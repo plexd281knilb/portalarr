@@ -5118,6 +5118,40 @@ async function runTestSuite() {
         }
     });
 
+    await assertTest("Agregarr: Collection Media Preview Concurrency, Timeout Safety & Offline Resilience", async () => {
+        const { evaluateCollectionMediaPreviewInternal } = await import("../src/app/curation-actions");
+        if (typeof evaluateCollectionMediaPreviewInternal !== "function") {
+            throw new Error("Missing evaluateCollectionMediaPreviewInternal in curation-actions.ts");
+        }
+
+        const startTime = Date.now();
+        const dummyCollection = {
+            id: "test-preview-dummy",
+            title: "Test Dummy Preview",
+            sourceType: "tmdb",
+            sourceQuery: "collection:999999999",
+            category: "franchise",
+            type: "movie",
+            serverId: "non-existent-server",
+            sectionKey: "non-existent-section"
+        };
+
+        const previewRes = await evaluateCollectionMediaPreviewInternal(dummyCollection);
+        const duration = Date.now() - startTime;
+
+        if (duration > 8500) {
+            throw new Error(`Preview evaluation took too long: ${duration}ms (exceeded 8500ms safety threshold)`);
+        }
+
+        if (!previewRes || typeof previewRes.success !== "boolean") {
+            throw new Error(`Invalid preview response structure: ${JSON.stringify(previewRes)}`);
+        }
+
+        if (!Array.isArray(previewRes.items)) {
+            throw new Error("Expected preview response to return items array");
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

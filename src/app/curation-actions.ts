@@ -1633,7 +1633,9 @@ export async function syncCollectionToPlexInternal(collectionId: string): Promis
                 // Franchise collection (e.g. Marvel MCU, Star Wars)
                 const collId = collection.sourceQuery.replace("collection:", "");
                 if (tmdbKey) {
-                    const tmdbRes = await fetch(`https://api.themoviedb.org/3/collection/${collId}?api_key=${tmdbKey}`);
+                    const tmdbRes = await fetch(`https://api.themoviedb.org/3/collection/${collId}?api_key=${tmdbKey}`, {
+                        signal: AbortSignal.timeout(5000)
+                    });
                     if (tmdbRes.ok) {
                         const data = await tmdbRes.json();
                         const parts = (data.parts || []).filter((p: any) => {
@@ -2217,7 +2219,9 @@ export async function generateCollectionCandidateItemsPreviewAction(
                 const collId = sourceQuery.replace("collection:", "");
                 executionMethod = `TMDb Franchise API: Querying collection ID #${collId} parts list.`;
                 if (tmdbKey) {
-                    const tmdbRes = await fetch(`https://api.themoviedb.org/3/collection/${collId}?api_key=${tmdbKey}`);
+                    const tmdbRes = await fetch(`https://api.themoviedb.org/3/collection/${collId}?api_key=${tmdbKey}`, {
+                        signal: AbortSignal.timeout(5000)
+                    });
                     if (tmdbRes.ok) {
                         const data = await tmdbRes.json();
                         const parts: any[] = (data.parts || []).filter((p: any) => {
@@ -10005,7 +10009,9 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
         if (collection.sourceType === "tmdb") {
             if (collection.sourceQuery?.startsWith("collection:")) {
                 const collId = collection.sourceQuery.replace("collection:", "");
-                const tmdbRes = await fetch(`https://api.themoviedb.org/3/collection/${collId}?api_key=${tmdbKey}`);
+                const tmdbRes = await fetch(`https://api.themoviedb.org/3/collection/${collId}?api_key=${tmdbKey}`, {
+                    signal: AbortSignal.timeout(5000)
+                });
                 if (tmdbRes.ok) {
                     const data = await tmdbRes.json();
                     candidateItems = (data.parts || [])
@@ -11201,37 +11207,90 @@ export async function deployAllFilteredSmartHubsAction(
  */
 export async function getCollectionMediaPreviewAction(collectionId: string) {
     try {
-
         await verifyAdmin();
         const collection = await prisma.mediaCollection.findUnique({ where: { id: collectionId } });
         if (!collection) return { success: false, error: "Collection not found.", items: [] };
 
-        // 1. Fetch library items to know what is already present in Plex
-        let libraryItems: any[] = [];
-        if (collection.serverId && collection.sectionKey) {
-            try {
-                const resolved = await resolveWorkingPlexServerConnection(collection.serverId);
-                if (resolved && resolved.serverUrl) {
-                    const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
-                    libraryItems = await getPlexLibraryMediaItems(urlsToTry, resolved.token, collection.sectionKey, 5000, undefined, false, true);
-                }
-            } catch (err: any) {
-                console.warn("[COLL-PREVIEW] Failed fetching library items:", err.message);
-            }
+        // Global safety timeout of 8.5 seconds guarantees the modal NEVER hangs indefinitely
+        return await Promise.race([
+            evaluateCollectionMediaPreviewInternal(collection),
+            new Promise<any>((resolve) => 
+                setTimeout(() => resolve({
+                    success: false,
+                    error: "Inspection timed out after 8.5s while contacting TMDb or Plex. Please retry.",
+                    items: []
+                }), 8500)
+            )
+        ]);
+    } catch (e: any) {
+        console.warn("[COLL-PREVIEW] Evaluation error:", e.message);
+        return { success: false, error: e.message || "Failed evaluating collection preview.", items: [] };
+    }
+}
+
+export async function evaluateCollectionMediaPreviewInternal(collection: any) {
+    const isPlexSource = collection.sourceType === "plex_query" || collection.sourceType === "plex_smart";
+
+    // 1. Fetch library items to know what is already present in Plex (Concurrent with 3.5s timeout)
+    const libraryItemsPromise = (async () => {
+        if (!collection.serverId || !collection.sectionKey) return [];
+        try {
+            return await Promise.race([
+                (async () => {
+                    const resolved = await resolveWorkingPlexServerConnection(collection.serverId);
+                    if (resolved && resolved.serverUrl) {
+                        const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
+                        return await getPlexLibraryMediaItems(urlsToTry, resolved.token, collection.sectionKey, 1500, undefined, false, true);
+                    }
+                    return [];
+                })(),
+                new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 3500))
+            ]);
+        } catch (err: any) {
+            console.warn("[COLL-PREVIEW] Failed fetching library items:", err.message);
+            return [];
         }
+    })();
 
-        const libraryTmdbIds = new Set(libraryItems.map(it => it.guids?.tmdb).filter(Boolean));
-        const libraryImdbIds = new Set(libraryItems.map(it => it.guids?.imdb).filter(Boolean));
-        const libraryTitles = new Map(libraryItems.map(it => [it.title?.toLowerCase().trim(), it]));
+    // 2. Fetch Arr monitored status index (Concurrent with 3.0s timeout)
+    const arrIndexPromise = (async () => {
+        try {
+            return await Promise.race([
+                getArrMonitoredIndex({ targetServerId: collection.serverId || undefined }),
+                new Promise<any>((resolve) => setTimeout(() => resolve({
+                    moviesByTmdb: new Map(),
+                    moviesByImdb: new Map(),
+                    moviesByTitle: new Map(),
+                    seriesByTvdb: new Map(),
+                    seriesByImdb: new Map(),
+                    seriesByTitle: new Map()
+                }), 3000))
+            ]);
+        } catch (arrErr: any) {
+            console.warn("[COLL-PREVIEW] Failed fetching Arr index:", arrErr.message);
+            return {
+                moviesByTmdb: new Map(),
+                moviesByImdb: new Map(),
+                moviesByTitle: new Map(),
+                seriesByTvdb: new Map(),
+                seriesByImdb: new Map(),
+                seriesByTitle: new Map()
+            };
+        }
+    })();
 
-        // 2. Fetch candidates from Collection Source Query
+    // 3. Fetch candidates from Collection Source Query (Concurrent)
+    const candidateItemsPromise = (async () => {
+        if (isPlexSource) return []; // Populated from libraryItems once library fetch resolves
         let candidateItems: any[] = [];
         const tmdbKey = await getTmdbApiKey();
 
         if (collection.sourceType === "tmdb") {
             if (collection.sourceQuery?.startsWith("collection:")) {
                 const collId = collection.sourceQuery.replace("collection:", "");
-                const tmdbRes = await fetch(`https://api.themoviedb.org/3/collection/${collId}?api_key=${tmdbKey}`);
+                const tmdbRes = await fetch(`https://api.themoviedb.org/3/collection/${collId}?api_key=${tmdbKey}`, {
+                    signal: AbortSignal.timeout(5000)
+                });
                 if (tmdbRes.ok) {
                     const data = await tmdbRes.json();
                     candidateItems = (data.parts || []).map((p: any) => ({
@@ -11250,18 +11309,18 @@ export async function getCollectionMediaPreviewAction(collectionId: string) {
                 const isMovie = collection.type === "movie";
                 candidateItems = await getTmdbFranchiseMedia(franchiseKey, {
                     mediaType: isTv ? "tv" : isMovie ? "movie" : "both",
-                    maxPages: 3
+                    maxPages: 2
                 });
             } else if (collection.sourceQuery?.startsWith("company:")) {
                 const compId = parseInt(collection.sourceQuery.replace("company:", ""), 10);
                 if (compId) {
-                    candidateItems = await getTmdbStudioMovies(compId, 20, 3);
+                    candidateItems = await getTmdbStudioMovies(compId, 20, 2);
                 }
             } else if (collection.sourceQuery?.startsWith("network:")) {
                 const netId = parseInt(collection.sourceQuery.replace("network:", ""), 10) || 213;
                 const isMovie = collection.type === "movie";
                 if (!isMovie) {
-                    const shows = await getTmdbNetworkShows(netId, 20, 3);
+                    const shows = await getTmdbNetworkShows(netId, 20, 2);
                     candidateItems = shows.map(s => ({
                         id: s.id,
                         title: s.title,
@@ -11278,14 +11337,14 @@ export async function getCollectionMediaPreviewAction(collectionId: string) {
                 const parts = collection.sourceQuery.split(":");
                 const provId = parseInt(parts[1], 10) || 8;
                 const isKids = parts.length > 2 && parts[2] === "kids";
-                candidateItems = await getTmdbStreamingProviderMedia(provId, { isKids, mediaType: "both" });
+                candidateItems = await getTmdbStreamingProviderMedia(provId, { isKids, mediaType: "both", maxPages: 2 });
             } else if (collection.sourceQuery?.startsWith("genre:")) {
                 const genreId = parseInt(collection.sourceQuery.replace("genre:", "").trim(), 10) || 28;
                 const isTv = collection.type === "show" || collection.type === "tv";
                 const isMovie = collection.type === "movie";
                 candidateItems = await getTmdbGenreMedia(genreId, {
                     mediaType: isTv ? "tv" : isMovie ? "movie" : "both",
-                    maxPages: 3,
+                    maxPages: 2,
                     minVotes: 200
                 });
             } else if (collection.sourceQuery?.startsWith("keyword:")) {
@@ -11294,7 +11353,7 @@ export async function getCollectionMediaPreviewAction(collectionId: string) {
                 const isMovie = collection.type === "movie";
                 candidateItems = await getTmdbKeywordMedia(kw, {
                     mediaType: isTv ? "tv" : isMovie ? "movie" : "both",
-                    maxPages: 3,
+                    maxPages: 2,
                     minVotes: 100
                 });
             } else if (collection.sourceQuery === "in_theatres") {
@@ -11312,12 +11371,11 @@ export async function getCollectionMediaPreviewAction(collectionId: string) {
                 candidateItems = await getTmdbUpcomingMovies();
             } else if (collection.sourceQuery === "popular" || collection.sourceQuery === "popular_movies" || collection.sourceQuery === "popular_tv") {
                 const isTv = collection.type === "show" || collection.type === "tv" || collection.sourceQuery === "popular_tv";
-                const [p1, p2, p3] = await Promise.all([
+                const [p1, p2] = await Promise.all([
                     isTv ? getTmdbPopularTv(1) : getTmdbPopularMovies(1),
-                    isTv ? getTmdbPopularTv(2) : getTmdbPopularMovies(2),
-                    isTv ? getTmdbPopularTv(3) : getTmdbPopularMovies(3)
+                    isTv ? getTmdbPopularTv(2) : getTmdbPopularMovies(2)
                 ]);
-                candidateItems = [...p1, ...p2, ...p3].map(m => ({
+                candidateItems = [...p1, ...p2].map(m => ({
                     id: m.id,
                     title: m.title,
                     overview: m.overview,
@@ -11433,35 +11491,8 @@ export async function getCollectionMediaPreviewAction(collectionId: string) {
             } catch (sErr: any) {
                 console.warn("[SONARR-PREVIEW] Error querying Sonarr:", sErr.message);
             }
-        } else if (collection.sourceType === "plex_smart") {
-            const subtype = collection.sourceQuery || "recently_added";
-            let filteredLib = [...libraryItems];
-            if (subtype === "recently_added") {
-                filteredLib.sort((a, b) => {
-                    const tA = a.addedAt ? new Date(a.addedAt).getTime() : (parseInt(a.ratingKey, 10) || 0);
-                    const tB = b.addedAt ? new Date(b.addedAt).getTime() : (parseInt(b.ratingKey, 10) || 0);
-                    return tB - tA;
-                });
-            } else if (subtype === "recently_released") {
-                filteredLib = [...libraryItems].sort((a, b) => {
-                    const yA = a.originallyAvailableAt ? new Date(a.originallyAvailableAt).getTime() : (a.year ? new Date(a.year, 0, 1).getTime() : 0);
-                    const yB = b.originallyAvailableAt ? new Date(b.originallyAvailableAt).getTime() : (b.year ? new Date(b.year, 0, 1).getTime() : 0);
-                    return yB - yA;
-                });
-            } else if (subtype === "top_unwatched") {
-                filteredLib = libraryItems.filter(it => it.viewCount === 0 || it.unwatched === true || !it.lastViewedAt).sort((a, b) => (b.rating || 0) - (a.rating || 0));
-            }
-            candidateItems = filteredLib.slice(0, collection.maxItems || 30).map(it => ({
-                id: it.guids?.tmdb || it.ratingKey,
-                title: it.title,
-                overview: it.summary,
-                posterPath: it.thumb,
-                mediaType: it.type === "show" ? "tv" as const : "movie" as const,
-                releaseDate: it.originallyAvailableAt || (it.year ? `${it.year}-01-01` : undefined),
-                imdbId: it.guids?.imdb
-            }));
         } else if (collection.sourceType === "mdblist") {
-            const isTv = collection.type === "show" || collection.type === "tv" || collection.title?.toLowerCase().includes("tv") || collection.sourceQuery?.includes("tv") || libraryItems.some(it => it.type === "show");
+            const isTv = collection.type === "show" || collection.type === "tv" || collection.title?.toLowerCase().includes("tv") || collection.sourceQuery?.includes("tv");
             let items: any[] = [];
             if (collection.sourceQuery) {
                 items = await getMdblistItems(collection.sourceQuery);
@@ -11502,12 +11533,11 @@ export async function getCollectionMediaPreviewAction(collectionId: string) {
 
                 const isPopular = collection.title?.toLowerCase().includes("popular") || collection.sourceQuery?.includes("popular");
                 if (isPopular) {
-                    const [p1, p2, p3] = await Promise.all([
+                    const [p1, p2] = await Promise.all([
                         isTv ? getTmdbPopularTv(1) : getTmdbPopularMovies(1),
-                        isTv ? getTmdbPopularTv(2) : getTmdbPopularMovies(2),
-                        isTv ? getTmdbPopularTv(3) : getTmdbPopularMovies(3)
+                        isTv ? getTmdbPopularTv(2) : getTmdbPopularMovies(2)
                     ]);
-                    items = [...p1, ...p2, ...p3].map(p => ({
+                    items = [...p1, ...p2].map(p => ({
                         tmdbId: p.id,
                         imdbId: p.imdbId,
                         title: p.title,
@@ -11528,6 +11558,57 @@ export async function getCollectionMediaPreviewAction(collectionId: string) {
                     imdbId: t.imdbId
                 }));
             }
+        }
+        return candidateItems;
+    })();
+
+    // Await all concurrent tasks
+    const [libRes, arrRes, candRes] = await Promise.allSettled([
+        libraryItemsPromise,
+        arrIndexPromise,
+        candidateItemsPromise
+    ]);
+
+    const libraryItems: any[] = libRes.status === "fulfilled" ? libRes.value : [];
+    const arrIndex: any = arrRes.status === "fulfilled" ? arrRes.value : {
+        moviesByTmdb: new Map(),
+        moviesByImdb: new Map(),
+        moviesByTitle: new Map(),
+        seriesByTvdb: new Map(),
+        seriesByImdb: new Map(),
+        seriesByTitle: new Map()
+    };
+    let candidateItems: any[] = candRes.status === "fulfilled" ? candRes.value : [];
+
+    // If Plex source, extract candidateItems from libraryItems
+    if (isPlexSource) {
+        if (collection.sourceType === "plex_smart") {
+            const subtype = collection.sourceQuery || "recently_added";
+            let filteredLib = [...libraryItems];
+            if (subtype === "recently_added") {
+                filteredLib.sort((a, b) => {
+                    const tA = a.addedAt ? new Date(a.addedAt).getTime() : (parseInt(a.ratingKey, 10) || 0);
+                    const tB = b.addedAt ? new Date(b.addedAt).getTime() : (parseInt(b.ratingKey, 10) || 0);
+                    return tB - tA;
+                });
+            } else if (subtype === "recently_released") {
+                filteredLib = [...libraryItems].sort((a, b) => {
+                    const yA = a.originallyAvailableAt ? new Date(a.originallyAvailableAt).getTime() : (a.year ? new Date(a.year, 0, 1).getTime() : 0);
+                    const yB = b.originallyAvailableAt ? new Date(b.originallyAvailableAt).getTime() : (b.year ? new Date(b.year, 0, 1).getTime() : 0);
+                    return yB - yA;
+                });
+            } else if (subtype === "top_unwatched") {
+                filteredLib = libraryItems.filter(it => it.viewCount === 0 || it.unwatched === true || !it.lastViewedAt).sort((a, b) => (b.rating || 0) - (a.rating || 0));
+            }
+            candidateItems = filteredLib.slice(0, collection.maxItems || 30).map(it => ({
+                id: it.guids?.tmdb || it.ratingKey,
+                title: it.title,
+                overview: it.summary,
+                posterPath: it.thumb,
+                mediaType: it.type === "show" ? "tv" as const : "movie" as const,
+                releaseDate: it.originallyAvailableAt || (it.year ? `${it.year}-01-01` : undefined),
+                imdbId: it.guids?.imdb
+            }));
         } else if (collection.sourceType === "plex_query") {
             if (collection.sourceQuery === "tag:leaving-soon" || collection.title?.toLowerCase().includes("leaving soon")) {
                 const leavingSoon = await prisma.mediaContentAdvisory.findMany({ where: { isLeavingSoon: true } });
@@ -11560,127 +11641,128 @@ export async function getCollectionMediaPreviewAction(collectionId: string) {
                 }));
             }
         }
+    }
 
-        // Limit if maxItems is set
-        if (collection.maxItems && collection.maxItems > 0) {
-            candidateItems = candidateItems.slice(0, collection.maxItems);
+    // Limit if maxItems is set
+    if (collection.maxItems && collection.maxItems > 0) {
+        candidateItems = candidateItems.slice(0, collection.maxItems);
+    }
+
+    const libraryTmdbIds = new Set(libraryItems.map(it => it.guids?.tmdb).filter(Boolean));
+    const libraryImdbIds = new Set(libraryItems.map(it => it.guids?.imdb).filter(Boolean));
+    const libraryTitles = new Map(libraryItems.map(it => [it.title?.toLowerCase().trim(), it]));
+
+    const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+    const now = new Date();
+
+    const formatNiceDate = (dStr?: string) => {
+        if (!dStr) return "";
+        try {
+            const d = new Date(dStr);
+            return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+        } catch { return dStr; }
+    };
+
+    const enrichedItems = candidateItems.map(item => {
+        const tmdbStr = String(item.id);
+        let match = null;
+
+        if (item.id && libraryItems.some(it => String(it.ratingKey) === tmdbStr)) {
+            match = libraryItems.find(it => String(it.ratingKey) === tmdbStr);
+        } else if (libraryTmdbIds.has(tmdbStr)) {
+            match = libraryItems.find(it => it.guids?.tmdb === tmdbStr);
+        } else if (item.imdbId && libraryImdbIds.has(item.imdbId)) {
+            match = libraryItems.find(it => it.guids?.imdb === item.imdbId);
+        } else if (item.title) {
+            const clean = item.title.toLowerCase().trim();
+            const candYear = item.releaseDate ? parseInt(String(item.releaseDate).slice(0, 4), 10) : ((item as any).year || undefined);
+            if (candYear) {
+                match = libraryItems.find(it => it.title && it.title.toLowerCase().trim() === clean && it.year && Math.abs(it.year - candYear) <= 1);
+            } else if (libraryTitles.has(clean)) {
+                match = libraryTitles.get(clean);
+            }
         }
 
-        const arrIndex = await getArrMonitoredIndex({ targetServerId: collection.serverId || undefined });
-        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
-        const now = new Date();
+        const inLibrary = Boolean(match);
 
-        const formatNiceDate = (dStr?: string) => {
-            if (!dStr) return "";
-            try {
-                const d = new Date(dStr);
-                return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-            } catch { return dStr; }
-        };
+        // Arr status
+        let arrItem: ArrItemStatus | undefined;
+        if (item.mediaType === "tv") {
+            arrItem = (item.id ? arrIndex.seriesByTvdb.get(String(item.id)) : undefined) ||
+                      (item.imdbId ? arrIndex.seriesByImdb.get(item.imdbId.toLowerCase().trim()) : undefined) ||
+                      (item.title ? arrIndex.seriesByTitle.get(item.title.toLowerCase().trim()) : undefined);
+        } else {
+            arrItem = arrIndex.moviesByTmdb.get(tmdbStr) ||
+                      (item.imdbId ? arrIndex.moviesByImdb.get(item.imdbId.toLowerCase().trim()) : undefined) ||
+                      (item.title ? arrIndex.moviesByTitle.get(item.title.toLowerCase().trim()) : undefined);
+        }
 
-        const enrichedItems = candidateItems.map(item => {
-            const tmdbStr = String(item.id);
-            let match = null;
+        const inRadarr = arrItem?.appType === "radarr" || collection.sourceType === "radarr";
+        const inSonarr = arrItem?.appType === "sonarr" || collection.sourceType === "sonarr";
+        const isMonitored = Boolean(arrItem?.monitored) || collection.sourceType === "radarr" || collection.sourceType === "sonarr";
 
-            if (item.id && libraryItems.some(it => String(it.ratingKey) === tmdbStr)) {
-                match = libraryItems.find(it => String(it.ratingKey) === tmdbStr);
-            } else if (libraryTmdbIds.has(tmdbStr)) {
-                match = libraryItems.find(it => it.guids?.tmdb === tmdbStr);
-            } else if (item.imdbId && libraryImdbIds.has(item.imdbId)) {
-                match = libraryItems.find(it => it.guids?.imdb === item.imdbId);
-            } else if (item.title) {
-                const clean = item.title.toLowerCase().trim();
-                const candYear = item.releaseDate ? parseInt(String(item.releaseDate).slice(0, 4), 10) : ((item as any).year || undefined);
-                if (candYear) {
-                    match = libraryItems.find(it => it.title && it.title.toLowerCase().trim() === clean && it.year && Math.abs(it.year - candYear) <= 1);
-                } else if (libraryTitles.has(clean)) {
-                    match = libraryTitles.get(clean);
-                }
-            }
-
-            const inLibrary = Boolean(match);
-
-            // Arr status
-            let arrItem: ArrItemStatus | undefined;
-            if (item.mediaType === "tv") {
-                arrItem = (item.id ? arrIndex.seriesByTvdb.get(String(item.id)) : undefined) ||
-                          (item.imdbId ? arrIndex.seriesByImdb.get(item.imdbId.toLowerCase().trim()) : undefined) ||
-                          (item.title ? arrIndex.seriesByTitle.get(item.title.toLowerCase().trim()) : undefined);
-            } else {
-                arrItem = arrIndex.moviesByTmdb.get(tmdbStr) ||
-                          (item.imdbId ? arrIndex.moviesByImdb.get(item.imdbId.toLowerCase().trim()) : undefined) ||
-                          (item.title ? arrIndex.moviesByTitle.get(item.title.toLowerCase().trim()) : undefined);
-            }
-
-            const inRadarr = arrItem?.appType === "radarr" || collection.sourceType === "radarr";
-            const inSonarr = arrItem?.appType === "sonarr" || collection.sourceType === "sonarr";
-            const isMonitored = Boolean(arrItem?.monitored) || collection.sourceType === "radarr" || collection.sourceType === "sonarr";
-
-            const relDate = item.releaseDate ? new Date(item.releaseDate) : null;
-            const digDate = item.digitalReleaseDate ? new Date(item.digitalReleaseDate) : null;
-            const theDate = item.theatricalReleaseDate ? new Date(item.theatricalReleaseDate) : null;
-            const smartBanner = resolveItemSmartBanner({
-                inLibrary,
-                isMonitored,
-                inRadarr,
-                inSonarr,
-                category: collection.category || collection.sourceQuery,
-                isTvSection: collection.type === "show" || collection.type === "tv" || item.mediaType === "tv",
-                digitalReleaseDate: item.digitalReleaseDate || arrItem?.digitalRelease,
-                physicalReleaseDate: arrItem?.physicalRelease,
-                theatricalReleaseDate: item.theatricalReleaseDate || arrItem?.inCinemas,
-                releaseDate: item.releaseDate,
-                nextAiring: (arrItem as any)?.nextAiring || (arrItem as any)?.airDate,
-                inTheaters: item.inTheaters,
-                countdownDaysThreshold: settings?.placeholderDigitalCountdownDays ?? 30
-            });
-
-            const arrStatus = smartBanner.arrStatus;
-            const suggestedBannerType = smartBanner.suggestedBannerType;
-            const suggestedBannerText = smartBanner.suggestedBannerText;
-            const suggestedBannerTheme = smartBanner.suggestedBannerTheme;
-            const statusBadgeText = smartBanner.statusBadgeText;
-            const statusBadgeColor = smartBanner.statusBadgeColor;
-
-            const releaseYear = item.releaseDate ? parseInt(item.releaseDate.split("-")[0], 10) : undefined;
-
-            return {
-                id: item.id,
-                title: item.title,
-                overview: item.overview,
-                posterPath: item.posterPath,
-                backdropPath: item.backdropPath,
-                mediaType: item.mediaType || "movie",
-                releaseDate: item.releaseDate,
-                year: releaseYear,
-                theatricalReleaseDate: item.theatricalReleaseDate,
-                digitalReleaseDate: item.digitalReleaseDate,
-                inLibrary,
-                libraryRatingKey: match?.ratingKey,
-                inRadarr,
-                inSonarr,
-                isMonitored,
-                arrStatus,
-                isReleased: smartBanner.isReleased,
-                suggestedBannerType,
-                suggestedBannerText,
-                suggestedBannerTheme,
-                statusBadgeText,
-                statusBadgeColor
-            };
+        const relDate = item.releaseDate ? new Date(item.releaseDate) : null;
+        const digDate = item.digitalReleaseDate ? new Date(item.digitalReleaseDate) : null;
+        const theDate = item.theatricalReleaseDate ? new Date(item.theatricalReleaseDate) : null;
+        const smartBanner = resolveItemSmartBanner({
+            inLibrary,
+            isMonitored,
+            inRadarr,
+            inSonarr,
+            category: collection.category || collection.sourceQuery,
+            isTvSection: collection.type === "show" || collection.type === "tv" || item.mediaType === "tv",
+            digitalReleaseDate: item.digitalReleaseDate || arrItem?.digitalRelease,
+            physicalReleaseDate: arrItem?.physicalRelease,
+            theatricalReleaseDate: item.theatricalReleaseDate || arrItem?.inCinemas,
+            releaseDate: item.releaseDate,
+            nextAiring: (arrItem as any)?.nextAiring || (arrItem as any)?.airDate,
+            inTheaters: item.inTheaters,
+            countdownDaysThreshold: settings?.placeholderDigitalCountdownDays ?? 30
         });
 
+        const arrStatus = smartBanner.arrStatus;
+        const suggestedBannerType = smartBanner.suggestedBannerType;
+        const suggestedBannerText = smartBanner.suggestedBannerText;
+        const suggestedBannerTheme = smartBanner.suggestedBannerTheme;
+        const statusBadgeText = smartBanner.statusBadgeText;
+        const statusBadgeColor = smartBanner.statusBadgeColor;
+
+        const releaseYear = item.releaseDate ? parseInt(item.releaseDate.split("-")[0], 10) : undefined;
+
         return {
-            success: true,
-            collection,
-            totalCount: enrichedItems.length,
-            inLibraryCount: enrichedItems.filter(i => i.inLibrary).length,
-            missingCount: enrichedItems.filter(i => !i.inLibrary).length,
-            items: enrichedItems
+            id: item.id,
+            title: item.title,
+            overview: item.overview,
+            posterPath: item.posterPath,
+            backdropPath: item.backdropPath,
+            mediaType: item.mediaType || "movie",
+            releaseDate: item.releaseDate,
+            year: releaseYear,
+            theatricalReleaseDate: item.theatricalReleaseDate,
+            digitalReleaseDate: item.digitalReleaseDate,
+            inLibrary,
+            libraryRatingKey: match?.ratingKey,
+            inRadarr,
+            inSonarr,
+            isMonitored,
+            arrStatus,
+            isReleased: smartBanner.isReleased,
+            suggestedBannerType,
+            suggestedBannerText,
+            suggestedBannerTheme,
+            statusBadgeText,
+            statusBadgeColor
         };
-    } catch (e: any) {
-        return { success: false, error: e.message, items: [] };
-    }
+    });
+
+    return {
+        success: true,
+        collection,
+        totalCount: enrichedItems.length,
+        inLibraryCount: enrichedItems.filter(i => i.inLibrary).length,
+        missingCount: enrichedItems.filter(i => !i.inLibrary).length,
+        items: enrichedItems
+    };
 }
 
 /**

@@ -222,6 +222,7 @@ export function AgregarrStudio() {
     const [mediaInspectorModalOpen, setMediaInspectorModalOpen] = useState(false);
     const [inspectingCollection, setInspectingCollection] = useState<any | null>(null);
     const [collectionMediaLoading, setCollectionMediaLoading] = useState(false);
+    const [collectionMediaError, setCollectionMediaError] = useState<string | null>(null);
     const [collectionMediaData, setCollectionMediaData] = useState<{ totalCount: number; inLibraryCount: number; missingCount: number; items: any[] } | null>(null);
     const [collectionMediaSearch, setCollectionMediaSearch] = useState("");
     const [collectionMediaFilter, setCollectionMediaFilter] = useState<"all" | "in_library" | "missing" | "coming_soon" | "not_requested">("all");
@@ -1746,20 +1747,29 @@ export function AgregarrStudio() {
     const handleInspectCollectionMedia = async (coll: any) => {
         setInspectingCollection(coll);
         setCollectionMediaLoading(true);
+        setCollectionMediaError(null);
         setCollectionMediaData(null);
         setCollectionMediaSearch("");
         setCollectionMediaFilter("all");
         setMediaInspectorModalOpen(true);
         try {
-            const res = await getCollectionMediaPreviewAction(coll.id);
+            const res = await Promise.race([
+                getCollectionMediaPreviewAction(coll.id),
+                new Promise<any>((_, reject) => 
+                    setTimeout(() => reject(new Error("Preview request timed out after 9 seconds.")), 9000)
+                )
+            ]);
             if (res.success) {
                 setCollectionMediaData(res as any);
+                setCollectionMediaError(null);
             } else {
                 setCollectionMediaData({ totalCount: 0, inLibraryCount: 0, missingCount: 0, items: [] });
+                setCollectionMediaError(res.error || "Failed loading media items for this collection.");
             }
-        } catch (e) {
+        } catch (e: any) {
             console.error("Failed inspecting collection media:", e);
             setCollectionMediaData({ totalCount: 0, inLibraryCount: 0, missingCount: 0, items: [] });
+            setCollectionMediaError(e.message || "Failed inspecting collection media.");
         } finally {
             setCollectionMediaLoading(false);
         }
@@ -5135,7 +5145,44 @@ export function AgregarrStudio() {
                         {collectionMediaLoading ? (
                             <div className="flex flex-col items-center justify-center py-20 text-slate-400 gap-3">
                                 <Loader2 className="h-8 w-8 animate-spin text-amber-400" />
-                                <p className="text-xs font-bold">Querying and evaluating collection items from {inspectingCollection?.sourceType?.toUpperCase()}...</p>
+                                <p className="text-xs font-bold text-slate-300">Querying and evaluating collection items from {inspectingCollection?.sourceType?.toUpperCase()}...</p>
+                                <p className="text-[11px] text-slate-500">Checking Plex library and media indexers concurrently...</p>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="mt-2 text-xs border-slate-700 hover:bg-slate-800 text-slate-300"
+                                    onClick={() => setMediaInspectorModalOpen(false)}
+                                >
+                                    Cancel
+                                </Button>
+                            </div>
+                        ) : collectionMediaError ? (
+                            <div className="flex flex-col items-center justify-center py-16 text-center space-y-3 px-4">
+                                <div className="p-3 bg-red-500/10 rounded-full border border-red-500/20 text-red-400">
+                                    <AlertTriangle className="h-8 w-8" />
+                                </div>
+                                <div>
+                                    <h4 className="text-sm font-semibold text-red-300">Unable to Load Media Preview</h4>
+                                    <p className="text-xs text-slate-400 mt-1 max-w-md">{collectionMediaError}</p>
+                                </div>
+                                <div className="flex items-center gap-2 pt-2">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="text-xs border-slate-700 text-slate-300 hover:bg-slate-800"
+                                        onClick={() => setMediaInspectorModalOpen(false)}
+                                    >
+                                        Close
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        className="text-xs bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold"
+                                        onClick={() => inspectingCollection && handleInspectCollectionMedia(inspectingCollection)}
+                                    >
+                                        <RefreshCw className="h-3 w-3 mr-1" />
+                                        Retry Query
+                                    </Button>
+                                </div>
                             </div>
                         ) : filteredCollectionItems.length === 0 ? (
                             <div className="text-center py-16 text-slate-500 space-y-2">

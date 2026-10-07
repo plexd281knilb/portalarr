@@ -99,6 +99,18 @@ Active collection cards feature an interactive position badge (`#<rank>`) allowi
 - **Instant Repositioning**: Enter any target position (e.g. `20` from `#1`) and press `Enter`, click the `Check` (✓) icon, or blur the input.
 - **Automatic Array Reindexing & Plex Sync**: Automatically splices and shifts intervening collections, recalculates 2-digit zero-padded sort prefixes (`!01_`, `!20_`), updates local state, and fires `reorderPlexCollectionsAction` to synchronize Plex Home Screen hub ordering and SQLite database records immediately with user feedback toast.
 
+### 8. Fast Collection Media Preview & Live Inspector (`getCollectionMediaPreviewAction`)
+The Agregarr Studio provides instant media verification via the **Inspect Media** (`Eye`) action on active collections:
+- **Concurrent Tri-Tier Resolution**: `evaluateCollectionMediaPreviewInternal` queries candidate media items, local Plex library media, and Servarr (Radarr/Sonarr) monitored indexes concurrently using `Promise.allSettled`:
+  - **Plex Library Scan**: Prioritizes confirmed working server URLs with an item limit of 1,500 and a strict 3.5s timeout.
+  - **Servarr Monitored Index**: Fast background index with a strict 3.0s timeout.
+  - **Candidate List**: Capped at 2 pages and protected by a 5.0s `AbortSignal.timeout` on all raw TMDb fetches.
+- **Double Safety Timeouts & Non-Blocking Client UI**:
+  - **Server-Side Timeout**: Bounded by an 8.5-second `Promise.race` safety guard returning whatever items were fetched or clean error details.
+  - **Client-Side Timeout**: Capped by a 9.0-second safety race in `handleInspectCollectionMedia`.
+  - **Cancel & Retry UI**: Modal renders a 1-click **Cancel** button during loading, and an error state with an instant **Retry Query** button if upstream APIs fail, eliminating infinite modal freezes.
+
+
 ---
 
 ## Common Gotchas & Troubleshooting
