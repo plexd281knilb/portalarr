@@ -87,7 +87,11 @@ Agregarr manages metadata labels on items:
 ### 6. Collection Edit Modal & Reset to Preset Defaults
 The Collections & Hubs studio provides interactive per-collection configuration via the **Edit** action button:
 - **Edit Modal (`Edit Collection: {title}`)**: Configures Plex client screen targets (Owner Home, Shared Home, Recommended), inline library display mode (`default`, `hide`, `hideItems`, `showItems`), home screen numerical ranking (#1 - #99) and sort prefix, day-of-week active scheduling, daily time windows, seasonal date ranges, excluded Plex labels, and trailer placeholder generation.
-- **Reset to Defaults (`RotateCcw`)**: Locates the underlying preset from `COLLECTION_PRESETS` (via exact title, preset ID, `sourceType`/`sourceQuery`, or normalized alphanumeric match) and restores all configuration fields to their preset baseline settings (or default studio settings for custom collections). Changes are applied and written to Plex on clicking **"Save & Sync to Plex"**.
+- **Reset to Defaults (`RotateCcw`)**: Locates the underlying preset from `COLLECTION_PRESETS` (via exact title, preset ID, `sourceType`/`sourceQuery`, or normalized alphanumeric match) and restores all configuration fields to their preset baseline settings (or default studio settings for custom collections).
+- **Fast Non-Blocking Save & Background Sync**:
+  - **Save Changes (`Save`)**: Commits collection configuration changes to SQLite in <100ms with `syncToPlex: false` and closes the modal immediately. Media managers can batch multiple edits without freezing their screen, then push changes when ready.
+  - **Save & Sync in Background (`RefreshCw`)**: Saves settings to SQLite, closes the modal immediately without UI freezing, and launches `syncCollectionToPlexAction` asynchronously in the background with card-level loading spinners and non-blocking floating glassmorphic toasts.
+  - **Sync All to Plex (`Zap`)**: Prominent action button positioned in the Active Collections toolbar for 1-click background synchronization of all collections in the library via `runAgregarrSyncAction`.
 
 ### 7. Inline Quick Position Editor on Collection Cards
 Active collection cards feature an interactive position badge (`#<rank>`) allowing administrators to instantly reprioritize collection hubs:

@@ -593,6 +593,11 @@ export function AgregarrStudio() {
     const executeRunCollectionSync = async () => {
         setRunningCollectionSync(true);
         setCollectionSyncResult(null);
+        showFloatingToast({
+            id: "sync-all-library",
+            type: "info",
+            text: `Syncing all collections for library #${selectedSectionKey} to Plex in background...`
+        });
         try {
             const res = await runAgregarrSyncAction(selectedServerId, selectedSectionKey);
             if (res.success) {
@@ -601,6 +606,11 @@ export function AgregarrStudio() {
                     text: `Agregarr Collection & Hubs Sync Completed: ${res.evaluatedCount ?? 0} items processed across enabled libraries.`,
                     details: res.details
                 });
+                showFloatingToast({
+                    id: "sync-all-library",
+                    type: "success",
+                    text: `✓ All collections synced to Plex (${res.evaluatedCount ?? 0} items processed)!`
+                });
                 setCurationLastRunAt(new Date().toISOString());
                 loadCollections();
             } else {
@@ -608,11 +618,21 @@ export function AgregarrStudio() {
                     success: false,
                     text: res.error || "Failed running collection sync."
                 });
+                showFloatingToast({
+                    id: "sync-all-library",
+                    type: "error",
+                    text: `⚠️ Sync notice: ${res.error || "Failed running collection sync."}`
+                });
             }
         } catch (e: any) {
             setCollectionSyncResult({
                 success: false,
                 text: e.message || "An error occurred during sync."
+            });
+            showFloatingToast({
+                id: "sync-all-library",
+                type: "error",
+                text: `Failed syncing collections: ${e.message}`
             });
         } finally {
             setRunningCollectionSync(false);
@@ -1142,7 +1162,7 @@ export function AgregarrStudio() {
             setPlacementExcludedLabels(defaultExcludedLabels);
             setPlacementIncludePlaceholders(defaultIncludePlaceholders);
 
-            setPlacementSavedMsg(`✓ Reverted settings to "${matchedPreset.title}" preset defaults. Click "Save & Sync to Plex" to apply.`);
+            setPlacementSavedMsg(`✓ Reverted settings to "${matchedPreset.title}" preset defaults. Click "Save Changes" or "Save & Sync in Background" to apply.`);
         } else {
             // Standard defaults for custom collections
             const effOrder = (editingCollection.orderIndex && editingCollection.orderIndex > 0)
@@ -1168,18 +1188,20 @@ export function AgregarrStudio() {
             setPlacementExcludedLabels("trailer-placeholder, trailers, coming_soon, leaving-soon");
             setPlacementIncludePlaceholders(false);
 
-            setPlacementSavedMsg("✓ Reverted settings to default values. Click \"Save & Sync to Plex\" to apply.");
+            setPlacementSavedMsg("✓ Reverted settings to default values. Click \"Save Changes\" or \"Save & Sync in Background\" to apply.");
         }
     };
 
-    // Save Placement Modal Settings
-    const handleSavePlacement = async () => {
+    // Save Placement Modal Settings (Fast non-blocking save + optional background Plex sync)
+    const handleSavePlacement = async (syncToPlex: boolean = false) => {
         if (!editingCollection) return;
+        const collId = editingCollection.id;
+        const collTitle = editingCollection.title || "Collection";
         setSavingPlacement(true);
         setPlacementSavedMsg(null);
         try {
             const res = await updateCollectionPlacementAction({
-                id: editingCollection.id,
+                id: collId,
                 promotedToHome: placementHome,
                 promotedToSharedHome: placementShared,
                 promotedToRecommended: placementRecommended,
@@ -1196,22 +1218,41 @@ export function AgregarrStudio() {
                 seasonalAction: placementSeasonalAction,
                 maxItems: Number(placementMaxItems),
                 excludedLabels: placementExcludedLabels,
-                includePlaceholders: placementIncludePlaceholders
+                includePlaceholders: placementIncludePlaceholders,
+                syncToPlex: false // Fast local save in SQLite - never blocks or freezes!
             });
 
             if (res.success) {
-                setPlacementSavedMsg("✓ Collection settings updated and synced to Plex!");
-                setTimeout(() => {
-                    setPlacementModalOpen(false);
-                    loadCollections();
-                }, 1000);
+                // 1. Immediately close modal and unblock UI so user never waits or freezes
+                setPlacementModalOpen(false);
+                setSavingPlacement(false);
+
+                // 2. Refresh local collection list immediately so the new settings are visible on the card
+                loadCollections();
+
+                if (syncToPlex) {
+                    // 3. Trigger background sync to Plex asynchronously
+                    showFloatingToast({
+                        id: collId,
+                        type: "info",
+                        text: `✓ Saved "${collTitle}"! Syncing to Plex in the background...`
+                    });
+                    executeSyncCollection(collId);
+                } else {
+                    // 4. Saved locally without syncing to Plex
+                    showFloatingToast({
+                        id: collId,
+                        type: "success",
+                        text: `✓ Saved "${collTitle}"! Hit "Sync" on the card or "Sync All to Plex" when ready to push.`
+                    });
+                }
             } else {
                 setPlacementSavedMsg(`⚠️ ${res.error || "Failed saving collection settings."}`);
+                setSavingPlacement(false);
             }
         } catch (err: any) {
             console.error("Failed saving collection settings:", err);
             setPlacementSavedMsg(`⚠️ ${err.message || "Failed saving collection settings."}`);
-        } finally {
             setSavingPlacement(false);
         }
     };
@@ -3151,12 +3192,25 @@ export function AgregarrStudio() {
                             <Button
                                 type="button"
                                 size="sm"
+                                variant="outline"
                                 disabled={savingOrder}
                                 onClick={() => handleSaveCollectionOrder()}
-                                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs h-8 px-3.5 gap-1.5 shadow-md cursor-pointer"
+                                className="border-slate-700 hover:bg-slate-800 text-slate-200 text-xs h-8 px-3.5 gap-1.5 cursor-pointer"
+                                title="Commit Home and Recommended Hub numerical rank ordering and sort prefixes to Plex"
                             >
-                                {savingOrder ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                                {savingOrder ? <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-400" /> : <Save className="h-3.5 w-3.5 text-amber-400" />}
                                 <span>Save Hub Ordering</span>
+                            </Button>
+                            <Button
+                                type="button"
+                                size="sm"
+                                disabled={runningCollectionSync}
+                                onClick={handleRunCollectionSync}
+                                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs h-8 px-3.5 gap-1.5 shadow-md cursor-pointer transition-all active:scale-95"
+                                title="Synchronize ALL active collections and hubs in this library to Plex in the background"
+                            >
+                                {runningCollectionSync ? <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-950" /> : <Zap className="h-3.5 w-3.5 text-slate-950 fill-current" />}
+                                <span>Sync All to Plex</span>
                             </Button>
                         </div>
                     </div>
@@ -6002,7 +6056,7 @@ export function AgregarrStudio() {
                             <RotateCcw className="h-3.5 w-3.5 text-amber-400" />
                             <span>Reset to Defaults</span>
                         </Button>
-                        <div className="flex items-center justify-end gap-2 order-1 sm:order-2">
+                        <div className="flex items-center justify-end gap-2 order-1 sm:order-2 flex-wrap">
                             <Button type="button" variant="ghost" size="sm" onClick={() => setPlacementModalOpen(false)}>
                                 Cancel
                             </Button>
@@ -6010,11 +6064,23 @@ export function AgregarrStudio() {
                                 type="button"
                                 size="sm"
                                 disabled={savingPlacement}
-                                onClick={handleSavePlacement}
-                                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs gap-1.5 shadow-md cursor-pointer"
+                                onClick={() => handleSavePlacement(false)}
+                                className="border border-slate-700 hover:bg-slate-800 text-slate-200 font-bold text-xs gap-1.5 cursor-pointer"
+                                title="Save collection settings instantly to database without pushing to Plex now (sync later via 'Sync All')"
                             >
                                 {savingPlacement ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                                <span>Save &amp; Sync to Plex</span>
+                                <span>Save Changes</span>
+                            </Button>
+                            <Button
+                                type="button"
+                                size="sm"
+                                disabled={savingPlacement}
+                                onClick={() => handleSavePlacement(true)}
+                                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs gap-1.5 shadow-md cursor-pointer"
+                                title="Save settings and push to Plex immediately in the background without freezing your screen"
+                            >
+                                <RefreshCw className="h-3.5 w-3.5 text-slate-950" />
+                                <span>Save &amp; Sync in Background</span>
                             </Button>
                         </div>
                     </DialogFooter>

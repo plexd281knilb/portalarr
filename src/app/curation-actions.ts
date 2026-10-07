@@ -2754,6 +2754,7 @@ export async function updateCollectionPlacementAction(data: {
     scheduleEndMonth?: number | null;
     scheduleEndDay?: number | null;
     seasonalAction?: string | null;
+    syncToPlex?: boolean;
 }) {
     try {
 
@@ -2797,8 +2798,8 @@ export async function updateCollectionPlacementAction(data: {
             }
         });
 
-        // Push directly to Plex
-        if (updated.serverId && updated.sectionKey && updated.ratingKey) {
+        // Push directly to Plex if requested (skip if syncToPlex is explicitly false)
+        if (data.syncToPlex !== false && updated.serverId && updated.sectionKey && updated.ratingKey) {
             const resolved = await resolveWorkingPlexServerConnection(updated.serverId);
             if (resolved?.serverUrl) {
                 const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
