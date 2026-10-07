@@ -129,6 +129,9 @@ To achieve sub-second page loads and eliminate blank-screen flashing on tab chan
 - **Request Manager Module-Level Cache**:
   - `RequestManager` initializes from `cachedRequests` to render previous request listings instantly when switching between Discover and Requests tabs.
   - `filteredRequests` and status `counts` are memoized via `useMemo` for lag-free typing in large request catalogs.
+- **Verification & Soak Testing Timing Tolerances**:
+  - When verifying primed in-memory cache pre-warming (such as Test 50 in `scripts/verify-all.ts`), server action execution includes local availability evaluations (`batchCheckMediaAvailability`) iterating over media items.
+  - Uncached TMDb network calls require 1,500ms–3,500ms; primed cache execution completes in ~10–130ms depending on background CPU load and GC sweeps. Timing assertions enforce a sub-second threshold (`< 250ms`) rather than micro-benchmarks (`< 60ms`) to guarantee 100% soak test reliability under heavy system stress without masking uncached network calls.
 
 ---
 

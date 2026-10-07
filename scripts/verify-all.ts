@@ -3064,7 +3064,7 @@ async function runTestSuite() {
             throw new Error(`getDiscoverHomeAction failed: ${homeRes.error}`);
         }
 
-        // 3. Tab switch to "movies" (popular page 1) must be instant (< 50ms) from primed cache
+        // 3. Tab switch to "movies" (popular page 1) must be sub-second (< 250ms) from primed cache
         const startMovies = Date.now();
         const moviesRes = await getDiscoverMediaAction("popular", "movie", 1, false);
         const moviesDuration = Date.now() - startMovies;
@@ -3072,11 +3072,11 @@ async function runTestSuite() {
         if (!moviesRes.success || !Array.isArray(moviesRes.items) || moviesRes.items.length === 0) {
             throw new Error("getDiscoverMediaAction for popular movies failed or returned empty items");
         }
-        if (moviesDuration > 60) {
-            throw new Error(`getDiscoverMediaAction for popular movies took ${moviesDuration}ms (expected < 60ms)`);
+        if (moviesDuration > 250) {
+            throw new Error(`getDiscoverMediaAction for popular movies took ${moviesDuration}ms (expected < 250ms)`);
         }
 
-        // 4. Tab switch to "tv" (popular page 1) must be instant (< 50ms) from primed cache
+        // 4. Tab switch to "tv" (popular page 1) must be sub-second (< 250ms) from primed cache
         const startTv = Date.now();
         const tvRes = await getDiscoverMediaAction("popular", "tv", 1, false);
         const tvDuration = Date.now() - startTv;
@@ -3084,8 +3084,8 @@ async function runTestSuite() {
         if (!tvRes.success || !Array.isArray(tvRes.items) || tvRes.items.length === 0) {
             throw new Error("getDiscoverMediaAction for popular tv failed or returned empty items");
         }
-        if (tvDuration > 60) {
-            throw new Error(`getDiscoverMediaAction for popular tv took ${tvDuration}ms (expected < 60ms)`);
+        if (tvDuration > 250) {
+            throw new Error(`getDiscoverMediaAction for popular tv took ${tvDuration}ms (expected < 250ms)`);
         }
 
         // 5. In-memory API key caching test
