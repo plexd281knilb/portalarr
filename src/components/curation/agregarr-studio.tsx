@@ -6050,25 +6050,32 @@ export function AgregarrStudio() {
                             variant="outline"
                             size="sm"
                             onClick={handleResetToDefaults}
-                            className="border-slate-700 hover:bg-slate-800 text-slate-300 hover:text-amber-300 text-xs gap-1.5 cursor-pointer order-2 sm:order-1"
+                            className="bg-slate-800/80 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 border-slate-700 hover:border-slate-600 text-slate-300 hover:text-amber-300 dark:text-slate-300 dark:hover:text-amber-300 text-xs gap-1.5 cursor-pointer order-2 sm:order-1"
                             title={findMatchingPreset(editingCollection) ? `Reset all fields to "${findMatchingPreset(editingCollection)?.title}" preset defaults` : "Reset all fields to default settings"}
                         >
                             <RotateCcw className="h-3.5 w-3.5 text-amber-400" />
                             <span>Reset to Defaults</span>
                         </Button>
                         <div className="flex items-center justify-end gap-2 order-1 sm:order-2 flex-wrap">
-                            <Button type="button" variant="ghost" size="sm" onClick={() => setPlacementModalOpen(false)}>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setPlacementModalOpen(false)}
+                                className="text-slate-400 hover:text-slate-200 hover:bg-slate-800 dark:hover:bg-slate-800 text-xs cursor-pointer"
+                            >
                                 Cancel
                             </Button>
                             <Button
                                 type="button"
+                                variant="outline"
                                 size="sm"
                                 disabled={savingPlacement}
                                 onClick={() => handleSavePlacement(false)}
-                                className="border border-slate-700 hover:bg-slate-800 text-slate-200 font-bold text-xs gap-1.5 cursor-pointer"
+                                className="bg-slate-800 hover:bg-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 border-slate-600 dark:border-slate-600 hover:border-slate-500 text-white dark:text-white font-bold text-xs gap-1.5 cursor-pointer shadow-sm transition-all"
                                 title="Save collection settings instantly to database without pushing to Plex now (sync later via 'Sync All')"
                             >
-                                {savingPlacement ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                                {savingPlacement ? <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-400" /> : <Save className="h-3.5 w-3.5 text-amber-400" />}
                                 <span>Save Changes</span>
                             </Button>
                             <Button
@@ -6076,10 +6083,10 @@ export function AgregarrStudio() {
                                 size="sm"
                                 disabled={savingPlacement}
                                 onClick={() => handleSavePlacement(true)}
-                                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs gap-1.5 shadow-md cursor-pointer"
+                                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs gap-1.5 shadow-md cursor-pointer transition-all active:scale-95"
                                 title="Save settings and push to Plex immediately in the background without freezing your screen"
                             >
-                                <RefreshCw className="h-3.5 w-3.5 text-slate-950" />
+                                {savingPlacement ? <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-950" /> : <RefreshCw className="h-3.5 w-3.5 text-slate-950" />}
                                 <span>Save &amp; Sync in Background</span>
                             </Button>
                         </div>
