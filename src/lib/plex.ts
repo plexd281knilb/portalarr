@@ -42,6 +42,39 @@ export function patchPlexDirectDns() {
 
 patchPlexDirectDns();
 
+/**
+ * Returns true if the given IP address or hostname is a private LAN, link-local, or loopback address.
+ */
+export function isPrivateOrLocalIp(ip?: string | null): boolean {
+    if (!ip) return false;
+    const clean = ip.trim().toLowerCase();
+    if (
+        clean === "127.0.0.1" || 
+        clean === "localhost" || 
+        clean === "::1" || 
+        clean === "host.docker.internal" || 
+        clean === "plex"
+    ) {
+        return true;
+    }
+    const parts = clean.split(".").map(n => parseInt(n, 10));
+    if (parts.length !== 4 || parts.some(n => isNaN(n) || n < 0 || n > 255)) {
+        return false;
+    }
+    // Loopback (127.0.0.0/8)
+    if (parts[0] === 127) return true;
+    // RFC 1918 Class A (10.0.0.0/8)
+    if (parts[0] === 10) return true;
+    // RFC 1918 Class B (172.16.0.0/12: 172.16.0.0 – 172.31.255.255)
+    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
+    // RFC 1918 Class C (192.168.0.0/16)
+    if (parts[0] === 192 && parts[1] === 168) return true;
+    // Link-local (169.254.0.0/16)
+    if (parts[0] === 169 && parts[1] === 254) return true;
+
+    return false;
+}
+
 export interface PlexFriendItem {
     id?: number | string;
     email: string;
@@ -1154,36 +1187,58 @@ export async function resolveWorkingPlexServerConnection(
 
     const addCandidate = (u?: string, isPriority = false) => {
         if (!u) return;
-        const clean = u.replace(/\/+$/, "").trim();
+        let clean = u.replace(/\/+$/, "").trim();
         if (!clean) return;
 
         const isPlexDirect = clean.includes(".plex.direct");
-        const isLan = clean.includes("127.0.0.1") || clean.includes("localhost") || clean.includes("192.168.") || clean.includes("10.") || clean.includes("172.") || clean.includes("host.docker.internal") || clean.includes("plex");
+        if (isPlexDirect) {
+            // Strictly enforce HTTPS for all .plex.direct endpoints; plain HTTP causes immediate TLS handshake drops
+            clean = clean.replace(/^http:\/\//i, "https://");
+        }
 
-        const targetList = isPriority ? priorityUrls : (isPlexDirect || isLan ? directLanUrls : otherUrls);
+        // Decode *.plex.direct to IP:port
+        let decodedIp = "";
+        let decodedPort = "32400";
+        const plexDirectMatch = clean.match(/^(?:https?:\/\/)?(\d{1,3})-(\d{1,3})-(\d{1,3})-(\d{1,3})\.[a-zA-Z0-9-]+\.plex\.direct(?::(\d+))?/i);
+        if (plexDirectMatch) {
+            decodedIp = `${plexDirectMatch[1]}.${plexDirectMatch[2]}.${plexDirectMatch[3]}.${plexDirectMatch[4]}`;
+            decodedPort = plexDirectMatch[5] || "32400";
+        }
+
+        const isDecodedPrivate = decodedIp ? isPrivateOrLocalIp(decodedIp) : false;
+        const isLan = clean.includes("127.0.0.1") ||
+                      clean.includes("localhost") ||
+                      clean.includes("192.168.") ||
+                      clean.includes("10.") ||
+                      clean.includes("172.") ||
+                      clean.includes("host.docker.internal") ||
+                      clean.includes("plex") ||
+                      (isPlexDirect && isDecodedPrivate);
+
+        const targetList = isPriority ? priorityUrls : (isLan ? directLanUrls : otherUrls);
 
         if (!targetList.includes(clean)) {
             targetList.push(clean);
         }
 
-        // Also add the http/https alternative
-        if (clean.startsWith("http://")) {
-            const httpsAlt = clean.replace("http://", "https://");
-            if (!targetList.includes(httpsAlt)) targetList.push(httpsAlt);
-        } else if (clean.startsWith("https://")) {
-            const httpAlt = clean.replace("https://", "http://");
-            if (!targetList.includes(httpAlt)) targetList.push(httpAlt);
+        // For non-plex.direct URLs, add http/https alternative
+        if (!isPlexDirect) {
+            if (clean.startsWith("http://")) {
+                const httpsAlt = clean.replace("http://", "https://");
+                if (!targetList.includes(httpsAlt)) targetList.push(httpsAlt);
+            } else if (clean.startsWith("https://")) {
+                const httpAlt = clean.replace("https://", "http://");
+                if (!targetList.includes(httpAlt)) targetList.push(httpAlt);
+            }
         }
 
-        // Decode *.plex.direct to direct LAN IP:port as well
-        const plexDirectMatch = clean.match(/^(?:https?:\/\/)?(\d{1,3})-(\d{1,3})-(\d{1,3})-(\d{1,3})\.[a-zA-Z0-9-]+\.plex\.direct(?::(\d+))?/i);
-        if (plexDirectMatch) {
-            const ip = `${plexDirectMatch[1]}.${plexDirectMatch[2]}.${plexDirectMatch[3]}.${plexDirectMatch[4]}`;
-            const port = plexDirectMatch[5] || "32400";
-            const directHttp = `http://${ip}:${port}`;
-            const directHttps = `https://${ip}:${port}`;
-            if (!directLanUrls.includes(directHttp)) directLanUrls.push(directHttp);
-            if (!directLanUrls.includes(directHttps)) directLanUrls.push(directHttps);
+        // Add decoded IP:port endpoints
+        if (decodedIp) {
+            const decodedTargetList = isPriority ? priorityUrls : (isDecodedPrivate ? directLanUrls : otherUrls);
+            const directHttp = `http://${decodedIp}:${decodedPort}`;
+            const directHttps = `https://${decodedIp}:${decodedPort}`;
+            if (!decodedTargetList.includes(directHttp)) decodedTargetList.push(directHttp);
+            if (!decodedTargetList.includes(directHttps)) decodedTargetList.push(directHttps);
         }
     };
 
@@ -1195,10 +1250,11 @@ export async function resolveWorkingPlexServerConnection(
     // 2. Server-specific connection URIs from Plex API (targetServer.connections):
     if (targetServer?.connections) {
         for (const c of targetServer.connections) {
-            if (c.uri) addCandidate(c.uri, Boolean(c.local));
+            const isLocalConn = Boolean(c.local) || isPrivateOrLocalIp(c.address);
+            if (c.uri) addCandidate(c.uri, isLocalConn);
             if (c.address && c.port) {
-                addCandidate(`http://${c.address}:${c.port}`, true);
-                addCandidate(`https://${c.address}:${c.port}`, true);
+                addCandidate(`http://${c.address}:${c.port}`, isLocalConn);
+                addCandidate(`https://${c.address}:${c.port}`, isLocalConn);
             }
         }
     }

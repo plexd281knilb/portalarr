@@ -1,7 +1,9 @@
 import { decryptData } from "@/lib/encryption";
 import prisma from "@/lib/prisma";
 import { logger } from "@/lib/logger";
-import { getPlexServers, getPlexCloudServersMap } from "@/lib/plex";
+import { getPlexServers, getPlexCloudServersMap, isPrivateOrLocalIp } from "@/lib/plex";
+
+export { isPrivateOrLocalIp };
 
 export interface PlexMediaStreamInfo {
     ratingKey: string;
@@ -595,42 +597,74 @@ export function formatPlexErrorDetails(err: any, url?: string, res?: Response): 
 }
 
 /**
- * Expands a single URL or candidate list into deduplicated http/https endpoints,
- * decoding *.plex.direct domains into direct LAN IP connections to bypass DNS rebinding issues.
+ * Expands a single URL or candidate list into deduplicated endpoints to try,
+ * strictly prioritizing the caller's confirmed working server URL, direct local LAN IPs, and valid HTTPS .plex.direct endpoints.
+ * Note: .plex.direct certificates are TLS only; plain HTTP to .plex.direct is strictly forbidden.
  */
 export function expandCandidateUrls(serverUrlOrCandidates: string | string[]): string[] {
-    const rawList = Array.isArray(serverUrlOrCandidates) ? serverUrlOrCandidates : [serverUrlOrCandidates];
+    const rawList = (Array.isArray(serverUrlOrCandidates) ? serverUrlOrCandidates : [serverUrlOrCandidates])
+        .filter(Boolean)
+        .map(u => (typeof u === "string" ? u.replace(/\/+$/, "").trim() : ""))
+        .filter(Boolean);
+
+    if (rawList.length === 0) return [];
+
+    const primaryUrl = rawList[0];
     const directLanList: string[] = [];
     const otherList: string[] = [];
 
     const add = (u?: string) => {
         if (!u) return;
-        const clean = u.replace(/\/+$/, "").trim();
+        let clean = u.replace(/\/+$/, "").trim();
         if (!clean) return;
 
-        // Decode *.plex.direct to direct LAN IP:port (e.g. 192-168-1-50.xxx.plex.direct:32400 -> http://192.168.1.50:32400)
-        const plexDirectMatch = clean.match(/^(?:https?:\/\/)?(\d{1,3})-(\d{1,3})-(\d{1,3})-(\d{1,3})\.[a-zA-Z0-9-]+\.plex\.direct(?::(\d+))?/i);
-        if (plexDirectMatch) {
-            const ip = `${plexDirectMatch[1]}.${plexDirectMatch[2]}.${plexDirectMatch[3]}.${plexDirectMatch[4]}`;
-            const port = plexDirectMatch[5] || "32400";
-            const directHttp = `http://${ip}:${port}`;
-            const directHttps = `https://${ip}:${port}`;
-            if (!directLanList.includes(directHttp)) directLanList.push(directHttp);
-            if (!directLanList.includes(directHttps)) directLanList.push(directHttps);
+        const isPlexDirect = clean.includes(".plex.direct");
+        if (isPlexDirect) {
+            // Strictly enforce HTTPS for all .plex.direct endpoints; plain HTTP causes immediate TLS handshake drops
+            clean = clean.replace(/^http:\/\//i, "https://");
         }
 
-        const isPlexDirect = clean.includes(".plex.direct");
-        const isLan = clean.includes("127.0.0.1") || clean.includes("localhost") || clean.includes("192.168.") || clean.includes("10.") || clean.includes("172.") || clean.includes("host.docker.internal") || clean.includes("plex");
-        const targetList = (isPlexDirect || isLan) ? directLanList : otherList;
+        // Decode *.plex.direct to direct IP:port
+        let decodedIp = "";
+        let decodedPort = "32400";
+        const plexDirectMatch = clean.match(/^(?:https?:\/\/)?(\d{1,3})-(\d{1,3})-(\d{1,3})-(\d{1,3})\.[a-zA-Z0-9-]+\.plex\.direct(?::(\d+))?/i);
+        if (plexDirectMatch) {
+            decodedIp = `${plexDirectMatch[1]}.${plexDirectMatch[2]}.${plexDirectMatch[3]}.${plexDirectMatch[4]}`;
+            decodedPort = plexDirectMatch[5] || "32400";
+        }
+
+        const isDecodedPrivate = decodedIp ? isPrivateOrLocalIp(decodedIp) : false;
+        const isLan = clean.includes("127.0.0.1") ||
+                      clean.includes("localhost") ||
+                      clean.includes("192.168.") ||
+                      clean.includes("10.") ||
+                      clean.includes("172.") ||
+                      clean.includes("host.docker.internal") ||
+                      clean.includes("plex") ||
+                      (isPlexDirect && isDecodedPrivate);
+
+        const targetList = isLan ? directLanList : otherList;
 
         if (!targetList.includes(clean)) targetList.push(clean);
 
-        if (clean.startsWith("http://")) {
-            const httpsAlt = clean.replace("http://", "https://");
-            if (!targetList.includes(httpsAlt)) targetList.push(httpsAlt);
-        } else if (clean.startsWith("https://")) {
-            const httpAlt = clean.replace("https://", "http://");
-            if (!targetList.includes(httpAlt)) targetList.push(httpAlt);
+        // For non-plex.direct endpoints, add http/https alternatives
+        if (!isPlexDirect) {
+            if (clean.startsWith("http://")) {
+                const httpsAlt = clean.replace("http://", "https://");
+                if (!targetList.includes(httpsAlt)) targetList.push(httpsAlt);
+            } else if (clean.startsWith("https://")) {
+                const httpAlt = clean.replace("https://", "http://");
+                if (!targetList.includes(httpAlt)) targetList.push(httpAlt);
+            }
+        }
+
+        // Add decoded direct IP endpoints
+        if (decodedIp) {
+            const decodedList = isDecodedPrivate ? directLanList : otherList;
+            const directHttp = `http://${decodedIp}:${decodedPort}`;
+            const directHttps = `https://${decodedIp}:${decodedPort}`;
+            if (!decodedList.includes(directHttp)) decodedList.push(directHttp);
+            if (!decodedList.includes(directHttps)) decodedList.push(directHttps);
         }
     };
 
@@ -638,8 +672,18 @@ export function expandCandidateUrls(serverUrlOrCandidates: string | string[]): s
         add(raw);
     }
 
-    // Direct LAN IPs and .plex.direct endpoints first, followed by remaining hostnames / domain endpoints
-    return Array.from(new Set([...directLanList, ...otherList]));
+    // Always ensure the primary URL supplied by the caller is Candidate #1
+    const cleanPrimary = primaryUrl.includes(".plex.direct")
+        ? primaryUrl.replace(/^http:\/\//i, "https://")
+        : primaryUrl;
+
+    const ordered = [
+        cleanPrimary,
+        ...directLanList.filter(u => u !== cleanPrimary),
+        ...otherList.filter(u => u !== cleanPrimary)
+    ];
+
+    return Array.from(new Set(ordered));
 }
 
 function parsePlexXmlMetadata(xml: string): any[] {
@@ -2292,14 +2336,7 @@ export async function updatePlexCollectionPromotionAndOrder(
                 }).catch(() => {});
             }
 
-            // B. Initialize hub for this collection (makes it eligible for Home/Recommended)
-            await fetch(`${cleanBase}/hubs/sections/${encodeURIComponent(String(sectionKey))}/manage?metadataItemId=${encodeURIComponent(collectionRatingKey)}&X-Plex-Token=${encodeURIComponent(token)}`, {
-                method: "POST",
-                headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" },
-                signal: AbortSignal.timeout(4000)
-            }).catch(() => {});
-
-            // C. Update visibility on canonical hub ID
+            // B. Try updating visibility on existing hub first (preserves existing hub order and avoids pushing to bottom!)
             const hubUrl = `${cleanBase}/hubs/sections/${encodeURIComponent(String(sectionKey))}/manage/${encodeURIComponent(canonicalHubId)}?promotedToRecommended=${recVal}&promotedToOwnHome=${homeVal}&promotedToSharedHome=${sharedVal}&X-Plex-Token=${encodeURIComponent(token)}`;
             const hubRes = await fetch(hubUrl, {
                 method: "PUT",
@@ -2307,15 +2344,44 @@ export async function updatePlexCollectionPromotionAndOrder(
                 signal: AbortSignal.timeout(4000)
             }).catch(() => null);
 
-            // D. Fallback visibility update on 3-part hub ID
-            const fallbackHubUrl = `${cleanBase}/hubs/sections/${encodeURIComponent(String(sectionKey))}/manage/${encodeURIComponent(fallbackHubId)}?promotedToRecommended=${recVal}&promotedToOwnHome=${homeVal}&promotedToSharedHome=${sharedVal}&X-Plex-Token=${encodeURIComponent(token)}`;
-            await fetch(fallbackHubUrl, {
-                method: "PUT",
-                headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" },
-                signal: AbortSignal.timeout(4000)
-            }).catch(() => null);
+            let visibilityUpdated = Boolean(hubRes && hubRes.ok);
 
-            // E. Also persist legacy prefs as safety net
+            const fallbackHubUrl = `${cleanBase}/hubs/sections/${encodeURIComponent(String(sectionKey))}/manage/${encodeURIComponent(fallbackHubId)}?promotedToRecommended=${recVal}&promotedToOwnHome=${homeVal}&promotedToSharedHome=${sharedVal}&X-Plex-Token=${encodeURIComponent(token)}`;
+            if (!visibilityUpdated) {
+                const fallbackRes = await fetch(fallbackHubUrl, {
+                    method: "PUT",
+                    headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" },
+                    signal: AbortSignal.timeout(4000)
+                }).catch(() => null);
+                if (fallbackRes && fallbackRes.ok) {
+                    visibilityUpdated = true;
+                }
+            }
+
+            // C. Only initialize hub via POST if neither PUT succeeded (i.e. brand-new unmanaged hub)
+            // Note: Calling POST unconditionally on an already-managed hub causes PMS to reset/append it to the bottom of the section!
+            if (!visibilityUpdated) {
+                await fetch(`${cleanBase}/hubs/sections/${encodeURIComponent(String(sectionKey))}/manage?metadataItemId=${encodeURIComponent(collectionRatingKey)}&X-Plex-Token=${encodeURIComponent(token)}`, {
+                    method: "POST",
+                    headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" },
+                    signal: AbortSignal.timeout(4000)
+                }).catch(() => {});
+
+                // Now retry visibility update after POST initialization
+                await fetch(hubUrl, {
+                    method: "PUT",
+                    headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" },
+                    signal: AbortSignal.timeout(4000)
+                }).catch(() => null);
+
+                await fetch(fallbackHubUrl, {
+                    method: "PUT",
+                    headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" },
+                    signal: AbortSignal.timeout(4000)
+                }).catch(() => null);
+            }
+
+            // D. Also persist legacy prefs as safety net
             await fetch(`${cleanBase}/library/metadata/${encodeURIComponent(collectionRatingKey)}/prefs?promotedToHome=${homeVal}&promotedToRecommended=${recVal}&promotedToSharedHome=${sharedVal}&X-Plex-Token=${encodeURIComponent(token)}`, {
                 method: "PUT",
                 headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" },
@@ -2644,7 +2710,12 @@ export async function uploadPlexItemPoster(
     imageBuffer: Buffer,
     mimeType = "image/jpeg"
 ): Promise<boolean> {
+    if (!imageBuffer || imageBuffer.length === 0 || !ratingKey) {
+        return false;
+    }
+
     const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
+    if (urlsToTry.length === 0) return false;
 
     // Automatically detect image format from magic bytes if possible to prevent PMS 400 rejection
     let detectedMime = mimeType;
@@ -2664,6 +2735,7 @@ export async function uploadPlexItemPoster(
     }
 
     let lastErrorDetail = "";
+    let serverRespondedWithStatus = false;
 
     for (const cleanBase of urlsToTry) {
         const url = `${cleanBase}/library/metadata/${encodeURIComponent(ratingKey)}/posters?X-Plex-Token=${encodeURIComponent(token)}`;
@@ -2688,12 +2760,18 @@ export async function uploadPlexItemPoster(
                 }).catch(() => {});
                 return true;
             } else {
+                serverRespondedWithStatus = true;
                 const text = await res.text().catch(() => "");
                 lastErrorDetail = `${cleanBase}: HTTP ${res.status} ${res.statusText}${text ? ` - ${text.slice(0, 80).replace(/\s+/g, " ")}` : ""}`;
+                if (res.status === 404) {
+                    break;
+                }
             }
         } catch (e: any) {
-            const msg = e?.name === "AbortError" || e?.name === "TimeoutError" ? "timeout after 20s" : (e?.message || String(e));
-            lastErrorDetail = `${cleanBase}: ${msg}`;
+            if (!serverRespondedWithStatus) {
+                const msg = e?.name === "AbortError" || e?.name === "TimeoutError" ? "timeout after 20s" : (e?.message || String(e));
+                lastErrorDetail = `${cleanBase}: ${msg}`;
+            }
         }
     }
 
@@ -2703,6 +2781,8 @@ export async function uploadPlexItemPoster(
 
 /**
  * Uploads a poster image from a URL to a Plex item and locks it.
+ * Downloads the image buffer locally first to bypass Plex container DNS, CDN blocks, and routing issues.
+ * Falls back to asking PMS to fetch from the URL if local download fails.
  */
 export async function uploadPlexItemPosterFromUrl(
     serverUrlOrCandidates: string | string[],
@@ -2710,8 +2790,53 @@ export async function uploadPlexItemPosterFromUrl(
     ratingKey: string,
     imageUrl: string
 ): Promise<boolean> {
+    if (!imageUrl || !ratingKey) return false;
+
+    // 1. Direct Buffer Download Strategy:
+    // Download image into memory directly from Portalarr. This eliminates failures caused by Plex container
+    // outbound DNS isolation, CDN bot blockers (e.g. Unsplash/Cloudflare), and localhost unreachable issues.
+    try {
+        let posterBuffer: Buffer | null = null;
+        let mimeType = "image/jpeg";
+
+        if (imageUrl.startsWith("/")) {
+            // Relative Plex thumbnail path (e.g. /library/metadata/123/thumb/456)
+            posterBuffer = await fetchPlexPosterBuffer(serverUrlOrCandidates, token, imageUrl);
+        } else {
+            const fetchUrl = imageUrl.includes(".plex.direct") && !imageUrl.includes("X-Plex-Token=")
+                ? `${imageUrl}${imageUrl.includes("?") ? "&" : "?"}X-Plex-Token=${encodeURIComponent(token)}`
+                : imageUrl;
+
+            const res = await fetch(fetchUrl, {
+                headers: {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                    "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
+                },
+                signal: AbortSignal.timeout(12000)
+            });
+
+            if (res.ok) {
+                const arr = await res.arrayBuffer();
+                if (arr.byteLength > 0) {
+                    posterBuffer = Buffer.from(arr);
+                    mimeType = res.headers.get("content-type") || "image/jpeg";
+                }
+            }
+        }
+
+        if (posterBuffer && posterBuffer.length > 0) {
+            const uploaded = await uploadPlexItemPoster(serverUrlOrCandidates, token, ratingKey, posterBuffer, mimeType);
+            if (uploaded) {
+                return true;
+            }
+        }
+    } catch {}
+
+    // 2. PMS Outbound Fetch Fallback:
+    // If local buffer download failed, instruct Plex Media Server to download the URL directly
     const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
     let lastErrorDetail = "";
+    let serverRespondedWithStatus = false;
 
     for (const cleanBase of urlsToTry) {
         const url = `${cleanBase}/library/metadata/${encodeURIComponent(ratingKey)}/posters?url=${encodeURIComponent(imageUrl)}&X-Plex-Token=${encodeURIComponent(token)}`;
@@ -2734,12 +2859,16 @@ export async function uploadPlexItemPosterFromUrl(
                 }).catch(() => {});
                 return true;
             } else {
+                serverRespondedWithStatus = true;
                 const text = await res.text().catch(() => "");
                 lastErrorDetail = `${cleanBase}: HTTP ${res.status} ${res.statusText}${text ? ` - ${text.slice(0, 80).replace(/\s+/g, " ")}` : ""}`;
+                if (res.status === 404) break;
             }
         } catch (e: any) {
-            const msg = e?.name === "AbortError" || e?.name === "TimeoutError" ? "timeout after 20s" : (e?.message || String(e));
-            lastErrorDetail = `${cleanBase}: ${msg}`;
+            if (!serverRespondedWithStatus) {
+                const msg = e?.name === "AbortError" || e?.name === "TimeoutError" ? "timeout after 20s" : (e?.message || String(e));
+                lastErrorDetail = `${cleanBase}: ${msg}`;
+            }
         }
     }
 
@@ -2846,7 +2975,7 @@ export async function fetchPlexPosterBuffer(
 
     for (const cleanBase of urlsToTry) {
         const fullUrl = thumbPath.startsWith("http")
-            ? thumbPath
+            ? (thumbPath.includes("X-Plex-Token=") ? thumbPath : `${thumbPath}${thumbPath.includes("?") ? "&" : "?"}X-Plex-Token=${encodeURIComponent(token)}`)
             : `${cleanBase}${thumbPath.startsWith("/") ? "" : "/"}${thumbPath}?X-Plex-Token=${encodeURIComponent(token)}`;
 
         try {

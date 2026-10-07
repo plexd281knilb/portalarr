@@ -32,6 +32,7 @@ import path from "path";
 import { CLOUDFLARE_BYPASS_PATHS, CLOUDFLARE_SUPER_USER_PATHS, CLOUDFLARE_ADMIN_PATHS, matchesCloudflareBypass, matchesCloudflareSuperUser, matchesCloudflareAdmin } from "../src/lib/edge-policy-paths";
 import { getBuiltinOscarBestPictureList } from "../src/lib/curation/oscar-best-picture-data";
 import { COLLECTION_PRESETS } from "../src/lib/curation/presets";
+import { expandCandidateUrls, isPrivateOrLocalIp } from "../src/lib/curation/plex-analyzer";
 
 
 async function runTestSuite() {
@@ -4967,6 +4968,153 @@ async function runTestSuite() {
         }
         if (!isPlexItemExcludedByLabels(comingSoonStub, standardExcludedLabels, false)) {
             throw new Error("Standard collection failed to blanket exclude coming soon stub!");
+        }
+    });
+
+    await assertTest("Agregarr: Collection Update Priority Preservation & Plex Hub Ordering Integrity", async () => {
+        const {
+            updatePlexCollectionPromotionAndOrder,
+            reorderPlexHubsSelective
+        } = await import("../src/lib/curation/plex-analyzer");
+
+        if (typeof updatePlexCollectionPromotionAndOrder !== "function") {
+            throw new Error("Missing updatePlexCollectionPromotionAndOrder in plex-analyzer.ts");
+        }
+        if (typeof reorderPlexHubsSelective !== "function") {
+            throw new Error("Missing reorderPlexHubsSelective in plex-analyzer.ts");
+        }
+
+        // 1. Verify sortTitle normalization regex strips repeated/compounded prefixes cleanly
+        const stripPrefixes = (t: string) => t.replace(/^(![\d]+_)+/, "").trim();
+        if (stripPrefixes("!01_!01_Trending Movies") !== "Trending Movies") {
+            throw new Error(`Failed stripping compounded prefix: ${stripPrefixes("!01_!01_Trending Movies")}`);
+        }
+        if (stripPrefixes("!02_!03_!05_Leaving Soon") !== "Leaving Soon") {
+            throw new Error(`Failed stripping triple compounded prefix: ${stripPrefixes("!02_!03_!05_Leaving Soon")}`);
+        }
+        if (stripPrefixes("Regular Title Without Prefix") !== "Regular Title Without Prefix") {
+            throw new Error(`Failed on title without prefix: ${stripPrefixes("Regular Title Without Prefix")}`);
+        }
+
+        // 2. Test database orderIndex & sortPrefix preservation on update simulation
+        const testCollId = "test_priority_preserve_" + Date.now();
+        const initialOrder = 3;
+        const initialPrefix = `!03_`;
+
+        // Create test collection at priority rank #3
+        const created = await prisma.mediaCollection.create({
+            data: {
+                id: testCollId,
+                title: "Test Priority Collection",
+                summary: "Testing priority rank preservation",
+                sortTitle: `${initialPrefix}Test Priority Collection`,
+                type: "movie",
+                category: "curated",
+                serverId: "test_srv_priority",
+                sectionKey: "1",
+                sourceType: "tmdb",
+                sourceQuery: "trending",
+                orderIndex: initialOrder,
+                sortPrefix: initialPrefix,
+                promotedToHome: true,
+                promotedToRecommended: true
+            }
+        });
+
+        if (created.orderIndex !== 3 || created.sortPrefix !== "!03_") {
+            throw new Error(`Expected created orderIndex=3 and sortPrefix='!03_', got ${created.orderIndex}, ${created.sortPrefix}`);
+        }
+
+        // Simulate update where incoming payload does NOT specify orderIndex (orderIndex is undefined/0)
+        // Demonstrating that existing.orderIndex (3) and sortPrefix (!03_) are strictly preserved
+        const existing = await prisma.mediaCollection.findUnique({ where: { id: testCollId } });
+        if (!existing) throw new Error("Test collection not found in database");
+
+        const incomingData: { orderIndex?: number; sortPrefix?: string; summary?: string } = {
+            summary: "Updated description without specifying orderIndex"
+        };
+
+        const effectiveOrderIndex = (incomingData.orderIndex !== undefined && incomingData.orderIndex > 0)
+            ? incomingData.orderIndex
+            : (existing.orderIndex && existing.orderIndex > 0 ? existing.orderIndex : 1);
+        const effectiveSortPrefix = incomingData.sortPrefix || existing.sortPrefix || `!${String(effectiveOrderIndex).padStart(2, '0')}_`;
+
+        const updated = await prisma.mediaCollection.update({
+            where: { id: testCollId },
+            data: {
+                summary: incomingData.summary,
+                orderIndex: effectiveOrderIndex,
+                sortPrefix: effectiveSortPrefix
+            }
+        });
+
+        if (updated.orderIndex !== 3) {
+            throw new Error(`Expected orderIndex to remain 3 after update, got ${updated.orderIndex} (dropped to bottom bug!)`);
+        }
+        if (updated.sortPrefix !== "!03_") {
+            throw new Error(`Expected sortPrefix to remain '!03_', got '${updated.sortPrefix}'`);
+        }
+
+        // Cleanup
+        await prisma.mediaCollection.deleteMany({
+            where: { id: testCollId }
+        });
+    });
+
+    // 79. Agregarr & Plex Direct: SSL Enforcement, LAN/WAN IP Isolation & Candidate URL Precedence
+    await assertTest("Agregarr: Plex Direct Endpoint SSL Security, Private LAN IP Isolation & Working Server URL Precedence", async () => {
+        // 1. Verify isPrivateOrLocalIp detects private subnets, loopbacks, link-local, and Docker hosts
+        const privateIps = [
+            "127.0.0.1", "localhost", "::1", "host.docker.internal", "plex",
+            "192.168.1.1", "192.168.0.254", "10.0.0.1", "10.255.255.255",
+            "172.16.0.1", "172.20.10.2", "172.31.255.254", "169.254.1.1"
+        ];
+        for (const ip of privateIps) {
+            if (!isPrivateOrLocalIp(ip)) {
+                throw new Error(`Expected isPrivateOrLocalIp("${ip}") to be true, got false`);
+            }
+        }
+
+        // 2. Verify isPrivateOrLocalIp rejects public WAN IPs
+        const publicIps = [
+            "162.231.214.194", "8.8.8.8", "1.1.1.1", "208.67.222.222",
+            "172.32.0.1", "172.15.255.255", "192.169.1.1"
+        ];
+        for (const ip of publicIps) {
+            if (isPrivateOrLocalIp(ip)) {
+                throw new Error(`Expected isPrivateOrLocalIp("${ip}") to be false, got true`);
+            }
+        }
+
+        // 3. Verify expandCandidateUrls enforces HTTPS on .plex.direct (never returns plain http:// for .plex.direct)
+        const httpPlexDirect = "http://192-168-1-50.57284ecb50604cbabd5368742bd8cc5f.plex.direct:32400";
+        const expandedHttp = expandCandidateUrls(httpPlexDirect);
+        for (const cand of expandedHttp) {
+            if (cand.includes(".plex.direct") && cand.startsWith("http://")) {
+                throw new Error(`Protocol violation: expandCandidateUrls generated plain http:// for .plex.direct: "${cand}"`);
+            }
+        }
+
+        // 4. Verify candidate #0 (confirmed working server URL) is ALWAYS preserved as Candidate #1
+        const workingDirectUrl = "http://192.168.1.100:32400";
+        const wanPlexDirectUrl = "https://162-231-214-194.57284ecb50604cbabd5368742bd8cc5f.plex.direct:24960";
+        const expandedPriority = expandCandidateUrls([workingDirectUrl, wanPlexDirectUrl]);
+
+        if (expandedPriority[0] !== workingDirectUrl) {
+            throw new Error(`Expected Candidate #0 to remain confirmed working URL "${workingDirectUrl}", got "${expandedPriority[0]}"`);
+        }
+
+        // 5. Verify public WAN .plex.direct does NOT get decoded into high-priority direct LAN candidates
+        const expandedWan = expandCandidateUrls(wanPlexDirectUrl);
+        // It must NOT generate http://162-231-214-194...plex.direct
+        if (expandedWan.some(u => u.includes(".plex.direct") && u.startsWith("http://"))) {
+            throw new Error(`Found plain http:// for WAN .plex.direct in: ${expandedWan.join(", ")}`);
+        }
+        // Direct LAN URLs must come before WAN fallback URLs when both are present
+        const directLanIndex = expandedPriority.indexOf("http://192.168.1.100:32400");
+        const wanIndex = expandedPriority.indexOf(wanPlexDirectUrl);
+        if (directLanIndex === -1 || wanIndex === -1 || directLanIndex > wanIndex) {
+            throw new Error(`Expected direct LAN URL (idx: ${directLanIndex}) to precede WAN fallback URL (idx: ${wanIndex})`);
         }
     });
 

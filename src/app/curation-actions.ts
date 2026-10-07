@@ -1270,39 +1270,6 @@ export async function saveMediaCollectionAction(data: {
         await verifyAdmin();
 
         await ensureSchemaColumns();
-        const dataPayload = {
-            title: data.title,
-            summary: data.summary,
-            sortTitle: data.sortTitle,
-            type: data.type,
-            category: data.category,
-            serverId: data.serverId,
-            sectionKey: data.sectionKey,
-            sourceType: data.sourceType,
-            sourceQuery: data.sourceQuery,
-            rules: data.rules ? JSON.stringify(data.rules) : null,
-            posterUrl: data.posterUrl,
-            autoSync: data.autoSync ?? true,
-            syncInterval: data.syncInterval || "daily",
-            maxItems: data.maxItems !== undefined ? data.maxItems : 0,
-            excludedLabels: data.excludedLabels !== undefined ? data.excludedLabels : "",
-            includePlaceholders: data.includePlaceholders !== undefined ? data.includePlaceholders : false,
-            orderIndex: data.orderIndex ?? 0,
-            promotedToHome: data.promotedToHome ?? true,
-            promotedToRecommended: data.promotedToRecommended ?? true,
-            promotedToSharedHome: data.promotedToSharedHome ?? true,
-            collectionMode: data.collectionMode || "default",
-            sortPrefix: data.sortPrefix || "!00_",
-            activeDays: data.activeDays || "all",
-            activeTimeRange: data.activeTimeRange || "all_day",
-            isSeasonal: data.isSeasonal ?? false,
-            scheduleStartMonth: data.scheduleStartMonth,
-            scheduleStartDay: data.scheduleStartDay,
-            scheduleEndMonth: data.scheduleEndMonth,
-            scheduleEndDay: data.scheduleEndDay,
-            seasonalAction: data.seasonalAction || "promote_hide"
-        };
-
         let existing = null;
         if (data.id) {
             existing = await prisma.mediaCollection.findUnique({
@@ -1323,6 +1290,77 @@ export async function saveMediaCollectionAction(data: {
                 (data.sourceQuery && c.sourceQuery && c.sourceQuery === data.sourceQuery)
             ) || null;
         }
+
+        // Determine effective orderIndex and sortPrefix (PRESERVE existing priority!)
+        let effectiveOrderIndex: number;
+        let effectiveSortPrefix: string;
+
+        if (existing) {
+            // When updating an existing collection, strictly PRESERVE its established rank and sort prefix
+            if (data.id && data.orderIndex !== undefined && data.orderIndex > 0) {
+                effectiveOrderIndex = data.orderIndex;
+            } else if (existing.orderIndex && existing.orderIndex > 0) {
+                effectiveOrderIndex = existing.orderIndex;
+            } else if (data.orderIndex !== undefined && data.orderIndex > 0) {
+                effectiveOrderIndex = data.orderIndex;
+            } else {
+                effectiveOrderIndex = 1;
+            }
+            effectiveSortPrefix = data.sortPrefix || existing.sortPrefix || `!${String(effectiveOrderIndex).padStart(2, '0')}_`;
+        } else {
+            // New collection: append to end if not specified
+            if (data.orderIndex !== undefined && data.orderIndex > 0) {
+                effectiveOrderIndex = data.orderIndex;
+            } else {
+                const maxInDb = await prisma.mediaCollection.aggregate({
+                    where: {
+                        serverId: data.serverId,
+                        sectionKey: data.sectionKey
+                    },
+                    _max: { orderIndex: true }
+                });
+                effectiveOrderIndex = (maxInDb._max.orderIndex || 0) + 1;
+            }
+            effectiveSortPrefix = data.sortPrefix || `!${String(effectiveOrderIndex).padStart(2, '0')}_`;
+        }
+
+        const cleanBaseTitle = (data.title || existing?.title || "").replace(/^(![\d]+_)+/, "").trim();
+        const effectiveSortTitle = data.sortTitle
+            ? `${effectiveSortPrefix}${data.sortTitle.replace(/^(![\d]+_)+/, "").trim()}`
+            : `${effectiveSortPrefix}${cleanBaseTitle}`;
+
+        const dataPayload = {
+            title: data.title,
+            summary: data.summary,
+            sortTitle: effectiveSortTitle,
+            type: data.type,
+            category: data.category,
+            serverId: data.serverId,
+            sectionKey: data.sectionKey,
+            sourceType: data.sourceType,
+            sourceQuery: data.sourceQuery,
+            rules: data.rules ? JSON.stringify(data.rules) : null,
+            posterUrl: data.posterUrl,
+            autoSync: data.autoSync ?? true,
+            syncInterval: data.syncInterval || "daily",
+            maxItems: data.maxItems !== undefined ? data.maxItems : 0,
+            excludedLabels: data.excludedLabels !== undefined ? data.excludedLabels : "",
+            includePlaceholders: data.includePlaceholders !== undefined ? data.includePlaceholders : false,
+            orderIndex: effectiveOrderIndex,
+            promotedToHome: data.promotedToHome ?? true,
+            promotedToRecommended: data.promotedToRecommended ?? true,
+            promotedToSharedHome: data.promotedToSharedHome ?? true,
+            collectionMode: data.collectionMode || "default",
+            sortPrefix: effectiveSortPrefix,
+            activeDays: data.activeDays || "all",
+            activeTimeRange: data.activeTimeRange || "all_day",
+            isSeasonal: data.isSeasonal ?? false,
+            scheduleStartMonth: data.scheduleStartMonth,
+            scheduleStartDay: data.scheduleStartDay,
+            scheduleEndMonth: data.scheduleEndMonth,
+            scheduleEndDay: data.scheduleEndDay,
+            seasonalAction: data.seasonalAction || "promote_hide"
+        };
 
         let collection;
         if (existing) {
@@ -1450,7 +1488,9 @@ export async function syncCollectionToPlexInternal(collectionId: string): Promis
 
             if (found) {
                 if (!found.ratingKey?.startsWith("hub:") && !found.isHub) {
-                    const sortTitle = `${collection.sortPrefix || "!00_"}${collection.sortTitle || collection.title}`;
+                    const cleanBaseTitle = (collection.title || collection.sortTitle || "").replace(/^(![\d]+_)+/, "").trim();
+                    const prefix = collection.sortPrefix || `!${String(collection.orderIndex || 0).padStart(2, '0')}_`;
+                    const sortTitle = `${prefix}${cleanBaseTitle}`;
                     await updatePlexCollectionPromotionAndOrder(
                         urlsToTry,
                         token,
@@ -1474,6 +1514,34 @@ export async function syncCollectionToPlexInternal(collectionId: string): Promis
                         lastSyncedAt: new Date()
                     }
                 });
+
+                if (collection.serverId && collection.sectionKey) {
+                    try {
+                        const sectionColls = await prisma.mediaCollection.findMany({
+                            where: {
+                                serverId: collection.serverId,
+                                sectionKey: collection.sectionKey,
+                                isIgnored: false,
+                            },
+                            orderBy: [
+                                { orderIndex: "asc" },
+                                { createdAt: "asc" }
+                            ]
+                        });
+                        const desiredHubKeys = sectionColls.map(c => c.ratingKey || c.id).filter(Boolean);
+                        if (desiredHubKeys.length > 0) {
+                            let libraryType: "show" | "movie" = "movie";
+                            try {
+                                const sections = await getPlexServerSections(token, collection.serverId, resolved.serverUrl);
+                                const sec = sections.find(s => String(s.key) === String(collection.sectionKey));
+                                if (sec?.type === "show" || sec?.type === "tv") {
+                                    libraryType = "show";
+                                }
+                            } catch {}
+                            await reorderPlexHubsSelective(urlsToTry, token, collection.sectionKey, desiredHubKeys, libraryType);
+                        }
+                    } catch (reorderErr: any) {}
+                }
 
                 const label = found.isHub ? "Hub" : "collection";
                 logger.addLog("SUCCESS", "PLEX", `Synced Plex ${label} "${collection.title}" (${found.childCount} items) on server "${resolved.serverName}" with sort prefix "${collection.sortPrefix || "!00_"}"`);
@@ -1955,6 +2023,10 @@ export async function syncCollectionToPlexInternal(collectionId: string): Promis
             : matchingRatingKeys;
 
         // 4. Sync to Plex with Sort Prefix and Home Promotion
+        const cleanBaseTitle = (collection.title || collection.sortTitle || "").replace(/^(![\d]+_)+/, "").trim();
+        const prefix = collection.sortPrefix || `!${String(collection.orderIndex || 0).padStart(2, '0')}_`;
+        const sortTitle = `${prefix}${cleanBaseTitle}`;
+
         const syncResult = await syncPlexCollection(
             urlsToTry,
             token,
@@ -1963,7 +2035,7 @@ export async function syncCollectionToPlexInternal(collectionId: string): Promis
             finalRatingKeys,
             {
                 summary: collection.summary || undefined,
-                sortTitle: `${collection.sortPrefix || "!00_"}${collection.title}`,
+                sortTitle,
                 promotedToHome: collection.promotedToHome ?? true,
                 promotedToRecommended: collection.promotedToRecommended ?? true,
                 promotedToSharedHome: collection.promotedToSharedHome ?? true,
@@ -1981,6 +2053,37 @@ export async function syncCollectionToPlexInternal(collectionId: string): Promis
                 ratingKey: syncResult.collectionRatingKey || undefined
             }
         });
+
+        // 6. Selective hub reorder to guarantee Plex Home Screen respects established priority order
+        if (collection.serverId && collection.sectionKey) {
+            try {
+                const sectionColls = await prisma.mediaCollection.findMany({
+                    where: {
+                        serverId: collection.serverId,
+                        sectionKey: collection.sectionKey,
+                        isIgnored: false,
+                    },
+                    orderBy: [
+                        { orderIndex: "asc" },
+                        { createdAt: "asc" }
+                    ]
+                });
+                const desiredHubKeys = sectionColls.map(c => c.ratingKey || c.id).filter(Boolean);
+                if (desiredHubKeys.length > 0) {
+                    let libraryType: "show" | "movie" = "movie";
+                    try {
+                        const sections = await getPlexServerSections(token, collection.serverId, resolved.serverUrl);
+                        const sec = sections.find(s => String(s.key) === String(collection.sectionKey));
+                        if (sec?.type === "show" || sec?.type === "tv") {
+                            libraryType = "show";
+                        }
+                    } catch {}
+                    await reorderPlexHubsSelective(urlsToTry, token, collection.sectionKey, desiredHubKeys, libraryType);
+                }
+            } catch (hubReorderErr: any) {
+                console.warn("[SYNC-REORDER] Non-fatal hub reorder error after collection sync:", hubReorderErr?.message);
+            }
+        }
 
         logger.addLog("SUCCESS", "PLEX", `Successfully synced collection "${collection.title}" (${finalRatingKeys.length} items${placeholdersGenerated > 0 ? `, ${placeholdersGenerated} placeholders generated` : ""}) to Plex server "${resolved.serverName}"`);
 
@@ -2456,7 +2559,7 @@ export async function reorderPlexCollectionsAction(
 
                 if (!existing) return null;
 
-                const cleanBaseTitle = (existing.title || existing.sortTitle || "").replace(/^![\d]+_/, "").trim();
+                const cleanBaseTitle = (existing.title || existing.sortTitle || "").replace(/^(![\d]+_)+/, "").trim();
                 const effectiveSortTitle = `${prefix}${cleanBaseTitle}`;
 
                 const updated = await prisma.mediaCollection.update({
@@ -2485,7 +2588,7 @@ export async function reorderPlexCollectionsAction(
                 if (!targetRatingKey) return;
 
                 const prefix = item.sortPrefix || `!${String(item.orderIndex).padStart(2, '0')}_`;
-                const cleanBaseTitle = (db.title || db.sortTitle || "").replace(/^![\d]+_/, "").trim();
+                const cleanBaseTitle = (db.title || db.sortTitle || "").replace(/^(![\d]+_)+/, "").trim();
                 const effectiveSortTitle = `${prefix}${cleanBaseTitle}`;
 
                 try {
@@ -2577,7 +2680,8 @@ export async function toggleCollectionVisibilityAction(
             if (resolved?.serverUrl) {
                 const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
                 const prefix = updated.sortPrefix || `!${String(updated.orderIndex || 0).padStart(2, '0')}_`;
-                const sortTitle = `${prefix}${updated.sortTitle || updated.title}`;
+                const cleanBaseTitle = (updated.title || updated.sortTitle || "").replace(/^(![\d]+_)+/, "").trim();
+                const sortTitle = `${prefix}${cleanBaseTitle}`;
 
                 await updatePlexCollectionPromotionAndOrder(
                     urlsToTry,
@@ -2659,7 +2763,15 @@ export async function updateCollectionPlacementAction(data: {
         const collection = await prisma.mediaCollection.findUnique({ where: { id: data.id } });
         if (!collection) return { success: false, error: "Collection not found." };
 
-        const prefix = data.sortPrefix !== undefined ? data.sortPrefix : (data.orderIndex !== undefined ? `!${String(data.orderIndex).padStart(2, '0')}_` : collection.sortPrefix);
+        const targetOrder = (data.orderIndex !== undefined && data.orderIndex > 0)
+            ? data.orderIndex
+            : (collection.orderIndex && collection.orderIndex > 0 ? collection.orderIndex : 1);
+        const prefix = data.sortPrefix !== undefined 
+            ? data.sortPrefix 
+            : `!${String(targetOrder).padStart(2, '0')}_`;
+
+        const cleanBaseTitle = (collection.title || collection.sortTitle || "").replace(/^(![\d]+_)+/, "").trim();
+        const sortTitle = `${prefix}${cleanBaseTitle}`;
 
         const updated = await prisma.mediaCollection.update({
             where: { id: data.id },
@@ -2671,8 +2783,9 @@ export async function updateCollectionPlacementAction(data: {
                 promotedToSharedHome: data.promotedToSharedHome ?? collection.promotedToSharedHome,
                 promotedToRecommended: data.promotedToRecommended ?? collection.promotedToRecommended,
                 collectionMode: data.collectionMode ?? collection.collectionMode,
-                orderIndex: data.orderIndex ?? collection.orderIndex,
+                orderIndex: targetOrder,
                 sortPrefix: prefix,
+                sortTitle,
                 activeDays: data.activeDays ?? collection.activeDays,
                 activeTimeRange: data.activeTimeRange ?? collection.activeTimeRange,
                 isSeasonal: data.isSeasonal ?? collection.isSeasonal,
@@ -2689,7 +2802,6 @@ export async function updateCollectionPlacementAction(data: {
             const resolved = await resolveWorkingPlexServerConnection(updated.serverId);
             if (resolved?.serverUrl) {
                 const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
-                const sortTitle = `${prefix}${updated.sortTitle || updated.title}`;
 
                 await updatePlexCollectionPromotionAndOrder(
                     urlsToTry,
@@ -2704,6 +2816,35 @@ export async function updateCollectionPlacementAction(data: {
                         collectionMode: updated.collectionMode || "default"
                     }
                 );
+
+                // Reorder hubs selectively in Plex so this collection preserves its position on Plex Home Screen
+                try {
+                    const sectionColls = await prisma.mediaCollection.findMany({
+                        where: {
+                            serverId: updated.serverId,
+                            sectionKey: updated.sectionKey,
+                            isIgnored: false,
+                        },
+                        orderBy: [
+                            { orderIndex: "asc" },
+                            { createdAt: "asc" }
+                        ]
+                    });
+                    const desiredHubKeys = sectionColls.map(c => c.ratingKey || c.id).filter(Boolean);
+                    if (desiredHubKeys.length > 0) {
+                        let libraryType: "show" | "movie" = "movie";
+                        try {
+                            const sections = await getPlexServerSections(resolved.token, updated.serverId, resolved.serverUrl);
+                            const sec = sections.find(s => String(s.key) === String(updated.sectionKey));
+                            if (sec?.type === "show" || sec?.type === "tv") {
+                                libraryType = "show";
+                            }
+                        } catch {}
+                        await reorderPlexHubsSelective(urlsToTry, resolved.token, updated.sectionKey, desiredHubKeys, libraryType);
+                    }
+                } catch (reorderErr: any) {
+                    console.warn("[PLACEMENT-REORDER] Could not reorder Plex hubs after placement update:", reorderErr?.message);
+                }
 
                 // If this is a Smart Hub collection, update its filter URI in Plex with the latest excluded labels
                 if (updated.sourceType === "plex_smart" || updated.category === "Plex Smart") {
@@ -2886,8 +3027,9 @@ export async function syncSeasonalAndScheduledCollectionsInternal(serverId?: str
                     }
 
                     if (coll.ratingKey && coll.sectionKey) {
-                        const prefix = coll.sortPrefix || `!02_Schedule_`;
-                        const effectiveSort = `${prefix}${coll.sortTitle || coll.title}`;
+                        const prefix = coll.sortPrefix || `!${String(coll.orderIndex || 2).padStart(2, '0')}_`;
+                        const cleanBaseTitle = (coll.title || coll.sortTitle || "").replace(/^(![\d]+_)+/, "").trim();
+                        const effectiveSort = `${prefix}${cleanBaseTitle}`;
                         await updatePlexCollectionPromotionAndOrder(
                             urlsToTry,
                             token,
@@ -2950,7 +3092,9 @@ export async function syncSeasonalAndScheduledCollectionsInternal(serverId?: str
                     // Auto-sync dynamic collection to Plex to refresh contents & ordering
                     await syncCollectionToPlexInternal(coll.id).catch(() => {});
                 } else if (coll.ratingKey && coll.sectionKey) {
-                    const sortTitle = `${coll.sortPrefix || "!00_"}${coll.sortTitle || coll.title}`;
+                    const cleanBaseTitle = (coll.title || coll.sortTitle || "").replace(/^(![\d]+_)+/, "").trim();
+                    const prefix = coll.sortPrefix || `!${String(coll.orderIndex || 0).padStart(2, '0')}_`;
+                    const sortTitle = `${prefix}${cleanBaseTitle}`;
                     await updatePlexCollectionPromotionAndOrder(
                         urlsToTry,
                         token,
