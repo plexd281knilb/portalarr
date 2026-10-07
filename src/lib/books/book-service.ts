@@ -314,9 +314,7 @@ export async function fetchTrendingEbooks(isKids: boolean = false): Promise<Book
         } catch (e) {}
     }
 
-    if (results.length > 0) {
-        trendingEbooksCache.set(cacheKey, { data: results, timestamp: Date.now() });
-    }
+    trendingEbooksCache.set(cacheKey, { data: results, timestamp: Date.now() });
     return results;
 }
 
@@ -440,9 +438,7 @@ export async function fetchTrendingAudiobooks(isKids: boolean = false): Promise<
         } catch (e) {}
     }
 
-    if (results.length > 0) {
-        trendingAudiobooksCache.set(cacheKey, { data: results, timestamp: Date.now() });
-    }
+    trendingAudiobooksCache.set(cacheKey, { data: results, timestamp: Date.now() });
     return results;
 }
 
