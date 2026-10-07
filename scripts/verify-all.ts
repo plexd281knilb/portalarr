@@ -5162,13 +5162,18 @@ async function runTestSuite() {
             throw new Error(`Expected copyToClipboard("") to return false, got ${emptyResult}`);
         }
 
-        const { syncCollectionToPlexInternal } = await import("../src/app/curation-actions");
+        const { syncCollectionToPlexInternal, getMediaCollectionsAction } = await import("../src/app/curation-actions");
         const res = await syncCollectionToPlexInternal("non-existent-collection-id-999", {
             skipHubReorder: true,
             cachedExistingCollections: []
         });
         if (res.success !== false) {
             throw new Error(`Expected failure for non-existent collection, got: ${JSON.stringify(res)}`);
+        }
+
+        const getRes = await getMediaCollectionsAction("main", "1");
+        if (!getRes || typeof getRes.success !== "boolean") {
+            throw new Error("getMediaCollectionsAction failed structure test");
         }
     });
 

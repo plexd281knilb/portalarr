@@ -1041,8 +1041,29 @@ export async function getMediaCollectionsAction(serverId?: string, sectionKey?: 
         await verifyAdmin();
 
         await ensureSchemaColumns();
-        const resolved = serverId ? await resolveWorkingPlexServerConnection(serverId).catch(() => null) : null;
-        const serverIdCandidates = [serverId, resolved?.serverId, "main"].filter(Boolean) as string[];
+        let serverIdCandidates = serverId ? [serverId, "main"] : [];
+        if (serverId) {
+            try {
+                const dbServer = await prisma.plexServer.findFirst({
+                    where: {
+                        OR: [
+                            { id: serverId },
+                            { name: serverId },
+                            { clientIdentifier: serverId }
+                        ]
+                    }
+                });
+                if (dbServer) {
+                    serverIdCandidates = Array.from(new Set([
+                        serverId,
+                        dbServer.id,
+                        dbServer.name,
+                        dbServer.clientIdentifier,
+                        "main"
+                    ].filter(Boolean) as string[]));
+                }
+            } catch {}
+        }
 
         const rawCollections = await prisma.mediaCollection.findMany({
             where: {
@@ -2813,7 +2834,7 @@ export async function updateCollectionPlacementAction(data: {
         if (data.syncToPlex !== false && updated.serverId && updated.sectionKey && updated.ratingKey) {
             const resolved = await resolveWorkingPlexServerConnection(updated.serverId);
             if (resolved?.serverUrl) {
-                const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter(u => u !== resolved.serverUrl)];
+                const urlsToTry = [resolved.serverUrl];
 
                 await updatePlexCollectionPromotionAndOrder(
                     urlsToTry,

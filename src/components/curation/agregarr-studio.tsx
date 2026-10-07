@@ -1193,69 +1193,87 @@ export function AgregarrStudio() {
         }
     };
 
-    // Save Placement Modal Settings (Fast non-blocking save + optional background Plex sync)
-    const handleSavePlacement = async (syncToPlex: boolean = false) => {
+    // Save Placement Modal Settings (Instant 0ms optimistic save + background SQLite & Plex sync)
+    const handleSavePlacement = (syncToPlex: boolean = false) => {
         if (!editingCollection) return;
         const collId = editingCollection.id;
         const collTitle = editingCollection.title || "Collection";
-        setSavingPlacement(true);
+
+        const targetOrder = (Number(placementOrderIndex) && Number(placementOrderIndex) > 0)
+            ? Number(placementOrderIndex)
+            : (editingCollection.orderIndex && editingCollection.orderIndex > 0 ? editingCollection.orderIndex : 1);
+        const prefix = placementSortPrefix || `!${String(targetOrder).padStart(2, '0')}_`;
+        const cleanBaseTitle = (editingCollection.title || editingCollection.sortTitle || "").replace(/^(![\d]+_)+/, "").trim();
+        const newSortTitle = `${prefix}${cleanBaseTitle}`;
+
+        const updatedFields = {
+            promotedToHome: placementHome,
+            promotedToSharedHome: placementShared,
+            promotedToRecommended: placementRecommended,
+            collectionMode: placementMode,
+            orderIndex: targetOrder,
+            sortPrefix: prefix,
+            sortTitle: newSortTitle,
+            activeDays: placementActiveDays,
+            activeTimeRange: placementActiveTimeRange,
+            isSeasonal: placementIsSeasonal,
+            scheduleStartMonth: placementIsSeasonal ? Number(placementStartMonth) : null,
+            scheduleStartDay: placementIsSeasonal ? Number(placementStartDay) : null,
+            scheduleEndMonth: placementIsSeasonal ? Number(placementEndMonth) : null,
+            scheduleEndDay: placementIsSeasonal ? Number(placementEndDay) : null,
+            seasonalAction: placementSeasonalAction,
+            maxItems: Number(placementMaxItems),
+            excludedLabels: placementExcludedLabels,
+            includePlaceholders: placementIncludePlaceholders,
+        };
+
+        // 1. Instantly update React state optimistically (0ms UI latency!)
+        setCollections(prev => prev.map(c => c.id === collId ? { ...c, ...updatedFields } : c));
+
+        // 2. Immediately close modal and unblock UI
+        setPlacementModalOpen(false);
+        setSavingPlacement(false);
         setPlacementSavedMsg(null);
-        try {
-            const res = await updateCollectionPlacementAction({
+
+        // 3. Show instant toast notification
+        if (syncToPlex) {
+            showFloatingToast({
                 id: collId,
-                promotedToHome: placementHome,
-                promotedToSharedHome: placementShared,
-                promotedToRecommended: placementRecommended,
-                collectionMode: placementMode,
-                orderIndex: Number(placementOrderIndex),
-                sortPrefix: placementSortPrefix,
-                activeDays: placementActiveDays,
-                activeTimeRange: placementActiveTimeRange,
-                isSeasonal: placementIsSeasonal,
-                scheduleStartMonth: placementIsSeasonal ? Number(placementStartMonth) : null,
-                scheduleStartDay: placementIsSeasonal ? Number(placementStartDay) : null,
-                scheduleEndMonth: placementIsSeasonal ? Number(placementEndMonth) : null,
-                scheduleEndDay: placementIsSeasonal ? Number(placementEndDay) : null,
-                seasonalAction: placementSeasonalAction,
-                maxItems: Number(placementMaxItems),
-                excludedLabels: placementExcludedLabels,
-                includePlaceholders: placementIncludePlaceholders,
-                syncToPlex: false // Fast local save in SQLite - never blocks or freezes!
+                type: "info",
+                text: `✓ Saved "${collTitle}"! Syncing to Plex in the background...`
             });
-
-            if (res.success) {
-                // 1. Immediately close modal and unblock UI so user never waits or freezes
-                setPlacementModalOpen(false);
-                setSavingPlacement(false);
-
-                // 2. Refresh local collection list immediately so the new settings are visible on the card
-                loadCollections();
-
-                if (syncToPlex) {
-                    // 3. Trigger background sync to Plex asynchronously
-                    showFloatingToast({
-                        id: collId,
-                        type: "info",
-                        text: `✓ Saved "${collTitle}"! Syncing to Plex in the background...`
-                    });
-                    executeSyncCollection(collId);
-                } else {
-                    // 4. Saved locally without syncing to Plex
-                    showFloatingToast({
-                        id: collId,
-                        type: "success",
-                        text: `✓ Saved "${collTitle}"! Hit "Sync" on the card or "Sync All to Plex" when ready to push.`
-                    });
-                }
-            } else {
-                setPlacementSavedMsg(`⚠️ ${res.error || "Failed saving collection settings."}`);
-                setSavingPlacement(false);
-            }
-        } catch (err: any) {
-            console.error("Failed saving collection settings:", err);
-            setPlacementSavedMsg(`⚠️ ${err.message || "Failed saving collection settings."}`);
-            setSavingPlacement(false);
+            executeSyncCollection(collId);
+        } else {
+            showFloatingToast({
+                id: collId,
+                type: "success",
+                text: `✓ Saved changes for "${collTitle}"!`
+            });
         }
+
+        // 4. Asynchronously persist to SQLite in background
+        updateCollectionPlacementAction({
+            id: collId,
+            ...updatedFields,
+            syncToPlex: false // Fast local save in SQLite
+        }).then(res => {
+            if (!res.success) {
+                showFloatingToast({
+                    id: collId,
+                    type: "error",
+                    text: `⚠️ Could not save settings for "${collTitle}": ${res.error}`
+                });
+                loadCollections();
+            }
+        }).catch(err => {
+            console.error("Failed saving collection settings in background:", err);
+            showFloatingToast({
+                id: collId,
+                type: "error",
+                text: `⚠️ Error saving settings: ${err?.message || "Unknown error"}`
+            });
+            loadCollections();
+        });
     };
 
     // Open Quick Excluded Labels Modal
