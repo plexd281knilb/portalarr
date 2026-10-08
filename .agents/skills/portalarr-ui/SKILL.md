@@ -637,10 +637,26 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
   - Responses must explicitly specify `Cache-Control: no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0` to prevent edge proxies (Cloudflare) and intermediate CDNs from serving stale status snapshots.
   - Client components (`SimpleSystemHealth`, `SystemStatus`, etc.) must fetch with `{ cache: "no-store" }`.
 
+### 35. Subscription Renewal Reminders & Access Directory Telemetry (`/settings/access`)
+- **Deterministic Member Directory Next Reminder Badges**:
+  - Every member card in `/settings/access` computes live reminder information (`getNextRenewalReminderInfo`) and displays responsive status badges:
+    - 🟢 `Paid / Up to Date` / `Paid`: Subscription is covered through the future cycle or a confirmed payment was recorded.
+    - 🟡 `Due Today (<m>d notice)`: The current milestone bracket has arrived and is due for dispatch today.
+    - 🔵 `<Date> (<m>d notice)`: Next advance notice is scheduled and waiting for the target threshold.
+    - ⚪ `All Reminders Sent`: All configured milestones for this cycle have been dispatched.
+    - 🔴 `Expired`: Account has lapsed.
+    - 🔘 `Admin` / `Trial` / `Pending`: Account not subject to standard renewal reminders.
+- **Detailed Renewal Notice Metadata Row**:
+  - Below member account type and cadence pills, an informative "Renewal Notice" row renders with a `BellRing` icon, displaying plan cadence, days remaining, exact next email reminder date, and dispatched milestone history badges (`60d`, `30d`, `14d`, `3d`, `1d`).
+- **Dual-Zone Schedule Configuration UI (Payment & Onboarding Tab)**:
+  - Two dedicated configuration areas for Annual and Monthly memberships:
+    - **Annual Members Schedule (`yearlyRenewalReminderDays`, default: `60,30,14,3,1`)**: Multi-tier advance notice (e.g. 2 months, 1 month, 14 days, 3 days, 1 day before expiration).
+    - **Monthly Members Schedule (`monthlyRenewalReminderDays`, default: `7,3,1`)**: Multi-tier advance notice (e.g. 7 days, 3 days, 1 day before expiration).
+  - Features quick-toggle preset milestone pills, custom comma-separated inputs with real-time numeric normalization, and sequential timeline flow arrows.
+- **Strict Already-Paid Payment Check Callout**:
+  - Highlights the automatic payment verification engine (`isUserSubscriptionPaidForCycle`), reassuring administrators that members who already sent their payments are strictly excluded from reminder emails.
+
 ---
-
-
-
 
 As the Portalarr frontend evolves or new design decisions are finalized:
 1. **Adding a New UI Rule**: Add the rule to the relevant section above or under `references/`.

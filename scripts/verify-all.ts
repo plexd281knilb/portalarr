@@ -34,6 +34,15 @@ import { CLOUDFLARE_BYPASS_PATHS, CLOUDFLARE_SUPER_USER_PATHS, CLOUDFLARE_ADMIN_
 import { getBuiltinOscarBestPictureList } from "../src/lib/curation/oscar-best-picture-data";
 import { COLLECTION_PRESETS } from "../src/lib/curation/presets";
 import { expandCandidateUrls, isPrivateOrLocalIp, isPlexItemPlaceholderOrStub, parsePlexXmlCollections } from "../src/lib/curation/plex-analyzer";
+import {
+    parseReminderDays,
+    formatReminderDays,
+    getNextRenewalReminderInfo,
+    getDueReminderMilestone,
+    isUserSubscriptionPaidForCycle,
+    DEFAULT_YEARLY_REMINDER_DAYS,
+    DEFAULT_MONTHLY_REMINDER_DAYS
+} from "../src/lib/subscription-reminders";
 
 
 async function runTestSuite() {
@@ -5667,6 +5676,199 @@ async function runTestSuite() {
         if (keyUnknownAuthor !== "ebook:::all:::demigodsofolympus" || keyNullAuthor !== "ebook:::all:::demigodsofolympus") {
             throw new Error(`Expected unknown/null author to map to 'all' authorGroupKey, got "${keyUnknownAuthor}" and "${keyNullAuthor}"`);
         }
+    });
+
+    // 88. Subscriptions: Multi-Tier Renewal Reminder Schedules, Timings & Paid Verification
+    await assertTest("Subscriptions: Multi-Tier Renewal Reminders & Paid Detection", async () => {
+        // 1. Parsing & formatting of reminder day lists
+        const defaultYearly = parseReminderDays(null);
+        if (JSON.stringify(defaultYearly) !== JSON.stringify(DEFAULT_YEARLY_REMINDER_DAYS)) {
+            throw new Error(`Expected default yearly days ${JSON.stringify(DEFAULT_YEARLY_REMINDER_DAYS)}, got ${JSON.stringify(defaultYearly)}`);
+        }
+
+        const customParsed = parseReminderDays("60, 30, 14, 3, 1, 30, 0, -5");
+        if (JSON.stringify(customParsed) !== JSON.stringify([60, 30, 14, 3, 1])) {
+            throw new Error(`Expected cleaned descending deduplicated list [60, 30, 14, 3, 1], got ${JSON.stringify(customParsed)}`);
+        }
+
+        const formatted = formatReminderDays([1, 14, 30, 60, 3]);
+        if (formatted !== "60,30,14,3,1") {
+            throw new Error(`Expected formatted string "60,30,14,3,1", got "${formatted}"`);
+        }
+
+        const customMonthlyParsed = parseReminderDays("14, 7, 3, 1, 1", DEFAULT_MONTHLY_REMINDER_DAYS);
+        if (JSON.stringify(customMonthlyParsed) !== JSON.stringify([14, 7, 3, 1])) {
+            throw new Error(`Expected custom monthly [14, 7, 3, 1], got ${JSON.stringify(customMonthlyParsed)}`);
+        }
+
+        // 2. Next renewal reminder calculation for Annual Member
+        const now = new Date("2026-10-01T12:00:00Z");
+        // Case A: User subscription expiring in 75 days (2026-12-15) - advance notice 60d is scheduled in 15 days
+        const yearlyExpiry75d = new Date("2026-12-15T12:00:00Z");
+        const userAnnualScheduled = {
+            id: "user-annual-1",
+            username: "AnnualUser",
+            role: "USER",
+            status: "APPROVED",
+            subscriptionCadence: "YEARLY",
+            subscriptionEndsAt: yearlyExpiry75d,
+            renewalRemindersSent: null,
+            paymentTransactions: []
+        };
+
+        const infoAnnual = getNextRenewalReminderInfo({
+            user: userAnnualScheduled,
+            settings: { yearlyRenewalReminderDays: "60,30,14,3,1", monthlyRenewalReminderDays: "7,3,1" },
+            now
+        });
+
+        if (infoAnnual.cadence !== "YEARLY") throw new Error(`Expected cadence YEARLY, got ${infoAnnual.cadence}`);
+        if (infoAnnual.nextMilestoneDays !== 60) throw new Error(`Expected next milestone 60 days, got ${infoAnnual.nextMilestoneDays}`);
+        if (infoAnnual.status !== "paid" || !infoAnnual.isPaid) throw new Error(`Expected status paid and isPaid true, got ${infoAnnual.status}`);
+
+        // Case B: User expiring in 45 days with 60d notice already sent -> next is 30d in 15 days
+        const yearlyExpiry45d = new Date("2026-11-15T12:00:00Z");
+        const userAnnual60dSent = {
+            id: "user-annual-2",
+            username: "AnnualUser2",
+            role: "USER",
+            status: "APPROVED",
+            subscriptionCadence: "YEARLY",
+            subscriptionEndsAt: yearlyExpiry45d,
+            renewalRemindersSent: JSON.stringify({ cycleTarget: "2026-11-15", milestones: ["60d"] }),
+            paymentTransactions: []
+        };
+
+        const infoAnnual30d = getNextRenewalReminderInfo({
+            user: userAnnual60dSent,
+            settings: { yearlyRenewalReminderDays: "60,30,14,3,1" },
+            now
+        });
+        if (infoAnnual30d.nextMilestoneDays !== 30) throw new Error(`Expected next milestone 30 days, got ${infoAnnual30d.nextMilestoneDays}`);
+        if (infoAnnual30d.daysUntilNextReminder !== 15) throw new Error(`Expected daysUntilNextReminder 15, got ${infoAnnual30d.daysUntilNextReminder}`);
+        if (infoAnnual30d.status !== "scheduled") throw new Error(`Expected status scheduled, got ${infoAnnual30d.status}`);
+
+        // 3. Next renewal reminder calculation for Monthly Member
+        // User subscription expiring in 5 days (2026-10-06T12:00:00Z) with 7d notice already sent
+        const monthlyExpiry = new Date("2026-10-06T12:00:00Z");
+        const userMonthly = {
+            id: "user-monthly-1",
+            username: "MonthlyUser",
+            role: "USER",
+            status: "APPROVED",
+            subscriptionCadence: "MONTHLY",
+            subscriptionEndsAt: monthlyExpiry,
+            renewalRemindersSent: JSON.stringify({ cycleTarget: "2026-10-06", milestones: ["7d"] }),
+            paymentTransactions: []
+        };
+
+        const infoMonthly = getNextRenewalReminderInfo({
+            user: userMonthly,
+            settings: { yearlyRenewalReminderDays: "60,30,14,3,1", monthlyRenewalReminderDays: "7,3,1" },
+            now
+        });
+
+        // 5 days remaining, 7d sent. Next milestone is 3 days before expiration (in 2 days, on 2026-10-03).
+        if (infoMonthly.cadence !== "MONTHLY") throw new Error(`Expected cadence MONTHLY, got ${infoMonthly.cadence}`);
+        if (infoMonthly.nextMilestoneDays !== 3) throw new Error(`Expected next milestone 3 days, got ${infoMonthly.nextMilestoneDays}`);
+        if (infoMonthly.daysUntilNextReminder !== 2) throw new Error(`Expected daysUntilNextReminder 2, got ${infoMonthly.daysUntilNextReminder}`);
+
+        // 4. Milestone Due Today
+        // Expiry in 3 days, milestone 3 days
+        const dueSoonExpiry = new Date("2026-10-04T12:00:00Z"); // exactly 3 days away
+        const userDueSoon = {
+            id: "user-due-1",
+            username: "DueSoonUser",
+            role: "USER",
+            status: "APPROVED",
+            subscriptionCadence: "MONTHLY",
+            subscriptionEndsAt: dueSoonExpiry,
+            renewalRemindersSent: null,
+            paymentTransactions: []
+        };
+
+        const dueMilestone = getDueReminderMilestone({
+            daysRemaining: 3,
+            milestoneDays: [7, 3, 1],
+            sentMilestones: []
+        });
+        if (dueMilestone.dueMilestone !== "3d") throw new Error(`Expected dueMilestone 3d, got ${dueMilestone.dueMilestone}`);
+
+        const infoDue = getNextRenewalReminderInfo({
+            user: userDueSoon,
+            settings: { monthlyRenewalReminderDays: "7,3,1" },
+            now
+        });
+        if (infoDue.status !== "due_today") throw new Error(`Expected status due_today, got ${infoDue.status}`);
+
+        // 5. Already-Paid Check: Subscription extends beyond max milestone window
+        const userCoveredFuture = {
+            id: "user-covered-1",
+            username: "CoveredUser",
+            role: "USER",
+            status: "APPROVED",
+            subscriptionCadence: "YEARLY",
+            subscriptionEndsAt: new Date("2027-09-01T12:00:00Z"), // 335 days away (> 60 max milestone)
+            paymentTransactions: []
+        };
+        const paidResult1 = isUserSubscriptionPaidForCycle({ user: userCoveredFuture, now, maxMilestoneDays: 60 });
+        if (!paidResult1.isPaid) throw new Error(`Expected covered user to have isPaid: true, got ${paidResult1.isPaid} (${paidResult1.reason})`);
+
+        // 6. Already-Paid Check: Expiry within milestone window, but confirmed payment transaction present
+        // Expiry in 10 days, milestone window is active, but user sent CashApp/PayPal payment 2 days ago
+        const userPaidRecently = {
+            id: "user-paid-1",
+            username: "PaidRecentlyUser",
+            role: "USER",
+            status: "APPROVED",
+            subscriptionCadence: "YEARLY",
+            subscriptionEndsAt: new Date("2026-10-11T12:00:00Z"), // 10 days away
+            paymentTransactions: [
+                {
+                    id: "tx-100",
+                    amount: 60,
+                    provider: "cashapp",
+                    emailDate: new Date("2026-09-29T10:00:00Z"), // 2 days ago, well within renewal window
+                    status: "PROCESSED",
+                    appliedSubscription: true
+                }
+            ]
+        };
+        const paidResult2 = isUserSubscriptionPaidForCycle({ user: userPaidRecently, now, maxMilestoneDays: 60 });
+        if (!paidResult2.isPaid) throw new Error(`Expected paid user to have isPaid: true, got ${paidResult2.isPaid}`);
+
+        const infoPaidRecently = getNextRenewalReminderInfo({
+            user: userPaidRecently,
+            settings: { yearlyRenewalReminderDays: "60,30,14,3,1" },
+            now
+        });
+        if (!infoPaidRecently.isPaid || infoPaidRecently.status !== "paid") {
+            throw new Error(`Expected getNextRenewalReminderInfo to return status "paid" for paid member, got ${infoPaidRecently.status}`);
+        }
+
+        // 7. Unpaid user in window returns isPaid: false
+        const userUnpaidInWindow = {
+            id: "user-unpaid-1",
+            username: "UnpaidUser",
+            role: "USER",
+            status: "APPROVED",
+            subscriptionCadence: "YEARLY",
+            subscriptionEndsAt: new Date("2026-10-11T12:00:00Z"), // 10 days away
+            paymentTransactions: []
+        };
+        const unpaidResult = isUserSubscriptionPaidForCycle({ user: userUnpaidInWindow, now, maxMilestoneDays: 60 });
+        if (unpaidResult.isPaid) throw new Error(`Expected unpaid member to return isPaid: false`);
+
+        // 8. Admin account returns isPaid: true always
+        const adminUser = {
+            id: "admin-1",
+            username: "AdminUser",
+            role: "ADMIN",
+            status: "APPROVED",
+            subscriptionEndsAt: null
+        };
+        const adminCheck = isUserSubscriptionPaidForCycle({ user: adminUser, now });
+        if (!adminCheck.isPaid) throw new Error("Expected admin account to be marked paid");
     });
 
     console.log("\n==========================================================");

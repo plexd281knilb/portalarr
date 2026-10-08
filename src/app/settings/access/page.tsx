@@ -59,8 +59,15 @@ import {
     Clock, Play, RefreshCw, Loader2, KeyRound, Search, CheckCheck, Send, Edit2,
     Layers, Timer, Gift, Trophy, DollarSign, CreditCard, Sparkles, AlertTriangle,
     FolderCheck, ShieldAlert, Check, Users, ArrowUpRight, Copy, Calculator, Calendar, Monitor, Server, PauseCircle, SlidersHorizontal,
-    Eye, Music, BookOpen, Tv, Baby, X, CalendarClock, Zap
+    Eye, Music, BookOpen, Tv, Baby, X, CalendarClock, Zap, BellRing
 } from "lucide-react";
+import { 
+    getNextRenewalReminderInfo, 
+    parseReminderDays, 
+    formatReminderDays, 
+    DEFAULT_YEARLY_REMINDER_DAYS, 
+    DEFAULT_MONTHLY_REMINDER_DAYS 
+} from "@/lib/subscription-reminders";
 import { updateUserSubscriptionCadenceAction } from "@/app/payment-actions";
 import { format, differenceInDays } from "date-fns";
 import PaymentEmailManager from "@/components/payment-email-manager";
@@ -159,7 +166,9 @@ export default function AccessSettingsPage() {
         discordInviteUrl: "",
         subscriptionGracePeriodDays: 3,
         membershipTiersEnabled: true,
-        autoSuspendExpiredAccounts: false
+        autoSuspendExpiredAccounts: false,
+        yearlyRenewalReminderDays: "60,30,14,3,1",
+        monthlyRenewalReminderDays: "7,3,1"
     });
     const [defaultSelectedKeys, setDefaultSelectedKeys] = useState<string[]>([]);
     const [defaultTrialSelectedKeys, setDefaultTrialSelectedKeys] = useState<string[]>([]);
@@ -216,9 +225,15 @@ export default function AccessSettingsPage() {
         !areArraysEqual(defaultKidsSelectedKeys, initialPaymentSettingsRef.current.defaultKidsSelectedKeys)
     ));
 
+    const isReminderTimingsDirty = Boolean(initialPaymentSettingsRef.current && (
+        (paymentSettings.yearlyRenewalReminderDays || "60,30,14,3,1") !== (initialPaymentSettingsRef.current.paymentSettings.yearlyRenewalReminderDays || "60,30,14,3,1") ||
+        (paymentSettings.monthlyRenewalReminderDays || "7,3,1") !== (initialPaymentSettingsRef.current.paymentSettings.monthlyRenewalReminderDays || "7,3,1")
+    ));
+
     const unsavedSections: string[] = [];
     if (isPricingDirty) unsavedSections.push("Subscription & Trial Pricing");
     if (isPaymentMethodsDirty) unsavedSections.push("Payment Methods & Policy");
+    if (isReminderTimingsDirty) unsavedSections.push("Renewal Reminder Timings");
     if (isDefaultLibrariesDirty) unsavedSections.push("Default Plex Libraries");
 
     const hasUnsavedChanges = unsavedSections.length > 0;
@@ -1340,6 +1355,8 @@ export default function AccessSettingsPage() {
         formData.append("subscriptionGracePeriodDays", String(paymentSettings.subscriptionGracePeriodDays ?? 3));
         formData.append("membershipTiersEnabled", String(paymentSettings.membershipTiersEnabled ?? true));
         formData.append("autoSuspendExpiredAccounts", String(paymentSettings.autoSuspendExpiredAccounts ?? false));
+        formData.append("yearlyRenewalReminderDays", paymentSettings.yearlyRenewalReminderDays || "60,30,14,3,1");
+        formData.append("monthlyRenewalReminderDays", paymentSettings.monthlyRenewalReminderDays || "7,3,1");
 
         const res = await savePaymentAndTrialSettings(formData);
         setSavingSettings(false);
@@ -1995,6 +2012,10 @@ export default function AccessSettingsPage() {
                                         const isInactive = isExpired || isSuspended || isRejected || isPending;
                                         const isAdmin = user.role === "ADMIN";
                                         const daysLeft = isTrial ? getDaysLeft(user.trialEndsAt) : null;
+                                        const reminderInfo = getNextRenewalReminderInfo({
+                                            user,
+                                            settings: paymentSettings
+                                        });
 
                                         // Calculate actual active libraries scanned from Plex
                                         const actualPlexShareCount = (() => {
@@ -2287,6 +2308,61 @@ export default function AccessSettingsPage() {
                                                                 <CheckCircle2 className="h-3 w-3" /> {user.subscriptionCadence === "MONTHLY" ? "Monthly Plan" : "Annual Plan"} ({format(new Date(user.subscriptionEndsAt), "MMM d, yyyy")})
                                                             </Badge>
                                                         )}
+                                                        {/* NEXT RENEWAL REMINDER BADGE */}
+                                                        {user.status === "APPROVED" && user.subscriptionEndsAt && (
+                                                            reminderInfo.status === "paid" ? (
+                                                                <Badge 
+                                                                    variant="outline" 
+                                                                    className="bg-emerald-500/15 text-emerald-300 border-emerald-500/30 text-[10px] gap-1 font-semibold cursor-help"
+                                                                    title={reminderInfo.details}
+                                                                >
+                                                                    <CheckCircle2 className="h-3 w-3 text-emerald-400" /> Paid / Cycle Covered
+                                                                </Badge>
+                                                            ) : reminderInfo.status === "due_today" ? (
+                                                                <Badge 
+                                                                    variant="outline" 
+                                                                    className="bg-amber-500/20 text-amber-200 border-amber-500/50 text-[10px] gap-1 font-bold animate-pulse cursor-help"
+                                                                    title={reminderInfo.details}
+                                                                >
+                                                                    <BellRing className="h-3 w-3 text-amber-300" /> Reminder Due Today ({reminderInfo.nextMilestoneDays}d notice)
+                                                                </Badge>
+                                                            ) : reminderInfo.status === "scheduled" ? (
+                                                                <Badge 
+                                                                    variant="outline" 
+                                                                    className="bg-blue-500/15 text-blue-300 border-blue-500/30 text-[10px] gap-1 font-medium cursor-help"
+                                                                    title={reminderInfo.details}
+                                                                >
+                                                                    <BellRing className="h-3 w-3 text-blue-400" /> Next Reminder: {reminderInfo.badgeText}
+                                                                </Badge>
+                                                            ) : reminderInfo.status === "all_sent" ? (
+                                                                <Badge 
+                                                                    variant="outline" 
+                                                                    className="bg-muted/40 text-muted-foreground border-border/40 text-[10px] gap-1 font-medium cursor-help"
+                                                                    title={reminderInfo.details}
+                                                                >
+                                                                    <Check className="h-3 w-3 text-muted-foreground" /> All Reminders Sent
+                                                                </Badge>
+                                                            ) : null
+                                                        )}
+                                                        {user.status === "TRIAL" && user.trialEndsAt && (
+                                                            reminderInfo.status === "due_today" ? (
+                                                                <Badge 
+                                                                    variant="outline" 
+                                                                    className="bg-amber-500/20 text-amber-200 border-amber-500/50 text-[10px] gap-1 font-bold animate-pulse cursor-help"
+                                                                    title={reminderInfo.details}
+                                                                >
+                                                                    <BellRing className="h-3 w-3 text-amber-300" /> Trial Notice Due Today
+                                                                </Badge>
+                                                            ) : reminderInfo.status === "scheduled" ? (
+                                                                <Badge 
+                                                                    variant="outline" 
+                                                                    className="bg-blue-500/15 text-blue-300 border-blue-500/30 text-[10px] gap-1 font-medium cursor-help"
+                                                                    title={reminderInfo.details}
+                                                                >
+                                                                    <BellRing className="h-3 w-3 text-blue-400" /> Next Notice: {reminderInfo.badgeText}
+                                                                </Badge>
+                                                            ) : null
+                                                        )}
                                                         {user.lastRenewalReminderSentAt && (
                                                             <Badge variant="outline" className="bg-amber-500/15 text-amber-300 border-amber-500/30 text-[10px] gap-1 font-medium" title={`Last renewal reminder dispatched on ${format(new Date(user.lastRenewalReminderSentAt), "MMM d, yyyy h:mm a")}`}>
                                                                 <CalendarClock className="h-3 w-3 text-amber-400" /> Reminder Sent ({format(new Date(user.lastRenewalReminderSentAt), "MMM d")})
@@ -2440,6 +2516,62 @@ export default function AccessSettingsPage() {
                                                             <span className="text-muted-foreground italic text-xs">No payments recorded</span>
                                                         )}
                                                     </div>
+
+                                                    {/* SUBSCRIPTION RENEWAL & NEXT EMAIL REMINDER ROW */}
+                                                    {(user.subscriptionEndsAt || user.trialEndsAt) && !isPending && !isAdmin && (
+                                                        <div className="flex items-center gap-1.5 min-w-0 sm:col-span-2 lg:col-span-3 pt-1 border-t border-border/20">
+                                                            <CalendarClock className="h-3.5 w-3.5 text-blue-400 shrink-0" />
+                                                            <span className="text-muted-foreground shrink-0 font-medium">Renewal Notice:</span>
+                                                            <div className="flex items-center gap-2 flex-wrap min-w-0 text-xs">
+                                                                {reminderInfo.status === "paid" ? (
+                                                                    <>
+                                                                        <span className="font-semibold text-emerald-400 flex items-center gap-1">
+                                                                            <CheckCircle2 className="h-3 w-3" /> {reminderInfo.label}
+                                                                        </span>
+                                                                        <span className="text-muted-foreground text-[11px] truncate">
+                                                                            • {reminderInfo.details}
+                                                                        </span>
+                                                                    </>
+                                                                ) : reminderInfo.status === "due_today" ? (
+                                                                    <>
+                                                                        <span className="font-bold text-amber-300 animate-pulse flex items-center gap-1">
+                                                                            <BellRing className="h-3 w-3" /> {reminderInfo.label}
+                                                                        </span>
+                                                                        <span className="text-amber-200/80 text-[11px]">
+                                                                            • Dispatches on next hourly background check
+                                                                        </span>
+                                                                    </>
+                                                                ) : reminderInfo.status === "scheduled" ? (
+                                                                    <>
+                                                                        <span className="font-semibold text-blue-300 flex items-center gap-1">
+                                                                            <BellRing className="h-3 w-3" /> Next Email: {reminderInfo.label}
+                                                                        </span>
+                                                                        <span className="text-muted-foreground text-[11px]">
+                                                                            ({reminderInfo.daysRemaining} days until {reminderInfo.cadence === "YEARLY" ? "annual" : "monthly"} renewal)
+                                                                        </span>
+                                                                        {reminderInfo.sentMilestones.length > 0 && (
+                                                                            <Badge variant="outline" className="text-[9px] bg-muted/30 text-muted-foreground border-border/30 px-1 py-0 font-mono">
+                                                                                Sent: {reminderInfo.sentMilestones.join(", ")}
+                                                                            </Badge>
+                                                                        )}
+                                                                    </>
+                                                                ) : reminderInfo.status === "all_sent" ? (
+                                                                    <>
+                                                                        <span className="font-medium text-muted-foreground flex items-center gap-1">
+                                                                            <Check className="h-3 w-3" /> {reminderInfo.label}
+                                                                        </span>
+                                                                        {reminderInfo.sentMilestones.length > 0 && (
+                                                                            <Badge variant="outline" className="text-[9px] bg-muted/30 text-muted-foreground border-border/30 px-1 py-0 font-mono">
+                                                                                Sent: {reminderInfo.sentMilestones.join(", ")}
+                                                                            </Badge>
+                                                                        )}
+                                                                    </>
+                                                                ) : (
+                                                                    <span className="text-muted-foreground italic text-xs">{reminderInfo.label}</span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    )}
 
                                                     {/* ACTIVE ADD-ONS ROW */}
                                                     <div className="flex items-center gap-1.5 min-w-0 sm:col-span-2 lg:col-span-3 pt-1 border-t border-border/20">
@@ -3052,6 +3184,203 @@ export default function AccessSettingsPage() {
                                         <div className="pt-1 text-[11px] text-muted-foreground/90 italic space-y-1">
                                             <p><strong>Annual Summary:</strong> "{liveProrated.breakdownSummary}"</p>
                                             <p><strong>Monthly Summary:</strong> "{liveProrated.monthlyBreakdownSummary}"</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* SUBSCRIPTION RENEWAL REMINDER TIMINGS & SCHEDULES */}
+                                <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06] space-y-5">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-400">
+                                            <CalendarClock className="h-4 w-4" />
+                                            <span>Subscription Renewal Reminder Timings & Schedules</span>
+                                        </div>
+                                        <Badge variant="outline" className="bg-amber-500/10 text-amber-300 border-amber-500/30 text-[10px] w-fit">
+                                            Hourly Auto-Check Engine
+                                        </Badge>
+                                    </div>
+
+                                    <p className="text-xs text-muted-foreground leading-relaxed">
+                                        Configure how far in advance automated renewal reminders are emailed to members before their subscription expires. 
+                                        Separate schedules are enforced for Annual and Monthly memberships. Reminders check if payment was already made and will strictly never send to paid members.
+                                    </p>
+
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                                        {/* AREA 1: YEARLY SUBSCRIPTION REMINDER SCHEDULE */}
+                                        <div className="p-4 rounded-xl bg-background/60 border border-amber-500/20 space-y-3.5">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <Calendar className="h-4 w-4 text-amber-400" />
+                                                    <span className="text-sm font-bold text-foreground">Annual (Yearly) Schedule</span>
+                                                </div>
+                                                <Badge variant="outline" className="text-[10px] bg-amber-500/15 text-amber-300 border-amber-500/30 font-mono">
+                                                    {parseReminderDays(paymentSettings.yearlyRenewalReminderDays, DEFAULT_YEARLY_REMINDER_DAYS).length} Milestone Notices
+                                                </Badge>
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground">
+                                                Advance notices sent before annual January 1st (or custom yearly) expiration date:
+                                            </p>
+
+                                            {/* Quick Toggle Pills */}
+                                            <div className="space-y-1.5">
+                                                <Label className="text-[11px] font-semibold text-muted-foreground">Quick Milestone Toggles:</Label>
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {[
+                                                        { days: 60, label: "60d (2 Months)" },
+                                                        { days: 45, label: "45d (1.5 Months)" },
+                                                        { days: 30, label: "30d (1 Month)" },
+                                                        { days: 14, label: "14d (2 Weeks)" },
+                                                        { days: 7, label: "7d (1 Week)" },
+                                                        { days: 3, label: "3 Days" },
+                                                        { days: 1, label: "1 Day Before" },
+                                                    ].map(item => {
+                                                        const currentDays = parseReminderDays(paymentSettings.yearlyRenewalReminderDays, DEFAULT_YEARLY_REMINDER_DAYS);
+                                                        const isSelected = currentDays.includes(item.days);
+                                                        return (
+                                                            <button
+                                                                key={item.days}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    const next = isSelected 
+                                                                        ? currentDays.filter(d => d !== item.days)
+                                                                        : [...currentDays, item.days];
+                                                                    setPaymentSettings({
+                                                                        ...paymentSettings,
+                                                                        yearlyRenewalReminderDays: formatReminderDays(next)
+                                                                    });
+                                                                }}
+                                                                className={`text-[11px] px-2.5 py-1 rounded-lg border font-medium transition-all ${
+                                                                    isSelected
+                                                                        ? "bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm shadow-amber-500/10 font-bold"
+                                                                        : "bg-muted/20 text-muted-foreground border-border/40 hover:bg-muted/40 hover:text-foreground"
+                                                                }`}
+                                                            >
+                                                                {isSelected ? "✓ " : "+ "}{item.label}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+
+                                            {/* Custom Input */}
+                                            <div className="space-y-1.5 pt-1">
+                                                <Label className="text-xs font-semibold">Custom Advance Notice Days (Comma-separated)</Label>
+                                                <Input
+                                                    placeholder="e.g. 60, 30, 14, 3, 1"
+                                                    value={paymentSettings.yearlyRenewalReminderDays || ""}
+                                                    onChange={(e) => setPaymentSettings({ ...paymentSettings, yearlyRenewalReminderDays: e.target.value })}
+                                                    className="bg-background/80 font-mono text-xs"
+                                                />
+                                                <p className="text-[11px] text-muted-foreground">
+                                                    Sorted automatically: {parseReminderDays(paymentSettings.yearlyRenewalReminderDays, DEFAULT_YEARLY_REMINDER_DAYS).join("d → ")}d before expiry.
+                                                </p>
+                                            </div>
+
+                                            {/* Sequential Visual Timeline */}
+                                            <div className="p-2.5 rounded-lg bg-amber-950/20 border border-amber-500/20 text-[11px] text-amber-200/90 font-mono flex items-center gap-1.5 flex-wrap">
+                                                <span className="font-bold text-amber-400">📅 Yearly Timeline:</span>
+                                                {parseReminderDays(paymentSettings.yearlyRenewalReminderDays, DEFAULT_YEARLY_REMINDER_DAYS).map((d, i, arr) => (
+                                                    <span key={d} className="inline-flex items-center gap-1">
+                                                        <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold">{d}d</span>
+                                                        {i < arr.length - 1 && <span className="text-amber-500/60">→</span>}
+                                                    </span>
+                                                ))}
+                                                <span className="text-muted-foreground text-[10px] ml-auto">before renewal</span>
+                                            </div>
+                                        </div>
+
+                                        {/* AREA 2: MONTHLY SUBSCRIPTION REMINDER SCHEDULE */}
+                                        <div className="p-4 rounded-xl bg-background/60 border border-purple-500/20 space-y-3.5">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <CreditCard className="h-4 w-4 text-purple-400" />
+                                                    <span className="text-sm font-bold text-foreground">Monthly Schedule</span>
+                                                </div>
+                                                <Badge variant="outline" className="text-[10px] bg-purple-500/15 text-purple-300 border-purple-500/30 font-mono">
+                                                    {parseReminderDays(paymentSettings.monthlyRenewalReminderDays, DEFAULT_MONTHLY_REMINDER_DAYS).length} Milestone Notices
+                                                </Badge>
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground">
+                                                Advance notices sent before each monthly renewal date:
+                                            </p>
+
+                                            {/* Quick Toggle Pills */}
+                                            <div className="space-y-1.5">
+                                                <Label className="text-[11px] font-semibold text-muted-foreground">Quick Milestone Toggles:</Label>
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {[
+                                                        { days: 14, label: "14d (2 Weeks)" },
+                                                        { days: 10, label: "10 Days" },
+                                                        { days: 7, label: "7d (1 Week)" },
+                                                        { days: 5, label: "5 Days" },
+                                                        { days: 3, label: "3 Days" },
+                                                        { days: 2, label: "2 Days" },
+                                                        { days: 1, label: "1 Day Before" },
+                                                    ].map(item => {
+                                                        const currentDays = parseReminderDays(paymentSettings.monthlyRenewalReminderDays, DEFAULT_MONTHLY_REMINDER_DAYS);
+                                                        const isSelected = currentDays.includes(item.days);
+                                                        return (
+                                                            <button
+                                                                key={item.days}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    const next = isSelected 
+                                                                        ? currentDays.filter(d => d !== item.days)
+                                                                        : [...currentDays, item.days];
+                                                                    setPaymentSettings({
+                                                                        ...paymentSettings,
+                                                                        monthlyRenewalReminderDays: formatReminderDays(next)
+                                                                    });
+                                                                }}
+                                                                className={`text-[11px] px-2.5 py-1 rounded-lg border font-medium transition-all ${
+                                                                    isSelected
+                                                                        ? "bg-purple-500/20 text-purple-300 border-purple-500/50 shadow-sm shadow-purple-500/10 font-bold"
+                                                                        : "bg-muted/20 text-muted-foreground border-border/40 hover:bg-muted/40 hover:text-foreground"
+                                                                }`}
+                                                            >
+                                                                {isSelected ? "✓ " : "+ "}{item.label}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+
+                                            {/* Custom Input */}
+                                            <div className="space-y-1.5 pt-1">
+                                                <Label className="text-xs font-semibold">Custom Advance Notice Days (Comma-separated)</Label>
+                                                <Input
+                                                    placeholder="e.g. 7, 3, 1"
+                                                    value={paymentSettings.monthlyRenewalReminderDays || ""}
+                                                    onChange={(e) => setPaymentSettings({ ...paymentSettings, monthlyRenewalReminderDays: e.target.value })}
+                                                    className="bg-background/80 font-mono text-xs"
+                                                />
+                                                <p className="text-[11px] text-muted-foreground">
+                                                    Sorted automatically: {parseReminderDays(paymentSettings.monthlyRenewalReminderDays, DEFAULT_MONTHLY_REMINDER_DAYS).join("d → ")}d before expiry.
+                                                </p>
+                                            </div>
+
+                                            {/* Sequential Visual Timeline */}
+                                            <div className="p-2.5 rounded-lg bg-purple-950/20 border border-purple-500/20 text-[11px] text-purple-200/90 font-mono flex items-center gap-1.5 flex-wrap">
+                                                <span className="font-bold text-purple-400">📅 Monthly Timeline:</span>
+                                                {parseReminderDays(paymentSettings.monthlyRenewalReminderDays, DEFAULT_MONTHLY_REMINDER_DAYS).map((d, i, arr) => (
+                                                    <span key={d} className="inline-flex items-center gap-1">
+                                                        <span className="px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 font-bold">{d}d</span>
+                                                        {i < arr.length - 1 && <span className="text-purple-500/60">→</span>}
+                                                    </span>
+                                                ))}
+                                                <span className="text-muted-foreground text-[10px] ml-auto">before renewal</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* ALREADY PAID SAFETY GUARANTEE CALLOUT */}
+                                    <div className="p-3 rounded-xl bg-emerald-950/20 border border-emerald-500/30 flex items-start gap-2.5 text-xs text-muted-foreground">
+                                        <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+                                        <div className="space-y-0.5">
+                                            <span className="font-semibold text-emerald-300">Automatic Payment Verification Guard:</span>
+                                            <p>
+                                                When a subscriber makes their renewal payment or has an active payment transaction covering the upcoming cycle, renewal reminder emails are strictly suppressed. No reminder emails will be sent to members who have already paid.
+                                            </p>
                                         </div>
                                     </div>
                                 </div>

@@ -246,6 +246,8 @@ export async function ensureSchemaColumns(): Promise<void> {
                     "notifyMediaRequests" BOOLEAN NOT NULL DEFAULT 1,
                     "notifySupportTickets" BOOLEAN NOT NULL DEFAULT 1,
                     "notifySendToKindle" BOOLEAN NOT NULL DEFAULT 1,
+                    "yearlyRenewalReminderDays" TEXT DEFAULT '60,30,14,3,1',
+                    "monthlyRenewalReminderDays" TEXT DEFAULT '7,3,1',
                     "tmdbApiKey" TEXT,
                     "traktClientId" TEXT,
                     "mdblistApiKey" TEXT,
@@ -602,7 +604,9 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["tier2MonthlyPrice", `ALTER TABLE "Settings" ADD COLUMN "tier2MonthlyPrice" REAL DEFAULT 25;`],
                 ["availableAddons", `ALTER TABLE "Settings" ADD COLUMN "availableAddons" TEXT;`],
                 ["requireApprovalForPlexChanges", `ALTER TABLE "Settings" ADD COLUMN "requireApprovalForPlexChanges" BOOLEAN NOT NULL DEFAULT 1;`],
-                ["requireApprovalForEmails", `ALTER TABLE "Settings" ADD COLUMN "requireApprovalForEmails" BOOLEAN NOT NULL DEFAULT 1;`]
+                ["requireApprovalForEmails", `ALTER TABLE "Settings" ADD COLUMN "requireApprovalForEmails" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["yearlyRenewalReminderDays", `ALTER TABLE "Settings" ADD COLUMN "yearlyRenewalReminderDays" TEXT DEFAULT '60,30,14,3,1';`],
+                ["monthlyRenewalReminderDays", `ALTER TABLE "Settings" ADD COLUMN "monthlyRenewalReminderDays" TEXT DEFAULT '7,3,1';`]
             ];
 
             for (const [colName, ddl] of settingsAddCols) {

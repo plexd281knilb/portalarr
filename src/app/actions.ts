@@ -5606,6 +5606,16 @@ export async function sendSubscriptionRenewalReminderAction(userId: string) {
                         status: true,
                         convertedAt: true
                     }
+                },
+                paymentTransactions: {
+                    select: {
+                        id: true,
+                        amount: true,
+                        status: true,
+                        appliedSubscription: true,
+                        emailDate: true
+                    },
+                    orderBy: { emailDate: "desc" }
                 }
             }
         });
@@ -5616,6 +5626,24 @@ export async function sendSubscriptionRenewalReminderAction(userId: string) {
         const settings = await prisma.settings.findUnique({ where: { id: "global" } });
         const yearlyPrice = settings?.yearlyPrice || 180;
         const monthlyPrice = settings?.monthlyPrice || 15;
+
+        // Verify if user already paid for this cycle
+        const { isUserSubscriptionPaidForCycle, parseReminderDays, DEFAULT_YEARLY_REMINDER_DAYS, DEFAULT_MONTHLY_REMINDER_DAYS } = await import("@/lib/subscription-reminders");
+        const yearlyMilestones = parseReminderDays(settings?.yearlyRenewalReminderDays, DEFAULT_YEARLY_REMINDER_DAYS);
+        const monthlyMilestones = parseReminderDays(settings?.monthlyRenewalReminderDays, DEFAULT_MONTHLY_REMINDER_DAYS);
+        const isYearly = (user.subscriptionCadence || "YEARLY").toUpperCase() === "YEARLY";
+        const maxMilestone = isYearly ? yearlyMilestones[0] : monthlyMilestones[0];
+
+        const paidCheck = isUserSubscriptionPaidForCycle({
+            user,
+            maxMilestoneDays: maxMilestone
+        });
+        if (paidCheck.isPaid) {
+            return { 
+                success: false, 
+                error: `@${user.username} has already paid for this cycle (${paidCheck.reason}). Renewal reminder suppressed.` 
+            };
+        }
 
         const summary = calculateUserRenewalSummary({
             user,
@@ -5694,6 +5722,14 @@ export async function savePaymentAndTrialSettings(formData: FormData) {
         const subscriptionGracePeriodDays = rawGraceDays ? parseInt(rawGraceDays as string, 10) : 3;
         const membershipTiersEnabled = formData.get("membershipTiersEnabled") !== "false";
         const autoSuspendExpiredAccounts = formData.get("autoSuspendExpiredAccounts") === "true";
+        const rawYearlyReminderDays = formData.get("yearlyRenewalReminderDays");
+        const yearlyRenewalReminderDays = rawYearlyReminderDays !== null && rawYearlyReminderDays !== undefined
+            ? (rawYearlyReminderDays as string).trim() || "60,30,14,3,1"
+            : "60,30,14,3,1";
+        const rawMonthlyReminderDays = formData.get("monthlyRenewalReminderDays");
+        const monthlyRenewalReminderDays = rawMonthlyReminderDays !== null && rawMonthlyReminderDays !== undefined
+            ? (rawMonthlyReminderDays as string).trim() || "7,3,1"
+            : "7,3,1";
 
         const updateData: any = {
             defaultTrialDays,
@@ -5717,7 +5753,9 @@ export async function savePaymentAndTrialSettings(formData: FormData) {
             discordInviteUrl,
             subscriptionGracePeriodDays: isNaN(subscriptionGracePeriodDays) ? 3 : subscriptionGracePeriodDays,
             membershipTiersEnabled,
-            autoSuspendExpiredAccounts
+            autoSuspendExpiredAccounts,
+            yearlyRenewalReminderDays,
+            monthlyRenewalReminderDays
         };
         if (availableAddons !== null) {
             updateData.availableAddons = availableAddons;
@@ -5794,7 +5832,9 @@ export async function getPaymentAndTrialSettings() {
                 discordInviteUrl: settings?.discordInviteUrl ?? "",
                 subscriptionGracePeriodDays: settings?.subscriptionGracePeriodDays ?? 3,
                 membershipTiersEnabled: settings?.membershipTiersEnabled ?? true,
-                autoSuspendExpiredAccounts: settings?.autoSuspendExpiredAccounts ?? false
+                autoSuspendExpiredAccounts: settings?.autoSuspendExpiredAccounts ?? false,
+                yearlyRenewalReminderDays: settings?.yearlyRenewalReminderDays ?? "60,30,14,3,1",
+                monthlyRenewalReminderDays: settings?.monthlyRenewalReminderDays ?? "7,3,1"
             },
             proratedPreview
         };

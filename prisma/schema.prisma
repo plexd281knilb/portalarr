@@ -73,6 +73,8 @@ model Settings {
   notifyTrialExpired          Boolean   @default(false)
   notifySubscriptionActive    Boolean   @default(false)
   notifySubscriptionRenewal   Boolean   @default(true)
+  yearlyRenewalReminderDays   String?   @default("60,30,14,3,1") // Advance days for annual subscription renewal notices
+  monthlyRenewalReminderDays  String?   @default("7,3,1")        // Advance days for monthly subscription renewal notices
   notifyReferralReward        Boolean   @default(false)
   notifySupportTickets        Boolean   @default(false)
   notifySendToKindle          Boolean   @default(false)

@@ -1155,6 +1155,16 @@ export async function sendSubscriptionRenewalRemindersInternal(): Promise<{
     const { renderEmailTemplate } = await import("@/lib/email-templates");
     const { sendOrQueueEmail } = await import("@/app/actions");
     const { calculateUserRenewalSummary } = await import("@/lib/referral-rewards");
+    const { 
+        parseReminderDays, 
+        getDueReminderMilestone, 
+        isUserSubscriptionPaidForCycle,
+        DEFAULT_YEARLY_REMINDER_DAYS,
+        DEFAULT_MONTHLY_REMINDER_DAYS
+    } = await import("@/lib/subscription-reminders");
+
+    const yearlyMilestones = parseReminderDays(settings.yearlyRenewalReminderDays, DEFAULT_YEARLY_REMINDER_DAYS);
+    const monthlyMilestones = parseReminderDays(settings.monthlyRenewalReminderDays, DEFAULT_MONTHLY_REMINDER_DAYS);
 
     const remindersSent: Array<{ username: string; plan: string; milestone: string; daysRemaining: number }> = [];
 
@@ -1175,6 +1185,16 @@ export async function sendSubscriptionRenewalRemindersInternal(): Promise<{
                     status: true,
                     convertedAt: true
                 }
+            },
+            paymentTransactions: {
+                select: {
+                    id: true,
+                    amount: true,
+                    status: true,
+                    appliedSubscription: true,
+                    emailDate: true
+                },
+                orderBy: { emailDate: "desc" }
             }
         }
     });
@@ -1190,15 +1210,28 @@ export async function sendSubscriptionRenewalRemindersInternal(): Promise<{
         const msRemaining = expiryDate.getTime() - now.getTime();
         const daysRemaining = Math.ceil(msRemaining / (24 * 60 * 60 * 1000));
 
-        // Only evaluate if within 31 days and not already expired
-        if (daysRemaining <= 0 || daysRemaining > 31) continue;
-
         // Determine plan cadence
         const cadence = (member.subscriptionCadence || (
             expiryDate.getMonth() === 0 && expiryDate.getDate() === 1 ? "YEARLY" : "MONTHLY"
         )).toUpperCase();
 
         const isYearly = cadence === "YEARLY";
+        const milestoneDays = isYearly ? yearlyMilestones : monthlyMilestones;
+        const maxMilestone = milestoneDays.length > 0 ? milestoneDays[0] : 60;
+
+        // Skip if already expired or beyond the configured advance reminder window
+        if (daysRemaining <= 0 || daysRemaining > maxMilestone) continue;
+
+        // CRITICAL CHECK: Verify if member has already made their payment!
+        // Suppress reminder if they have already made their payment covering this cycle.
+        const paidCheck = isUserSubscriptionPaidForCycle({
+            user: member,
+            now,
+            maxMilestoneDays: maxMilestone
+        });
+        if (paidCheck.isPaid) {
+            continue;
+        }
 
         // Cycle target key for idempotency: e.g. "2027-01-01"
         const cycleTarget = expiryDate.toISOString().slice(0, 10);
@@ -1216,37 +1249,12 @@ export async function sendSubscriptionRenewalRemindersInternal(): Promise<{
             } catch (_) {}
         }
 
-        let dueMilestone: string | null = null;
-        let milestoneLabel = "";
-
-        if (isYearly) {
-            // Yearly Plan: 30d, 14d, 7d, 3d, 1d milestones
-            if (daysRemaining <= 30 && daysRemaining > 14 && !reminderState.milestones.includes("30d")) {
-                dueMilestone = "30d";
-                milestoneLabel = "30 Days";
-            } else if (daysRemaining <= 14 && daysRemaining > 7 && !reminderState.milestones.includes("14d")) {
-                dueMilestone = "14d";
-                milestoneLabel = "14 Days";
-            } else if (daysRemaining <= 7 && daysRemaining > 3 && !reminderState.milestones.includes("7d")) {
-                dueMilestone = "7d";
-                milestoneLabel = "7 Days";
-            } else if (daysRemaining <= 3 && daysRemaining > 1 && !reminderState.milestones.includes("3d")) {
-                dueMilestone = "3d";
-                milestoneLabel = "3 Days";
-            } else if (daysRemaining <= 1 && daysRemaining > 0 && !reminderState.milestones.includes("1d")) {
-                dueMilestone = "1d";
-                milestoneLabel = "1 Day";
-            }
-        } else {
-            // Monthly Plan: 3d and 1d milestones
-            if (daysRemaining <= 3 && daysRemaining > 1 && !reminderState.milestones.includes("3d")) {
-                dueMilestone = "3d";
-                milestoneLabel = "3 Days";
-            } else if (daysRemaining <= 1 && daysRemaining > 0 && !reminderState.milestones.includes("1d")) {
-                dueMilestone = "1d";
-                milestoneLabel = "1 Day";
-            }
-        }
+        // Determine which milestone is due dynamically
+        const { dueMilestone, milestoneLabel } = getDueReminderMilestone({
+            daysRemaining,
+            milestoneDays,
+            sentMilestones: reminderState.milestones
+        });
 
         if (dueMilestone) {
             try {
