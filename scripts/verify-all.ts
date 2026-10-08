@@ -5871,6 +5871,90 @@ async function runTestSuite() {
         if (!adminCheck.isPaid) throw new Error("Expected admin account to be marked paid");
     });
 
+    // 89. Books: Scanner In-Loop Deduplication & Stub Ingestion Engine
+    await assertTest("Books: Scanner In-Loop Deduplication & Stub Ingestion Engine", async () => {
+        const { getBookCompositeDedupKey, getBookCleanTitleKey, getNormTitle } = await import("../src/lib/books/book-dedup");
+
+        // 1. Verify composite dedup keys match across bracketed series tags and raw titles
+        const keyRaw = getBookCompositeDedupKey({ mediaType: "ebook", author: "Elsie Silver", title: "Wild Love" });
+        const keyBracketed = getBookCompositeDedupKey({ mediaType: "ebook", author: "Elsie Silver", title: "[Chestnut Springs 01] Wild Love" });
+        const keyNumbered = getBookCompositeDedupKey({ mediaType: "ebook", author: "Elsie Silver", title: "Chestnut Springs 01 - Wild Love" });
+        const keyWithParen = getBookCompositeDedupKey({ mediaType: "ebook", author: "Elsie Silver", title: "Wild Love (Chestnut Springs #1)" });
+
+        if (keyRaw !== "ebook:::elsiesilver:::wildlove") throw new Error(`Expected ebook:::elsiesilver:::wildlove, got ${keyRaw}`);
+        if (keyBracketed !== keyRaw) throw new Error(`Bracketed key mismatch: ${keyBracketed} vs ${keyRaw}`);
+        if (keyNumbered !== keyRaw) throw new Error(`Numbered prefix key mismatch: ${keyNumbered} vs ${keyRaw}`);
+        if (keyWithParen !== keyRaw) throw new Error(`Parenthetical key mismatch: ${keyWithParen} vs ${keyRaw}`);
+
+        // 2. Demigods of Olympus Fighting Fantasy bracket normalization
+        const demiRaw = getBookCompositeDedupKey({ mediaType: "ebook", author: "Rick Riordan", title: "Demigods of Olympus" });
+        const demiBracketed = getBookCompositeDedupKey({ mediaType: "ebook", author: "Rick Riordan", title: "[Fighting Fantasy 32] Demigods of Olympus" });
+        if (demiBracketed !== demiRaw || demiRaw !== "ebook:::rickriordan:::demigodsofolympus") {
+            throw new Error(`Demigods of Olympus key normalization mismatch: ${demiBracketed} vs ${demiRaw}`);
+        }
+
+        // 3. Multi-value candidate Map indexing simulation
+        const dbBooks = [
+            {
+                id: "stub-1",
+                title: "Wild Love",
+                author: "Elsie Silver",
+                filePath: "/Kyrabooks/books/Elsie Silver/[Chestnut Springs 01] Wild Love",
+                fileType: "missing",
+                mediaType: "ebook",
+                libraryId: "lib-kyra"
+            },
+            {
+                id: "stub-2",
+                title: "Wild Eyes",
+                author: "Elsie Silver",
+                filePath: "/Kyrabooks/books/Elsie Silver/[Chestnut Springs 03] Wild Eyes",
+                fileType: "epub", // fileType updated, but filePath is directory
+                mediaType: "ebook",
+                libraryId: "lib-kyra"
+            }
+        ];
+
+        const dbBooksByParentDirLower = new Map<string, any[]>();
+        const dbBooksByDedupKey = new Map<string, any[]>();
+        const normScanPath = "/kyrabooks/books";
+
+        for (const b of dbBooks) {
+            const normP = b.filePath.toLowerCase();
+            const ext = path.extname(b.filePath);
+            const isFolderStub = b.fileType === "missing" || b.fileType === "folder" || !ext;
+            if (isFolderStub) {
+                if (!dbBooksByParentDirLower.has(normP)) dbBooksByParentDirLower.set(normP, []);
+                dbBooksByParentDirLower.get(normP)!.push(b);
+            }
+            const dedupKey = getBookCompositeDedupKey(b);
+            if (dedupKey) {
+                if (!dbBooksByDedupKey.has(dedupKey)) dbBooksByDedupKey.set(dedupKey, []);
+                dbBooksByDedupKey.get(dedupKey)!.push(b);
+            }
+        }
+
+        // Directory lookup for incoming real disk file inside stub-1
+        const incomingPath1 = "/kyrabooks/books/elsie silver/[chestnut springs 01] wild love";
+        const dirMatches1 = dbBooksByParentDirLower.get(incomingPath1);
+        if (!dirMatches1 || dirMatches1.length === 0 || dirMatches1[0].id !== "stub-1") {
+            throw new Error(`Failed to match stub-1 via directory map: ${JSON.stringify(dirMatches1)}`);
+        }
+
+        // Directory lookup for stub-2 where fileType was updated to 'epub' but path is directory (no ext)
+        const incomingPath2 = "/kyrabooks/books/elsie silver/[chestnut springs 03] wild eyes";
+        const dirMatches2 = dbBooksByParentDirLower.get(incomingPath2);
+        if (!dirMatches2 || dirMatches2.length === 0 || dirMatches2[0].id !== "stub-2") {
+            throw new Error(`Failed to match stub-2 with non-missing fileType via directory map: ${JSON.stringify(dirMatches2)}`);
+        }
+
+        // Dedup key candidates
+        const candWildLove = dbBooksByDedupKey.get("ebook:::elsiesilver:::wildlove");
+        if (!candWildLove || candWildLove[0].id !== "stub-1") {
+            throw new Error(`Failed to find candidate in multi-item dedup map`);
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

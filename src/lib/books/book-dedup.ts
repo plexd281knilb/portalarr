@@ -41,8 +41,16 @@ export function getBookCleanTitleKey(title?: string | null): string {
     cleanStr = cleanStr
         .replace(/\[[^\]]+\]/g, " ")
         .replace(/\([^\)]+\)/g, " ")
-        .replace(/^\s*\d{1,3}\s*[-._\s]+\s*/g, " ")
-        .replace(/^(?:[A-Za-z0-9\s]+Trilogy|[A-Za-z0-9\s]+Series|[A-Za-z0-9\s]+Saga)?\s*#?\s*\d{1,3}(?:\.\d{1,2})?\s*[-:]\s*/i, " ");
+        .replace(/^\s*\d{1,3}\s*[-._\s]+\s*/g, " ");
+
+    // Strip leading series prefix or book number like "Chestnut Springs 01 - ", "The Founders Trilogy 01 - ", "Bridgerton 06 - ", "Book 1 - "
+    const seriesPrefixPattern = /^(?:[a-zA-Z\s'-]+)?(?:#|Book|Vol|Volume)?\s*\d{1,3}(?:\.\d{1,2}|\s+\d{1,2})?\s*[-:]\s*/i;
+    if (seriesPrefixPattern.test(cleanStr)) {
+        const lower = cleanStr.toLowerCase();
+        if (!lower.includes("catch 22") && !lower.includes("fahrenheit 451")) {
+            cleanStr = cleanStr.replace(seriesPrefixPattern, " ");
+        }
+    }
 
     return cleanStr.replace(/[^a-z0-9]/g, "").trim();
 }
