@@ -4247,9 +4247,11 @@ export async function sendOrQueueEmail(options: {
 }): Promise<{ success: boolean; queued?: boolean; sent?: boolean; approvalId?: string; error?: string }> {
     try {
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        const recipientStr = Array.isArray(options.to) ? options.to.join(", ") : options.to;
         
         // If email notifications globally disabled and not bypassing approval
         if (settings?.emailNotificationsEnabled === false && !options.bypassApproval) {
+            logger.addLog("INFO", "EMAIL", `Email notifications globally disabled in settings. Skipping email "${options.subject}" to ${recipientStr}`);
             console.log(`[EMAIL-GATE] Email notifications globally disabled. Skipping email: "${options.subject}"`);
             return { success: true, sent: false, queued: false };
         }
@@ -4257,7 +4259,6 @@ export async function sendOrQueueEmail(options: {
         const requireApproval = (settings?.requireApprovalForEmails ?? true) && !options.bypassApproval;
 
         if (requireApproval) {
-            const recipientStr = Array.isArray(options.to) ? options.to.join(", ") : options.to;
             const attachmentNote = options.attachments && options.attachments.length > 0 ? ` [${options.attachments.length} attachment(s)]` : "";
             const approval = await prisma.adminApproval.create({
                 data: {
@@ -4280,11 +4281,13 @@ export async function sendOrQueueEmail(options: {
                 }
             });
             logger.addLog("INFO", "APPROVAL", `Email "${options.subject}" to ${recipientStr} queued for admin approval (ID: ${approval.id}).`);
+            logger.addLog("INFO", "EMAIL", `Email "${options.subject}" to ${recipientStr} staged in Admin Approval Queue (ID: ${approval.id}).`);
             return { success: true, queued: true, approvalId: approval.id };
         }
 
         // Send email immediately via SMTP
         if (!settings?.smtpHost || !settings?.smtpUser || !settings?.smtpPass) {
+            logger.addLog("WARN", "EMAIL", `Failed to dispatch email "${options.subject}" to ${recipientStr}: SMTP settings not configured`);
             return { success: false, error: "SMTP settings not configured" };
         }
 
@@ -4309,9 +4312,11 @@ export async function sendOrQueueEmail(options: {
             attachments: options.attachments
         });
 
-        logger.addLog("INFO", "EMAIL", `Dispatched email "${options.subject}" to ${Array.isArray(options.to) ? options.to.join(", ") : options.to}`);
+        logger.addLog("INFO", "EMAIL", `Dispatched email "${options.subject}" to ${recipientStr}`);
         return { success: true, sent: true };
     } catch (e: any) {
+        const recipientStr = Array.isArray(options.to) ? options.to.join(", ") : options.to;
+        logger.addLog("ERROR", "EMAIL", `Failed to dispatch email "${options.subject}" to ${recipientStr}: ${e.message || e}`);
         console.error("[EMAIL-GATE-ERROR]:", e.message || e);
         return { success: false, error: e.message || "Failed to send or queue email" };
     }
