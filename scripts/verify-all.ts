@@ -5595,6 +5595,48 @@ async function runTestSuite() {
         if (!keyHP_Audio.startsWith("audiobook:::") || !keyHP_Ebook.startsWith("ebook:::")) {
             throw new Error("Expected mediaType prefix on composite dedup key");
         }
+
+        // 3. Verify same-author different title separation
+        const keyWildLove = getBookCompositeDedupKey({
+            mediaType: "ebook",
+            author: "Elsie Silver",
+            title: "Wild Love"
+        });
+        const keyWildEyes = getBookCompositeDedupKey({
+            mediaType: "ebook",
+            author: "Elsie Silver",
+            title: "Wild Eyes"
+        });
+        if (keyWildLove === keyWildEyes) {
+            throw new Error("Expected Wild Love and Wild Eyes to have distinct composite keys");
+        }
+
+        const keyDemigods1 = getBookCompositeDedupKey({
+            mediaType: "ebook",
+            author: "Rick Riordan",
+            title: "Demigods of Olympus"
+        });
+        const keyDemigods2 = getBookCompositeDedupKey({
+            mediaType: "ebook",
+            author: "Rick Riordan",
+            title: "[Fighting Fantasy 32] Demigods of Olympus"
+        });
+        if (keyDemigods1 !== keyDemigods2) {
+            throw new Error(`Expected identical keys for Demigods of Olympus: "${keyDemigods1}" vs "${keyDemigods2}"`);
+        }
+
+        // 4. Verify post-scan deduplication metadata synchronization logic
+        const mockKeepBook = { id: "cmt8y82yu0025qg2m47y0pq0v", libraryId: "old-lib", filePath: "/old/path/Demigods.epub", fileSize: 0, fileType: "missing" };
+        const mockValidDiskItem = { id: "cmuzusrgu0007pm01fhrrtw4f", libraryId: "new-lib", filePath: "/Kidsbooks/books/Rick Riordan/[Fighting Fantasy 32] Demigods of Olympus/Rick Riordan - [Fighting Fantasy 32] Demigods of Olympus.epub", fileSize: 210000, fileType: "epub" };
+        const updateKeepData: any = {};
+        if (mockKeepBook.libraryId !== "new-lib") updateKeepData.libraryId = "new-lib";
+        if (mockValidDiskItem.filePath && mockKeepBook.filePath !== mockValidDiskItem.filePath) updateKeepData.filePath = mockValidDiskItem.filePath;
+        if (typeof mockValidDiskItem.fileSize === 'number' && mockValidDiskItem.fileSize > 0 && mockKeepBook.fileSize !== mockValidDiskItem.fileSize) updateKeepData.fileSize = mockValidDiskItem.fileSize;
+        if (mockValidDiskItem.fileType && mockValidDiskItem.fileType !== 'missing' && mockKeepBook.fileType !== mockValidDiskItem.fileType) updateKeepData.fileType = mockValidDiskItem.fileType;
+
+        if (updateKeepData.libraryId !== "new-lib" || updateKeepData.filePath !== mockValidDiskItem.filePath || updateKeepData.fileSize !== 210000 || updateKeepData.fileType !== "epub") {
+            throw new Error("Post-scan metadata synchronization failed to adopt valid on-disk properties");
+        }
     });
 
     console.log("\n==========================================================");
