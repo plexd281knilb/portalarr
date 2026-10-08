@@ -151,63 +151,138 @@ async function verifyAdmin() {
 
 /**
  * Evaluates whether a Radarr movie is a valid "Coming Soon" candidate.
- * Looks ahead up to futureThresholdDays (default 90 days), and looks behind
- * up to pastGraceDays (default 30 days) so that legacy missing backlog from years ago is excluded.
+ * Includes announced, in-cinemas, and unreleased/missing movies within the future threshold
+ * (default 365 days / 1 year) or recent grace window (default 90 days), while excluding
+ * legacy missing backlog from past years.
  */
-function isRadarrMovieComingSoon(m: any, futureThresholdDays = 90, pastGraceDays = 30): boolean {
+function isRadarrMovieComingSoon(m: any, futureThresholdDays = 365, pastGraceDays = 90): boolean {
     if (!m.monitored || m.hasFile) return false;
 
     const now = new Date();
+    const currentYear = now.getFullYear();
+
+    // 1. Announced / In-production upcoming movies in Radarr
+    if (m.status === "announced") {
+        if (!m.year || m.year >= currentYear - 1) return true;
+    }
+
+    // 2. Currently in Cinemas or recent theatrical window waiting for home release
+    if (m.status === "inCinemas") return true;
+
+    // 3. Flagged as not yet available in Radarr
+    if (m.isAvailable === false && (!m.year || m.year >= currentYear - 1)) {
+        return true;
+    }
+
     const digDate = m.digitalRelease ? new Date(m.digitalRelease) : null;
     const physDate = m.physicalRelease ? new Date(m.physicalRelease) : null;
     const cinDate = m.inCinemas ? new Date(m.inCinemas) : null;
 
-    // Must have a valid release date
-    const targetDate = digDate || physDate || cinDate;
-    if (!targetDate || isNaN(targetDate.getTime())) {
-        return false; // No concrete release date -> cannot determine if it's "coming soon"
+    const validDigDate = digDate && !isNaN(digDate.getTime()) ? digDate : null;
+    const validPhysDate = physDate && !isNaN(physDate.getTime()) ? physDate : null;
+    const validCinDate = cinDate && !isNaN(cinDate.getTime()) ? cinDate : null;
+
+    // 4. Future release dates (digital, physical, or cinema)
+    const futureTarget = (validDigDate && validDigDate > now) ? validDigDate :
+                         (validPhysDate && validPhysDate > now) ? validPhysDate :
+                         (validCinDate && validCinDate > now) ? validCinDate : null;
+
+    if (futureTarget) {
+        const daysAhead = Math.ceil((futureTarget.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        const limit = futureThresholdDays <= 0 ? 0 : Math.max(futureThresholdDays, 365);
+        return limit <= 0 || daysAhead <= limit;
     }
 
-    if (targetDate > now) {
-        // Future release: must be within futureThresholdDays (default 90 days)
-        const daysAhead = Math.ceil((targetDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-        return futureThresholdDays <= 0 || daysAhead <= futureThresholdDays;
-    } else {
-        // Already released: only include if within recent grace window (default 30 days)
-        const daysPast = Math.floor((now.getTime() - targetDate.getTime()) / (1000 * 60 * 60 * 24));
-        return daysPast <= pastGraceDays;
+    // 5. Recent release dates within grace window (e.g. released in past 90 days and still missing)
+    const pastTarget = validDigDate || validPhysDate || validCinDate;
+    if (pastTarget) {
+        const daysPast = Math.floor((now.getTime() - pastTarget.getTime()) / (1000 * 60 * 60 * 24));
+        const grace = pastGraceDays <= 0 ? 0 : Math.max(pastGraceDays, 90);
+        if (daysPast <= grace) return true;
     }
+
+    // 6. Current or future year movie fallback (monitored and missing)
+    if (m.year && m.year >= currentYear && m.status !== "deleted") {
+        return true;
+    }
+
+    return false;
 }
 
 /**
  * Evaluates whether a Sonarr series is a valid "Coming Soon" candidate.
+ * Includes upcoming series, continuing shows with missing/pending episodes,
+ * future nextAiring dates, and current-year releases, while excluding dead legacy backlog.
  */
-function isSonarrSeriesComingSoon(s: any, futureThresholdDays = 90, pastGraceDays = 30): boolean {
+function isSonarrSeriesComingSoon(s: any, futureThresholdDays = 365, pastGraceDays = 90): boolean {
     if (!s.monitored) return false;
-    const hasAllFiles = s.statistics?.episodeFileCount && s.statistics?.totalEpisodeCount && s.statistics.episodeFileCount >= s.statistics.totalEpisodeCount;
+    const hasAllFiles = Boolean(
+        s.statistics?.totalEpisodeCount && 
+        s.statistics?.episodeFileCount !== undefined && 
+        s.statistics.episodeFileCount >= s.statistics.totalEpisodeCount
+    );
     if (hasAllFiles) return false;
 
     const now = new Date();
+    const currentYear = now.getFullYear();
+
+    // 1. Upcoming new series that haven't premiered yet
+    if (s.status === "upcoming") return true;
+
+    // 2. Future episode airing scheduled in Sonarr
     const nextAiring = s.nextAiring ? new Date(s.nextAiring) : null;
-    const firstAired = s.firstAired ? new Date(s.firstAired) : null;
-
-    // Must have a valid airing or release date
-    const targetDate = (nextAiring && !isNaN(nextAiring.getTime())) 
-        ? nextAiring 
-        : (firstAired && !isNaN(firstAired.getTime())) 
-            ? firstAired 
-            : null;
-    if (!targetDate) {
-        return false; // No concrete air date -> cannot determine if it's "coming soon"
+    const validNextAiring = nextAiring && !isNaN(nextAiring.getTime()) ? nextAiring : null;
+    if (validNextAiring && validNextAiring > now) {
+        const daysAhead = Math.ceil((validNextAiring.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        const limit = futureThresholdDays <= 0 ? 0 : Math.max(futureThresholdDays, 365);
+        if (limit <= 0 || daysAhead <= limit) {
+            return true;
+        }
     }
 
-    if (targetDate > now) {
-        const daysAhead = Math.ceil((targetDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-        return futureThresholdDays <= 0 || daysAhead <= futureThresholdDays;
-    } else {
-        const daysPast = Math.floor((now.getTime() - targetDate.getTime()) / (1000 * 60 * 60 * 24));
-        return daysPast <= pastGraceDays;
+    // 3. Continuing / active series with missing episodes or waiting for next season
+    if (s.status === "continuing") {
+        if (!s.year || s.year >= currentYear - 1 || (s.statistics && s.statistics.totalEpisodeCount === 0)) {
+            return true;
+        }
+        if (s.previousAiring) {
+            const prevAiring = new Date(s.previousAiring);
+            if (!isNaN(prevAiring.getTime())) {
+                const daysPast = Math.floor((now.getTime() - prevAiring.getTime()) / (1000 * 60 * 60 * 24));
+                const grace = pastGraceDays <= 0 ? 0 : Math.max(pastGraceDays, 90);
+                if (daysPast <= grace) return true;
+            }
+        }
+        if (s.firstAired) {
+            const firstAired = new Date(s.firstAired);
+            if (!isNaN(firstAired.getTime()) && firstAired > now) return true;
+        }
+        // Active continuing show with missing files
+        return true;
     }
+
+    // 4. Series premiering in current or future year
+    if (s.year && s.year >= currentYear && s.status !== "deleted") {
+        return true;
+    }
+
+    // 5. First aired in the future or within recent grace period
+    if (s.firstAired) {
+        const firstAired = new Date(s.firstAired);
+        if (!isNaN(firstAired.getTime())) {
+            if (firstAired > now) {
+                const daysAhead = Math.ceil((firstAired.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                const limit = futureThresholdDays <= 0 ? 0 : Math.max(futureThresholdDays, 365);
+                return limit <= 0 || daysAhead <= limit;
+            } else {
+                const daysPast = Math.floor((now.getTime() - firstAired.getTime()) / (1000 * 60 * 60 * 24));
+                const grace = pastGraceDays <= 0 ? 0 : Math.max(pastGraceDays, 90);
+                return daysPast <= grace;
+            }
+        }
+    }
+
+    return false;
 }
 
 /**
@@ -1592,9 +1667,16 @@ export async function syncCollectionToPlexInternal(
             isMovieSection = sec?.type === "movie";
         } catch {}
 
-        // 5. If placeholders are enabled for this collection, generate/ensure placeholders first so they are present for library sync
+        // 5. If placeholders are enabled for this collection (or it is a Radarr/Sonarr Coming Soon collection), ensure placeholders are generated
         let placeholdersGenerated = 0;
-        if (collection.includePlaceholders) {
+        const shouldGeneratePlaceholders = Boolean(
+            collection.includePlaceholders ||
+            collection.sourceType === "radarr" ||
+            collection.sourceType === "sonarr" ||
+            collection.category === "Coming Soon" ||
+            collection.sourceQuery === "monitored_missing"
+        );
+        if (shouldGeneratePlaceholders) {
             try {
                 const placeholderRes = await generateCollectionPlaceholdersInternal(collection);
                 if (placeholderRes.success) {
@@ -1940,7 +2022,7 @@ export async function syncCollectionToPlexInternal(
                         if (moviesRes.success && Array.isArray(moviesRes.data)) {
                             let movies = moviesRes.data;
                             if (collection.sourceQuery === "monitored_missing") {
-                                movies = movies.filter((m: any) => isRadarrMovieComingSoon(m, 90, 30));
+                                movies = movies.filter((m: any) => isRadarrMovieComingSoon(m));
                             } else if (collection.sourceQuery?.startsWith("tag:") || collection.sourceQuery === "tag") {
                                 const targetTag = collection.sourceQuery.includes(":") 
                                     ? collection.sourceQuery.replace("tag:", "").toLowerCase().trim() 
@@ -1977,7 +2059,7 @@ export async function syncCollectionToPlexInternal(
                         if (seriesRes.success && Array.isArray(seriesRes.data)) {
                             let series = seriesRes.data;
                             if (collection.sourceQuery === "monitored_missing") {
-                                series = series.filter((s: any) => isSonarrSeriesComingSoon(s, 90, 30));
+                                series = series.filter((s: any) => isSonarrSeriesComingSoon(s));
                             } else if (collection.sourceQuery?.startsWith("tag:") || collection.sourceQuery === "tag") {
                                 const targetTag = collection.sourceQuery.includes(":") 
                                     ? collection.sourceQuery.replace("tag:", "").toLowerCase().trim() 
@@ -2431,6 +2513,7 @@ export async function generateCollectionCandidateItemsPreviewAction(
             }
         } else if (sourceType === "radarr") {
             executionMethod = `Radarr Servarr API: Querying monitored movies (${sourceQuery}).`;
+            const radarrCandidates: any[] = [];
             try {
                 const arrRes = await getEnabledArrInstancesInternal("radarr");
                 if (arrRes.success && arrRes.data && arrRes.data.length > 0) {
@@ -2439,7 +2522,7 @@ export async function generateCollectionCandidateItemsPreviewAction(
                         if (moviesRes.success && Array.isArray(moviesRes.data)) {
                             let movies = moviesRes.data;
                             if (sourceQuery === "monitored_missing") {
-                                movies = movies.filter((m: any) => isRadarrMovieComingSoon(m, 90, 30));
+                                movies = movies.filter((m: any) => isRadarrMovieComingSoon(m));
                             } else if (sourceQuery.startsWith("tag:") || sourceQuery === "tag") {
                                 const targetTag = sourceQuery.includes(":") ? sourceQuery.replace("tag:", "").toLowerCase().trim() : "portalarr";
                                 const tagsRes = await arrApiGet(app, "/api/v3/tag");
@@ -2450,16 +2533,45 @@ export async function generateCollectionCandidateItemsPreviewAction(
                                     movies = [];
                                 }
                             }
+                            radarrCandidates.push(...movies);
                             const index = buildCandidateIndex(movies);
-                            matchedItems = libraryItems.filter(it => matchLibraryItemToCandidates(it, index));
+                            matchedItems.push(...libraryItems.filter(it => matchLibraryItemToCandidates(it, index)));
                         }
                     }
                 }
             } catch (rErr: any) {
                 executionMethod += ` (Error querying Radarr: ${rErr.message})`;
             }
+
+            if (matchedItems.length === 0 && radarrCandidates.length > 0) {
+                const effectiveCandidates = (collectionConfig.maxItems && collectionConfig.maxItems > 0)
+                    ? radarrCandidates.slice(0, collectionConfig.maxItems)
+                    : radarrCandidates;
+                const sampleList = effectiveCandidates.slice(0, 18).map(m => {
+                    const posterUrl = m.images?.find((img: any) => img.coverType === "poster")?.remoteUrl || null;
+                    const year = m.year || (m.releaseDate ? parseInt(String(m.releaseDate).slice(0, 4), 10) : undefined);
+                    const rating = m.ratings?.imdb?.value || m.ratings?.tmdb?.value || m.ratings?.value;
+                    return {
+                        ratingKey: `arr-radarr-${m.id}`,
+                        title: m.title,
+                        year: year,
+                        rating: rating ? Math.round(rating * 10) / 10 : undefined,
+                        thumb: posterUrl,
+                        detectedBadges: { edition: "Coming Soon" },
+                        isPlaceholderCandidate: true
+                    };
+                });
+                return {
+                    success: true,
+                    totalEvaluated: radarrCandidates.length,
+                    matchCount: effectiveCandidates.length,
+                    executionMethod: executionMethod + ` Found ${radarrCandidates.length} monitored upcoming candidate${radarrCandidates.length === 1 ? '' : 's'}. Placeholders will be created on sync.`,
+                    sampleMatches: sampleList
+                };
+            }
         } else if (sourceType === "sonarr") {
             executionMethod = `Sonarr Servarr API: Querying monitored series (${sourceQuery}).`;
+            const sonarrCandidates: any[] = [];
             try {
                 const arrRes = await getEnabledArrInstancesInternal("sonarr");
                 if (arrRes.success && arrRes.data && arrRes.data.length > 0) {
@@ -2468,7 +2580,7 @@ export async function generateCollectionCandidateItemsPreviewAction(
                         if (seriesRes.success && Array.isArray(seriesRes.data)) {
                             let series = seriesRes.data;
                             if (sourceQuery === "monitored_missing") {
-                                series = series.filter((s: any) => isSonarrSeriesComingSoon(s, 90, 30));
+                                series = series.filter((s: any) => isSonarrSeriesComingSoon(s));
                             } else if (sourceQuery.startsWith("tag:") || sourceQuery === "tag") {
                                 const targetTag = sourceQuery.includes(":") ? sourceQuery.replace("tag:", "").toLowerCase().trim() : "portalarr";
                                 const tagsRes = await arrApiGet(app, "/api/v3/tag");
@@ -2479,16 +2591,44 @@ export async function generateCollectionCandidateItemsPreviewAction(
                                     series = [];
                                 }
                             }
+                            sonarrCandidates.push(...series);
                             const index = buildCandidateIndex(series.map((s: any) => ({ ...s, id: s.tvdbId })));
-                            matchedItems = libraryItems.filter(it => {
+                            matchedItems.push(...libraryItems.filter(it => {
                                 if (it.guids?.tvdb && index.tmdbIds.has(String(it.guids.tvdb))) return true;
                                 return matchLibraryItemToCandidates(it, index);
-                            });
+                            }));
                         }
                     }
                 }
             } catch (sErr: any) {
                 executionMethod += ` (Error querying Sonarr: ${sErr.message})`;
+            }
+
+            if (matchedItems.length === 0 && sonarrCandidates.length > 0) {
+                const effectiveCandidates = (collectionConfig.maxItems && collectionConfig.maxItems > 0)
+                    ? sonarrCandidates.slice(0, collectionConfig.maxItems)
+                    : sonarrCandidates;
+                const sampleList = effectiveCandidates.slice(0, 18).map(s => {
+                    const posterUrl = s.images?.find((img: any) => img.coverType === "poster")?.remoteUrl || null;
+                    const year = s.year || (s.firstAired ? parseInt(String(s.firstAired).slice(0, 4), 10) : undefined);
+                    const rating = s.ratings?.imdb?.value || s.ratings?.tvdb?.value || s.ratings?.value;
+                    return {
+                        ratingKey: `arr-sonarr-${s.id}`,
+                        title: s.title,
+                        year: year,
+                        rating: rating ? Math.round(rating * 10) / 10 : undefined,
+                        thumb: posterUrl,
+                        detectedBadges: { edition: "Coming Soon" },
+                        isPlaceholderCandidate: true
+                    };
+                });
+                return {
+                    success: true,
+                    totalEvaluated: sonarrCandidates.length,
+                    matchCount: effectiveCandidates.length,
+                    executionMethod: executionMethod + ` Found ${sonarrCandidates.length} monitored upcoming candidate${sonarrCandidates.length === 1 ? '' : 's'}. Placeholders will be created on sync.`,
+                    sampleMatches: sampleList
+                };
             }
         } else if (sourceType === "plex_smart") {
             const subtype = sourceQuery || "recently_added";
@@ -9094,6 +9234,28 @@ function resolveItemSmartBanner(params: {
     }
 
     // 7. Otherwise: Released on Digital / Physical or long past theatrical window -> DOWNLOADING SOON
+    // If not genuinely released yet (e.g. announced, upcoming series, or no release date), label as COMING SOON MONITORED
+    const isGenuinelyReleased = Boolean(
+        (validDigDate && validDigDate <= now) ||
+        (validPhysDate && validPhysDate <= now) ||
+        (validAirDate && validAirDate <= now && !params.nextAiring) ||
+        (validCinDate && (now.getTime() - validCinDate.getTime()) > (45 * 24 * 60 * 60 * 1000))
+    );
+
+    if (!isGenuinelyReleased) {
+        return {
+            arrStatus: "COMING_SOON" as const,
+            suggestedBannerType: "coming_soon_monitored",
+            suggestedBannerText: "COMING SOON MONITORED",
+            suggestedBannerTheme: "amber-gold",
+            statusBadgeText: params.inRadarr ? "IN RADARR (COMING SOON)" : params.inSonarr ? "IN SONARR (COMING SOON)" : "COMING SOON MONITORED",
+            statusBadgeColor: "amber",
+            effectiveDateStr: params.digitalReleaseDate || params.physicalReleaseDate || params.theatricalReleaseDate || params.releaseDate || (params.nextAiring || params.firstAired) || undefined,
+            daysToRelease: undefined,
+            isReleased: false
+        };
+    }
+
     return {
         arrStatus: "MONITORED_RELEASED" as const,
         suggestedBannerType: "downloading_soon",
@@ -10248,7 +10410,7 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                         if (moviesRes.success && Array.isArray(moviesRes.data)) {
                             let movies = moviesRes.data;
                             if (collection.sourceQuery === "monitored_missing") {
-                                movies = movies.filter((m: any) => isRadarrMovieComingSoon(m, 90, 30));
+                                movies = movies.filter((m: any) => isRadarrMovieComingSoon(m));
                             } else if (collection.sourceQuery?.startsWith("tag:") || collection.sourceQuery === "tag") {
                                 const targetTag = collection.sourceQuery.includes(":") ? collection.sourceQuery.replace("tag:", "").toLowerCase().trim() : "portalarr";
                                 const tagsRes = await arrApiGet(app, "/api/v3/tag");
@@ -10285,7 +10447,7 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                         if (seriesRes.success && Array.isArray(seriesRes.data)) {
                             let series = seriesRes.data;
                             if (collection.sourceQuery === "monitored_missing") {
-                                series = series.filter((s: any) => isSonarrSeriesComingSoon(s, 90, 30));
+                                series = series.filter((s: any) => isSonarrSeriesComingSoon(s));
                             } else if (collection.sourceQuery?.startsWith("tag:") || collection.sourceQuery === "tag") {
                                 const targetTag = collection.sourceQuery.includes(":") ? collection.sourceQuery.replace("tag:", "").toLowerCase().trim() : "portalarr";
                                 const tagsRes = await arrApiGet(app, "/api/v3/tag");
@@ -10492,23 +10654,34 @@ export async function generateCollectionPlaceholdersInternal(collection: any): P
                 // General collection placeholders (Trending, Studio, Kids, Decades, etc.) generate for ALL missing items in the collection.
                 if (isMonitoredPlaceholder) {
                     const effectiveTargetDate = digDate || relDate || theDate;
-                    if (!effectiveTargetDate || isNaN(effectiveTargetDate.getTime())) {
-                        // No concrete release date -> cannot determine if it's "coming soon", skip!
-                        continue;
-                    }
+                    const isArrSource = collection.sourceType === "radarr" || collection.sourceType === "sonarr";
 
-                    if (effectiveTargetDate > now) {
-                        // Future release: verify within placeholderDaysThreshold (default 90 days)
-                        if (placeholderDaysThreshold > 0) {
+                    if (!effectiveTargetDate || isNaN(effectiveTargetDate.getTime())) {
+                        // If no concrete release date, allow if it's from Radarr/Sonarr or has upcoming/announced status or current/future year
+                        const isUpcomingOrAnnounced = Boolean(
+                            isArrSource ||
+                            arrItem?.status === "announced" ||
+                            arrItem?.status === "upcoming" ||
+                            arrItem?.status === "inCinemas" ||
+                            (itemYear && itemYear >= now.getFullYear())
+                        );
+                        if (!isUpcomingOrAnnounced) {
+                            continue;
+                        }
+                    } else if (effectiveTargetDate > now) {
+                        // Future release: verify within placeholderDaysThreshold (default 365 days for Arr, or user threshold)
+                        const effectiveThreshold = isArrSource ? Math.max(placeholderDaysThreshold, 365) : placeholderDaysThreshold;
+                        if (effectiveThreshold > 0) {
                             const daysToRelease = Math.ceil((effectiveTargetDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-                            if (daysToRelease > placeholderDaysThreshold) {
+                            if (daysToRelease > effectiveThreshold) {
                                 continue;
                             }
                         }
                     } else {
-                        // Past release: only allow recent releases within grace window (default past 30 days)
+                        // Past release: only allow recent releases within grace window (default 90 days for Arr, 30 days for general)
                         const daysSinceRelease = Math.floor((now.getTime() - effectiveTargetDate.getTime()) / (1000 * 60 * 60 * 24));
-                        if (daysSinceRelease > 30) {
+                        const effectiveGrace = isArrSource ? 90 : 30;
+                        if (daysSinceRelease > effectiveGrace) {
                             continue;
                         }
                     }
@@ -11515,7 +11688,7 @@ export async function evaluateCollectionMediaPreviewInternal(collection: any) {
                         if (moviesRes.success && Array.isArray(moviesRes.data)) {
                             let movies = moviesRes.data;
                             if (collection.sourceQuery === "monitored_missing") {
-                                movies = movies.filter((m: any) => isRadarrMovieComingSoon(m, 90, 30));
+                                movies = movies.filter((m: any) => isRadarrMovieComingSoon(m));
                             } else if (collection.sourceQuery?.startsWith("tag:") || collection.sourceQuery === "tag") {
                                 const targetTag = collection.sourceQuery.includes(":") ? collection.sourceQuery.replace("tag:", "").toLowerCase().trim() : "portalarr";
                                 const tagsRes = await arrApiGet(app, "/api/v3/tag");
@@ -11552,7 +11725,7 @@ export async function evaluateCollectionMediaPreviewInternal(collection: any) {
                         if (seriesRes.success && Array.isArray(seriesRes.data)) {
                             let series = seriesRes.data;
                             if (collection.sourceQuery === "monitored_missing") {
-                                series = series.filter((s: any) => isSonarrSeriesComingSoon(s, 90, 30));
+                                series = series.filter((s: any) => isSonarrSeriesComingSoon(s));
                             } else if (collection.sourceQuery?.startsWith("tag:") || collection.sourceQuery === "tag") {
                                 const targetTag = collection.sourceQuery.includes(":") ? collection.sourceQuery.replace("tag:", "").toLowerCase().trim() : "portalarr";
                                 const tagsRes = await arrApiGet(app, "/api/v3/tag");

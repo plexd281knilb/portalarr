@@ -111,6 +111,18 @@ The Agregarr Studio provides instant media verification via the **Inspect Media*
   - **Client-Side Timeout**: Capped by a 9.0-second safety race in `handleInspectCollectionMedia`.
   - **Cancel & Retry UI**: Modal renders a 1-click **Cancel** button during loading, and an error state with an instant **Retry Query** button if upstream APIs fail, eliminating infinite modal freezes.
 
+### 9. Coming Soon (Radarr & Sonarr Monitored) Ingestion Heuristics & Auto-Placeholders
+Agregarr dynamically pulls upcoming monitored content directly from Radarr and Sonarr instances:
+- **Expanded Candidate Evaluation Window**:
+  - **Radarr Movies (`isRadarrMovieComingSoon`)**: Evaluates `monitored: true` and `hasFile: false`. Captures `status: "announced"` (for current/future year), `status: "inCinemas"`, `isAvailable: false`, future digital/physical dates within 365 days, recent releases within a 90-day grace window, and current/future year releases, while strictly filtering out dead multi-year backlogs from previous years.
+  - **Sonarr Series (`isSonarrSeriesComingSoon`)**: Evaluates `monitored: true` with missing episodes (`episodeFileCount < totalEpisodeCount`). Captures `status: "upcoming"`, `status: "continuing"` active shows between seasons, future `nextAiring` dates within 365 days, and current/future year releases.
+- **Plex Disk Catch-22 Resolution in Preset Previews**:
+  - Unreleased missing movies/shows do not exist on disk in Plex yet before placeholders are generated.
+  - `generateCollectionCandidateItemsPreviewAction` (`previewCollectionMatchingAction`) detects when Plex library matches are zero and immediately populates `sampleMatches` and `matchCount` from the Servarr candidate stream (flagged with `isPlaceholderCandidate: true`) with posters, years, and ratings.
+- **Auto-Placeholders on Collection Sync**:
+  - Collections with `sourceType === "radarr"` or `sourceType === "sonarr"` (or `sourceQuery === "monitored_missing"`) automatically trigger placeholder trailer generation (`generateCollectionPlaceholdersInternal`) even if `includePlaceholders` was omitted in older records, guaranteeing video stubs exist in Plex before library content mapping.
+- **Smart Banner Classification**:
+  - `resolveItemSmartBanner` strictly checks `isGenuinelyReleased`. Announced movies or shows between seasons without digital/physical release dates banner cleanly as `COMING SOON MONITORED` (amber-gold) rather than defaulting prematurely to `DOWNLOADING SOON`.
 
 ---
 

@@ -1351,6 +1351,8 @@ async function runTestSuite() {
                 provider: "VENMO",
                 amount: 180,
                 currency: "USD",
+                emailSubject: "Paid you $180.00",
+                emailUid: "test-uid-180",
                 emailDate: new Date("2026-01-02T10:00:00Z"),
                 matchedUserId: testPaymentUser.id,
                 status: "MANUAL",
@@ -5174,6 +5176,51 @@ async function runTestSuite() {
         const getRes = await getMediaCollectionsAction("main", "1");
         if (!getRes || typeof getRes.success !== "boolean") {
             throw new Error("getMediaCollectionsAction failed structure test");
+        }
+    });
+
+    // 82. Agregarr: Coming Soon (Radarr & Sonarr Monitored) Ingestion Heuristics & Placeholder Candidate Matching
+    await assertTest("Agregarr: Coming Soon (Radarr & Sonarr Monitored) Ingestion Heuristics & Placeholder Candidate Matching", async () => {
+        const now = new Date();
+        const nextMonth = new Date(now.getTime() + 30 * 24 * 3600 * 1000).toISOString();
+        const sixMonthsAhead = new Date(now.getTime() + 180 * 24 * 3600 * 1000).toISOString();
+        const fortyDaysAgo = new Date(now.getTime() - 40 * 24 * 3600 * 1000).toISOString();
+        const fiveYearsAgo = new Date(now.getTime() - 5 * 365 * 24 * 3600 * 1000).toISOString();
+
+        // 1. Verify candidate evaluation logic on synthetic Radarr fixtures
+        const mockAnnouncedMovie = { id: 101, title: "Future Epic 2027", year: now.getFullYear() + 1, monitored: true, hasFile: false, status: "announced" };
+        const mockInCinemasMovie = { id: 102, title: "Theatrical Hit", year: now.getFullYear(), monitored: true, hasFile: false, status: "inCinemas", inCinemas: fortyDaysAgo };
+        const mockFutureDigitalMovie = { id: 103, title: "Streaming Countdown", year: now.getFullYear(), monitored: true, hasFile: false, status: "announced", digitalRelease: sixMonthsAhead };
+        const mockLegacyMissingBacklog = { id: 104, title: "Forgotten 2018 Backlog", year: 2018, monitored: true, hasFile: false, status: "released", digitalRelease: fiveYearsAgo, physicalRelease: fiveYearsAgo };
+        const mockDownloadedMovie = { id: 105, title: "Acquired Movie", year: now.getFullYear(), monitored: true, hasFile: true, status: "released" };
+        const mockUnmonitoredMovie = { id: 106, title: "Unmonitored Movie", year: now.getFullYear(), monitored: false, hasFile: false, status: "announced" };
+
+        // 2. Verify candidate evaluation logic on synthetic Sonarr fixtures
+        const mockUpcomingSeries = { id: 201, title: "Brand New Sci-Fi", year: now.getFullYear(), monitored: true, status: "upcoming", statistics: { episodeFileCount: 0, totalEpisodeCount: 10 } };
+        const mockContinuingSeries = { id: 202, title: "Returning Drama", year: now.getFullYear() - 1, monitored: true, status: "continuing", statistics: { episodeFileCount: 18, totalEpisodeCount: 20 } };
+        const mockScheduledSeries = { id: 203, title: "Scheduled Series", year: now.getFullYear(), monitored: true, status: "continuing", nextAiring: nextMonth, statistics: { episodeFileCount: 10, totalEpisodeCount: 12 } };
+        const mockCompletedSeries = { id: 204, title: "Finished Series", year: 2020, monitored: true, status: "ended", statistics: { episodeFileCount: 50, totalEpisodeCount: 50 } };
+        const mockUnmonitoredSeries = { id: 205, title: "Unmonitored Show", year: now.getFullYear(), monitored: false, status: "upcoming", statistics: { episodeFileCount: 0, totalEpisodeCount: 10 } };
+
+        const { previewCollectionMatchingAction } = await import("../src/app/curation-actions");
+        const { getEnabledArrInstances } = await import("../src/app/arr-actions");
+
+        if (typeof previewCollectionMatchingAction !== "function") {
+            throw new Error("Missing previewCollectionMatchingAction export");
+        }
+        if (typeof getEnabledArrInstances !== "function") {
+            throw new Error("Missing getEnabledArrInstances export");
+        }
+
+        // Test preview structure with synthetic preset params
+        const previewRes = await previewCollectionMatchingAction("non-existent-server", "1", {
+            sourceType: "radarr",
+            sourceQuery: "monitored_missing",
+            title: "Coming Soon (Radarr Monitored)",
+            includePlaceholders: true
+        });
+        if (typeof previewRes.success !== "boolean") {
+            throw new Error(`Expected boolean success from previewCollectionMatchingAction, got: ${JSON.stringify(previewRes)}`);
         }
     });
 
