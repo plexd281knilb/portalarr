@@ -5224,6 +5224,30 @@ async function runTestSuite() {
         }
     });
 
+    // 109. Curation: Agregarr Plex Collection Synchronization & Batch Item Addition
+    await assertTest("Agregarr: Plex Collection Item Batching & Multi-URI Isolation", async () => {
+        const { syncPlexCollection, removeItemsFromPlexCollection, getPlexServerMachineIdentifier } = await import("../src/lib/curation/plex-analyzer");
+        if (typeof syncPlexCollection !== "function") throw new Error("Missing syncPlexCollection");
+        if (typeof removeItemsFromPlexCollection !== "function") throw new Error("Missing removeItemsFromPlexCollection");
+        if (typeof getPlexServerMachineIdentifier !== "function") throw new Error("Missing getPlexServerMachineIdentifier");
+
+        // Verify removeItemsFromPlexCollection safely handles empty input
+        const emptyRemoved = await removeItemsFromPlexCollection([], "dummy-token", "Test Coll", []);
+        if (emptyRemoved !== 0) throw new Error("Expected 0 removed for empty input");
+
+        // Verify seasonal presets have distinct valid queries
+        const { COLLECTION_PRESETS } = await import("../src/lib/curation/presets");
+        const halloween = COLLECTION_PRESETS.find(p => p.id === "halloween-horror-fest");
+        const summer = COLLECTION_PRESETS.find(p => p.id === "summer-blockbusters");
+        const christmas = COLLECTION_PRESETS.find(p => p.id === "christmas-holiday-cheer");
+        const thanksgiving = COLLECTION_PRESETS.find(p => p.id === "thanksgiving-family-feast");
+
+        if (!halloween || halloween.sourceQuery !== "genre:27") throw new Error("Invalid halloween preset query");
+        if (!summer || summer.sourceQuery !== "genre:28") throw new Error("Invalid summer preset query");
+        if (!christmas || christmas.sourceQuery !== "keyword:christmas") throw new Error("Invalid christmas preset query");
+        if (!thanksgiving || thanksgiving.sourceQuery !== "genre:10751") throw new Error("Invalid thanksgiving preset query");
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

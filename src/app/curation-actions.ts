@@ -1685,12 +1685,6 @@ export async function syncCollectionToPlexInternal(
             } catch (pErr: any) {
                 console.warn("[COLL-SYNC] Error running auto-placeholders:", pErr.message);
             }
-        } else {
-            try {
-                await cleanupAvailablePlaceholdersInternal(collection.serverId || undefined, collection.sectionKey || undefined);
-            } catch (pErr: any) {
-                console.warn("[COLL-SYNC] Error running placeholder cleanup:", pErr.message);
-            }
         }
 
         const isPlaceholdersCollection = collection.sourceType === "radarr" || 
@@ -3231,6 +3225,18 @@ export async function syncSeasonalAndScheduledCollectionsInternal(serverId?: str
                                 collectionMode: coll.collectionMode || "default"
                             }
                         ).catch(() => {});
+
+                        // Also re-sync the collection items if it is a dynamic collection (TMDb, Trakt, MDBList, Radarr, Sonarr, etc.)!
+                        // Otherwise, scheduled seasonal collections (Halloween, Summer, Christmas, Thanksgiving) remain permanently frozen with stale items!
+                        if (coll.sourceType !== "plex_native" && coll.sourceType !== "plex_smart") {
+                            if (coll.sectionKey) affectedSections.add(String(coll.sectionKey));
+                            const cachedColls = coll.sectionKey ? await getCachedCollectionsForSection(String(coll.sectionKey)) : [];
+                            await syncCollectionToPlexInternal(coll.id, {
+                                skipHubReorder: true,
+                                cachedExistingCollections: cachedColls,
+                                resolvedConnection: resolved
+                            }).catch(() => {});
+                        }
                     } else if (!coll.ratingKey) {
                         // Auto-sync collection if not yet created on Plex
                         if (coll.sectionKey) affectedSections.add(String(coll.sectionKey));
