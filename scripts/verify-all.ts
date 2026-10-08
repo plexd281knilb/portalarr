@@ -32,7 +32,7 @@ import path from "path";
 import { CLOUDFLARE_BYPASS_PATHS, CLOUDFLARE_SUPER_USER_PATHS, CLOUDFLARE_ADMIN_PATHS, matchesCloudflareBypass, matchesCloudflareSuperUser, matchesCloudflareAdmin } from "../src/lib/edge-policy-paths";
 import { getBuiltinOscarBestPictureList } from "../src/lib/curation/oscar-best-picture-data";
 import { COLLECTION_PRESETS } from "../src/lib/curation/presets";
-import { expandCandidateUrls, isPrivateOrLocalIp } from "../src/lib/curation/plex-analyzer";
+import { expandCandidateUrls, isPrivateOrLocalIp, isPlexItemPlaceholderOrStub, parsePlexXmlCollections } from "../src/lib/curation/plex-analyzer";
 
 
 async function runTestSuite() {
@@ -5246,6 +5246,179 @@ async function runTestSuite() {
         if (!summer || summer.sourceQuery !== "genre:28") throw new Error("Invalid summer preset query");
         if (!christmas || christmas.sourceQuery !== "keyword:christmas") throw new Error("Invalid christmas preset query");
         if (!thanksgiving || thanksgiving.sourceQuery !== "genre:10751") throw new Error("Invalid thanksgiving preset query");
+    });
+
+    // 85. Agregarr: Out-of-Season Hiding, Schedule Evaluation & Visibility Promotion Flags
+    await assertTest("Agregarr: Out-of-Season Hiding & Schedule Evaluation", async () => {
+        const { isSeasonalCollectionInSeason, isCollectionScheduleActive } = await import("../src/lib/curation/schedule-helper");
+
+        const oct7 = new Date("2026-10-07T12:00:00Z");
+
+        // 1. Halloween Horror & Spooky Nights (Oct 1 - Nov 3) -> IN SEASON on Oct 7
+        const halloweenColl = {
+            isSeasonal: true,
+            scheduleStartMonth: 10,
+            scheduleStartDay: 1,
+            scheduleEndMonth: 11,
+            scheduleEndDay: 3,
+            seasonalAction: "promote_hide"
+        };
+        if (!isSeasonalCollectionInSeason(halloweenColl, oct7)) {
+            throw new Error("Halloween collection should be IN SEASON on Oct 7");
+        }
+        if (!isCollectionScheduleActive(halloweenColl, oct7)) {
+            throw new Error("Halloween collection schedule should be ACTIVE on Oct 7");
+        }
+
+        // 2. Summer Blockbusters & Action Thrills (May 15 - Aug 31) -> OUT OF SEASON on Oct 7
+        const summerColl = {
+            isSeasonal: true,
+            scheduleStartMonth: 5,
+            scheduleStartDay: 15,
+            scheduleEndMonth: 8,
+            scheduleEndDay: 31,
+            seasonalAction: "promote_hide"
+        };
+        if (isSeasonalCollectionInSeason(summerColl, oct7)) {
+            throw new Error("Summer Blockbusters collection should be OUT OF SEASON on Oct 7");
+        }
+        if (isCollectionScheduleActive(summerColl, oct7)) {
+            throw new Error("Summer Blockbusters schedule should be INACTIVE on Oct 7");
+        }
+
+        // 3. Holiday Cheer & Christmas Classics (Nov 20 - Jan 6) -> OUT OF SEASON on Oct 7
+        const christmasColl = {
+            isSeasonal: true,
+            scheduleStartMonth: 11,
+            scheduleStartDay: 20,
+            scheduleEndMonth: 1,
+            scheduleEndDay: 6,
+            seasonalAction: "promote_hide"
+        };
+        if (isSeasonalCollectionInSeason(christmasColl, oct7)) {
+            throw new Error("Holiday Cheer collection should be OUT OF SEASON on Oct 7");
+        }
+        if (isCollectionScheduleActive(christmasColl, oct7)) {
+            throw new Error("Holiday Cheer schedule should be INACTIVE on Oct 7");
+        }
+
+        // 4. Thanksgiving & Fall Family Cinema (Nov 1 - Nov 30) -> OUT OF SEASON on Oct 7
+        const thanksgivingColl = {
+            isSeasonal: true,
+            scheduleStartMonth: 11,
+            scheduleStartDay: 1,
+            scheduleEndMonth: 11,
+            scheduleEndDay: 30,
+            seasonalAction: "promote_hide"
+        };
+        if (isSeasonalCollectionInSeason(thanksgivingColl, oct7)) {
+            throw new Error("Thanksgiving collection should be OUT OF SEASON on Oct 7");
+        }
+        if (isCollectionScheduleActive(thanksgivingColl, oct7)) {
+            throw new Error("Thanksgiving schedule should be INACTIVE on Oct 7");
+        }
+
+        // 5. Wrap-around Christmas in December: Dec 25 -> IN SEASON
+        const dec25 = new Date("2026-12-25T12:00:00Z");
+        if (!isSeasonalCollectionInSeason(christmasColl, dec25)) {
+            throw new Error("Holiday Cheer collection should be IN SEASON on Dec 25");
+        }
+
+        // 6. Non-seasonal collection should always be active
+        const standardColl = { isSeasonal: false, activeDays: "all", activeTimeRange: "all_day" };
+        if (!isCollectionScheduleActive(standardColl, oct7)) {
+            throw new Error("Standard collection should always be active");
+        }
+    });
+
+    // 86. Agregarr: Exclusion of TV Specials and Trailer Stubs from Filtered Smart Hubs & Candidate Previews
+    await assertTest("Agregarr: TV Specials & Trailer Stub Exclusion from Smart Hubs", async () => {
+        // 1. isPlexItemPlaceholderOrStub detects TV shows with trailer/placeholder paths
+        const tvTrailerStub = {
+            type: "show",
+            title: "Supernatural",
+            filePath: "/mnt/user/data/media/tv/placeholders/curated_tv_shows/Supernatural/Supernatural - S00E00 - Trailer.mp4"
+        };
+        if (!isPlexItemPlaceholderOrStub(tvTrailerStub)) {
+            throw new Error("isPlexItemPlaceholderOrStub failed to flag TV show with placeholder path as stub");
+        }
+
+        // 2. isPlexItemPlaceholderOrStub detects TV show with .trailer. in filePath
+        const tvTrailerFile = {
+            type: "tv",
+            title: "Young Hearts",
+            filePath: "/mnt/user/data/media/tv/Young Hearts/Young Hearts.trailer.mkv"
+        };
+        if (!isPlexItemPlaceholderOrStub(tvTrailerFile)) {
+            throw new Error("isPlexItemPlaceholderOrStub failed to flag TV show with trailer file as stub");
+        }
+
+        // 3. isPlexItemPlaceholderOrStub detects TV shows with only specials or no regular seasons
+        const tvOnlySpecials = {
+            type: "show",
+            title: "Late Show With David Letterman",
+            hasOnlySpecials: true
+        };
+        if (!isPlexItemPlaceholderOrStub(tvOnlySpecials)) {
+            throw new Error("isPlexItemPlaceholderOrStub failed to flag TV show with hasOnlySpecials: true as stub");
+        }
+
+        const tvNoRegularSeasons = {
+            type: "show",
+            title: "Tagesschau",
+            hasRegularSeasons: false
+        };
+        if (!isPlexItemPlaceholderOrStub(tvNoRegularSeasons)) {
+            throw new Error("isPlexItemPlaceholderOrStub failed to flag TV show with hasRegularSeasons: false as stub");
+        }
+
+        // 4. isPlexItemPlaceholderOrStub returns FALSE for genuine TV shows and movies
+        const genuineShow = {
+            type: "show",
+            title: "Abbott Elementary",
+            filePath: "/mnt/user/data/media/tv/Abbott Elementary/Season 01/Abbott Elementary - S01E01 - Pilot.mkv",
+            hasRegularSeasons: true,
+            hasOnlySpecials: false,
+            year: 2021
+        };
+        if (isPlexItemPlaceholderOrStub(genuineShow)) {
+            throw new Error("isPlexItemPlaceholderOrStub falsely flagged genuine TV show as placeholder");
+        }
+
+        const genuineMovie = {
+            type: "movie",
+            title: "Oppenheimer",
+            filePath: "/mnt/user/data/media/movies/Oppenheimer (2023)/Oppenheimer.mkv",
+            fileSize: 30 * 1024 * 1024 * 1024,
+            duration: 180 * 60 * 1000,
+            year: 2023
+        };
+        if (isPlexItemPlaceholderOrStub(genuineMovie)) {
+            throw new Error("isPlexItemPlaceholderOrStub falsely flagged genuine movie as placeholder");
+        }
+
+        // 5. parsePlexXmlCollections properly extracts content attribute (smart query URI)
+        const sampleXml = `<?xml version="1.0" encoding="UTF-8"?>
+<MediaContainer size="2">
+    <Directory ratingKey="481321" title="Recently Added TV (Curated)" smart="1" content="server://abc/com.plexapp.plugins.library/library/sections/7/all?type=2&amp;sort=addedAt:desc&amp;season.index!=0&amp;episode.title!=Trailer%20(Placeholder)&amp;label!=trailer-placeholder&amp;limit=25" childCount="25" />
+    <Directory ratingKey="481322" title="Standard Collection" smart="0" childCount="10" />
+</MediaContainer>`;
+        const parsed = parsePlexXmlCollections(sampleXml);
+        if (parsed.length !== 2) {
+            throw new Error(`Expected 2 parsed collections, got ${parsed.length}`);
+        }
+        const smartColl = parsed.find(c => c.ratingKey === "481321");
+        if (!smartColl || !smartColl.smart) {
+            throw new Error("Parsed collection should be marked as smart");
+        }
+        if (!smartColl.content || !smartColl.content.includes("season.index!=0")) {
+            throw new Error(`Parsed smart collection content should contain 'season.index!=0', got: ${smartColl.content}`);
+        }
+
+        const standardColl = parsed.find(c => c.ratingKey === "481322");
+        if (!standardColl || standardColl.smart) {
+            throw new Error("Parsed standard collection should NOT be smart");
+        }
     });
 
     console.log("\n==========================================================");

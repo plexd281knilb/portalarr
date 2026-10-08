@@ -21,26 +21,34 @@ By deploying Plex Smart Collections that explicitly filter out placeholder crite
 
 2. **Recently Added TV (`recently_added` - TV Shows)**:
    - Default Title: `Recently Added TV (Curated)`
-   - Filter URI: `?type=2&label!=trailer-placeholder&episode.title!=Trailer (Placeholder)&sort=addedAt:desc`
-   - Excludes shows whose episodes are marked with `Trailer (Placeholder)`.
+   - Filter URI: `?type=2&sort=addedAt:desc&season.index!=0&episode.title!=Trailer%20(Placeholder)&label!=trailer-placeholder&label!=Coming%20Soon-placeholder`
+   - Excludes shows whose episodes are marked with `Trailer (Placeholder)` and uses `season.index!=0` to strictly exclude series that only have Season 00 specials/trailers.
 
 3. **Recently Released Movies (`recently_released` - Movies)**:
    - Default Title: `Recently Released Movies (Curated)`
-   - Filter URI: `?type=1&label!=trailer-placeholder&editionTitle!=Trailer&sort=originallyAvailableAt:desc`
+   - Filter URI: `?type=1&sort=originallyAvailableAt:desc&label!=trailer-placeholder&label!=Coming%20Soon-placeholder&editionTitle!=Trailer`
    - Orders by premiere/theatrical release date while excluding placeholder trailers.
 
 4. **Recently Released TV / Episodes (`recently_released` / `recently_released_episodes` - TV)**:
    - Default Title: `Recently Released Episodes (Curated)` (or `Recently Released TV (Curated)`)
-   - Filter URI: `?type=2&label!=trailer-placeholder&episode.title!=Trailer (Placeholder)&sort=originallyAvailableAt:desc`
+   - Filter URI: `?type=2&sort=episode.addedAt:desc&season.index!=0&episode.title!=Trailer%20(Placeholder)&label!=trailer-placeholder&label!=Coming%20Soon-placeholder`
+   - Includes `season.index!=0` to guarantee that trailer-only stubs are excluded from latest episodes.
 
 5. **Top Unwatched (Personalized per User) (`top_unwatched`)**:
    - Default Title: `Top Unwatched Movies (Curated)` (Movies) / `Top Unwatched TV (Curated)` (TV)
-   - Filter URI: `?type=1&unwatched=1&sort=rating:desc` (Movies) or `?type=2&unwatched=1&sort=rating:desc` (TV)
+   - Filter URI: `?type=1&sort=originallyAvailableAt:desc&unwatched=1&and=1&label!=trailer-placeholder&label!=Coming%20Soon-placeholder&editionTitle!=Trailer` (Movies) or `?type=2&sort=originallyAvailableAt:desc&season.index!=0&show.unwatchedLeaves=1&and=1&episode.title!=Trailer%20(Placeholder)&label!=trailer-placeholder&label!=Coming%20Soon-placeholder` (TV)
    - User Personalization API:
      ```http
      PUT /library/metadata/{ratingKey}/prefs?collectionFilterBasedOnUser=1
      ```
      This instructs PMS to evaluate the `unwatched=1` filter per individual logged-in user rather than globally across the server owner.
+
+### PMS Smart Collection Immutability & Re-creation
+Plex Media Server does not support modifying the query URI of an existing smart collection via `PUT /library/collections/{id}/items?uri=...`. When updating smart queries:
+1. Sweep all existing matching collections on the server.
+2. If `content` matches `fullUri`, keep it.
+3. If `content` differs or if duplicates exist, delete them via `DELETE /library/metadata/{ratingKey}`.
+4. Deploy the new smart collection via `POST /library/collections` with `smart=1&uri=${encodeURIComponent(fullUri)}`.
 
 ---
 

@@ -254,3 +254,89 @@ export function formatLastRunDisplay(lastRunIsoOrDate?: string | Date | null): s
     if (isYesterday) return `Yesterday at ${timeStr}`;
     return `${date.toLocaleDateString()} at ${timeStr}`;
 }
+
+/**
+ * Checks whether a seasonal collection is currently in season based on calendar date.
+ */
+export function isSeasonalCollectionInSeason(collection: {
+    isSeasonal?: boolean | null;
+    scheduleStartMonth?: number | null;
+    scheduleStartDay?: number | null;
+    scheduleEndMonth?: number | null;
+    scheduleEndDay?: number | null;
+}, date: Date = new Date()): boolean {
+    if (!collection.isSeasonal) return true;
+    const curMonth = date.getMonth() + 1; // 1-12
+    const curDay = date.getDate(); // 1-31
+    const curVal = curMonth * 100 + curDay;
+
+    const startM = collection.scheduleStartMonth || 1;
+    const startD = collection.scheduleStartDay || 1;
+    const endM = collection.scheduleEndMonth || 12;
+    const endD = collection.scheduleEndDay || 31;
+
+    const startVal = startM * 100 + startD;
+    const endVal = endM * 100 + endD;
+
+    if (startVal <= endVal) {
+        return curVal >= startVal && curVal <= endVal;
+    } else {
+        // Wraps across year-end (e.g. Nov 20 to Jan 6)
+        return curVal >= startVal || curVal <= endVal;
+    }
+}
+
+/**
+ * Checks whether a collection's schedule (seasonal, day-of-week, time-of-day) is active right now.
+ */
+export function isCollectionScheduleActive(collection: {
+    isSeasonal?: boolean | null;
+    scheduleStartMonth?: number | null;
+    scheduleStartDay?: number | null;
+    scheduleEndMonth?: number | null;
+    scheduleEndDay?: number | null;
+    activeDays?: string | null;
+    activeTimeRange?: string | null;
+}, date: Date = new Date()): boolean {
+    const isScheduled = Boolean(
+        collection.isSeasonal ||
+        (collection.activeDays && collection.activeDays !== "all") ||
+        (collection.activeTimeRange && collection.activeTimeRange !== "all_day")
+    );
+    if (!isScheduled) return true;
+
+    // 1. Day of Week Check
+    if (collection.activeDays && collection.activeDays !== "all") {
+        const dayCodes = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+        const curDayCode = dayCodes[date.getDay()];
+        const allowedDays = collection.activeDays.toLowerCase().split(",").map(d => d.trim());
+        if (!allowedDays.includes(curDayCode)) {
+            return false;
+        }
+    }
+
+    // 2. Time of Day Check
+    if (collection.activeTimeRange && collection.activeTimeRange !== "all_day") {
+        const curHour = date.getHours();
+        if (collection.activeTimeRange === "evening") {
+            // 6:00 PM (18) to 11:59 PM (23)
+            if (curHour < 18 || curHour > 23) return false;
+        } else if (collection.activeTimeRange === "late_night") {
+            // 11:00 PM (23) to 4:00 AM (4)
+            if (curHour < 23 && curHour > 4) return false;
+        } else if (collection.activeTimeRange === "daytime") {
+            // 8:00 AM (8) to 5:00 PM (17)
+            if (curHour < 8 || curHour > 17) return false;
+        }
+    }
+
+    // 3. Seasonal Calendar Range Check
+    if (collection.isSeasonal) {
+        if (!isSeasonalCollectionInSeason(collection, date)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+

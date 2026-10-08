@@ -4,7 +4,7 @@ import fs from "fs";
 import path from "path";
 import sharp from "sharp";
 import prisma, { ensureSchemaColumns } from "@/lib/prisma";
-import { isPlexMaintenanceWindow } from "@/lib/curation/schedule-helper";
+import { isPlexMaintenanceWindow, isSeasonalCollectionInSeason, isCollectionScheduleActive } from "@/lib/curation/schedule-helper";
 import { decryptData, encryptData } from "@/lib/encryption";
 import { getCurrentUser } from "@/app/auth-actions";
 import { logger } from "@/lib/logger";
@@ -147,6 +147,34 @@ async function verifyAdmin() {
         throw new Error("Unauthorized: Admin permissions required.");
     }
     return user;
+}
+
+/**
+ * Server Action: Checks whether a seasonal collection is currently in season based on calendar date.
+ */
+export async function isSeasonalCollectionInSeasonAction(collection: {
+    isSeasonal?: boolean | null;
+    scheduleStartMonth?: number | null;
+    scheduleStartDay?: number | null;
+    scheduleEndMonth?: number | null;
+    scheduleEndDay?: number | null;
+}, dateIso?: string) {
+    return isSeasonalCollectionInSeason(collection, dateIso ? new Date(dateIso) : new Date());
+}
+
+/**
+ * Server Action: Checks whether a collection's schedule (seasonal, day-of-week, time-of-day) is active right now.
+ */
+export async function isCollectionScheduleActiveAction(collection: {
+    isSeasonal?: boolean | null;
+    scheduleStartMonth?: number | null;
+    scheduleStartDay?: number | null;
+    scheduleEndMonth?: number | null;
+    scheduleEndDay?: number | null;
+    activeDays?: string | null;
+    activeTimeRange?: string | null;
+}, dateIso?: string) {
+    return isCollectionScheduleActive(collection, dateIso ? new Date(dateIso) : new Date());
 }
 
 /**
@@ -1573,6 +1601,27 @@ export async function syncCollectionToPlexInternal(
             };
         }
 
+        // Evaluate effective schedule visibility
+        const isScheduled = Boolean(
+            collection.isSeasonal ||
+            (collection.activeDays && collection.activeDays !== "all") ||
+            (collection.activeTimeRange && collection.activeTimeRange !== "all_day")
+        );
+        let effHome = collection.promotedToHome ?? true;
+        let effRecommended = collection.promotedToRecommended ?? true;
+        let effSharedHome = collection.promotedToSharedHome ?? true;
+        let effCollectionMode = collection.collectionMode || "default";
+
+        if (isScheduled && !isCollectionScheduleActive(collection)) {
+            const shouldHide = collection.seasonalAction === "promote_hide" || collection.seasonalAction === "create_delete" || !collection.seasonalAction;
+            if (shouldHide) {
+                effHome = false;
+                effRecommended = false;
+                effSharedHome = false;
+                effCollectionMode = "hide";
+            }
+        }
+
         // 3. If this is an existing Plex-native collection, hub, or already has a ratingKey in PMS:
         const isNativePlex = collection.sourceType === "plex_native" || 
                              collection.sourceType === "plex_hub" || 
@@ -1601,10 +1650,10 @@ export async function syncCollectionToPlexInternal(
                         found.ratingKey,
                         {
                             sortTitle,
-                            promotedToHome: collection.promotedToHome ?? true,
-                            promotedToRecommended: collection.promotedToRecommended ?? true,
-                            promotedToSharedHome: collection.promotedToSharedHome ?? true,
-                            collectionMode: collection.collectionMode || "default"
+                            promotedToHome: effHome,
+                            promotedToRecommended: effRecommended,
+                            promotedToSharedHome: effSharedHome,
+                            collectionMode: effCollectionMode
                         }
                     );
                 }
@@ -2142,21 +2191,26 @@ export async function syncCollectionToPlexInternal(
             {
                 summary: collection.summary || undefined,
                 sortTitle,
-                promotedToHome: collection.promotedToHome ?? true,
-                promotedToRecommended: collection.promotedToRecommended ?? true,
-                promotedToSharedHome: collection.promotedToSharedHome ?? true,
-                collectionMode: collection.collectionMode || "default",
+                promotedToHome: effHome,
+                promotedToRecommended: effRecommended,
+                promotedToSharedHome: effSharedHome,
+                collectionMode: effCollectionMode,
                 posterUrl: collection.posterUrl || undefined
             }
         );
 
-        // 5. Update local DB with item count and synced time
+        // 5. Update local DB with item count and synced time (and sync promotion flags if scheduled)
         await prisma.mediaCollection.update({
             where: { id: collection.id },
             data: {
                 itemCount: finalRatingKeys.length,
                 lastSyncedAt: new Date(),
-                ratingKey: syncResult.collectionRatingKey || undefined
+                ratingKey: syncResult.collectionRatingKey || undefined,
+                ...(isScheduled && !isCollectionScheduleActive(collection) ? {
+                    promotedToHome: effHome,
+                    promotedToRecommended: effRecommended,
+                    promotedToSharedHome: effSharedHome
+                } : {})
             }
         });
 
@@ -2627,22 +2681,31 @@ export async function generateCollectionCandidateItemsPreviewAction(
         } else if (sourceType === "plex_smart") {
             const subtype = sourceQuery || "recently_added";
             executionMethod = `Plex Filtered Smart Hub: Dynamic filter for ${subtype} (excludes trailer-placeholder stubs).`;
+            const eligibleItems = isTvSection
+                ? libraryItems.filter(it => !it.isPlaceholder && !isPlexItemPlaceholderOrStub(it) && !(it.seasonCount === 0 && (it.leafCount || 0) <= 1))
+                : libraryItems;
             if (subtype === "recently_added") {
-                matchedItems = [...libraryItems].sort((a, b) => {
+                matchedItems = [...eligibleItems].sort((a, b) => {
                     const tA = a.addedAt ? new Date(a.addedAt).getTime() : (parseInt(a.ratingKey, 10) || 0);
                     const tB = b.addedAt ? new Date(b.addedAt).getTime() : (parseInt(b.ratingKey, 10) || 0);
                     return tB - tA;
                 });
             } else if (subtype === "recently_released") {
-                matchedItems = [...libraryItems].sort((a, b) => {
+                matchedItems = [...eligibleItems].sort((a, b) => {
                     const yA = a.originallyAvailableAt ? new Date(a.originallyAvailableAt).getTime() : (a.year ? new Date(a.year, 0, 1).getTime() : 0);
                     const yB = b.originallyAvailableAt ? new Date(b.originallyAvailableAt).getTime() : (b.year ? new Date(b.year, 0, 1).getTime() : 0);
                     return yB - yA;
                 });
+            } else if (subtype === "recently_released_episodes") {
+                matchedItems = [...eligibleItems].sort((a, b) => {
+                    const tA = a.addedAt ? new Date(a.addedAt).getTime() : (parseInt(a.ratingKey, 10) || 0);
+                    const tB = b.addedAt ? new Date(b.addedAt).getTime() : (parseInt(b.ratingKey, 10) || 0);
+                    return tB - tA;
+                });
             } else if (subtype === "top_unwatched") {
-                matchedItems = libraryItems.filter(it => it.viewCount === 0 || it.unwatched === true || !it.lastViewedAt).sort((a, b) => (b.rating || 0) - (a.rating || 0));
+                matchedItems = eligibleItems.filter(it => it.viewCount === 0 || it.unwatched === true || !it.lastViewedAt).sort((a, b) => (b.rating || 0) - (a.rating || 0));
             } else {
-                matchedItems = libraryItems.slice(0, 30);
+                matchedItems = eligibleItems.slice(0, 30);
             }
         }
 
@@ -2728,16 +2791,36 @@ export async function reorderPlexCollectionsAction(
                 const cleanBaseTitle = (existing.title || existing.sortTitle || "").replace(/^(![\d]+_)+/, "").trim();
                 const effectiveSortTitle = `${prefix}${cleanBaseTitle}`;
 
+                const isScheduled = Boolean(
+                    existing.isSeasonal ||
+                    (existing.activeDays && existing.activeDays !== "all") ||
+                    (existing.activeTimeRange && existing.activeTimeRange !== "all_day")
+                );
+                let effHome = item.promotedToHome !== undefined ? item.promotedToHome : (existing.promotedToHome ?? true);
+                let effRec = item.promotedToRecommended !== undefined ? item.promotedToRecommended : (existing.promotedToRecommended ?? true);
+                let effShared = item.promotedToSharedHome !== undefined ? item.promotedToSharedHome : (existing.promotedToSharedHome ?? true);
+                let effMode = item.collectionMode || existing.collectionMode || "default";
+
+                if (isScheduled && !isCollectionScheduleActive(existing)) {
+                    const shouldHide = existing.seasonalAction === "promote_hide" || existing.seasonalAction === "create_delete" || !existing.seasonalAction;
+                    if (shouldHide) {
+                        effHome = false;
+                        effRec = false;
+                        effShared = false;
+                        effMode = "hide";
+                    }
+                }
+
                 const updated = await prisma.mediaCollection.update({
                     where: { id: existing.id },
                     data: {
                         orderIndex: item.orderIndex,
                         sortPrefix: prefix,
                         sortTitle: effectiveSortTitle,
-                        promotedToHome: item.promotedToHome ?? true,
-                        promotedToRecommended: item.promotedToRecommended ?? true,
-                        promotedToSharedHome: item.promotedToSharedHome ?? true,
-                        collectionMode: item.collectionMode || "default"
+                        promotedToHome: effHome,
+                        promotedToRecommended: effRec,
+                        promotedToSharedHome: effShared,
+                        collectionMode: effMode
                     }
                 });
                 return { item, db: updated };
@@ -2765,10 +2848,10 @@ export async function reorderPlexCollectionsAction(
                         targetRatingKey,
                         {
                             sortTitle: effectiveSortTitle,
-                            promotedToHome: item.promotedToHome ?? true,
-                            promotedToRecommended: item.promotedToRecommended ?? true,
-                            promotedToSharedHome: item.promotedToSharedHome ?? true,
-                            collectionMode: item.collectionMode || "default"
+                            promotedToHome: db.promotedToHome,
+                            promotedToRecommended: db.promotedToRecommended,
+                            promotedToSharedHome: db.promotedToSharedHome,
+                            collectionMode: db.collectionMode || "default"
                         }
                     );
                     updatedCount++;
@@ -2970,6 +3053,26 @@ export async function updateCollectionPlacementAction(data: {
             if (resolved?.serverUrl) {
                 const urlsToTry = [resolved.serverUrl];
 
+                const isScheduled = Boolean(
+                    updated.isSeasonal ||
+                    (updated.activeDays && updated.activeDays !== "all") ||
+                    (updated.activeTimeRange && updated.activeTimeRange !== "all_day")
+                );
+                let effHome = updated.promotedToHome;
+                let effRec = updated.promotedToRecommended;
+                let effShared = updated.promotedToSharedHome;
+                let effMode = updated.collectionMode || "default";
+
+                if (isScheduled && !isCollectionScheduleActive(updated)) {
+                    const shouldHide = updated.seasonalAction === "promote_hide" || updated.seasonalAction === "create_delete" || !updated.seasonalAction;
+                    if (shouldHide) {
+                        effHome = false;
+                        effRec = false;
+                        effShared = false;
+                        effMode = "hide";
+                    }
+                }
+
                 await updatePlexCollectionPromotionAndOrder(
                     urlsToTry,
                     resolved.token,
@@ -2977,10 +3080,10 @@ export async function updateCollectionPlacementAction(data: {
                     updated.ratingKey,
                     {
                         sortTitle,
-                        promotedToHome: updated.promotedToHome,
-                        promotedToRecommended: updated.promotedToRecommended,
-                        promotedToSharedHome: updated.promotedToSharedHome,
-                        collectionMode: updated.collectionMode || "default"
+                        promotedToHome: effHome,
+                        promotedToRecommended: effRec,
+                        promotedToSharedHome: effShared,
+                        collectionMode: effMode
                     }
                 );
 
@@ -3145,55 +3248,17 @@ export async function syncSeasonalAndScheduledCollectionsInternal(serverId?: str
             const isScheduled = Boolean(coll.isSeasonal || (coll.activeDays && coll.activeDays !== "all") || (coll.activeTimeRange && coll.activeTimeRange !== "all_day"));
 
             if (isScheduled) {
-                let isScheduleActive = true;
-
-                // 1. Day of Week Check
-                if (coll.activeDays && coll.activeDays !== "all") {
-                    const allowedDays = coll.activeDays.toLowerCase().split(",").map(d => d.trim());
-                    if (!allowedDays.includes(curDayCode)) {
-                        isScheduleActive = false;
-                    }
-                }
-
-                // 2. Time of Day Check
-                if (isScheduleActive && coll.activeTimeRange && coll.activeTimeRange !== "all_day") {
-                    if (coll.activeTimeRange === "evening") {
-                        // 6:00 PM (18) to 11:59 PM (23)
-                        if (curHour < 18 || curHour > 23) isScheduleActive = false;
-                    } else if (coll.activeTimeRange === "late_night") {
-                        // 11:00 PM (23) to 4:00 AM (4)
-                        if (curHour < 23 && curHour > 4) isScheduleActive = false;
-                    } else if (coll.activeTimeRange === "daytime") {
-                        // 8:00 AM (8) to 5:00 PM (17)
-                        if (curHour < 8 || curHour > 17) isScheduleActive = false;
-                    }
-                }
-
-                // 3. Seasonal Calendar Range Check
-                if (isScheduleActive && coll.isSeasonal) {
-                    const startM = coll.scheduleStartMonth || 1;
-                    const startD = coll.scheduleStartDay || 1;
-                    const endM = coll.scheduleEndMonth || 12;
-                    const endD = coll.scheduleEndDay || 31;
-
-                    const startVal = startM * 100 + startD;
-                    const endVal = endM * 100 + endD;
-
-                    let isInSeason = false;
-                    if (startVal <= endVal) {
-                        isInSeason = curVal >= startVal && curVal <= endVal;
-                    } else {
-                        // Wrap around year end (e.g. Nov 20 to Jan 6)
-                        isInSeason = curVal >= startVal || curVal <= endVal;
-                    }
-                    if (!isInSeason) isScheduleActive = false;
-                }
+                const isScheduleActive = isCollectionScheduleActive(coll, now);
 
                 if (isScheduleActive) {
                     // Promote active scheduled collection
                     await prisma.mediaCollection.update({
                         where: { id: coll.id },
-                        data: { promotedToHome: true, promotedToRecommended: true }
+                        data: {
+                            promotedToHome: coll.promotedToHome ?? true,
+                            promotedToRecommended: coll.promotedToRecommended ?? true,
+                            promotedToSharedHome: coll.promotedToSharedHome ?? true
+                        }
                     });
 
                     let placeholderNotes = "";
@@ -3219,9 +3284,9 @@ export async function syncSeasonalAndScheduledCollectionsInternal(serverId?: str
                             coll.ratingKey,
                             {
                                 sortTitle: effectiveSort,
-                                promotedToHome: true,
-                                promotedToRecommended: true,
-                                promotedToSharedHome: coll.promotedToSharedHome,
+                                promotedToHome: coll.promotedToHome ?? true,
+                                promotedToRecommended: coll.promotedToRecommended ?? true,
+                                promotedToSharedHome: coll.promotedToSharedHome ?? true,
                                 collectionMode: coll.collectionMode || "default"
                             }
                         ).catch(() => {});
@@ -3251,11 +3316,15 @@ export async function syncSeasonalAndScheduledCollectionsInternal(serverId?: str
                     results.push({ title: coll.title, active: true, action: `Promoted to Plex Home & Recommended (Schedule Active)${placeholderNotes}` });
                 } else {
                     // Demote / hide inactive scheduled collection
-                    const shouldHide = coll.seasonalAction === "promote_hide" || coll.seasonalAction === "create_delete";
+                    const shouldHide = coll.seasonalAction === "promote_hide" || coll.seasonalAction === "create_delete" || !coll.seasonalAction;
 
                     await prisma.mediaCollection.update({
                         where: { id: coll.id },
-                        data: { promotedToHome: !shouldHide }
+                        data: {
+                            promotedToHome: !shouldHide,
+                            promotedToRecommended: !shouldHide,
+                            promotedToSharedHome: !shouldHide
+                        }
                     });
 
                     if (coll.ratingKey && coll.sectionKey) {
@@ -3268,12 +3337,13 @@ export async function syncSeasonalAndScheduledCollectionsInternal(serverId?: str
                             {
                                 promotedToHome: !shouldHide,
                                 promotedToRecommended: !shouldHide,
-                                collectionMode: coll.collectionMode || "default"
+                                promotedToSharedHome: !shouldHide,
+                                collectionMode: shouldHide ? "hide" : (coll.collectionMode || "default")
                             }
                         ).catch(() => {});
                     }
 
-                    results.push({ title: coll.title, active: false, action: shouldHide ? "Hidden from Plex Home (Out of Schedule/Season)" : "Demoted" });
+                    results.push({ title: coll.title, active: false, action: shouldHide ? "Hidden from Plex Home & Recommended (Out of Schedule/Season)" : "Demoted" });
                 }
             } else {
                 // Non-scheduled active collection (e.g. dynamic or standard)
@@ -11136,21 +11206,21 @@ export async function deployFilteredSmartHubInternal(
 
         if (subtype === "recently_added") {
             if (isTv) {
-                filterUri = `/library/sections/${sectionKey}/all?type=2&sort=addedAt:desc&episode.title!=${trailerTitle}&label!=${trailerLabel}&label!=${comingSoonLabel}${limitParam}`;
+                filterUri = `/library/sections/${sectionKey}/all?type=2&sort=addedAt:desc&season.index!=0&episode.title!=${trailerTitle}&label!=${trailerLabel}&label!=${comingSoonLabel}${limitParam}`;
             } else {
                 filterUri = `/library/sections/${sectionKey}/all?type=1&sort=addedAt:desc&label!=${trailerLabel}&label!=${comingSoonLabel}&editionTitle!=Trailer${limitParam}`;
             }
         } else if (subtype === "recently_released") {
             if (isTv) {
-                filterUri = `/library/sections/${sectionKey}/all?type=2&sort=episode.originallyAvailableAt:desc&episode.title!=${trailerTitle}&label!=${trailerLabel}&label!=${comingSoonLabel}${limitParam}`;
+                filterUri = `/library/sections/${sectionKey}/all?type=2&sort=episode.originallyAvailableAt:desc&season.index!=0&episode.title!=${trailerTitle}&label!=${trailerLabel}&label!=${comingSoonLabel}${limitParam}`;
             } else {
                 filterUri = `/library/sections/${sectionKey}/all?type=1&sort=originallyAvailableAt:desc&label!=${trailerLabel}&label!=${comingSoonLabel}&editionTitle!=Trailer${limitParam}`;
             }
         } else if (subtype === "recently_released_episodes") {
-            filterUri = `/library/sections/${sectionKey}/all?type=2&sort=episode.addedAt:desc&episode.title!=${trailerTitle}&label!=${trailerLabel}&label!=${comingSoonLabel}${limitParam}`;
+            filterUri = `/library/sections/${sectionKey}/all?type=2&sort=episode.addedAt:desc&season.index!=0&episode.title!=${trailerTitle}&label!=${trailerLabel}&label!=${comingSoonLabel}${limitParam}`;
         } else if (subtype === "top_unwatched") {
             if (isTv) {
-                filterUri = `/library/sections/${sectionKey}/all?type=2&sort=originallyAvailableAt:desc&show.unwatchedLeaves=1&and=1&episode.title!=${trailerTitle}&label!=${trailerLabel}&label!=${comingSoonLabel}${limitParam}`;
+                filterUri = `/library/sections/${sectionKey}/all?type=2&sort=originallyAvailableAt:desc&season.index!=0&show.unwatchedLeaves=1&and=1&episode.title!=${trailerTitle}&label!=${trailerLabel}&label!=${comingSoonLabel}${limitParam}`;
             } else {
                 filterUri = `/library/sections/${sectionKey}/all?type=1&sort=originallyAvailableAt:desc&unwatched=1&and=1&label!=${trailerLabel}&label!=${comingSoonLabel}&editionTitle!=Trailer${limitParam}`;
             }
@@ -11196,9 +11266,9 @@ export async function deployFilteredSmartHubInternal(
             ? `server://${machineId}/com.plexapp.plugins.library${filterUri}`
             : filterUri;
 
-        // Check if collection already exists in Plex
+        // Check if collection(s) already exist in Plex
         const existingCollections = await getPlexLibraryCollections(urlsToTry, token, sectionKey);
-        const existing = existingCollections.find(c => {
+        const matchingCollections = existingCollections.filter(c => {
             const titleLower = c.title.toLowerCase();
             if (titleLower === defaultTitle.toLowerCase()) return true;
             if (subtype === "recently_added") {
@@ -11237,32 +11307,30 @@ export async function deployFilteredSmartHubInternal(
             return false;
         });
 
-        let ratingKey = existing?.ratingKey;
+        let ratingKey: string | undefined = undefined;
 
-        if (existing && existing.smart && !existing.ratingKey.startsWith("hub:")) {
-            // Update existing smart collection URI and title if needed
-            for (const cleanBase of urlsToTry) {
-                try {
-                    const updateUrl = `${cleanBase}/library/collections/${existing.ratingKey}/items?uri=${encodeURIComponent(fullUri)}&X-Plex-Token=${encodeURIComponent(token)}`;
-                    await fetch(updateUrl, {
-                        method: "PUT",
-                        headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" },
-                        signal: AbortSignal.timeout(4000)
-                    });
-                    if (existing.title !== defaultTitle) {
-                        await updatePlexItemTitle(urlsToTry, token, existing.ratingKey, defaultTitle);
-                    }
-                    break;
-                } catch {}
+        // Clean up any stale or duplicate collections whose filter URI doesn't match fullUri
+        for (const col of matchingCollections) {
+            if (col.ratingKey.startsWith("hub:")) continue;
+            const matchesUri = Boolean(
+                col.smart &&
+                col.content &&
+                decodeURIComponent(col.content) === decodeURIComponent(fullUri)
+            );
+            if (matchesUri && !ratingKey) {
+                ratingKey = col.ratingKey;
+                if (col.title !== defaultTitle) {
+                    await updatePlexItemTitle(urlsToTry, token, col.ratingKey, defaultTitle);
+                }
+            } else {
+                // Outdated filter URI or duplicate: delete it so PMS stays pristine
+                logger.addLog("INFO", "AGREGARR", `Cleaning up outdated/duplicate collection "${col.title}" in Plex (ratingKey: ${col.ratingKey}) to apply updated filter query.`);
+                await deletePlexCollection(urlsToTry, token, col.ratingKey).catch(() => {});
             }
-        } else {
-            // If an existing collection exists but is NOT smart (e.g. legacy static collection), delete it first so PMS creates a true smart collection
-            if (existing && !existing.smart && !existing.ratingKey.startsWith("hub:")) {
-                await deletePlexCollection(urlsToTry, token, existing.ratingKey).catch(() => {});
-                ratingKey = undefined;
-            }
+        }
 
-            // Create new smart collection in Plex
+        // Create new smart collection in Plex if not present or recreated
+        if (!ratingKey || ratingKey.startsWith("hub:")) {
             for (const cleanBase of urlsToTry) {
                 if (ratingKey && !ratingKey.startsWith("hub:")) break;
                 try {
@@ -11359,9 +11427,9 @@ export async function deployFilteredSmartHubInternal(
                     type: "smart",
                     itemCount: childItemCount || existingDb.itemCount,
                     maxItems: maxItems || 25,
-                    promotedToHome: true,
-                    promotedToRecommended: true,
-                    promotedToSharedHome: true,
+                    promotedToHome: existingDb.promotedToHome ?? true,
+                    promotedToRecommended: existingDb.promotedToRecommended ?? true,
+                    promotedToSharedHome: existingDb.promotedToSharedHome ?? true,
                     sortPrefix: existingDb.sortPrefix || sortPrefix,
                     excludedLabels: excludedLabels !== undefined ? excludedLabels : (existingDb.excludedLabels || "trailer-placeholder"),
                     isIgnored: false,

@@ -56,8 +56,12 @@ See detailed runbook: [plex-hubs-and-sync.md](./references/plex-hubs-and-sync.md
 
 ### 2. Filtered Smart Hubs & Placeholder Exclusion
 When trailer placeholders exist in a Plex library, standard default Plex hubs ("Recently Added", "Recently Released") display trailer stubs. Agregarr and Portalarr deploy **Filtered Smart Hubs**:
-- **Movies**: `?type=1&label!=trailer-placeholder&editionTitle!=Trailer&sort=addedAt:desc`
-- **TV Shows**: `?type=2&label!=trailer-placeholder&episode.title!=Trailer (Placeholder)&sort=addedAt:desc`
+- **Movies**: `?type=1&label!=trailer-placeholder&label!=Coming%20Soon-placeholder&editionTitle!=Trailer&sort=addedAt:desc`
+- **TV Shows**: `?type=2&season.index!=0&label!=trailer-placeholder&label!=Coming%20Soon-placeholder&episode.title!=Trailer%20(Placeholder)&sort=addedAt:desc`
+- **TV Specials & Trailer Stub Exclusion (`season.index!=0`)**: In Plex TV queries (`type=2`), TV shows whose only media files are Season 00 specials or trailer placeholders (`S00E00`) are strictly excluded by appending `&season.index!=0`. This guarantees curated TV hubs ("Recently Added TV", "Recently Released TV", "Recently Released Episodes", "Top Unwatched TV") only display genuine TV series with regular broadcast seasons (Season 1+).
+- **PMS Smart Collection Immutability & Re-creation**: Plex Media Server does NOT support modifying existing smart collection queries via `PUT /library/collections/{id}/items?uri=...` (it hangs for 4 seconds and fails). When a collection's filter URI changes, Agregarr sweeps all matching collections whose `content` attribute differs from `fullUri`, cleanly deletes them from PMS (`DELETE /library/metadata/{ratingKey}`), and creates a fresh smart collection via `POST /library/collections` with `smart=1&uri=${fullUri}`.
+- **Multi-User Child Collection Cleanup**: When `collectionFilterBasedOnUser=1` is set (e.g. for `top_unwatched`), Plex spawns virtual per-user collection instances. Updating or redeploying cleans up all outdated matching instances to prevent duplicate ghost collections.
+- **Candidate Preview & Stub Filtering (`isPlexItemPlaceholderOrStub`)**: Filters out TV shows residing in trailer placeholder folders (`placeholders/curated_tv_shows`), files containing `.trailer.`, and series where `hasOnlySpecials: true` or `hasRegularSeasons: false`.
 - **Top Unwatched (Personalized)**: Dynamic filter with `collectionFilterBasedOnUser=1` so Plex computes unwatched recommendations dynamically per logged-in user.
 
 See detailed runbook: [filtered-smart-hubs-and-dismissal.md](./references/filtered-smart-hubs-and-dismissal.md).
@@ -210,4 +214,16 @@ Agregarr dynamically pulls upcoming monitored content directly from Radarr and S
     - **Batch Home Screen Hub Reordering Deferral (`skipHubReorder`)**: Instead of triggering `reorderPlexHubsSelective` after every single collection in a batch (which previously caused 18 full hub reorder cycles across PMS), `syncCollectionToPlexInternal` accepts `skipHubReorder: true`. Home screen hub reordering is deferred and run exactly ONCE per affected library section at the end of the entire batch.
     - **Hub Initialization Short-Circuit**: In `reorderPlexHubsSelective`, candidate endpoint probing breaks immediately upon the first successful HTTP response (`if (res.ok) break;`), preventing trailing requests across unneeded fallback URLs.
     - **Universal Clipboard Helper (`copyToClipboard`)**: System and diagnostic activity streams utilize `copyToClipboard` in `src/lib/utils.ts` which uses modern `navigator.clipboard.writeText` on secure origins, and gracefully falls back to an offscreen DOM `textarea` with `document.execCommand('copy')` on non-secure LAN HTTP origins (e.g. `http://192.168.1.x:3000`).
+20. **Seasonal Collection Out-of-Season Hiding, Shared Home Screen Enforcement & Schedule Synchronization**:
+    - **Tri-Screen Visibility Enforcement**: Seasonal collections and scheduled hubs must consistently synchronize visibility across all three Plex screen surfaces:
+      - `promotedToHome` (Server owner's Home screen, `promotedToOwnHome` in PMS API)
+      - `promotedToSharedHome` (Shared friends & home members' Home screens)
+      - `promotedToRecommended` (Library section Recommended screen)
+    - **Shared Home Fallback Safeguard (`plex-analyzer.ts`)**:
+      - In `updatePlexCollectionPromotionAndOrder`, `sharedVal` safely defaults to `options.promotedToHome` (or `"1"` if both are undefined) rather than unconditionally setting `"1"`. This prevents out-of-season collections from leaking onto shared users' home screens when callers omit `promotedToSharedHome`.
+    - **Out-of-Season Automatic Demotion & Hub Hiding**:
+      - `isSeasonalCollectionInSeason` and `isCollectionScheduleActive` in `curation-actions.ts` calculate calendar dates (`curMonth * 100 + curDay`) against seasonal start and end dates with year-end rollover support (e.g. Nov 20 to Jan 6 for Holiday Cheer).
+      - When an active collection is out of season (e.g. Summer Blockbusters, Holiday Cheer, Thanksgiving in October), all sync and reorder operations (`syncCollectionToPlexInternal`, `runAgregarrSyncInternal`, `syncSeasonalAndScheduledCollectionsInternal`, `updateCollectionPlacementAction`, `reorderPlexCollectionsAction`) enforce `promotedToHome = false`, `promotedToSharedHome = false`, `promotedToRecommended = false`, and `collectionMode = "hide"` (when `seasonalAction === "promote_hide"` or `"create_delete"`).
+      - Database records in SQLite `MediaCollection` are persisted with `false` across all three visibility fields (`promotedToHome`, `promotedToRecommended`, `promotedToSharedHome`), preventing subsequent manual, preset, or background sync sweeps from re-promoting inactive seasonal collections to Plex hubs.
+
 

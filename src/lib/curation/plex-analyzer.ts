@@ -853,7 +853,7 @@ function parsePlexXmlMetadata(xml: string): any[] {
     return items;
 }
 
-function parsePlexXmlCollections(xml: string): { 
+export function parsePlexXmlCollections(xml: string): { 
     ratingKey: string; 
     title: string; 
     summary?: string; 
@@ -862,6 +862,7 @@ function parsePlexXmlCollections(xml: string): {
     childCount: number; 
     sortTitle?: string; 
     smart?: boolean;
+    content?: string;
     promotedToHome?: boolean;
     promotedToRecommended?: boolean;
     promotedToSharedHome?: boolean;
@@ -875,6 +876,7 @@ function parsePlexXmlCollections(xml: string): {
         childCount: number; 
         sortTitle?: string; 
         smart?: boolean;
+        content?: string;
         promotedToHome?: boolean;
         promotedToRecommended?: boolean;
         promotedToSharedHome?: boolean;
@@ -899,6 +901,7 @@ function parsePlexXmlCollections(xml: string): {
                 childCount: parseInt(getAttr("childCount") || "0", 10),
                 sortTitle: getAttr("titleSort"),
                 smart: getAttr("smart") === "1" || getAttr("subtype") === "smart",
+                content: getAttr("content") || getAttr("filter"),
                 promotedToHome: getAttr("promotedToHome") !== "0",
                 promotedToRecommended: getAttr("promotedToRecommended") !== "0",
                 promotedToSharedHome: getAttr("promotedToSharedHome") !== "0"
@@ -1169,6 +1172,7 @@ export async function getPlexLibraryCollections(
     childCount: number;
     sortTitle?: string;
     smart?: boolean;
+    content?: string;
     isHub?: boolean;
     hubIdentifier?: string;
     promotedToHome?: boolean;
@@ -1219,6 +1223,7 @@ export async function getPlexLibraryCollections(
                                     childCount: parseInt(c.childCount || "0", 10),
                                     sortTitle: c.titleSort,
                                     smart: Boolean(c.smart === "1" || c.smart === 1 || c.subtype === "smart"),
+                                    content: c.content || c.filter || undefined,
                                     promotedToHome: c.promotedToHome !== "0" && c.promotedToHome !== 0,
                                     promotedToRecommended: c.promotedToRecommended !== "0" && c.promotedToRecommended !== 0,
                                     promotedToSharedHome: c.promotedToSharedHome !== "0" && c.promotedToSharedHome !== 0
@@ -1275,6 +1280,7 @@ export async function getPlexLibraryCollections(
                                     childCount: parseInt(c.childCount || "0", 10),
                                     sortTitle: c.titleSort,
                                     smart: Boolean(c.smart === "1" || c.smart === 1 || c.subtype === "smart"),
+                                    content: c.content || c.filter || undefined,
                                     promotedToHome: c.promotedToHome !== "0" && c.promotedToHome !== 0,
                                     promotedToRecommended: c.promotedToRecommended !== "0" && c.promotedToRecommended !== 0,
                                     promotedToSharedHome: c.promotedToSharedHome !== "0" && c.promotedToSharedHome !== 0
@@ -2212,7 +2218,9 @@ export async function updatePlexCollectionPromotionAndOrder(
     const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
     const recVal = options.promotedToRecommended === false ? "0" : "1";
     const homeVal = options.promotedToHome === false ? "0" : "1";
-    const sharedVal = options.promotedToSharedHome === false ? "0" : "1";
+    const sharedVal = options.promotedToSharedHome !== undefined
+        ? (options.promotedToSharedHome === false ? "0" : "1")
+        : (options.promotedToHome === false ? "0" : "1");
 
     // 1. Built-in Plex Hubs (e.g. hub:movie.recentlyadded.1)
     if (collectionRatingKey.startsWith("hub:")) {
@@ -4238,6 +4246,15 @@ export function isPlexItemPlaceholderOrStub(it: any): boolean {
     // File size under 25MB for a feature film movie indicates a placeholder/stub
     if (it.type === "movie" && it.fileSize && it.fileSize > 0 && it.fileSize < 25 * 1024 * 1024) {
         return true;
+    }
+    // TV show trailer placeholder stubs: Shows with zero regular seasons or located in trailer placeholders directory
+    if (it.type === "show" || it.type === "tv") {
+        if (it.filePath && typeof it.filePath === "string" && (/placeholders[\\/]curated_tv_shows/i.test(it.filePath) || /\.trailer\./i.test(it.filePath))) {
+            return true;
+        }
+        if (it.hasOnlySpecials === true || it.hasRegularSeasons === false) {
+            return true;
+        }
     }
     // Future unreleased stubs / placeholder items (year > current year)
     const currentYear = new Date().getFullYear();
