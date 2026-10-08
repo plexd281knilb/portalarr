@@ -106,4 +106,9 @@ Portalarr separates overlay generation into two distinct, decoupled automated sc
 14. **Collection & Poster Studio Candidate Indexing and Placeholder Guards**:
     - **Trailer & Stub Immunity**: When Kometa Studio or Poster Studio evaluates collections or batches media, trailer stubs, placeholder files (`.portalarr-missing`, `edition-trailer`, duration < 15 min, size < 25MB), and future unreleased items (`year > currentYear`) are isolated via `isPlexItemPlaceholderOrStub` in `@/lib/curation/plex-analyzer`.
     - **Year-Aware Candidate Title Matching**: When matching candidate items to library media by title, matching strictly checks `Math.abs(libraryItem.year - candidate.year) <= 1` via `matchLibraryItemToCandidates` to prevent vintage releases from cross-matching unreleased remakes/reboots.
+15. **IMDb Top 150 vs Top 250 Waterfall Ribbon Differentiation & Vector Corner Banner Resolution**:
+    - **Stock Asset Collision**: Kometa's stock asset repository contains `ribbon/yellow/imdb.png` which has the text 'IMDb TOP 250' permanently pre-rendered into the graphic. There is no stock `imdb150.png` asset in Kometa.
+    - **Strict Top 150 Isolation**: `resolveStockRibbonPath` excludes `150` from matching `assetName = "imdb"`, mapping `imdb_top_150` to `blank-${color}.png` (`blank-yellow.png`) instead.
+    - **Dynamic Vector Banner Rendering**: In `applyOverlaysToPoster`, when `winningRibbonName` is `imdb_top_150` (or `winningRibbonText` contains `150` or custom tier text is specified), the overlay engine routes to `generateBannerSvg` with `winningTheme` (`amber-gold`) and `winningRibbonText` (`IMDb TOP 150`), producing crisp vector text and correct corner rotation rather than stamping the stock `imdb.png` Top 250 graphic.
+    - **Simulator Parity**: In `kometa-studio.tsx`, `isTop150` is evaluated before `isTop250` so that `cleanText.includes("150")` produces the `- TOP 150 -` sub-label on amber gold ribbons rather than `- ALL-TIME BEST -`.
 

@@ -128,7 +128,8 @@ export const IMDB_TOP_250_MOVIES: Top250Entry[] = [
     { rank: 112, title: "Gone Girl", year: 2014, imdbId: "tt2267998", tmdbId: 210577, mediaType: "movie" },
     { rank: 113, title: "The Grand Budapest Hotel", year: 2014, imdbId: "tt2278388", tmdbId: 120467, mediaType: "movie" },
     { rank: 114, title: "Blade Runner 2049", year: 2017, imdbId: "tt1856101", tmdbId: 335984, mediaType: "movie" },
-    { rank: 115, title: "Avengers: Endgame", year: 2019, imdbId: "tt4154796", tmdbId: 299534, mediaType: "movie" }
+    { rank: 115, title: "Avengers: Endgame", year: 2019, imdbId: "tt4154796", tmdbId: 299534, mediaType: "movie" },
+    { rank: 177, title: "Fargo", year: 1996, imdbId: "tt0116282", tmdbId: 275, mediaType: "movie" }
 ];
 
 export const IMDB_TOP_250_TV: Top250Entry[] = [

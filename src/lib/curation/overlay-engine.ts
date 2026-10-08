@@ -203,7 +203,7 @@ export function resolveStockRibbonPath(
     else if (nameLower.includes("cannes") || nameLower.includes("palme")) assetName = "cannes";
     else if (nameLower.includes("emmy")) assetName = "emmys";
     else if (nameLower.includes("golden") || nameLower.includes("globe")) assetName = "golden";
-    else if (nameLower.includes("imdb") || nameLower.includes("top250") || nameLower.includes("top_250")) assetName = "imdb";
+    else if ((nameLower.includes("imdb") || nameLower.includes("top250") || nameLower.includes("top_250")) && !nameLower.includes("150") && !nameLower.includes("top150") && !nameLower.includes("top_150")) assetName = "imdb";
     else if (nameLower.includes("certified") || nameLower.includes("rottenverified")) assetName = "rottenverified";
     else if (nameLower.includes("rotten") || nameLower.includes("fresh")) assetName = "rotten";
     else if (nameLower.includes("meta") || nameLower.includes("mustsee")) assetName = "metacritic";
@@ -1698,11 +1698,13 @@ export async function applyOverlaysToPoster(
     if (options.showRibbon || options.ribbonText || (options.tieredRibbons && options.tieredRibbons.length > 0) || options.ribbonMode === "auto_stack" || options.ribbonMode === "tiered" || options.ribbonMode === "waterfall") {
         const rPos = options.ribbonPosition || "bottom-right";
         let winningRibbonName = "";
+        let winningRibbonText = "";
         let winningTheme = options.ribbonTheme || "gold";
 
         if (options.ribbonMode === "single") {
             if (options.ribbonText && options.ribbonText.trim()) {
                 winningRibbonName = options.ribbonText.trim();
+                winningRibbonText = options.ribbonText.trim();
             } else if (options.ribbonType) {
                 const isMatch = isRibbonTypeMatching(options.ribbonType, mediaInfo, {
                     leavingSoonDays: options.leavingSoonDays,
@@ -1710,6 +1712,8 @@ export async function applyOverlaysToPoster(
                 });
                 if (isMatch) {
                     winningRibbonName = options.ribbonType;
+                    const preset = resolveRibbonPresetTextAndTheme(options.ribbonType, mediaInfo, options.leavingSoonDays);
+                    winningRibbonText = preset.text;
                 }
             }
         } else {
@@ -1730,6 +1734,7 @@ export async function applyOverlaysToPoster(
 
             if (matched) {
                 winningRibbonName = matched.matchedType || matched.text;
+                winningRibbonText = matched.text || winningRibbonName;
                 if (matched.theme) winningTheme = matched.theme;
             }
         }
@@ -1737,13 +1742,26 @@ export async function applyOverlaysToPoster(
         if (winningRibbonName) {
             const ribbonRelPath = resolveStockRibbonPath(winningRibbonName, winningTheme);
             if (ribbonRelPath) {
-                // If it's a blank ribbon (e.g. leaving_soon or custom text or generic tier), render dynamic corner banner with crisp text!
-                if (ribbonRelPath.includes("blank-") || winningRibbonName === "leaving_soon" || !fs.existsSync(path.join(STOCK_KOMETA_DIR, ribbonRelPath))) {
+                const isTop150 = winningRibbonName.toLowerCase().includes("150") || (winningRibbonText && winningRibbonText.toLowerCase().includes("150"));
+                const isStockImdb = ribbonRelPath.endsWith("imdb.png");
+                const isCustomTextOnStockImdb = isStockImdb && Boolean(winningRibbonText && !/^IMDb?\s*TOP\s*250$/i.test(winningRibbonText.trim()));
+
+                // If it's a blank ribbon (e.g. leaving_soon or custom text or generic tier), Top 150, or custom text, render dynamic corner banner with crisp text!
+                if (ribbonRelPath.includes("blank-") || winningRibbonName === "leaving_soon" || isTop150 || isCustomTextOnStockImdb || !fs.existsSync(path.join(STOCK_KOMETA_DIR, ribbonRelPath))) {
                     const ribbonText = winningRibbonName === "leaving_soon" 
                         ? (options.leavingSoonDays ? `LEAVING IN ${options.leavingSoonDays}D` : "LEAVING SOON") 
-                        : (options.ribbonText || winningRibbonName).replace(/_/g, " ").toUpperCase();
+                        : (winningRibbonText || options.ribbonText || winningRibbonName).replace(/_/g, " ").toUpperCase();
 
-                    const bannerTheme = winningTheme === "gold" ? "amber-gold" : winningTheme === "crimson" ? "crimson-red" : winningTheme === "purple" ? "indigo-purple" : "amber-gold";
+                    const bannerTheme = winningTheme === "gold" ? "amber-gold"
+                        : winningTheme === "crimson" ? "crimson-red"
+                        : winningTheme === "emerald" ? "emerald-green"
+                        : winningTheme === "cyan" ? "cyan-blue"
+                        : winningTheme === "purple" ? "indigo-purple"
+                        : winningTheme === "orange" ? "amber-gold"
+                        : winningTheme === "glass" ? "glass-slate"
+                        : winningTheme === "pink" ? "crimson-red"
+                        : "amber-gold";
+
                     const bannerInfo = generateBannerSvg(ribbonText, bannerTheme, rPos, options.ribbonFontSize || options.bannerFontSize);
                     const ribbonBuf = await sharp(Buffer.from(bannerInfo.svg)).png().toBuffer();
 

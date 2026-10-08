@@ -5421,6 +5421,101 @@ async function runTestSuite() {
         }
     });
 
+    // 86. Kometa: IMDb Top 150 vs Top 250 Waterfall Ribbon Differentiation & Vector Corner Banner Resolution
+    await assertTest("Kometa: IMDb Top 150 vs Top 250 Waterfall Ribbons & Vector Banner Resolution", async () => {
+        const {
+            resolveStockRibbonPath,
+            evaluateWaterfallRibbon,
+            isRibbonTypeMatching,
+            applyOverlaysToPoster
+        } = await import("../src/lib/curation/overlay-engine");
+        const sharp = (await import("sharp")).default;
+
+        // 1. Verify stock asset resolution: Top 150 must NOT map to static Top 250 image
+        const p150 = resolveStockRibbonPath("imdb_top_150", "gold");
+        if (!p150 || !p150.includes("blank-") || p150.endsWith("imdb.png")) {
+            throw new Error(`Expected resolveStockRibbonPath for imdb_top_150 to return blank ribbon template, got: ${p150}`);
+        }
+
+        const p250 = resolveStockRibbonPath("imdb_top_250", "gold");
+        if (!p250 || !p250.endsWith("imdb.png")) {
+            throw new Error(`Expected resolveStockRibbonPath for imdb_top_250 to return stock imdb.png, got: ${p250}`);
+        }
+
+        // 2. Waterfall Priority Evaluation
+        const waterfallTiers = [
+            { id: "tier-1", type: "imdb_top_150", text: "IMDb TOP 150", theme: "gold" as const, enabled: true },
+            { id: "tier-2", type: "imdb_top_250", text: "IMDb TOP 250", theme: "gold" as const, enabled: true },
+            { id: "tier-3", type: "certified_fresh", text: "CERTIFIED FRESH", theme: "crimson" as const, enabled: true }
+        ];
+
+        // Alien (1979) has IMDb rank #48 <= 150
+        const alienMediaInfo = {
+            title: "Alien",
+            year: 1979,
+            guids: { imdb: "tt0078748" },
+            detectedBadges: { resolution: "4K" }
+        };
+
+        if (!isRibbonTypeMatching("imdb_top_150", alienMediaInfo as any)) {
+            throw new Error("Alien (rank 48) failed isRibbonTypeMatching for imdb_top_150");
+        }
+
+        const alienMatch = evaluateWaterfallRibbon(alienMediaInfo as any, waterfallTiers);
+        if (!alienMatch) {
+            throw new Error("Expected Alien to match waterfall ribbon tiers");
+        }
+        if (alienMatch.matchedType !== "imdb_top_150" || alienMatch.priority !== 1) {
+            throw new Error(`Alien matched unexpected tier: ${alienMatch.matchedType} (priority #${alienMatch.priority})`);
+        }
+        if (alienMatch.text !== "IMDB TOP 150") {
+            throw new Error(`Expected Alien ribbon text to be "IMDB TOP 150", got "${alienMatch.text}"`);
+        }
+
+        // Test item with rank > 150 (e.g. Fargo rank 177, tt0116282)
+        const rank177MediaInfo = {
+            title: "Fargo",
+            year: 1996,
+            guids: { imdb: "tt0116282" },
+            detectedBadges: {}
+        };
+
+        if (isRibbonTypeMatching("imdb_top_150", rank177MediaInfo as any)) {
+            throw new Error("Fargo (rank 177) falsely matched imdb_top_150");
+        }
+        if (!isRibbonTypeMatching("imdb_top_250", rank177MediaInfo as any)) {
+            throw new Error("Fargo (rank 177) failed isRibbonTypeMatching for imdb_top_250");
+        }
+
+        const fargoMatch = evaluateWaterfallRibbon(rank177MediaInfo as any, waterfallTiers);
+        if (!fargoMatch) {
+            throw new Error("Expected Fargo to match waterfall ribbon tiers");
+        }
+        if (fargoMatch.matchedType !== "imdb_top_250" || fargoMatch.priority !== 2) {
+            throw new Error(`Fargo matched unexpected tier: ${fargoMatch.matchedType} (priority #${fargoMatch.priority})`);
+        }
+
+        // 3. Poster overlay generation with dynamic Top 150 ribbon
+        const dummyPoster = await sharp({
+            create: {
+                width: 1000,
+                height: 1500,
+                channels: 3,
+                background: { r: 30, g: 30, b: 30 }
+            }
+        }).jpeg().toBuffer();
+
+        const overlaidBuf = await applyOverlaysToPoster(dummyPoster, alienMediaInfo as any, {
+            showRibbon: true,
+            ribbonMode: "waterfall",
+            tieredRibbons: waterfallTiers
+        });
+
+        if (!overlaidBuf || overlaidBuf.length === 0) {
+            throw new Error("applyOverlaysToPoster returned empty buffer for Top 150 media item");
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

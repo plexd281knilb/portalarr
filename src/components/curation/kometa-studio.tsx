@@ -2161,22 +2161,25 @@ export function KometaStudio() {
         const cleanText = winningRibbon.text.trim().toUpperCase();
 
         const isOscar = cleanText.includes("OSCAR") || cleanText.includes("ACADEMY");
-        const isTop250 = cleanText.includes("250") || cleanText.includes("IMDB");
+        const isTop150 = cleanText.includes("150") || cleanText.includes("TOP 150");
+        const isTop250 = !isTop150 && (cleanText.includes("250") || cleanText.includes("IMDB"));
         const isCannes = cleanText.includes("CANNES") || cleanText.includes("PALME");
         const isCriterion = cleanText.includes("CRITERION");
         const isLeaving = cleanText.includes("LEAVING");
 
         const subLabel = isOscar 
             ? "- ACADEMY AWARDS -" 
-            : isTop250 
-                ? "- ALL-TIME BEST -" 
-                : isCannes 
-                    ? "- CANNES WINNER -" 
-                    : isCriterion 
-                        ? "- SPECIAL EDITION -" 
-                        : isLeaving 
-                            ? "- SOON -" 
-                            : "- OFFICIAL SELECTION -";
+            : isTop150
+                ? "- TOP 150 -"
+                : isTop250 
+                    ? "- ALL-TIME BEST -" 
+                    : isCannes 
+                        ? "- CANNES WINNER -" 
+                        : isCriterion 
+                            ? "- SPECIAL EDITION -" 
+                            : isLeaving 
+                                ? "- SOON -" 
+                                : "- OFFICIAL SELECTION -";
 
         const gradientThemeMap: Record<string, { start: string; mid: string; end: string; border: string; highlight: string; text: string; subText: string }> = {
             gold: { start: "#fef08a", mid: "#f59e0b", end: "#b45309", border: "#fef9c3", highlight: "rgba(255,255,255,0.9)", text: "#000000", subText: "#1c1917" },
