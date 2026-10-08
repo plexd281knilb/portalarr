@@ -37,6 +37,13 @@ export function getBookCleanTitleKey(title?: string | null): string {
         if (/\b(?:07|7|bk\s*7|book\s*7|vol\s*7)\b/i.test(cleanStr)) return "harry potter 7";
     }
 
+    // Strip bracketed series, volume, or format tags like [Cosmere 01], [Fighting Fantasy 32], (Chestnut Springs #1)
+    cleanStr = cleanStr
+        .replace(/\[[^\]]+\]/g, " ")
+        .replace(/\([^\)]+\)/g, " ")
+        .replace(/^\s*\d{1,3}\s*[-._\s]+\s*/g, " ")
+        .replace(/^(?:[A-Za-z0-9\s]+Trilogy|[A-Za-z0-9\s]+Series|[A-Za-z0-9\s]+Saga)?\s*#?\s*\d{1,3}(?:\.\d{1,2})?\s*[-:]\s*/i, " ");
+
     return cleanStr.replace(/[^a-z0-9]/g, "").trim();
 }
 

@@ -5537,6 +5537,31 @@ async function runTestSuite() {
             throw new Error(`Expected Demigods of Olympus title keys to match or be normalized, got "${title1}" and "${title2}"`);
         }
 
+        // Bracketed series and volume tag normalization assertions
+        const cosmereKey1 = getBookCleanTitleKey("[Cosmere 01] Arcanum Unbounded The Cosmere Collection");
+        const cosmereKey2 = getBookCleanTitleKey("Arcanum Unbounded The Cosmere Collection");
+        if (cosmereKey1 !== cosmereKey2) {
+            throw new Error(`Expected [Cosmere 01] title key "${cosmereKey1}" to match "${cosmereKey2}"`);
+        }
+
+        const ffKey1 = getBookCleanTitleKey("[Fighting Fantasy 32] Demigods of Olympus");
+        const ffKey2 = getBookCleanTitleKey("Demigods of Olympus");
+        if (ffKey1 !== ffKey2) {
+            throw new Error(`Expected [Fighting Fantasy 32] title key "${ffKey1}" to match "${ffKey2}"`);
+        }
+
+        const csKey1 = getBookCleanTitleKey("[Chestnut Springs 01] Wild Love");
+        const csKey2 = getBookCleanTitleKey("Wild Love");
+        if (csKey1 !== csKey2) {
+            throw new Error(`Expected [Chestnut Springs 01] title key "${csKey1}" to match "${csKey2}"`);
+        }
+
+        const csKey3 = getBookCleanTitleKey("[Chestnut Springs 03] Wild Eyes");
+        const csKey4 = getBookCleanTitleKey("Wild Eyes");
+        if (csKey3 !== csKey4) {
+            throw new Error(`Expected [Chestnut Springs 03] title key "${csKey3}" to match "${csKey4}"`);
+        }
+
         // 2. Verify composite dedup keys
         const keyA = getBookCompositeDedupKey({
             mediaType: "ebook",

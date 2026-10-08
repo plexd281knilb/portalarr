@@ -232,7 +232,8 @@ function isTitleMatch(titleA: string | null | undefined, titleB: string | null |
 }
 
 function normalizePathForLookup(p: string | null | undefined): string {
-    return (p || "").replace(/\\/g, "/").toLowerCase().trim();
+    const norm = (p || "").replace(/\\/g, "/").trim().toLowerCase();
+    return norm.length > 1 && norm.endsWith("/") ? norm.slice(0, -1) : norm;
 }
 
 async function mobiBounceEpub(filePath: string): Promise<boolean> {
@@ -10558,7 +10559,12 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
         } catch (e) {}
 
         const dbBooks = await prisma.book.findMany({
-            where: { libraryId }
+            where: {
+                OR: [
+                    { libraryId },
+                    ...(scanPath ? [{ filePath: { startsWith: scanPath } }] : [])
+                ]
+            }
         });
 
         const [dbBookRequests, dbMediaRequests] = await Promise.all([
@@ -11285,8 +11291,8 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                     title = parsedMeta.title || cleanBase;
                 }
 
-                let series: string | null = null;
-                let volumeNumber: string | null = null;
+                let series: string | null = parsedMeta.series || null;
+                let volumeNumber: string | null = parsedMeta.volumeNumber || null;
                 let initialCoverUrl: string | null = null;
 
                 // TIER 1: Match against active/fulfilled BookRequest or MediaRequest
@@ -11416,6 +11422,48 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                         }
                     }
 
+                    // 7. Comprehensive DB candidate lookup by composite key, title key, or isTitleMatch & isAuthorMatch
+                    if (!newBook) {
+                        const candidateDedupKey = getBookCompositeDedupKey({
+                            mediaType: targetMediaType,
+                            author,
+                            title
+                        });
+                        const candidateTitleKey = getBookCleanTitleKey(title);
+                        const normTargetMedia = targetMediaType === "audiobook" ? "audiobook" : "ebook";
+
+                        const existingCandidates = await prisma.book.findMany({
+                            where: {
+                                OR: [
+                                    { libraryId },
+                                    ...(scanPath ? [{ filePath: { startsWith: scanPath } }] : []),
+                                    { title: { contains: title } }
+                                ]
+                            }
+                        }).catch(() => []);
+
+                        for (const cand of existingCandidates) {
+                            if (matchedDbBookIds.has(cand.id)) continue;
+                            const candMedia = cand.mediaType === "audiobook" ? "audiobook" : "ebook";
+                            if (candMedia !== normTargetMedia) continue;
+
+                            const candDedup = getBookCompositeDedupKey(cand);
+                            if (candDedup && candDedup === candidateDedupKey) {
+                                newBook = cand;
+                                break;
+                            }
+                            const candTitle = getBookCleanTitleKey(cand.title);
+                            if (candTitle && candTitle === candidateTitleKey && isAuthorMatch(cand.author, author)) {
+                                newBook = cand;
+                                break;
+                            }
+                            if (isTitleMatch(cand.title, title) && isAuthorMatch(cand.author, author)) {
+                                newBook = cand;
+                                break;
+                            }
+                        }
+                    }
+
                     const ratingResult = inferBookRating({
                         title,
                         author,
@@ -11512,12 +11560,19 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
 
         // Post-scan database deduplication by exact filePath
         try {
-            const currentDbBooks = await prisma.book.findMany({ where: { libraryId } });
+            const currentDbBooks = await prisma.book.findMany({
+                where: {
+                    OR: [
+                        { libraryId },
+                        ...(scanPath ? [{ filePath: { startsWith: scanPath } }] : [])
+                    ]
+                }
+            });
             const pathMap = new Map<string, string>();
             const duplicateIds: string[] = [];
             
             for (const b of currentDbBooks) {
-                const p = b.filePath.toLowerCase();
+                const p = normalizePathForLookup(b.filePath);
                 if (pathMap.has(p)) {
                     duplicateIds.push(b.id);
                 } else {
@@ -11535,7 +11590,14 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
 
         // Post-scan database deduplication by composite mediaType + author + title key
         try {
-            const currentDbBooks = await prisma.book.findMany({ where: { libraryId } });
+            const currentDbBooks = await prisma.book.findMany({
+                where: {
+                    OR: [
+                        { libraryId },
+                        ...(scanPath ? [{ filePath: { startsWith: scanPath } }] : [])
+                    ]
+                }
+            });
             const titleMap = new Map<string, typeof currentDbBooks>();
             for (const b of currentDbBooks) {
                 const compositeKey = getBookCompositeDedupKey(b);
@@ -11562,6 +11624,12 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                         return a.id.localeCompare(b.id);
                     });
                     const keepBook = group[0];
+                    if (keepBook.libraryId !== libraryId) {
+                        await prisma.book.update({
+                            where: { id: keepBook.id },
+                            data: { libraryId }
+                        }).catch(() => {});
+                    }
                     const deleteIds = group.slice(1).map(b => b.id);
                     console.log(`[SCANNER-DEDUP] Purging ${deleteIds.length} duplicate DB rows for book "${keepBook.title}" (Keeping ID: ${keepBook.id})`);
                     await prisma.book.deleteMany({
