@@ -16,6 +16,7 @@ import {
     getAdminInfrastructureStatusAction,
     updateCurrentUserKindleEmail
 } from "../src/app/actions";
+import { getBookCleanTitleKey, getBookCompositeDedupKey } from "../src/lib/books/book-dedup";
 import http from "http";
 import { calculateProratedBilling } from "../src/lib/prorated-billing";
 import { encryptData, decryptData } from "../src/lib/encryption";
@@ -5513,6 +5514,61 @@ async function runTestSuite() {
 
         if (!overlaidBuf || overlaidBuf.length === 0) {
             throw new Error("applyOverlaysToPoster returned empty buffer for Top 150 media item");
+        }
+    });
+
+    // 87. Books: Multi-Tier Deduplication Key Matching & Boot Scan Redundancy Prevention
+    await assertTest("Books: Deduplication Key Normalization & Boot Scan Dedup Engine", async () => {
+        // 1. Verify clean title key normalization
+        const title1 = getBookCleanTitleKey("Rick Riordan - [Fighting Fantasy 32] Demigods of Olympus");
+        const title2 = getBookCleanTitleKey("Demigods of Olympus");
+        const title3 = getBookCleanTitleKey("Harry Potter and the Order of the Phoenix (2003)");
+        const title4 = getBookCleanTitleKey("Harry Potter and the Order of the Phoenix");
+        const title5 = getBookCleanTitleKey("The Hobbit (Audiobook) [1937]");
+        const title6 = getBookCleanTitleKey("The Hobbit");
+
+        if (title3 !== "harry potter 5" || title4 !== "harry potter 5") {
+            throw new Error(`Expected HP5 title keys to equal "harry potter 5", got "${title3}" and "${title4}"`);
+        }
+        if (title5 !== "hobbit" || title6 !== "hobbit") {
+            throw new Error(`Expected Hobbit title keys to equal "hobbit", got "${title5}" and "${title6}"`);
+        }
+        if (!title1.includes("demigodsofolympus") && title1 !== title2) {
+            throw new Error(`Expected Demigods of Olympus title keys to match or be normalized, got "${title1}" and "${title2}"`);
+        }
+
+        // 2. Verify composite dedup keys
+        const keyA = getBookCompositeDedupKey({
+            mediaType: "ebook",
+            author: "Brandon Sanderson",
+            title: "Arcanum Unbounded The Cosmere Collection"
+        });
+        const keyB = getBookCompositeDedupKey({
+            mediaType: "ebook",
+            author: "Brandon Sanderson",
+            title: "Arcanum Unbounded The Cosmere Collection [Retail] (2016)"
+        });
+
+        if (!keyA || !keyB || keyA !== keyB) {
+            throw new Error(`Expected identical composite keys for Arcanum Unbounded, got "${keyA}" and "${keyB}"`);
+        }
+
+        const keyHP_Audio = getBookCompositeDedupKey({
+            mediaType: "audiobook",
+            author: "J. K. Rowling",
+            title: "Harry Potter and the Order of the Phoenix"
+        });
+        const keyHP_Ebook = getBookCompositeDedupKey({
+            mediaType: "ebook",
+            author: "J. K. Rowling",
+            title: "Harry Potter and the Order of the Phoenix"
+        });
+
+        if (keyHP_Audio === keyHP_Ebook) {
+            throw new Error("Expected audiobook and ebook versions of same title to have distinct composite keys");
+        }
+        if (!keyHP_Audio.startsWith("audiobook:::") || !keyHP_Ebook.startsWith("ebook:::")) {
+            throw new Error("Expected mediaType prefix on composite dedup key");
         }
     });
 
