@@ -5626,16 +5626,46 @@ async function runTestSuite() {
         }
 
         // 4. Verify post-scan deduplication metadata synchronization logic
-        const mockKeepBook = { id: "cmt8y82yu0025qg2m47y0pq0v", libraryId: "old-lib", filePath: "/old/path/Demigods.epub", fileSize: 0, fileType: "missing" };
-        const mockValidDiskItem = { id: "cmuzusrgu0007pm01fhrrtw4f", libraryId: "new-lib", filePath: "/Kidsbooks/books/Rick Riordan/[Fighting Fantasy 32] Demigods of Olympus/Rick Riordan - [Fighting Fantasy 32] Demigods of Olympus.epub", fileSize: 210000, fileType: "epub" };
+        const mockKeepBook = { id: "cmt8y82yu0025qg2m47y0pq0v", libraryId: "old-lib", filePath: "/old/path/Demigods.epub", fileSize: 0, fileType: "missing", mediaType: "book" };
+        const mockValidDiskItem = { id: "cmuzusrgu0007pm01fhrrtw4f", libraryId: "new-lib", filePath: "/Kidsbooks/books/Rick Riordan/[Fighting Fantasy 32] Demigods of Olympus/Rick Riordan - [Fighting Fantasy 32] Demigods of Olympus.epub", fileSize: 210000, fileType: "epub", mediaType: "ebook" };
         const updateKeepData: any = {};
         if (mockKeepBook.libraryId !== "new-lib") updateKeepData.libraryId = "new-lib";
         if (mockValidDiskItem.filePath && mockKeepBook.filePath !== mockValidDiskItem.filePath) updateKeepData.filePath = mockValidDiskItem.filePath;
         if (typeof mockValidDiskItem.fileSize === 'number' && mockValidDiskItem.fileSize > 0 && mockKeepBook.fileSize !== mockValidDiskItem.fileSize) updateKeepData.fileSize = mockValidDiskItem.fileSize;
         if (mockValidDiskItem.fileType && mockValidDiskItem.fileType !== 'missing' && mockKeepBook.fileType !== mockValidDiskItem.fileType) updateKeepData.fileType = mockValidDiskItem.fileType;
+        if (mockKeepBook.mediaType !== "ebook") updateKeepData.mediaType = "ebook";
 
-        if (updateKeepData.libraryId !== "new-lib" || updateKeepData.filePath !== mockValidDiskItem.filePath || updateKeepData.fileSize !== 210000 || updateKeepData.fileType !== "epub") {
+        if (updateKeepData.libraryId !== "new-lib" || updateKeepData.filePath !== mockValidDiskItem.filePath || updateKeepData.fileSize !== 210000 || updateKeepData.fileType !== "epub" || updateKeepData.mediaType !== "ebook") {
             throw new Error("Post-scan metadata synchronization failed to adopt valid on-disk properties");
+        }
+
+        // 5. Verify null/'book' mediaType and 'all' author fallback normalization
+        const keyNullMedia = getBookCompositeDedupKey({
+            mediaType: null,
+            author: "Rick Riordan",
+            title: "Demigods of Olympus"
+        });
+        const keyBookMedia = getBookCompositeDedupKey({
+            mediaType: "book",
+            author: "Rick Riordan",
+            title: "Demigods of Olympus"
+        });
+        if (keyNullMedia !== keyDemigods1 || keyBookMedia !== keyDemigods1) {
+            throw new Error(`Expected null and 'book' mediaTypes to normalize to 'ebook' composite key: "${keyNullMedia}", "${keyBookMedia}" vs "${keyDemigods1}"`);
+        }
+
+        const keyUnknownAuthor = getBookCompositeDedupKey({
+            mediaType: "ebook",
+            author: "Unknown Author",
+            title: "Demigods of Olympus"
+        });
+        const keyNullAuthor = getBookCompositeDedupKey({
+            mediaType: "ebook",
+            author: null,
+            title: "Demigods of Olympus"
+        });
+        if (keyUnknownAuthor !== "ebook:::all:::demigodsofolympus" || keyNullAuthor !== "ebook:::all:::demigodsofolympus") {
+            throw new Error(`Expected unknown/null author to map to 'all' authorGroupKey, got "${keyUnknownAuthor}" and "${keyNullAuthor}"`);
         }
     });
 

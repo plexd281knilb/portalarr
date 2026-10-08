@@ -11088,8 +11088,15 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
 
             const cleanBaseCheck = getEffectiveBookBaseName(effectiveFilePath, file, ext);
             const parsedMetaCheck = extractMetadataFromPath(effectiveFilePath, file, ext, scanPath);
-            const targetCheckTitle = parsedMetaCheck.title || cleanBaseCheck;
-            const targetCheckAuthor = parsedMetaCheck.author || "";
+            let targetCheckTitle = parsedMetaCheck.title || cleanBaseCheck;
+            let targetCheckAuthor = (parsedMetaCheck.author && parsedMetaCheck.author !== "Unknown Author") ? parsedMetaCheck.author : "";
+
+            // Check Tier 1 authoritative request metadata before candidate lookup to enrich title/author early
+            const preReq = findMatchingRequest(targetCheckTitle, targetCheckAuthor, fullPath, targetMediaType);
+            if (preReq) {
+                if (preReq.title) targetCheckTitle = preReq.title;
+                if (preReq.author && preReq.author !== "Unknown Author") targetCheckAuthor = preReq.author;
+            }
 
             // 1. Exact file path match
             let existing = dbBooksByPathLower.get(normFullPathForLookup);
@@ -11113,17 +11120,25 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                 }
             }
 
-            // 3. Exact composite dedup key match
+            // 3. Exact composite dedup key match with author 'all' fallback
             if (!existing) {
                 const candidateDedupKey = getBookCompositeDedupKey({
                     mediaType: targetMediaType,
                     author: targetCheckAuthor,
                     title: targetCheckTitle
                 });
+                const candidateTitleKey = getBookCleanTitleKey(targetCheckTitle);
+                const normTargetMedia = targetMediaType === "audiobook" ? "audiobook" : "ebook";
                 if (candidateDedupKey && dbBooksByDedupKey.has(candidateDedupKey)) {
                     const dedupMatch = dbBooksByDedupKey.get(candidateDedupKey);
                     if (dedupMatch && !matchedDbBookIds.has(dedupMatch.id)) {
                         existing = dedupMatch;
+                    }
+                }
+                if (!existing && candidateTitleKey) {
+                    const allMatch = dbBooksByDedupKey.get(`${normTargetMedia}:::all:::${candidateTitleKey}`);
+                    if (allMatch && !matchedDbBookIds.has(allMatch.id) && isAuthorMatch(allMatch.author, targetCheckAuthor)) {
+                        existing = allMatch;
                     }
                 }
             }
@@ -11384,10 +11399,18 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                             author,
                             title
                         });
+                        const candidateTitleKey = getBookCleanTitleKey(title);
+                        const normTargetMedia = targetMediaType === "audiobook" ? "audiobook" : "ebook";
                         if (candidateDedupKey && dbBooksByDedupKey.has(candidateDedupKey)) {
                             const dedupMatch = dbBooksByDedupKey.get(candidateDedupKey);
                             if (dedupMatch && !matchedDbBookIds.has(dedupMatch.id)) {
                                 newBook = dedupMatch;
+                            }
+                        }
+                        if (!newBook && candidateTitleKey) {
+                            const allMatch = dbBooksByDedupKey.get(`${normTargetMedia}:::all:::${candidateTitleKey}`);
+                            if (allMatch && !matchedDbBookIds.has(allMatch.id) && isAuthorMatch(allMatch.author, author)) {
+                                newBook = allMatch;
                             }
                         }
                     }
@@ -11449,11 +11472,12 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                         });
                         const candidateTitleKey = getBookCleanTitleKey(title);
                         const normTargetMedia = targetMediaType === "audiobook" ? "audiobook" : "ebook";
+                        const allAuthorKey = `${normTargetMedia}:::all:::${candidateTitleKey}`;
 
                         const existingCandidates = await prisma.book.findMany({
-                            where: {
-                                mediaType: targetMediaType
-                            }
+                            where: (targetMediaType === "audiobook"
+                                ? { mediaType: "audiobook" }
+                                : { mediaType: { not: "audiobook" } }) as any
                         }).catch(() => []);
 
                         for (const cand of existingCandidates) {
@@ -11462,9 +11486,11 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                             if (candMedia !== normTargetMedia) continue;
 
                             const candDedup = getBookCompositeDedupKey(cand);
-                            if (candDedup && candDedup === candidateDedupKey) {
-                                newBook = cand;
-                                break;
+                            if (candDedup && (candDedup === candidateDedupKey || candDedup === allAuthorKey)) {
+                                if (isAuthorMatch(cand.author, author)) {
+                                    newBook = cand;
+                                    break;
+                                }
                             }
                             const candTitle = getBookCleanTitleKey(cand.title);
                             if (candTitle && candTitle === candidateTitleKey && isAuthorMatch(cand.author, author)) {
@@ -11643,7 +11669,8 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                     if (keepBook.libraryId !== libraryId) updateKeepData.libraryId = libraryId;
                     if (validDiskItem.filePath && keepBook.filePath !== validDiskItem.filePath) updateKeepData.filePath = validDiskItem.filePath;
                     if (typeof validDiskItem.fileSize === 'number' && validDiskItem.fileSize > 0 && keepBook.fileSize !== validDiskItem.fileSize) updateKeepData.fileSize = validDiskItem.fileSize;
-                    if (validDiskItem.fileType && validDiskItem.fileType !== 'missing' && keepBook.fileType !== validDiskItem.fileType) updateKeepData.fileType = validDiskItem.fileType;
+                    const libMediaType = library.mediaType || "ebook";
+                    if (keepBook.mediaType !== libMediaType) updateKeepData.mediaType = libMediaType;
 
                     if (Object.keys(updateKeepData).length > 0) {
                         await prisma.book.update({
@@ -12076,7 +12103,9 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
         const normTitleReq = title.toLowerCase().replace(/[^a-z0-9]/g, "");
         if (normTitleReq.length > 2 && resolvedLibId && targetLib) {
             const allBooksInTarget = await prisma.book.findMany({
-                where: { mediaType: reqMediaType, libraryId: resolvedLibId }
+                where: (reqMediaType === "audiobook"
+                    ? { mediaType: "audiobook", libraryId: resolvedLibId }
+                    : { libraryId: resolvedLibId, mediaType: { not: "audiobook" } }) as any
             });
             const existingBook = allBooksInTarget.find(b => {
                 if (b.fileType === "missing") return false;
