@@ -66,7 +66,10 @@ export default function PendingPage() {
         const u = await getCurrentUser();
         if (u) {
           setUser(u);
-          if (u.status === "APPROVED" || u.status === "TRIAL") {
+          const isAdmin = u.role === "ADMIN";
+          const isSubExpired = !isAdmin && u.subscriptionEndsAt && new Date(u.subscriptionEndsAt).getTime() < Date.now();
+          const isTrialExpired = !isAdmin && (u.status === "TRIAL" || u.membershipTier === "TRIAL") && u.trialEndsAt && new Date(u.trialEndsAt).getTime() < Date.now();
+          if (isAdmin || ((u.status === "APPROVED" || u.status === "TRIAL") && !isSubExpired && !isTrialExpired)) {
             window.location.href = "/";
           }
         }

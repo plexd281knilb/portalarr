@@ -356,7 +356,7 @@ export default function UserProfilePage() {
                     window.location.href = "/login";
                     return;
                 }
-                if (u && (u.status === "EXPIRED" || u.status === "PENDING" || u.status === "REJECTED" || u.status === "SUSPENDED")) {
+                if (u && u.role !== "ADMIN" && (u.status === "EXPIRED" || u.status === "PENDING" || u.status === "REJECTED" || u.status === "SUSPENDED")) {
                     window.location.href = "/pending";
                     return;
                 }

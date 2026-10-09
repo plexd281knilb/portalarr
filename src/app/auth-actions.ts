@@ -208,14 +208,15 @@ export async function createSession(
     }
   }
 
+  const isAdmin = role === "ADMIN";
   const token = await new SignJWT({ 
     userId, 
     username, 
     role, 
-    status,
-    membershipTier: membershipTier || (status === "TRIAL" ? "TRIAL" : "STANDARD"),
-    trialEndsAt: trialEndsAt ? new Date(trialEndsAt).toISOString() : null,
-    subscriptionEndsAt: subscriptionEndsAt ? new Date(subscriptionEndsAt).toISOString() : null
+    status: isAdmin ? "APPROVED" : status,
+    membershipTier: isAdmin ? "ADMIN" : (membershipTier || (status === "TRIAL" ? "TRIAL" : "STANDARD")),
+    trialEndsAt: isAdmin ? null : (trialEndsAt ? new Date(trialEndsAt).toISOString() : null),
+    subscriptionEndsAt: isAdmin ? null : (subscriptionEndsAt ? new Date(subscriptionEndsAt).toISOString() : null)
   })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
@@ -644,8 +645,34 @@ export async function getCurrentUser() {
     });
   }
   
+  // Auto-heal Admin records: Admins have permanent lifetime access and never expire
+  if (user.role === "ADMIN" && (user.subscriptionEndsAt || user.subscriptionCadence || user.membershipTier !== "ADMIN" || user.trialEndsAt)) {
+    try {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          subscriptionEndsAt: null,
+          subscriptionCadence: null,
+          membershipTier: "ADMIN",
+          trialEndsAt: null,
+          status: "APPROVED"
+        }
+      });
+      user.subscriptionEndsAt = null;
+      user.subscriptionCadence = null;
+      user.membershipTier = "ADMIN";
+      user.trialEndsAt = null;
+      user.status = "APPROVED";
+    } catch (e) {}
+  }
+  
   // Prevent login loops: If user status, role, or tier in DB changed, re-issue updated session cookie immediately
-  if (user.status !== payload.status || user.role !== payload.role || (payload as any).membershipTier !== user.membershipTier) {
+  if (
+    user.status !== payload.status || 
+    user.role !== payload.role || 
+    (payload as any).membershipTier !== user.membershipTier ||
+    (user.role === "ADMIN" && (Boolean(payload.subscriptionEndsAt) || Boolean((payload as any).trialEndsAt)))
+  ) {
     console.log(`[AUTH] User status/role/tier updated for ${user.username} (Status: ${payload.status} -> ${user.status}, Tier: ${(payload as any).membershipTier} -> ${user.membershipTier}). Updating session cookie.`);
     await createSession(user.id, user.username, user.role, user.status, user.trialEndsAt, user.subscriptionEndsAt, user.membershipTier);
   }

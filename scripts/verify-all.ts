@@ -6182,6 +6182,53 @@ async function runTestSuite() {
         }
     });
 
+    // 93. Admin Expiration Immunity & Lifetime Access (Proxy & Pending Loop Elimination)
+    await assertTest("Test 93: Admin Expiration Immunity & Lifetime Access", async () => {
+        // 1. Simulate proxy logic for ADMIN with past subscription/trial
+        const evaluateProxyStatus = (role: string, status: string, trialEndsAt: string | null, subscriptionEndsAt: string | null) => {
+            const isAdmin = role === "ADMIN";
+            let effectiveStatus = status || "APPROVED";
+            const now = Date.now();
+            if (!isAdmin) {
+                if (effectiveStatus === "TRIAL" && trialEndsAt && new Date(trialEndsAt).getTime() < now) {
+                    effectiveStatus = "EXPIRED";
+                }
+                if (effectiveStatus === "APPROVED" && subscriptionEndsAt && new Date(subscriptionEndsAt).getTime() < now) {
+                    effectiveStatus = "EXPIRED";
+                }
+            }
+            const shouldRedirectToPending = !isAdmin && (effectiveStatus === "PENDING" || effectiveStatus === "REJECTED" || effectiveStatus === "SUSPENDED" || effectiveStatus === "EXPIRED");
+            return { effectiveStatus, shouldRedirectToPending };
+        };
+
+        const pastDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
+
+        // Admin with past subscription MUST NOT be expired or redirected
+        const adminResult = evaluateProxyStatus("ADMIN", "APPROVED", null, pastDate);
+        if (adminResult.effectiveStatus !== "APPROVED") throw new Error(`Admin was marked ${adminResult.effectiveStatus}`);
+        if (adminResult.shouldRedirectToPending) throw new Error("Admin was incorrectly redirected to /pending");
+
+        // Standard user with past subscription MUST be marked EXPIRED and redirected
+        const userResult = evaluateProxyStatus("USER", "APPROVED", null, pastDate);
+        if (userResult.effectiveStatus !== "EXPIRED") throw new Error(`Standard user was not marked EXPIRED: ${userResult.effectiveStatus}`);
+        if (!userResult.shouldRedirectToPending) throw new Error("Standard user was not redirected to /pending");
+
+        // 2. Pending page redirect condition
+        const evaluatePendingRedirect = (role: string, status: string, trialEndsAt: string | null, subscriptionEndsAt: string | null) => {
+            const isAdmin = role === "ADMIN";
+            const isSubExpired = !isAdmin && subscriptionEndsAt && new Date(subscriptionEndsAt).getTime() < Date.now();
+            const isTrialExpired = !isAdmin && status === "TRIAL" && trialEndsAt && new Date(trialEndsAt).getTime() < Date.now();
+            return isAdmin || ((status === "APPROVED" || status === "TRIAL") && !isSubExpired && !isTrialExpired);
+        };
+
+        if (!evaluatePendingRedirect("ADMIN", "APPROVED", null, pastDate)) {
+            throw new Error("Admin on pending page should redirect to home");
+        }
+        if (evaluatePendingRedirect("USER", "APPROVED", null, pastDate)) {
+            throw new Error("Expired standard user on pending page should NOT redirect to home (would loop)");
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");
