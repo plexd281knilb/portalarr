@@ -1195,11 +1195,9 @@ export default function UserProfilePage() {
                                     ? "bg-amber-500/20 text-amber-300 border-amber-500/40" 
                                     : user?.role === "ADMIN"
                                         ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/40"
-                                        : isTier2
-                                            ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
-                                            : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                                        : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
                             }`}>
-                                {isTrial ? "⏱️ Trial User" : (user?.role === "ADMIN" ? "🛡️ Administrator" : (isTier2 ? "🛡️ Tier 2: Managed Support" : "⭐ Tier 1: Full Member"))}
+                                {isTrial ? "⏱️ Trial User" : (user?.role === "ADMIN" ? "🛡️ Administrator" : "⭐ Full Member")}
                             </Badge>
                             {currentAccountType !== "STANDARD" && (
                                 <Badge variant="outline" className="text-xs font-medium bg-muted/40 border-border">
@@ -1214,11 +1212,11 @@ export default function UserProfilePage() {
                         <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-1">
                             <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Account Status</span>
                             <p className="font-bold text-foreground text-sm flex items-center gap-1.5">
-                                <ShieldCheck className={`h-4 w-4 ${isTrial ? "text-amber-400" : (user?.role === "ADMIN" ? "text-indigo-400" : (isTier2 ? "text-amber-400" : "text-emerald-400"))}`} />
-                                {isTrial ? "Trial User" : (user?.role === "ADMIN" ? "Server Administrator" : (isTier2 ? "Tier 2: Managed Support" : "Tier 1: Full Member"))}
+                                <ShieldCheck className={`h-4 w-4 ${isTrial ? "text-amber-400" : (user?.role === "ADMIN" ? "text-indigo-400" : "text-emerald-400")}`} />
+                                {isTrial ? "Trial User" : (user?.role === "ADMIN" ? "Server Administrator" : "Full Member")}
                             </p>
                             <p className="text-[10px] text-muted-foreground">
-                                {isTrial ? "Temporary trial access pass." : (user?.role === "ADMIN" ? "Full system & curation administrator." : (isTier2 ? "Priority VIP support & dedicated troubleshooting assistance." : "Full active membership."))}
+                                {isTrial ? "Temporary trial access pass." : (user?.role === "ADMIN" ? "Full system & curation administrator." : "Full active membership.")}
                             </p>
                         </div>
 
