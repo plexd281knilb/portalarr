@@ -271,6 +271,24 @@ export const DISCORD_ROLES_BLUEPRINT = [
         color: 0x3B82F6, // Blue-500
         hoist: true,
         mentionable: true
+    },
+    {
+        name: "🧒 Kids Account",
+        color: 0xEC4899, // Pink-500
+        hoist: true,
+        mentionable: false
+    },
+    {
+        name: "📺 Living Room Device",
+        color: 0x6366F1, // Indigo-500
+        hoist: false,
+        mentionable: false
+    },
+    {
+        name: "⏳ Pending Approval",
+        color: 0x9CA3AF, // Slate-400
+        hoist: true,
+        mentionable: false
     }
 ];
 
