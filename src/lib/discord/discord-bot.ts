@@ -117,7 +117,7 @@ export interface DiscordBlueprintCategory {
  */
 export const DISCORD_SERVER_BLUEPRINT: DiscordBlueprintCategory[] = [
     {
-        name: "📌 INFORMATION & RULES",
+        name: "📌 1. INFORMATION & RULES",
         channels: [
             {
                 name: "welcome-and-rules",
@@ -142,17 +142,33 @@ export const DISCORD_SERVER_BLUEPRINT: DiscordBlueprintCategory[] = [
                 topic: "Membership tiers (Regular vs VIP), trial passes, renewal cadences, and payment methods.",
                 readOnlyForEveryone: true,
                 pinnedEmbedKey: "subscription_tiers"
+            },
+            {
+                name: "links-and-webhooks",
+                topic: "Portalarr Web Portal, Seerr media requests, Tautulli stream stats, and external guides.",
+                readOnlyForEveryone: true
+            },
+            {
+                name: "roadmap-and-updates",
+                topic: "Upcoming server hardware migrations, capacity expansions, and feature roadmap.",
+                readOnlyForEveryone: true
             }
         ]
     },
     {
-        name: "📖 SETUP & GUIDES",
+        name: "📖 2. SETUP & GUIDES",
         channels: [
             {
                 name: "plex-setup-guides",
                 topic: "Direct Play optimization for Apple TV, Roku, Fire TV, Samsung/LG, Android TV, iOS, and Web.",
                 readOnlyForEveryone: true,
                 pinnedEmbedKey: "plex_guides"
+            },
+            {
+                name: "transcode-doctor",
+                topic: "Playback issue troubleshooting, buffer diagnosis, and client device fixes.",
+                readOnlyForEveryone: true,
+                pinnedEmbedKey: "transcode_doctor"
             },
             {
                 name: "kindle-and-reading",
@@ -169,7 +185,37 @@ export const DISCORD_SERVER_BLUEPRINT: DiscordBlueprintCategory[] = [
         ]
     },
     {
-        name: "🎬 MEDIA & REQUESTS",
+        name: "💬 3. COMMUNITY LOUNGE",
+        channels: [
+            {
+                name: "general-chat",
+                topic: "General community discussions, homelab banter, and casual talk.",
+                readOnlyForEveryone: false
+            },
+            {
+                name: "movies-and-tv",
+                topic: "Spoiler-free film & television chats, watch parties, and reviews.",
+                readOnlyForEveryone: false
+            },
+            {
+                name: "reading-nook",
+                topic: "Book discussions, series chat, kindle recommendations, and author discovery.",
+                readOnlyForEveryone: false
+            },
+            {
+                name: "book-nook",
+                topic: "Book discussions, series chat, kindle recommendations, and author discovery.",
+                readOnlyForEveryone: false
+            },
+            {
+                name: "polls-and-feedback",
+                topic: "Community polls for upcoming library additions, feature votes, and feedback.",
+                readOnlyForEveryone: false
+            }
+        ]
+    },
+    {
+        name: "🎬 4. REQUESTS & MEDIA",
         channels: [
             {
                 name: "media-requests",
@@ -195,44 +241,59 @@ export const DISCORD_SERVER_BLUEPRINT: DiscordBlueprintCategory[] = [
         ]
     },
     {
-        name: "💬 COMMUNITY LOUNGE",
+        name: "🆘 5. SUPPORT & HELP DESK",
         channels: [
-            {
-                name: "general-chat",
-                topic: "General community discussions, homelab banter, and casual talk.",
-                readOnlyForEveryone: false
-            },
-            {
-                name: "movies-and-tv",
-                topic: "Spoiler-free film & television chats, watch parties, and reviews.",
-                readOnlyForEveryone: false
-            },
-            {
-                name: "reading-nook",
-                topic: "Book discussions, series chat, kindle recommendations, and author discovery.",
-                readOnlyForEveryone: false
-            }
-        ]
-    },
-    {
-        name: "🛠️ SUPPORT & HELP DESK",
-        channels: [
-            {
-                name: "transcode-doctor",
-                topic: "Playback issue troubleshooting, buffer diagnosis, and client device fixes.",
-                readOnlyForEveryone: true,
-                pinnedEmbedKey: "transcode_doctor"
-            },
             {
                 name: "support-tickets",
                 topic: "Open a support request or question with the server administrator.",
                 readOnlyForEveryone: false
+            },
+            {
+                name: "server-uptime",
+                topic: "Real-time infrastructure health, Plex reachability, host telemetry, and service links.",
+                readOnlyForEveryone: true,
+                pinnedEmbedKey: "system_status"
             }
         ]
     },
     {
-        name: "🤖 BOT & MANAGEMENT",
+        name: "👑 6. VIP TIER 2 LOUNGE",
         channels: [
+            {
+                name: "vip-chat",
+                topic: "Exclusive conversational channel for Tier 2 VIP supporters.",
+                readOnlyForEveryone: false
+            },
+            {
+                name: "vip-priority-support",
+                topic: "Direct 1-on-1 concierge assistance for device configuration and expedited requests.",
+                readOnlyForEveryone: false
+            }
+        ]
+    },
+    {
+        name: "🤖 7. BOT & AUTOMATION",
+        channels: [
+            {
+                name: "main-server-feed",
+                topic: "Radarr/Sonarr download progress, grab alerts, and import logs for Main Plex.",
+                adminOnly: true
+            },
+            {
+                name: "kid-server-feed",
+                topic: "Radarr/Sonarr download progress and kid library imports.",
+                adminOnly: true
+            },
+            {
+                name: "host-health-glances",
+                topic: "Hardware telemetry alerts (CPU spikes, RAM usage, storage capacity warnings).",
+                adminOnly: true
+            },
+            {
+                name: "deletion-audit",
+                topic: "Maintainerr auto-prune executions, deleted media logs, and storage reclaimed.",
+                adminOnly: true
+            },
             {
                 name: "bot-commands",
                 topic: "Portalarr Bot diagnostics and manual sync commands.",
@@ -241,6 +302,16 @@ export const DISCORD_SERVER_BLUEPRINT: DiscordBlueprintCategory[] = [
             {
                 name: "portalarr-logs",
                 topic: "Automated sync logs, request dispatch audit, and alert telemetry.",
+                adminOnly: true
+            }
+        ]
+    },
+    {
+        name: "🔒 8. STAFF & VAULT",
+        channels: [
+            {
+                name: "staff-lounge",
+                topic: "Private admin notes, billing ledger audits, user management discussion.",
                 adminOnly: true
             }
         ]
@@ -515,11 +586,11 @@ export function generateDiscordEmbed(
                 fields: [
                     {
                         name: "⭐ Tier 1: Regular Member",
-                        value: "• **$15 / Month** ($180/year calendar prorated)\n• Full access to 1080p & 4K Plex Libraries\n• Unlimited eBooks, Audiobooks & Comic Readers\n• Send-to-Kindle automated document dispatch\n• Standard 10 movie / 10 TV episode weekly request quota\n• High-speed Direct Play streaming"
+                        value: "• **$17.50 / Month** (or **$180 / Year** discounted annual equivalent of $15/mo)\n• Full access to 1080p & 4K Plex Libraries\n• Unlimited eBooks, Audiobooks & Comic Readers\n• Send-to-Kindle automated document dispatch\n• Standard 10 movie / 10 TV episode weekly request quota\n• High-speed Direct Play streaming"
                     },
                     {
                         name: "🛡️ Tier 2: Managed VIP Support",
-                        value: "• **$25 / Month**\n• Everything in Tier 1 included\n• Dedicated 1-on-1 remote device onboarding & TV setup assistance\n• Priority expedited request fulfillment & bandwidth reservation\n• Direct administrator VIP support channel access"
+                        value: "• **$25 / Month** (or **$240 / Year** discounted annual rate)\n• Everything in Tier 1 included\n• Dedicated 1-on-1 remote device onboarding & TV setup assistance\n• Priority expedited request fulfillment & bandwidth reservation\n• Direct administrator VIP support channel access"
                     },
                     {
                         name: "⏱️ Trial Pass",
