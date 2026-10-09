@@ -43,6 +43,8 @@ import {
     DEFAULT_YEARLY_REMINDER_DAYS,
     DEFAULT_MONTHLY_REMINDER_DAYS
 } from "../src/lib/subscription-reminders";
+import { evaluatePaymentThreshold } from "../src/lib/payment-threshold-engine";
+import { renderEmailTemplate } from "../src/lib/email-templates";
 
 
 async function runTestSuite() {
@@ -6226,6 +6228,103 @@ async function runTestSuite() {
         }
         if (evaluatePendingRedirect("USER", "APPROVED", null, pastDate)) {
             throw new Error("Expired standard user on pending page should NOT redirect to home (would loop)");
+        }
+    });
+
+    // 94. Payment Threshold Awareness, Installment Credits & Underpayment Notifications
+    await assertTest("Test 94: Payment Threshold Awareness & Balance Tracking", async () => {
+        const defaultSettings = {
+            yearlyPrice: 180,
+            monthlyPrice: 17.50
+        };
+
+        // Scenario 1: Yearly user switches to monthly, sends $15 (believing monthly is 180/12=$15, but actual is $17.50)
+        const s1 = evaluatePaymentThreshold({
+            user: { subscriptionCadence: "YEARLY", accountCredit: 0 },
+            payment: { amount: 15, provider: "Venmo" },
+            settings: defaultSettings
+        });
+        if (s1.action !== "PARTIAL_MONTHLY") throw new Error(`S1 action expected PARTIAL_MONTHLY, got ${s1.action}`);
+        if (s1.amountPaidNow !== 15) throw new Error(`S1 amountPaidNow expected 15, got ${s1.amountPaidNow}`);
+        if (s1.monthlyShortfall !== 2.50) throw new Error(`S1 monthlyShortfall expected 2.50, got ${s1.monthlyShortfall}`);
+        if (s1.yearlyShortfall !== 165) throw new Error(`S1 yearlyShortfall expected 165, got ${s1.yearlyShortfall}`);
+        if (s1.newAccountCredit !== 15) throw new Error(`S1 newAccountCredit expected 15, got ${s1.newAccountCredit}`);
+
+        // Scenario 2: User accidentally sends $16 for $17.50 monthly plan
+        const s2 = evaluatePaymentThreshold({
+            user: { subscriptionCadence: "MONTHLY", accountCredit: 0 },
+            payment: { amount: 16, provider: "Cash App" },
+            settings: defaultSettings
+        });
+        if (s2.action !== "PARTIAL_MONTHLY") throw new Error(`S2 action expected PARTIAL_MONTHLY, got ${s2.action}`);
+        if (s2.amountPaidNow !== 16) throw new Error(`S2 amountPaidNow expected 16, got ${s2.amountPaidNow}`);
+        if (s2.monthlyShortfall !== 1.50) throw new Error(`S2 monthlyShortfall expected 1.50, got ${s2.monthlyShortfall}`);
+        if (s2.newAccountCredit !== 16) throw new Error(`S2 newAccountCredit expected 16, got ${s2.newAccountCredit}`);
+
+        // Scenario 3: User with existing $15 credit sends $2.50 to fulfill monthly rate
+        const s3 = evaluatePaymentThreshold({
+            user: { subscriptionCadence: "MONTHLY", accountCredit: 15 },
+            payment: { amount: 2.50, provider: "PayPal" },
+            settings: defaultSettings
+        });
+        if (s3.action !== "FULL_MONTHLY") throw new Error(`S3 action expected FULL_MONTHLY, got ${s3.action}`);
+        if (s3.amountPaidNow !== 2.50) throw new Error(`S3 amountPaidNow expected 2.50, got ${s3.amountPaidNow}`);
+        if (s3.creditedAmount !== 17.50) throw new Error(`S3 creditedAmount expected 17.50, got ${s3.creditedAmount}`);
+        if (s3.newAccountCredit !== 0) throw new Error(`S3 newAccountCredit expected 0, got ${s3.newAccountCredit}`);
+        if (!s3.periodGrantedText.includes("1 Month")) throw new Error(`S3 periodGrantedText missing '1 Month', got ${s3.periodGrantedText}`);
+
+        // Scenario 4: User sends $175 of the $180 yearly rate
+        const s4 = evaluatePaymentThreshold({
+            user: { subscriptionCadence: "YEARLY", accountCredit: 0 },
+            payment: { amount: 175, provider: "Zelle" },
+            settings: defaultSettings
+        });
+        if (s4.action !== "PARTIAL_YEARLY") throw new Error(`S4 action expected PARTIAL_YEARLY, got ${s4.action}`);
+        if (s4.amountPaidNow !== 175) throw new Error(`S4 amountPaidNow expected 175, got ${s4.amountPaidNow}`);
+        if (s4.shortfall !== 5.00) throw new Error(`S4 shortfall expected 5.00, got ${s4.shortfall}`);
+        if (s4.newAccountCredit !== 175) throw new Error(`S4 newAccountCredit expected 175, got ${s4.newAccountCredit}`);
+
+        // Scenario 5: User with existing $175 credit sends $5 to complete yearly rate
+        const s5 = evaluatePaymentThreshold({
+            user: { subscriptionCadence: "YEARLY", accountCredit: 175 },
+            payment: { amount: 5, provider: "Venmo" },
+            settings: defaultSettings
+        });
+        if (s5.action !== "FULL_YEARLY") throw new Error(`S5 action expected FULL_YEARLY, got ${s5.action}`);
+        if (s5.amountPaidNow !== 5) throw new Error(`S5 amountPaidNow expected 5, got ${s5.amountPaidNow}`);
+        if (s5.creditedAmount !== 180) throw new Error(`S5 creditedAmount expected 180, got ${s5.creditedAmount}`);
+        if (s5.newAccountCredit !== 0) throw new Error(`S5 newAccountCredit expected 0, got ${s5.newAccountCredit}`);
+        if (!s5.periodGrantedText.includes("1 Year")) throw new Error(`S5 periodGrantedText missing '1 Year', got ${s5.periodGrantedText}`);
+
+        // Scenario 6: Excess payment ($20 sent on $17.50 monthly plan) preserves $2.50 credit balance
+        const s6 = evaluatePaymentThreshold({
+            user: { subscriptionCadence: "MONTHLY", accountCredit: 0 },
+            payment: { amount: 20, provider: "Cash App" },
+            settings: defaultSettings
+        });
+        if (s6.action !== "FULL_MONTHLY") throw new Error(`S6 action expected FULL_MONTHLY, got ${s6.action}`);
+        if (s6.newAccountCredit !== 2.50) throw new Error(`S6 newAccountCredit expected 2.50, got ${s6.newAccountCredit}`);
+        if (!s6.periodGrantedText.includes("1 Month")) throw new Error(`S6 periodGrantedText missing '1 Month', got ${s6.periodGrantedText}`);
+
+        // Scenario 7: Email template rendering for payment underpayment
+        const renderedEmail = await renderEmailTemplate("payment_underpayment", {
+            username: "testuser",
+            amountPaid: "$15.00",
+            accountCredit: "$15.00",
+            provider: "Venmo",
+            paymentDate: "Oct 10, 2026",
+            planType: "Monthly Plan",
+            targetPrice: "$17.50",
+            shortfall: "$2.50",
+            yearlyOptionNote: "Prefer the discounted Annual Plan? The annual membership is $180.00/year. Send in the remaining $165.00 for the full year.",
+            appUrl: "https://home.domshomelab.com",
+            profileUrl: "https://home.domshomelab.com/profile"
+        });
+        if (!renderedEmail.subject.includes("$2.50 Remaining")) {
+            throw new Error(`Email template subject missing shortfall: ${renderedEmail.subject}`);
+        }
+        if (!renderedEmail.html.includes("$15.00") || !renderedEmail.html.includes("$2.50") || !renderedEmail.html.includes("$165.00")) {
+            throw new Error("Email template HTML missing expected amounts ($15.00, $2.50, or $165.00)");
         }
     });
 

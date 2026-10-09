@@ -12,6 +12,7 @@ import {
     calculateAlignedExpiryDate,
     matchPaymentToUser 
 } from "@/lib/payment-email-scraper";
+import { evaluatePaymentThreshold } from "@/lib/payment-threshold-engine";
 
 async function verifyAdmin() {
     const user = await getCurrentUser();
@@ -507,8 +508,11 @@ export async function recheckUserAccessAndPaymentAction() {
                 subscriptionEndsAt: true,
                 convertedAt: true,
                 plexUsername: true,
-                plexEmail: true,
-                selectedPlexLibrarySectionIds: true
+                selectedPlexLibrarySectionIds: true,
+                accountCredit: true,
+                lastPaymentAmount: true,
+                lastPaymentDate: true,
+                lastPaymentProvider: true
             }
         });
 
@@ -647,36 +651,64 @@ export async function recalculateUserSubscriptionFromPayments(userId: string) {
     }
 
     const settings = await prisma.settings.findUnique({ where: { id: "global" } });
-    const yearlyPrice = settings?.yearlyPrice || 180;
-    const monthlyPrice = settings?.monthlyPrice || 15;
 
+    let accumulatedCredit = 0;
     let currentExpiry: Date | null = null;
     let finalCadence: "YEARLY" | "MONTHLY" = "YEARLY";
+    let lastTx: any = null;
 
     for (const tx of matchedPayments) {
-        const paymentDate = new Date(tx.emailDate);
-        const { newExpiryDate, periodGrantedText, cadence } = calculateAlignedExpiryDate({
-            paymentDate,
-            totalAmount: tx.amount,
-            yearlyPrice,
-            monthlyPrice,
-            existingExpiry: currentExpiry
+        lastTx = tx;
+        const result = evaluatePaymentThreshold({
+            user: {
+                id: user.id,
+                username: user.username,
+                email: user.email,
+                membershipTier: user.membershipTier,
+                subscriptionCadence: finalCadence,
+                accountCredit: accumulatedCredit,
+                subscriptionEndsAt: currentExpiry
+            },
+            payment: {
+                amount: tx.amount,
+                emailDate: tx.emailDate,
+                provider: tx.provider,
+                externalTxId: tx.externalTxId
+            },
+            settings
         });
-        currentExpiry = newExpiryDate;
-        finalCadence = cadence;
 
-        await prisma.paymentTransaction.update({
-            where: { id: tx.id },
-            data: {
-                appliedSubscription: true,
-                subscriptionPeriodGranted: periodGrantedText
-            }
-        });
+        accumulatedCredit = result.newAccountCredit;
+        finalCadence = result.cadence;
+
+        if (result.action === "FULL_YEARLY" || result.action === "FULL_MONTHLY") {
+            currentExpiry = result.newExpiryDate;
+            await prisma.paymentTransaction.update({
+                where: { id: tx.id },
+                data: {
+                    appliedSubscription: true,
+                    subscriptionPeriodGranted: result.periodGrantedText
+                }
+            });
+        } else {
+            const isPartialMonthly = result.action === "PARTIAL_MONTHLY";
+            const shortfall = isPartialMonthly ? result.monthlyShortfall : result.shortfall;
+            const planType = isPartialMonthly ? "1 Month" : "1 Year";
+            await prisma.paymentTransaction.update({
+                where: { id: tx.id },
+                data: {
+                    appliedSubscription: false,
+                    subscriptionPeriodGranted: `Partial Credit ($${tx.amount.toFixed(2)} credited to balance, $${shortfall.toFixed(2)} remaining for ${planType})`
+                }
+            });
+        }
     }
 
     const now = new Date();
     const isCurrentlyActive = currentExpiry ? currentExpiry > now : false;
-    const newStatus = isCurrentlyActive ? "APPROVED" : "EXPIRED";
+    const newStatus = isCurrentlyActive 
+        ? "APPROVED" 
+        : (user.status === "TRIAL" && user.trialEndsAt && new Date(user.trialEndsAt) > now ? "TRIAL" : "EXPIRED");
 
     const newTier = (user.membershipTier === "TRIAL" || !user.membershipTier) && newStatus === "APPROVED" 
         ? "STANDARD" 
@@ -688,7 +720,11 @@ export async function recalculateUserSubscriptionFromPayments(userId: string) {
             membershipTier: newTier,
             subscriptionCadence: finalCadence,
             trialEndsAt: newStatus === "APPROVED" ? null : user.trialEndsAt,
-            subscriptionEndsAt: currentExpiry
+            subscriptionEndsAt: currentExpiry,
+            accountCredit: accumulatedCredit,
+            lastPaymentAmount: lastTx?.amount ?? null,
+            lastPaymentDate: lastTx?.emailDate ? new Date(lastTx.emailDate) : null,
+            lastPaymentProvider: lastTx?.provider ?? null
         }
     });
 

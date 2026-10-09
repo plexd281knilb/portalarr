@@ -45,7 +45,7 @@ model Settings {
   paymentInstructions String?
   subscriptionPrice  String?
   yearlyPrice        Float?    @default(180)
-  monthlyPrice       Float?    @default(15)
+  monthlyPrice       Float?    @default(17.50)
   tier2YearlyPrice   Float?    @default(240) // Yearly pricing for Tier 2 (Needy / Managed Support)
   tier2MonthlyPrice  Float?    @default(25)  // Monthly pricing for Tier 2 (Needy / Managed Support)
   availableAddons    String?   // JSON list of configured add-ons with pricing and free flags
@@ -83,6 +83,7 @@ model Settings {
   notifyTrialExpiring         Boolean   @default(false)
   notifyTrialExpired          Boolean   @default(false)
   notifySubscriptionActive    Boolean   @default(false)
+  notifyPaymentUnderpayment   Boolean   @default(true)
   notifySubscriptionRenewal   Boolean   @default(true)
   yearlyRenewalReminderDays   String?   @default("60,30,14,3,1") // Advance days for annual subscription renewal notices
   monthlyRenewalReminderDays  String?   @default("7,3,1")        // Advance days for monthly subscription renewal notices
@@ -363,6 +364,10 @@ model User {
   convertedAt            DateTime? // When trial converted to paying subscriber
   lastLogin              DateTime? // Last time the user logged in
   subscriptionCadence    String?   @default("YEARLY") // "YEARLY" or "MONTHLY"
+  accountCredit          Float     @default(0) // Available account credit balance (installments / partial payments)
+  lastPaymentAmount      Float?    // Most recent payment amount received
+  lastPaymentDate        DateTime? // Timestamp of most recent payment
+  lastPaymentProvider    String?   // Most recent payment provider (VENMO, PAYPAL, CASHAPP, ZELLE, MANUAL)
   lastRenewalReminderSentAt DateTime?
   renewalRemindersSent   String?   // JSON snapshot of sent milestones e.g. {"cycleTarget":"2027-01-01","milestones":["30d","14d"]}
   

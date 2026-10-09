@@ -1042,7 +1042,7 @@ export default function UserProfilePage() {
         : (paymentConfig?.yearlyPrice ?? 180);
     const effectiveMonthlyPrice = isTier2 
         ? (paymentConfig?.tier2MonthlyPrice ?? 25) 
-        : (paymentConfig?.monthlyPrice ?? 15);
+        : (paymentConfig?.monthlyPrice ?? 17.50);
 
     return (
         <div className="space-y-4 sm:space-y-6 max-w-5xl 2xl:max-w-6xl 3xl:max-w-7xl mx-auto p-3 sm:p-6 w-full min-w-0 animate-in fade-in duration-500">
@@ -1285,6 +1285,57 @@ export default function UserProfilePage() {
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                    {/* ACCOUNT CREDIT & PARTIAL PAYMENT NOTICE */}
+                    {(user?.accountCredit ?? 0) > 0 && (
+                        <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs space-y-2.5">
+                            <div className="flex items-center justify-between">
+                                <span className="font-bold text-amber-400 flex items-center gap-1.5 text-sm">
+                                    <DollarSign className="h-4 w-4 text-amber-400" /> Account Credit Balance: ${(user.accountCredit ?? 0).toFixed(2)}
+                                </span>
+                                <Badge variant="outline" className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-[10px] font-semibold">
+                                    Partial Payment Credited
+                                </Badge>
+                            </div>
+                            <p className="text-muted-foreground leading-relaxed text-[11px]">
+                                Your latest payment {user.lastPaymentAmount ? <>of <strong>${user.lastPaymentAmount.toFixed(2)}</strong> {user.lastPaymentDate ? `on ${safeFormatDate(user.lastPaymentDate, "MMMM d, yyyy")}` : ""}</> : ""} has been safely credited to your account balance.
+                            </p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                                <div className="p-2.5 rounded-lg bg-black/40 border border-amber-500/20 space-y-1">
+                                    <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Monthly Plan (${effectiveMonthlyPrice.toFixed(2)}/mo)</span>
+                                    <p className="font-semibold text-foreground text-xs">
+                                        {(effectiveMonthlyPrice - user.accountCredit) > 0 
+                                            ? <>Send <strong className="text-amber-400">${(effectiveMonthlyPrice - user.accountCredit).toFixed(2)}</strong> more to activate</>
+                                            : <span className="text-emerald-400 font-bold">Credit covers monthly rate!</span>
+                                        }
+                                    </p>
+                                </div>
+                                <div className="p-2.5 rounded-lg bg-black/40 border border-purple-500/20 space-y-1">
+                                    <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Annual Discounted Plan (${effectiveYearlyPrice.toFixed(2)}/yr)</span>
+                                    <p className="font-semibold text-foreground text-xs">
+                                        {(effectiveYearlyPrice - user.accountCredit) > 0 
+                                            ? <>Send <strong className="text-purple-400">${(effectiveYearlyPrice - user.accountCredit).toFixed(2)}</strong> more for 1 full year ($15/mo)</>
+                                            : <span className="text-emerald-400 font-bold">Credit covers yearly rate!</span>
+                                        }
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {user?.lastPaymentAmount && (user?.accountCredit ?? 0) === 0 && (
+                        <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between text-xs">
+                            <span className="text-muted-foreground flex items-center gap-1.5">
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                                Last Payment: <strong className="text-emerald-300 font-semibold">${user.lastPaymentAmount.toFixed(2)}</strong>
+                                {user.lastPaymentDate ? ` on ${safeFormatDate(user.lastPaymentDate, "MMM d, yyyy")}` : ""}
+                                {user.lastPaymentProvider ? ` via ${user.lastPaymentProvider}` : ""}
+                            </span>
+                            <Badge variant="outline" className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[10px]">
+                                Applied
+                            </Badge>
+                        </div>
+                    )}
+
                     {user?.role === "ADMIN" ? (
                         <div className="p-3.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-xs space-y-1.5">
                             <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Access Level</span>

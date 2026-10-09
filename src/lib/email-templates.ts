@@ -557,6 +557,70 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         ]
     },
     {
+        id: "payment_underpayment",
+        name: "Payment Underpayment & Account Credit Notice",
+        description: "Sent to users when an incoming payment is received and credited to their balance, but falls short of the monthly or yearly subscription threshold.",
+        triggerEvent: "Triggered automatically when an incoming payment is credited to a user's account balance, but remains below the required plan threshold (e.g. $15 or $16 sent for a $17.50 monthly plan, or $175 sent for a $180 annual plan).",
+        category: "PAYMENTS",
+        defaultSubject: "💰 Payment Received: {amountPaid} Credited ({shortfall} Remaining for {planType})",
+        defaultBody: `<h2>Payment Received & Credited to Your Balance 💰</h2>
+<p>Hi <strong>{username}</strong>,</p>
+<p>Thank you! We received your payment of <strong>{amountPaid}</strong> via <strong>{provider}</strong> on {paymentDate}.</p>
+<p>Your payment has been credited to your DomsHomeLab account balance. Your current available balance is <strong>{accountCredit}</strong>.</p>
+
+<div style="background-color: #fffbeb; border: 1px solid #fef3c7; border-left: 4px solid #f59e0b; padding: 16px; border-radius: 8px; margin: 20px 0;">
+    <h3 style="margin-top: 0; color: #b45309; font-size: 15px; font-weight: 700;">Notice: {shortfall} Remaining for {planType}</h3>
+    <p style="margin-bottom: 8px; color: #78350f; font-size: 14px;">
+        The current subscription rate for the <strong>{planType}</strong> is <strong>{targetPrice}</strong>.
+    </p>
+    <p style="margin-bottom: 0; color: #78350f; font-size: 14px;">
+        To activate your access for the upcoming cycle, please send in the remaining <strong>{shortfall}</strong>. Once received, your membership will be credited immediately!
+    </p>
+</div>
+
+{yearlyOptionNote}
+
+<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 20px 0;">
+    <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; width: 160px; color: #64748b;">Amount Received:</td>
+            <td style="padding: 6px 0; color: #0f172a; font-weight: 600;">{amountPaid}</td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Payment Method:</td>
+            <td style="padding: 6px 0; color: #0f172a; font-weight: 600;">{provider}</td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Account Credit Balance:</td>
+            <td style="padding: 6px 0; color: #047857; font-weight: 700; font-size: 15px;">{accountCredit}</td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; color: #64748b;">Plan Target Price:</td>
+            <td style="padding: 6px 0; color: #0f172a; font-weight: 600;">{targetPrice}</td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; color: #b45309;">Remaining Needed:</td>
+            <td style="padding: 6px 0; color: #b45309; font-weight: 700; font-size: 15px;">{shortfall}</td>
+        </tr>
+    </table>
+</div>
+
+<p style="font-size: 13px; color: #64748b;">You can view your available account credit and payment handles anytime in your <a href="{profileUrl}" style="color: #4f46e5; font-weight: 600; text-decoration: underline;">Account Profile</a>.</p>`,
+        variables: [
+            { key: "{username}", description: "Username of the member", sampleValue: "alex_reader" },
+            { key: "{amountPaid}", description: "Amount received in the latest transaction", sampleValue: "$15.00" },
+            { key: "{accountCredit}", description: "Total available credit on the account", sampleValue: "$15.00" },
+            { key: "{provider}", description: "Payment provider (Venmo, PayPal, Cash App, Zelle)", sampleValue: "Venmo" },
+            { key: "{paymentDate}", description: "Date payment was received", sampleValue: "October 9, 2026" },
+            { key: "{planType}", description: "Target subscription plan (Monthly Plan or Annual Plan)", sampleValue: "Monthly Plan" },
+            { key: "{targetPrice}", description: "Target plan price", sampleValue: "$17.50" },
+            { key: "{shortfall}", description: "Remaining balance needed to complete the plan", sampleValue: "$2.50" },
+            { key: "{yearlyOptionNote}", description: "Optional callout for switching to discounted annual plan", sampleValue: "" },
+            { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" },
+            { key: "{profileUrl}", description: "Direct link to user profile settings", sampleValue: "https://portal.example.com/profile" }
+        ]
+    },
+    {
         id: "admin_payment_received",
         name: "New Payment Alert (Admins)",
         description: "Sent to administrators whenever an incoming payment is detected and recorded from Venmo, PayPal, Cash App, or Zelle.",

@@ -2394,6 +2394,16 @@ export default function AccessSettingsPage() {
                                                                 Rejected
                                                             </Badge>
                                                         )}
+                                                        {user.accountCredit > 0 && (
+                                                            <Badge variant="outline" className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-xs gap-1 font-semibold" title={`Account Credit Balance: $${user.accountCredit.toFixed(2)}`}>
+                                                                <DollarSign className="h-3 w-3 text-amber-400" /> Credit: ${user.accountCredit.toFixed(2)}
+                                                            </Badge>
+                                                        )}
+                                                        {user.lastPaymentAmount && (
+                                                            <Badge variant="outline" className="bg-emerald-500/15 text-emerald-300 border-emerald-500/30 text-[10px] gap-1 font-medium" title={`Last payment: $${user.lastPaymentAmount.toFixed(2)} on ${user.lastPaymentDate ? format(new Date(user.lastPaymentDate), "MMM d, yyyy") : "N/A"}${user.lastPaymentProvider ? ` via ${user.lastPaymentProvider}` : ""}`}>
+                                                                <CreditCard className="h-3 w-3 text-emerald-400" /> Last: ${user.lastPaymentAmount.toFixed(2)}
+                                                            </Badge>
+                                                        )}
                                                         {user.referredBy?.username && (
                                                             <Badge variant="outline" className="bg-purple-500/15 text-purple-300 border-purple-500/40 text-xs gap-1 font-medium" title={`Invited by @${user.referredBy.username}`}>
                                                                 <Gift className="h-3 w-3" /> @{user.referredBy.username}
@@ -4814,6 +4824,24 @@ export default function AccessSettingsPage() {
                                     <div className="flex justify-between">
                                         <span className="text-muted-foreground">Last Renewal Notice:</span>
                                         <span className="font-medium text-amber-400">{format(new Date(subModalUser.lastRenewalReminderSentAt), "MMM d, yyyy h:mm a")}</span>
+                                    </div>
+                                )}
+                                {subModalUser.accountCredit > 0 && (
+                                    <div className="flex justify-between items-center p-2 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                                        <span className="text-amber-300 font-semibold flex items-center gap-1.5">
+                                            <DollarSign className="h-3.5 w-3.5" /> Account Credit Balance:
+                                        </span>
+                                        <span className="font-bold text-amber-400">${subModalUser.accountCredit.toFixed(2)}</span>
+                                    </div>
+                                )}
+                                {subModalUser.lastPaymentAmount && (
+                                    <div className="flex justify-between items-center text-xs">
+                                        <span className="text-muted-foreground">Latest Payment Recorded:</span>
+                                        <span className="font-medium text-foreground">
+                                            ${subModalUser.lastPaymentAmount.toFixed(2)}
+                                            {subModalUser.lastPaymentDate ? ` (${format(new Date(subModalUser.lastPaymentDate), "MMM d, yyyy")})` : ""}
+                                            {subModalUser.lastPaymentProvider ? ` via ${subModalUser.lastPaymentProvider}` : ""}
+                                        </span>
                                     </div>
                                 )}
 

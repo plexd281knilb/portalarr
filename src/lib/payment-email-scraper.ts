@@ -4,6 +4,7 @@ import prisma from "@/lib/prisma";
 import { decryptData, encryptData } from "@/lib/encryption";
 import { logger } from "@/lib/logger";
 import { addYears, addMonths } from "date-fns";
+import { evaluatePaymentThreshold, PaymentThresholdResult } from "./payment-threshold-engine";
 
 export interface ScrapedPayment {
     provider: "VENMO" | "PAYPAL" | "ZELLE" | "CASHAPP" | "OTHER";
@@ -862,159 +863,272 @@ export async function matchPaymentToUser(payment: ScrapedPayment): Promise<any |
  * Grant subscription to a matched user based on the payment amount and cumulative installments
  */
 export async function applySubscriptionForPayment(user: any, payment: ScrapedPayment): Promise<{
-    newExpiryDate: Date;
+    newExpiryDate?: Date | null;
     periodGrantedText: string;
     totalCumulativeAmount: number;
+    thresholdResult: PaymentThresholdResult;
 }> {
     const settings = await prisma.settings.findUnique({ where: { id: "global" } });
-    const yearlyPrice = settings?.yearlyPrice || 180;
-    const monthlyPrice = settings?.monthlyPrice || 15;
+    const thresholdResult = evaluatePaymentThreshold({
+        user,
+        payment,
+        settings
+    });
 
     const paymentDate = payment.emailDate ? new Date(payment.emailDate) : new Date();
-
-    const existingExpiry = user.subscriptionEndsAt ? new Date(user.subscriptionEndsAt) : null;
-
-    const { newExpiryDate, periodGrantedText, cadence } = calculateAlignedExpiryDate({
-        paymentDate,
-        totalAmount: payment.amount,
-        yearlyPrice,
-        monthlyPrice,
-        existingExpiry
-    });
-
     const now = new Date();
-    const isCurrentlyActive = newExpiryDate > now;
-    const targetStatus = user.role === "ADMIN" ? "APPROVED" : (isCurrentlyActive ? "APPROVED" : "EXPIRED");
     const convertedAtDate = user.convertedAt || payment.emailDate || now;
 
-    // Update User in database
-    const newTier = (user.membershipTier === "TRIAL" || !user.membershipTier) && targetStatus === "APPROVED" 
-        ? "STANDARD" 
-        : user.membershipTier;
-    await prisma.user.update({
-        where: { id: user.id },
-        data: {
-            status: targetStatus,
-            membershipTier: newTier,
-            subscriptionCadence: cadence,
-            trialEndsAt: targetStatus === "APPROVED" ? null : user.trialEndsAt,
-            subscriptionEndsAt: newExpiryDate,
-            convertedAt: convertedAtDate
-        }
-    });
+    if (thresholdResult.action === "FULL_YEARLY" || thresholdResult.action === "FULL_MONTHLY") {
+        const newExpiryDate = thresholdResult.newExpiryDate;
+        const periodGrantedText = thresholdResult.periodGrantedText;
+        const isCurrentlyActive = newExpiryDate > now;
+        const targetStatus = user.role === "ADMIN" ? "APPROVED" : (isCurrentlyActive ? "APPROVED" : "EXPIRED");
+        const newTier = (user.membershipTier === "TRIAL" || !user.membershipTier) && targetStatus === "APPROVED" 
+            ? "STANDARD" 
+            : user.membershipTier;
 
-    // Ensure Plex Sharing access is granted if active
-    if (isCurrentlyActive) {
-        try {
-            // If the user's status was ALREADY APPROVED, we already updated their subscription date.
-            // DO NOT re-sync or modify their active Plex shares, preserving all active libraries across all servers.
-            // Only if they were previously EXPIRED, SUSPENDED, PENDING, or TRIAL do we restore their shares.
-            if (user.status === "EXPIRED" || user.status === "SUSPENDED" || user.status === "PENDING" || user.status === "TRIAL") {
-                const { setUserTrialOrSubscription } = await import("@/app/actions");
-                await setUserTrialOrSubscription(user.id, "CUSTOM", newExpiryDate.toISOString());
+        // Update User in database with new subscription, excess credit, and payment tracking
+        await prisma.user.update({
+            where: { id: user.id },
+            data: {
+                status: targetStatus,
+                membershipTier: newTier,
+                subscriptionCadence: thresholdResult.cadence,
+                trialEndsAt: targetStatus === "APPROVED" ? null : user.trialEndsAt,
+                subscriptionEndsAt: newExpiryDate,
+                convertedAt: convertedAtDate,
+                accountCredit: thresholdResult.newAccountCredit,
+                lastPaymentAmount: payment.amount,
+                lastPaymentDate: paymentDate,
+                lastPaymentProvider: payment.provider
             }
-        } catch (plexErr) {
-            logger.addLog("WARN", "PLEX", `[PAYMENT-SCRAPER] Failed to sync Plex sharing for "${user.username}": ${plexErr}`);
+        });
+
+        // Ensure Plex Sharing access is granted if active
+        if (isCurrentlyActive) {
+            try {
+                if (user.status === "EXPIRED" || user.status === "SUSPENDED" || user.status === "PENDING" || user.status === "TRIAL") {
+                    const { setUserTrialOrSubscription } = await import("@/app/actions");
+                    await setUserTrialOrSubscription(user.id, "CUSTOM", newExpiryDate.toISOString());
+                }
+            } catch (plexErr) {
+                logger.addLog("WARN", "PLEX", `[PAYMENT-SCRAPER] Failed to sync Plex sharing for "${user.username}": ${plexErr}`);
+            }
         }
-    }
 
-    logger.addLog(
-        "INFO", 
-        "SYSTEM", 
-        `[PAYMENT-FULFILLMENT] Applied ${periodGrantedText} for user "${user.username}" (Amount: $${payment.amount.toFixed(2)}) via ${payment.provider}`
-    );
+        logger.addLog(
+            "INFO", 
+            "SYSTEM", 
+            `[PAYMENT-FULFILLMENT] Applied ${periodGrantedText} for user "${user.username}" (Amount: $${payment.amount.toFixed(2)}, Available Credit: $${thresholdResult.newAccountCredit.toFixed(2)}) via ${payment.provider}`
+        );
 
-    // Dispatch payment confirmation receipt email to the user
-    try {
-        if (user.email && isCurrentlyActive) {
-            const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        // Dispatch payment confirmation receipt email to the user
+        try {
+            if (user.email && isCurrentlyActive) {
+                if (settings?.emailNotificationsEnabled && settings?.notifySubscriptionActive) {
+                    const { renderEmailTemplate } = await import("@/lib/email-templates");
+                    const { sendOrQueueEmail } = await import("@/app/actions");
+                    const { getAppUrl } = await import("@/lib/app-url");
+                    const appUrl = await getAppUrl();
+
+                    const formattedDate = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(paymentDate);
+                    const validUntilFormatted = new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric" }).format(newExpiryDate);
+
+                    const { subject, html } = await renderEmailTemplate("payment_received", {
+                        username: user.username,
+                        email: user.email,
+                        amount: `$${payment.amount.toFixed(2)}`,
+                        provider: payment.provider,
+                        paymentDate: formattedDate,
+                        periodGranted: periodGrantedText,
+                        validUntil: validUntilFormatted,
+                        transactionId: payment.externalTxId || payment.emailUid || "N/A",
+                        appUrl,
+                        loginUrl: `${appUrl}/login`
+                    });
+
+                    await sendOrQueueEmail({
+                        to: user.email,
+                        subject,
+                        html,
+                        templateId: "payment_received",
+                        targetUser: user.username,
+                        userId: user.id
+                    });
+                    logger.addLog("INFO", "EMAIL", `Dispatched payment confirmation receipt to "${user.username}" (${user.email}) for $${payment.amount.toFixed(2)} via ${payment.provider}`);
+                }
+            }
+        } catch (emailErr: any) {
+            logger.addLog("WARN", "EMAIL", `Failed to dispatch payment receipt email to "${user.username}": ${emailErr.message || emailErr}`);
+        }
+
+        // Dispatch admin payment notification alert if enabled
+        try {
             if (settings?.emailNotificationsEnabled && settings?.notifySubscriptionActive) {
+                const admins = await prisma.user.findMany({
+                    where: { role: "ADMIN" },
+                    select: { email: true }
+                });
+                const adminEmails = admins.map(a => a.email).filter((e): e is string => Boolean(e));
+                const recipientEmails = adminEmails.length > 0 ? adminEmails : (settings.smtpUser ? [settings.smtpUser] : []);
+
+                if (recipientEmails.length > 0) {
+                    const { renderEmailTemplate } = await import("@/lib/email-templates");
+                    const { sendOrQueueEmail } = await import("@/app/actions");
+                    const { getAppUrl } = await import("@/lib/app-url");
+                    const appUrl = await getAppUrl();
+
+                    const { subject, html } = await renderEmailTemplate("admin_payment_received", {
+                        amount: `$${payment.amount.toFixed(2)}`,
+                        provider: payment.provider,
+                        senderName: payment.senderName || "Unknown",
+                        senderHandle: payment.senderHandle || "",
+                        matchedUser: user.username,
+                        periodGranted: `${periodGrantedText} (Remaining Credit: $${thresholdResult.newAccountCredit.toFixed(2)})`,
+                        note: payment.note || "None",
+                        accessUrl: `${appUrl}/settings/access`,
+                        appUrl
+                    });
+
+                    await sendOrQueueEmail({
+                        to: recipientEmails,
+                        subject,
+                        html,
+                        templateId: "admin_payment_received",
+                        targetUser: "admin"
+                    });
+                }
+            }
+        } catch (adminEmailErr: any) {}
+
+        return {
+            newExpiryDate,
+            periodGrantedText,
+            totalCumulativeAmount: payment.amount,
+            thresholdResult
+        };
+    } else {
+        // PARTIAL PAYMENT / UNDERPAYMENT (Threshold not yet met)
+        const isPartialMonthly = thresholdResult.action === "PARTIAL_MONTHLY";
+        const shortfall = isPartialMonthly ? thresholdResult.monthlyShortfall : thresholdResult.shortfall;
+        const planType = isPartialMonthly ? "Monthly Plan" : "Annual Plan";
+        const targetPrice = isPartialMonthly 
+            ? `$${thresholdResult.targetMonthlyPrice.toFixed(2)}/month`
+            : `$${thresholdResult.targetPrice.toFixed(2)}/year`;
+        const periodGrantedText = `Partial Payment ($${payment.amount.toFixed(2)} credited to balance, $${shortfall.toFixed(2)} remaining for ${planType})`;
+
+        // Store payment amount, date, provider and credited balance on User
+        await prisma.user.update({
+            where: { id: user.id },
+            data: {
+                accountCredit: thresholdResult.newAccountCredit,
+                lastPaymentAmount: payment.amount,
+                lastPaymentDate: paymentDate,
+                lastPaymentProvider: payment.provider
+            }
+        });
+
+        logger.addLog(
+            "INFO",
+            "SYSTEM",
+            `[PAYMENT-THRESHOLD] User "${user.username}" sent $${payment.amount.toFixed(2)} (Credited Balance: $${thresholdResult.newAccountCredit.toFixed(2)}). Shortfall: $${shortfall.toFixed(2)} for ${planType}.`
+        );
+
+        // Send payment_underpayment email notice to user
+        try {
+            if (user.email && (settings?.notifyPaymentUnderpayment ?? true)) {
                 const { renderEmailTemplate } = await import("@/lib/email-templates");
                 const { sendOrQueueEmail } = await import("@/app/actions");
                 const { getAppUrl } = await import("@/lib/app-url");
                 const appUrl = await getAppUrl();
 
-                const formattedDate = payment.emailDate 
-                    ? new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(payment.emailDate))
-                    : new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(now);
+                const formattedDate = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(paymentDate);
 
-                const validUntilFormatted = new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric" }).format(newExpiryDate);
+                let yearlyOptionNote = "";
+                if (isPartialMonthly) {
+                    yearlyOptionNote = `
+<div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-left: 4px solid #10b981; padding: 14px; border-radius: 6px; margin: 20px 0;">
+    <p style="margin: 0; color: #166534; font-size: 13px;">
+        💡 <strong>Prefer the discounted Annual Plan?</strong> The annual membership is $${thresholdResult.targetYearlyPrice.toFixed(2)}/year (averaging only $15.00/mo). If you'd like to unlock a full year of access instead, you can send in the remaining <strong>$${thresholdResult.yearlyShortfall.toFixed(2)}</strong> ($${thresholdResult.targetYearlyPrice.toFixed(2)} - $${thresholdResult.totalCredit.toFixed(2)}).
+    </p>
+</div>`;
+                }
 
-                const { subject, html } = await renderEmailTemplate("payment_received", {
+                const { subject, html } = await renderEmailTemplate("payment_underpayment", {
                     username: user.username,
-                    email: user.email,
-                    amount: payment.amount.toFixed(2),
+                    amountPaid: `$${payment.amount.toFixed(2)}`,
+                    accountCredit: `$${thresholdResult.newAccountCredit.toFixed(2)}`,
                     provider: payment.provider,
                     paymentDate: formattedDate,
-                    periodGranted: periodGrantedText,
-                    validUntil: validUntilFormatted,
-                    transactionId: payment.externalTxId || payment.emailUid || "N/A",
+                    planType,
+                    targetPrice,
+                    shortfall: `$${shortfall.toFixed(2)}`,
+                    yearlyOptionNote,
                     appUrl,
-                    loginUrl: `${appUrl}/login`
+                    profileUrl: `${appUrl}/profile`
                 });
 
                 await sendOrQueueEmail({
                     to: user.email,
                     subject,
                     html,
-                    templateId: "payment_received",
+                    templateId: "payment_underpayment",
                     targetUser: user.username,
                     userId: user.id
                 });
-                logger.addLog("INFO", "EMAIL", `Dispatched payment confirmation receipt to "${user.username}" (${user.email}) for $${payment.amount.toFixed(2)} via ${payment.provider}`);
+                logger.addLog("INFO", "EMAIL", `Dispatched underpayment notice to "${user.username}" (${user.email}) for $${payment.amount.toFixed(2)} ($${shortfall.toFixed(2)} remaining for ${planType})`);
             }
+        } catch (emailErr: any) {
+            logger.addLog("WARN", "EMAIL", `Failed to dispatch underpayment notice to "${user.username}": ${emailErr.message || emailErr}`);
         }
-    } catch (emailErr: any) {
-        logger.addLog("WARN", "EMAIL", `Failed to dispatch payment receipt email to "${user.username}": ${emailErr.message || emailErr}`);
-    }
 
-    // Dispatch admin payment notification alert if enabled
-    try {
-        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
-        if (settings?.emailNotificationsEnabled && settings?.notifySubscriptionActive) {
-            const admins = await prisma.user.findMany({
-                where: { role: "ADMIN" },
-                select: { email: true }
-            });
-            const adminEmails = admins.map(a => a.email).filter((e): e is string => Boolean(e));
-            const recipientEmails = adminEmails.length > 0 ? adminEmails : (settings.smtpUser ? [settings.smtpUser] : []);
-
-            if (recipientEmails.length > 0) {
-                const { renderEmailTemplate } = await import("@/lib/email-templates");
-                const { sendOrQueueEmail } = await import("@/app/actions");
-                const { getAppUrl } = await import("@/lib/app-url");
-                const appUrl = await getAppUrl();
-
-                const { subject, html } = await renderEmailTemplate("admin_payment_received", {
-                    amount: payment.amount.toFixed(2),
-                    provider: payment.provider,
-                    senderName: payment.senderName || "Unknown",
-                    senderHandle: payment.senderHandle || "",
-                    matchedUser: user.username,
-                    periodGranted: periodGrantedText,
-                    note: payment.note || "None",
-                    accessUrl: `${appUrl}/settings/access`,
-                    appUrl
+        // Send alert to admin about partial payment / underpayment
+        try {
+            if (settings?.emailNotificationsEnabled) {
+                const admins = await prisma.user.findMany({
+                    where: { role: "ADMIN" },
+                    select: { email: true }
                 });
+                const adminEmails = admins.map(a => a.email).filter((e): e is string => Boolean(e));
+                const recipientEmails = adminEmails.length > 0 ? adminEmails : (settings.smtpUser ? [settings.smtpUser] : []);
 
-                await sendOrQueueEmail({
-                    to: recipientEmails,
-                    subject,
-                    html,
-                    templateId: "admin_payment_received",
-                    targetUser: "admin"
-                });
+                if (recipientEmails.length > 0) {
+                    const { renderEmailTemplate } = await import("@/lib/email-templates");
+                    const { sendOrQueueEmail } = await import("@/app/actions");
+                    const { getAppUrl } = await import("@/lib/app-url");
+                    const appUrl = await getAppUrl();
+
+                    const { subject, html } = await renderEmailTemplate("admin_payment_received", {
+                        amount: `$${payment.amount.toFixed(2)}`,
+                        provider: payment.provider,
+                        senderName: payment.senderName || "Unknown",
+                        senderHandle: payment.senderHandle || "",
+                        matchedUser: user.username,
+                        periodGranted: `[UNDERPAYMENT] Credited $${payment.amount.toFixed(2)} to balance ($${thresholdResult.newAccountCredit.toFixed(2)} total). Shortfall: $${shortfall.toFixed(2)} for ${planType}.`,
+                        note: payment.note || "None",
+                        accessUrl: `${appUrl}/settings/access`,
+                        appUrl
+                    });
+
+                    await sendOrQueueEmail({
+                        to: recipientEmails,
+                        subject,
+                        html,
+                        templateId: "admin_payment_received",
+                        targetUser: "admin"
+                    });
+                }
             }
-        }
-    } catch (adminEmailErr: any) {
-        // Non-blocking
-    }
+        } catch (adminEmailErr: any) {}
 
-    return {
-        newExpiryDate,
-        periodGrantedText,
-        totalCumulativeAmount: payment.amount
-    };
+        return {
+            newExpiryDate: user.subscriptionEndsAt ? new Date(user.subscriptionEndsAt) : null,
+            periodGrantedText,
+            totalCumulativeAmount: payment.amount,
+            thresholdResult
+        };
+    }
 }
 
 /**
@@ -1156,9 +1270,11 @@ export async function scanPaymentEmailsInternal(sourceId?: string, lookbackDays?
                                 const matchedUser = await matchPaymentToUser(scraped);
 
                                 if (matchedUser) {
-                                    // Auto-grant subscription!
-                                    const { periodGrantedText } = await applySubscriptionForPayment(matchedUser, scraped);
+                                    // Auto-evaluate payment threshold and apply subscription or credit
+                                    const { periodGrantedText, thresholdResult } = await applySubscriptionForPayment(matchedUser, scraped);
                                     autoAttributed++;
+
+                                    const isFullFulfillment = thresholdResult.action === "FULL_YEARLY" || thresholdResult.action === "FULL_MONTHLY";
 
                                     await prisma.paymentTransaction.create({
                                         data: {
@@ -1176,11 +1292,13 @@ export async function scanPaymentEmailsInternal(sourceId?: string, lookbackDays?
                                             emailUid: uidStr,
                                             matchedUserId: matchedUser.id,
                                             status: "PROCESSED",
-                                            appliedSubscription: true,
+                                            appliedSubscription: isFullFulfillment,
                                             subscriptionPeriodGranted: periodGrantedText,
                                             rawPayload: JSON.stringify({
                                                 snippet: scraped.rawSnippet,
-                                                autoMatched: true
+                                                autoMatched: true,
+                                                thresholdAction: thresholdResult.action,
+                                                accountCredit: thresholdResult.newAccountCredit
                                             })
                                         }
                                     });

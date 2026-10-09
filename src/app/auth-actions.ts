@@ -549,7 +549,11 @@ export async function getCurrentUser() {
       subscriptionEndsAt: true,
       referralCode: true,
       plexEmail: true,
-      plexUsername: true
+      plexUsername: true,
+      accountCredit: true,
+      lastPaymentAmount: true,
+      lastPaymentDate: true,
+      lastPaymentProvider: true
     }
   });
 
@@ -576,7 +580,11 @@ export async function getCurrentUser() {
         subscriptionEndsAt: true,
         referralCode: true,
         plexEmail: true,
-        plexUsername: true
+        plexUsername: true,
+        accountCredit: true,
+        lastPaymentAmount: true,
+        lastPaymentDate: true,
+        lastPaymentProvider: true
       }
     });
 
@@ -608,7 +616,11 @@ export async function getCurrentUser() {
         subscriptionEndsAt: true,
         referralCode: true,
         plexEmail: true,
-        plexUsername: true
+        plexUsername: true,
+        accountCredit: true,
+        lastPaymentAmount: true,
+        lastPaymentDate: true,
+        lastPaymentProvider: true
       }
     });
 
@@ -640,7 +652,11 @@ export async function getCurrentUser() {
         subscriptionEndsAt: true,
         referralCode: true,
         plexEmail: true,
-        plexUsername: true
+        plexUsername: true,
+        accountCredit: true,
+        lastPaymentAmount: true,
+        lastPaymentDate: true,
+        lastPaymentProvider: true
       }
     });
   }

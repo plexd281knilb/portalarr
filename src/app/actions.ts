@@ -3383,6 +3383,10 @@ export async function getAppUsers() {
                 subscriptionCadence: true,
                 lastRenewalReminderSentAt: true,
                 renewalRemindersSent: true,
+                accountCredit: true,
+                lastPaymentAmount: true,
+                lastPaymentDate: true,
+                lastPaymentProvider: true,
                 paymentTransactions: {
                     select: {
                         id: true,
@@ -6191,7 +6195,7 @@ export async function getPublicJoinConfig(refCode?: string) {
 
         const defaultTrialDays = settings?.defaultTrialDays ?? 14;
         const yearlyPrice = settings?.yearlyPrice ?? 180;
-        const monthlyPrice = settings?.monthlyPrice ?? (yearlyPrice > 0 ? Math.round((yearlyPrice / 12) * 100) / 100 : 15);
+        const monthlyPrice = settings?.monthlyPrice ?? 17.50;
         const renewalMonth = settings?.renewalMonth ?? 1;
         const renewalDay = settings?.renewalDay ?? 1;
 

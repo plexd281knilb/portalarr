@@ -678,7 +678,18 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
   - Under Account Access Status, admins are prominently identified with `<Badge variant="outline" className="bg-indigo-500/20 text-indigo-300 border-indigo-500/40"><ShieldCheck /> Platform Administrator (Permanent Access)</Badge>`.
 - **Backend Governance & Auto-Healing**:
   - Backend mutations (`setUserTrialOrSubscription`, `updateUserMembershipTierAction`, `updateUserSubscriptionCadenceAction`, `sendSubscriptionRenewalReminderAction`) reject operations against admins with descriptive error feedback.
-  - Background expiration sweeps (`expireDueTrialsAndSubscriptionsInternal`) and role assignments (`updateAppUserRole`) automatically sanitize and heal any admin records to `status = "APPROVED"`, `subscriptionEndsAt = null`, `subscriptionCadence = null`, `trialEndsAt = null`, and `membershipTier = "ADMIN"`.
+### 37. Payment Threshold Awareness, Installment Credits & Account Balance Cockpit (`/profile`, `/settings/profile`, `/settings/access`)
+- **Member Account Credit & Partial Balance Card (`/profile` & `/settings/profile`)**:
+  - Whenever a member has an unapplied credit balance (`user.accountCredit > 0`), a prominent amber glassmorphic card renders at the top of the Subscription & Prorated Billing card (`bg-amber-500/10 border-amber-500/30`):
+    - Displays total available balance (`$X.XX Balance`), latest payment amount, and payment date.
+    - Features a 2-card comparison breakdown:
+      - **Monthly Plan**: Displays exact remaining shortfall needed to activate/extend 1 month access (`${effectiveMonthlyPrice - user.accountCredit}` remaining).
+      - **Annual Discounted Plan**: Displays exact remaining shortfall needed for 1 full year of access (`${effectiveYearlyPrice - user.accountCredit}` remaining), highlighting the discounted $15/mo equivalent rate.
+  - When account credit is zero and a payment was applied, renders a subtle recent payment confirmation badge (`Last Payment: $X.XX on Date via Provider (Applied)`).
+- **Admin Access Control Transparency (`/settings/access`)**:
+  - User rows in the directory display an amber badge `<Badge variant="outline" className="bg-amber-500/20 text-amber-300 border-amber-500/40"><DollarSign /> Credit: $X.XX</Badge>` whenever `accountCredit > 0`.
+  - Also displays latest payment badge `<Badge variant="outline" className="bg-emerald-500/15 text-emerald-300 border-emerald-500/30"><CreditCard /> Last: $X.XX</Badge>`.
+  - Inside the user management modal (`subModalUser`), displays a dedicated Account Credit Balance row with full payment details.
 
 ---
 
