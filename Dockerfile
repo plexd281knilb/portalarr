@@ -1,5 +1,8 @@
+# Base image definition - uses AWS Public ECR Docker Library mirror to eliminate Docker Hub anonymous 429 rate limits
+ARG BASE_IMAGE=public.ecr.aws/docker/library/node:20-bookworm-slim
+
 # 1. Install dependencies
-FROM node:20-bookworm-slim AS deps
+FROM ${BASE_IMAGE} AS deps
 # Install dependencies required for Prisma engines
 RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
@@ -8,7 +11,7 @@ COPY package.json package-lock.json* ./
 RUN npm ci
 
 # 2. Builder stage
-FROM node:20-bookworm-slim AS builder
+FROM ${BASE_IMAGE} AS builder
 WORKDIR /app
 
 # Copy node_modules from deps
@@ -26,7 +29,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
 # 3. Production image
-FROM node:20-bookworm-slim AS runner
+FROM ${BASE_IMAGE} AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
