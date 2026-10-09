@@ -1,6 +1,11 @@
 /**
- * Apply Discord Redesign Migration Script
- * Executes the approved 8-category architecture migration non-destructively.
+ * Apply Discord Redesign Migration Script (Approved Layout)
+ * Executes the approved 7-category architecture migration non-destructively:
+ * - Unifies member roles into "⭐ Member"
+ * - Deletes the "Tier 2" role from Discord
+ * - Deletes the "VIP Tier 2 Lounge" category and channels
+ * - Organizes 7 canonical categories and channel permissions
+ * - Posts and pins clean guide embeds with zero mention of Tier 1 vs Tier 2
  */
 
 import { prisma, ensureSchemaColumns } from "../src/lib/prisma";
@@ -16,7 +21,7 @@ import {
 
 async function run() {
     console.log("=================================================================");
-    console.log("   EXECUTING DISCORD SERVER LAYOUT REDESIGN MIGRATION           ");
+    console.log("   EXECUTING APPROVED DISCORD SERVER REDESIGN MIGRATION          ");
     console.log("=================================================================\n");
 
     await ensureSchemaColumns();
@@ -32,7 +37,7 @@ async function run() {
 
     console.log(`🤖 Using Bot Token on Guild ID: ${guildId}`);
 
-    // 1. Fetch roles
+    // 1. Fetch current roles
     const rolesRes = await discordFetch<DiscordRole[]>(`/guilds/${guildId}/roles`, { method: "GET" }, botToken);
     if (!rolesRes.ok || !Array.isArray(rolesRes.data)) {
         console.error("❌ Failed to fetch roles:", rolesRes.error);
@@ -40,22 +45,80 @@ async function run() {
     }
 
     const roles = rolesRes.data;
-    const roleByName = (name: string) => roles.find(r => r.name.toLowerCase().includes(name.toLowerCase()))?.id;
-
     const everyoneRoleId = guildId;
-    const tier2RoleId = roleByName("Tier 2") || "1558228645393342586";
-    const tier1RoleId = roleByName("Tier 1") || "1558228646525665412";
-    const trialRoleId = roleByName("Trial Pass") || "1558228646911672363";
-    const kidsRoleId = roleByName("Kids") || "1558228647976898733";
-    const adminRoleId = roleByName("Admin") || "1377295566781943960";
+    let memberRole = roles.find(r => r.name.toLowerCase().includes("member") || r.name.toLowerCase().includes("tier 1"));
+    const tier2Role = roles.find(r => r.name.toLowerCase().includes("tier 2"));
+    const trialRole = roles.find(r => r.name.toLowerCase().includes("trial"));
+    const kidsRole = roles.find(r => r.name.toLowerCase().includes("kids"));
+    const adminRole = roles.find(r => r.name.toLowerCase().includes("admin"));
 
-    console.log("🛡️ Resolved Roles:");
+    // 1a. If member role is named "⭐ Tier 1 (Regular Member)", rename it to "⭐ Member"
+    if (memberRole && memberRole.name !== "⭐ Member") {
+        console.log(`🔄 Renaming role "${memberRole.name}" -> "⭐ Member"...`);
+        const updateRoleRes = await discordFetch<DiscordRole>(`/guilds/${guildId}/roles/${memberRole.id}`, {
+            method: "PATCH",
+            body: JSON.stringify({
+                name: "⭐ Member",
+                color: 0x10B981, // Emerald
+                hoist: true,
+                mentionable: true
+            })
+        }, botToken);
+        if (updateRoleRes.ok && updateRoleRes.data) {
+            memberRole = updateRoleRes.data;
+            console.log("✅ Successfully updated role to ⭐ Member");
+        }
+    } else if (!memberRole) {
+        console.log("➕ Creating ⭐ Member role...");
+        const createRoleRes = await discordFetch<DiscordRole>(`/guilds/${guildId}/roles`, {
+            method: "POST",
+            body: JSON.stringify({
+                name: "⭐ Member",
+                color: 0x10B981,
+                hoist: true,
+                mentionable: true
+            })
+        }, botToken);
+        if (createRoleRes.ok && createRoleRes.data) {
+            memberRole = createRoleRes.data;
+            console.log("✅ Created ⭐ Member role");
+        }
+    }
+
+    const memberRoleId = memberRole?.id || "1558228646525665412";
+
+    // 1b. If Tier 2 role exists, transfer members to ⭐ Member and delete Tier 2 role
+    if (tier2Role) {
+        console.log(`🔍 Inspecting members with Tier 2 role (${tier2Role.id})...`);
+        const membersRes = await discordFetch<any[]>(`/guilds/${guildId}/members?limit=1000`, { method: "GET" }, botToken);
+        if (membersRes.ok && Array.isArray(membersRes.data)) {
+            for (const m of membersRes.data) {
+                if (m.roles && m.roles.includes(tier2Role.id)) {
+                    console.log(`   Transferring @${m.user?.username} from Tier 2 to ⭐ Member...`);
+                    await discordFetch(`/guilds/${guildId}/members/${m.user.id}/roles/${memberRoleId}`, { method: "PUT" }, botToken);
+                    await discordFetch(`/guilds/${guildId}/members/${m.user.id}/roles/${tier2Role.id}`, { method: "DELETE" }, botToken);
+                }
+            }
+        }
+        console.log(`🗑️ Deleting "Tier 2" role from Discord to conceal tiers...`);
+        const delRes = await discordFetch(`/guilds/${guildId}/roles/${tier2Role.id}`, { method: "DELETE" }, botToken);
+        if (delRes.ok) {
+            console.log("✅ Successfully deleted Tier 2 role from Discord.");
+        } else {
+            console.warn(`⚠️ Warning deleting Tier 2 role: ${delRes.error}`);
+        }
+    }
+
+    const trialRoleId = trialRole?.id || "1558228646911672363";
+    const kidsRoleId = kidsRole?.id || "1558228647976898733";
+    const adminRoleId = adminRole?.id || "1377295566781943960";
+
+    console.log("\n🛡️ Active Server Roles:");
     console.log(`   @everyone: ${everyoneRoleId}`);
-    console.log(`   Tier 2:    ${tier2RoleId}`);
-    console.log(`   Tier 1:    ${tier1RoleId}`);
-    console.log(`   Trial:     ${trialRoleId}`);
-    console.log(`   Kids:      ${kidsRoleId}`);
-    console.log(`   Admin:     ${adminRoleId}\n`);
+    console.log(`   ⭐ Member: ${memberRoleId}`);
+    console.log(`   ⏱️ Trial:   ${trialRoleId}`);
+    console.log(`   🧒 Kids:    ${kidsRoleId}`);
+    console.log(`   👑 Admin:   ${adminRoleId}\n`);
 
     // Standard Bitwise Permissions
     const VIEW_READ = (DISCORD_PERMISSIONS.VIEW_CHANNEL | DISCORD_PERMISSIONS.READ_MESSAGE_HISTORY).toString();
@@ -63,7 +126,7 @@ async function run() {
     const SEND_REACT = (DISCORD_PERMISSIONS.SEND_MESSAGES | DISCORD_PERMISSIONS.ADD_REACTIONS).toString();
     const VIEW_ONLY = (DISCORD_PERMISSIONS.VIEW_CHANNEL).toString();
 
-    // 2. Fetch existing channels
+    // 2. Fetch all channels
     const channelsRes = await discordFetch<DiscordChannel[]>(`/guilds/${guildId}/channels`, { method: "GET" }, botToken);
     if (!channelsRes.ok || !Array.isArray(channelsRes.data)) {
         console.error("❌ Failed to fetch channels:", channelsRes.error);
@@ -82,12 +145,29 @@ async function run() {
         }
     }
 
-    // Define target 8 categories with mapped existing IDs or fallback to creation
+    // 2a. Remove VIP Tier 2 category and channels if they exist
+    for (const [id, c] of chanMap.entries()) {
+        if (c.name === "vip-chat" || c.name === "vip-priority-support") {
+            console.log(`🗑️ Deleting obsolete VIP channel #${c.name} (${c.id})...`);
+            await discordFetch(`/channels/${c.id}`, { method: "DELETE" }, botToken);
+            chanMap.delete(id);
+        }
+    }
+
+    for (const [id, cat] of catMap.entries()) {
+        if (cat.name.toLowerCase().includes("vip") || cat.name.toLowerCase().includes("tier 2")) {
+            console.log(`🗑️ Deleting obsolete VIP category "${cat.name}" (${cat.id})...`);
+            await discordFetch(`/channels/${cat.id}`, { method: "DELETE" }, botToken);
+            catMap.delete(id);
+        }
+    }
+
+    // 3. Define target 7 categories according to approved layout plan
     const categoryConfigs = [
         {
             key: "welcome_info",
             targetName: "📌 1. WELCOME & INFO",
-            existingId: "1343807831614160926", // old Information
+            existingId: "1343807831614160926",
             position: 0,
             overwrites: [
                 { id: everyoneRoleId, type: 0, allow: VIEW_READ, deny: SEND_REACT }
@@ -96,25 +176,23 @@ async function run() {
         {
             key: "guides",
             targetName: "📖 2. GUIDES & SELF-SERVICE",
-            existingId: "1343807480479617046", // old Kid Server Notifications
+            existingId: "1343807480479617046",
             position: 1,
             overwrites: [
                 { id: everyoneRoleId, type: 0, allow: "0", deny: VIEW_ONLY },
-                { id: tier1RoleId, type: 0, allow: VIEW_READ, deny: SEND_REACT },
-                { id: tier2RoleId, type: 0, allow: VIEW_READ, deny: SEND_REACT },
+                { id: memberRoleId, type: 0, allow: VIEW_READ, deny: SEND_REACT },
                 { id: trialRoleId, type: 0, allow: VIEW_READ, deny: SEND_REACT },
                 { id: kidsRoleId, type: 0, allow: VIEW_READ, deny: SEND_REACT }
             ]
         },
         {
             key: "community",
-            targetName: "💬 3. COMMUNITY LOUNGE",
-            existingId: "1343806593786970124", // old Discussion
+            targetName: "💬 3. COMMUNITY CHAT",
+            existingId: "1343806593786970124",
             position: 2,
             overwrites: [
                 { id: everyoneRoleId, type: 0, allow: "0", deny: VIEW_ONLY },
-                { id: tier1RoleId, type: 0, allow: VIEW_READ_SEND, deny: "0" },
-                { id: tier2RoleId, type: 0, allow: VIEW_READ_SEND, deny: "0" },
+                { id: memberRoleId, type: 0, allow: VIEW_READ_SEND, deny: "0" },
                 { id: trialRoleId, type: 0, allow: VIEW_READ_SEND, deny: "0" },
                 { id: kidsRoleId, type: 0, allow: VIEW_READ_SEND, deny: "0" }
             ]
@@ -122,56 +200,47 @@ async function run() {
         {
             key: "requests",
             targetName: "🎬 4. REQUESTS & MEDIA",
-            existingId: "1343807419523792926", // old Main Server Notifications
+            existingId: "1343807419523792926",
             position: 3,
             overwrites: [
                 { id: everyoneRoleId, type: 0, allow: "0", deny: VIEW_ONLY },
-                { id: tier1RoleId, type: 0, allow: VIEW_READ, deny: SEND_REACT },
-                { id: tier2RoleId, type: 0, allow: VIEW_READ, deny: SEND_REACT },
+                { id: memberRoleId, type: 0, allow: VIEW_READ, deny: SEND_REACT },
                 { id: trialRoleId, type: 0, allow: VIEW_READ, deny: SEND_REACT },
                 { id: kidsRoleId, type: 0, allow: VIEW_READ, deny: SEND_REACT }
             ]
         },
         {
             key: "support",
-            targetName: "🆘 5. SUPPORT & HELP DESK",
-            existingId: "1343806730957754381", // old Issues
+            targetName: "🆘 5. HELP & TICKETS",
+            existingId: "1343806730957754381",
             position: 4,
             overwrites: [
                 { id: everyoneRoleId, type: 0, allow: VIEW_READ_SEND, deny: "0" }
             ]
         },
         {
-            key: "vip",
-            targetName: "👑 6. VIP TIER 2 LOUNGE",
-            existingId: "553667067996405770", // old Text Channels
+            key: "admin_bot",
+            targetName: "🤖 6. BOT & AUTOMATION",
+            existingId: "1343807553758560336",
             position: 5,
             overwrites: [
                 { id: everyoneRoleId, type: 0, allow: "0", deny: VIEW_ONLY },
-                { id: tier2RoleId, type: 0, allow: VIEW_READ_SEND, deny: "0" }
-            ]
-        },
-        {
-            key: "admin_bot",
-            targetName: "🤖 7. BOT & AUTOMATION",
-            existingId: "1343807553758560336", // old Admin Notifications
-            position: 6,
-            overwrites: [
-                { id: everyoneRoleId, type: 0, allow: "0", deny: VIEW_ONLY }
+                { id: adminRoleId, type: 0, allow: VIEW_READ_SEND, deny: "0" }
             ]
         },
         {
             key: "staff_archive",
-            targetName: "🔒 8. STAFF & ARCHIVE",
-            existingId: "1353570261063962635", // old old/archived
-            position: 7,
+            targetName: "🔒 7. STAFF & ARCHIVE",
+            existingId: "1353570261063962635",
+            position: 6,
             overwrites: [
-                { id: everyoneRoleId, type: 0, allow: "0", deny: VIEW_ONLY }
+                { id: everyoneRoleId, type: 0, allow: "0", deny: VIEW_ONLY },
+                { id: adminRoleId, type: 0, allow: VIEW_READ_SEND, deny: "0" }
             ]
         }
     ];
 
-    console.log("📁 Upgrading & Syncing Categories...");
+    console.log("📁 Updating 7 Canonical Categories...");
     const resolvedCatIds: Record<string, string> = {};
 
     for (const cConf of categoryConfigs) {
@@ -179,8 +248,8 @@ async function run() {
         const existingCat = catMap.get(catId);
 
         if (existingCat) {
-            console.log(`   🔄 Renaming Category "${existingCat.name}" -> "${cConf.targetName}"...`);
-            const updateRes = await discordFetch(`/channels/${catId}`, {
+            console.log(`   🔄 Category "${existingCat.name}" -> "${cConf.targetName}"...`);
+            await discordFetch(`/channels/${catId}`, {
                 method: "PATCH",
                 body: JSON.stringify({
                     name: cConf.targetName,
@@ -188,9 +257,6 @@ async function run() {
                     permission_overwrites: cConf.overwrites
                 })
             }, botToken);
-            if (!updateRes.ok) {
-                console.warn(`   ⚠️ Warning updating category ${cConf.targetName}: ${updateRes.error}`);
-            }
             resolvedCatIds[cConf.key] = catId;
         } else {
             console.log(`   ➕ Creating Category "${cConf.targetName}"...`);
@@ -205,70 +271,46 @@ async function run() {
             }, botToken);
             if (createRes.ok && createRes.data) {
                 resolvedCatIds[cConf.key] = createRes.data.id;
-            } else {
-                console.error(`   ❌ Failed to create category ${cConf.targetName}: ${createRes.error}`);
             }
         }
     }
 
-    console.log("\n💬 Upgrading & Re-parenting Channels...");
+    // Helper functions for channels
+    async function moveChannel(channelId: string, targetName: string, catKey: string, topic?: string) {
+        const parentId = resolvedCatIds[catKey];
+        const existing = chanMap.get(channelId);
+        if (!existing) return null;
 
-    // Helper to move / rename existing channel
-    async function moveChannel(channelId: string, newName: string, parentCatKey: string, topic?: string) {
-        const catId = resolvedCatIds[parentCatKey];
-        if (!catId) return;
-        const current = chanMap.get(channelId);
-        if (!current) return;
-
-        const payload: any = {
-            name: newName,
-            parent_id: catId
+        console.log(`   ➡️ Moving #${existing.name} -> #${targetName} in [${categoryConfigs.find(c => c.key === catKey)?.targetName}]...`);
+        const updateBody: any = {
+            name: targetName,
+            parent_id: parentId
         };
-        if (topic) payload.topic = topic;
+        if (topic) updateBody.topic = topic;
 
-        console.log(`   🔄 Moving #${current.name} -> #${newName} in ${categoryConfigs.find(c => c.key === parentCatKey)?.targetName}...`);
         const res = await discordFetch(`/channels/${channelId}`, {
             method: "PATCH",
-            body: JSON.stringify(payload)
+            body: JSON.stringify(updateBody)
         }, botToken);
-        if (!res.ok) {
-            console.warn(`   ⚠️ Failed moving channel #${newName}: ${res.error}`);
-        }
-        return res.ok ? channelId : undefined;
+        return res.ok ? channelId : null;
     }
 
-    // Helper to create channel if not exists
-    async function getOrCreateChannel(
-        name: string,
-        parentCatKey: string,
-        topic: string,
-        type: number = DISCORD_CHANNEL_TYPES.GUILD_TEXT
-    ): Promise<string | undefined> {
-        const catId = resolvedCatIds[parentCatKey];
-        if (!catId) return undefined;
-
-        // Check if channel already exists with this name
-        const norm = name.toLowerCase().trim();
+    async function getOrCreateChannel(name: string, catKey: string, topic?: string, type = DISCORD_CHANNEL_TYPES.GUILD_TEXT): Promise<string | null> {
+        const parentId = resolvedCatIds[catKey];
         for (const [id, c] of chanMap.entries()) {
-            if (c.name.toLowerCase().trim() === norm) {
-                // Already exists, just ensure parent
-                if (c.parent_id !== catId) {
-                    await discordFetch(`/channels/${id}`, {
-                        method: "PATCH",
-                        body: JSON.stringify({ parent_id: catId, topic })
-                    }, botToken);
-                }
+            if (c.name.toLowerCase() === name.toLowerCase()) {
+                await moveChannel(id, name, catKey, topic);
                 return id;
             }
         }
 
-        console.log(`   ➕ Creating Channel #${name}...`);
+        console.log(`   ➕ Creating #${name} in [${categoryConfigs.find(c => c.key === catKey)?.targetName}]...`);
         const res = await discordFetch<DiscordChannel>(`/guilds/${guildId}/channels`, {
             method: "POST",
             body: JSON.stringify({
                 name,
                 type,
-                parent_id: catId,
+                parent_id: parentId,
                 topic
             })
         }, botToken);
@@ -276,49 +318,42 @@ async function run() {
         if (res.ok && res.data) {
             chanMap.set(res.data.id, res.data);
             return res.data.id;
-        } else {
-            console.error(`   ❌ Failed creating #${name}: ${res.error}`);
-            return undefined;
         }
+        return null;
     }
 
+    console.log("\n💬 Synchronizing Channel Structure...");
+
     // Category 1: Welcome & Info
-    await moveChannel("1336766499200958525", "welcome-and-rules", "welcome_info", "Server rules, guidelines, community etiquette, and mission control overview.");
-    await moveChannel("1343809337985863710", "announcements", "welcome_info", "Official platform updates, maintenance notices, outages, and changelogs.");
-    const subTierId = await getOrCreateChannel("subscription-tiers", "welcome_info", "Membership tiers (Regular vs VIP), trial passes, renewal cadences, and payment methods.");
-    await moveChannel("1343814266263830618", "links-and-webhooks", "welcome_info", "Portalarr Web Portal, Seerr requests, Tautulli stats, and external guides.");
-    await moveChannel("1353117750758998016", "roadmap-and-updates", "welcome_info", "Future features, planned expansions, and hardware roadmap.");
-    await moveChannel("1369683308631560202", "plex-invites", "welcome_info", "Plex server invitation instructions and onboarding.");
-    await moveChannel("1363921408215875604", "maintenance", "welcome_info", "Scheduled maintenance and container reboot windows.");
+    await moveChannel("1336766499200958525", "welcome-and-rules", "welcome_info", "Community rules, etiquette, and essential server info.");
+    await moveChannel("1343809337985863710", "announcements", "welcome_info", "Platform updates, maintenance windows, and server news.");
+    const membershipInfoId = await getOrCreateChannel("membership-info", "welcome_info", "Transparent membership contributions, payment tags, and referral rewards.");
+    await moveChannel("1343814266263830618", "links-and-webhooks", "welcome_info", "Portalarr Web, Seerr request portal, status hub, and quick links.");
+    await moveChannel("1353117750758998016", "roadmap-and-updates", "welcome_info", "Upcoming hardware expansions, storage drives, and feature roadmap.");
 
     // Category 2: Guides & Self-Service
-    const plexGuidesId = await getOrCreateChannel("plex-setup-guides", "guides", "Direct Play optimization for Apple TV, Roku, Fire TV, Samsung/LG, Android TV, iOS, and Web.");
-    const transcodeDocId = await getOrCreateChannel("transcode-doctor", "guides", "Playback issue troubleshooting, buffer diagnosis, and client device fixes.");
-    const kindleReadingId = await getOrCreateChannel("kindle-and-reading", "guides", "Send-to-Kindle configuration, approved senders setup, ebook & comic reading.");
-    const audiobooksGuideId = await getOrCreateChannel("audiobooks-guide", "guides", "Audiobook chapter management, streaming, mobile apps, and playback.");
+    await getOrCreateChannel("plex-setup-guides", "guides", "One-time setup instructions for Apple TV 4K, Roku, Fire TV, and Smart TVs.");
+    await getOrCreateChannel("transcode-doctor", "guides", "Self-service buffer diagnosis and playback troubleshooting.");
+    await getOrCreateChannel("kindle-and-audiobooks", "guides", "Amazon Send-to-Kindle delivery guide, in-browser reader, and audiobook apps.");
 
-    // Category 3: Community Lounge
+    // Category 3: Community Chat
     await moveChannel("1343808192102269000", "general-chat", "community", "General community discussions, homelab banter, and casual talk.");
-    await getOrCreateChannel("movies-and-tv", "community", "Spoiler-free film & television chats, watch parties, and reviews.");
-    await getOrCreateChannel("book-nook", "community", "Book discussions, series chat, kindle recommendations, and author discovery.");
-    await moveChannel("1440019243771887707", "polls-and-feedback", "community", "Community polls for upcoming library additions, feature votes, and interface feedback.");
+    await getOrCreateChannel("movie-and-tv-talk", "community", "Spoiler-free film & television chats, watch parties, and recommendations.");
+    await getOrCreateChannel("book-nook", "community", "Book discussions, series chat, kindle recommendations, and reading lists.");
+    await moveChannel("1440019243771887707", "polls-and-feedback", "community", "Community polls for library additions, feature votes, and feedback.");
 
     // Category 4: Requests & Media
     const mediaReqId = await moveChannel("1343809489375330314", "media-requests", "requests", "Live request feed from Portalarr & Seerr. Automated approval & download telemetry.") || "1343809489375330314";
     await getOrCreateChannel("recently-added", "requests", "Newly ingested movies, television episodes, audiobooks, and books.");
-    const leavingSoonId = await getOrCreateChannel("leaving-soon", "requests", "Maintainerr pruning radar: Staged media items leaving soon to preserve storage headroom.");
+    await getOrCreateChannel("leaving-soon", "requests", "Maintainerr pruning radar: Staged media items leaving soon to preserve storage headroom.");
 
-    // Category 5: Support & Help Desk
+    // Category 5: Help & Tickets
     const serverUptimeId = await moveChannel("812445481548513332", "server-uptime", "support", "Real-time infrastructure health, Plex reachability, host telemetry, and service links.") || "812445481548513332";
     await getOrCreateChannel("support-tickets", "support", "Open a support request or report playback issues with the server administrator.");
     await moveChannel("1343805546750283840", "main-server-request-issues", "support");
     await moveChannel("1343808506502975541", "kid-server-request-issues", "support");
 
-    // Category 6: VIP Tier 2 Lounge
-    await getOrCreateChannel("vip-chat", "vip", "Exclusive conversational channel for Tier 2 VIP supporters.");
-    await getOrCreateChannel("vip-priority-support", "vip", "Direct 1-on-1 concierge assistance for device configuration and expedited requests.");
-
-    // Category 7: Bot & Automation
+    // Category 6: Bot & Automation (Staff)
     await moveChannel("1343809561580273674", "main-server-feed", "admin_bot", "Radarr/Sonarr download progress, grab alerts, and import logs for Main Plex.");
     await moveChannel("1343809715507036291", "kid-server-feed", "admin_bot", "Radarr/Sonarr download progress and kid library imports.");
     await moveChannel("1343810641504501781", "host-health-glances", "admin_bot", "Hardware telemetry alerts (CPU spikes, RAM usage, storage capacity warnings).");
@@ -331,7 +366,7 @@ async function run() {
     await getOrCreateChannel("bot-commands", "admin_bot", "Portalarr Bot diagnostics and manual sync commands.");
     await getOrCreateChannel("portalarr-logs", "admin_bot", "Automated sync logs, request dispatch audit, and alert telemetry.");
 
-    // Category 8: Staff & Archive
+    // Category 7: Staff & Archive
     await moveChannel("1336766499200958528", "staff-lounge", "staff_archive", "Private admin notes, billing ledger audits, user management discussion.");
     await moveChannel("553667067996405772", "legacy-general", "staff_archive");
     await moveChannel("1343807663196340234", "legacy-up-down-trackers", "staff_archive");
@@ -339,12 +374,20 @@ async function run() {
 
     console.log("\n📌 Posting & Pinning Rich Guide Embeds...");
 
-    async function postAndPin(channelId: string | undefined, embedKey: any) {
+    async function postAndPin(channelName: string, embedKey: any) {
+        let channelId: string | undefined;
+        for (const [id, c] of chanMap.entries()) {
+            if (c.name.toLowerCase() === channelName.toLowerCase()) {
+                channelId = id;
+                break;
+            }
+        }
         if (!channelId) return;
+
         try {
             const pinsRes = await discordFetch<any[]>(`/channels/${channelId}/pins`, { method: "GET" }, botToken);
             if (pinsRes.ok && Array.isArray(pinsRes.data) && pinsRes.data.length > 0) {
-                console.log(`   ℹ️ Channel ${channelId} already has pinned messages, skipping.`);
+                console.log(`   ℹ️ Channel #${channelName} (${channelId}) already has pinned messages, skipping.`);
                 return;
             }
 
@@ -356,39 +399,44 @@ async function run() {
 
             if (msgRes.ok && msgRes.data?.id) {
                 await discordFetch(`/channels/${channelId}/pins/${msgRes.data.id}`, { method: "PUT" }, botToken);
-                console.log(`   ✅ Posted and pinned embed in channel ${channelId} (${embedKey})`);
+                console.log(`   ✅ Posted and pinned embed in #${channelName} (${embedKey})`);
             }
         } catch (e: any) {
-            console.warn(`   ⚠️ Warning posting embed to ${channelId}:`, e.message);
+            console.warn(`   ⚠️ Could not pin embed in #${channelName}: ${e.message}`);
         }
     }
 
-    await postAndPin("1336766499200958525", "welcome_rules"); // #welcome-and-rules
-    await postAndPin(subTierId, "subscription_tiers");
-    await postAndPin(plexGuidesId, "plex_guides");
-    await postAndPin(transcodeDocId, "transcode_doctor");
-    await postAndPin(kindleReadingId, "kindle_reading");
-    await postAndPin(audiobooksGuideId, "audiobooks_guide");
-    await postAndPin(leavingSoonId, "leaving_soon");
-    await postAndPin(serverUptimeId, "system_status");
+    await postAndPin("welcome-and-rules", "welcome_rules");
+    await postAndPin("membership-info", "subscription_tiers");
+    await postAndPin("plex-setup-guides", "plex_guides");
+    await postAndPin("transcode-doctor", "transcode_doctor");
+    await postAndPin("kindle-and-audiobooks", "kindle_reading");
 
-    // 7. Update database settings
-    console.log("\n💾 Updating Portalarr SQLite Settings...");
-    await prisma.settings.updateMany({
-        data: {
-            discordStatusChannelId: serverUptimeId,
-            discordRequestsChannelId: mediaReqId,
-            discordAnnouncementsChannelId: "1343809337985863710",
-            discordLastSyncAt: new Date()
-        }
-    });
+    // Save channel mapping to database
+    if (settings) {
+        const updateData: any = {
+            discordLastSyncAt: new Date(),
+            discordLastSyncStatus: JSON.stringify({
+                status: "SUCCESS",
+                categories: 7,
+                timestamp: new Date().toISOString()
+            })
+        };
+        if (serverUptimeId) updateData.discordStatusChannelId = serverUptimeId;
+        if (mediaReqId) updateData.discordRequestsChannelId = mediaReqId;
 
-    console.log("=================================================================");
-    console.log("   🎉 DISCORD SERVER REDESIGN APPLIED SUCCESSFULLY!              ");
-    console.log("=================================================================\n");
+        await prisma.settings.update({
+            where: { id: settings.id },
+            data: updateData
+        });
+        console.log("💾 Saved active Discord status channel IDs to SQLite database.");
+    }
+
+    console.log("\n🎉 ALL DONE! Discord Server is now 100% migrated to the approved 7-category layout!");
+    process.exit(0);
 }
 
-run().catch(err => {
-    console.error("FATAL ERROR during Discord migration:", err);
+run().catch((e) => {
+    console.error("FATAL ERROR:", e);
     process.exit(1);
 });

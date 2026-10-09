@@ -553,7 +553,12 @@ export async function getCurrentUser() {
       accountCredit: true,
       lastPaymentAmount: true,
       lastPaymentDate: true,
-      lastPaymentProvider: true
+      lastPaymentProvider: true,
+      discordId: true,
+      discordUsername: true,
+      discordDiscriminator: true,
+      discordAvatar: true,
+      discordLinkedAt: true
     }
   });
 
@@ -584,7 +589,12 @@ export async function getCurrentUser() {
         accountCredit: true,
         lastPaymentAmount: true,
         lastPaymentDate: true,
-        lastPaymentProvider: true
+        lastPaymentProvider: true,
+      discordId: true,
+      discordUsername: true,
+      discordDiscriminator: true,
+      discordAvatar: true,
+      discordLinkedAt: true
       }
     });
 
@@ -620,7 +630,12 @@ export async function getCurrentUser() {
         accountCredit: true,
         lastPaymentAmount: true,
         lastPaymentDate: true,
-        lastPaymentProvider: true
+        lastPaymentProvider: true,
+      discordId: true,
+      discordUsername: true,
+      discordDiscriminator: true,
+      discordAvatar: true,
+      discordLinkedAt: true
       }
     });
 
@@ -656,7 +671,12 @@ export async function getCurrentUser() {
         accountCredit: true,
         lastPaymentAmount: true,
         lastPaymentDate: true,
-        lastPaymentProvider: true
+        lastPaymentProvider: true,
+      discordId: true,
+      discordUsername: true,
+      discordDiscriminator: true,
+      discordAvatar: true,
+      discordLinkedAt: true
       }
     });
   }

@@ -45,6 +45,8 @@ import {
 } from "../src/lib/subscription-reminders";
 import { evaluatePaymentThreshold } from "../src/lib/payment-threshold-engine";
 import { renderEmailTemplate } from "../src/lib/email-templates";
+import { computeExpectedDiscordRole, findBestMatch } from "../src/lib/discord/discord-role-sync";
+import { DISCORD_ROLES_BLUEPRINT, DISCORD_SERVER_BLUEPRINT } from "../src/lib/discord/discord-bot";
 
 
 async function runTestSuite() {
@@ -6064,8 +6066,7 @@ async function runTestSuite() {
         }
         const roleNames = DISCORD_ROLES_BLUEPRINT.map(r => r.name);
         if (!roleNames.some(r => r.includes("Admin"))) throw new Error("Missing Admin role in blueprint");
-        if (!roleNames.some(r => r.includes("Tier 2"))) throw new Error("Missing Tier 2 VIP role in blueprint");
-        if (!roleNames.some(r => r.includes("Tier 1"))) throw new Error("Missing Tier 1 Regular role in blueprint");
+        if (!roleNames.some(r => r.includes("Member"))) throw new Error("Missing unified Member role in blueprint");
         if (!roleNames.some(r => r.includes("Trial"))) throw new Error("Missing Trial Pass role in blueprint");
 
         // 3. Verify Rich Pinned Embed Generators
@@ -6076,8 +6077,7 @@ async function runTestSuite() {
 
         const tiersEmbed = generateDiscordEmbed("subscription_tiers");
         if (!tiersEmbed.title?.includes("Membership Plans")) throw new Error("Invalid subscription tiers embed title");
-        if (!tiersEmbed.fields?.some(f => f.name.includes("Tier 1"))) throw new Error("Tiers embed must include Tier 1");
-        if (!tiersEmbed.fields?.some(f => f.name.includes("Tier 2"))) throw new Error("Tiers embed must include Tier 2");
+        if (!tiersEmbed.fields?.some(f => f.name.includes("Member"))) throw new Error("Tiers embed must include Member field");
         if (!tiersEmbed.fields?.some(f => f.name.includes("Payment Methods"))) throw new Error("Tiers embed must list payment options");
 
         const plexEmbed = generateDiscordEmbed("plex_guides");
@@ -6325,6 +6325,96 @@ async function runTestSuite() {
         }
         if (!renderedEmail.html.includes("$15.00") || !renderedEmail.html.includes("$2.50") || !renderedEmail.html.includes("$165.00")) {
             throw new Error("Email template HTML missing expected amounts ($15.00, $2.50, or $165.00)");
+        }
+    });
+
+    // 95. Discord Bot: Bidirectional Role Resolution, Heuristic Matching, and Strict Member Tier Concealment
+    await assertTest("Test 95: Discord Bot: Bidirectional Role Resolution, Heuristic Matching, and Strict Member Tier Concealment", async () => {
+        const mockRoleMap = {
+            admin: "role_admin_123",
+            member: "role_member_456",
+            trial: "role_trial_789",
+            kids: "role_kids_101",
+            livingRoom: "role_lr_102",
+            pending: "role_pending_103"
+        };
+
+        // 1. Unified Member Role Resolution (Strict Tier Concealment)
+        // Standard Member (Tier 1) MUST receive unified member role
+        const standardRole = computeExpectedDiscordRole({
+            role: "USER",
+            status: "APPROVED",
+            membershipTier: "STANDARD"
+        }, mockRoleMap);
+        if (standardRole !== "role_member_456") {
+            throw new Error(`Expected standard user to get role_member_456, got ${standardRole}`);
+        }
+
+        // Tier 2 VIP Member MUST ALSO receive the EXACT SAME unified member role (zero tier leak)
+        const tier2Role = computeExpectedDiscordRole({
+            role: "USER",
+            status: "APPROVED",
+            membershipTier: "TIER_2_VIP"
+        }, mockRoleMap);
+        if (tier2Role !== "role_member_456") {
+            throw new Error(`Expected Tier 2 VIP user to get role_member_456, got ${tier2Role}`);
+        }
+
+        // 2. Specialized Roles
+        const adminRole = computeExpectedDiscordRole({ role: "ADMIN", status: "APPROVED" }, mockRoleMap);
+        if (adminRole !== "role_admin_123") throw new Error(`Admin role expected role_admin_123, got ${adminRole}`);
+
+        const trialRole = computeExpectedDiscordRole({ role: "USER", status: "TRIAL", membershipTier: "TRIAL" }, mockRoleMap);
+        if (trialRole !== "role_trial_789") throw new Error(`Trial role expected role_trial_789, got ${trialRole}`);
+
+        const kidsRole = computeExpectedDiscordRole({ role: "USER", status: "APPROVED", accountType: "KID" }, mockRoleMap);
+        if (kidsRole !== "role_kids_101") throw new Error(`Kids role expected role_kids_101, got ${kidsRole}`);
+
+        const lrRole = computeExpectedDiscordRole({ role: "USER", status: "APPROVED", accountType: "LIVING_ROOM" }, mockRoleMap);
+        if (lrRole !== "role_lr_102") throw new Error(`Living Room role expected role_lr_102, got ${lrRole}`);
+
+        // 3. Heuristic Matching Engine (findBestMatch)
+        const candidates = [
+            { id: "u1", username: "plexmaster", email: "plexmaster@example.com", plexUsername: "PlexMaster99", name: "John Doe" },
+            { id: "u2", username: "moviebuff", email: "mbuff_stream@gmail.com", plexUsername: "mbuff", name: "Jane Smith" },
+            { id: "u3", username: "spiderman", email: "peter.parker@dailybugle.com", plexUsername: "peterp", name: "Peter Parker" }
+        ];
+
+        // Exact match (100%)
+        const exactMatch = findBestMatch({ discordId: "111", discordUsername: "plexmaster" }, candidates);
+        if (!exactMatch || exactMatch.userId !== "u1" || exactMatch.confidence !== 100) {
+            throw new Error(`Failed exact match: got ${JSON.stringify(exactMatch)}`);
+        }
+
+        // Email prefix match (95%)
+        const emailMatch = findBestMatch({ discordId: "222", discordUsername: "mbuff_stream" }, candidates);
+        if (!emailMatch || emailMatch.userId !== "u2" || emailMatch.confidence !== 95) {
+            throw new Error(`Failed email prefix match: got ${JSON.stringify(emailMatch)}`);
+        }
+
+        // Server nickname exact match (90%)
+        const nickMatch = findBestMatch({ discordId: "333", discordUsername: "randomguy", nickname: "PlexMaster99" }, candidates);
+        if (!nickMatch || nickMatch.userId !== "u1" || nickMatch.confidence !== 90) {
+            throw new Error(`Failed nickname match: got ${JSON.stringify(nickMatch)}`);
+        }
+
+        // Real name match (85%)
+        const realNameMatch = findBestMatch({ discordId: "444", discordUsername: "webhead", globalName: "Peter Parker" }, candidates);
+        if (!realNameMatch || realNameMatch.userId !== "u3" || realNameMatch.confidence !== 85) {
+            throw new Error(`Failed real name match: got ${JSON.stringify(realNameMatch)}`);
+        }
+
+        // 4. Discord Blueprint Zero-Tier Inspection
+        for (const roleDef of DISCORD_ROLES_BLUEPRINT) {
+            const roleNameLower = roleDef.name.toLowerCase();
+            if (roleNameLower.includes("tier 1") || roleNameLower.includes("tier 2") || roleNameLower.includes("managed support")) {
+                throw new Error(`Blueprint role (${roleDef.name}) leaks tier designation!`);
+            }
+        }
+
+        const memberBlueprint = DISCORD_ROLES_BLUEPRINT.find(r => r.name === "⭐ Member");
+        if (!memberBlueprint) {
+            throw new Error(`Expected DISCORD_ROLES_BLUEPRINT to contain role '⭐ Member'`);
         }
     });
 

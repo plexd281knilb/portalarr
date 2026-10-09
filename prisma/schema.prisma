@@ -371,6 +371,13 @@ model User {
   lastRenewalReminderSentAt DateTime?
   renewalRemindersSent   String?   // JSON snapshot of sent milestones e.g. {"cycleTarget":"2027-01-01","milestones":["30d","14d"]}
   
+  // Discord Account Binding & Bidirectional Role Sync
+  discordId              String?   @unique
+  discordUsername        String?
+  discordDiscriminator   String?
+  discordAvatar          String?
+  discordLinkedAt        DateTime?
+  
   // Media Request Permissions & Quotas
   canRequest             Boolean   @default(true)
   canRequest4k           Boolean   @default(false)

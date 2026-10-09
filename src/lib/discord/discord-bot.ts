@@ -257,22 +257,7 @@ export const DISCORD_SERVER_BLUEPRINT: DiscordBlueprintCategory[] = [
         ]
     },
     {
-        name: "👑 6. VIP TIER 2 LOUNGE",
-        channels: [
-            {
-                name: "vip-chat",
-                topic: "Exclusive conversational channel for Tier 2 VIP supporters.",
-                readOnlyForEveryone: false
-            },
-            {
-                name: "vip-priority-support",
-                topic: "Direct 1-on-1 concierge assistance for device configuration and expedited requests.",
-                readOnlyForEveryone: false
-            }
-        ]
-    },
-    {
-        name: "🤖 7. BOT & AUTOMATION",
+        name: "🤖 6. BOT & AUTOMATION",
         channels: [
             {
                 name: "main-server-feed",
@@ -307,7 +292,7 @@ export const DISCORD_SERVER_BLUEPRINT: DiscordBlueprintCategory[] = [
         ]
     },
     {
-        name: "🔒 8. STAFF & VAULT",
+        name: "🔒 7. STAFF & VAULT",
         channels: [
             {
                 name: "staff-lounge",
@@ -326,13 +311,13 @@ export const DISCORD_ROLES_BLUEPRINT = [
         mentionable: false
     },
     {
-        name: "🛡️ Tier 2 (Managed Support)",
-        color: 0x8B5CF6, // Violet-500
+        name: "🛡️ Moderator",
+        color: 0x06B6D4, // Cyan-500
         hoist: true,
         mentionable: true
     },
     {
-        name: "⭐ Tier 1 (Regular Member)",
+        name: "⭐ Member",
         color: 0x10B981, // Emerald-500
         hoist: true,
         mentionable: true
@@ -585,12 +570,8 @@ export function generateDiscordEmbed(
                 color: 0x10B981, // Emerald
                 fields: [
                     {
-                        name: "⭐ Tier 1: Regular Member",
+                        name: "⭐ Member: Full Access",
                         value: "• **$17.50 / Month** (or **$180 / Year** discounted annual equivalent of $15/mo)\n• Full access to 1080p & 4K Plex Libraries\n• Unlimited eBooks, Audiobooks & Comic Readers\n• Send-to-Kindle automated document dispatch\n• Standard 10 movie / 10 TV episode weekly request quota\n• High-speed Direct Play streaming"
-                    },
-                    {
-                        name: "🛡️ Tier 2: Managed VIP Support",
-                        value: "• **$25 / Month** (or **$240 / Year** discounted annual rate)\n• Everything in Tier 1 included\n• Dedicated 1-on-1 remote device onboarding & TV setup assistance\n• Priority expedited request fulfillment & bandwidth reservation\n• Direct administrator VIP support channel access"
                     },
                     {
                         name: "⏱️ Trial Pass",

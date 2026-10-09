@@ -691,6 +691,20 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
   - Also displays latest payment badge `<Badge variant="outline" className="bg-emerald-500/15 text-emerald-300 border-emerald-500/30"><CreditCard /> Last: $X.XX</Badge>`.
   - Inside the user management modal (`subModalUser`), displays a dedicated Account Credit Balance row with full payment details.
 
+### 38. Strict Member Tier Concealment & Bidirectional Discord Role Sync Architecture (`/settings/profile`, `/settings/access`, `discord-role-sync.ts`)
+- **Strict Member Tier Concealment**:
+  - Non-admin members must NEVER know or see whether they are Tier 1 or Tier 2. Tier 2 is for needy users who pay a higher rate for managed support, but to regular members they must strictly appear as "⭐ Full Member" (in the web portal) and "⭐ Member" (in Discord) with zero tier numbers or "Managed Support" labels.
+  - Only administrators in `/settings/access` may view or manage Tier 1 vs Tier 2 membership levels.
+- **Discord Community & Role Sync Card (`/settings/profile`)**:
+  - Positioned prominently below Notification & Email Preferences.
+  - Allows members to self-service link their Discord account by username or numeric Snowflake ID (`linkMyDiscordAccountAction`).
+  - Displays avatar, linked username, linked snowflake ID, auto-sync status, and server role badge (`👑 Admin`, `⏱️ Trial Pass`, `🧒 Kids Profile`, or unified `⭐ Member`).
+  - Self-service 1-click **Sync Role** (`syncMyDiscordRoleAction`) and **Unlink** (`unlinkMyDiscordAccountAction`).
+- **Admin Discord Role Sync Cockpit (`/settings/access`)**:
+  - Single-pane management modal (`DiscordMemberManagerModal`) with multi-axis filtering (`All`, `Unlinked`, `Linked`, `Suggested`).
+  - Smart heuristic auto-matching engine (`findBestMatch`) pairing exact usernames (100%), email prefixes (95%), server nicknames (90%), full names (85%), display names (80%), and substrings (70%).
+  - 1-click Auto-Match, Bulk Push to Discord (`syncAllUsersRolesToDiscordAction`), Bulk Pull to Portalarr (`syncAllDiscordRolesToPortalarrAction`), and individual user dropdown linking.
+
 ---
 
 As the Portalarr frontend evolves or new design decisions are finalized:

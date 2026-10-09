@@ -38,6 +38,7 @@ import { convertEbookToEpub, validateAndFixEpubForKindle } from "@/lib/books/epu
 import { resolveOrLinkAuthorAndSeries } from "@/lib/books/book-service";
 import { inferBookRating, isKidsLibrary } from "@/lib/books/book-rating";
 import { getBookCleanTitleKey, getBookCompositeDedupKey } from "@/lib/books/book-dedup";
+import { syncUserRoleToDiscord } from "@/lib/discord/discord-role-sync";
 
 if (typeof process !== "undefined" && process.env) {
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
@@ -3387,6 +3388,11 @@ export async function getAppUsers() {
                 lastPaymentAmount: true,
                 lastPaymentDate: true,
                 lastPaymentProvider: true,
+                discordId: true,
+                discordUsername: true,
+                discordDiscriminator: true,
+                discordAvatar: true,
+                discordLinkedAt: true,
                 paymentTransactions: {
                     select: {
                         id: true,
@@ -3563,6 +3569,7 @@ export async function approveAppUser(id: string) {
         if (user.email) {
             await sendUserApprovalEmail(user.email, user.username);
         }
+        syncUserRoleToDiscord(id).catch(() => {});
         revalidatePath("/settings/access");
         revalidatePath("/settings");
         return { success: true };
@@ -3661,6 +3668,7 @@ export async function updateAppUserRole(id: string, role: string) {
             }).catch(() => {});
         }
 
+        syncUserRoleToDiscord(id).catch(() => {});
         revalidatePath("/settings/access");
         return { success: true };
     } catch (e: any) {
@@ -5305,6 +5313,7 @@ export async function markUserConverted(userId: string) {
                 convertedAt: new Date()
             }
         });
+        syncUserRoleToDiscord(userId).catch(() => {});
         revalidatePath("/settings/access");
         return { success: true };
     } catch (e: any) {
@@ -6568,6 +6577,7 @@ export async function updateUserAccountTypeAction(userId: string, accountType: s
             }).catch(() => {});
         }
 
+        syncUserRoleToDiscord(userId).catch(() => {});
         revalidatePath("/settings/access");
         return { success: true, message: `Updated ${updated.username} account type to ${cleanType}`, user: updated };
     } catch (e: any) {
@@ -6603,6 +6613,7 @@ export async function updateUserMembershipTierAction(userId: string, membershipT
             select: { id: true, username: true, membershipTier: true, canRequest4k: true }
         });
 
+        syncUserRoleToDiscord(userId).catch(() => {});
         revalidatePath("/settings/access");
         revalidatePath("/settings/profile");
         return { success: true, message: `Updated ${updated.username} membership tier to ${cleanTier === "TIER_2_VIP" ? "Tier 2 (Managed Support)" : cleanTier === "TRIAL" ? "Trial Pass" : "Tier 1 (Regular Member)"}`, user: updated };

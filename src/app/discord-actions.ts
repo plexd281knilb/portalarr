@@ -11,9 +11,20 @@ import {
     postDiscordMessage,
     generateDiscordEmbed,
     getDiscordBotInviteUrl,
+    discordFetch,
     DISCORD_SERVER_BLUEPRINT,
     DISCORD_ROLES_BLUEPRINT
 } from "@/lib/discord/discord-bot";
+import {
+    getDiscordMembersWithStatus,
+    linkUserToDiscord,
+    unlinkUserFromDiscord,
+    syncUserRoleToDiscord,
+    syncAllUsersRolesToDiscord,
+    syncDiscordRolesToPortalarr,
+    syncAllDiscordRolesToPortalarr,
+    autoMatchAndLinkUsers
+} from "@/lib/discord/discord-role-sync";
 import { getAdminInfrastructureStatusAction } from "@/app/actions";
 
 async function verifyAdmin() {
@@ -395,3 +406,185 @@ export async function postDiscordTestMessageAction(
         return { success: false, error: e?.message || "Failed to send test message." };
     }
 }
+
+/**
+ * Admin: Retrieves all Discord guild members with linked Portalarr status and auto-match suggestions
+ */
+export async function getDiscordMembersWithStatusAction() {
+    await verifyAdmin();
+    return await getDiscordMembersWithStatus();
+}
+
+/**
+ * Admin: Links a Portalarr user to a Discord account Snowflake ID
+ */
+export async function linkUserToDiscordAction(params: {
+    userId: string;
+    discordId: string;
+    discordUsername?: string;
+    discordDiscriminator?: string;
+    discordAvatar?: string;
+}) {
+    await verifyAdmin();
+    return await linkUserToDiscord({ ...params, syncRolesImmediately: true });
+}
+
+/**
+ * Admin: Unlinks a user from Discord
+ */
+export async function unlinkUserFromDiscordAction(userId: string) {
+    await verifyAdmin();
+    return await unlinkUserFromDiscord(userId);
+}
+
+/**
+ * Admin: Pushes a user's Portalarr role to Discord
+ */
+export async function syncUserRoleToDiscordAction(userId: string) {
+    await verifyAdmin();
+    return await syncUserRoleToDiscord(userId);
+}
+
+/**
+ * Admin: Batch pushes all linked Portalarr users to Discord
+ */
+export async function syncAllUsersRolesToDiscordAction() {
+    await verifyAdmin();
+    return await syncAllUsersRolesToDiscord();
+}
+
+/**
+ * Admin: Pulls Discord roles into a Portalarr user's account
+ */
+export async function syncDiscordRolesToPortalarrAction(discordId: string) {
+    await verifyAdmin();
+    return await syncDiscordRolesToPortalarr(discordId);
+}
+
+/**
+ * Admin: Batch pulls Discord roles from all linked members into Portalarr
+ */
+export async function syncAllDiscordRolesToPortalarrAction() {
+    await verifyAdmin();
+    return await syncAllDiscordRolesToPortalarr();
+}
+
+/**
+ * Admin: Auto-matches unlinked Discord users with Portalarr users
+ */
+export async function autoMatchDiscordUsersAction() {
+    await verifyAdmin();
+    return await autoMatchAndLinkUsers();
+}
+
+/**
+ * User Self-Service: Links current logged-in user's account to Discord by username/tag/snowflake ID
+ */
+export async function linkMyDiscordAccountAction(query: string): Promise<{
+    success: boolean;
+    error?: string;
+    discordUsername?: string;
+    rolesSynced?: boolean;
+}> {
+    try {
+        const currentUser = await getCurrentUser();
+        if (!currentUser) return { success: false, error: "Authentication required" };
+
+        const cleanQuery = query.trim().replace(/^@/, "");
+        if (!cleanQuery) return { success: false, error: "Please enter a Discord username or ID" };
+
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } }) || await prisma.settings.findFirst();
+        if (!settings?.discordBotToken || !settings?.discordGuildId) {
+            return { success: false, error: "Discord integration is not configured" };
+        }
+
+        const rawToken = decryptData(settings.discordBotToken);
+        if (!rawToken) return { success: false, error: "Failed to decrypt bot token" };
+
+        const guildId = settings.discordGuildId;
+
+        // Search members in guild
+        let targetMember: any = null;
+
+        // 1. If it's a numeric snowflake ID (17-20 digits)
+        if (/^\d{17,20}$/.test(cleanQuery)) {
+            const singleRes = await discordFetch(`/guilds/${guildId}/members/${cleanQuery}`, { method: "GET" }, rawToken);
+            if (singleRes.ok && singleRes.data) {
+                targetMember = singleRes.data;
+            }
+        }
+
+        // 2. Search by query in guild
+        if (!targetMember) {
+            const searchRes = await discordFetch(`/guilds/${guildId}/members/search?query=${encodeURIComponent(cleanQuery)}&limit=10`, { method: "GET" }, rawToken);
+            if (searchRes.ok && Array.isArray(searchRes.data) && searchRes.data.length > 0) {
+                targetMember = searchRes.data.find((m: any) => 
+                    m.user?.username?.toLowerCase() === cleanQuery.toLowerCase() ||
+                    m.nick?.toLowerCase() === cleanQuery.toLowerCase()
+                ) || searchRes.data[0];
+            }
+        }
+
+        if (!targetMember || !targetMember.user) {
+            return {
+                success: false,
+                error: `Could not find "${cleanQuery}" in the Discord server. Make sure you have joined the Discord server first!`
+            };
+        }
+
+        const discordUser = targetMember.user;
+        const avatarUrl = discordUser.avatar 
+            ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png?size=128`
+            : undefined;
+
+        const linkRes = await linkUserToDiscord({
+            userId: currentUser.id,
+            discordId: discordUser.id,
+            discordUsername: discordUser.username,
+            discordDiscriminator: discordUser.discriminator,
+            discordAvatar: avatarUrl,
+            syncRolesImmediately: true
+        });
+
+        if (!linkRes.success) {
+            return { success: false, error: linkRes.error };
+        }
+
+        return {
+            success: true,
+            discordUsername: discordUser.username,
+            rolesSynced: linkRes.rolesSynced
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to link Discord account" };
+    }
+}
+
+/**
+ * User Self-Service: Unlinks current logged-in user's Discord account
+ */
+export async function unlinkMyDiscordAccountAction(): Promise<{ success: boolean; error?: string }> {
+    try {
+        const currentUser = await getCurrentUser();
+        if (!currentUser) return { success: false, error: "Authentication required" };
+        return await unlinkUserFromDiscord(currentUser.id);
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+/**
+ * User Self-Service: Re-syncs the current logged-in user's Discord role
+ */
+export async function syncMyDiscordRoleAction(): Promise<{ success: boolean; error?: string; roleName?: string }> {
+    try {
+        const currentUser = await getCurrentUser();
+        if (!currentUser) return { success: false, error: "Authentication required" };
+        if (!currentUser.discordId) return { success: false, error: "No Discord account linked" };
+        return await syncUserRoleToDiscord(currentUser.id);
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+

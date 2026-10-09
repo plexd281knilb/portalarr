@@ -734,7 +734,12 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["lastPaymentDate", `ALTER TABLE "User" ADD COLUMN "lastPaymentDate" DATETIME;`],
                 ["lastPaymentProvider", `ALTER TABLE "User" ADD COLUMN "lastPaymentProvider" TEXT;`],
                 ["lastRenewalReminderSentAt", `ALTER TABLE "User" ADD COLUMN "lastRenewalReminderSentAt" DATETIME;`],
-                ["renewalRemindersSent", `ALTER TABLE "User" ADD COLUMN "renewalRemindersSent" TEXT;`]
+                ["renewalRemindersSent", `ALTER TABLE "User" ADD COLUMN "renewalRemindersSent" TEXT;`],
+                ["discordId", `ALTER TABLE "User" ADD COLUMN "discordId" TEXT;`],
+                ["discordUsername", `ALTER TABLE "User" ADD COLUMN "discordUsername" TEXT;`],
+                ["discordDiscriminator", `ALTER TABLE "User" ADD COLUMN "discordDiscriminator" TEXT;`],
+                ["discordAvatar", `ALTER TABLE "User" ADD COLUMN "discordAvatar" TEXT;`],
+                ["discordLinkedAt", `ALTER TABLE "User" ADD COLUMN "discordLinkedAt" DATETIME;`]
             ];
 
             for (const [colName, ddl] of userAddCols) {

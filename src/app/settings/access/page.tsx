@@ -59,8 +59,9 @@ import {
     Clock, Play, RefreshCw, Loader2, KeyRound, Search, CheckCheck, Send, Edit2,
     Layers, Timer, Gift, Trophy, DollarSign, CreditCard, Sparkles, AlertTriangle,
     FolderCheck, ShieldAlert, Check, Users, ArrowUpRight, Copy, Calculator, Calendar, Monitor, Server, PauseCircle, SlidersHorizontal,
-    Eye, Music, BookOpen, Tv, Baby, X, CalendarClock, Zap, BellRing
+    Eye, Music, BookOpen, Tv, Baby, X, CalendarClock, Zap, BellRing, Gamepad2
 } from "lucide-react";
+import { DiscordMemberManagerModal } from "@/components/discord-member-manager-modal";
 import { 
     getNextRenewalReminderInfo, 
     parseReminderDays, 
@@ -82,6 +83,7 @@ export default function AccessSettingsPage() {
     const [restoreStatusMsg, setRestoreStatusMsg] = useState("");
     const [filterStatus, setFilterStatus] = useState<"ALL" | "PENDING" | "APPROVED" | "TRIAL" | "INACTIVE">("ALL");
     const [searchQuery, setSearchQuery] = useState("");
+    const [showDiscordModal, setShowDiscordModal] = useState(false);
 
     // Plex Libraries & Shares state
     const [serverLibraries, setServerLibraries] = useState<any[]>([]);
@@ -1698,6 +1700,21 @@ export default function AccessSettingsPage() {
                                         {restoringAccess ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : <Layers className="h-4 w-4 text-primary" />}
                                         Restore All Users' Libraries
                                     </Button>
+                                    <Button 
+                                        variant="outline" 
+                                        size="sm" 
+                                        className="border-[#5865F2]/40 text-[#5865F2] hover:bg-[#5865F2]/10 gap-1.5 font-semibold shrink-0 transition-all duration-200 hover:ring-2 hover:ring-[#5865F2]/40 active:scale-95 cursor-pointer"
+                                        onClick={() => setShowDiscordModal(true)}
+                                        title="Open Discord Member & Role Synchronization Center"
+                                    >
+                                        <Gamepad2 className="h-4 w-4 text-[#5865F2]" />
+                                        Discord Role Sync
+                                        {users.some(u => u.discordId) && (
+                                            <span className="ml-0.5 text-[10px] bg-[#5865F2]/20 text-[#5865F2] px-1.5 py-0.5 rounded-full font-mono font-bold">
+                                                {users.filter(u => u.discordId).length}/{users.length}
+                                            </span>
+                                        )}
+                                    </Button>
                                     {pendingUsersCount > 0 && (
                                         <Button 
                                             variant="default" 
@@ -2264,6 +2281,27 @@ export default function AccessSettingsPage() {
                                                         ) : (
                                                             <Badge variant="outline" className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-xs font-semibold">
                                                                 ⭐ Tier 1 (Regular)
+                                                            </Badge>
+                                                        )}
+                                                        {user.discordId ? (
+                                                            <Badge 
+                                                                variant="outline" 
+                                                                className="bg-[#5865F2]/20 text-[#5865F2] border-[#5865F2]/40 text-xs font-semibold gap-1 cursor-pointer hover:bg-[#5865F2]/30 transition-colors"
+                                                                onClick={() => setShowDiscordModal(true)}
+                                                                title={`Discord Linked: @${user.discordUsername || user.discordId} (${user.discordId})\nClick to manage Discord roles & mappings`}
+                                                            >
+                                                                <Gamepad2 className="h-3 w-3 text-[#5865F2]" />
+                                                                <span>@{user.discordUsername || "Linked"}</span>
+                                                            </Badge>
+                                                        ) : (
+                                                            <Badge 
+                                                                variant="outline" 
+                                                                className="bg-muted/30 text-muted-foreground/60 border-border/40 text-[10px] gap-1 cursor-pointer hover:text-foreground hover:bg-muted/50 transition-colors"
+                                                                onClick={() => setShowDiscordModal(true)}
+                                                                title="No Discord account linked. Click to link and sync roles."
+                                                            >
+                                                                <Gamepad2 className="h-2.5 w-2.5 opacity-50" />
+                                                                <span>Unlinked</span>
                                                             </Badge>
                                                         )}
                                                         {(() => {
@@ -5613,6 +5651,14 @@ export default function AccessSettingsPage() {
                     </div>
                 );
             })()}
+
+            {/* DISCORD MEMBER & ROLE MANAGER MODAL */}
+            <DiscordMemberManagerModal
+                isOpen={showDiscordModal}
+                onClose={() => setShowDiscordModal(false)}
+                portalarrUsers={users}
+                onUserUpdated={() => loadUsers()}
+            />
 
             {/* UNSAVED CHANGES FLOATING BAR & MODAL */}
             <UnsavedChangesPrompt

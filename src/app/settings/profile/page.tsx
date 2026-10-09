@@ -23,6 +23,11 @@ import {
     updateUserKidsLibraryAccessAction
 } from "@/app/actions";
 import { recheckUserAccessAndPaymentAction } from "@/app/payment-actions";
+import { 
+    linkMyDiscordAccountAction, 
+    unlinkMyDiscordAccountAction, 
+    syncMyDiscordRoleAction 
+} from "@/app/discord-actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,7 +42,7 @@ import {
     MailCheck, Zap, BookOpen, Gift, Copy, Check, Timer, DollarSign, Users, Sparkles, ExternalLink,
     CreditCard, Calendar, AlertCircle, Trash2, RefreshCw, Bell, Shield, Crown, Tv, Film,
     Flame, MessageSquare, Send, CheckCheck, Sliders, Volume2, Lock, Baby, Monitor, FolderCheck,
-    CheckSquare, Square, Plus, Edit2, AlertTriangle, Music, Eye, EyeOff
+    CheckSquare, Square, Plus, Edit2, AlertTriangle, Music, Eye, EyeOff, Gamepad2, Link as LinkIcon
 } from "lucide-react";
 import ServerSpeedTest from "@/components/server-speed-test";
 import FeatureGuideModal from "@/components/feature-guide-modal";
@@ -164,6 +169,12 @@ export default function UserProfilePage() {
     const [savingKidsAccess, setSavingKidsAccess] = useState(false);
     const [kidsAccessMsg, setKidsAccessMsg] = useState("");
     const [kidsAccessErr, setKidsAccessErr] = useState("");
+
+    // Discord Integration State
+    const [discordInput, setDiscordInput] = useState("");
+    const [discordLoading, setDiscordLoading] = useState(false);
+    const [discordSuccessMsg, setDiscordSuccessMsg] = useState("");
+    const [discordErrMsg, setDiscordErrMsg] = useState("");
 
     const isTrial = (user?.status === "TRIAL" || user?.membershipTier === "TRIAL") && user?.status !== "APPROVED" && user?.role !== "ADMIN";
 
@@ -1015,6 +1026,73 @@ export default function UserProfilePage() {
         setTimeout(() => setCopied(false), 2000);
     };
 
+    const handleLinkDiscord = async (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
+        if (!discordInput.trim()) return;
+        setDiscordLoading(true);
+        setDiscordSuccessMsg("");
+        setDiscordErrMsg("");
+        try {
+            const res = await linkMyDiscordAccountAction(discordInput.trim());
+            if (res.success) {
+                setDiscordSuccessMsg(`Discord linked successfully as @${res.discordUsername || discordInput.trim()}! Roles synced.`);
+                setDiscordInput("");
+                const u = await getCurrentUser();
+                if (u) setUser(u);
+                setTimeout(() => setDiscordSuccessMsg(""), 6000);
+            } else {
+                setDiscordErrMsg(res.error || "Failed to link Discord account.");
+            }
+        } catch (err: any) {
+            setDiscordErrMsg(err.message || "Error linking Discord account");
+        } finally {
+            setDiscordLoading(false);
+        }
+    };
+
+    const handleUnlinkDiscord = async () => {
+        setDiscordLoading(true);
+        setDiscordSuccessMsg("");
+        setDiscordErrMsg("");
+        try {
+            const res = await unlinkMyDiscordAccountAction();
+            if (res.success) {
+                setDiscordSuccessMsg("Discord account unlinked successfully.");
+                const u = await getCurrentUser();
+                if (u) setUser(u);
+                setTimeout(() => setDiscordSuccessMsg(""), 6000);
+            } else {
+                setDiscordErrMsg(res.error || "Failed to unlink Discord account.");
+            }
+        } catch (err: any) {
+            setDiscordErrMsg(err.message || "Error unlinking Discord account");
+        } finally {
+            setDiscordLoading(false);
+        }
+    };
+
+    const handleSyncMyDiscordRole = async () => {
+        setDiscordLoading(true);
+        setDiscordSuccessMsg("");
+        setDiscordErrMsg("");
+        try {
+            const res = await syncMyDiscordRoleAction();
+            if (res.success) {
+                setDiscordSuccessMsg(`Discord roles synced successfully! Assigned role: ${res.roleName || "⭐ Member"}.`);
+                const u = await getCurrentUser();
+                if (u) setUser(u);
+                setTimeout(() => setDiscordSuccessMsg(""), 6000);
+            } else {
+                setDiscordErrMsg(res.error || "Failed to sync Discord roles.");
+            }
+        } catch (err: any) {
+            setDiscordErrMsg(err.message || "Error syncing Discord roles");
+        } finally {
+            setDiscordLoading(false);
+        }
+    };
+
+
     if (loading || !user) {
         return (
             <div className="p-6 flex flex-col items-center justify-center min-h-[400px] space-y-3">
@@ -1311,7 +1389,7 @@ export default function UserProfilePage() {
                                     <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Annual Discounted Plan (${effectiveYearlyPrice.toFixed(2)}/yr)</span>
                                     <p className="font-semibold text-foreground text-xs">
                                         {(effectiveYearlyPrice - user.accountCredit) > 0 
-                                            ? <>Send <strong className="text-purple-400">${(effectiveYearlyPrice - user.accountCredit).toFixed(2)}</strong> more for 1 full year ($15/mo)</>
+                                            ? <>Send <strong className="text-purple-400">${(effectiveYearlyPrice - user.accountCredit).toFixed(2)}</strong> more for 1 full year (${(effectiveYearlyPrice / 12).toFixed(0)}/mo)</>
                                             : <span className="text-emerald-400 font-bold">Credit covers yearly rate!</span>
                                         }
                                     </p>
@@ -2132,6 +2210,148 @@ export default function UserProfilePage() {
                             Save Notification Preferences
                         </Button>
                     </form>
+                </CardContent>
+            </Card>
+
+            {/* DISCORD COMMUNITY & ROLE SYNC CARD */}
+            <Card id="discord" className="border-indigo-500/30 bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden scroll-mt-6">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl -z-10 pointer-events-none" />
+                <CardHeader className="pb-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                            <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
+                                <Gamepad2 className="h-5 w-5 text-indigo-400" /> Discord Community & Role Sync
+                            </CardTitle>
+                            <CardDescription className="text-xs">
+                                Link your Discord account to gain automated access to community channels, live announcements, and support.
+                            </CardDescription>
+                        </div>
+                        {user?.discordId ? (
+                            <Badge variant="outline" className="bg-indigo-500/20 text-indigo-300 border-indigo-500/40 text-xs font-semibold gap-1.5 w-fit">
+                                <CheckCircle2 className="h-3 w-3 text-emerald-400" /> Linked
+                            </Badge>
+                        ) : (
+                            <Badge variant="outline" className="bg-muted/40 text-muted-foreground border-border text-xs w-fit">
+                                Not Linked
+                            </Badge>
+                        )}
+                    </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    {discordSuccessMsg && (
+                        <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
+                            <CheckCircle2 className="h-4 w-4 shrink-0" />
+                            <span>{discordSuccessMsg}</span>
+                        </div>
+                    )}
+                    {discordErrMsg && (
+                        <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
+                            <XCircle className="h-4 w-4 shrink-0" />
+                            <span>{discordErrMsg}</span>
+                        </div>
+                    )}
+
+                    {user?.discordId ? (
+                        <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-4">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                <div className="flex items-center gap-3">
+                                    {user.discordAvatar ? (
+                                        <img 
+                                            src={user.discordAvatar} 
+                                            alt={user.discordUsername || "Discord Avatar"} 
+                                            className="w-10 h-10 rounded-full border border-indigo-500/30 object-cover shrink-0" 
+                                        />
+                                    ) : (
+                                        <div className="w-10 h-10 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-300 shrink-0 font-bold">
+                                            {(user.discordUsername || "D").charAt(0).toUpperCase()}
+                                        </div>
+                                    )}
+                                    <div>
+                                        <p className="font-bold text-sm text-foreground flex items-center gap-2">
+                                            @{user.discordUsername || "Discord User"}
+                                            {user.discordDiscriminator && user.discordDiscriminator !== "0" && (
+                                                <span className="text-xs text-muted-foreground font-normal">#{user.discordDiscriminator}</span>
+                                            )}
+                                        </p>
+                                        <div className="flex items-center gap-2 pt-0.5">
+                                            <span className="text-[11px] text-muted-foreground">Server Role:</span>
+                                            <Badge variant="outline" className="text-[10px] font-semibold bg-emerald-500/10 text-emerald-300 border-emerald-500/30">
+                                                {user?.role === "ADMIN" 
+                                                    ? "👑 Admin" 
+                                                    : isTrial 
+                                                        ? "⏱️ Trial Pass" 
+                                                        : currentAccountType === "KID" 
+                                                            ? "🧒 Kids Profile" 
+                                                            : "⭐ Member"
+                                                }
+                                            </Badge>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        disabled={discordLoading}
+                                        onClick={handleSyncMyDiscordRole}
+                                        className="text-xs h-8 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border-indigo-500/30 gap-1.5 cursor-pointer"
+                                    >
+                                        {discordLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                                        Sync Role
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        disabled={discordLoading}
+                                        onClick={handleUnlinkDiscord}
+                                        className="text-xs h-8 bg-red-500/10 hover:bg-red-500/20 text-red-300 border-red-500/30 gap-1.5 cursor-pointer"
+                                    >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                        Unlink
+                                    </Button>
+                                </div>
+                            </div>
+
+                            <div className="text-[11px] text-muted-foreground pt-1 border-t border-border/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                                <span>
+                                    Linked Discord ID: <code className="text-muted-foreground/80 font-mono text-[10px]">{user.discordId}</code>
+                                    {user.discordLinkedAt && ` • Linked on ${safeFormatDate(user.discordLinkedAt, "MMM d, yyyy")}`}
+                                </span>
+                                <span className="text-emerald-400 flex items-center gap-1 text-[10px]">
+                                    <CheckCheck className="h-3 w-3" /> Automatic role sync active
+                                </span>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-3">
+                            <p className="text-xs text-muted-foreground leading-relaxed">
+                                If your Discord username is different from your Portalarr or Plex username, you can link your account directly below. Make sure you have joined the Discord server first!
+                            </p>
+                            <form onSubmit={handleLinkDiscord} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                                <div className="relative flex-1">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-mono">@</span>
+                                    <Input
+                                        placeholder="your_discord_username or User ID"
+                                        value={discordInput}
+                                        onChange={(e) => setDiscordInput(e.target.value)}
+                                        className="pl-7 bg-background/80 text-xs"
+                                        disabled={discordLoading}
+                                    />
+                                </div>
+                                <Button
+                                    type="submit"
+                                    disabled={discordLoading || !discordInput.trim()}
+                                    className="font-bold text-xs h-9 bg-indigo-600 hover:bg-indigo-500 text-white gap-2 transition-all hover:ring-2 hover:ring-indigo-400/40 shrink-0 cursor-pointer"
+                                >
+                                    {discordLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LinkIcon className="h-3.5 w-3.5" />}
+                                    Link Discord Account
+                                </Button>
+                            </form>
+                        </div>
+                    )}
                 </CardContent>
             </Card>
 
