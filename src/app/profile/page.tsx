@@ -1,1 +1,7 @@
-export { default } from "@/app/settings/profile/page";
+"use client";
+
+import UserProfilePage from "@/app/settings/profile/page";
+
+export default function ProfilePage() {
+    return <UserProfilePage />;
+}

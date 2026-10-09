@@ -8,7 +8,7 @@
  */
 
 import { prisma, ensureSchemaColumns } from "../src/lib/prisma";
-import { decryptData } from "../src/lib/encryption";
+import { encryptData, decryptData } from "../src/lib/encryption";
 import {
     verifyDiscordBotCredentials,
     syncDiscordServerStructure,
@@ -29,12 +29,14 @@ async function main() {
     const args = process.argv.slice(2);
     let cliToken = "";
     let cliGuild = "";
+    let cliClient = "";
     let statusOnly = false;
     let skipEmbeds = false;
 
     for (const arg of args) {
         if (arg.startsWith("--token=")) cliToken = arg.split("=")[1].trim();
         if (arg.startsWith("--guild=")) cliGuild = arg.split("=")[1].trim();
+        if (arg.startsWith("--client=")) cliClient = arg.split("=")[1].trim();
         if (arg === "--status-only") statusOnly = true;
         if (arg === "--skip-embeds") skipEmbeds = true;
     }
@@ -130,6 +132,9 @@ async function main() {
         if (syncRes.channelMap["system-status"]) updateData.discordStatusChannelId = syncRes.channelMap["system-status"];
         if (syncRes.channelMap["media-requests"]) updateData.discordRequestsChannelId = syncRes.channelMap["media-requests"];
         if (syncRes.channelMap["announcements"]) updateData.discordAnnouncementsChannelId = syncRes.channelMap["announcements"];
+        if (cliToken) updateData.discordBotToken = encryptData(cliToken);
+        if (cliGuild) updateData.discordGuildId = cliGuild;
+        if (cliClient) updateData.discordClientId = cliClient;
 
         await prisma.settings.update({
             where: { id: settings.id },

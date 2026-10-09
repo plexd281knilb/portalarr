@@ -46,6 +46,17 @@ import SuperUserCard from "@/components/super-user-card";
 import { PaymentMethodsGrid } from "@/components/payment-methods-grid";
 import { format, differenceInDays } from "date-fns";
 
+function safeFormatDate(dateVal: any, formatPattern: string, fallback = ""): string {
+    if (!dateVal) return fallback;
+    try {
+        const d = new Date(dateVal);
+        if (isNaN(d.getTime())) return fallback;
+        return format(d, formatPattern);
+    } catch {
+        return fallback;
+    }
+}
+
 export default function UserProfilePage() {
     const [user, setUser] = useState<any>(null);
     const [referralInfo, setReferralInfo] = useState<any>(null);
@@ -341,6 +352,10 @@ export default function UserProfilePage() {
             setLoading(true);
             try {
                 const u = await getCurrentUser();
+                if (!u) {
+                    window.location.href = "/login";
+                    return;
+                }
                 if (u && (u.status === "EXPIRED" || u.status === "PENDING" || u.status === "REJECTED" || u.status === "SUSPENDED")) {
                     window.location.href = "/pending";
                     return;
@@ -1000,15 +1015,17 @@ export default function UserProfilePage() {
         setTimeout(() => setCopied(false), 2000);
     };
 
-    if (loading) {
+    if (loading || !user) {
         return (
-            <div className="p-6 flex items-center justify-center min-h-[400px]">
+            <div className="p-6 flex flex-col items-center justify-center min-h-[400px] space-y-3">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <p className="text-xs text-muted-foreground">Loading account profile...</p>
             </div>
         );
     }
 
-    const daysLeft = isTrial && user?.trialEndsAt ? Math.max(0, differenceInDays(new Date(user.trialEndsAt), new Date())) : null;
+    const trialDateValid = Boolean(user?.trialEndsAt && !isNaN(new Date(user.trialEndsAt).getTime()));
+    const daysLeft = isTrial && trialDateValid ? Math.max(0, differenceInDays(new Date(user.trialEndsAt), new Date())) : null;
     const origin = typeof window !== "undefined" ? window.location.origin : "";
     const inviteUrl = referralInfo?.inviteUrl || (referralInfo?.referralCode ? (paymentConfig?.appUrl ? `${paymentConfig.appUrl}/join?ref=${referralInfo.referralCode}` : `${origin}/join?ref=${referralInfo.referralCode}`) : "");
 
@@ -1268,13 +1285,23 @@ export default function UserProfilePage() {
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    {isTrial && paymentConfig?.proratedBilling ? (
+                    {user?.role === "ADMIN" ? (
+                        <div className="p-3.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-xs space-y-1.5">
+                            <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Access Level</span>
+                            <p className="font-bold text-indigo-400 text-sm flex items-center gap-1.5">
+                                <ShieldCheck className="h-4 w-4 text-indigo-400" /> Platform Administrator
+                            </p>
+                            <p className="text-[11px] text-muted-foreground leading-relaxed">
+                                Unrestricted administrator privileges with permanent lifetime access. You are exempt from all subscription plans, renewals, and expiration dates.
+                            </p>
+                        </div>
+                    ) : isTrial && paymentConfig?.proratedBilling ? (
                         <div className="space-y-3">
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
                                 <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 space-y-1">
                                     <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Trial Status</span>
-                                    <p className="font-bold text-blue-400 text-sm">{daysLeft} Days Left</p>
-                                    <p className="text-[10px] text-muted-foreground">Ends {user?.trialEndsAt ? format(new Date(user.trialEndsAt), "MMM d, yyyy") : ""}</p>
+                                    <p className="font-bold text-blue-400 text-sm">{daysLeft ?? 0} Days Left</p>
+                                    <p className="text-[10px] text-muted-foreground">Ends {safeFormatDate(user?.trialEndsAt, "MMM d, yyyy")}</p>
                                 </div>
                                 <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 space-y-1">
                                     <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">1st Year Prorated</span>
@@ -1305,7 +1332,7 @@ export default function UserProfilePage() {
                                 )}
                             </div>
                             <p className="font-bold text-emerald-400 text-sm">
-                                Valid until {format(new Date(user.subscriptionEndsAt), "MMMM d, yyyy")}
+                                Valid until {safeFormatDate(user.subscriptionEndsAt, "MMMM d, yyyy", "Active")}
                             </p>
 
                             {referralInfo?.renewalSummary?.convertedReferralsCount > 0 ? (
@@ -1316,16 +1343,16 @@ export default function UserProfilePage() {
                                             Referral Reward Applied
                                         </span>
                                         <span className="font-bold text-emerald-400">
-                                            ${referralInfo.renewalSummary.discountedYearlyPrice.toFixed(2)}/yr
+                                            ${(referralInfo?.renewalSummary?.discountedYearlyPrice ?? 0).toFixed(2)}/yr
                                             <span className="line-through text-muted-foreground ml-1.5 font-normal text-[11px]">
-                                                ${referralInfo.renewalSummary.baseYearlyPrice.toFixed(2)}
+                                                ${(referralInfo?.renewalSummary?.baseYearlyPrice ?? effectiveYearlyPrice).toFixed(2)}
                                             </span>
                                         </span>
                                     </div>
                                     <p className="text-[11px] text-muted-foreground leading-relaxed">
-                                        You earned <strong>{referralInfo.renewalSummary.convertedReferralsCount} free month(s)</strong> (${referralInfo.renewalSummary.rewardDiscountAmount.toFixed(2)} credit) for inviting friends who joined!
+                                        You earned <strong>{referralInfo.renewalSummary.convertedReferralsCount} free month(s)</strong> (${(referralInfo?.renewalSummary?.rewardDiscountAmount ?? 0).toFixed(2)} credit) for inviting friends who joined!
                                         {referralInfo.renewalSummary.delayedMonthlyStartDate && (
-                                            <> If switching to monthly billing (${referralInfo.renewalSummary.monthlyRate.toFixed(2)}/mo), your payments are delayed until <strong>{referralInfo.renewalSummary.delayedMonthlyStartDate}</strong>.</>
+                                            <> If switching to monthly billing (${(referralInfo?.renewalSummary?.monthlyRate ?? effectiveMonthlyPrice).toFixed(2)}/mo), your payments are delayed until <strong>{referralInfo.renewalSummary.delayedMonthlyStartDate}</strong>.</>
                                         )}
                                     </p>
                                 </div>
@@ -2615,7 +2642,7 @@ export default function UserProfilePage() {
                             <div className="flex items-center gap-2 pt-0.5">
                                 {isTrial ? (
                                     <Badge variant="outline" className="bg-blue-500/20 text-blue-400 border-blue-500/40 gap-1.5 text-xs font-bold">
-                                        <Timer className="h-3.5 w-3.5" /> {paymentConfig?.defaultTrialDays || 14}-Day Free Trial ({daysLeft} days remaining)
+                                        <Timer className="h-3.5 w-3.5" /> {paymentConfig?.defaultTrialDays || 14}-Day Free Trial ({daysLeft ?? 0} days remaining)
                                     </Badge>
                                 ) : user?.role === "ADMIN" ? (
                                     <Badge variant="outline" className="bg-indigo-500/20 text-indigo-300 border-indigo-500/40 gap-1.5 text-xs font-bold">
@@ -2623,7 +2650,7 @@ export default function UserProfilePage() {
                                     </Badge>
                                 ) : user?.status === "APPROVED" && user?.subscriptionEndsAt ? (
                                     <Badge variant="outline" className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 gap-1.5 text-xs font-semibold">
-                                        <CheckCircle2 className="h-3.5 w-3.5" /> {user.subscriptionCadence === "MONTHLY" ? "Monthly Plan" : "Annual Plan"} (Expires {format(new Date(user.subscriptionEndsAt), "MMM d, yyyy")})
+                                        <CheckCircle2 className="h-3.5 w-3.5" /> {user.subscriptionCadence === "MONTHLY" ? "Monthly Plan" : "Annual Plan"} (Expires {safeFormatDate(user.subscriptionEndsAt, "MMM d, yyyy", "Active")})
                                     </Badge>
                                 ) : user?.status === "APPROVED" ? (
                                     <Badge variant="outline" className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 gap-1.5 text-xs font-semibold">

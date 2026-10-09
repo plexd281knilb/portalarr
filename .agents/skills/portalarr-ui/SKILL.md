@@ -113,6 +113,14 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
   - When configuring stepped thresholds or permissions (e.g. AI Autonomy Levels 1-3, Max Daily Interactions 1-10), pair an `<input type="range" />` track slider with direct, clickable tier preview cards.
   - Slider track styling: `w-full h-2.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-400/50`.
   - Provide interactive text labels beneath the track with `text-[11px]` and bold color accents when active.
+
+---
+
+### 6. Route Aliases, Error Boundaries & Safe Date Rendering
+- **Route Alias Pages**: Whenever a route alias exists (e.g. `/profile` mirroring `/settings/profile`), the wrapper `page.tsx` must explicitly include `"use client";` at the top and export a React component. Bare `export { default } from ...` across route folders breaks Next.js App Router client reference manifests in production.
+- **Safe Date Formatting (`safeFormatDate`)**: Never pass unverified strings or objects directly into date-fns `format(new Date(val))` without validating `!isNaN(new Date(val).getTime())`. Invalid dates throw `RangeError: Invalid time value` which crashes the entire page into Next.js's fallback error boundary.
+- **Global Error Boundaries (`error.tsx`)**: The app includes a root `src/app/error.tsx` boundary with graceful recovery buttons (`Try Again`, `Return to Dashboard`), preventing Next.js default blank crash screens.
+- **Admin Exemption in Account Views**: Administrators must never display subscription plans, renewals, or expiration dates; their status must render as `Platform Administrator (Permanent Access)`.
   - Tier cards highlight with semantic ring and border glows (`ring-1 ring-emerald-500/50 bg-emerald-950/30 border-emerald-500/80` for Autonomous, `ring-amber-500/50 bg-amber-950/30 border-amber-500/80` for Assisted, `ring-sky-500/50 bg-sky-950/30 border-sky-500/80` for Advisory).
   - Clicking any tier card immediately synchronizes the range slider and dirty-state tracking without page reloads.
 
