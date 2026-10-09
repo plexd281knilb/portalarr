@@ -6113,6 +6113,75 @@ async function runTestSuite() {
         if (decrypted !== sampleToken) throw new Error("Decrypted token does not match original token");
     });
 
+    // 92. Book Scanner Multi-Library File Isolation & Non-Destructive Candidate Selection
+    await assertTest("Test 92: Book Scanner Multi-Library File Isolation & Non-Destructive Candidate Selection", async () => {
+        const currentLibraryId = "lib_kyra";
+        const currentScanPath = "/Kyrabooks/books";
+        const normScanPath = currentScanPath.toLowerCase();
+
+        const matchedDbBookIds = new Set<string>();
+
+        // Simulating the selectMatchingCandidate engine
+        const selectCandidate = (candidates: any[], fileExistsMock: (p: string) => boolean) => {
+            if (!candidates || candidates.length === 0) return undefined;
+            // 1. Strict Priority 1: Match within the library currently being scanned
+            const inLib = candidates.find(b => !matchedDbBookIds.has(b.id) && b.libraryId === currentLibraryId);
+            if (inLib) return inLib;
+
+            // 2. Cross-library candidate adoption:
+            // ONLY permitted if candidate's path starts with normScanPath, OR if candidate's existing file no longer exists on disk.
+            // If the candidate's file STILL EXISTS on disk in another library, NEVER steal or reassign it!
+            return candidates.find(b => {
+                if (matchedDbBookIds.has(b.id)) return false;
+                if (!b.filePath) return true;
+                const normBPath = b.filePath.toLowerCase();
+                if (normScanPath && normBPath.startsWith(normScanPath)) return true;
+                try {
+                    if (fileExistsMock(b.filePath)) return false;
+                } catch (e) {
+                    return false;
+                }
+                return true;
+            });
+        };
+
+        const mockCandidates = [
+            { id: "book_pub_1", title: "The Final Empire", libraryId: "lib_public", filePath: "/Userbooks/books/The Final Empire.epub" },
+            { id: "book_kyra_1", title: "The Final Empire", libraryId: "lib_kyra", filePath: "/Kyrabooks/books/The Final Empire.epub" }
+        ];
+
+        // Scenario 1: Both libraries have books in DB. Kyra's library scan MUST pick Kyra's own book.
+        const picked1 = selectCandidate(mockCandidates, () => true);
+        if (!picked1 || picked1.id !== "book_kyra_1") {
+            throw new Error(`Scenario 1 failed: Expected Kyra's own book "book_kyra_1", got ${picked1?.id}`);
+        }
+
+        // Scenario 2: Kyra's library has NO book in DB yet, but Public library has an active file on disk.
+        // Kyra's library MUST NOT steal Public library's book!
+        const onlyPublicCandidate = [
+            { id: "book_pub_1", title: "The Final Empire", libraryId: "lib_public", filePath: "/Userbooks/books/The Final Empire.epub" }
+        ];
+        const picked2 = selectCandidate(onlyPublicCandidate, (p) => p === "/Userbooks/books/The Final Empire.epub");
+        if (picked2 !== undefined) {
+            throw new Error(`Scenario 2 failed: Expected undefined (anti-theft guard), but Public Library's book was stolen: ${picked2?.id}`);
+        }
+
+        // Scenario 3: Public library had a record, but the file was deleted/moved to Kyra's library.
+        const picked3 = selectCandidate(onlyPublicCandidate, () => false);
+        if (!picked3 || picked3.id !== "book_pub_1") {
+            throw new Error(`Scenario 3 failed: Expected orphan adoption of "book_pub_1", got ${picked3?.id}`);
+        }
+
+        // Scenario 4: A record had the wrong libraryId, but its filePath is inside Kyra's folder.
+        const mislabeledCandidate = [
+            { id: "book_mislabeled", title: "Mistborn 2", libraryId: "lib_public", filePath: "/Kyrabooks/books/Mistborn 2.epub" }
+        ];
+        const picked4 = selectCandidate(mislabeledCandidate, () => true);
+        if (!picked4 || picked4.id !== "book_mislabeled") {
+            throw new Error(`Scenario 4 failed: Expected adoption of path-matched record, got ${picked4?.id}`);
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

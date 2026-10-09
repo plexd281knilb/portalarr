@@ -643,7 +643,13 @@ export async function findMissingBooksInSeries(seriesName: string, author: strin
             const activeKey = settings?.googleBooksApiKey || process.env.GOOGLE_BOOKS_API_KEY;
             const gbKey = activeKey ? `&key=${activeKey}` : "";
             const gUrl = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&langRestrict=en&maxResults=35${gbKey}`;
-            const gRes = await fetchWithRetry(gUrl, { headers: { "Accept": "application/json" } });
+            const gRes = await fetchWithRetry(gUrl, { headers: { "Accept": "application/json" } }, 1, 5000).catch((err) => {
+                if (rawCandidates.length > 0) {
+                    console.log(`[API-FAILOVER] Google Books search bypassed for missing books (${err?.message || err}), continuing with ${rawCandidates.length} iTunes/OpenLibrary candidates.`);
+                    return null;
+                }
+                throw err;
+            });
             if (gRes && gRes.ok) {
                 const data = await gRes.json();
                 if (data.items) {
@@ -664,7 +670,9 @@ export async function findMissingBooksInSeries(seriesName: string, author: strin
                 }
             }
         } catch(e: any) {
-            console.warn("[API-FAILOVER] Google Books search failed for missing books:", e?.message || String(e));
+            if (rawCandidates.length === 0) {
+                console.warn("[API-FAILOVER] Google Books search failed for missing books:", e?.message || String(e));
+            }
         }
 
         if (rawCandidates.length === 0) {
@@ -11066,6 +11074,29 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
 
         const matchedDbBookIds = new Set<string>();
 
+        const selectMatchingCandidate = (candidates: any[] | undefined): any | undefined => {
+            if (!candidates || candidates.length === 0) return undefined;
+            // 1. Strict Priority 1: Match within the library currently being scanned
+            const inLib = candidates.find(b => !matchedDbBookIds.has(b.id) && b.libraryId === libraryId);
+            if (inLib) return inLib;
+
+            // 2. Cross-library candidate adoption:
+            // ONLY permitted if candidate's path starts with normScanPath, OR if candidate's existing file no longer exists on disk.
+            // If the candidate's file STILL EXISTS on disk in another library, NEVER steal or reassign it!
+            return candidates.find(b => {
+                if (matchedDbBookIds.has(b.id)) return false;
+                if (!b.filePath) return true;
+                const normBPath = normalizePathForLookup(b.filePath);
+                if (normScanPath && normBPath.startsWith(normScanPath)) return true;
+                try {
+                    if (fs.existsSync(b.filePath)) return false;
+                } catch (e) {
+                    return false;
+                }
+                return true;
+            });
+        };
+
         for (const item of finalMediaItems) {
             const { file, ext, stats } = item;
             let fullPath = item.fullPath;
@@ -11192,7 +11223,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
             let existing: any = undefined;
             const pathMatches = dbBooksByPathLower.get(normFullPathForLookup);
             if (pathMatches && pathMatches.length > 0) {
-                existing = pathMatches.find(b => !matchedDbBookIds.has(b.id));
+                existing = selectMatchingCandidate(pathMatches);
             }
 
             // 2. Directory match (e.g. file is inside a stub folder or reorganized series directory)
@@ -11201,17 +11232,14 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                 if (dirCandidates && dirCandidates.length > 0) {
                     const normTargetMedia = targetMediaType === "audiobook" ? "audiobook" : "ebook";
                     const cleanCheckTitleKey = getBookCleanTitleKey(targetCheckTitle);
-                    for (const dirMatch of dirCandidates) {
-                        if (matchedDbBookIds.has(dirMatch.id)) continue;
+                    const validDirCandidates = dirCandidates.filter(dirMatch => {
+                        if (matchedDbBookIds.has(dirMatch.id)) return false;
                         const dirMedia = dirMatch.mediaType === "audiobook" ? "audiobook" : "ebook";
-                        if (dirMedia === normTargetMedia) {
-                            const matchTitleKey = getBookCleanTitleKey(dirMatch.title);
-                            if (isTitleMatch(dirMatch.title, targetCheckTitle) || (cleanCheckTitleKey && matchTitleKey && cleanCheckTitleKey === matchTitleKey)) {
-                                existing = dirMatch;
-                                break;
-                            }
-                        }
-                    }
+                        if (dirMedia !== normTargetMedia) return false;
+                        const matchTitleKey = getBookCleanTitleKey(dirMatch.title);
+                        return (isTitleMatch(dirMatch.title, targetCheckTitle) || (cleanCheckTitleKey && matchTitleKey && cleanCheckTitleKey === matchTitleKey));
+                    });
+                    existing = selectMatchingCandidate(validDirCandidates);
                 }
             }
 
@@ -11226,13 +11254,14 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                 const normTargetMedia = targetMediaType === "audiobook" ? "audiobook" : "ebook";
                 if (candidateDedupKey && dbBooksByDedupKey.has(candidateDedupKey)) {
                     const dedupCandidates = dbBooksByDedupKey.get(candidateDedupKey)!;
-                    existing = dedupCandidates.find(b => !matchedDbBookIds.has(b.id));
+                    existing = selectMatchingCandidate(dedupCandidates);
                 }
                 if (!existing && candidateTitleKey) {
                     const allKey = `${normTargetMedia}:::all:::${candidateTitleKey}`;
                     const allCandidates = dbBooksByDedupKey.get(allKey);
                     if (allCandidates && allCandidates.length > 0) {
-                        existing = allCandidates.find(b => !matchedDbBookIds.has(b.id) && isAuthorMatch(b.author, targetCheckAuthor));
+                        const validAll = allCandidates.filter(b => !matchedDbBookIds.has(b.id) && isAuthorMatch(b.author, targetCheckAuthor));
+                        existing = selectMatchingCandidate(validAll);
                     }
                 }
             }
@@ -11244,7 +11273,8 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                 if (candidateTitleKey) {
                     const titleCandidates = dbBooksByTitleKey.get(`${normTargetMedia}:::${candidateTitleKey}`);
                     if (titleCandidates && titleCandidates.length > 0) {
-                        existing = titleCandidates.find(b => !matchedDbBookIds.has(b.id) && isAuthorMatch(b.author, targetCheckAuthor));
+                        const validTitles = titleCandidates.filter(b => !matchedDbBookIds.has(b.id) && isAuthorMatch(b.author, targetCheckAuthor));
+                        existing = selectMatchingCandidate(validTitles);
                     }
                 }
             }
@@ -11253,7 +11283,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
             if (!existing) {
                 const normTargetMedia = targetMediaType === "audiobook" ? "audiobook" : "ebook";
                 const candidateTitleKey = getBookCleanTitleKey(targetCheckTitle);
-                existing = dbBooks.find(b => {
+                const fallbackCandidates = dbBooks.filter(b => {
                     if (matchedDbBookIds.has(b.id)) return false;
                     const bMedia = b.mediaType === "audiobook" ? "audiobook" : "ebook";
                     if (bMedia !== normTargetMedia) return false;
@@ -11264,6 +11294,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                     if (!isAuthorMatch(b.author, targetCheckAuthor)) return false;
                     return true;
                 });
+                existing = selectMatchingCandidate(fallbackCandidates);
             }
 
             if (existing) {
@@ -11489,7 +11520,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                     if (!newBook) {
                         const cachedPathMatches = dbBooksByPathLower.get(normFullPathForLookup);
                         if (cachedPathMatches && cachedPathMatches.length > 0) {
-                            newBook = cachedPathMatches.find(b => !matchedDbBookIds.has(b.id));
+                            newBook = selectMatchingCandidate(cachedPathMatches);
                         }
                     }
 
@@ -11499,17 +11530,14 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                         if (dirCandidates && dirCandidates.length > 0) {
                             const normTargetMedia = targetMediaType === "audiobook" ? "audiobook" : "ebook";
                             const cleanCheckTitleKey = getBookCleanTitleKey(title);
-                            for (const dirMatch of dirCandidates) {
-                                if (matchedDbBookIds.has(dirMatch.id)) continue;
+                            const validDirCandidates = dirCandidates.filter(dirMatch => {
+                                if (matchedDbBookIds.has(dirMatch.id)) return false;
                                 const dirMedia = dirMatch.mediaType === "audiobook" ? "audiobook" : "ebook";
-                                if (dirMedia === normTargetMedia) {
-                                    const matchTitleKey = getBookCleanTitleKey(dirMatch.title);
-                                    if (isTitleMatch(dirMatch.title, title) || (cleanCheckTitleKey && matchTitleKey && cleanCheckTitleKey === matchTitleKey)) {
-                                        newBook = dirMatch;
-                                        break;
-                                    }
-                                }
-                            }
+                                if (dirMedia !== normTargetMedia) return false;
+                                const matchTitleKey = getBookCleanTitleKey(dirMatch.title);
+                                return (isTitleMatch(dirMatch.title, title) || (cleanCheckTitleKey && matchTitleKey && cleanCheckTitleKey === matchTitleKey));
+                            });
+                            newBook = selectMatchingCandidate(validDirCandidates);
                         }
                     }
 
@@ -11524,13 +11552,14 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                         const normTargetMedia = targetMediaType === "audiobook" ? "audiobook" : "ebook";
                         if (candidateDedupKey && dbBooksByDedupKey.has(candidateDedupKey)) {
                             const dedupCandidates = dbBooksByDedupKey.get(candidateDedupKey)!;
-                            newBook = dedupCandidates.find(b => !matchedDbBookIds.has(b.id));
+                            newBook = selectMatchingCandidate(dedupCandidates);
                         }
                         if (!newBook && candidateTitleKey) {
                             const allKey = `${normTargetMedia}:::all:::${candidateTitleKey}`;
                             const allCandidates = dbBooksByDedupKey.get(allKey);
                             if (allCandidates && allCandidates.length > 0) {
-                                newBook = allCandidates.find(b => !matchedDbBookIds.has(b.id) && isAuthorMatch(b.author, author));
+                                const validAll = allCandidates.filter(b => !matchedDbBookIds.has(b.id) && isAuthorMatch(b.author, author));
+                                newBook = selectMatchingCandidate(validAll);
                             }
                         }
                     }
@@ -11542,7 +11571,8 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                         if (candidateTitleKey) {
                             const titleCandidates = dbBooksByTitleKey.get(`${normTargetMedia}:::${candidateTitleKey}`);
                             if (titleCandidates && titleCandidates.length > 0) {
-                                newBook = titleCandidates.find(b => !matchedDbBookIds.has(b.id) && isAuthorMatch(b.author, author));
+                                const validTitles = titleCandidates.filter(b => !matchedDbBookIds.has(b.id) && isAuthorMatch(b.author, author));
+                                newBook = selectMatchingCandidate(validTitles);
                             }
                         }
                     }
@@ -11551,7 +11581,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                     if (!newBook) {
                         const normTargetMedia = targetMediaType === "audiobook" ? "audiobook" : "ebook";
                         const candidateTitleKey = getBookCleanTitleKey(title);
-                        newBook = dbBooks.find(b => {
+                        const fallbackCandidates = dbBooks.filter(b => {
                             if (matchedDbBookIds.has(b.id)) return false;
                             const bMedia = b.mediaType === "audiobook" ? "audiobook" : "ebook";
                             if (bMedia !== normTargetMedia) return false;
@@ -11562,22 +11592,22 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                             if (!isAuthorMatch(b.author, author)) return false;
                             return true;
                         });
+                        newBook = selectMatchingCandidate(fallbackCandidates);
                     }
 
                     // 6. Direct database query fallback for parent directory / stub with title verification
                     if (!newBook) {
-                        const directDbMatch = await prisma.book.findFirst({
+                        const directDbMatches = await prisma.book.findMany({
                             where: {
                                 OR: [
                                     { filePath: fullPath },
                                     { filePath: path.dirname(fullPath) }
                                 ]
                             }
-                        });
-                        if (directDbMatch && !matchedDbBookIds.has(directDbMatch.id)) {
-                            if (isTitleMatch(directDbMatch.title, title) || directDbMatch.filePath === fullPath) {
-                                newBook = directDbMatch;
-                            }
+                        }).catch(() => []);
+                        if (directDbMatches && directDbMatches.length > 0) {
+                            const validDirect = directDbMatches.filter(m => !matchedDbBookIds.has(m.id) && (isTitleMatch(m.title, title) || m.filePath === fullPath));
+                            newBook = selectMatchingCandidate(validDirect);
                         }
                     }
 
@@ -11598,28 +11628,25 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                                 : { mediaType: { not: "audiobook" } }
                         }).catch(() => []);
 
-                        for (const cand of existingCandidates) {
-                            if (matchedDbBookIds.has(cand.id)) continue;
+                        const validCandidates = existingCandidates.filter(cand => {
+                            if (matchedDbBookIds.has(cand.id)) return false;
                             const candMedia = cand.mediaType === "audiobook" ? "audiobook" : "ebook";
-                            if (candMedia !== normTargetMedia) continue;
+                            if (candMedia !== normTargetMedia) return false;
 
                             const candDedup = getBookCompositeDedupKey(cand);
                             if (candDedup && (candDedup === candidateDedupKey || candDedup === allAuthorKey)) {
-                                if (isAuthorMatch(cand.author, author)) {
-                                    newBook = cand;
-                                    break;
-                                }
+                                if (isAuthorMatch(cand.author, author)) return true;
                             }
                             const candTitle = getBookCleanTitleKey(cand.title);
                             if (candTitle && candTitle === candidateTitleKey && isAuthorMatch(cand.author, author)) {
-                                newBook = cand;
-                                break;
+                                return true;
                             }
                             if (isTitleMatch(cand.title, title) && isAuthorMatch(cand.author, author)) {
-                                newBook = cand;
-                                break;
+                                return true;
                             }
-                        }
+                            return false;
+                        });
+                        newBook = selectMatchingCandidate(validCandidates);
                     }
 
                     // 8. FINAL AUTHORITATIVE SAFEGUARD: Search entire Book table for any record with matching clean title and author
@@ -11635,17 +11662,14 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                                 }
                             }).catch(() => []);
                             const normTargetMedia = targetMediaType === "audiobook" ? "audiobook" : "ebook";
-                            for (const m of titleSubstringMatches) {
-                                if (matchedDbBookIds.has(m.id)) continue;
+                            const validMatches = titleSubstringMatches.filter(m => {
+                                if (matchedDbBookIds.has(m.id)) return false;
                                 const mMedia = m.mediaType === "audiobook" ? "audiobook" : "ebook";
-                                if (mMedia === normTargetMedia) {
-                                    const mTKey = getBookCleanTitleKey(m.title);
-                                    if ((mTKey === cleanTKey || isTitleMatch(m.title, title)) && isAuthorMatch(m.author, author)) {
-                                        newBook = m;
-                                        break;
-                                    }
-                                }
-                            }
+                                if (mMedia !== normTargetMedia) return false;
+                                const mTKey = getBookCleanTitleKey(m.title);
+                                return ((mTKey === cleanTKey || isTitleMatch(m.title, title)) && isAuthorMatch(m.author, author));
+                            });
+                            newBook = selectMatchingCandidate(validMatches);
                         }
                     }
 
