@@ -155,7 +155,7 @@ export default function AccessSettingsPage() {
         paymentInstructions: "",
         subscriptionPrice: "$180 / year",
         yearlyPrice: 180,
-        monthlyPrice: 15,
+        monthlyPrice: 17.50,
         tier2YearlyPrice: 240,
         tier2MonthlyPrice: 25,
         availableAddons: null as string | null,
@@ -4791,7 +4791,7 @@ export default function AccessSettingsPage() {
                                             : (paymentSettings.yearlyPrice ?? 180);
                                         const modalMonthlyPrice = isModalUserTier2 
                                             ? (paymentSettings.tier2MonthlyPrice ?? 25) 
-                                            : (paymentSettings.monthlyPrice ?? 15);
+                                            : (paymentSettings.monthlyPrice ?? 17.50);
                                         return (
                                             <Select 
                                                 value={subModalUser.subscriptionCadence || "YEARLY"} 
@@ -5389,7 +5389,7 @@ export default function AccessSettingsPage() {
                             referralBonusMonths: (selectedReferrer.referralBonusMonths || 0) + (creditBonusMonths || 0)
                         },
                         yearlyPrice: paymentSettings?.yearlyPrice ?? 180,
-                        monthlyPrice: paymentSettings?.monthlyPrice ?? 15
+                        monthlyPrice: paymentSettings?.monthlyPrice ?? 17.50
                     });
                 }
 

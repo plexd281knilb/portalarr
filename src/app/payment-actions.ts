@@ -1156,10 +1156,15 @@ export async function updateUserSubscriptionCadenceAction(userId: string, cadenc
         revalidatePath("/settings/access");
         revalidatePath("/settings/profile");
 
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        const isTier2 = user.membershipTier === "TIER_2_VIP";
+        const yrPrice = isTier2 ? (settings?.tier2YearlyPrice ?? 240) : (settings?.yearlyPrice ?? 180);
+        const moPrice = isTier2 ? (settings?.tier2MonthlyPrice ?? 25) : (settings?.monthlyPrice ?? 17.50);
+
         logger.addLog("INFO", "DATABASE", `Admin updated subscription cadence for "${user.username}" to ${cadence}`);
         return {
             success: true,
-            message: `Updated @${user.username}'s plan cadence to ${cadence === "YEARLY" ? "Annual ($180/yr)" : "Monthly ($15/mo)"}.`
+            message: `Updated @${user.username}'s plan cadence to ${cadence === "YEARLY" ? `Annual ($${yrPrice}/yr)` : `Monthly ($${moPrice}/mo)`}.`
         };
     } catch (e: any) {
         return { success: false, error: e.message || "Failed to update subscription cadence." };
@@ -1188,7 +1193,7 @@ export async function sendSubscriptionRenewalRemindersInternal(): Promise<{
 
     const now = new Date();
     const yearlyPrice = settings.yearlyPrice || 180;
-    const monthlyPrice = settings.monthlyPrice || 15;
+    const monthlyPrice = settings.monthlyPrice || 17.50;
     const { getAppUrl } = await import("@/lib/app-url");
     const appUrl = await getAppUrl();
     const { renderEmailTemplate } = await import("@/lib/email-templates");

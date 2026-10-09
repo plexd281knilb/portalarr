@@ -5748,7 +5748,7 @@ export async function savePaymentAndTrialSettings(formData: FormData) {
         const paymentInstructions = (formData.get("paymentInstructions") as string) || "";
         const subscriptionPrice = (formData.get("subscriptionPrice") as string)?.trim() || "";
         const yearlyPrice = parseFloat((formData.get("yearlyPrice") as string) || "180") || 180;
-        const monthlyPrice = parseFloat((formData.get("monthlyPrice") as string) || "15") || (yearlyPrice > 0 ? Math.round((yearlyPrice / 12) * 100) / 100 : 15);
+        const monthlyPrice = parseFloat((formData.get("monthlyPrice") as string) || "17.50") || 17.50;
         const tier2YearlyPrice = parseFloat((formData.get("tier2YearlyPrice") as string) || "240") || 240;
         const tier2MonthlyPrice = parseFloat((formData.get("tier2MonthlyPrice") as string) || "25") || (tier2YearlyPrice > 0 ? Math.round((tier2YearlyPrice / 12) * 100) / 100 : 25);
         const availableAddons = (formData.get("availableAddons") as string)?.trim() || null;
@@ -5831,7 +5831,7 @@ export async function getPaymentAndTrialSettings() {
         const settings = await prisma.settings.findUnique({ where: { id: "global" } });
         const defaultTrialDays = settings?.defaultTrialDays ?? 14;
         const yearlyPrice = settings?.yearlyPrice ?? 180;
-        const monthlyPrice = settings?.monthlyPrice ?? (yearlyPrice > 0 ? Math.round((yearlyPrice / 12) * 100) / 100 : 15);
+        const monthlyPrice = settings?.monthlyPrice ?? 17.50;
         const tier2YearlyPrice = settings?.tier2YearlyPrice ?? 240;
         const tier2MonthlyPrice = settings?.tier2MonthlyPrice ?? (tier2YearlyPrice > 0 ? Math.round((tier2YearlyPrice / 12) * 100) / 100 : 25);
         const renewalMonth = settings?.renewalMonth ?? 1;
@@ -5928,7 +5928,7 @@ export async function getUserReferralInfo() {
 
         const settings = await prisma.settings.findUnique({ where: { id: "global" } });
         const yearlyPrice = settings?.yearlyPrice || 180;
-        const monthlyPrice = settings?.monthlyPrice || 15;
+        const monthlyPrice = settings?.monthlyPrice || 17.50;
 
         const renewalSummary = calculateUserRenewalSummary({
             user: dbUser,
