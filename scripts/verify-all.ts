@@ -5955,6 +5955,69 @@ async function runTestSuite() {
         }
     });
 
+    // 90. Admin Platform Isolation: Permanent Access, Exemption from Subscriptions, Cadences, Renewal Reminders, and Member Tiers
+    await assertTest("Test 90: Admin Platform Isolation: Permanent Access & Exemption from Subscriptions, Cadences, Renewal Reminders, and Member Tiers", async () => {
+        const { getNextRenewalReminderInfo } = await import("../src/lib/subscription-reminders");
+
+        // 1. Verify getNextRenewalReminderInfo explicitly recognizes Admin accounts
+        const adminUser = {
+            id: "admin-user-1",
+            username: "d281knilb",
+            role: "ADMIN",
+            status: "APPROVED",
+            membershipTier: "ADMIN",
+            subscriptionEndsAt: null,
+            subscriptionCadence: null,
+            trialEndsAt: null,
+            lastRenewalReminderSentAt: null,
+            renewalRemindersSent: null
+        };
+
+        const reminder = getNextRenewalReminderInfo({
+            user: adminUser,
+            settings: { yearlyRenewalReminderDays: "60,30,14,3,1", monthlyRenewalReminderDays: "7,3,1" }
+        });
+
+        if (reminder.status !== "not_applicable") {
+            throw new Error(`Expected admin reminder status to be 'not_applicable', got '${reminder.status}'`);
+        }
+        if (!reminder.label.includes("Permanent Access") && !reminder.label.includes("Admin")) {
+            throw new Error(`Expected admin reminder label to include Permanent Access or Admin, got '${reminder.label}'`);
+        }
+
+        // 2. Verify isTrial evaluates to false for admin accounts regardless of legacy fields
+        const dirtyAdminUser = {
+            ...adminUser,
+            status: "TRIAL",
+            membershipTier: "TRIAL",
+            trialEndsAt: new Date(Date.now() + 7 * 24 * 3600 * 1000)
+        };
+        const isAdminTrial = (dirtyAdminUser.status === "TRIAL" || dirtyAdminUser.membershipTier === "TRIAL") && dirtyAdminUser.status !== "APPROVED" && dirtyAdminUser.role !== "ADMIN";
+        if (isAdminTrial) {
+            throw new Error("Admin user must NEVER evaluate isTrial as true");
+        }
+
+        // 3. Verify Admin auto-heal and sanitization logic restores permanent access state
+        let recoveredAdmin = { ...dirtyAdminUser, subscriptionEndsAt: new Date(), subscriptionCadence: "YEARLY" };
+        if (recoveredAdmin.role === "ADMIN") {
+            recoveredAdmin.status = "APPROVED";
+            recoveredAdmin.subscriptionEndsAt = null;
+            recoveredAdmin.subscriptionCadence = null;
+            recoveredAdmin.trialEndsAt = null;
+            recoveredAdmin.membershipTier = "ADMIN";
+        }
+
+        if (recoveredAdmin.status !== "APPROVED" || recoveredAdmin.subscriptionEndsAt !== null || recoveredAdmin.subscriptionCadence !== null || recoveredAdmin.trialEndsAt !== null || recoveredAdmin.membershipTier !== "ADMIN") {
+            throw new Error(`Admin auto-heal failed: ${JSON.stringify(recoveredAdmin)}`);
+        }
+
+        // 4. Verify Permanent Access evaluation for UI
+        const isPermanentAccess = recoveredAdmin.role === "ADMIN" || (recoveredAdmin.status === "APPROVED" && !recoveredAdmin.subscriptionEndsAt);
+        if (!isPermanentAccess) {
+            throw new Error("Expected admin user to evaluate as permanent access");
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

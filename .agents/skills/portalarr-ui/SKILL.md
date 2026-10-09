@@ -656,6 +656,21 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 - **Strict Already-Paid Payment Check Callout**:
   - Highlights the automatic payment verification engine (`isUserSubscriptionPaidForCycle`), reassuring administrators that members who already sent their payments are strictly excluded from reminder emails.
 
+### 36. Platform Administrator Isolation from Subscriptions, Cadences & Member Tiers (`/settings/access` & `/settings/profile`)
+- **Strict Exemption from Subscriptions & Cadences**:
+  - Administrators (`role === "ADMIN"`) possess permanent, lifetime platform access and must NEVER have an annual plan, monthly plan, subscription expiration (`subscriptionEndsAt`), free trial (`trialEndsAt`), or member tier (`⭐ Tier 1`, `🛡️ Tier 2`) assigned or rendered.
+- **Access Control Directory Styling (`/settings/access`)**:
+  - **Badges**: Admin cards strictly display `🛡️ Platform Administrator` and `Permanent Access`. Annual/Monthly plan badges, next renewal reminder pills, and trial notice badges are completely hidden for admins.
+  - **Payment Row**: Displays `Payment: Exempt (Platform Administrator)` instead of member transaction history.
+  - **Action Buttons**: Suppresses subscription-specific action buttons (`Access & Timer`, `Credit Referral`, `Renewal Notice`) on admin cards, leaving only `Manage Libraries` and `View As` (impersonate).
+  - **Bulk Exclusion**: Checkboxes for bulk subscription/trial application are hidden on admin cards, and master bulk selection (`handleSelectAllFiltered`) as well as the backend (`bulkSetUsersTrialOrSubscriptionAction`) strictly exclude admin accounts from bulk updates.
+  - **Member Tier Selector**: Replaces the interactive `<Select>` tier dropdown with a static, non-selectable badge (`🛡️ Permanent Admin`) to prevent accidental tier reassignment.
+- **User Profile Status (`/settings/profile`)**:
+  - Under Account Access Status, admins are prominently identified with `<Badge variant="outline" className="bg-indigo-500/20 text-indigo-300 border-indigo-500/40"><ShieldCheck /> Platform Administrator (Permanent Access)</Badge>`.
+- **Backend Governance & Auto-Healing**:
+  - Backend mutations (`setUserTrialOrSubscription`, `updateUserMembershipTierAction`, `updateUserSubscriptionCadenceAction`, `sendSubscriptionRenewalReminderAction`) reject operations against admins with descriptive error feedback.
+  - Background expiration sweeps (`expireDueTrialsAndSubscriptionsInternal`) and role assignments (`updateAppUserRole`) automatically sanitize and heal any admin records to `status = "APPROVED"`, `subscriptionEndsAt = null`, `subscriptionCadence = null`, `trialEndsAt = null`, and `membershipTier = "ADMIN"`.
+
 ---
 
 As the Portalarr frontend evolves or new design decisions are finalized:

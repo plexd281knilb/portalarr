@@ -1107,6 +1107,9 @@ export async function updateUserSubscriptionCadenceAction(userId: string, cadenc
 
         const user = await prisma.user.findUnique({ where: { id: userId } });
         if (!user) return { success: false, error: "User not found." };
+        if (user.role === "ADMIN") {
+            return { success: false, error: "Platform Administrators have permanent access and do not have an annual or monthly subscription plan." };
+        }
 
         await prisma.user.update({
             where: { id: userId },

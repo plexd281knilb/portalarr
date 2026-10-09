@@ -2617,6 +2617,10 @@ export default function UserProfilePage() {
                                     <Badge variant="outline" className="bg-blue-500/20 text-blue-400 border-blue-500/40 gap-1.5 text-xs font-bold">
                                         <Timer className="h-3.5 w-3.5" /> {paymentConfig?.defaultTrialDays || 14}-Day Free Trial ({daysLeft} days remaining)
                                     </Badge>
+                                ) : user?.role === "ADMIN" ? (
+                                    <Badge variant="outline" className="bg-indigo-500/20 text-indigo-300 border-indigo-500/40 gap-1.5 text-xs font-bold">
+                                        <ShieldCheck className="h-3.5 w-3.5 text-indigo-400" /> Platform Administrator (Permanent Access)
+                                    </Badge>
                                 ) : user?.status === "APPROVED" && user?.subscriptionEndsAt ? (
                                     <Badge variant="outline" className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 gap-1.5 text-xs font-semibold">
                                         <CheckCircle2 className="h-3.5 w-3.5" /> {user.subscriptionCadence === "MONTHLY" ? "Monthly Plan" : "Annual Plan"} (Expires {format(new Date(user.subscriptionEndsAt), "MMM d, yyyy")})

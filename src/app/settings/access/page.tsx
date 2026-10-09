@@ -1286,7 +1286,7 @@ export default function AccessSettingsPage() {
     };
 
     const handleSelectAllFiltered = (filtered: any[]) => {
-        const filteredIds = filtered.map(u => u.id);
+        const filteredIds = filtered.filter(u => u.role !== "ADMIN").map(u => u.id);
         const allSelected = filteredIds.length > 0 && filteredIds.every(id => selectedUserIds.includes(id));
         if (allSelected) {
             setSelectedUserIds(prev => prev.filter(id => !filteredIds.includes(id)));
@@ -2165,13 +2165,15 @@ export default function AccessSettingsPage() {
                                                 {/* TOP ROW: USER INFO & BADGES */}
                                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                                                     <div className="flex items-center gap-3 min-w-0 flex-1">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={selectedUserIds.includes(user.id)}
-                                                            onChange={() => toggleSelectUser(user.id)}
-                                                            className="w-4 h-4 rounded border-border/60 bg-muted/30 text-amber-500 focus:ring-amber-500/50 cursor-pointer accent-amber-500 shrink-0"
-                                                            title={`Select ${user.username} for bulk actions`}
-                                                        />
+                                                        {!isAdmin && (
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={selectedUserIds.includes(user.id)}
+                                                                onChange={() => toggleSelectUser(user.id)}
+                                                                className="w-4 h-4 rounded border-border/60 bg-muted/30 text-amber-500 focus:ring-amber-500/50 cursor-pointer accent-amber-500 shrink-0"
+                                                                title={`Select ${user.username} for bulk actions`}
+                                                            />
+                                                        )}
                                                         <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20">
                                                             {user.role === "ADMIN" ? <Shield className="h-5 w-5 text-primary" /> : <User className="h-5 w-5 text-muted-foreground" />}
                                                         </div>
@@ -2247,7 +2249,11 @@ export default function AccessSettingsPage() {
                                                                 "{user.subAccountLabel}"
                                                             </Badge>
                                                         )}
-                                                        {user.membershipTier === "TIER_2_VIP" ? (
+                                                        {isAdmin ? (
+                                                            <Badge variant="outline" className="bg-indigo-500/20 text-indigo-300 border-indigo-500/40 text-xs font-bold gap-1">
+                                                                <Shield className="h-3 w-3 text-indigo-400" /> Platform Administrator
+                                                            </Badge>
+                                                        ) : user.membershipTier === "TIER_2_VIP" ? (
                                                             <Badge variant="outline" className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-xs font-bold">
                                                                 🛡️ Tier 2 (Managed Support)
                                                             </Badge>
@@ -2298,18 +2304,18 @@ export default function AccessSettingsPage() {
                                                                 <Clock className="h-3 w-3" /> Pending Approval
                                                             </Badge>
                                                         )}
-                                                        {isTrial && (
+                                                        {!isAdmin && isTrial && (
                                                             <Badge variant="outline" className="bg-blue-500/20 text-blue-300 border-blue-500/40 text-xs gap-1 font-bold">
                                                                 <Timer className="h-3 w-3" /> Trial ({daysLeft}d left)
                                                             </Badge>
                                                         )}
-                                                        {user.status === "APPROVED" && user.subscriptionEndsAt && (
+                                                        {!isAdmin && user.status === "APPROVED" && user.subscriptionEndsAt && (
                                                             <Badge variant="outline" className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-xs gap-1 font-semibold">
                                                                 <CheckCircle2 className="h-3 w-3" /> {user.subscriptionCadence === "MONTHLY" ? "Monthly Plan" : "Annual Plan"} ({format(new Date(user.subscriptionEndsAt), "MMM d, yyyy")})
                                                             </Badge>
                                                         )}
                                                         {/* NEXT RENEWAL REMINDER BADGE */}
-                                                        {user.status === "APPROVED" && user.subscriptionEndsAt && (
+                                                        {!isAdmin && user.status === "APPROVED" && user.subscriptionEndsAt && (
                                                             reminderInfo.status === "paid" ? (
                                                                 <Badge 
                                                                     variant="outline" 
@@ -2344,7 +2350,7 @@ export default function AccessSettingsPage() {
                                                                 </Badge>
                                                             ) : null
                                                         )}
-                                                        {user.status === "TRIAL" && user.trialEndsAt && (
+                                                        {!isAdmin && user.status === "TRIAL" && user.trialEndsAt && (
                                                             reminderInfo.status === "due_today" ? (
                                                                 <Badge 
                                                                     variant="outline" 
@@ -2357,18 +2363,18 @@ export default function AccessSettingsPage() {
                                                                 <Badge 
                                                                     variant="outline" 
                                                                     className="bg-blue-500/15 text-blue-300 border-blue-500/30 text-[10px] gap-1 font-medium cursor-help"
-                                                                    title={reminderInfo.details}
+                                                                    title={reminderInfo.badgeText}
                                                                 >
                                                                     <BellRing className="h-3 w-3 text-blue-400" /> Next Notice: {reminderInfo.badgeText}
                                                                 </Badge>
                                                             ) : null
                                                         )}
-                                                        {user.lastRenewalReminderSentAt && (
+                                                        {!isAdmin && user.lastRenewalReminderSentAt && (
                                                             <Badge variant="outline" className="bg-amber-500/15 text-amber-300 border-amber-500/30 text-[10px] gap-1 font-medium" title={`Last renewal reminder dispatched on ${format(new Date(user.lastRenewalReminderSentAt), "MMM d, yyyy h:mm a")}`}>
                                                                 <CalendarClock className="h-3 w-3 text-amber-400" /> Reminder Sent ({format(new Date(user.lastRenewalReminderSentAt), "MMM d")})
                                                             </Badge>
                                                         )}
-                                                        {user.status === "APPROVED" && !user.subscriptionEndsAt && (
+                                                        {(isAdmin || (user.status === "APPROVED" && !user.subscriptionEndsAt)) && (
                                                             <Badge variant="outline" className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-xs gap-1 font-semibold">
                                                                 <CheckCircle2 className="h-3 w-3" /> Permanent Access
                                                             </Badge>
@@ -2493,7 +2499,9 @@ export default function AccessSettingsPage() {
                                                     <div className="flex items-center gap-1.5 min-w-0 sm:col-span-2 lg:col-span-3 pt-1 border-t border-border/20">
                                                         <DollarSign className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
                                                         <span className="text-muted-foreground shrink-0 font-medium">Payment:</span>
-                                                        {user.paymentTransactions && user.paymentTransactions.length > 0 ? (
+                                                        {isAdmin ? (
+                                                            <span className="text-muted-foreground italic text-xs">Exempt (Platform Administrator)</span>
+                                                        ) : user.paymentTransactions && user.paymentTransactions.length > 0 ? (
                                                             <div className="flex items-center gap-2 flex-wrap min-w-0">
                                                                 <span className="font-semibold text-emerald-400">
                                                                     Last Paid: ${user.paymentTransactions[0].amount.toFixed(2)} ({user.paymentTransactions[0].provider})
@@ -2625,22 +2633,24 @@ export default function AccessSettingsPage() {
                                                         </Button>
 
                                                         {/* TRIAL / SUBSCRIPTION TIMER BUTTON */}
-                                                        <Button 
-                                                            size="sm" 
-                                                            variant="outline" 
-                                                            className="h-8 px-2.5 text-xs font-semibold gap-1.5 border-blue-500/40 text-blue-400 hover:bg-blue-500/10 hover:border-blue-500 transition-all active:scale-95"
-                                                            onClick={() => {
-                                                                setSubModalUser(user);
-                                                                setShowCustomTrialScreen(false);
-                                                                setCustomTrialDaysInput(paymentSettings.defaultTrialDays || 7);
-                                                                setSubSuccessMsg("");
-                                                                setSubErrMsg("");
-                                                            }}
-                                                            title="Adjust Trial or Subscription Period"
-                                                        >
-                                                            <Timer className="h-3.5 w-3.5 text-blue-400" />
-                                                            Access & Timer
-                                                        </Button>
+                                                        {!isAdmin && (
+                                                            <Button 
+                                                                size="sm" 
+                                                                variant="outline" 
+                                                                className="h-8 px-2.5 text-xs font-semibold gap-1.5 border-blue-500/40 text-blue-400 hover:bg-blue-500/10 hover:border-blue-500 transition-all active:scale-95"
+                                                                onClick={() => {
+                                                                    setSubModalUser(user);
+                                                                    setShowCustomTrialScreen(false);
+                                                                    setCustomTrialDaysInput(paymentSettings.defaultTrialDays || 7);
+                                                                    setSubSuccessMsg("");
+                                                                    setSubErrMsg("");
+                                                                }}
+                                                                title="Adjust Trial or Subscription Period"
+                                                            >
+                                                                <Timer className="h-3.5 w-3.5 text-blue-400" />
+                                                                Access & Timer
+                                                            </Button>
+                                                        )}
 
                                                         {/* VIEW AS USER (IMPERSONATE) BUTTON */}
                                                         <Button 
@@ -2660,19 +2670,21 @@ export default function AccessSettingsPage() {
                                                         </Button>
 
                                                         {/* CREDIT REFERRAL BUTTON */}
-                                                        <Button 
-                                                            size="sm" 
-                                                            variant="outline" 
-                                                            className="h-8 px-2.5 text-xs font-semibold gap-1.5 border-purple-500/40 text-purple-300 hover:bg-purple-500/15 hover:border-purple-500 transition-all active:scale-95"
-                                                            onClick={() => handleOpenCreditReferralModal(user)}
-                                                            title="Credit this member for a referral or assign who invited them"
-                                                        >
-                                                            <Gift className="h-3.5 w-3.5 text-purple-400" />
-                                                            Credit Referral
-                                                        </Button>
+                                                        {!isAdmin && (
+                                                            <Button 
+                                                                size="sm" 
+                                                                variant="outline" 
+                                                                className="h-8 px-2.5 text-xs font-semibold gap-1.5 border-purple-500/40 text-purple-300 hover:bg-purple-500/15 hover:border-purple-500 transition-all active:scale-95"
+                                                                onClick={() => handleOpenCreditReferralModal(user)}
+                                                                title="Credit this member for a referral or assign who invited them"
+                                                            >
+                                                                <Gift className="h-3.5 w-3.5 text-purple-400" />
+                                                                Credit Referral
+                                                            </Button>
+                                                        )}
 
                                                         {/* SEND RENEWAL REMINDER BUTTON */}
-                                                        {user.status === "APPROVED" && user.subscriptionEndsAt && (
+                                                        {!isAdmin && user.status === "APPROVED" && user.subscriptionEndsAt && (
                                                             <Button 
                                                                 size="sm" 
                                                                 variant="outline" 
@@ -2693,16 +2705,23 @@ export default function AccessSettingsPage() {
 
                                                     <div className="flex flex-wrap items-center gap-2">
                                                         {/* MEMBERSHIP TIER SELECTOR */}
-                                                        <Select value={user.membershipTier || "STANDARD"} onValueChange={(val) => handleMembershipTierChange(user.id, val)}>
-                                                            <SelectTrigger className="h-8 text-xs w-44 bg-background/80 border-border/60 font-semibold" title="Membership Plan Tier">
-                                                                <SelectValue />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                <SelectItem value="STANDARD">⭐ Tier 1: Regular Member</SelectItem>
-                                                                <SelectItem value="TIER_2_VIP">🛡️ Tier 2: Managed Support</SelectItem>
-                                                                <SelectItem value="TRIAL">⏱️ Trial Pass</SelectItem>
-                                                            </SelectContent>
-                                                        </Select>
+                                                        {isAdmin ? (
+                                                            <div className="h-8 px-3 rounded-md bg-indigo-500/10 border border-indigo-500/30 flex items-center gap-1.5 text-xs font-semibold text-indigo-300" title="Platform Administrators have permanent full access and do not have member tiers">
+                                                                <Shield className="h-3.5 w-3.5 text-indigo-400" />
+                                                                Permanent Admin
+                                                            </div>
+                                                        ) : (
+                                                            <Select value={user.membershipTier || "STANDARD"} onValueChange={(val) => handleMembershipTierChange(user.id, val)}>
+                                                                <SelectTrigger className="h-8 text-xs w-44 bg-background/80 border-border/60 font-semibold" title="Membership Plan Tier">
+                                                                    <SelectValue />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    <SelectItem value="STANDARD">⭐ Tier 1: Regular Member</SelectItem>
+                                                                    <SelectItem value="TIER_2_VIP">🛡️ Tier 2: Managed Support</SelectItem>
+                                                                    <SelectItem value="TRIAL">⏱️ Trial Pass</SelectItem>
+                                                                </SelectContent>
+                                                            </Select>
+                                                        )}
 
                                                         {/* ROLE SELECTOR */}
                                                         <Select value={user.role} onValueChange={(val) => handleRoleChange(user.id, val)}>

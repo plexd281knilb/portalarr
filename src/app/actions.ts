@@ -3175,18 +3175,24 @@ export async function expireDueTrialsAndSubscriptionsInternal() {
     try {
         await ensureSchemaColumns();
 
-        // 0. Auto-recover any ADMIN whose status was set to EXPIRED or SUSPENDED
+        // 0. Auto-recover and ensure all ADMIN accounts have clean permanent platform access
+        // (Admins should NOT have an annual plan, monthly plan, subscription expiry, or trial)
         const admins = await prisma.user.findMany({
-            where: {
-                role: "ADMIN",
-                status: { in: ["EXPIRED", "SUSPENDED"] }
-            }
+            where: { role: "ADMIN" }
         });
         for (const a of admins) {
-            await prisma.user.update({
-                where: { id: a.id },
-                data: { status: "APPROVED", trialEndsAt: null, subscriptionEndsAt: null }
-            }).catch(() => {});
+            if (a.subscriptionEndsAt || a.subscriptionCadence || a.trialEndsAt || a.status !== "APPROVED" || a.membershipTier !== "ADMIN") {
+                await prisma.user.update({
+                    where: { id: a.id },
+                    data: {
+                        status: "APPROVED",
+                        trialEndsAt: null,
+                        subscriptionEndsAt: null,
+                        subscriptionCadence: null,
+                        membershipTier: "ADMIN"
+                    }
+                }).catch(() => {});
+            }
         }
 
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
@@ -3616,9 +3622,19 @@ export async function updateAppUserRole(id: string, role: string) {
     await verifyAdmin();
     try {
         const targetUser = await prisma.user.findUnique({ where: { id } });
+        const updateData: any = { role };
+        if (role === "ADMIN") {
+            updateData.status = "APPROVED";
+            updateData.subscriptionEndsAt = null;
+            updateData.subscriptionCadence = null;
+            updateData.trialEndsAt = null;
+            updateData.membershipTier = "ADMIN";
+        } else if (targetUser?.membershipTier === "ADMIN") {
+            updateData.membershipTier = "STANDARD";
+        }
         await prisma.user.update({
             where: { id },
-            data: { role }
+            data: updateData
         });
 
         if (targetUser && targetUser.role !== role) {
@@ -4657,6 +4673,9 @@ export async function setUserTrialOrSubscription(
         await verifyAdmin();
         const user = await prisma.user.findUnique({ where: { id: userId } });
         if (!user) return { success: false, error: "User not found" };
+        if (user.role === "ADMIN") {
+            return { success: false, error: "Platform Administrators have permanent access and cannot be assigned subscriptions or trials." };
+        }
 
         let status = user.status;
         let trialEndsAt: Date | null = user.trialEndsAt;
@@ -5132,6 +5151,11 @@ export async function bulkSetUsersTrialOrSubscriptionAction(
 
         for (const userId of userIds) {
             try {
+                const target = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+                if (target?.role === "ADMIN") {
+                    // Platform administrators permanently have access and are exempt from subscriptions/trials
+                    continue;
+                }
                 const res = await setUserTrialOrSubscription(userId, type, customDateOrDays);
                 if (res.success) {
                     updatedCount++;
@@ -5621,6 +5645,9 @@ export async function sendSubscriptionRenewalReminderAction(userId: string) {
         });
 
         if (!user) return { success: false, error: "User not found." };
+        if (user.role === "ADMIN") {
+            return { success: false, error: `@${user.username} is a Platform Administrator with permanent access. Administrators do not have subscriptions or renewal notices.` };
+        }
         if (!user.email) return { success: false, error: `User @${user.username} has no email address configured.` };
 
         const settings = await prisma.settings.findUnique({ where: { id: "global" } });
@@ -6542,11 +6569,16 @@ export async function updateUserMembershipTierAction(userId: string, membershipT
         const validTiers = ["STANDARD", "TIER_2_VIP", "TRIAL"];
         const cleanTier = validTiers.includes(membershipTier) ? membershipTier : "STANDARD";
 
+        const target = await prisma.user.findUnique({ where: { id: userId }, select: { status: true, role: true } });
+        if (!target) return { success: false, error: "User not found" };
+        if (target.role === "ADMIN") {
+            return { success: false, error: "Platform Administrators have permanent access and cannot be assigned to member tiers." };
+        }
+
         const updatePayload: any = { membershipTier: cleanTier };
         if (cleanTier === "TRIAL") {
             updatePayload.status = "TRIAL";
         } else {
-            const target = await prisma.user.findUnique({ where: { id: userId }, select: { status: true } });
             if (target?.status === "TRIAL") {
                 updatePayload.status = "APPROVED";
                 updatePayload.trialEndsAt = null;
