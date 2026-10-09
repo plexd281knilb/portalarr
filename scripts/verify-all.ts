@@ -6018,6 +6018,101 @@ async function runTestSuite() {
         }
     });
 
+    // 91. Discord Bot: Canonical Blueprint, Server Architecture, Roles & Pinned Guides Engine
+    await assertTest("Test 91: Discord Bot: Canonical Blueprint, Server Architecture, Roles & Pinned Guides Engine", async () => {
+        const {
+            DISCORD_SERVER_BLUEPRINT,
+            DISCORD_ROLES_BLUEPRINT,
+            generateDiscordEmbed,
+            getDiscordBotInviteUrl
+        } = await import("../src/lib/discord/discord-bot");
+        const { encryptData, decryptData } = await import("../src/lib/encryption");
+
+        // 1. Verify Server Blueprint Categories & Channels
+        if (!Array.isArray(DISCORD_SERVER_BLUEPRINT) || DISCORD_SERVER_BLUEPRINT.length < 5) {
+            throw new Error(`Expected at least 5 blueprint categories, found ${DISCORD_SERVER_BLUEPRINT.length}`);
+        }
+
+        const categoryNames = DISCORD_SERVER_BLUEPRINT.map(c => c.name);
+        if (!categoryNames.some(n => n.includes("INFORMATION"))) throw new Error("Missing Information & Rules category");
+        if (!categoryNames.some(n => n.includes("SETUP"))) throw new Error("Missing Setup & Guides category");
+        if (!categoryNames.some(n => n.includes("MEDIA"))) throw new Error("Missing Media & Requests category");
+        if (!categoryNames.some(n => n.includes("COMMUNITY"))) throw new Error("Missing Community Lounge category");
+        if (!categoryNames.some(n => n.includes("SUPPORT"))) throw new Error("Missing Support & Help Desk category");
+
+        const allChannels = DISCORD_SERVER_BLUEPRINT.flatMap(c => c.channels);
+        const channelNames = allChannels.map(ch => ch.name);
+
+        const requiredChannels = [
+            "welcome-and-rules", "announcements", "system-status", "subscription-tiers",
+            "plex-setup-guides", "kindle-and-reading", "audiobooks-guide",
+            "media-requests", "recently-added", "leaving-soon", "recommendations",
+            "general-chat", "movies-and-tv", "reading-nook", "transcode-doctor", "support-tickets"
+        ];
+
+        for (const req of requiredChannels) {
+            if (!channelNames.includes(req)) {
+                throw new Error(`Missing expected blueprint channel: ${req}`);
+            }
+        }
+
+        // 2. Verify Roles Blueprint
+        if (!Array.isArray(DISCORD_ROLES_BLUEPRINT) || DISCORD_ROLES_BLUEPRINT.length < 4) {
+            throw new Error(`Expected 4 member roles in blueprint, got ${DISCORD_ROLES_BLUEPRINT.length}`);
+        }
+        const roleNames = DISCORD_ROLES_BLUEPRINT.map(r => r.name);
+        if (!roleNames.some(r => r.includes("Admin"))) throw new Error("Missing Admin role in blueprint");
+        if (!roleNames.some(r => r.includes("Tier 2"))) throw new Error("Missing Tier 2 VIP role in blueprint");
+        if (!roleNames.some(r => r.includes("Tier 1"))) throw new Error("Missing Tier 1 Regular role in blueprint");
+        if (!roleNames.some(r => r.includes("Trial"))) throw new Error("Missing Trial Pass role in blueprint");
+
+        // 3. Verify Rich Pinned Embed Generators
+        const welcomeEmbed = generateDiscordEmbed("welcome_rules");
+        if (!welcomeEmbed.title || !welcomeEmbed.description || !welcomeEmbed.fields || welcomeEmbed.fields.length < 4) {
+            throw new Error("Welcome & Rules embed must have title, description, and at least 4 guideline fields");
+        }
+
+        const tiersEmbed = generateDiscordEmbed("subscription_tiers");
+        if (!tiersEmbed.title?.includes("Membership Plans")) throw new Error("Invalid subscription tiers embed title");
+        if (!tiersEmbed.fields?.some(f => f.name.includes("Tier 1"))) throw new Error("Tiers embed must include Tier 1");
+        if (!tiersEmbed.fields?.some(f => f.name.includes("Tier 2"))) throw new Error("Tiers embed must include Tier 2");
+        if (!tiersEmbed.fields?.some(f => f.name.includes("Payment Methods"))) throw new Error("Tiers embed must list payment options");
+
+        const plexEmbed = generateDiscordEmbed("plex_guides");
+        if (!plexEmbed.title?.includes("Plex Device Setup")) throw new Error("Invalid plex guides embed title");
+        if (!plexEmbed.fields?.some(f => f.name.includes("Apple TV"))) throw new Error("Plex embed missing Apple TV");
+        if (!plexEmbed.fields?.some(f => f.name.includes("Roku"))) throw new Error("Plex embed missing Roku");
+        if (!plexEmbed.fields?.some(f => f.name.includes("Fire TV"))) throw new Error("Plex embed missing Fire TV");
+
+        const doctorEmbed = generateDiscordEmbed("transcode_doctor");
+        if (!doctorEmbed.title?.includes("Transcode Doctor")) throw new Error("Invalid transcode doctor embed title");
+        if (!doctorEmbed.fields?.some(f => f.name.includes("720p"))) throw new Error("Doctor embed missing 720p throttle fix");
+
+        const statusEmbed = generateDiscordEmbed("system_status", {
+            summary: { totalConfigured: 3, onlineCount: 3, offlineCount: 0 },
+            services: [
+                { category: "PLEX", name: "MainPlexServer", status: "ONLINE", latencyMs: 12 },
+                { category: "HOST", name: "Glances Unraid", status: "ONLINE", latencyMs: 5 },
+                { category: "ARR", name: "Radarr", status: "ONLINE", latencyMs: 8 }
+            ]
+        });
+        if (!statusEmbed.title?.includes("All Systems Operational")) throw new Error("Expected all systems operational in status embed");
+        if (!statusEmbed.fields?.some(f => f.value.includes("MainPlexServer"))) throw new Error("Status embed missing MainPlexServer");
+
+        // 4. Verify Bot Invite URL Generator
+        const invite = getDiscordBotInviteUrl("123456789012345678");
+        if (!invite.includes("client_id=123456789012345678") || !invite.includes("permissions=8") || !invite.includes("scope=bot")) {
+            throw new Error(`Unexpected bot invite URL: ${invite}`);
+        }
+
+        // 5. Verify Token Encryption & Decryption
+        const sampleToken = "Bot.MTIzNDU2Nzg5MDEyMzQ1Njc4.GA-XYZ.abcdefghijklmnopqrstuvwxyz123456";
+        const encrypted = encryptData(sampleToken);
+        if (encrypted === sampleToken) throw new Error("Token was not encrypted");
+        const decrypted = decryptData(encrypted);
+        if (decrypted !== sampleToken) throw new Error("Decrypted token does not match original token");
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

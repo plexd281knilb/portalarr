@@ -24,6 +24,7 @@ export type LogCategory =
     | "AUTO_GRAB"
     | "APPROVAL"
     | "MONITORING"
+    | "DISCORD"
     | "PLEX_HUB"; // backward compatibility
 
 export interface SystemLogEntry {

@@ -54,6 +54,17 @@ model Settings {
   billingType        String?   @default("YEARLY_PRORATED")
   requireReferralForSignup Boolean @default(false)
   discordInviteUrl   String?   // Discord server invite link for onboarding
+  
+  // Discord Bot & Server Management Engine
+  discordBotToken               String?   // AES-256-GCM Encrypted Discord Bot Token
+  discordGuildId                String?   // Discord Server (Guild) ID
+  discordClientId               String?   // Discord Application / Client ID (for 1-click bot invite URL)
+  discordServerSyncEnabled      Boolean   @default(true)
+  discordStatusChannelId        String?   // Mapped #system-status channel ID
+  discordRequestsChannelId      String?   // Mapped #media-requests channel ID
+  discordAnnouncementsChannelId String?   // Mapped #announcements channel ID
+  discordLastSyncAt             DateTime?
+  discordLastSyncStatus         String?   // JSON telemetry summary of last server sync
   subscriptionGracePeriodDays Int? @default(3) // Grace period days after subscription expires before suspension
   membershipTiersEnabled Boolean @default(true)
   autoSuspendExpiredAccounts Boolean @default(false) // Safety switch - OFF by default

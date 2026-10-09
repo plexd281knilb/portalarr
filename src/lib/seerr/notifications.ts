@@ -3,6 +3,7 @@ import { decryptData } from "@/lib/encryption";
 import { getAppUrl } from "@/lib/app-url";
 import { renderEmailTemplate } from "@/lib/email-templates";
 import { logger } from "@/lib/logger";
+import { postDiscordMessage } from "@/lib/discord/discord-bot";
 
 export type SeerrNotificationEvent = 
     | "PENDING"
@@ -48,12 +49,15 @@ export async function sendSeerrDiscordWebhook(
     extra?: SeerrNotificationExtra
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-        if (!settings || !settings.seerrDiscordWebhookUrl || !settings.seerrDiscordWebhookUrl.trim()) {
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } }) || await prisma.settings.findFirst();
+        if (!settings) {
+            return { success: true };
+        }
+        const webhookUrl = settings.seerrDiscordWebhookUrl?.trim();
+        const hasBot = !!(settings.discordBotToken && settings.discordRequestsChannelId);
+        if (!webhookUrl && !hasBot) {
             return { success: true }; // Not configured, silently skip
         }
-
-        const webhookUrl = settings.seerrDiscordWebhookUrl.trim();
 
         // Check event toggle
         if (event === "PENDING" && settings.seerrDiscordNotifyPending === false) return { success: true };
@@ -178,23 +182,42 @@ export async function sendSeerrDiscordWebhook(
         const botUsername = settings.seerrDiscordBotUsername || "DomsHomeLab";
         const botAvatar = settings.seerrDiscordBotAvatarUrl || undefined;
 
-        const res = await fetch(webhookUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                username: botUsername,
-                avatar_url: botAvatar,
-                embeds: [embed]
-            })
-        });
+        if (webhookUrl) {
+            const res = await fetch(webhookUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    username: botUsername,
+                    avatar_url: botAvatar,
+                    embeds: [embed]
+                })
+            });
 
-        if (!res.ok) {
-            const errText = await res.text().catch(() => "");
-            logger.addLog("WARN", "SEERR", `Discord webhook returned HTTP ${res.status}: ${errText}`);
-            return { success: false, error: `Discord HTTP ${res.status}: ${errText}` };
+            if (!res.ok) {
+                const errText = await res.text().catch(() => "");
+                logger.addLog("WARN", "SEERR", `Discord webhook returned HTTP ${res.status}: ${errText}`);
+                return { success: false, error: `Discord HTTP ${res.status}: ${errText}` };
+            }
+
+            logger.addLog("INFO", "SEERR", `Dispatched Discord webhook for event ${event} ("${request.title}")`);
+            return { success: true };
+        } else if (hasBot && settings?.discordBotToken && settings?.discordRequestsChannelId) {
+            const rawToken = decryptData(settings.discordBotToken);
+            if (rawToken) {
+                const botRes = await postDiscordMessage({
+                    botToken: rawToken,
+                    channelId: settings.discordRequestsChannelId,
+                    embeds: [embed]
+                });
+                if (botRes.success) {
+                    logger.addLog("INFO", "SEERR", `Dispatched Discord bot message to #media-requests for event ${event} ("${request.title}")`);
+                    return { success: true };
+                } else {
+                    logger.addLog("WARN", "SEERR", `Discord bot failed sending to #media-requests: ${botRes.error}`);
+                    return { success: false, error: botRes.error };
+                }
+            }
         }
-
-        logger.addLog("INFO", "SEERR", `Dispatched Discord webhook for event ${event} ("${request.title}")`);
         return { success: true };
     } catch (e: any) {
         logger.addLog("ERROR", "SEERR", `Failed sending Discord webhook: ${e.message}`);

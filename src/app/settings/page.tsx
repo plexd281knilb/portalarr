@@ -34,7 +34,7 @@ import {
     AlertTriangle, PlaySquare, Activity, Sliders, Megaphone, Beaker, 
     CheckCircle2, XCircle, MailCheck, RefreshCw, Mail, FolderCheck, 
     Radio, ExternalLink, FileCode, Check, Bot, Sparkles, Key, Cpu, Eye, EyeOff, Terminal, Zap, Tv,
-    Bell, BellOff, UserCheck, BookOpen, LifeBuoy, Save, RotateCcw, Star, Globe, Compass
+    Bell, BellOff, UserCheck, BookOpen, LifeBuoy, Save, RotateCcw, Star, Globe, Compass, MessageSquare
 } from "lucide-react";
 import { 
     Dialog, 
@@ -50,6 +50,7 @@ import AccessSettingsPage from "@/app/settings/access/page";
 import SystemLogsViewer from "@/components/system-logs-viewer";
 import EmailManagement from "@/components/email-management";
 import { SeerrSettingsPanel } from "@/components/seerr/seerr-settings-panel";
+import DiscordSettingsPanel from "@/components/discord/discord-settings-panel";
 import CloudflarePolicyCard from "@/components/cloudflare-policy-card";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -1221,7 +1222,7 @@ function SettingsPageContent() {
             </div>
 
             <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-                <TabsList className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 w-full h-auto p-1.5 bg-muted/40 border border-muted/60 rounded-xl gap-1.5 shadow-md">
+                <TabsList className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 w-full h-auto p-1.5 bg-muted/40 border border-muted/60 rounded-xl gap-1.5 shadow-md">
                     <TabsTrigger value="general" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-orange-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(249,115,22,0.25)] hover:bg-muted/80 data-[state=active]:text-orange-400 data-[state=active]:bg-orange-500/10 data-[state=active]:border-orange-500/40 data-[state=active]:shadow-sm min-w-0">
                         <Sliders className="h-4 w-4 text-orange-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
                         <span className="truncate">General & Setup</span>
@@ -1249,6 +1250,10 @@ function SettingsPageContent() {
                     <TabsTrigger value="emails" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-amber-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(251,191,36,0.25)] hover:bg-muted/80 data-[state=active]:text-amber-400 data-[state=active]:bg-amber-500/10 data-[state=active]:border-amber-500/40 data-[state=active]:shadow-sm min-w-0">
                         <Mail className="h-4 w-4 text-amber-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
                         <span className="truncate">Broadcast & Emails</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="discord" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-indigo-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(99,102,241,0.25)] hover:bg-muted/80 data-[state=active]:text-indigo-400 data-[state=active]:bg-indigo-500/10 data-[state=active]:border-indigo-500/40 data-[state=active]:shadow-sm min-w-0">
+                        <MessageSquare className="h-4 w-4 text-indigo-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
+                        <span className="truncate">Discord Bot</span>
                     </TabsTrigger>
                     <TabsTrigger value="monitoring" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-sky-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(56,189,248,0.25)] hover:bg-muted/80 data-[state=active]:text-sky-400 data-[state=active]:bg-sky-500/10 data-[state=active]:border-sky-500/40 data-[state=active]:shadow-sm min-w-0">
                         <Activity className="h-4 w-4 text-sky-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
@@ -4216,6 +4221,10 @@ function SettingsPageContent() {
                             setSeerrDirtySections(sections);
                         }}
                     />
+                </TabsContent>
+
+                <TabsContent value="discord">
+                    <DiscordSettingsPanel />
                 </TabsContent>
 
                 <TabsContent value="logs">
