@@ -218,6 +218,65 @@ export default function UserProfilePage() {
         )
     );
 
+    const isSectionAllowed = (sec: any, server?: any) => {
+        if (isTrial) {
+            const sName = (server?.serverName || "").toLowerCase();
+            const secTitle = (sec?.title || "").toLowerCase();
+            if (sName.includes("kid") || sName.includes("backup") || secTitle.includes("kid")) {
+                return false;
+            }
+        }
+        if (user?.role === "ADMIN") return true;
+        if (!allowedLibraries || allowedLibraries.length === 0) return true;
+        const secId = String(sec?.id ?? "");
+        const secKey = String(sec?.key ?? "");
+        const uniqueKey = sec?.uniqueKey || (server?.serverId ? `${server.serverId}:${secId}` : "");
+        const uniqueServerKey = server?.serverId && secKey ? `${server.serverId}:${secKey}` : "";
+        const title = String(sec?.title ?? "").toLowerCase().trim();
+
+        return (
+            allowedLibraries.includes(uniqueKey) ||
+            allowedLibraries.includes(uniqueServerKey) ||
+            allowedLibraries.includes(secId) ||
+            allowedLibraries.includes(secKey) ||
+            allowedLibraries.some(ak => {
+                const akClean = String(ak).trim();
+                return (
+                    akClean === secId ||
+                    akClean === secKey ||
+                    akClean.endsWith(`:${secId}`) ||
+                    akClean.endsWith(`:${secKey}`) ||
+                    akClean.toLowerCase() === title
+                );
+            })
+        );
+    };
+
+    const isSectionSelected = (sec: any, server?: any) => {
+        const secId = String(sec?.id ?? "");
+        const secKey = String(sec?.key ?? "");
+        const uniqueKey = sec?.uniqueKey || (server?.serverId ? `${server.serverId}:${secId}` : "");
+        const uniqueServerKey = server?.serverId && secKey ? `${server.serverId}:${secKey}` : "";
+        const title = String(sec?.title ?? "").toLowerCase().trim();
+
+        return (
+            selectedLibraries.includes(uniqueKey) ||
+            selectedLibraries.includes(uniqueServerKey) ||
+            selectedLibraries.includes(secId) ||
+            selectedLibraries.includes(secKey) ||
+            selectedLibraries.some(sk => {
+                const skClean = String(sk).trim();
+                return (
+                    skClean === secId ||
+                    skClean === secKey ||
+                    skClean.endsWith(`:${secId}`) ||
+                    skClean.endsWith(`:${secKey}`) ||
+                    skClean.toLowerCase() === title
+                );
+            })
+        );
+    };
+
     const isInitialSectionSelected = (sec: any, server?: any) => {
         if (!initialProfileRef.current) return false;
         const initKeys = initialProfileRef.current.selectedLibraries;
@@ -485,65 +544,6 @@ export default function UserProfilePage() {
     }, []);
 
     // --- LIBRARY PREFERENCE HANDLERS ---
-    const isSectionAllowed = (sec: any, server?: any) => {
-        if (isTrial) {
-            const sName = (server?.serverName || "").toLowerCase();
-            const secTitle = (sec?.title || "").toLowerCase();
-            if (sName.includes("kid") || sName.includes("backup") || secTitle.includes("kid")) {
-                return false;
-            }
-        }
-        if (user?.role === "ADMIN") return true;
-        if (!allowedLibraries || allowedLibraries.length === 0) return true;
-        const secId = String(sec?.id ?? "");
-        const secKey = String(sec?.key ?? "");
-        const uniqueKey = sec?.uniqueKey || (server?.serverId ? `${server.serverId}:${secId}` : "");
-        const uniqueServerKey = server?.serverId && secKey ? `${server.serverId}:${secKey}` : "";
-        const title = String(sec?.title ?? "").toLowerCase().trim();
-
-        return (
-            allowedLibraries.includes(uniqueKey) ||
-            allowedLibraries.includes(uniqueServerKey) ||
-            allowedLibraries.includes(secId) ||
-            allowedLibraries.includes(secKey) ||
-            allowedLibraries.some(ak => {
-                const akClean = String(ak).trim();
-                return (
-                    akClean === secId ||
-                    akClean === secKey ||
-                    akClean.endsWith(`:${secId}`) ||
-                    akClean.endsWith(`:${secKey}`) ||
-                    akClean.toLowerCase() === title
-                );
-            })
-        );
-    };
-
-    const isSectionSelected = (sec: any, server?: any) => {
-        const secId = String(sec?.id ?? "");
-        const secKey = String(sec?.key ?? "");
-        const uniqueKey = sec?.uniqueKey || (server?.serverId ? `${server.serverId}:${secId}` : "");
-        const uniqueServerKey = server?.serverId && secKey ? `${server.serverId}:${secKey}` : "";
-        const title = String(sec?.title ?? "").toLowerCase().trim();
-
-        return (
-            selectedLibraries.includes(uniqueKey) ||
-            selectedLibraries.includes(uniqueServerKey) ||
-            selectedLibraries.includes(secId) ||
-            selectedLibraries.includes(secKey) ||
-            selectedLibraries.some(sk => {
-                const skClean = String(sk).trim();
-                return (
-                    skClean === secId ||
-                    skClean === secKey ||
-                    skClean.endsWith(`:${secId}`) ||
-                    skClean.endsWith(`:${secKey}`) ||
-                    skClean.toLowerCase() === title
-                );
-            })
-        );
-    };
-
     const handleToggleLibrary = (sec: any, server?: any) => {
         const isSelected = isSectionSelected(sec, server);
         const secId = String(sec?.id ?? "");
