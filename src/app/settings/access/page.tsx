@@ -62,6 +62,11 @@ import {
     Eye, Music, BookOpen, Tv, Baby, X, CalendarClock, Zap, BellRing, Gamepad2
 } from "lucide-react";
 import { DiscordMemberManagerModal } from "@/components/discord-member-manager-modal";
+import {
+    adminLinkUserByHandleAction,
+    syncUserRoleToDiscordAction,
+    unlinkUserFromDiscordAction
+} from "@/app/discord-actions";
 import { 
     getNextRenewalReminderInfo, 
     parseReminderDays, 
@@ -117,6 +122,12 @@ export default function AccessSettingsPage() {
     const [subActionLoading, setSubActionLoading] = useState(false);
     const [subSuccessMsg, setSubSuccessMsg] = useState("");
     const [subErrMsg, setSubErrMsg] = useState("");
+
+    // Discord Account Linking State for subModalUser
+    const [adminDiscordInput, setAdminDiscordInput] = useState("");
+    const [discordLinkLoading, setDiscordLinkLoading] = useState(false);
+    const [discordLinkMsg, setDiscordLinkMsg] = useState("");
+    const [discordLinkErr, setDiscordLinkErr] = useState("");
 
     // Bulk User Selection & Action state
     const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
@@ -1277,6 +1288,87 @@ export default function AccessSettingsPage() {
             }, 1200);
         } else {
             setSubErrMsg(res.error || "Failed to mark converted.");
+        }
+    };
+
+    useEffect(() => {
+        if (subModalUser) {
+            setAdminDiscordInput("");
+            setDiscordLinkMsg("");
+            setDiscordLinkErr("");
+        }
+    }, [subModalUser?.id]);
+
+    const handleAdminLinkUserDiscord = async (userId: string) => {
+        if (!adminDiscordInput.trim()) return;
+        setDiscordLinkLoading(true);
+        setDiscordLinkMsg("");
+        setDiscordLinkErr("");
+        try {
+            const res = await adminLinkUserByHandleAction(userId, adminDiscordInput.trim());
+            if (res.success) {
+                setDiscordLinkMsg(`Linked to @${res.discordUsername || adminDiscordInput.trim()}! Roles synchronized.`);
+                setAdminDiscordInput("");
+                if (subModalUser && subModalUser.id === userId) {
+                    setSubModalUser((prev: any) => prev ? {
+                        ...prev,
+                        discordId: res.discordId,
+                        discordUsername: res.discordUsername
+                    } : null);
+                }
+                loadUsers();
+            } else {
+                setDiscordLinkErr(res.error || "Failed to link Discord handle.");
+            }
+        } catch (e: any) {
+            setDiscordLinkErr(e.message || "Failed to link Discord handle.");
+        } finally {
+            setDiscordLinkLoading(false);
+        }
+    };
+
+    const handleAdminUnlinkUserDiscord = async (userId: string) => {
+        setDiscordLinkLoading(true);
+        setDiscordLinkMsg("");
+        setDiscordLinkErr("");
+        try {
+            const res = await unlinkUserFromDiscordAction(userId);
+            if (res.success) {
+                setDiscordLinkMsg("Discord account unlinked successfully.");
+                if (subModalUser && subModalUser.id === userId) {
+                    setSubModalUser((prev: any) => prev ? {
+                        ...prev,
+                        discordId: null,
+                        discordUsername: null,
+                        discordAvatar: null
+                    } : null);
+                }
+                loadUsers();
+            } else {
+                setDiscordLinkErr(res.error || "Failed to unlink Discord.");
+            }
+        } catch (e: any) {
+            setDiscordLinkErr(e.message || "Failed to unlink Discord.");
+        } finally {
+            setDiscordLinkLoading(false);
+        }
+    };
+
+    const handleAdminSyncUserDiscordRole = async (userId: string) => {
+        setDiscordLinkLoading(true);
+        setDiscordLinkMsg("");
+        setDiscordLinkErr("");
+        try {
+            const res = await syncUserRoleToDiscordAction(userId);
+            if (res.success) {
+                setDiscordLinkMsg("Discord role successfully synchronized.");
+            } else {
+                setDiscordLinkErr(res.error || "Failed to sync Discord role.");
+            }
+        } catch (e: any) {
+            setDiscordLinkErr(e.message || "Failed to sync Discord role.");
+        } finally {
+            setDiscordLinkLoading(false);
         }
     };
 
@@ -4927,6 +5019,119 @@ export default function AccessSettingsPage() {
                                             })}
                                     </div>
                                 </div>
+                            </div>
+
+                            {/* DISCORD ACCOUNT BINDING */}
+                            <div className="p-3 rounded-xl bg-indigo-500/5 border border-indigo-500/20 space-y-2.5">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
+                                        <Gamepad2 className="h-4 w-4 text-indigo-400" /> Discord Account Binding
+                                    </span>
+                                    {subModalUser.discordId ? (
+                                        <Badge variant="outline" className="text-[10px] bg-indigo-500/10 text-indigo-300 border-indigo-500/30 gap-1 font-semibold">
+                                            <CheckCircle2 className="h-3 w-3 text-emerald-400" /> Linked
+                                        </Badge>
+                                    ) : (
+                                        <Badge variant="outline" className="text-[10px] bg-muted/40 text-muted-foreground border-border/40 font-semibold">
+                                            Not Linked
+                                        </Badge>
+                                    )}
+                                </div>
+
+                                {discordLinkMsg && (
+                                    <div className="text-[11px] text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-2 rounded-lg flex items-center gap-1.5">
+                                        <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                                        <span>{discordLinkMsg}</span>
+                                    </div>
+                                )}
+                                {discordLinkErr && (
+                                    <div className="text-[11px] text-red-400 bg-red-950/40 border border-red-800/40 p-2 rounded-lg flex items-center gap-1.5">
+                                        <XCircle className="h-3.5 w-3.5 shrink-0" />
+                                        <span>{discordLinkErr}</span>
+                                    </div>
+                                )}
+
+                                {subModalUser.discordId ? (
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1 border-t border-indigo-500/20">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            {subModalUser.discordAvatar ? (
+                                                <img src={subModalUser.discordAvatar} alt="" className="w-7 h-7 rounded-full border border-indigo-500/30 shrink-0 object-cover" />
+                                            ) : (
+                                                <div className="w-7 h-7 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-300 text-xs font-bold shrink-0">
+                                                    {(subModalUser.discordUsername || "D").charAt(0).toUpperCase()}
+                                                </div>
+                                            )}
+                                            <div className="min-w-0">
+                                                <p className="text-xs font-bold text-foreground truncate">
+                                                    @{subModalUser.discordUsername || "Discord User"}
+                                                </p>
+                                                <p className="text-[10px] text-muted-foreground font-mono truncate">
+                                                    Snowflake: {subModalUser.discordId}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="outline"
+                                                disabled={discordLinkLoading}
+                                                onClick={() => handleAdminSyncUserDiscordRole(subModalUser.id)}
+                                                className="h-7 px-2 text-[11px] bg-indigo-500/10 text-indigo-300 border-indigo-500/30 hover:bg-indigo-500/20 cursor-pointer"
+                                                title="Push current status and assign Discord roles"
+                                            >
+                                                {discordLinkLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3 mr-1" />}
+                                                Sync Role
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="outline"
+                                                disabled={discordLinkLoading}
+                                                onClick={() => handleAdminUnlinkUserDiscord(subModalUser.id)}
+                                                className="h-7 px-2 text-[11px] bg-red-500/10 text-red-300 border-red-500/30 hover:bg-red-500/20 cursor-pointer"
+                                                title="Unlink Discord account"
+                                            >
+                                                <Trash2 className="h-3 w-3 mr-1" />
+                                                Unlink
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2 pt-1 border-t border-indigo-500/20">
+                                        <p className="text-[11px] text-muted-foreground">
+                                            Link this member to their Discord handle (@username or Snowflake ID):
+                                        </p>
+                                        <div className="flex items-center gap-1.5">
+                                            <div className="relative flex-1">
+                                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] text-muted-foreground font-mono">@</span>
+                                                <Input
+                                                    placeholder="username or Snowflake ID"
+                                                    value={adminDiscordInput}
+                                                    onChange={(e) => setAdminDiscordInput(e.target.value)}
+                                                    className="h-8 pl-6 text-xs bg-background/80"
+                                                    disabled={discordLinkLoading}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === "Enter") {
+                                                            e.preventDefault();
+                                                            handleAdminLinkUserDiscord(subModalUser.id);
+                                                        }
+                                                    }}
+                                                />
+                                            </div>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                disabled={discordLinkLoading || !adminDiscordInput.trim()}
+                                                onClick={() => handleAdminLinkUserDiscord(subModalUser.id)}
+                                                className="h-8 text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white shrink-0 cursor-pointer"
+                                            >
+                                                {discordLinkLoading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Gamepad2 className="h-3 w-3 mr-1" />}
+                                                Link Discord
+                                            </Button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             {showCustomTrialScreen ? (

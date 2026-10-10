@@ -26,7 +26,8 @@ import { recheckUserAccessAndPaymentAction } from "@/app/payment-actions";
 import { 
     linkMyDiscordAccountAction, 
     unlinkMyDiscordAccountAction, 
-    syncMyDiscordRoleAction 
+    syncMyDiscordRoleAction,
+    getDiscordServerInviteUrlAction
 } from "@/app/discord-actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -172,6 +173,7 @@ export default function UserProfilePage() {
 
     // Discord Integration State
     const [discordInput, setDiscordInput] = useState("");
+    const [discordInviteUrl, setDiscordInviteUrl] = useState("");
     const [discordLoading, setDiscordLoading] = useState(false);
     const [discordSuccessMsg, setDiscordSuccessMsg] = useState("");
     const [discordErrMsg, setDiscordErrMsg] = useState("");
@@ -446,7 +448,13 @@ export default function UserProfilePage() {
                 const pConfig = await getPublicJoinConfig();
                 if (pConfig?.success && pConfig.config) {
                     setPaymentConfig(pConfig.config);
+                    if (pConfig.config.discordInviteUrl) {
+                        setDiscordInviteUrl(pConfig.config.discordInviteUrl);
+                    }
                 }
+                getDiscordServerInviteUrlAction().then(res => {
+                    if (res.success && res.inviteUrl) setDiscordInviteUrl(res.inviteUrl);
+                }).catch(() => {});
 
                 // Load Notification Preferences
                 const notifRes = await getUserNotificationPreferencesAction();
@@ -2289,7 +2297,17 @@ export default function UserProfilePage() {
                                     </div>
                                 </div>
 
-                                <div className="flex items-center gap-2">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <a
+                                        href={discordInviteUrl || paymentConfig?.discordInviteUrl || "https://discord.gg/KNvUSmPtD3"}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-xs h-8 px-2.5 inline-flex items-center rounded-md bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 gap-1.5 cursor-pointer font-semibold shrink-0"
+                                    >
+                                        <Gamepad2 className="h-3.5 w-3.5" />
+                                        <span>Open Discord</span>
+                                        <ExternalLink className="h-3 w-3 opacity-80" />
+                                    </a>
                                     <Button
                                         type="button"
                                         size="sm"
@@ -2326,30 +2344,59 @@ export default function UserProfilePage() {
                             </div>
                         </div>
                     ) : (
-                        <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-3">
-                            <p className="text-xs text-muted-foreground leading-relaxed">
-                                If your Discord username is different from your Portalarr or Plex username, you can link your account directly below. Make sure you have joined the Discord server first!
-                            </p>
-                            <form onSubmit={handleLinkDiscord} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                                <div className="relative flex-1">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-mono">@</span>
-                                    <Input
-                                        placeholder="your_discord_username or User ID"
-                                        value={discordInput}
-                                        onChange={(e) => setDiscordInput(e.target.value)}
-                                        className="pl-7 bg-background/80 text-xs"
-                                        disabled={discordLoading}
-                                    />
+                        <div className="space-y-3">
+                            {/* STEP 1: JOIN DISCORD INVITE CTA */}
+                            <div className="p-3.5 rounded-xl bg-gradient-to-r from-indigo-500/15 via-purple-500/10 to-indigo-500/5 border border-indigo-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+                                <div className="space-y-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                        <Gamepad2 className="h-4 w-4 text-indigo-400 shrink-0" />
+                                        <span className="font-bold text-xs text-foreground">Step 1: Join the Discord Server</span>
+                                    </div>
+                                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                                        Click below to join our community server. Trial passes and new accounts start in Welcome & Rules until linked.
+                                    </p>
                                 </div>
-                                <Button
-                                    type="submit"
-                                    disabled={discordLoading || !discordInput.trim()}
-                                    className="font-bold text-xs h-9 bg-indigo-600 hover:bg-indigo-500 text-white gap-2 transition-all hover:ring-2 hover:ring-indigo-400/40 shrink-0 cursor-pointer"
+                                <a
+                                    href={discordInviteUrl || paymentConfig?.discordInviteUrl || "https://discord.gg/KNvUSmPtD3"}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-sm hover:shadow-indigo-500/20 shrink-0 w-full sm:w-auto"
                                 >
-                                    {discordLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LinkIcon className="h-3.5 w-3.5" />}
-                                    Link Discord Account
-                                </Button>
-                            </form>
+                                    <Gamepad2 className="h-3.5 w-3.5" />
+                                    <span>Join Discord Server</span>
+                                    <ExternalLink className="h-3 w-3 opacity-80" />
+                                </a>
+                            </div>
+
+                            {/* STEP 2: LINK DISCORD HANDLE */}
+                            <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-3">
+                                <div>
+                                    <span className="font-bold text-xs text-foreground block">Step 2: Link Your Discord Handle</span>
+                                    <p className="text-xs text-muted-foreground leading-relaxed pt-0.5">
+                                        Enter your Discord username below. Linking your account automatically elevates you to <strong className="text-emerald-400">⭐ Member</strong> to unlock all community channels, movie & TV chats, and 4K guides!
+                                    </p>
+                                </div>
+                                <form onSubmit={handleLinkDiscord} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                                    <div className="relative flex-1">
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-mono">@</span>
+                                        <Input
+                                            placeholder="your_discord_username or User ID"
+                                            value={discordInput}
+                                            onChange={(e) => setDiscordInput(e.target.value)}
+                                            className="pl-7 bg-background/80 text-xs"
+                                            disabled={discordLoading}
+                                        />
+                                    </div>
+                                    <Button
+                                        type="submit"
+                                        disabled={discordLoading || !discordInput.trim()}
+                                        className="font-bold text-xs h-9 bg-indigo-600 hover:bg-indigo-500 text-white gap-2 transition-all hover:ring-2 hover:ring-indigo-400/40 shrink-0 cursor-pointer"
+                                    >
+                                        {discordLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LinkIcon className="h-3.5 w-3.5" />}
+                                        Link Discord Account
+                                    </Button>
+                                </form>
+                            </div>
                         </div>
                     )}
                 </CardContent>

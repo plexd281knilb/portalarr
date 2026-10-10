@@ -104,11 +104,14 @@ export interface DiscordBlueprintChannel {
     type?: number;
     readOnlyForEveryone?: boolean;
     adminOnly?: boolean;
-    pinnedEmbedKey?: "welcome_rules" | "subscription_tiers" | "plex_guides" | "transcode_doctor" | "system_status" | "kindle_reading" | "audiobooks_guide" | "leaving_soon";
+    memberOnly?: boolean;
+    pinnedEmbedKey?: "welcome_rules" | "subscription_tiers" | "platform_features" | "roadmap_updates" | "plex_invites" | "plex_guides" | "transcode_doctor" | "system_status" | "kindle_reading" | "audiobooks_guide" | "leaving_soon";
 }
 
 export interface DiscordBlueprintCategory {
     name: string;
+    memberOnly?: boolean;
+    adminOnly?: boolean;
     channels: DiscordBlueprintChannel[];
 }
 
@@ -117,11 +120,11 @@ export interface DiscordBlueprintCategory {
  */
 export const DISCORD_SERVER_BLUEPRINT: DiscordBlueprintCategory[] = [
     {
-        name: "📌 1. INFORMATION & RULES",
+        name: "📌 1. WELCOME & INFO",
         channels: [
             {
                 name: "welcome-and-rules",
-                topic: "Server rules, guidelines, community etiquette, and mission control overview.",
+                topic: "Community rules, etiquette, and linking your member account to unlock full access.",
                 readOnlyForEveryone: true,
                 pinnedEmbedKey: "welcome_rules"
             },
@@ -132,16 +135,10 @@ export const DISCORD_SERVER_BLUEPRINT: DiscordBlueprintCategory[] = [
                 readOnlyForEveryone: true
             },
             {
-                name: "system-status",
-                topic: "Real-time infrastructure health, Plex reachability, host telemetry, and service links.",
+                name: "membership-info",
+                topic: "Platform overview, household features, request privileges, and community guidelines.",
                 readOnlyForEveryone: true,
-                pinnedEmbedKey: "system_status"
-            },
-            {
-                name: "subscription-tiers",
-                topic: "Membership tiers (Regular vs VIP), trial passes, renewal cadences, and payment methods.",
-                readOnlyForEveryone: true,
-                pinnedEmbedKey: "subscription_tiers"
+                pinnedEmbedKey: "platform_features"
             },
             {
                 name: "links-and-webhooks",
@@ -150,114 +147,127 @@ export const DISCORD_SERVER_BLUEPRINT: DiscordBlueprintCategory[] = [
             },
             {
                 name: "roadmap-and-updates",
-                topic: "Upcoming server hardware migrations, capacity expansions, and feature roadmap.",
+                topic: "Infrastructure expansions, 4K transcoding hardware, storage capacity, and platform roadmap.",
+                readOnlyForEveryone: true,
+                pinnedEmbedKey: "roadmap_updates"
+            },
+            {
+                name: "plex-invites",
+                topic: "How to accept your Plex invitation, connect your devices, and link your account.",
+                readOnlyForEveryone: true,
+                pinnedEmbedKey: "plex_invites"
+            },
+            {
+                name: "maintenance",
+                topic: "Scheduled maintenance windows and daily container reboot times.",
                 readOnlyForEveryone: true
             }
         ]
     },
     {
-        name: "📖 2. SETUP & GUIDES",
+        name: "📖 2. GUIDES & SELF-SERVICE",
+        memberOnly: true,
         channels: [
             {
                 name: "plex-setup-guides",
                 topic: "Direct Play optimization for Apple TV, Roku, Fire TV, Samsung/LG, Android TV, iOS, and Web.",
                 readOnlyForEveryone: true,
+                memberOnly: true,
                 pinnedEmbedKey: "plex_guides"
             },
             {
                 name: "transcode-doctor",
                 topic: "Playback issue troubleshooting, buffer diagnosis, and client device fixes.",
                 readOnlyForEveryone: true,
+                memberOnly: true,
                 pinnedEmbedKey: "transcode_doctor"
             },
             {
-                name: "kindle-and-reading",
-                topic: "Send-to-Kindle configuration, approved senders setup, ebook & comic reading.",
+                name: "kindle-and-audiobooks",
+                topic: "Send-to-Kindle configuration, approved senders setup, ebook & audiobook reader guide.",
                 readOnlyForEveryone: true,
+                memberOnly: true,
                 pinnedEmbedKey: "kindle_reading"
-            },
-            {
-                name: "audiobooks-guide",
-                topic: "Audiobook chapter management, streaming, mobile apps, and playback.",
-                readOnlyForEveryone: true,
-                pinnedEmbedKey: "audiobooks_guide"
             }
         ]
     },
     {
-        name: "💬 3. COMMUNITY LOUNGE",
+        name: "💬 3. COMMUNITY CHAT",
+        memberOnly: true,
         channels: [
             {
                 name: "general-chat",
                 topic: "General community discussions, homelab banter, and casual talk.",
-                readOnlyForEveryone: false
+                readOnlyForEveryone: false,
+                memberOnly: true
             },
             {
-                name: "movies-and-tv",
-                topic: "Spoiler-free film & television chats, watch parties, and reviews.",
-                readOnlyForEveryone: false
-            },
-            {
-                name: "reading-nook",
-                topic: "Book discussions, series chat, kindle recommendations, and author discovery.",
-                readOnlyForEveryone: false
+                name: "movie-and-tv-talk",
+                topic: "Spoiler-free film & television chats, watch parties, and recommendations.",
+                readOnlyForEveryone: false,
+                memberOnly: true
             },
             {
                 name: "book-nook",
                 topic: "Book discussions, series chat, kindle recommendations, and author discovery.",
-                readOnlyForEveryone: false
+                readOnlyForEveryone: false,
+                memberOnly: true
             },
             {
                 name: "polls-and-feedback",
                 topic: "Community polls for upcoming library additions, feature votes, and feedback.",
-                readOnlyForEveryone: false
+                readOnlyForEveryone: false,
+                memberOnly: true
             }
         ]
     },
     {
         name: "🎬 4. REQUESTS & MEDIA",
+        memberOnly: true,
         channels: [
             {
                 name: "media-requests",
                 topic: "Live request feed from Portalarr & Seerr. Automated approval & download telemetry.",
-                readOnlyForEveryone: true
+                readOnlyForEveryone: true,
+                memberOnly: true
             },
             {
                 name: "recently-added",
                 topic: "Newly ingested movies, television episodes, audiobooks, and books.",
-                readOnlyForEveryone: true
+                readOnlyForEveryone: true,
+                memberOnly: true
             },
             {
                 name: "leaving-soon",
                 topic: "Maintainerr pruning radar: Staged media items leaving soon to preserve storage headroom.",
                 readOnlyForEveryone: true,
+                memberOnly: true,
                 pinnedEmbedKey: "leaving_soon"
-            },
-            {
-                name: "recommendations",
-                topic: "Member movie, TV, and book recommendations and discovery discussions.",
-                readOnlyForEveryone: false
             }
         ]
     },
     {
-        name: "🆘 5. SUPPORT & HELP DESK",
+        name: "🆘 5. HELP & TICKETS",
+        memberOnly: true,
         channels: [
             {
                 name: "support-tickets",
-                topic: "Open a support request or question with the server administrator.",
-                readOnlyForEveryone: false
+                topic: "Open a support request or report playback issues with the server administrator.",
+                readOnlyForEveryone: false,
+                memberOnly: true
             },
             {
                 name: "server-uptime",
                 topic: "Real-time infrastructure health, Plex reachability, host telemetry, and service links.",
                 readOnlyForEveryone: true,
+                memberOnly: true,
                 pinnedEmbedKey: "system_status"
             }
         ]
     },
     {
         name: "🤖 6. BOT & AUTOMATION",
+        adminOnly: true,
         channels: [
             {
                 name: "main-server-feed",
@@ -293,10 +303,11 @@ export const DISCORD_SERVER_BLUEPRINT: DiscordBlueprintCategory[] = [
     },
     {
         name: "🔒 7. STAFF & VAULT",
+        adminOnly: true,
         channels: [
             {
                 name: "staff-lounge",
-                topic: "Private admin notes, billing ledger audits, user management discussion.",
+                topic: "Private admin notes, platform administration, and user management discussion.",
                 adminOnly: true
             }
         ]
@@ -526,7 +537,7 @@ export async function verifyDiscordBotCredentials(credentials: {
  * Generates canonical, high-definition Discord Embeds matching Portalarr's design system
  */
 export function generateDiscordEmbed(
-    key: "welcome_rules" | "subscription_tiers" | "plex_guides" | "transcode_doctor" | "system_status" | "kindle_reading" | "audiobooks_guide" | "leaving_soon",
+    key: "welcome_rules" | "subscription_tiers" | "platform_features" | "roadmap_updates" | "plex_invites" | "plex_guides" | "transcode_doctor" | "system_status" | "kindle_reading" | "audiobooks_guide" | "leaving_soon",
     customData?: any
 ): DiscordEmbed {
     const nowIso = new Date().toISOString();
@@ -535,9 +546,13 @@ export function generateDiscordEmbed(
         case "welcome_rules":
             return {
                 title: "🚀 Welcome to DomsHomeLab & Portalarr Mission Control",
-                description: "Welcome to the centralized media and homelab community! Portalarr provides unified access to high-performance Plex streaming stacks, Servarr automated request fulfillment, eBook & Audiobook readers, and real-time support.",
+                description: "Welcome to our private media server and homelab community! Portalarr provides unified access to high-performance Plex streaming stacks, Servarr automated request fulfillment, eBook & Audiobook readers, and real-time stream diagnostics.",
                 color: 0x3B82F6, // Blue
                 fields: [
+                    {
+                        name: "⏱️ Trial Pass & Account Linking (Required)",
+                        value: "Trial accounts have restricted access limited strictly to Welcome & Rules until you link your full member account! To unlock full access to community chatrooms, movie & TV discussions, media request feeds, recently added alerts, and 4K Direct Play setup guides, log into your account at the **Portalarr Web Portal** (`home.domshomelab.com`) and link your Discord handle in **Account Settings $\\rightarrow$ Profile**! Once linked, your account is automatically elevated to **⭐ Member** with instant full access."
+                    },
                     {
                         name: "📌 1. Quality & Direct Play First",
                         value: "Always set your client player quality to **Maximum / Original** in settings. Leaving clients on the 720p 2.0 Mbps default forces unnecessary server transcoding and reduces video clarity."
@@ -563,30 +578,89 @@ export function generateDiscordEmbed(
                 timestamp: nowIso
             };
 
+        case "platform_features":
         case "subscription_tiers":
             return {
-                title: "💎 Membership Plans & Subscription Information",
-                description: "Our media platform is privately funded and maintained. Transparent membership contributions cover dedicated high-bandwidth fiber connectivity, multi-terabyte NVMe storage, and enterprise hardware.",
+                title: "🌟 Platform Features & Membership Overview",
+                description: "Welcome to our private media and homelab community. Here is an overview of platform capabilities, reading integrations, and automated request workflows.",
                 color: 0x10B981, // Emerald
                 fields: [
                     {
-                        name: "⭐ Member: Full Access",
-                        value: "• **$17.50 / Month** (or **$180 / Year** discounted annual equivalent of $15/mo)\n• Full access to 1080p & 4K Plex Libraries\n• Unlimited eBooks, Audiobooks & Comic Readers\n• Send-to-Kindle automated document dispatch\n• Standard 10 movie / 10 TV episode weekly request quota\n• High-speed Direct Play streaming"
+                        name: "🎬 Crystal Clear 4K & 1080p Streaming",
+                        value: "Dedicated high-bitrate Direct Play streaming across Apple TV, Roku, Fire TV, Smart TVs, and mobile devices with pristine audio and zero quality loss."
                     },
                     {
-                        name: "⏱️ Trial Pass",
-                        value: "• **7-Day Complimentary Pass** upon signup\n• Full library exploration & 3 trial request credits"
+                        name: "📚 Ebooks, Audiobooks & Comic Readers",
+                        value: "Send-to-Kindle automated document dispatch, in-browser Paperwhite reader with Bookerly typography, chaptered audiobook player, and graphic novel viewer."
                     },
                     {
-                        name: "💳 Accepted Payment Methods",
-                        value: "• **Cash App**\n• **Apple Pay**\n• **PayPal**\n• **Zelle**\n\n*Important:* Always include your exact Portalarr username in the payment note/memo so payment auto-matches to your account."
+                        name: "📥 Automated Request Mission Control",
+                        value: "Submit requests for movies, television seasons, audiobooks, and books directly through the web portal with automated grabbing, importing, and notification dispatch."
                     },
                     {
-                        name: "🎁 Referral Program: Earn Free Months",
-                        value: "Every friend you invite through your unique referral link earns you **+1 FREE Month** of membership once their account is approved!"
+                        name: "🎁 Referral Rewards & Community Perks",
+                        value: "Invite friends and family using your personal referral link in your Account Profile to earn bonus platform credits and recognition!"
+                    },
+                    {
+                        name: "🔒 Household Profile Access & Content Safety",
+                        value: "Configure secondary household profiles (Living Room TV with nudity filters, Kids bookshelf with age rating ceilings) directly in your Profile Settings."
                     }
                 ],
-                footer: { text: "DomsHomeLab • Transparent Billing & Access" },
+                footer: { text: "DomsHomeLab • Member Privileges & Access" },
+                timestamp: nowIso
+            };
+
+        case "roadmap_updates":
+            return {
+                title: "🛠️ Infrastructure Roadmap & Hardware Expansions",
+                description: "Continuous improvements powering DomsHomeLab and Portalarr Mission Control.",
+                color: 0x8B5CF6, // Violet
+                fields: [
+                    {
+                        name: "🖥️ Storage Array & NVMe Cache Pool",
+                        value: "Ongoing expansion of high-speed NVMe caching pools and multi-terabyte Unraid storage arrays to guarantee ample headroom for incoming 4K HDR releases."
+                    },
+                    {
+                        name: "⚡ Dedicated GPU Transcode Power & Tone-Mapping",
+                        value: "Hardware-accelerated NVENC transcoding pipelines ensuring multi-stream simultaneous playback with zero CPU bottlenecking and real-time HDR tone-mapping."
+                    },
+                    {
+                        name: "📖 Portalarr 3.0 Reading & Audiobook Innovations",
+                        value: "Portalarr 3.0 reader suite featuring in-browser Kindle Paperwhite emulation, chapter reordering, variable speed audiobook playback, and automated Amazon bounce detection."
+                    },
+                    {
+                        name: "🚀 Automated Sync & Self-Service Bridge",
+                        value: "Instant Discord role synchronization, real-time stream telemetry (Transcode Doctor), and single-pane infrastructure health monitoring."
+                    }
+                ],
+                footer: { text: "DomsHomeLab • Hardware & Feature Roadmap" },
+                timestamp: nowIso
+            };
+
+        case "plex_invites":
+            return {
+                title: "📨 Plex Setup & Onboarding Guide",
+                description: "Follow these 4 simple steps to connect your device and start streaming immediately.",
+                color: 0xF59E0B, // Amber
+                fields: [
+                    {
+                        name: "Step 1: Create a Free Plex Account",
+                        value: "If you don't already have one, create a free account at https://plex.tv using your primary email address."
+                    },
+                    {
+                        name: "Step 2: Accept Your Server Invitation",
+                        value: "Check your email or visit https://app.plex.tv to accept the library share invitation sent from our server host (`d281knilb`)."
+                    },
+                    {
+                        name: "Step 3: Portalarr Web Portal",
+                        value: "Log in to the web portal at `home.domshomelab.com` to manage your media requests, reading bookshelf, stream diagnostics, and account profile."
+                    },
+                    {
+                        name: "Step 4: Link Your Discord Account",
+                        value: "Head to Account Settings $\\rightarrow$ Profile $\\rightarrow$ **Discord Community & Role Sync**. Enter your Discord username to automatically unlock all community channels, media feeds, and guides!"
+                    }
+                ],
+                footer: { text: "DomsHomeLab • Onboarding Guide" },
                 timestamp: nowIso
             };
 
@@ -862,6 +936,19 @@ export async function syncDiscordServerStructure(params: {
         }
     }
 
+    let memberRoleId: string | undefined;
+    let trialRoleId: string | undefined;
+
+    // Resolve member and trial roles for strict channel permission gating
+    const currentRolesRes = await discordFetch<DiscordRole[]>(`/guilds/${cleanGuildId}/roles`, { method: "GET" }, cleanToken);
+    if (currentRolesRes.ok && Array.isArray(currentRolesRes.data)) {
+        for (const r of currentRolesRes.data) {
+            const rLower = r.name.toLowerCase();
+            if (rLower.includes("member")) memberRoleId = r.id;
+            if (rLower.includes("trial")) trialRoleId = r.id;
+        }
+    }
+
     // 3. Process Categories & Channels from Blueprint
     let categoryPosition = 0;
 
@@ -906,7 +993,72 @@ export async function syncDiscordServerStructure(params: {
             // Determine permission overwrites
             const permissionOverwrites: any[] = [];
 
-            if (chBlueprint.readOnlyForEveryone) {
+            if (chBlueprint.name === "welcome-and-rules") {
+                // @everyone, Trial Pass, and Member all view read-only
+                permissionOverwrites.push({
+                    id: cleanGuildId,
+                    type: 0,
+                    allow: (DISCORD_PERMISSIONS.VIEW_CHANNEL | DISCORD_PERMISSIONS.READ_MESSAGE_HISTORY).toString(),
+                    deny: (DISCORD_PERMISSIONS.SEND_MESSAGES | DISCORD_PERMISSIONS.ADD_REACTIONS).toString()
+                });
+                if (trialRoleId) {
+                    permissionOverwrites.push({
+                        id: trialRoleId,
+                        type: 0,
+                        allow: (DISCORD_PERMISSIONS.VIEW_CHANNEL | DISCORD_PERMISSIONS.READ_MESSAGE_HISTORY).toString(),
+                        deny: (DISCORD_PERMISSIONS.SEND_MESSAGES | DISCORD_PERMISSIONS.ADD_REACTIONS).toString()
+                    });
+                }
+            } else if (catBlueprint.name.includes("WELCOME") && chBlueprint.name !== "welcome-and-rules") {
+                // Category 1 non-rules channels: restricted to Member only (denied for trial until account linked)
+                permissionOverwrites.push({
+                    id: cleanGuildId,
+                    type: 0,
+                    allow: "0",
+                    deny: (DISCORD_PERMISSIONS.VIEW_CHANNEL).toString()
+                });
+                if (trialRoleId) {
+                    permissionOverwrites.push({
+                        id: trialRoleId,
+                        type: 0,
+                        allow: "0",
+                        deny: (DISCORD_PERMISSIONS.VIEW_CHANNEL).toString()
+                    });
+                }
+                if (memberRoleId) {
+                    permissionOverwrites.push({
+                        id: memberRoleId,
+                        type: 0,
+                        allow: (DISCORD_PERMISSIONS.VIEW_CHANNEL | DISCORD_PERMISSIONS.READ_MESSAGE_HISTORY).toString(),
+                        deny: (DISCORD_PERMISSIONS.SEND_MESSAGES | DISCORD_PERMISSIONS.ADD_REACTIONS).toString()
+                    });
+                }
+            } else if (catBlueprint.memberOnly || chBlueprint.memberOnly) {
+                // Deny @everyone & Trial Pass. Allow Member.
+                permissionOverwrites.push({
+                    id: cleanGuildId,
+                    type: 0,
+                    allow: "0",
+                    deny: (DISCORD_PERMISSIONS.VIEW_CHANNEL).toString()
+                });
+                if (trialRoleId) {
+                    permissionOverwrites.push({
+                        id: trialRoleId,
+                        type: 0,
+                        allow: "0",
+                        deny: (DISCORD_PERMISSIONS.VIEW_CHANNEL).toString()
+                    });
+                }
+                if (memberRoleId) {
+                    const isChatOrHelp = catBlueprint.name.includes("COMMUNITY") || catBlueprint.name.includes("HELP");
+                    permissionOverwrites.push({
+                        id: memberRoleId,
+                        type: 0,
+                        allow: (DISCORD_PERMISSIONS.VIEW_CHANNEL | DISCORD_PERMISSIONS.READ_MESSAGE_HISTORY | (isChatOrHelp ? DISCORD_PERMISSIONS.SEND_MESSAGES | DISCORD_PERMISSIONS.ADD_REACTIONS : 0)).toString(),
+                        deny: isChatOrHelp ? "0" : (DISCORD_PERMISSIONS.SEND_MESSAGES | DISCORD_PERMISSIONS.ADD_REACTIONS).toString()
+                    });
+                }
+            } else if (chBlueprint.readOnlyForEveryone) {
                 // Deny SEND_MESSAGES for @everyone (id: cleanGuildId)
                 permissionOverwrites.push({
                     id: cleanGuildId,
@@ -914,7 +1066,7 @@ export async function syncDiscordServerStructure(params: {
                     allow: (DISCORD_PERMISSIONS.VIEW_CHANNEL | DISCORD_PERMISSIONS.READ_MESSAGE_HISTORY).toString(),
                     deny: (DISCORD_PERMISSIONS.SEND_MESSAGES | DISCORD_PERMISSIONS.ADD_REACTIONS).toString()
                 });
-            } else if (chBlueprint.adminOnly) {
+            } else if (chBlueprint.adminOnly || catBlueprint.adminOnly) {
                 // Deny VIEW_CHANNEL for @everyone
                 permissionOverwrites.push({
                     id: cleanGuildId,

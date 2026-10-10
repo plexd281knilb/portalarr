@@ -695,12 +695,22 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 - **Strict Member Tier Concealment**:
   - Non-admin members must NEVER know or see whether they are Tier 1 or Tier 2. Tier 2 is for needy users who pay a higher rate for managed support, but to regular members they must strictly appear as "⭐ Full Member" (in the web portal) and "⭐ Member" (in Discord) with zero tier numbers or "Managed Support" labels.
   - Only administrators in `/settings/access` may view or manage Tier 1 vs Tier 2 membership levels.
-- **Discord Community & Role Sync Card (`/settings/profile`)**:
+- **Strict Limited Trial Discord Access & Channel Isolation**:
+  - Members with `⏱️ Trial Pass` (and unlinked users with only `@everyone`) are denied `VIEW_CHANNEL` across all member categories (Guides & Self-Service, Community Chat, Requests & Media, Help & Tickets) and all non-welcome channels in Category 1.
+  - Trial members strictly view `#welcome-and-rules` until they link their Portalarr member account on the web portal.
+  - The `#welcome-and-rules` embed features a prominent `⏱️ Trial Pass & Account Linking (Required)` guideline explaining the restriction and directing users to **Account Settings $\rightarrow$ Profile** to link their Discord handle and automatically elevate to `⭐ Member`.
+- **Zero Pricing / Tiers / Subscriptions on Discord Policy**:
+  - Absolutely NO mentions of pricing ($17.50, $180), payment methods (Cash App, Venmo, PayPal, Zelle), tiers (Tier 1, Tier 2), or subscription billing anywhere on Discord channel topics or embeds.
+  - Pinned embeds emphasize homelab infrastructure, 4K Direct Play setup, reading integrations (Paperwhite & Audiobooks), automated request fulfillment, and the hardware expansion roadmap.
+- **Discord Community & Role Sync Card with Direct Invite Link (`/settings/profile`)**:
   - Positioned prominently below Notification & Email Preferences.
-  - Allows members to self-service link their Discord account by username or numeric Snowflake ID (`linkMyDiscordAccountAction`).
-  - Displays avatar, linked username, linked snowflake ID, auto-sync status, and server role badge (`👑 Admin`, `⏱️ Trial Pass`, `🧒 Kids Profile`, or unified `⭐ Member`).
-  - Self-service 1-click **Sync Role** (`syncMyDiscordRoleAction`) and **Unlink** (`unlinkMyDiscordAccountAction`).
-- **Admin Discord Role Sync Cockpit (`/settings/access`)**:
+  - **Step 1: Join the Discord Server**: Features a prominent glassmorphic CTA button with `Gamepad2` and `ExternalLink` icons directing members to the permanent server invite URL (`getDiscordServerInviteUrlAction` / `paymentConfig?.discordInviteUrl`).
+  - **Step 2: Link Your Discord Handle**: Allows members to self-service link their Discord account by username or numeric Snowflake ID (`linkMyDiscordAccountAction`) to unlock `⭐ Member` access immediately.
+  - When linked, displays avatar, linked username, linked snowflake ID, auto-sync status, a direct **Open Discord** button, 1-click **Sync Role** (`syncMyDiscordRoleAction`), and **Unlink** (`unlinkMyDiscordAccountAction`).
+- **Admin User Management Direct Discord Linking (`/settings/access`)**:
+  - Inside the User Management modal (`subModalUser`), includes a dedicated **Discord Account Binding** card:
+    - If unlinked: Admins can directly enter any Discord handle or Snowflake ID and link the member with 1 click (`adminLinkUserByHandleAction`).
+    - If linked: Displays linked avatar, handle, Snowflake ID, 1-click **Sync Role**, and **Unlink** (`unlinkUserFromDiscordAction`).
   - Single-pane management modal (`DiscordMemberManagerModal`) with multi-axis filtering (`All`, `Unlinked`, `Linked`, `Suggested`).
   - Smart heuristic auto-matching engine (`findBestMatch`) pairing exact usernames (100%), email prefixes (95%), server nicknames (90%), full names (85%), display names (80%), and substrings (70%).
   - 1-click Auto-Match, Bulk Push to Discord (`syncAllUsersRolesToDiscordAction`), Bulk Pull to Portalarr (`syncAllDiscordRolesToPortalarrAction`), and individual user dropdown linking.

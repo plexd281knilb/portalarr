@@ -587,4 +587,142 @@ export async function syncMyDiscordRoleAction(): Promise<{ success: boolean; err
     }
 }
 
+/**
+ * Admin: Links any Portalarr user to a Discord account by username/nickname/snowflake ID
+ */
+export async function adminLinkUserByHandleAction(userId: string, query: string): Promise<{
+    success: boolean;
+    error?: string;
+    discordUsername?: string;
+    discordId?: string;
+    rolesSynced?: boolean;
+}> {
+    try {
+        await verifyAdmin();
+        await ensureSchemaColumns();
+
+        const cleanQuery = query.trim().replace(/^@/, "");
+        if (!cleanQuery) return { success: false, error: "Please enter a Discord username or ID" };
+
+        const targetUser = await prisma.user.findUnique({ where: { id: userId } });
+        if (!targetUser) return { success: false, error: "User not found" };
+
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } }) || await prisma.settings.findFirst();
+        if (!settings?.discordBotToken || !settings?.discordGuildId) {
+            return { success: false, error: "Discord integration is not configured" };
+        }
+
+        const rawToken = decryptData(settings.discordBotToken);
+        if (!rawToken) return { success: false, error: "Failed to decrypt bot token" };
+
+        const guildId = settings.discordGuildId;
+        let targetMember: any = null;
+
+        // 1. If it's a numeric snowflake ID (17-20 digits)
+        if (/^\d{17,20}$/.test(cleanQuery)) {
+            const singleRes = await discordFetch(`/guilds/${guildId}/members/${cleanQuery}`, { method: "GET" }, rawToken);
+            if (singleRes.ok && singleRes.data) {
+                targetMember = singleRes.data;
+            }
+        }
+
+        // 2. Search by query in guild
+        if (!targetMember) {
+            const searchRes = await discordFetch(`/guilds/${guildId}/members/search?query=${encodeURIComponent(cleanQuery)}&limit=10`, { method: "GET" }, rawToken);
+            if (searchRes.ok && Array.isArray(searchRes.data) && searchRes.data.length > 0) {
+                targetMember = searchRes.data.find((m: any) => 
+                    m.user?.username?.toLowerCase() === cleanQuery.toLowerCase() ||
+                    m.nick?.toLowerCase() === cleanQuery.toLowerCase() ||
+                    m.user?.global_name?.toLowerCase() === cleanQuery.toLowerCase()
+                ) || searchRes.data[0];
+            }
+        }
+
+        if (!targetMember || !targetMember.user) {
+            return {
+                success: false,
+                error: `Could not find member "${cleanQuery}" in the Discord server. Ensure the user has joined the Discord server first.`
+            };
+        }
+
+        const discordUser = targetMember.user;
+        const avatarUrl = discordUser.avatar 
+            ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png?size=128`
+            : undefined;
+
+        const linkRes = await linkUserToDiscord({
+            userId: targetUser.id,
+            discordId: discordUser.id,
+            discordUsername: discordUser.username,
+            discordDiscriminator: discordUser.discriminator,
+            discordAvatar: avatarUrl,
+            syncRolesImmediately: true
+        });
+
+        if (!linkRes.success) {
+            return { success: false, error: linkRes.error };
+        }
+
+        return {
+            success: true,
+            discordUsername: discordUser.username,
+            discordId: discordUser.id,
+            rolesSynced: linkRes.rolesSynced
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to link Discord account" };
+    }
+}
+
+/**
+ * Retrieves the permanent Discord server invite URL (or generates an instant invite if not set)
+ */
+export async function getDiscordServerInviteUrlAction(): Promise<{
+    success: boolean;
+    inviteUrl?: string;
+    error?: string;
+}> {
+    try {
+        const currentUser = await getCurrentUser();
+        if (!currentUser) return { success: false, error: "Authentication required" };
+
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } }) || await prisma.settings.findFirst();
+        if (settings?.discordInviteUrl && settings.discordInviteUrl.trim().length > 0) {
+            return { success: true, inviteUrl: settings.discordInviteUrl.trim() };
+        }
+
+        // If not set, generate an instant invite via bot if configured
+        if (settings?.discordBotToken && settings?.discordGuildId) {
+            const rawToken = decryptData(settings.discordBotToken);
+            if (rawToken) {
+                const guildId = settings.discordGuildId;
+                const chRes = await discordFetch<any[]>(`/guilds/${guildId}/channels`, { method: "GET" }, rawToken);
+                if (chRes.ok && Array.isArray(chRes.data)) {
+                    const welcomeCh = chRes.data.find((c: any) => c.name === "welcome-and-rules") || chRes.data.find((c: any) => c.type === 0);
+                    if (welcomeCh) {
+                        const invRes = await discordFetch(`/channels/${welcomeCh.id}/invites`, {
+                            method: "POST",
+                            body: JSON.stringify({ max_age: 0, max_uses: 0, unique: false })
+                        }, rawToken);
+
+                        if (invRes.ok && invRes.data?.code) {
+                            const newInviteUrl = `https://discord.gg/${invRes.data.code}`;
+                            await prisma.settings.update({
+                                where: { id: settings.id },
+                                data: { discordInviteUrl: newInviteUrl }
+                            });
+                            return { success: true, inviteUrl: newInviteUrl };
+                        }
+                    }
+                }
+            }
+        }
+
+        return { success: false, error: "Discord invite URL is not configured" };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to retrieve Discord invite URL" };
+    }
+}
+
+
 

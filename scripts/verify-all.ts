@@ -6038,20 +6038,22 @@ async function runTestSuite() {
         }
 
         const categoryNames = DISCORD_SERVER_BLUEPRINT.map(c => c.name);
-        if (!categoryNames.some(n => n.includes("INFORMATION"))) throw new Error("Missing Information & Rules category");
-        if (!categoryNames.some(n => n.includes("SETUP"))) throw new Error("Missing Setup & Guides category");
-        if (!categoryNames.some(n => n.includes("MEDIA"))) throw new Error("Missing Media & Requests category");
-        if (!categoryNames.some(n => n.includes("COMMUNITY"))) throw new Error("Missing Community Lounge category");
-        if (!categoryNames.some(n => n.includes("SUPPORT"))) throw new Error("Missing Support & Help Desk category");
+        if (!categoryNames.some(n => n.includes("WELCOME") || n.includes("INFO"))) throw new Error("Missing Welcome & Info category");
+        if (!categoryNames.some(n => n.includes("GUIDES"))) throw new Error("Missing Guides & Self-Service category");
+        if (!categoryNames.some(n => n.includes("COMMUNITY") || n.includes("CHAT"))) throw new Error("Missing Community Chat category");
+        if (!categoryNames.some(n => n.includes("REQUESTS") || n.includes("MEDIA"))) throw new Error("Missing Requests & Media category");
+        if (!categoryNames.some(n => n.includes("HELP") || n.includes("TICKETS"))) throw new Error("Missing Help & Tickets category");
 
         const allChannels = DISCORD_SERVER_BLUEPRINT.flatMap(c => c.channels);
         const channelNames = allChannels.map(ch => ch.name);
 
         const requiredChannels = [
-            "welcome-and-rules", "announcements", "system-status", "subscription-tiers",
-            "plex-setup-guides", "kindle-and-reading", "audiobooks-guide",
-            "media-requests", "recently-added", "leaving-soon", "recommendations",
-            "general-chat", "movies-and-tv", "reading-nook", "transcode-doctor", "support-tickets"
+            "welcome-and-rules", "announcements", "membership-info", "links-and-webhooks",
+            "roadmap-and-updates", "plex-invites", "maintenance",
+            "plex-setup-guides", "transcode-doctor", "kindle-and-audiobooks",
+            "general-chat", "movie-and-tv-talk", "book-nook", "polls-and-feedback",
+            "media-requests", "recently-added", "leaving-soon",
+            "support-tickets", "server-uptime"
         ];
 
         for (const req of requiredChannels) {
@@ -6062,7 +6064,7 @@ async function runTestSuite() {
 
         // 2. Verify Roles Blueprint
         if (!Array.isArray(DISCORD_ROLES_BLUEPRINT) || DISCORD_ROLES_BLUEPRINT.length < 4) {
-            throw new Error(`Expected 4 member roles in blueprint, got ${DISCORD_ROLES_BLUEPRINT.length}`);
+            throw new Error(`Expected at least 4 member roles in blueprint, got ${DISCORD_ROLES_BLUEPRINT.length}`);
         }
         const roleNames = DISCORD_ROLES_BLUEPRINT.map(r => r.name);
         if (!roleNames.some(r => r.includes("Admin"))) throw new Error("Missing Admin role in blueprint");
@@ -6071,14 +6073,26 @@ async function runTestSuite() {
 
         // 3. Verify Rich Pinned Embed Generators
         const welcomeEmbed = generateDiscordEmbed("welcome_rules");
-        if (!welcomeEmbed.title || !welcomeEmbed.description || !welcomeEmbed.fields || welcomeEmbed.fields.length < 4) {
-            throw new Error("Welcome & Rules embed must have title, description, and at least 4 guideline fields");
+        if (!welcomeEmbed.title || !welcomeEmbed.description || !welcomeEmbed.fields || welcomeEmbed.fields.length < 5) {
+            throw new Error("Welcome & Rules embed must have title, description, and at least 5 guideline fields");
+        }
+        if (!welcomeEmbed.fields.some(f => f.name.includes("Trial Pass & Account Linking"))) {
+            throw new Error("Welcome & Rules embed must feature Trial Pass & Account Linking prominently at the top");
         }
 
-        const tiersEmbed = generateDiscordEmbed("subscription_tiers");
-        if (!tiersEmbed.title?.includes("Membership Plans")) throw new Error("Invalid subscription tiers embed title");
-        if (!tiersEmbed.fields?.some(f => f.name.includes("Member"))) throw new Error("Tiers embed must include Member field");
-        if (!tiersEmbed.fields?.some(f => f.name.includes("Payment Methods"))) throw new Error("Tiers embed must list payment options");
+        const featuresEmbed = generateDiscordEmbed("platform_features");
+        if (!featuresEmbed.title?.includes("Platform Features")) throw new Error("Invalid platform features embed title");
+        if (JSON.stringify(featuresEmbed).includes("$17.50") || JSON.stringify(featuresEmbed).includes("$180")) {
+            throw new Error("Discord embed must not mention pricing or subscription fees");
+        }
+
+        const roadmapEmbed = generateDiscordEmbed("roadmap_updates");
+        if (!roadmapEmbed.title?.includes("Infrastructure Roadmap")) throw new Error("Invalid roadmap embed title");
+        if (!roadmapEmbed.fields?.some(f => f.name.includes("Storage Array"))) throw new Error("Roadmap missing storage array field");
+
+        const invitesEmbed = generateDiscordEmbed("plex_invites");
+        if (!invitesEmbed.title?.includes("Plex Setup")) throw new Error("Invalid plex invites embed title");
+        if (!invitesEmbed.fields?.some(f => f.name.includes("Step 4"))) throw new Error("Plex invites missing Discord account link step");
 
         const plexEmbed = generateDiscordEmbed("plex_guides");
         if (!plexEmbed.title?.includes("Plex Device Setup")) throw new Error("Invalid plex guides embed title");
@@ -6415,6 +6429,58 @@ async function runTestSuite() {
         const memberBlueprint = DISCORD_ROLES_BLUEPRINT.find(r => r.name === "⭐ Member");
         if (!memberBlueprint) {
             throw new Error(`Expected DISCORD_ROLES_BLUEPRINT to contain role '⭐ Member'`);
+        }
+    });
+
+    // 96. Discord Security & Access: Trial Isolation, Zero Pricing Embeds & Web Admin Linking
+    await assertTest("Test 96: Discord Security & Access: Trial Isolation, Zero Pricing Embeds & Web Admin Linking", async () => {
+        const {
+            DISCORD_SERVER_BLUEPRINT,
+            generateDiscordEmbed
+        } = await import("../src/lib/discord/discord-bot");
+
+        // 1. Strict Trial Isolation: memberOnly categories
+        const memberCategories = DISCORD_SERVER_BLUEPRINT.filter(c => 
+            c.name.includes("GUIDES") ||
+            c.name.includes("COMMUNITY") ||
+            c.name.includes("REQUESTS") ||
+            c.name.includes("HELP")
+        );
+        for (const cat of memberCategories) {
+            if (!cat.memberOnly) {
+                throw new Error(`Category ${cat.name} must be marked memberOnly: true to bar trial accounts`);
+            }
+        }
+
+        // 2. Welcome Embed Must Mandate Account Linking for Trial Access
+        const welcome = generateDiscordEmbed("welcome_rules");
+        const linkingField = welcome.fields?.find(f => f.name.includes("Trial Pass & Account Linking"));
+        if (!linkingField) throw new Error("Welcome embed must contain Trial Pass & Account Linking field");
+        if (!linkingField.value.includes("restricted") || !linkingField.value.includes("Account Settings")) {
+            throw new Error("Welcome embed linking instructions must explain restrictions and web portal linking steps");
+        }
+
+        // 3. Absolute Zero Pricing / Tiers / Subscriptions on Discord
+        const embedKeys = ["welcome_rules", "platform_features", "roadmap_updates", "plex_invites", "plex_guides", "transcode_doctor"] as const;
+        for (const key of embedKeys) {
+            const emb = generateDiscordEmbed(key);
+            const str = JSON.stringify(emb).toLowerCase();
+            const forbiddenTerms = ["$17.50", "$180", "tier 1", "tier 2", "cash app", "venmo", "zelle", "billing ledger"];
+            for (const term of forbiddenTerms) {
+                if (str.includes(term)) {
+                    throw new Error(`Embed "${key}" leaks prohibited commercial/tier term: "${term}"`);
+                }
+            }
+        }
+
+        // 4. Blueprint Channels & Topics Inspection for Prohibited Terms
+        for (const cat of DISCORD_SERVER_BLUEPRINT) {
+            for (const ch of cat.channels) {
+                const topicLower = (ch.topic || "").toLowerCase();
+                if (topicLower.includes("tier 1") || topicLower.includes("tier 2") || topicLower.includes("billing ledger")) {
+                    throw new Error(`Channel #${ch.name} topic leaks prohibited term: "${ch.topic}"`);
+                }
+            }
         }
     });
 
