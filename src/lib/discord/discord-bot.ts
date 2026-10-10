@@ -554,7 +554,7 @@ export function generateDiscordEmbed(
                 fields: [
                     {
                         name: "⏱️ Trial Pass & Account Linking (Required)",
-                        value: "Trial accounts have restricted access limited strictly to Welcome & Rules until you link your full member account! To unlock full access to community chatrooms, movie & TV discussions, media request feeds, recently added alerts, and 4K Direct Play setup guides, log into your account at the **Portalarr Web Portal** (`home.domshomelab.com`) and link your Discord handle in **Account Settings $\\rightarrow$ Profile**! Once linked, your account is automatically elevated to **⭐ Member** with instant full access."
+                        value: "Trial accounts have restricted access limited strictly to Welcome & Rules until you link your full member account! To unlock full access to community chatrooms, movie & TV discussions, media request feeds, recently added alerts, and 4K Direct Play setup guides, log into your account at the **Portalarr Web Portal** (`home.domshomelab.com`) and link your Discord handle in **Account Settings → Profile**! Once linked, your account is automatically elevated to **⭐ Member** with instant full access."
                     },
                     {
                         name: "📌 1. Quality & Direct Play First",
@@ -656,7 +656,7 @@ export function generateDiscordEmbed(
                     },
                     {
                         name: "Step 4: Link Your Discord Account",
-                        value: "Head to Account Settings $\\rightarrow$ Profile $\\rightarrow$ **Discord Community & Role Sync**. Enter your Discord username to automatically unlock all community channels, media feeds, and guides!"
+                        value: "Head to Account Settings → Profile → **Discord Community & Role Sync**. Enter your Discord username to automatically unlock all community channels, media feeds, and guides!"
                     }
                 ],
                 footer: { text: "DomsHomeLab • Onboarding Guide" },
@@ -671,23 +671,23 @@ export function generateDiscordEmbed(
                 fields: [
                     {
                         name: "📺 Apple TV 4K",
-                        value: "Open Plex Settings $\\rightarrow$ Video\nSet Home Streaming & Remote Streaming to Maximum\nTurn Match Content (Dynamic Range & Frame Rate) ON"
+                        value: "Open Plex Settings → Video\nSet Home Streaming & Remote Streaming to Maximum\nTurn Match Content (Dynamic Range & Frame Rate) ON"
                     },
                     {
                         name: "📺 Roku Players & Roku TVs",
-                        value: "Open Plex Settings $\\rightarrow$ Video\nSet Local Quality & Remote Quality to Original\nIn Playback Options, ensure Direct Play is set to Force or Auto"
+                        value: "Open Plex Settings → Video\nSet Local Quality & Remote Quality to Original\nIn Playback Options, ensure Direct Play is set to Force or Auto"
                     },
                     {
                         name: "📺 Amazon Fire TV & Android TV / Google TV",
-                        value: "Open Plex Settings $\\rightarrow$ Video\nSet Video Quality to Maximum\nScroll to Subtitles $\\rightarrow$ Set Burn Subtitles to Only Image Formats"
+                        value: "Open Plex Settings → Video\nSet Video Quality to Maximum\nScroll to Subtitles → Set Burn Subtitles to Only Image Formats"
                     },
                     {
                         name: "📺 Samsung Tizen & LG webOS Smart TVs",
-                        value: "Open Plex Settings $\\rightarrow$ Video\nSet Local Quality & Remote Quality to Original\nEnable Direct Stream and Direct Play checkboxes"
+                        value: "Open Plex Settings → Video\nSet Local Quality & Remote Quality to Original\nEnable Direct Stream and Direct Play checkboxes"
                     },
                     {
                         name: "📱 iPhone, iPad & Android Mobile",
-                        value: "Open Plex Settings $\\rightarrow$ Quality\nSet Remote Streaming to Maximum\nIn Advanced $\\rightarrow$ Turn Use Old Video Player OFF"
+                        value: "Open Plex Settings → Quality\nSet Remote Streaming to Maximum\nIn Advanced → Turn Use Old Video Player OFF"
                     },
                     {
                         name: "💻 Windows / macOS / Linux PC",
@@ -706,15 +706,15 @@ export function generateDiscordEmbed(
                 fields: [
                     {
                         name: "🔴 Cause 1: Client Locked at 720p 2.0 Mbps (Severe Buffering)",
-                        value: "**Fix:** While the video is playing, click the playback settings slider (gear icon) $\\rightarrow$ **Quality** $\\rightarrow$ Change from `Convert Automatically` or `720p` to **Original / Maximum**."
+                        value: "**Fix:** While the video is playing, click the playback settings slider (gear icon) → **Quality** → Change from `Convert Automatically` or `720p` to **Original / Maximum**."
                     },
                     {
-                        name: "🟡 Cause 2: Audio Transcoding (EAC3 $\\rightarrow$ AAC / Opus)",
+                        name: "🟡 Cause 2: Audio Transcoding (EAC3 → AAC / Opus)",
                         value: "**Harmless!** If your TV or soundbar does not support 7.1 TrueHD or 5.1 EAC3 audio, the server converts the audio track in milliseconds while keeping the video track 100% Direct Play."
                     },
                     {
                         name: "🟠 Cause 3: Subtitle Burn-In Video Transcoding",
-                        value: "**Fix:** Complex anime subtitles (ASS/SSA) or Blu-ray image subtitles (PGS) can force the server to re-encode the entire video frame. In Plex Settings $\\rightarrow$ Subtitles, change **Burn Subtitles** to `Only Image Formats` or select an SRT text subtitle track."
+                        value: "**Fix:** Complex anime subtitles (ASS/SSA) or Blu-ray image subtitles (PGS) can force the server to re-encode the entire video frame. In Plex Settings → Subtitles, change **Burn Subtitles** to `Only Image Formats` or select an SRT text subtitle track."
                     }
                 ],
                 footer: { text: "DomsHomeLab • Transcode Doctor Self-Service" },
@@ -729,11 +729,11 @@ export function generateDiscordEmbed(
                 fields: [
                     {
                         name: "1. Configure Amazon Approved Senders",
-                        value: "Amazon requires you to authorize the sending email address before accepting documents.\n1. Go to **amazon.com/myk** $\\rightarrow$ Preferences $\\rightarrow$ **Personal Document Settings**\n2. Under *Approved Personal Document E-mail List*, add your lab dispatcher email."
+                        value: "Amazon requires you to authorize the sending email address before accepting documents.\n1. Go to **amazon.com/myk** → Preferences → **Personal Document Settings**\n2. Under *Approved Personal Document E-mail List*, add your lab dispatcher email."
                     },
                     {
                         name: "2. Save Your Kindle Address in Portalarr",
-                        value: "In Portalarr $\\rightarrow$ **Profile** (or **Settings**), enter your `@kindle.com` address. When browsing the Library, tap the **Send to Kindle** button on any book!"
+                        value: "In Portalarr → **Profile** (or **Settings**), enter your `@kindle.com` address. When browsing the Library, tap the **Send to Kindle** button on any book!"
                     },
                     {
                         name: "3. In-Browser Paperwhite Reader",
@@ -806,7 +806,7 @@ export function generateDiscordEmbed(
                     },
                     {
                         name: "⚡ In-Browser Speed Test",
-                        value: "Available inside Portalarr under **My Plex Hub $\\rightarrow$ Speed Test** to benchmark your real-time download speed directly to our physical server."
+                        value: "Available inside Portalarr under **My Plex Hub → Speed Test** to benchmark your real-time download speed directly to our physical server."
                     }
                 ],
                 footer: { text: "DomsHomeLab • Official Links Directory" },

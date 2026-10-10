@@ -21,7 +21,7 @@ Portalarr integrates with Discord via a lightweight, native REST API bot engine 
 - **Default Permissions:**
   - `@everyone` and `⏱️ Trial Pass` are denied `VIEW_CHANNEL` across all categories and channels **except `#welcome-and-rules`**.
   - Trial members entering the Discord server only see `#welcome-and-rules`.
-  - They are instructed to log in to the Portalarr Web Portal (`home.domshomelab.com`) and link their Discord handle in **Account Settings $\rightarrow$ Profile**.
+  - They are instructed to log in to the Portalarr Web Portal (`home.domshomelab.com`) and link their Discord handle in **Account Settings → Profile**.
 - **Role Elevation:**
   - Once linked, the user's role is automatically evaluated in Portalarr and updated to **`⭐ Member`** via the Discord REST API.
   - Elevating to `⭐ Member` instantly unlocks Category 2 (Guides), Category 3 (Community Chat), Category 4 (Requests & Media), and Category 5 (Help & Tickets).
@@ -102,23 +102,23 @@ All Discord embeds generated via `generateDiscordEmbed(key, customData)` in [`sr
   "fields": [
     {
       "name": "📺 Apple TV 4K",
-      "value": "Open Plex Settings $\\rightarrow$ Video\nSet Home Streaming & Remote Streaming to Maximum\nTurn Match Content (Dynamic Range & Frame Rate) ON"
+      "value": "Open Plex Settings → Video\nSet Home Streaming & Remote Streaming to Maximum\nTurn Match Content (Dynamic Range & Frame Rate) ON"
     },
     {
       "name": "📺 Roku Players & Roku TVs",
-      "value": "Open Plex Settings $\\rightarrow$ Video\nSet Local Quality & Remote Quality to Original\nIn Playback Options, ensure Direct Play is set to Force or Auto"
+      "value": "Open Plex Settings → Video\nSet Local Quality & Remote Quality to Original\nIn Playback Options, ensure Direct Play is set to Force or Auto"
     },
     {
       "name": "📺 Amazon Fire TV & Android TV / Google TV",
-      "value": "Open Plex Settings $\\rightarrow$ Video\nSet Video Quality to Maximum\nScroll to Subtitles $\\rightarrow$ Set Burn Subtitles to Only Image Formats"
+      "value": "Open Plex Settings → Video\nSet Video Quality to Maximum\nScroll to Subtitles → Set Burn Subtitles to Only Image Formats"
     },
     {
       "name": "📺 Samsung Tizen & LG webOS Smart TVs",
-      "value": "Open Plex Settings $\\rightarrow$ Video\nSet Local Quality & Remote Quality to Original\nEnable Direct Stream and Direct Play checkboxes"
+      "value": "Open Plex Settings → Video\nSet Local Quality & Remote Quality to Original\nEnable Direct Stream and Direct Play checkboxes"
     },
     {
       "name": "📱 iPhone, iPad & Android Mobile",
-      "value": "Open Plex Settings $\\rightarrow$ Quality\nSet Remote Streaming to Maximum\nIn Advanced $\\rightarrow$ Turn Use Old Video Player OFF"
+      "value": "Open Plex Settings → Quality\nSet Remote Streaming to Maximum\nIn Advanced → Turn Use Old Video Player OFF"
     },
     {
       "name": "💻 Windows / macOS / Linux PC",
@@ -163,7 +163,7 @@ All Discord embeds generated via `generateDiscordEmbed(key, customData)` in [`sr
 ## Web Account Linking & Verification Workflows
 
 ### 1. Member Self-Service Linking (`/settings/profile`)
-1. User navigates to **Account Settings $\rightarrow$ Profile $\rightarrow$ Discord Community & Role Sync**.
+1. User navigates to **Account Settings → Profile → Discord Community & Role Sync**.
 2. If not yet in the Discord server, user clicks **"Join Discord Community"** (`https://discord.gg/KNvUSmPtD3`).
 3. User enters their Discord handle or username (e.g. `username` or `username#1234`).
 4. System invokes `linkMyDiscordAccountAction(query)` in [`src/app/discord-actions.ts`](file:///C:/Users/Dom/Documents/GitHub/portalarr/src/app/discord-actions.ts).

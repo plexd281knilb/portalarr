@@ -698,7 +698,7 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 - **Strict Limited Trial Discord Access & Channel Isolation**:
   - Members with `⏱️ Trial Pass` (and unlinked users with only `@everyone`) are denied `VIEW_CHANNEL` across all member categories (Guides & Self-Service, Community Chat, Requests & Media, Help & Tickets) and all non-welcome channels in Category 1.
   - Trial members strictly view `#welcome-and-rules` until they link their Portalarr member account on the web portal.
-  - The `#welcome-and-rules` embed features a prominent `⏱️ Trial Pass & Account Linking (Required)` guideline explaining the restriction and directing users to **Account Settings $\rightarrow$ Profile** to link their Discord handle and automatically elevate to `⭐ Member`.
+  - The `#welcome-and-rules` embed features a prominent `⏱️ Trial Pass & Account Linking (Required)` guideline explaining the restriction and directing users to **Account Settings → Profile** to link their Discord handle and automatically elevate to `⭐ Member`.
 - **Zero Pricing / Tiers / Subscriptions on Discord Policy**:
   - Absolutely NO mentions of pricing ($17.50, $180), payment methods (Cash App, Venmo, PayPal, Zelle), tiers (Tier 1, Tier 2), or subscription billing anywhere on Discord channel topics or embeds.
   - Pinned embeds emphasize homelab infrastructure, 4K Direct Play setup, reading integrations (Paperwhite & Audiobooks), automated request fulfillment, and the hardware expansion roadmap.

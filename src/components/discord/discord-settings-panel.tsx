@@ -300,7 +300,7 @@ export default function DiscordSettingsPanel() {
                                 Create Application & Bot
                             </div>
                             <p className="pl-7">
-                                Go to the <a href="https://discord.com/developers/applications" target="_blank" rel="noreferrer" className="text-indigo-400 underline font-medium hover:text-indigo-300 inline-flex items-center gap-1">Discord Developer Portal <ExternalLink className="h-3 w-3" /></a> $\rightarrow$ Click <strong>New Application</strong> $\rightarrow$ Name it <em>DomsHomeLab</em> or <em>Portalarr</em>.
+                                Go to the <a href="https://discord.com/developers/applications" target="_blank" rel="noreferrer" className="text-indigo-400 underline font-medium hover:text-indigo-300 inline-flex items-center gap-1">Discord Developer Portal <ExternalLink className="h-3 w-3" /></a> → Click <strong>New Application</strong> → Name it <em>DomsHomeLab</em> or <em>Portalarr</em>.
                             </p>
                         </div>
 
@@ -310,7 +310,7 @@ export default function DiscordSettingsPanel() {
                                 Copy Token & Enable Privileged Intents
                             </div>
                             <p className="pl-7">
-                                In the left sidebar, click <strong>Bot</strong> $\rightarrow$ Click <strong>Reset Token</strong> and copy the token. Scroll down to <em>Privileged Gateway Intents</em> and enable <strong>Server Members Intent</strong>.
+                                In the left sidebar, click <strong>Bot</strong> → Click <strong>Reset Token</strong> and copy the token. Scroll down to <em>Privileged Gateway Intents</em> and enable <strong>Server Members Intent</strong>.
                             </p>
                         </div>
 
@@ -320,7 +320,7 @@ export default function DiscordSettingsPanel() {
                                 Invite Bot & Copy Server ID
                             </div>
                             <p className="pl-7">
-                                In Discord Developer Portal $\rightarrow$ <strong>General Information</strong>, copy the <strong>Application ID</strong> and paste it below to generate your 1-click invite link. In Discord, right-click your server icon $\rightarrow$ click <strong>Copy Server ID</strong> (requires Developer Mode enabled in Discord User Settings).
+                                In Discord Developer Portal → <strong>General Information</strong>, copy the <strong>Application ID</strong> and paste it below to generate your 1-click invite link. In Discord, right-click your server icon → click <strong>Copy Server ID</strong> (requires Developer Mode enabled in Discord User Settings).
                             </p>
                         </div>
                     </CardContent>
@@ -370,7 +370,7 @@ export default function DiscordSettingsPanel() {
                                     placeholder="e.g. 112233445566778899"
                                     className="font-mono text-xs"
                                 />
-                                <p className="text-[11px] text-muted-foreground">Right-click server in Discord $\rightarrow$ Copy Server ID</p>
+                                <p className="text-[11px] text-muted-foreground">Right-click server in Discord → Copy Server ID</p>
                             </div>
 
                             <div className="space-y-1.5">

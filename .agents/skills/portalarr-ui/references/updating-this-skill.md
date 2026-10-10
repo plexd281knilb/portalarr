@@ -36,10 +36,10 @@ If it's a fundamental rule (e.g. "All detail modals must use responsive width pr
 
 ### Step 2: Add Code Examples to Reference Files
 If you are tweaking a specific pattern:
-- Modals / Dialogs $\rightarrow$ [modal-and-dialog-patterns.md](./modal-and-dialog-patterns.md)
-- Posters / Media Cards $\rightarrow$ [card-and-poster-patterns.md](./card-and-poster-patterns.md)
-- Forms / Inputs / Autocomplete $\rightarrow$ [form-and-input-patterns.md](./form-and-input-patterns.md)
-- Colors / Typography $\rightarrow$ [theme-and-color-tokens.md](./theme-and-color-tokens.md)
+- Modals / Dialogs → [modal-and-dialog-patterns.md](./modal-and-dialog-patterns.md)
+- Posters / Media Cards → [card-and-poster-patterns.md](./card-and-poster-patterns.md)
+- Forms / Inputs / Autocomplete → [form-and-input-patterns.md](./form-and-input-patterns.md)
+- Colors / Typography → [theme-and-color-tokens.md](./theme-and-color-tokens.md)
 
 ### Step 3: Create New Reference Files for New Features
 When adding a new major section (e.g. `references/data-tables-and-lists.md` or `references/audio-player-controls.md`):
