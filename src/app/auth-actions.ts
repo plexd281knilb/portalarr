@@ -236,10 +236,11 @@ export async function createSession(
 
 // --- HELPER: GET SESSION ---
 export async function getSession() {
-  const token = (await cookies()).get("session")?.value;
-  if (!token) return null;
-
   try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get("session")?.value;
+    if (!token) return null;
+
     const { payload } = await jwtVerify(token, getJwtSecret());
     return payload;
   } catch (e) {

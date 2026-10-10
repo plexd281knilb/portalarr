@@ -6484,6 +6484,233 @@ async function runTestSuite() {
         }
     });
 
+    // 97. Media Requests: Mass Approve, Mass Decline, Mass Delete & Anti-Resurrection Cascade Synchronization
+    await assertTest("Test 97: Media Requests: Mass Approve, Mass Decline, Mass Delete & Anti-Resurrection Cascade Synchronization", async () => {
+        process.env.PORTALARR_TEST_AUTH = "true";
+        try {
+            const { 
+                bulkApproveMediaRequestsAction, 
+                bulkDeclineMediaRequestsAction, 
+                bulkDeleteMediaRequestsAction, 
+                reconcileBookRequestsWithMediaRequests 
+            } = await import("../src/app/seerr-actions");
+            const { deleteBookRequest } = await import("../src/app/actions");
+
+            const timestamp = Date.now();
+            const bookTitle1 = `Bulk Test Book 1 ${timestamp}`;
+            const bookTitle2 = `Bulk Test Book 2 ${timestamp}`;
+            const movieTitle1 = `Bulk Test Movie 1 ${timestamp}`;
+
+            // Part 1: Bulk Decline & Rejection Integrity
+            const br1 = await prisma.bookRequest.create({
+                data: {
+                    title: bookTitle1,
+                    author: "Author Bulk 1",
+                    requestedBy: "admin",
+                    status: "Pending",
+                    mediaType: "ebook",
+                    type: "book"
+                }
+            });
+
+            const mrBook1 = await prisma.mediaRequest.create({
+                data: {
+                    mediaType: "book",
+                    tmdbId: 0,
+                    title: bookTitle1,
+                    bookAuthor: "Author Bulk 1",
+                    requestedByUsername: "admin",
+                    status: "PENDING"
+                }
+            });
+
+            const mrMovie1 = await prisma.mediaRequest.create({
+                data: {
+                    mediaType: "movie",
+                    tmdbId: 999901,
+                    title: movieTitle1,
+                    requestedByUsername: "admin",
+                    status: "PENDING"
+                }
+            });
+
+            const declineRes = await bulkDeclineMediaRequestsAction([mrBook1.id, mrMovie1.id], "Test bulk decline");
+            if (!declineRes.success || declineRes.count !== 2) {
+                throw new Error(`bulkDeclineMediaRequestsAction failed: ${JSON.stringify(declineRes)}`);
+            }
+
+            const checkedMrBook1 = await prisma.mediaRequest.findUnique({ where: { id: mrBook1.id } });
+            const checkedMrMovie1 = await prisma.mediaRequest.findUnique({ where: { id: mrMovie1.id } });
+            if (checkedMrBook1?.status !== "DECLINED" || checkedMrMovie1?.status !== "DECLINED") {
+                throw new Error(`MediaRequest status not DECLINED: Book=${checkedMrBook1?.status}, Movie=${checkedMrMovie1?.status}`);
+            }
+
+            const checkedBr1 = await prisma.bookRequest.findUnique({ where: { id: br1.id } });
+            if (checkedBr1?.status !== "Rejected") {
+                throw new Error(`Linked BookRequest status not Rejected, got: ${checkedBr1?.status}`);
+            }
+
+            // Verify Anti-Reversion: Reconcile must NOT revert DECLINED status back to PENDING
+            await reconcileBookRequestsWithMediaRequests(undefined, true);
+            const reconciledMrBook1 = await prisma.mediaRequest.findUnique({ where: { id: mrBook1.id } });
+            if (reconciledMrBook1?.status !== "DECLINED") {
+                throw new Error(`Reconciliation reverted DECLINED status to: ${reconciledMrBook1?.status}`);
+            }
+
+            // Part 2: Bulk Delete Two-Way Cascade & Anti-Resurrection Guard
+            const req4k = await prisma.mediaRequest.create({
+                data: {
+                    mediaType: "movie",
+                    tmdbId: 999902,
+                    title: `Test 4K Movie ${timestamp}`,
+                    is4k: true,
+                    requestedByUsername: "admin",
+                    status: "PENDING"
+                }
+            });
+
+            const req1080pChild = await prisma.mediaRequest.create({
+                data: {
+                    mediaType: "movie",
+                    tmdbId: 999902,
+                    title: `Test 4K Movie ${timestamp}`,
+                    is4k: false,
+                    isDual1080pChild: true,
+                    parent4kRequestId: req4k.id,
+                    requestedByUsername: "admin",
+                    status: "PENDING"
+                }
+            });
+
+            const br2 = await prisma.bookRequest.create({
+                data: {
+                    title: bookTitle2,
+                    author: "Author Bulk 2",
+                    requestedBy: "admin",
+                    status: "Pending",
+                    mediaType: "ebook",
+                    type: "book"
+                }
+            });
+
+            const mrBook2 = await prisma.mediaRequest.create({
+                data: {
+                    mediaType: "book",
+                    tmdbId: 0,
+                    title: bookTitle2,
+                    bookAuthor: "Author Bulk 2",
+                    requestedByUsername: "admin",
+                    status: "PENDING"
+                }
+            });
+
+            const deleteRes = await bulkDeleteMediaRequestsAction([req4k.id, mrBook2.id]);
+            if (!deleteRes.success || deleteRes.count !== 2) {
+                throw new Error(`bulkDeleteMediaRequestsAction failed: ${JSON.stringify(deleteRes)}`);
+            }
+
+            const checkedChild = await prisma.mediaRequest.findUnique({ where: { id: req1080pChild.id } });
+            if (checkedChild) {
+                throw new Error("Companion 1080p child was not cascade deleted with 4K parent");
+            }
+
+            const checkedBr2 = await prisma.bookRequest.findUnique({ where: { id: br2.id } });
+            if (checkedBr2) {
+                throw new Error("Associated BookRequest was not cascade deleted with MediaRequest");
+            }
+
+            // Run reconciliation: neither should resurrect!
+            await reconcileBookRequestsWithMediaRequests(undefined, true);
+            const resurrectedMr = await prisma.mediaRequest.findFirst({
+                where: { title: bookTitle2 }
+            });
+            if (resurrectedMr) {
+                throw new Error(`Deleted BookRequest resurrected during sync: ${resurrectedMr.id}`);
+            }
+
+            // Part 3: Reverse Cascade Deletion via deleteBookRequest
+            const bookTitle3 = `Bulk Test Book 3 ${timestamp}`;
+            const br3 = await prisma.bookRequest.create({
+                data: {
+                    title: bookTitle3,
+                    author: "Author Bulk 3",
+                    requestedBy: "admin",
+                    status: "Pending",
+                    mediaType: "ebook",
+                    type: "book"
+                }
+            });
+
+            const mrBook3 = await prisma.mediaRequest.create({
+                data: {
+                    mediaType: "book",
+                    tmdbId: 0,
+                    title: bookTitle3,
+                    bookAuthor: "Author Bulk 3",
+                    requestedByUsername: "admin",
+                    status: "PENDING"
+                }
+            });
+
+            await deleteBookRequest(br3.id);
+
+            const checkedBr3 = await prisma.bookRequest.findUnique({ where: { id: br3.id } });
+            const checkedMrBook3 = await prisma.mediaRequest.findUnique({ where: { id: mrBook3.id } });
+            if (checkedBr3 || checkedMrBook3) {
+                throw new Error(`deleteBookRequest failed reverse cascade: BookRequest=${Boolean(checkedBr3)}, MediaRequest=${Boolean(checkedMrBook3)}`);
+            }
+
+            // Part 4: Bulk Approve
+            const bookTitle4 = `Bulk Test Book 4 ${timestamp}`;
+            const br4 = await prisma.bookRequest.create({
+                data: {
+                    title: bookTitle4,
+                    author: "Author Bulk 4",
+                    requestedBy: "admin",
+                    status: "Pending",
+                    mediaType: "ebook",
+                    type: "book"
+                }
+            });
+
+            const mrBook4 = await prisma.mediaRequest.create({
+                data: {
+                    mediaType: "book",
+                    tmdbId: 0,
+                    title: bookTitle4,
+                    bookAuthor: "Author Bulk 4",
+                    requestedByUsername: "admin",
+                    status: "PENDING"
+                }
+            });
+
+            const approveRes = await bulkApproveMediaRequestsAction([mrBook4.id]);
+            if (!approveRes.success) {
+                throw new Error(`bulkApproveMediaRequestsAction failed: ${approveRes.error}`);
+            }
+
+            const checkedMrBook4 = await prisma.mediaRequest.findUnique({ where: { id: mrBook4.id } });
+            const checkedBr4 = await prisma.bookRequest.findUnique({ where: { id: br4.id } });
+            if (checkedMrBook4?.status !== "APPROVED" && checkedMrBook4?.status !== "PROCESSING") {
+                throw new Error(`Expected approved MediaRequest to be APPROVED or PROCESSING, got ${checkedMrBook4?.status}`);
+            }
+            if (!["Approved", "Searching", "Downloading", "Downloaded"].includes(checkedBr4?.status || "")) {
+                throw new Error(`Expected linked BookRequest to be Approved or progressing, got ${checkedBr4?.status}`);
+            }
+
+            // Cleanup remaining test records
+            await prisma.mediaRequest.deleteMany({
+                where: { id: { in: [mrBook1.id, mrMovie1.id, mrBook4.id] } }
+            }).catch(() => {});
+            await prisma.bookRequest.deleteMany({
+                where: { id: { in: [br1.id, br4.id] } }
+            }).catch(() => {});
+
+        } finally {
+            delete process.env.PORTALARR_TEST_AUTH;
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

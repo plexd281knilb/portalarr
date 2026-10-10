@@ -715,6 +715,18 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
   - Smart heuristic auto-matching engine (`findBestMatch`) pairing exact usernames (100%), email prefixes (95%), server nicknames (90%), full names (85%), display names (80%), and substrings (70%).
   - 1-click Auto-Match, Bulk Push to Discord (`syncAllUsersRolesToDiscordAction`), Bulk Pull to Portalarr (`syncAllDiscordRolesToPortalarrAction`), and individual user dropdown linking.
 
+- **Request Manager Bulk Actions & Multi-Select Architecture (`request-manager.tsx`)**:
+  - **Multi-Select Checkboxes**: Every request card features an isolated `Checkbox` component with `e.stopPropagation()` preventing inadvertent card expansion or dialog opening.
+  - **Selected Visual State**: Selected cards display high-contrast accent outlines (`border-primary ring-1 ring-primary/40 bg-[#161626]`).
+  - **Master Toolbar Controls**: Features a dynamic `Select All ({filteredRequests.length}) / Deselect All` toggle alongside a dedicated manual `Refresh` button that busts in-memory cache and loads a fresh DB snapshot.
+  - **Sticky Bulk Actions Bar**: Renders a floating/docked toolbar (`sticky top-3 z-30`) with backdrop blur (`backdrop-blur-md bg-card/95 border border-border/70 shadow-2xl`):
+    - Badge: `{selectedIds.size} Selected` indicator.
+    - Clear: Quick "Clear" link.
+    - Mass Approve: Vibrant emerald action (`CheckCheck` icon) with optimistic state updating.
+    - Mass Reject: Rose outline action (`XCircle` icon) with confirmation prompt.
+    - Mass Delete: Rose filled action (`Trash2` icon) executing two-way cascade permanent deletion.
+  - **0ms Optimistic UI Transitions**: Mutated or deleted cards immediately disappear from the view with 0ms latency, backed by floating glassmorphic toasts for feedback.
+
 ---
 
 As the Portalarr frontend evolves or new design decisions are finalized:

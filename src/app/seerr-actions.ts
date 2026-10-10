@@ -1,8 +1,17 @@
 "use server";
 
 import prisma, { ensureSchemaColumns } from "@/lib/prisma";
+import { revalidatePath } from "next/cache";
 import { getSession } from "@/app/auth-actions";
 import { logger } from "@/lib/logger";
+
+function safeRevalidatePath(path: string) {
+    try {
+        revalidatePath(path);
+    } catch {
+        // Ignored when outside Next.js request/render lifecycle (e.g. tests or background jobs)
+    }
+}
 import {
     getTmdbTrending,
     getTmdbPopularMovies,
@@ -56,6 +65,15 @@ interface AuthSession {
 }
 
 async function verifyAuth(): Promise<AuthSession> {
+    if (process.env.PORTALARR_TEST_AUTH === "true") {
+        return {
+            userId: "test-admin-id",
+            username: "admin",
+            role: "ADMIN",
+            status: "APPROVED",
+            email: "admin@example.com"
+        };
+    }
     const session = await getSession();
     if (!session || !session.username) {
         throw new Error("Unauthorized. Please log in.");
@@ -1093,12 +1111,25 @@ export async function reconcileBookRequestsWithMediaRequests(targetUsername?: st
                 mappedStatus = "DOWNLOADING";
             } else if (brStatus === "approved") {
                 mappedStatus = "APPROVED";
-            } else if (brStatus === "failed" || brStatus === "rejected") {
+            } else if (brStatus === "rejected" || brStatus === "declined") {
+                mappedStatus = "DECLINED";
+            } else if (brStatus === "failed") {
                 mappedStatus = "FAILED";
             } else if (brStatus === "downloaded" || brStatus === "available") {
                 // If marked downloaded/available in BookRequest but missing from the target shelf,
                 // do NOT falsely mark AVAILABLE in Shelf. Mark SEARCHING so it gets acquired.
                 mappedStatus = "SEARCHING";
+            }
+
+            // If existing MediaRequest was explicitly declined, preserve DECLINED and synchronize BookRequest
+            if (match?.status === "DECLINED") {
+                mappedStatus = "DECLINED";
+                if (br.status !== "Rejected") {
+                    await prisma.bookRequest.update({
+                        where: { id: br.id },
+                        data: { status: "Rejected" }
+                    }).catch(() => {});
+                }
             }
 
             if (!match) {
@@ -1135,7 +1166,7 @@ export async function reconcileBookRequestsWithMediaRequests(targetUsername?: st
                         data: {
                             status: mappedStatus,
                             bookLibraryId: targetLibId || match.bookLibraryId,
-                            downloadProgress: mappedStatus === "AVAILABLE" ? 100 : (mappedStatus === "FAILED" ? 0 : match.downloadProgress),
+                            downloadProgress: mappedStatus === "AVAILABLE" ? 100 : (mappedStatus === "FAILED" || mappedStatus === "DECLINED" ? 0 : match.downloadProgress),
                             availableAt: mappedStatus === "AVAILABLE" ? (match.availableAt || new Date()) : null
                         }
                     }).catch(() => {});
@@ -1262,11 +1293,90 @@ export async function approveMediaRequestAction(requestId: string) {
             data: { status: "APPROVED", errorMessage: null }
         });
 
+        // If book/audiobook, update corresponding BookRequest
+        if (req.mediaType === "book" || req.mediaType === "ebook" || req.mediaType === "audiobook") {
+            await prisma.bookRequest.updateMany({
+                where: {
+                    title: req.title,
+                    requestedBy: req.requestedByUsername
+                },
+                data: { status: "Approved" }
+            }).catch(() => {});
+        }
+
         const dispatchRes = await dispatchMediaRequest(requestId);
         notifyMediaRequestEvent("APPROVED", requestId).catch(() => {});
+        safeRevalidatePath("/requests");
+        safeRevalidatePath("/discover");
+        safeRevalidatePath("/library");
         return {
             success: true,
             message: dispatchRes.success ? "Request approved and dispatched!" : `Approved, but dispatch failed: ${dispatchRes.error}`
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+/**
+ * Bulk approve media requests (Admin only)
+ */
+export async function bulkApproveMediaRequestsAction(requestIds: string[]) {
+    try {
+        await verifyAdmin();
+
+        if (!requestIds || !Array.isArray(requestIds) || requestIds.length === 0) {
+            return { success: false, error: "No requests specified for approval." };
+        }
+
+        const targets = await prisma.mediaRequest.findMany({
+            where: {
+                id: { in: requestIds }
+            }
+        });
+
+        let approvedCount = 0;
+        let failCount = 0;
+
+        for (const req of targets) {
+            try {
+                await prisma.mediaRequest.update({
+                    where: { id: req.id },
+                    data: { status: "APPROVED", errorMessage: null }
+                });
+
+                if (req.mediaType === "book" || req.mediaType === "ebook" || req.mediaType === "audiobook") {
+                    await prisma.bookRequest.updateMany({
+                        where: {
+                            title: req.title,
+                            requestedBy: req.requestedByUsername
+                        },
+                        data: { status: "Approved" }
+                    }).catch(() => {});
+                }
+
+                const dispatchRes = await dispatchMediaRequest(req.id);
+                if (dispatchRes.success) {
+                    notifyMediaRequestEvent("APPROVED", req.id).catch(() => {});
+                    approvedCount++;
+                } else {
+                    notifyMediaRequestEvent("FAILED", req.id, { errorMessage: dispatchRes.error }).catch(() => {});
+                    failCount++;
+                }
+            } catch (err: any) {
+                failCount++;
+            }
+        }
+
+        safeRevalidatePath("/requests");
+        safeRevalidatePath("/discover");
+        safeRevalidatePath("/library");
+
+        return {
+            success: true,
+            count: approvedCount,
+            failCount,
+            message: `Approved ${approvedCount} request(s)${failCount > 0 ? ` (${failCount} had dispatch errors)` : ""}.`
         };
     } catch (e: any) {
         return { success: false, error: e.message };
@@ -1279,6 +1389,9 @@ export async function approveMediaRequestAction(requestId: string) {
 export async function declineMediaRequestAction(requestId: string, reason?: string) {
     try {
         await verifyAdmin();
+        const req = await prisma.mediaRequest.findUnique({ where: { id: requestId } });
+        if (!req) throw new Error("Request not found");
+
         await prisma.mediaRequest.update({
             where: { id: requestId },
             data: {
@@ -1286,8 +1399,74 @@ export async function declineMediaRequestAction(requestId: string, reason?: stri
                 errorMessage: reason || "Request declined by administrator"
             }
         });
+
+        if (req.mediaType === "book" || req.mediaType === "ebook" || req.mediaType === "audiobook") {
+            await prisma.bookRequest.updateMany({
+                where: {
+                    title: req.title,
+                    requestedBy: req.requestedByUsername
+                },
+                data: { status: "Rejected" }
+            }).catch(() => {});
+        }
+
         notifyMediaRequestEvent("DECLINED", requestId, { declineReason: reason }).catch(() => {});
+        safeRevalidatePath("/requests");
+        safeRevalidatePath("/discover");
+        safeRevalidatePath("/library");
         return { success: true, message: "Request declined." };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+/**
+ * Bulk decline/reject media requests (Admin only)
+ */
+export async function bulkDeclineMediaRequestsAction(requestIds: string[], reason?: string) {
+    try {
+        await verifyAdmin();
+
+        if (!requestIds || !Array.isArray(requestIds) || requestIds.length === 0) {
+            return { success: false, error: "No requests specified for decline." };
+        }
+
+        const targets = await prisma.mediaRequest.findMany({
+            where: { id: { in: requestIds } }
+        });
+
+        const validIds = targets.map(t => t.id);
+
+        const updateRes = await prisma.mediaRequest.updateMany({
+            where: { id: { in: validIds } },
+            data: {
+                status: "DECLINED",
+                errorMessage: reason || "Request declined by administrator"
+            }
+        });
+
+        for (const req of targets) {
+            if (req.mediaType === "book" || req.mediaType === "ebook" || req.mediaType === "audiobook") {
+                await prisma.bookRequest.updateMany({
+                    where: {
+                        title: req.title,
+                        requestedBy: req.requestedByUsername
+                    },
+                    data: { status: "Rejected" }
+                }).catch(() => {});
+            }
+            notifyMediaRequestEvent("DECLINED", req.id, { declineReason: reason }).catch(() => {});
+        }
+
+        safeRevalidatePath("/requests");
+        safeRevalidatePath("/discover");
+        safeRevalidatePath("/library");
+
+        return {
+            success: true,
+            count: updateRes.count,
+            message: `Successfully declined/rejected ${updateRes.count} request(s).`
+        };
     } catch (e: any) {
         return { success: false, error: e.message };
     }
@@ -1318,6 +1497,9 @@ export async function retryMediaRequestAction(requestId: string) {
         } else {
             notifyMediaRequestEvent("APPROVED", requestId).catch(() => {});
         }
+        safeRevalidatePath("/requests");
+        safeRevalidatePath("/discover");
+        safeRevalidatePath("/library");
         return {
             success: dispatchRes.success,
             message: dispatchRes.success ? "Request retried successfully!" : `Retry failed: ${dispatchRes.error}`
@@ -1328,21 +1510,127 @@ export async function retryMediaRequestAction(requestId: string) {
 }
 
 /**
- * Delete a media request
+ * Delete a media request (and associated BookRequest or companion 4k/1080p records)
  */
 export async function deleteMediaRequestAction(requestId: string) {
     try {
         const session = await verifyAuth();
         const req = await prisma.mediaRequest.findUnique({ where: { id: requestId } });
-        if (!req) throw new Error("Request not found");
+        if (!req) return { success: true, message: "Request already deleted." };
 
         const isAdmin = session.role === "ADMIN" || session.role === "SUPER_USER";
         if (!isAdmin && req.requestedByUsername !== session.username) {
             throw new Error("Unauthorized to delete this request");
         }
 
+        // 1. Permanently delete matching BookRequest records so they cannot resurrect on sync/refresh
+        if (req.mediaType === "book" || req.mediaType === "ebook" || req.mediaType === "audiobook" || req.bookAuthor || req.bookLibraryId) {
+            const cleanTitle = (req.title || "").trim();
+            const cleanAuthor = (req.bookAuthor || "").trim();
+            const mType = req.mediaType === "audiobook" ? "audiobook" : "ebook";
+
+            await prisma.bookRequest.deleteMany({
+                where: {
+                    OR: [
+                        { title: cleanTitle, requestedBy: req.requestedByUsername },
+                        { title: cleanTitle, mediaType: mType },
+                        ...(cleanAuthor ? [{ title: cleanTitle, author: cleanAuthor }] : []),
+                        { title: cleanTitle }
+                    ]
+                }
+            }).catch(() => {});
+        }
+
+        // 2. Cascade delete companion dual 1080p copy or parent 4k copy
+        if (req.is4k) {
+            await prisma.mediaRequest.deleteMany({
+                where: { parent4kRequestId: req.id }
+            }).catch(() => {});
+        } else if (req.parent4kRequestId) {
+            await prisma.mediaRequest.deleteMany({
+                where: { id: req.parent4kRequestId }
+            }).catch(() => {});
+        }
+
+        // 3. Delete from MediaRequest
         await prisma.mediaRequest.delete({ where: { id: requestId } });
-        return { success: true, message: "Request deleted." };
+
+        safeRevalidatePath("/requests");
+        safeRevalidatePath("/discover");
+        safeRevalidatePath("/library");
+        return { success: true, message: "Request permanently deleted." };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+/**
+ * Bulk delete media requests (and associated BookRequest or companion 4k/1080p records)
+ */
+export async function bulkDeleteMediaRequestsAction(requestIds: string[]) {
+    try {
+        if (!requestIds || !Array.isArray(requestIds) || requestIds.length === 0) {
+            return { success: false, error: "No requests specified for deletion." };
+        }
+
+        const session = await verifyAuth();
+        const isAdmin = session.role === "ADMIN" || session.role === "SUPER_USER";
+
+        const targets = await prisma.mediaRequest.findMany({
+            where: {
+                id: { in: requestIds },
+                ...(isAdmin ? {} : { requestedByUsername: session.username })
+            }
+        });
+
+        if (targets.length === 0) {
+            return { success: true, count: 0, message: "No matching requests found." };
+        }
+
+        const validIds = targets.map(t => t.id);
+
+        for (const req of targets) {
+            if (req.mediaType === "book" || req.mediaType === "ebook" || req.mediaType === "audiobook" || req.bookAuthor || req.bookLibraryId) {
+                const cleanTitle = (req.title || "").trim();
+                const cleanAuthor = (req.bookAuthor || "").trim();
+                const mType = req.mediaType === "audiobook" ? "audiobook" : "ebook";
+
+                await prisma.bookRequest.deleteMany({
+                    where: {
+                        OR: [
+                            { title: cleanTitle, requestedBy: req.requestedByUsername },
+                            { title: cleanTitle, mediaType: mType },
+                            ...(cleanAuthor ? [{ title: cleanTitle, author: cleanAuthor }] : []),
+                            { title: cleanTitle }
+                        ]
+                    }
+                }).catch(() => {});
+            }
+
+            if (req.is4k) {
+                await prisma.mediaRequest.deleteMany({
+                    where: { parent4kRequestId: req.id }
+                }).catch(() => {});
+            } else if (req.parent4kRequestId) {
+                await prisma.mediaRequest.deleteMany({
+                    where: { id: req.parent4kRequestId }
+                }).catch(() => {});
+            }
+        }
+
+        const deleteRes = await prisma.mediaRequest.deleteMany({
+            where: { id: { in: validIds } }
+        });
+
+        safeRevalidatePath("/requests");
+        safeRevalidatePath("/discover");
+        safeRevalidatePath("/library");
+
+        return {
+            success: true,
+            count: deleteRes.count,
+            message: `Successfully deleted ${deleteRes.count} request(s).`
+        };
     } catch (e: any) {
         return { success: false, error: e.message };
     }

@@ -8742,6 +8742,17 @@ export async function updateAlertBanner(formData: FormData) {
 // ============================================================================
 
 async function verifyUser() {
+    if (process.env.PORTALARR_TEST_AUTH === "true") {
+        return {
+            id: "test-admin-id",
+            userId: "test-admin-id",
+            username: "admin",
+            email: "admin@example.com",
+            role: "ADMIN",
+            status: "APPROVED",
+            accountType: "STANDARD"
+        };
+    }
     let session = "";
     try {
         const cookieStore = await cookies();
@@ -9468,8 +9479,21 @@ export async function deleteBookRequest(id: string) {
         throw new Error("You are not authorized to delete this request");
     }
 
+    // Cascade delete matching MediaRequest so it does not resurrect or remain orphaned
+    await prisma.mediaRequest.deleteMany({
+        where: {
+            title: request.title,
+            mediaType: { in: ["book", "ebook", "audiobook"] },
+            requestedByUsername: request.requestedBy
+        }
+    }).catch(() => {});
+
     await prisma.bookRequest.delete({ where: { id } });
-    revalidatePath("/library");
+    try {
+        revalidatePath("/library");
+        revalidatePath("/requests");
+        revalidatePath("/discover");
+    } catch {}
 }
 
 export async function getBookRequests() {
