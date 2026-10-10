@@ -52,15 +52,15 @@ Portalarr communicates with Discord using native HTTPS fetch queries without hea
   ├── 💬 #welcome-and-rules      [All Read-Only] Pinned: welcome_rules embed
   ├── 📢 #announcements          [Member Read-Only] Announcement channel
   ├── 💬 #membership-info        [Member Read-Only] Pinned: platform_features embed
-  ├── 💬 #links-and-webhooks     [Member Read-Only] Fast links to web apps
+  ├── 💬 #links-and-webhooks     [Member Read-Only] Pinned: links_webhooks embed (Quick Links)
   ├── 💬 #roadmap-and-updates    [Member Read-Only] Pinned: roadmap_updates embed
   ├── 💬 #plex-invites           [Member Read-Only] Pinned: plex_invites embed
-  └── 💬 #maintenance            [Member Read-Only] Maintenance blackout schedule
+  └── 💬 #maintenance            [Member Read-Only] Pinned: maintenance_window embed (5:00-5:30 AM)
 
 📁 📖 2. GUIDES & SELF-SERVICE (Member-Only)
   ├── 💬 #plex-setup-guides      [Member Read-Only] Pinned: plex_guides embed (30-sec Direct Play)
   ├── 💬 #transcode-doctor       [Member Read-Only] Pinned: transcode_doctor embed
-  └── 💬 #kindle-and-audiobooks  [Member Read-Only] Pinned: kindle_reading embed
+  └── 💬 #kindle-and-audiobooks  [Member Read-Only] Pinned: kindle_reading embed (Ebooks & Audiobooks)
 
 📁 💬 3. COMMUNITY CHAT (Member-Only, Interactive)
   ├── 💬 #general-chat           [Member Chat] Homelab & general banter
@@ -74,9 +74,9 @@ Portalarr communicates with Discord using native HTTPS fetch queries without hea
   └── 💬 #leaving-soon           [Member Read-Only] Pinned: leaving_soon embed
 
 📁 🆘 5. HELP & TICKETS (Member-Only)
-  ├── 💬 #support-tickets        [Member Interactive] Support inquiries
+  ├── 💬 #support-tickets        [Member Interactive] Pinned: support_guide embed
   ├── 💬 #request-help           [Member Interactive] Media request assistance
-  └── 💬 #system-status          [Member Read-Only] Live 60-second status cockpit
+  └── 💬 #server-uptime          [Member Read-Only] Live 60-second status cockpit
 ```
 
 ### Discord Roles Hierarchy
@@ -135,7 +135,7 @@ All Discord embeds generated via `generateDiscordEmbed(key, customData)` in [`sr
   1. `⏱️ Trial Pass & Account Linking (Required)`: Explains trial restrictions and provides linking instructions in `/settings/profile`.
   2. `📌 1. Quality & Direct Play First`: Guidance on setting client quality to Maximum / Original.
   3. `📥 2. Automated Media Requests`: Portalarr web portal automated grabbing.
-  4. `🩺 3. Transcode Doctor Diagnostics`: Device fix instructions in `<#transcode-doctor>`.
+  4. `🩺 3. Transcode Doctor Diagnostics`: Device fix instructions linking to `<#1558230275950125261>`.
   5. `💬 4. Spoiler Etiquette & Chat`: Use `||spoiler||` tags for new releases.
 - **Rule Exclusions:** Do NOT include household integrity or account sharing rules.
 
@@ -145,6 +145,18 @@ All Discord embeds generated via `generateDiscordEmbed(key, customData)` in [`sr
   1. `🛡️ 14-Day Grace Period`: Items marked with badges and featured on Plex Home Screen.
   2. `🍿 Want to Keep Something?`:
      `Simply start watching the title before the countdown finishes to keep it in the library! Active playback automatically resets retention and keeps the media active.`
+
+### 4. Official Links Directory (`links_webhooks`)
+- **Header:** `🔗 Official Homelab Links & Fast Access`
+- **Fields:** Portalarr Web Portal (`https://home.domshomelab.com`), Plex Web (`https://app.plex.tv`), Seerr media requests, in-browser Speed Test.
+
+### 5. Scheduled Maintenance Window (`maintenance_window`)
+- **Header:** `🛠️ Scheduled Server Maintenance: Daily 5:00 AM – 5:30 AM`
+- **Fields:** Schedule details, Unraid reboot & DB sweep explanation, stream disconnection expectation (resumes at 5:30 AM), 24/7 uptime note.
+
+### 6. Support Ticket Submission Guide (`support_guide`)
+- **Header:** `🆘 Support & Assistance: How to Report an Issue`
+- **Fields:** Issue reporting template (device model, title, timestamp, error/buffering details), Transcode Doctor self-service check before opening a ticket.
 
 ---
 

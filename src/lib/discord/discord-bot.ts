@@ -105,7 +105,7 @@ export interface DiscordBlueprintChannel {
     readOnlyForEveryone?: boolean;
     adminOnly?: boolean;
     memberOnly?: boolean;
-    pinnedEmbedKey?: "welcome_rules" | "subscription_tiers" | "platform_features" | "roadmap_updates" | "plex_invites" | "plex_guides" | "transcode_doctor" | "system_status" | "kindle_reading" | "audiobooks_guide" | "leaving_soon";
+    pinnedEmbedKey?: "welcome_rules" | "subscription_tiers" | "platform_features" | "roadmap_updates" | "plex_invites" | "plex_guides" | "transcode_doctor" | "system_status" | "kindle_reading" | "audiobooks_guide" | "leaving_soon" | "maintenance_window" | "links_webhooks" | "support_guide";
 }
 
 export interface DiscordBlueprintCategory {
@@ -143,7 +143,8 @@ export const DISCORD_SERVER_BLUEPRINT: DiscordBlueprintCategory[] = [
             {
                 name: "links-and-webhooks",
                 topic: "Portalarr Web Portal, Seerr media requests, Tautulli stream stats, and external guides.",
-                readOnlyForEveryone: true
+                readOnlyForEveryone: true,
+                pinnedEmbedKey: "links_webhooks"
             },
             {
                 name: "roadmap-and-updates",
@@ -160,7 +161,8 @@ export const DISCORD_SERVER_BLUEPRINT: DiscordBlueprintCategory[] = [
             {
                 name: "maintenance",
                 topic: "Scheduled maintenance windows and daily container reboot times.",
-                readOnlyForEveryone: true
+                readOnlyForEveryone: true,
+                pinnedEmbedKey: "maintenance_window"
             }
         ]
     },
@@ -254,7 +256,8 @@ export const DISCORD_SERVER_BLUEPRINT: DiscordBlueprintCategory[] = [
                 name: "support-tickets",
                 topic: "Open a support request or report playback issues with the server administrator.",
                 readOnlyForEveryone: false,
-                memberOnly: true
+                memberOnly: true,
+                pinnedEmbedKey: "support_guide"
             },
             {
                 name: "server-uptime",
@@ -537,7 +540,7 @@ export async function verifyDiscordBotCredentials(credentials: {
  * Generates canonical, high-definition Discord Embeds matching Portalarr's design system
  */
 export function generateDiscordEmbed(
-    key: "welcome_rules" | "subscription_tiers" | "platform_features" | "roadmap_updates" | "plex_invites" | "plex_guides" | "transcode_doctor" | "system_status" | "kindle_reading" | "audiobooks_guide" | "leaving_soon",
+    key: "welcome_rules" | "subscription_tiers" | "platform_features" | "roadmap_updates" | "plex_invites" | "plex_guides" | "transcode_doctor" | "system_status" | "kindle_reading" | "audiobooks_guide" | "leaving_soon" | "maintenance_window" | "links_webhooks" | "support_guide",
     customData?: any
 ): DiscordEmbed {
     const nowIso = new Date().toISOString();
@@ -563,7 +566,7 @@ export function generateDiscordEmbed(
                     },
                     {
                         name: "🩺 3. Transcode Doctor Diagnostics",
-                        value: "If you encounter buffering, audio stutter, or subtitle lag, visit <#transcode-doctor> for immediate 30-second fix instructions tailored to your specific device."
+                        value: "If you encounter buffering, audio stutter, or subtitle lag, visit <#1558230275950125261> for immediate 30-second fix instructions tailored to your specific device."
                     },
                     {
                         name: "💬 4. Spoiler Etiquette & Chat",
@@ -645,7 +648,7 @@ export function generateDiscordEmbed(
                     },
                     {
                         name: "Step 2: Accept Your Server Invitation",
-                        value: "Check your email or visit https://app.plex.tv to accept the library share invitation sent from our server host (`d281knilb`)."
+                        value: "Check your email inbox or visit https://app.plex.tv/desktop/#!/settings/web/sharing to accept the library share invitation sent from our server host (`d281knilb`). If you do not see the email, check your Spam / Junk folder!"
                     },
                     {
                         name: "Step 3: Portalarr Web Portal",
@@ -720,8 +723,8 @@ export function generateDiscordEmbed(
 
         case "kindle_reading":
             return {
-                title: "📚 Send-to-Kindle & E-Reader Integration",
-                description: "Portalarr lets you read eBooks and graphic novels in your browser, or send books directly to your physical Amazon Kindle with 1 click.",
+                title: "📚 E-Readers & Audiobooks: Full Setup Guide",
+                description: "Portalarr lets you read eBooks and graphic novels in your browser, send books directly to your physical Amazon Kindle with 1 click, and stream chaptered audiobooks on mobile.",
                 color: 0x8B5CF6, // Violet
                 fields: [
                     {
@@ -735,9 +738,13 @@ export function generateDiscordEmbed(
                     {
                         name: "3. In-Browser Paperwhite Reader",
                         value: "No Kindle device? No problem! Read directly in any modern browser with Bookerly typography, customizable dark/light themes, and automatic reading percentage syncing."
+                    },
+                    {
+                        name: "4. Audiobooks & Mobile Listening Apps",
+                        value: "• **In-Browser Web Player:** Listen right inside Portalarr with the floating audio player, chapter selector, and variable speed (0.75x–2.5x).\n• **Plexamp (iOS & Android):** Best for mobile listening with audio caching and CarPlay/Android Auto.\n• **Prologue (iOS):** Premium dedicated audiobook player connecting directly to our server."
                     }
                 ],
-                footer: { text: "DomsHomeLab • Reading Guides" },
+                footer: { text: "DomsHomeLab • Reading & Listening Guides" },
                 timestamp: nowIso
             };
 
@@ -776,6 +783,79 @@ export function generateDiscordEmbed(
                     }
                 ],
                 footer: { text: "Maintainerr Storage Management • DomsHomeLab" },
+                timestamp: nowIso
+            };
+
+        case "links_webhooks":
+            return {
+                title: "🔗 Official Homelab Links & Fast Access",
+                description: "Bookmark these primary URLs to access our streaming stack, web readers, media requests, and diagnostic tools.",
+                color: 0x06B6D4, // Cyan
+                fields: [
+                    {
+                        name: "🌐 Portalarr Web Portal",
+                        value: "**https://home.domshomelab.com**\nManage your profile, Discord role sync, bookshelf, and live stream telemetry."
+                    },
+                    {
+                        name: "🎬 Plex Web App",
+                        value: "**https://app.plex.tv**\nStream directly from any desktop browser (or download the official Plex Desktop App for best performance)."
+                    },
+                    {
+                        name: "📥 Seerr Media Requests",
+                        value: "Integrated directly within the Portalarr Web Portal under the **Requests** tab for 1-click movie, TV, and book submissions."
+                    },
+                    {
+                        name: "⚡ In-Browser Speed Test",
+                        value: "Available inside Portalarr under **My Plex Hub $\\rightarrow$ Speed Test** to benchmark your real-time download speed directly to our physical server."
+                    }
+                ],
+                footer: { text: "DomsHomeLab • Official Links Directory" },
+                timestamp: nowIso
+            };
+
+        case "maintenance_window":
+            return {
+                title: "🛠️ Scheduled Server Maintenance: Daily 5:00 AM – 5:30 AM",
+                description: "To maintain maximum storage integrity, high-speed NVMe caching performance, and seamless database health, our primary Unraid server runs an automated 30-minute maintenance cycle every morning.",
+                color: 0xF59E0B, // Amber
+                fields: [
+                    {
+                        name: "⏰ Maintenance Schedule",
+                        value: "**Daily between 5:00 AM and 5:30 AM (Central Time)**."
+                    },
+                    {
+                        name: "🔄 What Happens During Maintenance?",
+                        value: "Plex Media Server and background Docker containers reboot cleanly, SQLite database integrity sweeps run, and temporary cache drives are trimmed."
+                    },
+                    {
+                        name: "📺 What Should I Expect?",
+                        value: "Active playback sessions may briefly disconnect or pause during this 30-minute window. You do not need to report this as an outage! All services automatically resume by 5:30 AM."
+                    },
+                    {
+                        name: "⚡ Outside Maintenance Hours",
+                        value: "Outside of 5:00 AM – 5:30 AM, our servers operate 24/7 with 99.9% uptime."
+                    }
+                ],
+                footer: { text: "DomsHomeLab • System Maintenance & Reliability" },
+                timestamp: nowIso
+            };
+
+        case "support_guide":
+            return {
+                title: "🆘 Support & Assistance: How to Report an Issue",
+                description: "Need help with your account, stream buffering, or device setup? Leave a message in this channel and an administrator will assist you.",
+                color: 0xEF4444, // Red
+                fields: [
+                    {
+                        name: "📋 What to Include in Your Message",
+                        value: "• **Device:** (e.g. Apple TV 4K, Roku Streaming Stick 4K, Fire TV Cube, LG OLED TV)\n• **Title & Time:** (e.g. *Dune: Part Two* around 45:00)\n• **Issue Details:** (e.g. Buffering every 10 seconds, no audio, wrong subtitles)\n• **Network:** (Home Wi-Fi, Ethernet, or Cellular)"
+                    },
+                    {
+                        name: "🩺 Self-Service First",
+                        value: "Before reporting buffering, check <#1558230275950125261> to verify your device quality is set to **Original / Maximum** instead of the 720p 2 Mbps default!"
+                    }
+                ],
+                footer: { text: "DomsHomeLab • Member Support Desk" },
                 timestamp: nowIso
             };
 
