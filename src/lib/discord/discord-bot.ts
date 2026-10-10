@@ -558,19 +558,15 @@ export function generateDiscordEmbed(
                         value: "Always set your client player quality to **Maximum / Original** in settings. Leaving clients on the 720p 2.0 Mbps default forces unnecessary server transcoding and reduces video clarity."
                     },
                     {
-                        name: "🚫 2. Household & Account Integrity",
-                        value: "Accounts are provisioned for your approved household only. Sharing login credentials, streaming tokens, or links outside your household leads to immediate account revocation."
-                    },
-                    {
-                        name: "📥 3. Automated Media Requests",
+                        name: "📥 2. Automated Media Requests",
                         value: "Need a movie, TV show, anime, or book? Submit requests directly on the Portalarr Web App. Most verified media requests auto-approve and start grabbing within seconds!"
                     },
                     {
-                        name: "🩺 4. Transcode Doctor Diagnostics",
+                        name: "🩺 3. Transcode Doctor Diagnostics",
                         value: "If you encounter buffering, audio stutter, or subtitle lag, visit <#transcode-doctor> for immediate 30-second fix instructions tailored to your specific device."
                     },
                     {
-                        name: "💬 5. Spoiler Etiquette & Chat",
+                        name: "💬 4. Spoiler Etiquette & Chat",
                         value: "Keep discussions friendly and spoiler-free! Always use spoiler tags `||spoiler content||` when discussing recent releases or plot twists in community channels."
                     }
                 ],
@@ -667,32 +663,32 @@ export function generateDiscordEmbed(
         case "plex_guides":
             return {
                 title: "📱 Plex Device Setup: Enable Direct Play in 30 Seconds",
-                description: "Plex default settings often limit video quality to 720p 2 Mbps over the internet. Follow these steps on your device once to ensure **Crystal Clear 4K/1080p Original Quality** without server buffering.",
+                description: "Plex default settings often limit video quality to 720p 2 Mbps over the internet. Follow these steps on your device once to ensure Crystal Clear 4K/1080p Original Quality without server buffering.",
                 color: 0xF59E0B, // Amber
                 fields: [
                     {
                         name: "📺 Apple TV 4K",
-                        value: "1. Open Plex Settings $\\rightarrow$ **Video**\n2. Set **Home Streaming** & **Remote Streaming** to `Maximum`\n3. Turn **Match Content (Dynamic Range & Frame Rate)** `ON`"
+                        value: "Open Plex Settings $\\rightarrow$ Video\nSet Home Streaming & Remote Streaming to Maximum\nTurn Match Content (Dynamic Range & Frame Rate) ON"
                     },
                     {
                         name: "📺 Roku Players & Roku TVs",
-                        value: "1. Open Plex Settings $\\rightarrow$ **Video**\n2. Set **Local Quality** & **Remote Quality** to `Original`\n3. In Playback Options, ensure **Direct Play** is set to `Force` or `Auto`"
+                        value: "Open Plex Settings $\\rightarrow$ Video\nSet Local Quality & Remote Quality to Original\nIn Playback Options, ensure Direct Play is set to Force or Auto"
                     },
                     {
                         name: "📺 Amazon Fire TV & Android TV / Google TV",
-                        value: "1. Open Plex Settings $\\rightarrow$ **Video**\n2. Set **Video Quality** to `Maximum`\n3. Scroll to **Subtitles** $\\rightarrow$ Set **Burn Subtitles** to `Only Image Formats`"
+                        value: "Open Plex Settings $\\rightarrow$ Video\nSet Video Quality to Maximum\nScroll to Subtitles $\\rightarrow$ Set Burn Subtitles to Only Image Formats"
                     },
                     {
                         name: "📺 Samsung Tizen & LG webOS Smart TVs",
-                        value: "1. Open Plex Settings $\\rightarrow$ **Video**\n2. Set **Local Quality** & **Remote Quality** to `Original`\n3. Enable **Direct Stream** and **Direct Play** checkboxes"
+                        value: "Open Plex Settings $\\rightarrow$ Video\nSet Local Quality & Remote Quality to Original\nEnable Direct Stream and Direct Play checkboxes"
                     },
                     {
                         name: "📱 iPhone, iPad & Android Mobile",
-                        value: "1. Open Plex Settings $\\rightarrow$ **Quality**\n2. Set **Remote Streaming** to `Maximum`\n3. In Advanced $\\rightarrow$ Turn **Use Old Video Player** `OFF`"
+                        value: "Open Plex Settings $\\rightarrow$ Quality\nSet Remote Streaming to Maximum\nIn Advanced $\\rightarrow$ Turn Use Old Video Player OFF"
                     },
                     {
                         name: "💻 Windows / macOS / Linux PC",
-                        value: "⚡ **Pro Tip:** Never use web browser tabs (Chrome/Safari) for 4K or HDR! Download the free official **Plex Desktop App** for native hardware decoding and Dolby Atmos pass-through."
+                        value: "⚡ Pro Tip: Never use web browser tabs (Chrome/Safari) for 4K or HDR! Download the free official Plex Desktop App for native hardware decoding and Dolby Atmos pass-through."
                     }
                 ],
                 footer: { text: "DomsHomeLab • Device Setup Guides" },
@@ -776,7 +772,7 @@ export function generateDiscordEmbed(
                     },
                     {
                         name: "🍿 Want to Keep Something?",
-                        value: "Simply start watching the title, or message an Admin in <#support-tickets> to permanently exempt it from automatic pruning!"
+                        value: "Simply start watching the title before the countdown finishes to keep it in the library! Active playback automatically resets retention and keeps the media active."
                     }
                 ],
                 footer: { text: "Maintainerr Storage Management • DomsHomeLab" },
@@ -862,6 +858,15 @@ export async function syncDiscordServerStructure(params: {
     const cleanGuildId = guildId.trim();
 
     logger.addLog("INFO", "DISCORD", `🚀 Starting Discord server sync for Guild ID: ${cleanGuildId}...`);
+
+    // Fetch bot user ID to identify existing bot messages
+    let botUserId: string | null = null;
+    try {
+        const meRes = await discordFetch<DiscordUser>("/users/@me", { method: "GET" }, cleanToken);
+        if (meRes.ok && meRes.data?.id) {
+            botUserId = meRes.data.id;
+        }
+    } catch {}
 
     // 1. Fetch existing guild channels
     const channelsRes = await discordFetch<DiscordChannel[]>(`/guilds/${cleanGuildId}/channels`, { method: "GET" }, cleanToken);
@@ -1121,30 +1126,70 @@ export async function syncDiscordServerStructure(params: {
             // 4. Post Pinned Guide / Welcome Embeds if requested
             if (postPinnedEmbeds && chBlueprint.pinnedEmbedKey && targetChannel) {
                 try {
-                    // Check if channel already has pinned messages from bot
+                    const embed = generateDiscordEmbed(chBlueprint.pinnedEmbedKey);
+                    // Check if channel already has pinned messages
                     const pinsRes = await discordFetch<any[]>(`/channels/${targetChannel.id}/pins`, { method: "GET" }, cleanToken);
-                    const hasPinnedEmbed = pinsRes.ok && Array.isArray(pinsRes.data) && pinsRes.data.length > 0;
+                    const pinnedMessages = pinsRes.ok && Array.isArray(pinsRes.data) ? pinsRes.data : [];
+                    
+                    // Look for existing pinned message from our bot
+                    const existingBotPin = pinnedMessages.find((m: any) => 
+                        (botUserId && m.author?.id === botUserId) || m.author?.bot
+                    );
 
-                    if (!hasPinnedEmbed) {
-                        const embed = generateDiscordEmbed(chBlueprint.pinnedEmbedKey);
-                        const msgRes = await discordFetch<any>(`/channels/${targetChannel.id}/messages`, {
-                            method: "POST",
+                    if (existingBotPin) {
+                        // Edit existing pinned embed to keep it updated with latest copy
+                        const patchRes = await discordFetch(`/channels/${targetChannel.id}/messages/${existingBotPin.id}`, {
+                            method: "PATCH",
                             body: JSON.stringify({
                                 embeds: [embed]
                             })
                         }, cleanToken);
 
-                        if (msgRes.ok && msgRes.data?.id) {
-                            // Pin message
-                            await discordFetch(`/channels/${targetChannel.id}/pins/${msgRes.data.id}`, {
+                        if (patchRes.ok) {
+                            embedsPosted++;
+                            logger.addLog("INFO", "DISCORD", `✏️ Updated existing pinned embed in "#${chBlueprint.name}"`);
+                        }
+                    } else {
+                        // Also check recent messages in the channel to see if bot posted it previously
+                        const recentRes = await discordFetch<any[]>(`/channels/${targetChannel.id}/messages?limit=10`, { method: "GET" }, cleanToken);
+                        const recentMessages = recentRes.ok && Array.isArray(recentRes.data) ? recentRes.data : [];
+                        const existingRecentBotMsg = recentMessages.find((m: any) =>
+                            (botUserId && m.author?.id === botUserId) || m.author?.bot
+                        );
+
+                        if (existingRecentBotMsg) {
+                            // Update and pin the existing recent bot message
+                            await discordFetch(`/channels/${targetChannel.id}/messages/${existingRecentBotMsg.id}`, {
+                                method: "PATCH",
+                                body: JSON.stringify({
+                                    embeds: [embed]
+                                })
+                            }, cleanToken);
+                            await discordFetch(`/channels/${targetChannel.id}/pins/${existingRecentBotMsg.id}`, {
                                 method: "PUT"
                             }, cleanToken);
                             embedsPosted++;
-                            logger.addLog("INFO", "DISCORD", `📌 Posted and pinned embed in "#${chBlueprint.name}"`);
+                            logger.addLog("INFO", "DISCORD", `✏️ Updated and pinned message in "#${chBlueprint.name}"`);
+                        } else {
+                            // Post new message and pin it
+                            const msgRes = await discordFetch<any>(`/channels/${targetChannel.id}/messages`, {
+                                method: "POST",
+                                body: JSON.stringify({
+                                    embeds: [embed]
+                                })
+                            }, cleanToken);
+
+                            if (msgRes.ok && msgRes.data?.id) {
+                                await discordFetch(`/channels/${targetChannel.id}/pins/${msgRes.data.id}`, {
+                                    method: "PUT"
+                                }, cleanToken);
+                                embedsPosted++;
+                                logger.addLog("INFO", "DISCORD", `📌 Posted and pinned embed in "#${chBlueprint.name}"`);
+                            }
                         }
                     }
                 } catch (e: any) {
-                    logger.addLog("WARN", "DISCORD", `Could not post pinned embed to #${chBlueprint.name}: ${e.message}`);
+                    logger.addLog("WARN", "DISCORD", `Could not post/update pinned embed in #${chBlueprint.name}: ${e.message}`);
                 }
             }
         }

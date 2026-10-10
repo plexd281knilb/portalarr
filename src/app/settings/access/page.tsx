@@ -2623,16 +2623,16 @@ export default function AccessSettingsPage() {
                                                         )}
                                                     </div>
 
-                                                    {/* JOINED & ACTIVITY */}
-                                                    <div className="flex items-center gap-1.5 truncate sm:col-span-2 lg:col-span-1">
+                                                    {/* JOINED & LAST LOGIN */}
+                                                    <div className="flex items-center gap-1.5 flex-wrap sm:col-span-2 lg:col-span-1">
                                                         <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                                                         <span className="text-muted-foreground">Joined:</span>
                                                         <span className="text-foreground">{format(new Date(user.createdAt), "MMM d, yyyy")}</span>
-                                                        {user.lastLogin && (
-                                                            <span className="text-muted-foreground text-[11px] truncate">
-                                                                (active {format(new Date(user.lastLogin), "MMM d")})
-                                                            </span>
-                                                        )}
+                                                        <span className="text-muted-foreground/40 mx-0.5">•</span>
+                                                        <span className="text-muted-foreground">Last Login:</span>
+                                                        <span className={user.lastLogin ? "text-foreground font-medium" : "text-muted-foreground italic text-xs"}>
+                                                            {user.lastLogin ? format(new Date(user.lastLogin), "MMM d, yyyy") : "Never"}
+                                                        </span>
                                                     </div>
 
                                                     {/* LAST PAID / PAYMENT SUMMARY */}
@@ -4956,6 +4956,12 @@ export default function AccessSettingsPage() {
                                         <span className="font-medium text-amber-400">{format(new Date(subModalUser.lastRenewalReminderSentAt), "MMM d, yyyy h:mm a")}</span>
                                     </div>
                                 )}
+                                <div className="flex justify-between items-center">
+                                    <span className="text-muted-foreground">Last Login:</span>
+                                    <span className="font-semibold text-foreground">
+                                        {subModalUser.lastLogin ? format(new Date(subModalUser.lastLogin), "MMM d, yyyy h:mm a") : <span className="text-muted-foreground italic text-xs font-normal">Never logged in</span>}
+                                    </span>
+                                </div>
                                 {subModalUser.accountCredit > 0 && (
                                     <div className="flex justify-between items-center p-2 rounded-lg bg-amber-500/10 border border-amber-500/20">
                                         <span className="text-amber-300 font-semibold flex items-center gap-1.5">
