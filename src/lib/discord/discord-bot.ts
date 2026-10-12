@@ -142,7 +142,7 @@ export const DISCORD_SERVER_BLUEPRINT: DiscordBlueprintCategory[] = [
             },
             {
                 name: "links-and-webhooks",
-                topic: "Portalarr Web Portal, Seerr media requests, Tautulli stream stats, and external guides.",
+                topic: "DomsHomeLab Web Portal, Seerr media requests, Tautulli stream stats, and external guides.",
                 readOnlyForEveryone: true,
                 pinnedEmbedKey: "links_webhooks"
             },
@@ -229,7 +229,7 @@ export const DISCORD_SERVER_BLUEPRINT: DiscordBlueprintCategory[] = [
         channels: [
             {
                 name: "media-requests",
-                topic: "Live request feed from Portalarr & Seerr. Automated approval & download telemetry.",
+                topic: "Live request feed from DomsHomeLab & Seerr. Automated approval & download telemetry.",
                 readOnlyForEveryone: true,
                 memberOnly: true
             },
@@ -294,11 +294,11 @@ export const DISCORD_SERVER_BLUEPRINT: DiscordBlueprintCategory[] = [
             },
             {
                 name: "bot-commands",
-                topic: "Portalarr Bot diagnostics and manual sync commands.",
+                topic: "DomsHomeLab Bot diagnostics and manual sync commands.",
                 adminOnly: true
             },
             {
-                name: "portalarr-logs",
+                name: "domshomelab-logs",
                 topic: "Automated sync logs, request dispatch audit, and alert telemetry.",
                 adminOnly: true
             }
@@ -553,13 +553,13 @@ export function generateDiscordEmbed(
     switch (key) {
         case "welcome_rules":
             return {
-                title: "🚀 Welcome to DomsHomeLab & Portalarr Mission Control",
-                description: "Welcome to our private media server and homelab community! Portalarr provides unified access to high-performance Plex streaming stacks, Servarr automated request fulfillment, eBook & Audiobook readers, and real-time stream diagnostics.",
+                title: "🚀 Welcome to DomsHomeLab Mission Control",
+                description: "Welcome to our private media server and homelab community! DomsHomeLab provides unified access to high-performance Plex streaming stacks, Servarr automated request fulfillment, eBook & Audiobook readers, and real-time stream diagnostics.",
                 color: 0x3B82F6, // Blue
                 fields: [
                     {
                         name: "⏱️ Trial Pass & Account Linking (Required)",
-                        value: "Trial accounts have restricted access limited strictly to Welcome & Rules until you link your full member account! To unlock full access to community chatrooms, movie & TV discussions, media request feeds, recently added alerts, and 4K Direct Play setup guides, log into your account at the **Portalarr Web Portal** (`home.domshomelab.com`) and link your Discord handle in **Account Settings → Profile**! Once linked, your account is automatically elevated to **⭐ Member** with instant full access."
+                        value: "Trial accounts have restricted access limited strictly to Welcome & Rules until you link your full member account! To unlock full access to community chatrooms, movie & TV discussions, media request feeds, recently added alerts, and 4K Direct Play setup guides, log into your account at the **DomsHomeLab Web Portal** (`home.domshomelab.com`) and link your Discord handle in **Account Settings → Profile**! Once linked, your account is automatically elevated to **⭐ Member** with instant full access."
                     },
                     {
                         name: "📌 1. Quality & Direct Play First",
@@ -567,7 +567,7 @@ export function generateDiscordEmbed(
                     },
                     {
                         name: "📥 2. Automated Media Requests",
-                        value: "Need a movie, TV show, anime, or book? Submit requests directly on the Portalarr Web App. Most verified media requests auto-approve and start grabbing within seconds!"
+                        value: "Need a movie, TV show, anime, or book? Submit requests directly on the DomsHomeLab Web App. Most verified media requests auto-approve and start grabbing within seconds!"
                     },
                     {
                         name: "🩺 3. Transcode Doctor Diagnostics",
@@ -578,7 +578,7 @@ export function generateDiscordEmbed(
                         value: "Keep discussions friendly and spoiler-free! Always use spoiler tags `||spoiler content||` when discussing recent releases or plot twists in community channels."
                     }
                 ],
-                footer: { text: "DomsHomeLab • Portalarr Mission Control" },
+                footer: { text: "DomsHomeLab Mission Control" },
                 timestamp: nowIso
             };
 
@@ -617,7 +617,7 @@ export function generateDiscordEmbed(
         case "roadmap_updates":
             return {
                 title: "🛠️ Infrastructure Roadmap & Hardware Expansions",
-                description: "Continuous improvements powering DomsHomeLab and Portalarr Mission Control.",
+                description: "Continuous improvements powering DomsHomeLab Mission Control.",
                 color: 0x8B5CF6, // Violet
                 fields: [
                     {
@@ -629,8 +629,8 @@ export function generateDiscordEmbed(
                         value: "Hardware-accelerated NVENC transcoding pipelines ensuring multi-stream simultaneous playback with zero CPU bottlenecking and real-time HDR tone-mapping."
                     },
                     {
-                        name: "📖 Portalarr 3.0 Reading & Audiobook Innovations",
-                        value: "Portalarr 3.0 reader suite featuring in-browser Kindle Paperwhite emulation, chapter reordering, variable speed audiobook playback, and automated Amazon bounce detection."
+                        name: "📖 DomsHomeLab Reading & Audiobook Innovations",
+                        value: "Comprehensive reader suite featuring in-browser Kindle Paperwhite emulation, chapter reordering, variable speed audiobook playback, and automated Amazon bounce detection."
                     },
                     {
                         name: "🚀 Automated Sync & Self-Service Bridge",
@@ -656,7 +656,7 @@ export function generateDiscordEmbed(
                         value: "Check your email inbox or visit https://app.plex.tv/desktop/#!/settings/web/sharing to accept the library share invitation sent from our server host (`d281knilb`). If you do not see the email, check your Spam / Junk folder!"
                     },
                     {
-                        name: "Step 3: Portalarr Web Portal",
+                        name: "Step 3: DomsHomeLab Web Portal",
                         value: "Log in to the web portal at `home.domshomelab.com` to manage your media requests, reading bookshelf, stream diagnostics, and account profile."
                     },
                     {
@@ -729,7 +729,7 @@ export function generateDiscordEmbed(
         case "kindle_reading":
             return {
                 title: "📚 E-Readers & Audiobooks: Full Setup Guide",
-                description: "Portalarr lets you read eBooks and graphic novels in your browser, send books directly to your physical Amazon Kindle with 1 click, and stream chaptered audiobooks on mobile.",
+                description: "DomsHomeLab lets you read eBooks and graphic novels in your browser, send books directly to your physical Amazon Kindle with 1 click, and stream chaptered audiobooks on mobile.",
                 color: 0x8B5CF6, // Violet
                 fields: [
                     {
@@ -737,8 +737,8 @@ export function generateDiscordEmbed(
                         value: "Amazon requires you to authorize the sending email address before accepting documents.\n1. Go to **amazon.com/myk** → Preferences → **Personal Document Settings**\n2. Under *Approved Personal Document E-mail List*, add your lab dispatcher email."
                     },
                     {
-                        name: "2. Save Your Kindle Address in Portalarr",
-                        value: "In Portalarr → **Profile** (or **Settings**), enter your `@kindle.com` address. When browsing the Library, tap the **Send to Kindle** button on any book!"
+                        name: "2. Save Your Kindle Address in DomsHomeLab",
+                        value: "In DomsHomeLab → **Profile** (or **Settings**), enter your `@kindle.com` address. When browsing the Library, tap the **Send to Kindle** button on any book!"
                     },
                     {
                         name: "3. In-Browser Paperwhite Reader",
@@ -746,7 +746,7 @@ export function generateDiscordEmbed(
                     },
                     {
                         name: "4. Audiobooks & Mobile Listening Apps",
-                        value: "• **In-Browser Web Player:** Listen right inside Portalarr with the floating audio player, chapter selector, and variable speed (0.75x–2.5x).\n• **Plexamp (iOS & Android):** Best for mobile listening with audio caching and CarPlay/Android Auto.\n• **Prologue (iOS):** Premium dedicated audiobook player connecting directly to our server."
+                        value: "• **In-Browser Web Player:** Listen right inside DomsHomeLab with the floating audio player, chapter selector, and variable speed (0.75x–2.5x).\n• **Plexamp (iOS & Android):** Best for mobile listening with audio caching and CarPlay/Android Auto.\n• **Prologue (iOS):** Premium dedicated audiobook player connecting directly to our server."
                     }
                 ],
                 footer: { text: "DomsHomeLab • Reading & Listening Guides" },
@@ -761,7 +761,7 @@ export function generateDiscordEmbed(
                 fields: [
                     {
                         name: "🎵 In-Browser Web Player",
-                        value: "Listen right inside Portalarr with the floating audio player, chapter selector, variable speed controls (0.75x to 2.5x), and sleep timer."
+                        value: "Listen right inside DomsHomeLab with the floating audio player, chapter selector, variable speed controls (0.75x to 2.5x), and sleep timer."
                     },
                     {
                         name: "📱 Recommended Mobile Apps",
@@ -798,7 +798,7 @@ export function generateDiscordEmbed(
                 color: 0x06B6D4, // Cyan
                 fields: [
                     {
-                        name: "🌐 Portalarr Web Portal",
+                        name: "🌐 DomsHomeLab Web Portal",
                         value: "**https://home.domshomelab.com**\nManage your profile, Discord role sync, bookshelf, and live stream telemetry."
                     },
                     {
@@ -807,11 +807,11 @@ export function generateDiscordEmbed(
                     },
                     {
                         name: "📥 Seerr Media Requests",
-                        value: "Integrated directly within the Portalarr Web Portal under the **Requests** tab for 1-click movie, TV, and book submissions."
+                        value: "Integrated directly within the DomsHomeLab Web Portal under the **Requests** tab for 1-click movie, TV, and book submissions."
                     },
                     {
                         name: "⚡ In-Browser Speed Test",
-                        value: "Available inside Portalarr under **My Plex Hub → Speed Test** to benchmark your real-time download speed directly to our physical server."
+                        value: "Available inside DomsHomeLab under **My Plex Hub → Speed Test** to benchmark your real-time download speed directly to our physical server."
                     }
                 ],
                 footer: { text: "DomsHomeLab • Official Links Directory" },
@@ -884,7 +884,7 @@ export function generateDiscordEmbed(
 
             return {
                 title: isAllHealthy ? "🟢 DomsHomeLab Infrastructure: All Systems Operational" : "⚠️ DomsHomeLab Infrastructure: Partial Outage / Degraded",
-                description: `Live automated telemetry from Portalarr Mission Control. Checked every 60 seconds across monitored hosts and media servers.`,
+                description: `Live automated telemetry from DomsHomeLab Mission Control. Checked every 60 seconds across monitored hosts and media servers.`,
                 color: isAllHealthy ? 0x10B981 : 0xF59E0B,
                 fields: [
                     { name: "🎬 Plex Media Servers", value: plexLines, inline: false },
