@@ -1,3 +1,7 @@
+process.env.PORTALARR_TEST = "true";
+process.env.NODE_ENV = "test";
+process.env.DISABLE_DISCORD_NOTIFICATIONS = "true";
+
 import { prisma } from "../src/lib/prisma";
 import { 
     getLibraries,
@@ -6501,6 +6505,24 @@ async function runTestSuite() {
             const bookTitle2 = `Bulk Test Book 2 ${timestamp}`;
             const movieTitle1 = `Bulk Test Movie 1 ${timestamp}`;
 
+            // Pre-clean any lingering records from previous runs
+            await prisma.mediaRequest.deleteMany({
+                where: {
+                    OR: [
+                        { title: { contains: "Bulk Test" } },
+                        { title: { contains: "Test 4K Movie" } }
+                    ]
+                }
+            }).catch(() => {});
+            await prisma.bookRequest.deleteMany({
+                where: {
+                    OR: [
+                        { title: { contains: "Bulk Test" } },
+                        { author: { contains: "Author Bulk" } }
+                    ]
+                }
+            }).catch(() => {});
+
             // Part 1: Bulk Decline & Rejection Integrity
             const br1 = await prisma.bookRequest.create({
                 data: {
@@ -6698,16 +6720,25 @@ async function runTestSuite() {
                 throw new Error(`Expected linked BookRequest to be Approved or progressing, got ${checkedBr4?.status}`);
             }
 
-            // Cleanup remaining test records
-            await prisma.mediaRequest.deleteMany({
-                where: { id: { in: [mrBook1.id, mrMovie1.id, mrBook4.id] } }
-            }).catch(() => {});
-            await prisma.bookRequest.deleteMany({
-                where: { id: { in: [br1.id, br4.id] } }
-            }).catch(() => {});
-
         } finally {
             delete process.env.PORTALARR_TEST_AUTH;
+            // Clean up all bulk test records comprehensively
+            await prisma.mediaRequest.deleteMany({
+                where: {
+                    OR: [
+                        { title: { contains: "Bulk Test" } },
+                        { title: { contains: "Test 4K Movie" } }
+                    ]
+                }
+            }).catch(() => {});
+            await prisma.bookRequest.deleteMany({
+                where: {
+                    OR: [
+                        { title: { contains: "Bulk Test" } },
+                        { author: { contains: "Author Bulk" } }
+                    ]
+                }
+            }).catch(() => {});
             try {
                 const testStubDir = path.join(process.cwd(), "Author Bulk 4");
                 if (fs.existsSync(testStubDir)) {

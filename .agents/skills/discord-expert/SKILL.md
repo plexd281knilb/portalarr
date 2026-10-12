@@ -185,3 +185,21 @@ All Discord embeds generated via `generateDiscordEmbed(key, customData)` in [`sr
 - **UI Exposure:**
   - **User Card:** Prominently displays `Joined: MMM d, yyyy • Last Login: MMM d, yyyy` (or `Never` if not yet logged in).
   - **User Modal (`subModalUser`):** Shows exact timestamp `Last Login: MMM d, yyyy h:mm a` alongside status and cadence info.
+
+---
+
+## Test Suite Isolation & Notification Suppression
+
+To ensure test suites (`npm test` / `verify-all.ts`) never post messages, dispatch webhooks, or ping users in live Discord channels:
+
+1. **Environment Variables:** `scripts/verify-all.ts` unconditionally initializes:
+   - `process.env.PORTALARR_TEST = "true"`
+   - `process.env.NODE_ENV = "test"`
+   - `process.env.DISABLE_DISCORD_NOTIFICATIONS = "true"`
+2. **REST API & Webhook Guards:**
+   - `discordFetch`: Returns mocked HTTP 200 `{ ok: true, status: 200, data: {} }` during test runs, preventing external network traffic to Discord API endpoints.
+   - `postDiscordMessage`: Returns `{ success: true, messageId: "mock-test-message-id" }` during test runs.
+   - `sendSeerrDiscordWebhook`: Silently returns `{ success: true }` without dispatching webhooks or bot messages if `PORTALARR_TEST` is set or if the request title/requester contains `"test"`.
+   - `sendSeerrEmailNotification`: Silently returns `{ success: true }` during test runs.
+3. **Auto-Download Decoupling:** `dispatchBookOrAudiobookRequest` skips background `autoDownloadBookRequest` loops in test runs to prevent async race conditions during bulk approval/decline verification.
+4. **Test Discord Guild:** When testing bot features in staging, administrators can bind dedicated test servers (e.g., Guild ID `1559231517325135892`) in Settings → Discord. Ensure the bot application is invited with Administrator permissions (`permissions=8&scope=bot%20applications.commands`).

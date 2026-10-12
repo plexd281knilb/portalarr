@@ -590,11 +590,13 @@ async function dispatchBookOrAudiobookRequest(req: any): Promise<DispatchResult>
             data: { status: "PROCESSING", errorMessage: null }
         });
 
-        // Trigger background search & grab
-        const { autoDownloadBookRequest } = await import("@/app/actions");
-        autoDownloadBookRequest(bookReq.id, title, author).catch(err => {
-            logger.addLog("WARN", "BOOK_ENGINE", `Auto-download failed for request ${bookReq?.id}: ${err.message}`);
-        });
+        // Trigger background search & grab (skip during test execution)
+        if (process.env.NODE_ENV !== "test" && process.env.PORTALARR_TEST !== "true") {
+            const { autoDownloadBookRequest } = await import("@/app/actions");
+            autoDownloadBookRequest(bookReq.id, title, author).catch(err => {
+                logger.addLog("WARN", "BOOK_ENGINE", `Auto-download failed for request ${bookReq?.id}: ${err.message}`);
+            });
+        }
 
         logger.addLog("SUCCESS", "SEERR", `Successfully dispatched ${mediaType.toUpperCase()} request "${title}" by ${author || "Unknown Author"}`);
 

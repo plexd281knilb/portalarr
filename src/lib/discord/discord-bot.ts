@@ -371,6 +371,11 @@ export async function discordFetch<T = any>(
     botToken: string,
     retryCount = 0
 ): Promise<{ ok: boolean; status: number; data?: T; error?: string }> {
+    // Suppress external calls during test execution
+    if (process.env.NODE_ENV === "test" || process.env.PORTALARR_TEST === "true" || process.env.DISABLE_DISCORD_NOTIFICATIONS === "true") {
+        return { ok: true, status: 200, data: {} as T };
+    }
+
     if (!botToken || !botToken.trim()) {
         return { ok: false, status: 401, error: "Discord Bot Token is missing or empty" };
     }
@@ -1366,6 +1371,10 @@ export async function postDiscordMessage(params: {
     content?: string;
     embeds?: DiscordEmbed[];
 }): Promise<{ success: boolean; error?: string; messageId?: string }> {
+    if (process.env.NODE_ENV === "test" || process.env.PORTALARR_TEST === "true" || process.env.DISABLE_DISCORD_NOTIFICATIONS === "true") {
+        return { success: true, messageId: "mock-test-message-id" };
+    }
+
     const { botToken, channelId, content, embeds } = params;
 
     const res = await discordFetch<any>(`/channels/${channelId}/messages`, {

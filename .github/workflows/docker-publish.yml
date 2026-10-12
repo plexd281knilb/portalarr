@@ -72,6 +72,6 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            BASE_IMAGE=public.ecr.aws/docker/library/node:20-bookworm-slim
+            BASE_IMAGE=node:20-bookworm-slim
           cache-from: type=gha
           cache-to: type=gha,mode=max

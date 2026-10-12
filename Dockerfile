@@ -1,5 +1,5 @@
-# Base image definition - uses AWS Public ECR Docker Library mirror to eliminate Docker Hub anonymous 429 rate limits
-ARG BASE_IMAGE=public.ecr.aws/docker/library/node:20-bookworm-slim
+# Base image definition - uses official node:20-bookworm-slim
+ARG BASE_IMAGE=node:20-bookworm-slim
 
 # 1. Install dependencies
 FROM ${BASE_IMAGE} AS deps

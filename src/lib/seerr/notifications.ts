@@ -49,6 +49,17 @@ export async function sendSeerrDiscordWebhook(
     extra?: SeerrNotificationExtra
 ): Promise<{ success: boolean; error?: string }> {
     try {
+        // Suppress notifications during test runs or for test dummy records
+        if (
+            process.env.NODE_ENV === "test" || 
+            process.env.PORTALARR_TEST === "true" || 
+            process.env.DISABLE_DISCORD_NOTIFICATIONS === "true" ||
+            request.title?.toLowerCase().includes("test") ||
+            request.requestedByUsername?.toLowerCase().includes("test")
+        ) {
+            return { success: true };
+        }
+
         const settings = await prisma.settings.findFirst({ where: { id: "global" } }) || await prisma.settings.findFirst();
         if (!settings) {
             return { success: true };
@@ -284,6 +295,16 @@ export async function sendSeerrEmailNotification(
     extra?: SeerrNotificationExtra
 ): Promise<{ success: boolean; error?: string }> {
     try {
+        // Suppress email notifications during test runs or for test dummy records
+        if (
+            process.env.NODE_ENV === "test" || 
+            process.env.PORTALARR_TEST === "true" ||
+            request.title?.toLowerCase().includes("test") ||
+            request.requestedByUsername?.toLowerCase().includes("test")
+        ) {
+            return { success: true };
+        }
+
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         if (!settings || !settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
             return { success: true }; // SMTP not configured, skip
@@ -443,6 +464,11 @@ export async function notifyMediaRequestEvent(
     extra?: SeerrNotificationExtra
 ): Promise<void> {
     try {
+        // Suppress notifications during test runs
+        if (process.env.NODE_ENV === "test" || process.env.PORTALARR_TEST === "true") {
+            return;
+        }
+
         const req = await prisma.mediaRequest.findUnique({
             where: { id: requestId }
         });
