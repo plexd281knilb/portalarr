@@ -6851,9 +6851,42 @@ async function runTestSuite() {
             throw new Error(`Expected '18+ Mature' and 'MATURE' for Kama Sutra, got: ${JSON.stringify(kamaSutraRating)}`);
         }
 
+        const joyOfSexRating = inferBookRating({
+            title: "The Joy of Sex",
+            author: "Alex Comfort"
+        });
+        if (joyOfSexRating.ageRating !== "18+ Mature" || joyOfSexRating.maturityRating !== "MATURE") {
+            throw new Error(`Expected '18+ Mature' and 'MATURE' for The Joy of Sex, got: ${JSON.stringify(joyOfSexRating)}`);
+        }
+
+        const darkRomanceRating = inferBookRating({
+            title: "Butcher & Blackbird",
+            author: "Brynne Weaver"
+        });
+        if (darkRomanceRating.ageRating !== "18+ Mature" || darkRomanceRating.maturityRating !== "MATURE") {
+            throw new Error(`Expected '18+ Mature' and 'MATURE' for Butcher & Blackbird, got: ${JSON.stringify(darkRomanceRating)}`);
+        }
+
+        const hookRating = inferBookRating({
+            title: "Hooked",
+            author: "Emily McIntire"
+        });
+        if (hookRating.ageRating !== "18+ Mature" || hookRating.maturityRating !== "MATURE") {
+            throw new Error(`Expected '18+ Mature' and 'MATURE' for Hooked, got: ${JSON.stringify(hookRating)}`);
+        }
+
         // 2. Assert isExplicitSexOrErotica correctly flags explicit titles and allows general titles
         if (!isExplicitSexOrErotica("Anne Hooper's ultimate sex guide", "Anne Hooper")) {
             throw new Error("isExplicitSexOrErotica failed to flag Anne Hooper's ultimate sex guide");
+        }
+        if (!isExplicitSexOrErotica("The Joy of Sex", "Alex Comfort")) {
+            throw new Error("isExplicitSexOrErotica failed to flag The Joy of Sex");
+        }
+        if (!isExplicitSexOrErotica("Supersex", "Tracey Cox")) {
+            throw new Error("isExplicitSexOrErotica failed to flag Supersex");
+        }
+        if (!isExplicitSexOrErotica("She Comes First", "Ian Kerner")) {
+            throw new Error("isExplicitSexOrErotica failed to flag She Comes First");
         }
         if (!isExplicitSexOrErotica("Kama Sutra", "Vatsyayana")) {
             throw new Error("isExplicitSexOrErotica failed to flag Kama Sutra");
@@ -6866,6 +6899,9 @@ async function runTestSuite() {
         }
         if (isExplicitSexOrErotica("Dune: Part One", "Frank Herbert")) {
             throw new Error("isExplicitSexOrErotica falsely flagged Dune");
+        }
+        if (isExplicitSexOrErotica("Atomic Habits", "James Clear")) {
+            throw new Error("isExplicitSexOrErotica falsely flagged Atomic Habits");
         }
 
         // 3. Audiobook Poster Healing Verification:
