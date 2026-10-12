@@ -64,6 +64,7 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
     // Multi-Selection & Bulk Actions State
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [bulkActionLoading, setBulkActionLoading] = useState(false);
+    const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
 
     // Toast Notification State
     const [toast, setToast] = useState<{ type: "success" | "error" | "info"; text: string } | null>(null);
@@ -658,44 +659,61 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                                 </div>
 
                                 {/* Poster / Cover */}
-                                <div 
-                                    onClick={() => {
-                                        if (isMovie || isTv) {
-                                            if (onSelectMedia && req.tmdbId) onSelectMedia(req.tmdbId, req.mediaType);
-                                        } else {
-                                            setSelectedBook({
-                                                title: req.title,
-                                                author: req.bookAuthor || "Unknown Author",
-                                                series: req.bookSeries || undefined,
-                                                volumeNumber: req.bookVolume || undefined,
-                                                coverUrl: req.posterPath || undefined,
-                                                publishYear: req.releaseYear || undefined,
-                                                mediaType: isAudiobook ? "audiobook" : "ebook",
-                                                availability: {
-                                                    status: req.status === "AVAILABLE" ? "AVAILABLE" : req.status === "PROCESSING" ? "DOWNLOADING" : "REQUESTED",
-                                                    requestId: req.id
+                                {(() => {
+                                    const rawPoster = req.posterPath;
+                                    const isCorrupted = !rawPoster || rawPoster.startsWith("?lib=");
+                                    const posterUrl = !isCorrupted ? rawPoster : null;
+                                    const showImage = Boolean(posterUrl && !imageErrors.has(req.id));
+
+                                    return (
+                                        <div 
+                                            onClick={() => {
+                                                if (isMovie || isTv) {
+                                                    if (onSelectMedia && req.tmdbId) onSelectMedia(req.tmdbId, req.mediaType);
+                                                } else {
+                                                    setSelectedBook({
+                                                        title: req.title,
+                                                        author: req.bookAuthor || "Unknown Author",
+                                                        series: req.bookSeries || undefined,
+                                                        volumeNumber: req.bookVolume || undefined,
+                                                        coverUrl: posterUrl || undefined,
+                                                        publishYear: req.releaseYear || undefined,
+                                                        mediaType: isAudiobook ? "audiobook" : "ebook",
+                                                        availability: {
+                                                            status: req.status === "AVAILABLE" ? "AVAILABLE" : req.status === "PROCESSING" ? "DOWNLOADING" : "REQUESTED",
+                                                            requestId: req.id
+                                                        }
+                                                    });
                                                 }
-                                            });
-                                        }
-                                    }}
-                                    className="w-16 sm:w-20 aspect-[2/3] rounded-xl overflow-hidden bg-muted/20 shrink-0 border border-white/5 cursor-pointer hover:opacity-90 transition-opacity"
-                                >
-                                    {req.posterPath ? (
-                                        <img src={req.posterPath} alt={req.title} className="w-full h-full object-cover" />
-                                    ) : (
-                                        <div className="w-full h-full flex flex-col items-center justify-center p-2 text-center text-muted-foreground bg-muted/40">
-                                            {isAudiobook ? (
-                                                <Headphones className="h-6 w-6 text-amber-400/40" />
-                                            ) : isBook ? (
-                                                <BookOpen className="h-6 w-6 text-purple-400/40" />
-                                            ) : isTv ? (
-                                                <Tv className="h-6 w-6 opacity-40" />
+                                            }}
+                                            className="w-16 sm:w-20 aspect-[2/3] rounded-xl overflow-hidden bg-muted/20 shrink-0 border border-white/5 cursor-pointer hover:opacity-90 transition-opacity relative"
+                                        >
+                                            {showImage ? (
+                                                <img 
+                                                    src={posterUrl!} 
+                                                    alt={req.title} 
+                                                    className="w-full h-full object-cover" 
+                                                    onError={() => setImageErrors(prev => new Set(prev).add(req.id))}
+                                                />
                                             ) : (
-                                                <Film className="h-6 w-6 opacity-40" />
+                                                <div className="w-full h-full flex flex-col items-center justify-center p-1.5 text-center bg-gradient-to-b from-muted/30 to-muted/80 text-muted-foreground/70">
+                                                    {isAudiobook ? (
+                                                        <Headphones className="h-6 w-6 text-amber-400 mb-1 shrink-0" />
+                                                    ) : isBook ? (
+                                                        <BookOpen className="h-6 w-6 text-purple-400 mb-1 shrink-0" />
+                                                    ) : isTv ? (
+                                                        <Tv className="h-6 w-6 text-cyan-400 mb-1 shrink-0" />
+                                                    ) : (
+                                                        <Film className="h-6 w-6 text-blue-400 mb-1 shrink-0" />
+                                                    )}
+                                                    <span className="text-[9px] font-semibold line-clamp-2 text-foreground/80 leading-tight px-0.5">
+                                                        {req.title}
+                                                    </span>
+                                                </div>
                                             )}
                                         </div>
-                                    )}
-                                </div>
+                                    );
+                                })()}
 
                                 {/* Content Details */}
                                 <div className="flex-1 min-w-0 space-y-1.5">

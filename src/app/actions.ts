@@ -986,7 +986,7 @@ async function fetchITunesCover(title: string, author: string, mediaType: string
     return null;
 }
 
-async function fetchBookCover(title: string, author: string, mediaType: string = "ebook", bookFolder?: string): Promise<string | null> {
+export async function fetchBookCover(title: string, author: string, mediaType: string = "ebook", bookFolder?: string): Promise<string | null> {
     console.log(`[COVER-ENGINE] 🖼️ Resolving cover artwork for "${title}" by "${author}" (MediaType: ${mediaType})...`);
 
     if (bookFolder) {
@@ -9809,9 +9809,6 @@ export async function createBookRequest(formData: FormData) {
         let targetLib: any = null;
         if (libraryId) {
             targetLib = await prisma.library.findUnique({ where: { id: libraryId } }).catch(() => null);
-            finalCover = finalCover 
-                ? (finalCover.includes("?") ? `${finalCover}&lib=${libraryId}` : `${finalCover}?lib=${libraryId}`) 
-                : `?lib=${libraryId}`;
         }
 
         const isKidsLib = targetLib ? isKidsLibrary(targetLib) : false;
@@ -10003,12 +10000,6 @@ async function expandSeriesRequest(seriesTitle: string, author: string, requeste
                 let coverUrl = doc.cover_i 
                     ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` 
                     : "";
-                
-                if (libraryId) {
-                    coverUrl = coverUrl 
-                        ? (coverUrl.includes("?") ? `${coverUrl}&lib=${libraryId}` : `${coverUrl}?lib=${libraryId}`) 
-                        : `?lib=${libraryId}`;
-                }
                     
                 uniqueBooks.push({
                     title: doc.title,
@@ -12485,12 +12476,12 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
         await prisma.bookRequest.update({
             where: { id: requestId },
             data: { status: "Searching" }
-        });
+        }).catch(() => {});
         
         // ------------------------------------------------------------------------------------------
         // PORTALARR-RADARR HYBRID: Create "Missing" Book Stub in Library immediately upon approval
         // ------------------------------------------------------------------------------------------
-        if (targetLib && resolvedLibId) {
+        if (targetLib && resolvedLibId && targetLib.path && fs.existsSync(targetLib.path) && path.resolve(targetLib.path) !== path.resolve(process.cwd())) {
             try {
                 const sanitize = (str: string) => str.replace(/[<>:"/\|?*\x00-\x1F]/g, "").trim();
                 const seriesTag = req?.series ? `[${sanitize(req.series)}${req.volumeNumber ? ' ' + String(req.volumeNumber).padStart(2, '0') : ''}] ` : "";
@@ -12513,7 +12504,7 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
                             { filePath: folderPath },
                             {
                                 title: { contains: title },
-                                ...(author && author !== "Unknown Author" ? [{ author: { contains: author } }] : []),
+                                ...(author && author !== "Unknown Author" ? { author: { contains: author } } : {}),
                                 mediaType: reqMediaType,
                                 libraryId: resolvedLibId
                             }
@@ -12593,7 +12584,7 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
             await prisma.bookRequest.update({
                 where: { id: requestId },
                 data: { status: "Failed - Prowlarr is not configured under settings" }
-            });
+            }).catch(() => {});
             return;
         }
 
@@ -12738,7 +12729,7 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
         await prisma.bookRequest.update({
             where: { id: requestId },
             data: { status: `Failed - ${e.message || "Unknown error during download client push"}` }
-        });
+        }).catch(() => {});
         await prisma.mediaRequest.updateMany({
             where: {
                 title: { contains: title }
@@ -16509,11 +16500,6 @@ export async function createMultipleBookRequests(booksList: { title: string, aut
 
         for (const book of booksList) {
             let finalCover = book.coverUrl;
-            if (libraryId) {
-                finalCover = finalCover 
-                    ? (finalCover.includes("?") ? `${finalCover}&lib=${libraryId}` : `${finalCover}?lib=${libraryId}`) 
-                    : `?lib=${libraryId}`;
-            }
             
             const rating = inferBookRating({
                 title: book.title,

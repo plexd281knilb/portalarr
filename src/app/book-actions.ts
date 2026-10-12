@@ -366,6 +366,18 @@ export async function submitBookOrAudiobookRequestAction(input: BookRequestInput
             input.volumeNumber
         );
 
+        // 2b. Proactively resolve high-definition cover artwork if missing or invalid
+        let resolvedCover = (input.coverUrl && !input.coverUrl.startsWith("?lib=")) ? input.coverUrl : null;
+        if (!resolvedCover) {
+            try {
+                const { fetchBookCover } = await import("./actions");
+                const fetched = await fetchBookCover(title, author, mediaType);
+                if (fetched && fetched !== "local") {
+                    resolvedCover = fetched;
+                }
+            } catch (e) {}
+        }
+
         // 3. Create BookRequest (Primary legacy & bookshelf sync)
         const bookRequest = await prisma.bookRequest.create({
             data: {
@@ -373,7 +385,7 @@ export async function submitBookOrAudiobookRequestAction(input: BookRequestInput
                 author,
                 series: input.series || null,
                 volumeNumber: input.volumeNumber || null,
-                coverUrl: input.coverUrl || null,
+                coverUrl: resolvedCover,
                 publishYear: input.publishYear || null,
                 maturityRating: input.maturityRating || inferredRating.maturityRating || null,
                 ageRating: input.ageRating || inferredRating.ageRating || null,
@@ -409,7 +421,7 @@ export async function submitBookOrAudiobookRequestAction(input: BookRequestInput
                     bookVolume: input.volumeNumber || null,
                     bookLibraryId: targetLibId,
                     sendToKindle: Boolean(input.sendToKindle && mediaType === "ebook"),
-                    posterPath: input.coverUrl || null,
+                    posterPath: resolvedCover,
                     releaseYear: input.publishYear || null,
                     contentRating: input.ageRating || inferredRating.ageRating || null,
                     status: autoApprove ? "APPROVED" : "PENDING"

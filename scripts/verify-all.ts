@@ -6708,6 +6708,219 @@ async function runTestSuite() {
 
         } finally {
             delete process.env.PORTALARR_TEST_AUTH;
+            try {
+                const testStubDir = path.join(process.cwd(), "Author Bulk 4");
+                if (fs.existsSync(testStubDir)) {
+                    fs.rmSync(testStubDir, { recursive: true, force: true });
+                }
+            } catch (e) {}
+        }
+    });
+
+    // 98. Seerr Engine: Dual-Tier RAM & Persistent Disk SWR Caching, In-Flight Deduplication & Background Pre-Warming
+    await assertTest("Test 98: Seerr Engine: Dual-Tier RAM & Persistent Disk SWR Caching, In-Flight Deduplication & Pre-Warming", async () => {
+        const {
+            setMediaCache,
+            getMediaCache,
+            getOrFetchMediaCache,
+            clearMediaCache,
+            pruneExpiredDiskMediaCache,
+            prewarmDiscoverCachesInternal
+        } = await import("../src/lib/seerr/media-cache");
+        const fs = await import("fs");
+        const path = await import("path");
+
+        const testKeyRam = `test:media:ram:${Date.now()}`;
+        const testKeyDisk = `test:media:disk:${Date.now()}`;
+        const testKeySwr = `test:media:swr:${Date.now()}`;
+        const testKeyDedup = `test:media:dedup:${Date.now()}`;
+
+        try {
+            // 1. Tier 1 (RAM) Cache Instant Storage & Retrieval
+            await setMediaCache(testKeyRam, { title: "Dune: Part Two", year: 2024 }, { ttlMs: 10000 });
+            const ramHit = await getMediaCache<{ title: string; year: number }>(testKeyRam);
+            if (!ramHit || ramHit.title !== "Dune: Part Two" || ramHit.year !== 2024) {
+                throw new Error(`RAM cache retrieval failed, got: ${JSON.stringify(ramHit)}`);
+            }
+
+            // 2. Tier 2 (Persistent Disk Cache) Storage & File Verification
+            await setMediaCache(testKeyDisk, { title: "Oppenheimer", tmdbId: 872585 }, { ttlMs: 20000 });
+            const diskDir = path.join(process.cwd(), "data", "cache", "tmdb");
+            if (!fs.existsSync(diskDir)) {
+                throw new Error(`Persistent disk cache directory does not exist: ${diskDir}`);
+            }
+            const diskFiles = await fs.promises.readdir(diskDir);
+            if (!diskFiles.some(f => f.startsWith("test_media_disk_") && f.endsWith(".json"))) {
+                throw new Error("Persistent disk cache file was not created on disk for testKeyDisk");
+            }
+
+            // 3. In-Flight Stampede Deduplication
+            let fetchCount = 0;
+            const concurrentFetches = await Promise.all([
+                getOrFetchMediaCache(testKeyDedup, async () => {
+                    fetchCount++;
+                    await new Promise(r => setTimeout(r, 60));
+                    return { movie: "Interstellar", rating: 8.7 };
+                }, { ttlMs: 5000 }),
+                getOrFetchMediaCache(testKeyDedup, async () => {
+                    fetchCount++;
+                    await new Promise(r => setTimeout(r, 60));
+                    return { movie: "Interstellar", rating: 8.7 };
+                }, { ttlMs: 5000 }),
+                getOrFetchMediaCache(testKeyDedup, async () => {
+                    fetchCount++;
+                    await new Promise(r => setTimeout(r, 60));
+                    return { movie: "Interstellar", rating: 8.7 };
+                }, { ttlMs: 5000 })
+            ]);
+
+            if (fetchCount !== 1) {
+                throw new Error(`In-flight deduplication failed: expected 1 fetch execution, got ${fetchCount}`);
+            }
+            if (concurrentFetches[0].movie !== "Interstellar" || concurrentFetches[1].movie !== "Interstellar") {
+                throw new Error("Concurrent deduplicated fetch results mismatch");
+            }
+
+            // 4. Stale-While-Revalidate (SWR) Engine Non-Blocking Return
+            await setMediaCache(testKeySwr, { version: 1, title: "The Dark Knight" }, { ttlMs: 60, staleTtlMs: 10000 });
+            await new Promise(r => setTimeout(r, 80)); // Wait for entry to become stale (> 60ms)
+
+            const swrStart = Date.now();
+            let bgExecuted = false;
+            const swrResult = await getOrFetchMediaCache(testKeySwr, async () => {
+                await new Promise(r => setTimeout(r, 100)); // Simulating slow API
+                bgExecuted = true;
+                return { version: 2, title: "The Dark Knight" };
+            }, { ttlMs: 60, staleTtlMs: 10000 });
+            const swrDuration = Date.now() - swrStart;
+
+            if (swrResult.version !== 1) {
+                throw new Error(`SWR did not return stale data immediately, returned version ${swrResult.version}`);
+            }
+            if (swrDuration > 50) {
+                throw new Error(`SWR response blocked caller for ${swrDuration}ms (expected < 50ms)`);
+            }
+
+            // 5. Pre-Warming Engine Execution
+            const prewarmRes = await prewarmDiscoverCachesInternal();
+            if (!prewarmRes.success || prewarmRes.warmedKeys < 5) {
+                throw new Error(`prewarmDiscoverCachesInternal failed or warmed too few keys: ${JSON.stringify(prewarmRes)}`);
+            }
+
+            // 6. Prune Engine Verification
+            const prunedCount = await pruneExpiredDiskMediaCache();
+            if (typeof prunedCount !== "number") {
+                throw new Error(`pruneExpiredDiskMediaCache did not return number, got ${typeof prunedCount}`);
+            }
+        } finally {
+            await clearMediaCache(testKeyRam).catch(() => {});
+            await clearMediaCache(testKeyDisk).catch(() => {});
+            await clearMediaCache(testKeySwr).catch(() => {});
+            await clearMediaCache(testKeyDedup).catch(() => {});
+        }
+    });
+
+    // 99. Media Requests: Audiobook Poster Auto-Healing & Explicit Sex Guide / Erotica Suppression
+    await assertTest("Test 99: Media Requests: Audiobook Poster Auto-Healing & Sex Guide Suppression", async () => {
+        const { inferBookRating, isExplicitSexOrErotica } = await import("../src/lib/books/book-rating");
+        const { reconcileBookRequestsWithMediaRequests } = await import("../src/app/seerr-actions");
+
+        // 1. Assert inferBookRating rates Anne Hooper & sex guides as 18+ Mature / MATURE
+        const anneHooperRating = inferBookRating({
+            title: "Anne Hooper's ultimate sex guide",
+            author: "Anne Hooper",
+            overview: "A comprehensive guide to intimacy and bedroom techniques."
+        });
+        if (anneHooperRating.ageRating !== "18+ Mature" || anneHooperRating.maturityRating !== "MATURE" || !anneHooperRating.isMature) {
+            throw new Error(`Expected '18+ Mature' and 'MATURE' for Anne Hooper's ultimate sex guide, got: ${JSON.stringify(anneHooperRating)}`);
+        }
+
+        const sexGuideRating = inferBookRating({
+            title: "The Ultimate Sex Guide: Positions & Techniques",
+            author: "John Doe"
+        });
+        if (sexGuideRating.ageRating !== "18+ Mature" || sexGuideRating.maturityRating !== "MATURE") {
+            throw new Error(`Expected '18+ Mature' and 'MATURE' for sex guide title, got: ${JSON.stringify(sexGuideRating)}`);
+        }
+
+        const kamaSutraRating = inferBookRating({
+            title: "Kama Sutra for Beginners",
+            author: "Vatsyayana"
+        });
+        if (kamaSutraRating.ageRating !== "18+ Mature" || kamaSutraRating.maturityRating !== "MATURE") {
+            throw new Error(`Expected '18+ Mature' and 'MATURE' for Kama Sutra, got: ${JSON.stringify(kamaSutraRating)}`);
+        }
+
+        // 2. Assert isExplicitSexOrErotica correctly flags explicit titles and allows general titles
+        if (!isExplicitSexOrErotica("Anne Hooper's ultimate sex guide", "Anne Hooper")) {
+            throw new Error("isExplicitSexOrErotica failed to flag Anne Hooper's ultimate sex guide");
+        }
+        if (!isExplicitSexOrErotica("Kama Sutra", "Vatsyayana")) {
+            throw new Error("isExplicitSexOrErotica failed to flag Kama Sutra");
+        }
+        if (!isExplicitSexOrErotica("Sensual Massage and Tantric Sex Techniques")) {
+            throw new Error("isExplicitSexOrErotica failed to flag Tantric Sex Techniques");
+        }
+        if (isExplicitSexOrErotica("The Hobbit", "J.R.R. Tolkien")) {
+            throw new Error("isExplicitSexOrErotica falsely flagged The Hobbit");
+        }
+        if (isExplicitSexOrErotica("Dune: Part One", "Frank Herbert")) {
+            throw new Error("isExplicitSexOrErotica falsely flagged Dune");
+        }
+
+        // 3. Audiobook Poster Healing Verification:
+        // Create a test audiobook BookRequest and MediaRequest with a corrupted "?lib=..." posterPath
+        const testAudiobookTitle = `Test Audiobook Healed ${Date.now()}`;
+        const testUser = "testuser_poster_healing";
+        const dummyCoverUrl = "https://images.example.com/audiobook-real-cover.jpg";
+
+        const testBr = await prisma.bookRequest.create({
+            data: {
+                title: testAudiobookTitle,
+                author: "Test Author",
+                mediaType: "audiobook",
+                type: "book",
+                requestedBy: testUser,
+                coverUrl: dummyCoverUrl,
+                status: "Pending"
+            }
+        });
+
+        const testMr = await prisma.mediaRequest.create({
+            data: {
+                mediaType: "audiobook",
+                title: testAudiobookTitle,
+                requestedByUsername: testUser,
+                bookAuthor: "Test Author",
+                posterPath: "?lib=mock_corrupted_lib_id",
+                status: "PENDING"
+            }
+        });
+
+        try {
+            // Run reconciliation
+            await reconcileBookRequestsWithMediaRequests(testUser, true);
+
+            const updatedMr = await prisma.mediaRequest.findUnique({
+                where: { id: testMr.id }
+            });
+
+            if (!updatedMr) {
+                throw new Error("Reconciliation deleted the test MediaRequest unexpectedly");
+            }
+            if (updatedMr.posterPath === "?lib=mock_corrupted_lib_id" || !updatedMr.posterPath) {
+                throw new Error(`MediaRequest posterPath was not healed from BookRequest! Got: ${updatedMr.posterPath}`);
+            }
+            if (updatedMr.posterPath !== dummyCoverUrl) {
+                throw new Error(`MediaRequest posterPath did not adopt BookRequest coverUrl! Expected ${dummyCoverUrl}, got: ${updatedMr.posterPath}`);
+            }
+        } finally {
+            await prisma.mediaRequest.deleteMany({
+                where: { id: testMr.id }
+            }).catch(() => {});
+            await prisma.bookRequest.deleteMany({
+                where: { id: testBr.id }
+            }).catch(() => {});
         }
     });
 

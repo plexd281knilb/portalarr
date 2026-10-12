@@ -55,6 +55,24 @@ import {
 import { dispatchMediaRequest } from "@/lib/seerr/dispatch";
 import { getEnabledArrInstancesInternal, arrApiGet, arrApiPost, arrApiPut, getArrProfilesAndFolders } from "@/app/arr-actions";
 import { notifyMediaRequestEvent, sendTestSeerrDiscordWebhook } from "@/lib/seerr/notifications";
+import {
+    getOrFetchMediaCache,
+    setMediaCache,
+    getMediaCache,
+    clearMediaCache,
+    TTL_DISCOVER_HOME,
+    STALE_DISCOVER_HOME,
+    TTL_DISCOVER_MEDIA,
+    STALE_DISCOVER_MEDIA,
+    TTL_MEDIA_DETAILS,
+    STALE_MEDIA_DETAILS,
+    TTL_MEDIA_SEARCH,
+    STALE_MEDIA_SEARCH,
+    prewarmDiscoverCachesInternal,
+    pruneExpiredDiskMediaCache
+} from "@/lib/seerr/media-cache";
+
+export { prewarmDiscoverCachesInternal, pruneExpiredDiskMediaCache, clearMediaCache };
 
 interface AuthSession {
     userId: string;
@@ -115,110 +133,140 @@ const MEDIA_DETAILS_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 let lastReconcileTime = 0;
 const RECONCILE_THROTTLE_MS = 30_000; // 30 seconds throttle to prevent redundant DB sweeps
 
+interface DiscoverHomeData {
+    heroItem: TmdbMediaItem | null;
+    sections: any[];
+    popularMoviesList: TmdbMediaItem[];
+    popularTvList: TmdbMediaItem[];
+    trendingMoviesList: TmdbMediaItem[];
+    trendingTvList: TmdbMediaItem[];
+}
+
 /**
  * Loads Discovery Home with Hero spotlight and multiple curated carousels
  * Supports "main" (General / Adult) and "kids" (Family / Child-friendly) sections
  */
 export async function getDiscoverHomeAction(section: "main" | "kids" = "main") {
     try {
-        const cached = discoverHomeCache.get(section);
-        let heroItem: TmdbMediaItem | null = null;
-        let sections: any[] = [];
+        const isKids = section === "kids";
+        const homeData = await getOrFetchMediaCache<DiscoverHomeData>(
+            `discover:home:${section}`,
+            async () => {
+                let popularMoviesList: TmdbMediaItem[] = [];
+                let popularTvList: TmdbMediaItem[] = [];
+                let trendingMoviesList: TmdbMediaItem[] = [];
+                let trendingTvList: TmdbMediaItem[] = [];
+                let heroItem: TmdbMediaItem | null = null;
+                let sections: any[] = [];
 
-        if (cached && Date.now() - cached.timestamp < DISCOVER_HOME_CACHE_TTL) {
-            heroItem = cached.data.heroItem;
-            sections = cached.data.sections;
-        } else {
-            let popularMoviesList: TmdbMediaItem[] = [];
-            if (section === "kids") {
-                const [
-                    kidsTrendingMovies,
-                    kidsTrendingTv,
-                    disneyPixar,
-                    popularKidsTv,
-                    popularKidsMovies,
-                    topRatedFamily
-                ] = await Promise.all([
-                    getTmdbKidsTrending("movie", 1).catch(() => []),
-                    getTmdbKidsTrending("tv", 1).catch(() => []),
-                    getTmdbDisneyPixar(1).catch(() => []),
-                    getTmdbKidsPopular("tv", 1).catch(() => []),
-                    getTmdbKidsPopular("movie", 1).catch(() => []),
-                    getTmdbKidsTopRated("movie", 1).catch(() => [])
-                ]);
+                if (isKids) {
+                    const [
+                        kidsTrendingMovies,
+                        kidsTrendingTv,
+                        disneyPixar,
+                        popularKidsTv,
+                        popularKidsMovies,
+                        topRatedFamily
+                    ] = await Promise.all([
+                        getTmdbKidsTrending("movie", 1).catch(() => []),
+                        getTmdbKidsTrending("tv", 1).catch(() => []),
+                        getTmdbDisneyPixar(1).catch(() => []),
+                        getTmdbKidsPopular("tv", 1).catch(() => []),
+                        getTmdbKidsPopular("movie", 1).catch(() => []),
+                        getTmdbKidsTopRated("movie", 1).catch(() => [])
+                    ]);
 
-                popularMoviesList = popularKidsMovies;
+                    popularMoviesList = popularKidsMovies;
+                    popularTvList = popularKidsTv;
+                    trendingMoviesList = kidsTrendingMovies;
+                    trendingTvList = kidsTrendingTv;
 
-                // Prime discoverMediaCache so tabs (Movies & TV) load in 0ms
-                discoverMediaCache.set(`popular:movie:1:true`, { data: popularKidsMovies, timestamp: Date.now() });
-                discoverMediaCache.set(`popular:tv:1:true`, { data: popularKidsTv, timestamp: Date.now() });
-                discoverMediaCache.set(`trending:movie:1:true`, { data: kidsTrendingMovies, timestamp: Date.now() });
-                discoverMediaCache.set(`trending:tv:1:true`, { data: kidsTrendingTv, timestamp: Date.now() });
+                    // Select top trending kids movie or show for hero spotlight
+                    const heroCandidates = [...kidsTrendingMovies, ...kidsTrendingTv, ...disneyPixar].filter(item => Boolean(item.backdropPath && item.overview));
+                    heroItem = heroCandidates.length > 0 ? heroCandidates[0] : (kidsTrendingMovies[0] || null);
 
-                // Select top trending kids movie or show for hero spotlight
-                const heroCandidates = [...kidsTrendingMovies, ...kidsTrendingTv, ...disneyPixar].filter(item => Boolean(item.backdropPath && item.overview));
-                heroItem = heroCandidates.length > 0 ? heroCandidates[0] : (kidsTrendingMovies[0] || null);
+                    sections = [
+                        { id: "kids-trending-movies", title: "Trending Family & Kids", icon: "Flame", mediaType: "movie", items: kidsTrendingMovies },
+                        { id: "disney-pixar", title: "Disney & Pixar Hits", icon: "Sparkles", mediaType: "movie", items: disneyPixar },
+                        { id: "kids-trending-tv", title: "Popular Kids Shows", icon: "Tv", mediaType: "tv", items: kidsTrendingTv },
+                        { id: "popular-kids-tv", title: "Family Favorites Series", icon: "TrendingUp", mediaType: "tv", items: popularKidsTv },
+                        { id: "top-rated-family", title: "Top Rated Family Movies", icon: "Star", mediaType: "movie", items: topRatedFamily }
+                    ];
+                } else {
+                    // Default: Main Discovery
+                    const [
+                        trendingMovies,
+                        trendingTv,
+                        upcomingMovies,
+                        popularTv,
+                        popularMovies,
+                        topRatedMovies
+                    ] = await Promise.all([
+                        getTmdbTrending("movie", "week", 1).catch(() => []),
+                        getTmdbTrending("tv", "week", 1).catch(() => []),
+                        getTmdbUpcomingMovies().catch(() => []),
+                        getTmdbPopularTv(1).catch(() => []),
+                        getTmdbPopularMovies(1).catch(() => []),
+                        getTmdbTopRatedMovies(1).catch(() => [])
+                    ]);
 
-                sections = [
-                    { id: "kids-trending-movies", title: "Trending Family & Kids", icon: "Flame", mediaType: "movie", items: kidsTrendingMovies },
-                    { id: "disney-pixar", title: "Disney & Pixar Hits", icon: "Sparkles", mediaType: "movie", items: disneyPixar },
-                    { id: "kids-trending-tv", title: "Popular Kids Shows", icon: "Tv", mediaType: "tv", items: kidsTrendingTv },
-                    { id: "popular-kids-tv", title: "Family Favorites Series", icon: "TrendingUp", mediaType: "tv", items: popularKidsTv },
-                    { id: "top-rated-family", title: "Top Rated Family Movies", icon: "Star", mediaType: "movie", items: topRatedFamily }
-                ];
-            } else {
-                // Default: Main Discovery
-                const [
-                    trendingMovies,
-                    trendingTv,
-                    upcomingMovies,
-                    popularTv,
-                    popularMovies,
-                    topRatedMovies
-                ] = await Promise.all([
-                    getTmdbTrending("movie", "week", 1).catch(() => []),
-                    getTmdbTrending("tv", "week", 1).catch(() => []),
-                    getTmdbUpcomingMovies().catch(() => []),
-                    getTmdbPopularTv(1).catch(() => []),
-                    getTmdbPopularMovies(1).catch(() => []),
-                    getTmdbTopRatedMovies(1).catch(() => [])
-                ]);
+                    popularMoviesList = popularMovies;
+                    popularTvList = popularTv;
+                    trendingMoviesList = trendingMovies;
+                    trendingTvList = trendingTv;
 
-                popularMoviesList = popularMovies;
+                    // Select top trending movie or show for hero spotlight
+                    const heroCandidates = [...trendingMovies, ...trendingTv].filter(item => Boolean(item.backdropPath && item.overview));
+                    heroItem = heroCandidates.length > 0 ? heroCandidates[0] : (trendingMovies[0] || null);
 
-                // Prime discoverMediaCache so tabs (Movies & TV) load in 0ms
-                discoverMediaCache.set(`popular:movie:1:false`, { data: popularMovies, timestamp: Date.now() });
-                discoverMediaCache.set(`popular:tv:1:false`, { data: popularTv, timestamp: Date.now() });
-                discoverMediaCache.set(`trending:movie:1:false`, { data: trendingMovies, timestamp: Date.now() });
-                discoverMediaCache.set(`trending:tv:1:false`, { data: trendingTv, timestamp: Date.now() });
+                    sections = [
+                        { id: "trending-movies", title: "Trending Movies", icon: "Flame", mediaType: "movie", items: trendingMovies },
+                        { id: "trending-tv", title: "Trending TV Shows", icon: "TrendingUp", mediaType: "tv", items: trendingTv },
+                        { id: "upcoming-movies", title: "Upcoming & In Theaters", icon: "Calendar", mediaType: "movie", items: upcomingMovies },
+                        { id: "popular-tv", title: "Popular Series", icon: "Tv", mediaType: "tv", items: popularTv },
+                        { id: "top-movies", title: "Top Rated Movies", icon: "Star", mediaType: "movie", items: topRatedMovies }
+                    ];
+                }
 
-                // Select top trending movie or show for hero spotlight
-                const heroCandidates = [...trendingMovies, ...trendingTv].filter(item => Boolean(item.backdropPath && item.overview));
-                heroItem = heroCandidates.length > 0 ? heroCandidates[0] : (trendingMovies[0] || null);
+                return {
+                    heroItem,
+                    sections,
+                    popularMoviesList,
+                    popularTvList,
+                    trendingMoviesList,
+                    trendingTvList
+                };
+            },
+            { ttlMs: TTL_DISCOVER_HOME, staleTtlMs: STALE_DISCOVER_HOME }
+        );
 
-                sections = [
-                    { id: "trending-movies", title: "Trending Movies", icon: "Flame", mediaType: "movie", items: trendingMovies },
-                    { id: "trending-tv", title: "Trending TV Shows", icon: "TrendingUp", mediaType: "tv", items: trendingTv },
-                    { id: "upcoming-movies", title: "Upcoming & In Theaters", icon: "Calendar", mediaType: "movie", items: upcomingMovies },
-                    { id: "popular-tv", title: "Popular Series", icon: "Tv", mediaType: "tv", items: popularTv },
-                    { id: "top-movies", title: "Top Rated Movies", icon: "Star", mediaType: "movie", items: topRatedMovies }
-                ];
-            }
+        const heroItem = homeData.heroItem;
+        const sections = homeData.sections;
 
-            discoverHomeCache.set(section, {
-                data: { heroItem, sections },
-                timestamp: Date.now()
-            });
-        }
+        // Prime memory maps and persistent disk caches so tabs (Movies & TV) load in 0ms
+        discoverMediaCache.set(`popular:movie:1:${isKids}`, { data: homeData.popularMoviesList, timestamp: Date.now() });
+        discoverMediaCache.set(`popular:tv:1:${isKids}`, { data: homeData.popularTvList, timestamp: Date.now() });
+        discoverMediaCache.set(`trending:movie:1:${isKids}`, { data: homeData.trendingMoviesList, timestamp: Date.now() });
+        discoverMediaCache.set(`trending:tv:1:${isKids}`, { data: homeData.trendingTvList, timestamp: Date.now() });
+
+        setMediaCache(`discover:media:popular:movie:1:${isKids}`, homeData.popularMoviesList, { ttlMs: TTL_DISCOVER_MEDIA, staleTtlMs: STALE_DISCOVER_MEDIA }).catch(() => {});
+        setMediaCache(`discover:media:popular:tv:1:${isKids}`, homeData.popularTvList, { ttlMs: TTL_DISCOVER_MEDIA, staleTtlMs: STALE_DISCOVER_MEDIA }).catch(() => {});
+        setMediaCache(`discover:media:trending:movie:1:${isKids}`, homeData.trendingMoviesList, { ttlMs: TTL_DISCOVER_MEDIA, staleTtlMs: STALE_DISCOVER_MEDIA }).catch(() => {});
+        setMediaCache(`discover:media:trending:tv:1:${isKids}`, homeData.trendingTvList, { ttlMs: TTL_DISCOVER_MEDIA, staleTtlMs: STALE_DISCOVER_MEDIA }).catch(() => {});
+
+        discoverHomeCache.set(section, {
+            data: { heroItem, sections },
+            timestamp: Date.now()
+        });
 
         // Collect all media items for batch availability check (real-time against local library & Arr)
         const allItems = [
             ...(heroItem ? [heroItem] : []),
             ...sections.flatMap(s => s.items),
-            ...(discoverMediaCache.get(`popular:movie:1:${section === "kids"}`)?.data || [])
+            ...(homeData.popularMoviesList || [])
         ];
 
-        const availabilityMap = await batchCheckMediaAvailability(allItems, section === "kids");
+        const availabilityMap = await batchCheckMediaAvailability(allItems, isKids);
 
         return {
             success: true,
@@ -250,44 +298,52 @@ export async function getDiscoverMediaAction(
         if (cached && Date.now() - cached.timestamp < DISCOVER_MEDIA_CACHE_TTL) {
             items = cached.data;
         } else {
-            if (isKids) {
-                if (category === "trending") {
-                    items = await getTmdbKidsTrending(mediaType, page);
-                } else if (category === "popular") {
-                    items = await getTmdbKidsPopular(mediaType === "tv" ? "tv" : "movie", page);
-                } else if (category === "upcoming") {
-                    items = await getTmdbDisneyPixar(page);
-                } else if (category === "top_rated") {
-                    items = await getTmdbKidsTopRated(mediaType === "tv" ? "tv" : "movie", page);
-                } else if (category === "in_theaters") {
-                    const nowPlaying = await getTmdbNowPlayingMovies();
-                    items = filterKidsSafeMedia(nowPlaying);
-                } else if (category === "disney") {
-                    items = await getDisneyTrending(true, page, mediaType === "all" ? "both" : mediaType);
-                } else if (category === "netflix") {
-                    items = await getNetflixTrending(true, page, mediaType === "all" ? "both" : mediaType);
-                }
-                items = filterKidsSafeMedia(items);
-            } else {
-                if (category === "trending") {
-                    items = await getTmdbTrending(mediaType, "week", page);
-                } else if (category === "popular") {
-                    if (mediaType === "tv") items = await getTmdbPopularTv(page);
-                    else items = await getTmdbPopularMovies(page);
-                } else if (category === "upcoming") {
-                    if (mediaType === "tv") items = await getTmdbUpcomingTv(page);
-                    else items = await getTmdbUpcomingMovies();
-                } else if (category === "top_rated") {
-                    if (mediaType === "tv") items = await getTmdbTopRatedTv(page);
-                    else items = await getTmdbTopRatedMovies(page);
-                } else if (category === "in_theaters") {
-                    items = await getTmdbNowPlayingMovies();
-                } else if (category === "disney") {
-                    items = await getDisneyTrending(false, page, mediaType === "all" ? "both" : mediaType);
-                } else if (category === "netflix") {
-                    items = await getNetflixTrending(false, page, mediaType === "all" ? "both" : mediaType);
-                }
-            }
+            items = await getOrFetchMediaCache<TmdbMediaItem[]>(
+                `discover:media:${cacheKey}`,
+                async () => {
+                    let fetchedItems: TmdbMediaItem[] = [];
+                    if (isKids) {
+                        if (category === "trending") {
+                            fetchedItems = await getTmdbKidsTrending(mediaType, page);
+                        } else if (category === "popular") {
+                            fetchedItems = await getTmdbKidsPopular(mediaType === "tv" ? "tv" : "movie", page);
+                        } else if (category === "upcoming") {
+                            fetchedItems = await getTmdbDisneyPixar(page);
+                        } else if (category === "top_rated") {
+                            fetchedItems = await getTmdbKidsTopRated(mediaType === "tv" ? "tv" : "movie", page);
+                        } else if (category === "in_theaters") {
+                            const nowPlaying = await getTmdbNowPlayingMovies();
+                            fetchedItems = filterKidsSafeMedia(nowPlaying);
+                        } else if (category === "disney") {
+                            fetchedItems = await getDisneyTrending(true, page, mediaType === "all" ? "both" : mediaType);
+                        } else if (category === "netflix") {
+                            fetchedItems = await getNetflixTrending(true, page, mediaType === "all" ? "both" : mediaType);
+                        }
+                        return filterKidsSafeMedia(fetchedItems);
+                    } else {
+                        if (category === "trending") {
+                            fetchedItems = await getTmdbTrending(mediaType, "week", page);
+                        } else if (category === "popular") {
+                            if (mediaType === "tv") fetchedItems = await getTmdbPopularTv(page);
+                            else fetchedItems = await getTmdbPopularMovies(page);
+                        } else if (category === "upcoming") {
+                            if (mediaType === "tv") fetchedItems = await getTmdbUpcomingTv(page);
+                            else fetchedItems = await getTmdbUpcomingMovies();
+                        } else if (category === "top_rated") {
+                            if (mediaType === "tv") fetchedItems = await getTmdbTopRatedTv(page);
+                            else fetchedItems = await getTmdbTopRatedMovies(page);
+                        } else if (category === "in_theaters") {
+                            fetchedItems = await getTmdbNowPlayingMovies();
+                        } else if (category === "disney") {
+                            fetchedItems = await getDisneyTrending(false, page, mediaType === "all" ? "both" : mediaType);
+                        } else if (category === "netflix") {
+                            fetchedItems = await getNetflixTrending(false, page, mediaType === "all" ? "both" : mediaType);
+                        }
+                        return fetchedItems;
+                    }
+                },
+                { ttlMs: TTL_DISCOVER_MEDIA, staleTtlMs: STALE_DISCOVER_MEDIA }
+            );
 
             discoverMediaCache.set(cacheKey, {
                 data: items,
@@ -330,10 +386,17 @@ export async function searchMediaAction(query: string, page = 1, isKids = false)
         if (cached && Date.now() - cached.timestamp < MEDIA_SEARCH_CACHE_TTL) {
             items = cached.data;
         } else {
-            items = await searchTmdbMulti(cleanQuery, page);
-            if (isKids) {
-                items = filterKidsSafeMedia(items);
-            }
+            items = await getOrFetchMediaCache<TmdbMediaItem[]>(
+                `search:${cacheKey}`,
+                async () => {
+                    let results = await searchTmdbMulti(cleanQuery, page);
+                    if (isKids) {
+                        results = filterKidsSafeMedia(results);
+                    }
+                    return results;
+                },
+                { ttlMs: TTL_MEDIA_SEARCH, staleTtlMs: STALE_MEDIA_SEARCH }
+            );
             mediaSearchCache.set(cacheKey, {
                 data: items,
                 timestamp: Date.now()
@@ -364,11 +427,17 @@ export async function getMediaDetailsAction(tmdbId: number, mediaType: "movie" |
         if (cached && Date.now() - cached.timestamp < MEDIA_DETAILS_CACHE_TTL) {
             details = cached.data;
         } else {
-            if (mediaType === "movie") {
-                details = await getTmdbMovieDetailsFull(tmdbId);
-            } else {
-                details = await getTmdbTvDetailsFull(tmdbId);
-            }
+            details = await getOrFetchMediaCache<TmdbMediaDetail | null>(
+                `details:${cacheKey}`,
+                async () => {
+                    if (mediaType === "movie") {
+                        return await getTmdbMovieDetailsFull(tmdbId);
+                    } else {
+                        return await getTmdbTvDetailsFull(tmdbId);
+                    }
+                },
+                { ttlMs: TTL_MEDIA_DETAILS, staleTtlMs: STALE_MEDIA_DETAILS }
+            );
             if (details) {
                 mediaDetailsCache.set(cacheKey, {
                     data: details,
@@ -676,7 +745,14 @@ export async function requestTvEpisodesAction(payload: {
  */
 export async function getTvSeasonEpisodesAction(tvId: number, seasonNumber: number) {
     try {
-        const episodes = await getTmdbTvSeasonDetails(tvId, seasonNumber);
+        const cacheKey = `tv_season:${tvId}:${seasonNumber}`;
+        const episodes = await getOrFetchMediaCache<TmdbEpisodeInfo[]>(
+            cacheKey,
+            async () => {
+                return await getTmdbTvSeasonDetails(tvId, seasonNumber);
+            },
+            { ttlMs: TTL_MEDIA_DETAILS, staleTtlMs: STALE_MEDIA_DETAILS }
+        );
         return { success: true, episodes };
     } catch (e: any) {
         return { success: false, error: e.message };
@@ -1021,10 +1097,12 @@ export async function submitMediaRequestAction(payload: {
 export async function reconcileBookRequestsWithMediaRequests(targetUsername?: string, force = false) {
     try {
         const now = Date.now();
-        if (!force && (now - lastReconcileTime < RECONCILE_THROTTLE_MS)) {
+        if (!force && !targetUsername && (now - lastReconcileTime < RECONCILE_THROTTLE_MS)) {
             return;
         }
-        lastReconcileTime = now;
+        if (!targetUsername) {
+            lastReconcileTime = now;
+        }
 
         await ensureSchemaColumns();
         // 1. Fetch book requests
@@ -1132,6 +1210,25 @@ export async function reconcileBookRequestsWithMediaRequests(targetUsername?: st
                 }
             }
 
+            // Resolve valid cover artwork, healing missing or "?lib=" corrupted covers
+            let resolvedCover = (br.coverUrl && !br.coverUrl.startsWith("?lib=")) 
+                ? br.coverUrl 
+                : (match?.posterPath && !match.posterPath.startsWith("?lib=") ? match.posterPath : null);
+
+            if (!resolvedCover) {
+                try {
+                    const { fetchBookCover } = await import("./actions");
+                    const fetched = await fetchBookCover(br.title, br.author || "Unknown Author", mType);
+                    if (fetched && fetched !== "local") {
+                        resolvedCover = fetched;
+                        await prisma.bookRequest.update({
+                            where: { id: br.id },
+                            data: { coverUrl: resolvedCover }
+                        }).catch(() => {});
+                    }
+                } catch {}
+            }
+
             if (!match) {
                 // Create missing MediaRequest record
                 const created = await prisma.mediaRequest.create({
@@ -1147,7 +1244,7 @@ export async function reconcileBookRequestsWithMediaRequests(targetUsername?: st
                         bookVolume: br.volumeNumber || null,
                         bookLibraryId: targetLibId,
                         sendToKindle: Boolean(br.sendToKindle),
-                        posterPath: br.coverUrl || null,
+                        posterPath: resolvedCover || null,
                         releaseYear: br.publishYear || null,
                         status: mappedStatus,
                         downloadProgress: mappedStatus === "AVAILABLE" ? 100 : (mappedStatus === "DOWNLOADING" ? 50 : null),
@@ -1159,13 +1256,15 @@ export async function reconcileBookRequestsWithMediaRequests(targetUsername?: st
                     mediaReqMap.set(`${mType}:${normTitle}:${normUser}`, created);
                 }
             } else {
-                // Synchronize status if out of sync (allows reverting false positive AVAILABLE states)
-                if (match.status !== mappedStatus || match.bookLibraryId !== targetLibId) {
+                // Synchronize status and heal missing posterPath
+                const needsPosterUpdate = Boolean(resolvedCover && (!match.posterPath || match.posterPath.startsWith("?lib=")));
+                if (match.status !== mappedStatus || match.bookLibraryId !== targetLibId || needsPosterUpdate) {
                     await prisma.mediaRequest.update({
                         where: { id: match.id },
                         data: {
                             status: mappedStatus,
                             bookLibraryId: targetLibId || match.bookLibraryId,
+                            ...(needsPosterUpdate ? { posterPath: resolvedCover } : {}),
                             downloadProgress: mappedStatus === "AVAILABLE" ? 100 : (mappedStatus === "FAILED" || mappedStatus === "DECLINED" ? 0 : match.downloadProgress),
                             availableAt: mappedStatus === "AVAILABLE" ? (match.availableAt || new Date()) : null
                         }
@@ -1173,6 +1272,36 @@ export async function reconcileBookRequestsWithMediaRequests(targetUsername?: st
                 }
             }
         }
+
+        // 4. Heal any loose MediaRequests for audiobooks and books missing cover artwork
+        try {
+            const looseRequestsWithoutPoster = await prisma.mediaRequest.findMany({
+                where: {
+                    mediaType: { in: ["book", "ebook", "audiobook"] },
+                    OR: [
+                        { posterPath: null },
+                        { posterPath: "" },
+                        { posterPath: { startsWith: "?lib=" } }
+                    ]
+                },
+                take: 8
+            });
+
+            if (looseRequestsWithoutPoster.length > 0) {
+                const { fetchBookCover } = await import("./actions");
+                for (const lr of looseRequestsWithoutPoster) {
+                    try {
+                        const cov = await fetchBookCover(lr.title, lr.bookAuthor || "Unknown Author", lr.mediaType === "audiobook" ? "audiobook" : "ebook");
+                        if (cov && cov !== "local") {
+                            await prisma.mediaRequest.update({
+                                where: { id: lr.id },
+                                data: { posterPath: cov }
+                            }).catch(() => {});
+                        }
+                    } catch {}
+                }
+            }
+        } catch {}
     } catch (e: any) {
         console.warn("[SEERR-RECONCILE] Error reconciling book requests:", e?.message || e);
     }

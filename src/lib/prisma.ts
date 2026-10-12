@@ -2067,6 +2067,17 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
     } catch (bootErr: any) {
       console.error(`[BACKGROUND-SCHEDULER] Boot scan failed:`, bootErr.message || bootErr);
     }
+
+    // Trigger initial pre-warming of Discovery Media Caches (RAM + Disk)
+    (async () => {
+      try {
+        const { prewarmDiscoverCachesInternal } = await import("./seerr/media-cache");
+        console.log("[BACKGROUND-SCHEDULER] Pre-warming Discovery Media Caches (RAM + Disk)...");
+        await prewarmDiscoverCachesInternal();
+      } catch (pwErr: any) {
+        console.warn("[BACKGROUND-SCHEDULER] Boot discovery pre-warming error:", pwErr.message || pwErr);
+      }
+    })();
     
     // Main periodic scheduler loop: checks every 60 seconds
     setInterval(async () => {
@@ -2301,6 +2312,26 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
               console.error("[KINDLE-BOUNCE-TIMER] Error in Kindle bounce scanner:", kErr.message || kErr);
             } finally {
               (global as any).__PORTALARR_KINDLE_BOUNCE_SCAN_RUNNING = false;
+            }
+          })();
+        }
+      }
+
+      // 6c. Discovery Media Cache Pre-Warmer & Pruning (every 30 minutes)
+      if (!(global as any).__PORTALARR_DISCOVER_CACHE_WARMER_RUNNING) {
+        const lastWarmerTime = (global as any).__PORTALARR_LAST_DISCOVER_WARMER_TIME || 0;
+        if (now.getTime() - lastWarmerTime >= 30 * 60 * 1000) {
+          (global as any).__PORTALARR_LAST_DISCOVER_WARMER_TIME = now.getTime();
+          (global as any).__PORTALARR_DISCOVER_CACHE_WARMER_RUNNING = true;
+          (async () => {
+            try {
+              const { prewarmDiscoverCachesInternal, pruneExpiredDiskMediaCache } = await import("./seerr/media-cache");
+              await prewarmDiscoverCachesInternal();
+              await pruneExpiredDiskMediaCache();
+            } catch (warmErr: any) {
+              console.error("[DISCOVER-CACHE-TIMER] Error in discovery cache warmer/pruner:", warmErr.message || warmErr);
+            } finally {
+              (global as any).__PORTALARR_DISCOVER_CACHE_WARMER_RUNNING = false;
             }
           })();
         }

@@ -8,7 +8,7 @@ import {
     SeriesSummary,
     BookAvailabilityStatus
 } from "./book-types";
-import { inferBookRating } from "./book-rating";
+import { inferBookRating, isExplicitSexOrErotica } from "./book-rating";
 import { logger } from "@/lib/logger";
 
 async function fetchWithTimeout(url: string, options: any = {}, timeoutMs = 7000): Promise<Response | null> {
@@ -244,7 +244,8 @@ export async function fetchTrendingEbooks(isKids: boolean = false): Promise<Book
                         series: typeof work.series === "string" ? work.series : (Array.isArray(work.series) ? work.series[0] : undefined)
                     });
 
-                    if (isKids && (ratingRes.isMature || ratingRes.maturityRating === "MATURE")) continue;
+                    // Suppress mature/erotic titles and explicit sex guides from general trending showcase
+                    if (isKids ? (ratingRes.isMature || ratingRes.maturityRating === "MATURE") : isExplicitSexOrErotica(work.title, authorName, work.subject)) continue;
 
                     const coverUrl = work.cover_i 
                         ? `https://covers.openlibrary.org/b/id/${work.cover_i}-L.jpg`
@@ -291,7 +292,8 @@ export async function fetchTrendingEbooks(isKids: boolean = false): Promise<Book
                             overview: vol.description
                         });
 
-                        if (isKids && (ratingRes.isMature || ratingRes.maturityRating === "MATURE")) continue;
+                        // Suppress mature/erotic titles and explicit sex guides from general trending showcase
+                        if (isKids ? (ratingRes.isMature || ratingRes.maturityRating === "MATURE") : isExplicitSexOrErotica(vol.title, authorName, vol.categories, vol.description)) continue;
 
                         const cover = vol.imageLinks?.thumbnail 
                             ? vol.imageLinks.thumbnail.replace("http:", "https:").replace("&edge=curl", "").replace("&zoom=1", "&zoom=0") 
@@ -366,7 +368,8 @@ export async function fetchTrendingAudiobooks(isKids: boolean = false): Promise<
                         overview: prod.publisher_summary || prod.merchandising_summary
                     });
 
-                    if (isKids && (ratingRes.isMature || ratingRes.maturityRating === "MATURE")) continue;
+                    // Suppress mature/erotic titles and explicit sex guides from general trending showcase
+                    if (isKids ? (ratingRes.isMature || ratingRes.maturityRating === "MATURE") : isExplicitSexOrErotica(prod.title, authorName, [isKids ? "children" : ""], prod.publisher_summary || prod.merchandising_summary)) continue;
 
                     let coverUrl = "";
                     if (prod.product_images) {
@@ -418,7 +421,8 @@ export async function fetchTrendingAudiobooks(isKids: boolean = false): Promise<
                             overview: item.description
                         });
 
-                        if (isKids && (ratingRes.isMature || ratingRes.maturityRating === "MATURE")) continue;
+                        // Suppress mature/erotic titles and explicit sex guides from general trending showcase
+                        if (isKids ? (ratingRes.isMature || ratingRes.maturityRating === "MATURE") : isExplicitSexOrErotica(title, author, [item.primaryGenreName], item.description)) continue;
 
                         const cover = item.artworkUrl100 ? item.artworkUrl100.replace("100x100bb", "600x600bb") : undefined;
 

@@ -180,3 +180,17 @@ To achieve sub-second page loads and eliminate blank-screen flashing on tab chan
      - `bulkDeleteMediaRequestsAction(requestIds: string[])`: Executes mass two-way cascade deletion across target IDs.
    - **Safe Revalidation**: Wraps Next.js route cache revalidation in `safeRevalidatePath` to prevent `Invariant: static generation store missing in revalidatePath` crashes in test runners and cron workers.
 
+
+13. **Dual-Tier Persistent Media Caching & Pre-Warming Engine (`src/lib/seerr/media-cache.ts`)**:
+    - **Dual-Tier Cache Architecture**: Pairs ultra-fast RAM Tier 1 (`Map`) with persistent filesystem JSON Tier 2 (`data/cache/tmdb/`), mirroring Overseerr's snappy instantaneous page responses even across cold server reboots.
+    - **Stale-While-Revalidate (SWR) Engine**: Automatically delivers stale data immediately in <5ms while refreshing upstream TMDb/TVDb APIs asynchronously in background threads.
+    - **In-Flight Stampede Deduplication**: Coalesces identical concurrent upstream requests into a single promise, completely eliminating redundant network calls.
+    - **Automated Pre-Warming Runner**: `prewarmDiscoverCachesInternal` triggers 10 seconds post-boot and every 30 minutes in `src/lib/prisma.ts` to pre-populate trending, popular, upcoming, and kids media categories.
+    - **Persistent Cache Pruning**: `pruneExpiredDiskMediaCache` automatically purges disk cache files older than 7 days, maintaining clean disk usage.
+
+14. **Audiobook Poster Resolution, Corrupted URL Auto-Healing & Explicit Content Suppression**:
+    - **Poster Resolution & `?lib=` Sanitization**: Removed legacy bug where missing covers generated `?lib=${libraryId}` values in `BookRequest.coverUrl` and `MediaRequest.posterPath`. Added proactive high-definition cover resolution in `submitBookOrAudiobookRequestAction` querying `fetchBookCover(title, author, mediaType)`.
+    - **Automatic Poster Healing**: `reconcileBookRequestsWithMediaRequests` detects missing or `?lib=` corrupted poster paths and auto-heals them from linked `BookRequest.coverUrl` or multi-source lookups.
+    - **Explicit Sex Guide & Erotica Filtering (`isExplicitSexOrErotica`)**: Curated author registry (`KNOWN_SPICY_AUTHORS_REGEX` including Anne Hooper) and explicit sex guide/manual patterns (`MATURE_KEYWORDS_REGEX` covering sex guides, manuals, Kama Sutra, tantric sex, sensual massage). Completely suppresses sex guides from appearing in general Trending Ebooks (`fetchTrendingEbooks`) and Trending Audiobooks (`fetchTrendingAudiobooks`).
+    - **Standardized Maturity Evaluation (`inferBookRating`)**: Evaluates sex guides and adult manuals strictly as `18+ Mature` with `maturityRating: "MATURE"`.
+    - **Maturity Badge Streamlining**: Suppresses redundant "All Ages" badges from media cards in `BookCard`, reserving visible badges strictly for `Kids`, `YA (12+)`, and `18+ Mature`.
