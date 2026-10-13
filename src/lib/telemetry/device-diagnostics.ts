@@ -48,7 +48,7 @@ export function diagnoseStreamSettings(session: any): DeviceDiagnosis {
     const user = session.user || "User";
 
     // 1. Roku Auto-Adjust Bug & 720p 4Mbps Cap
-    if (deviceCat === "Roku" && isTranscoding && bitrate > 0 && bitrate <= 4500) {
+    if (deviceCat === "Roku" && isTranscoding && (bitrate === 0 || bitrate <= 4500)) {
         return {
             hasIssue: true,
             issueType: "roku_auto_adjust",
@@ -70,7 +70,7 @@ export function diagnoseStreamSettings(session: any): DeviceDiagnosis {
     }
 
     // 2. Default Remote Quality Limit (2 Mbps / 4 Mbps) on Apple TV, Fire TV, Android TV, TVs
-    if (isRemote && isTranscoding && bitrate > 0 && bitrate <= 4500 && deviceCat !== "Web Browser") {
+    if (isRemote && isTranscoding && (bitrate === 0 || bitrate <= 4500) && deviceCat !== "Web Browser") {
         return {
             hasIssue: true,
             issueType: "remote_quality_cap",
@@ -157,4 +157,66 @@ export function diagnoseStreamSettings(session: any): DeviceDiagnosis {
         stepByStepGuide: [],
         copyableNotice: ""
     };
+}
+
+export interface UserTranscodeAlertResult {
+    hasAlert: boolean;
+    isActiveNow?: boolean;
+    mediaTitle?: string;
+    device?: string;
+    platform?: string;
+    serverName?: string;
+    watchedAt?: string;
+    diagnosis?: DeviceDiagnosis;
+}
+
+/**
+ * Checks if a user has an active or recent stream (within 14 days) suffering from
+ * suboptimal client settings / transcoding, to present a proactive fix banner.
+ */
+export async function getUserTranscodeAlert(username: string, email?: string): Promise<UserTranscodeAlertResult> {
+    try {
+        const cleanUser = username?.trim() || "";
+        if (!cleanUser) return { hasAlert: false };
+
+        const { prisma } = await import("@/lib/prisma");
+
+        const userNames = [cleanUser];
+        if (email && email.trim()) userNames.push(email.trim());
+
+        // 1. Check recent watch history within 14 days
+        const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+        const recentTranscode = await prisma.watchHistory.findFirst({
+            where: {
+                user: { in: userNames },
+                videoDecision: "transcode",
+                watchedAt: { gte: fourteenDaysAgo }
+            },
+            orderBy: { watchedAt: "desc" }
+        });
+
+        if (recentTranscode) {
+            const diag = diagnoseStreamSettings(recentTranscode);
+            if (diag.hasIssue) {
+                const title = recentTranscode.grandparentTitle 
+                    ? `${recentTranscode.grandparentTitle} - ${recentTranscode.title}` 
+                    : recentTranscode.title;
+                const dev = recentTranscode.device || recentTranscode.player || recentTranscode.platform || "Plex Client";
+                return {
+                    hasAlert: true,
+                    isActiveNow: false,
+                    mediaTitle: title,
+                    device: dev,
+                    platform: recentTranscode.platform || "Device",
+                    serverName: recentTranscode.serverName,
+                    watchedAt: recentTranscode.watchedAt.toISOString(),
+                    diagnosis: diag
+                };
+            }
+        }
+
+        return { hasAlert: false };
+    } catch (e) {
+        return { hasAlert: false };
+    }
 }

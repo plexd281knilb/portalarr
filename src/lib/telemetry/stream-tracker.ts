@@ -15,6 +15,50 @@ export interface UserStreamAnalysis {
     isExcessiveConnections: boolean;
     isSharingSuspected: boolean;
     sharingReason?: string;
+    isDualTvSharing?: boolean;
+    hasFixedHomeDevice?: boolean;
+}
+
+export type AccountSharingRisk = 
+    | "HIGH_SHARING_RISK"      // Multiple fixed home TVs overlapping concurrently across distinct public residential IPs
+    | "MODERATE_SHARING_RISK"  // Frequent multi-IP overlaps with mixed mobile/TV devices
+    | "SECOND_HOME"            // Alternating TV streaming between two home IPs with 0 concurrent overlap
+    | "VACATION_TRAVEL"        // Temporary remote IP usage (<= 14 days) with 0 concurrency at primary home
+    | "MOBILE_ROAMING"         // Streams on cell/mobile/laptops from various IPs, TV strictly at primary home
+    | "CLEAN_SINGLE_HOME";     // Only 1 home IP or only LAN streaming
+
+export interface UserSharingAssessment {
+    risk: AccountSharingRisk;
+    label: string;
+    badgeColor: string;
+    primaryHomeIp: string;
+    secondaryHomeIp?: string;
+    explanation: string;
+    fixedTvOverlapCount: number;
+    concurrentOverlapCount: number;
+    distinctPublicIpsCount: number;
+    fixedTvDevices: string[];
+    mobileDevices: string[];
+}
+
+export interface DetectedOverlapSession {
+    timestamp: Date;
+    durationMinutes: number;
+    isDualTv: boolean;
+    session1: {
+        title: string;
+        device: string;
+        platform: string;
+        ipAddress: string;
+        isFixedTv: boolean;
+    };
+    session2: {
+        title: string;
+        device: string;
+        platform: string;
+        ipAddress: string;
+        isFixedTv: boolean;
+    };
 }
 
 export interface WatchHistoryQueryOptions {
@@ -68,6 +112,66 @@ export function isPrivateOrLocalIp(rawIp?: string | null): boolean {
 }
 
 /**
+ * Detects whether a device is a fixed living room / home appliance (TV, streaming stick, console)
+ * that stays anchored to a physical residence.
+ */
+export function isFixedHomeDevice(device?: string | null, platform?: string | null, player?: string | null): boolean {
+    const raw = `${device || ""} ${platform || ""} ${player || ""}`.toLowerCase();
+    return (
+        raw.includes("roku") ||
+        raw.includes("appletv") ||
+        raw.includes("apple tv") ||
+        raw.includes("tvos") ||
+        raw.includes("firetv") ||
+        raw.includes("fire tv") ||
+        raw.includes("firestick") ||
+        raw.includes("aftt") ||
+        raw.includes("aftm") ||
+        raw.includes("aftb") ||
+        raw.includes("android tv") ||
+        raw.includes("google tv") ||
+        raw.includes("shield") ||
+        raw.includes("bravia") ||
+        raw.includes("tizen") ||
+        raw.includes("samsung") ||
+        raw.includes("lg") ||
+        raw.includes("webos") ||
+        raw.includes("vizio") ||
+        raw.includes("hisense") ||
+        raw.includes("chromecast") ||
+        raw.includes("smart tv") ||
+        raw.includes("playstation") ||
+        raw.includes("ps4") ||
+        raw.includes("ps5") ||
+        raw.includes("xbox")
+    );
+}
+
+/**
+ * Detects whether a device is mobile / roaming (cell phone, tablet, laptop, web browser)
+ */
+export function isMobileRoamingDevice(device?: string | null, platform?: string | null, player?: string | null): boolean {
+    if (isFixedHomeDevice(device, platform, player)) return false;
+    const raw = `${device || ""} ${platform || ""} ${player || ""}`.toLowerCase();
+    return (
+        raw.includes("iphone") ||
+        raw.includes("ipad") ||
+        raw.includes("android") ||
+        raw.includes("phone") ||
+        raw.includes("mobile") ||
+        raw.includes("cellular") ||
+        raw.includes("safari") ||
+        raw.includes("chrome") ||
+        raw.includes("firefox") ||
+        raw.includes("edge") ||
+        raw.includes("browser") ||
+        raw.includes("laptop") ||
+        raw.includes("mac") ||
+        raw.includes("windows")
+    );
+}
+
+/**
  * Evaluates active stream sessions to detect concurrent connections and credential/password sharing
  */
 export function analyzeActiveSessionsForSharing(
@@ -97,6 +201,8 @@ export function analyzeActiveSessionsForSharing(
         const devices = new Set<string>();
         const platforms = new Set<string>();
         const servers = new Set<string>();
+        let hasFixedHomeDevice = false;
+        const tvPublicIps = new Set<string>();
 
         for (const s of userSessions) {
             const rawIp = s.ipAddress || s.Player?.address || s.ip_address || "";
@@ -105,6 +211,14 @@ export function analyzeActiveSessionsForSharing(
                 allIps.add(cleanIp);
                 if (!isPrivateOrLocalIp(cleanIp)) {
                     publicIps.add(cleanIp);
+                }
+            }
+
+            const isTv = isFixedHomeDevice(s.device || s.Player?.device, s.platform || s.Player?.platform, s.player || s.Player?.title);
+            if (isTv) {
+                hasFixedHomeDevice = true;
+                if (cleanIp && !isPrivateOrLocalIp(cleanIp)) {
+                    tvPublicIps.add(cleanIp);
                 }
             }
 
@@ -121,6 +235,7 @@ export function analyzeActiveSessionsForSharing(
         const distinctIpsList = Array.from(allIps);
         const distinctPublicIpsList = Array.from(publicIps);
         const streamCount = userSessions.length;
+        const isDualTvSharing = tvPublicIps.size >= 2;
 
         // Multi-IP sharing detection: streaming from >= 2 distinct public IP addresses at the exact same time
         const isMultiIp = distinctPublicIpsList.length >= 2;
@@ -147,11 +262,249 @@ export function analyzeActiveSessionsForSharing(
             isMultiIp,
             isExcessiveConnections,
             isSharingSuspected,
-            sharingReason
+            sharingReason,
+            isDualTvSharing,
+            hasFixedHomeDevice
         });
     }
 
     return analyses;
+}
+
+/**
+ * Comprehensive account sharing intelligence:
+ * Pinpoints Primary Home IP, detects vacation / travel, second home / cabin usage,
+ * mobile roaming, and flags simultaneous living room TV playback across distinct public IPs.
+ */
+export function analyzeUserAccountSharing(userSessions: any[]): {
+    sharingAssessment: UserSharingAssessment;
+    detectedOverlaps: DetectedOverlapSession[];
+} {
+    // 1. Separate private LAN vs public WAN sessions
+    const publicSessions: any[] = [];
+    const fixedTvDevices = new Set<string>();
+    const mobileDevices = new Set<string>();
+
+    for (const s of userSessions) {
+        const devName = s.device || s.player || s.platform || "Client";
+        const isTv = isFixedHomeDevice(s.device, s.platform, s.player);
+        const isMobile = isMobileRoamingDevice(s.device, s.platform, s.player);
+
+        if (isTv) fixedTvDevices.add(devName);
+        if (isMobile) mobileDevices.add(devName);
+
+        const ip = normalizeIp(s.ipAddress);
+        if (ip && !isPrivateOrLocalIp(ip)) {
+            publicSessions.push(s);
+        }
+    }
+
+    // Default assessment for pure LAN or empty history
+    if (publicSessions.length === 0) {
+        return {
+            sharingAssessment: {
+                risk: "CLEAN_SINGLE_HOME",
+                label: "🟢 Single Household (LAN)",
+                badgeColor: "bg-emerald-500/20 text-emerald-300 border-emerald-500/40",
+                primaryHomeIp: "LAN / Local Network",
+                explanation: "All streaming activity originates exclusively from the local private home network. No public remote connections recorded.",
+                fixedTvOverlapCount: 0,
+                concurrentOverlapCount: 0,
+                distinctPublicIpsCount: 0,
+                fixedTvDevices: Array.from(fixedTvDevices),
+                mobileDevices: Array.from(mobileDevices)
+            },
+            detectedOverlaps: []
+        };
+    }
+
+    // 2. Aggregate per-IP telemetry
+    const ipMap = new Map<string, {
+        ip: string;
+        plays: number;
+        durationSeconds: number;
+        tvPlays: number;
+        mobilePlays: number;
+        firstSeen: Date;
+        lastSeen: Date;
+        devices: Set<string>;
+    }>();
+
+    for (const s of publicSessions) {
+        const ip = normalizeIp(s.ipAddress);
+        if (!ipMap.has(ip)) {
+            ipMap.set(ip, {
+                ip,
+                plays: 0,
+                durationSeconds: 0,
+                tvPlays: 0,
+                mobilePlays: 0,
+                firstSeen: new Date(s.watchedAt),
+                lastSeen: new Date(s.watchedAt),
+                devices: new Set()
+            });
+        }
+        const entry = ipMap.get(ip)!;
+        entry.plays++;
+        entry.durationSeconds += Math.round((s.durationMs || 0) / 1000);
+        const watched = new Date(s.watchedAt);
+        if (watched < entry.firstSeen) entry.firstSeen = watched;
+        if (watched > entry.lastSeen) entry.lastSeen = watched;
+
+        const isTv = isFixedHomeDevice(s.device, s.platform, s.player);
+        const isMobile = isMobileRoamingDevice(s.device, s.platform, s.player);
+        if (isTv) entry.tvPlays++;
+        if (isMobile) entry.mobilePlays++;
+        if (s.device || s.player) entry.devices.add(s.device || s.player);
+    }
+
+    const ipList = Array.from(ipMap.values());
+    // Primary Home IP: IP with highest TV plays, or highest overall plays
+    ipList.sort((a, b) => b.tvPlays !== a.tvPlays ? b.tvPlays - a.tvPlays : b.plays - a.plays);
+    const primaryHomeIp = ipList[0]?.ip || "Unknown IP";
+
+    // 3. Scan for concurrent overlapping playback across distinct public IPs
+    const detectedOverlaps: DetectedOverlapSession[] = [];
+    const seenOverlapPairs = new Set<string>();
+    let fixedTvOverlapCount = 0;
+
+    // Sort chronologically for pairwise interval checking
+    const sortedPublic = [...publicSessions].sort((a, b) => new Date(a.watchedAt).getTime() - new Date(b.watchedAt).getTime());
+
+    for (let i = 0; i < sortedPublic.length; i++) {
+        const s1 = sortedPublic[i];
+        const ip1 = normalizeIp(s1.ipAddress);
+        const start1 = new Date(s1.watchedAt).getTime();
+        const dur1 = Math.max((s1.durationMs || 0), 15 * 60 * 1000); // minimum 15 mins assumed
+        const end1 = s1.stoppedAt ? new Date(s1.stoppedAt).getTime() : start1 + dur1;
+
+        for (let j = i + 1; j < sortedPublic.length; j++) {
+            const s2 = sortedPublic[j];
+            const start2 = new Date(s2.watchedAt).getTime();
+            // Since array is sorted by start time, if start2 >= end1, no further sessions can overlap with s1
+            if (start2 >= end1) break;
+
+            const ip2 = normalizeIp(s2.ipAddress);
+            if (ip1 !== ip2) {
+                const dur2 = Math.max((s2.durationMs || 0), 15 * 60 * 1000);
+                const end2 = s2.stoppedAt ? new Date(s2.stoppedAt).getTime() : start2 + dur2;
+
+                if (start1 < end2 && start2 < end1) {
+                    const pairKey = [s1.id || `${start1}_${ip1}`, s2.id || `${start2}_${ip2}`].sort().join(":::");
+                    if (!seenOverlapPairs.has(pairKey)) {
+                        seenOverlapPairs.add(pairKey);
+                        const isTv1 = isFixedHomeDevice(s1.device, s1.platform, s1.player);
+                        const isTv2 = isFixedHomeDevice(s2.device, s2.platform, s2.player);
+                        const isDualTv = isTv1 && isTv2;
+
+                        if (isDualTv) fixedTvOverlapCount++;
+
+                        detectedOverlaps.push({
+                            timestamp: new Date(Math.max(start1, start2)),
+                            durationMinutes: Math.round(Math.min(dur1, dur2) / 60000),
+                            isDualTv,
+                            session1: {
+                                title: s1.grandparentTitle ? `${s1.grandparentTitle} - ${s1.title}` : s1.title,
+                                device: s1.device || s1.player || "Client",
+                                platform: s1.platform || "Platform",
+                                ipAddress: ip1,
+                                isFixedTv: isTv1
+                            },
+                            session2: {
+                                title: s2.grandparentTitle ? `${s2.grandparentTitle} - ${s2.title}` : s2.title,
+                                device: s2.device || s2.player || "Client",
+                                platform: s2.platform || "Platform",
+                                ipAddress: ip2,
+                                isFixedTv: isTv2
+                            }
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    // 4. Secondary Home & Vacation Heuristics for remaining IPs
+    let secondaryHomeIp: string | undefined = undefined;
+    let hasVacation = false;
+    let hasSecondHome = false;
+    let hasMobileRoamingOnly = false;
+
+    const nonHomeIps = ipList.filter(it => it.ip !== primaryHomeIp);
+
+    if (nonHomeIps.length > 0 && fixedTvOverlapCount === 0) {
+        // Find if there is an IP with TV usage
+        const tvNonHome = nonHomeIps.filter(it => it.tvPlays > 0);
+        if (tvNonHome.length > 0) {
+            const topSecond = tvNonHome[0];
+            const spanDays = (topSecond.lastSeen.getTime() - topSecond.firstSeen.getTime()) / (1000 * 60 * 60 * 24);
+            if (spanDays <= 14) {
+                hasVacation = true;
+                secondaryHomeIp = topSecond.ip;
+            } else {
+                hasSecondHome = true;
+                secondaryHomeIp = topSecond.ip;
+            }
+        } else {
+            // All non-home IPs have 0 TV plays (all mobile phones, laptops, or cellular)
+            hasMobileRoamingOnly = true;
+        }
+    }
+
+    // 5. Classification Rules
+    let risk: AccountSharingRisk;
+    let label: string;
+    let badgeColor: string;
+    let explanation: string;
+
+    if (fixedTvOverlapCount >= 1) {
+        risk = "HIGH_SHARING_RISK";
+        label = "🚨 Suspected Sharing (Dual TVs)";
+        badgeColor = "bg-red-500/20 text-red-300 border-red-500/40";
+        explanation = `Simultaneous playback detected on 2 physical living room TVs across different public IPs (${fixedTvOverlapCount} concurrent TV overlaps). This strongly indicates account sharing between separate households.`;
+    } else if (detectedOverlaps.length >= 2 && ipList.length >= 2) {
+        risk = "MODERATE_SHARING_RISK";
+        label = "⚠️ Multi-Location Activity";
+        badgeColor = "bg-amber-500/20 text-amber-300 border-amber-500/40";
+        explanation = `Detected ${detectedOverlaps.length} concurrent playback overlaps across ${ipList.length} distinct public IPs. Mixed devices observed.`;
+    } else if (hasSecondHome) {
+        risk = "SECOND_HOME";
+        label = "🏡 Second Home / Cabin";
+        badgeColor = "bg-cyan-500/20 text-cyan-300 border-cyan-500/40";
+        explanation = `Detected recurring TV streaming at secondary location (${secondaryHomeIp}) with zero concurrent overlaps. Consistent with a weekend cabin or secondary residence.`;
+    } else if (hasVacation) {
+        risk = "VACATION_TRAVEL";
+        label = "🏖️ Vacation / Travel";
+        badgeColor = "bg-emerald-500/20 text-emerald-300 border-emerald-500/40";
+        explanation = `Detected temporary away streaming (span ≤ 14 days) at ${secondaryHomeIp} with zero concurrent streaming at home base (${primaryHomeIp}). Consistent with travel or vacation.`;
+    } else if (hasMobileRoamingOnly || ipList.length > 1) {
+        risk = "MOBILE_ROAMING";
+        label = "📱 Mobile / Cellular Roaming";
+        badgeColor = "bg-indigo-500/20 text-indigo-300 border-indigo-500/40";
+        explanation = `Remote IPs are strictly mobile phones, tablets, or cellular networks. Living room TVs remain anchored to home base (${primaryHomeIp}).`;
+    } else {
+        risk = "CLEAN_SINGLE_HOME";
+        label = "🟢 Single Household";
+        badgeColor = "bg-emerald-500/20 text-emerald-300 border-emerald-500/40";
+        explanation = `Normal streaming within a single household. All playback originates from home base (${primaryHomeIp}) with no suspicious concurrency.`;
+    }
+
+    return {
+        sharingAssessment: {
+            risk,
+            label,
+            badgeColor,
+            primaryHomeIp,
+            secondaryHomeIp,
+            explanation,
+            fixedTvOverlapCount,
+            concurrentOverlapCount: detectedOverlaps.length,
+            distinctPublicIpsCount: ipList.length,
+            fixedTvDevices: Array.from(fixedTvDevices),
+            mobileDevices: Array.from(mobileDevices)
+        },
+        detectedOverlaps: detectedOverlaps.slice(0, 50)
+    };
 }
 
 /**
@@ -522,6 +875,7 @@ export async function getUserStreamProfiles() {
             lastPlatform: string;
             lastIp: string;
             sharingAlerts: number;
+            records: any[];
         }>();
 
         for (const r of records) {
@@ -542,12 +896,14 @@ export async function getUserStreamProfiles() {
                     lastWatchedAt: r.watchedAt,
                     lastPlatform: r.platform || r.player || "Unknown",
                     lastIp: r.ipAddress || "",
-                    sharingAlerts: 0
+                    sharingAlerts: 0,
+                    records: []
                 });
             }
 
             const profile = userMap.get(uKey)!;
             profile.totalPlays++;
+            profile.records.push(r);
             if (r.completed) profile.completedCount++;
             profile.totalWatchSeconds += Math.round((r.durationMs || 0) / 1000);
             if (r.videoDecision === "direct play") profile.directPlayCount++;
@@ -562,6 +918,7 @@ export async function getUserStreamProfiles() {
         const profiles = Array.from(userMap.values()).map(p => {
             const total = p.directPlayCount + p.transcodeCount;
             const transcodeRate = total > 0 ? Math.round((p.transcodeCount / total) * 100) : 0;
+            const { sharingAssessment } = analyzeUserAccountSharing(p.records);
             return {
                 user: p.user,
                 totalPlays: p.totalPlays,
@@ -581,7 +938,8 @@ export async function getUserStreamProfiles() {
                 lastPlatform: p.lastPlatform,
                 lastIp: p.lastIp,
                 sharingAlerts: p.sharingAlerts,
-                frequentTranscoder: transcodeRate >= 50 && p.totalPlays >= 2
+                frequentTranscoder: transcodeRate >= 50 && p.totalPlays >= 2,
+                sharingAssessment
             };
         });
 
@@ -764,6 +1122,8 @@ export async function getUserDetailedTelemetry(username: string) {
             devices: Array.from(i.devices)
         })).sort((a, b) => b.playCount - a.playCount);
 
+        const { sharingAssessment, detectedOverlaps } = analyzeUserAccountSharing(userRecords);
+
         return {
             user: cleanUser,
             totalPlays: userRecords.length,
@@ -775,7 +1135,9 @@ export async function getUserDetailedTelemetry(username: string) {
             sharingAlerts,
             devices,
             ips,
-            history: formattedHistory
+            history: formattedHistory,
+            sharingAssessment,
+            detectedOverlaps
         };
     } catch (err: any) {
         console.error("[STREAM-TRACKER] Error building detailed user telemetry:", err);
@@ -790,7 +1152,9 @@ export async function getUserDetailedTelemetry(username: string) {
             sharingAlerts: 0,
             devices: [],
             ips: [],
-            history: []
+            history: [],
+            sharingAssessment: null,
+            detectedOverlaps: []
         };
     }
 }
@@ -809,7 +1173,11 @@ export async function getStreamIntelligenceAnalytics() {
                     mediaType: true,
                     durationMs: true,
                     videoDecision: true,
-                    serverName: true
+                    serverName: true,
+                    thumb: true,
+                    ratingKey: true,
+                    serverId: true,
+                    year: true
                 },
                 take: 3000
             }),
@@ -823,6 +1191,8 @@ export async function getStreamIntelligenceAnalytics() {
         const moviePlays = new Map<string, number>();
         const showPlays = new Map<string, number>();
         const serverPlays = new Map<string, number>();
+        const movieMeta = new Map<string, { thumb?: string | null; ratingKey?: string | null; serverId?: string | null; serverName?: string; year?: number | null }>();
+        const showMeta = new Map<string, { thumb?: string | null; ratingKey?: string | null; serverId?: string | null; serverName?: string; year?: number | null }>();
         let moviesCount = 0;
         let episodesCount = 0;
 
@@ -839,10 +1209,16 @@ export async function getStreamIntelligenceAnalytics() {
                 moviesCount++;
                 const key = h.title;
                 moviePlays.set(key, (moviePlays.get(key) || 0) + 1);
+                if (!movieMeta.has(key) || (!movieMeta.get(key)?.thumb && h.thumb)) {
+                    movieMeta.set(key, { thumb: h.thumb, ratingKey: h.ratingKey, serverId: h.serverId, serverName: h.serverName, year: h.year });
+                }
             } else {
                 episodesCount++;
                 const key = h.grandparentTitle || h.title;
                 showPlays.set(key, (showPlays.get(key) || 0) + 1);
+                if (!showMeta.has(key) || (!showMeta.get(key)?.thumb && h.thumb)) {
+                    showMeta.set(key, { thumb: h.thumb, ratingKey: h.ratingKey, serverId: h.serverId, serverName: h.serverName, year: h.year });
+                }
             }
         }
 
@@ -850,20 +1226,46 @@ export async function getStreamIntelligenceAnalytics() {
         const directPlayRatio = totalPlayback > 0 ? Math.round((directPlayCount / totalPlayback) * 100) : 100;
 
         const topMovies = Array.from(moviePlays.entries())
-            .map(([title, plays]) => ({
-                title,
-                plays,
-                thumb: `/api/media/image?title=${encodeURIComponent(title)}&type=movie`
-            }))
+            .map(([title, plays]) => {
+                const meta = movieMeta.get(title);
+                const thumb = formatWatchHistoryThumb({
+                    thumb: meta?.thumb,
+                    ratingKey: meta?.ratingKey,
+                    serverId: meta?.serverId,
+                    serverName: meta?.serverName,
+                    title,
+                    year: meta?.year,
+                    mediaType: "movie"
+                }) || `/api/media/image?title=${encodeURIComponent(title)}&type=movie`;
+                return {
+                    title,
+                    plays,
+                    year: meta?.year,
+                    thumb
+                };
+            })
             .sort((a, b) => b.plays - a.plays)
             .slice(0, 10);
 
         const topShows = Array.from(showPlays.entries())
-            .map(([title, plays]) => ({
-                title,
-                plays,
-                thumb: `/api/media/image?title=${encodeURIComponent(title)}&type=show`
-            }))
+            .map(([title, plays]) => {
+                const meta = showMeta.get(title);
+                const thumb = formatWatchHistoryThumb({
+                    thumb: meta?.thumb,
+                    ratingKey: meta?.ratingKey,
+                    serverId: meta?.serverId,
+                    serverName: meta?.serverName,
+                    title,
+                    year: meta?.year,
+                    mediaType: "show"
+                }) || `/api/media/image?title=${encodeURIComponent(title)}&type=show`;
+                return {
+                    title,
+                    plays,
+                    year: meta?.year,
+                    thumb
+                };
+            })
             .sort((a, b) => b.plays - a.plays)
             .slice(0, 10);
 

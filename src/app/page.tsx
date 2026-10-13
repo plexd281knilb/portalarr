@@ -27,6 +27,7 @@ import WhatsNewModal from "@/components/whats-new-modal";
 import AdminUserSwitcher from "@/components/admin-user-switcher";
 import AdminDetailedStreams from "@/components/admin-detailed-streams";
 import AdminSystemHealthGrid from "@/components/admin-system-health-grid";
+import StreamQualityDoctorBanner from "@/components/stream-quality-doctor-banner";
 import TrialDashboardView from "@/components/trial-dashboard-view";
 import SuperUserCard from "@/components/super-user-card";
 import SupportTicketModal from "@/components/support-ticket-modal";
@@ -188,6 +189,11 @@ export default async function UserLandingPage() {
                             isImpersonating={isImpersonating}
                         />
                     </div>
+                )}
+
+                {/* --- PROACTIVE STREAM QUALITY DOCTOR BANNER --- */}
+                {isLoggedIn && (
+                    <StreamQualityDoctorBanner />
                 )}
 
                 {/* ========================================================================= */}

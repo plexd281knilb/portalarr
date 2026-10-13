@@ -319,6 +319,33 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 
 ---
 
+### 16. Proactive Stream Quality Doctor Alert Banner (`stream-quality-doctor-banner.tsx`)
+- **Proactive Main Screen Alerting**:
+  - Automatically mounted at the top of the main screen (`/`) for all authenticated members directly below the header/user switcher.
+  - Queries `getUserTranscodeAlertAction()` on mount; non-intrusive (returns nothing if all streams direct play).
+  - Triggers if an active or recent stream (within 14 days) was downscaling/transcoding due to client default quality caps (e.g. Roku 720p auto-adjust bug, default 2-4 Mbps remote streaming limits on Apple TV, Fire TV, Android TV, Smart TVs, or web browser HEVC incompatibility).
+  - Features an animated glassmorphic banner (`bg-amber-500/10 border-amber-500/30 text-amber-300`) with quick summary, "Fix in 30 Seconds" action button, and dismissible close.
+  - Clicking "Fix in 30 Seconds" opens an interactive step-by-step resolution dialog tailored to the member's specific client device with 1-click clipboard copy of the guide.
+
+---
+
+### 17. Smart Account Sharing & Overlap Intelligence Engine (`/admin/tautulli` & `stream-tracker.ts`)
+- **Household Device Anchoring (Fixed TV vs Mobile Roaming)**:
+  - Living room devices (`isFixedHomeDevice`: Apple TV, Roku, Fire TV, Smart TVs, Google TV, Shield, PlayStation, Xbox) stay physically anchored to a household.
+  - Mobile devices (`isMobileRoamingDevice`: iPhones, Android phones, tablets, cellular CGNAT, laptops, web browsers) roam legitimately.
+  - Local LAN IP addresses (`192.168.x.x`, `10.x.x.x`, `172.16-31.x.x`, `localhost`) are strictly excluded from sharing suspicion.
+- **Deterministic Multi-Household Overlap Detection (`analyzeUserAccountSharing`)**:
+  - **Single Household (`CLEAN_SINGLE_HOME`)**: Exclusively LAN or single residential IP playback with zero remote cross-IP concurrency.
+  - **Vacation / Travel (`VACATION_TRAVEL`)**: Remote IP usage span $\le 14$ days with 0 concurrent overlap with primary home base.
+  - **Second Home / Cabin (`SECOND_HOME`)**: Recurring TV playback across $> 14$ days with 0 concurrent overlap at primary home base.
+  - **Mobile Roaming (`MOBILE_ROAMING`)**: Roaming on cellular networks strictly on phones/laptops while fixed TVs remain anchored at home.
+  - **High-Confidence Account Sharing (`HIGH_SHARING_RISK`)**: Concurrent simultaneous playback on $\ge 2$ physical living room TVs across distinct public residential IPs (`isDualTvOverlap`).
+- **Telemetry Cockpit & Directory Integration**:
+  - Filter pills in User Directory: `All Users`, `🚨 Suspected Sharing`, `🏡 2nd Home / Vacation`, `📱 Mobile Roaming`, `⚠️ Transcoders`.
+  - Comprehensive inspection modal with 4th tab: **Sharing & Overlap Intelligence** rendering primary home IP, secondary location, device typology meter, and chronological timeline of concurrent overlap incidents with side-by-side stream comparison cards.
+
+---
+
 ### 13. Media Request Quota Visibility & Zero-Limit Suppression Rules
 - **Strict Zero-Limit Suppression**:
   - In Seerr and media request workflows, a quota limit of `0` denotes unlimited requests (e.g. Full Members or Admins).

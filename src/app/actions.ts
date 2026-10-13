@@ -9327,9 +9327,12 @@ export async function getLibraryBooks(libraryId?: string) {
         where: whereClause,
         orderBy: { createdAt: "desc" }
     });
-    
-    // Evaluate and repair ratings dynamically (e.g. adult romance formerly saved as "All Ages" or null)
+    // Evaluate and repair ratings and cover URLs dynamically
     for (const b of books) {
+        if (!b.coverUrl || b.coverUrl === "local" || b.coverUrl.trim() === "") {
+            b.coverUrl = `/api/cover?id=${b.id}`;
+        }
+
         if (!b.ageRating || b.ageRating === "All Ages") {
             const inferred = inferBookRating({
                 title: b.title,
@@ -19736,6 +19739,27 @@ export async function killUserStream(instanceId: string, sessionKey: string) {
 
     } catch (e: any) {
         return { success: false, error: e.message || "Failed to terminate stream" };
+    }
+}
+
+/**
+ * Evaluates whether the currently authenticated user has an active or recent stream
+ * that experienced transcoding or quality capping, returning a targeted fix action.
+ */
+export async function getUserTranscodeAlertAction() {
+    try {
+        let user: any = null;
+        try {
+            user = await verifyUser();
+        } catch {
+            return { hasAlert: false };
+        }
+        if (!user) return { hasAlert: false };
+
+        const { getUserTranscodeAlert } = await import("@/lib/telemetry/device-diagnostics");
+        return await getUserTranscodeAlert(user.username, user.email || undefined);
+    } catch (e) {
+        return { hasAlert: false };
     }
 }
 

@@ -7572,6 +7572,158 @@ async function runTestSuite() {
                 }).catch(() => {});
             }
 
+            // 4d. Verify Device Typology Heuristics (Fixed Home TV vs Mobile Roaming)
+            const { isFixedHomeDevice, isMobileRoamingDevice, analyzeUserAccountSharing } = await import("../src/lib/telemetry/stream-tracker");
+
+            if (!isFixedHomeDevice("Apple TV 4K", "tvOS", "Plex for Apple TV")) {
+                throw new Error("Expected Apple TV 4K to be classified as fixed home device");
+            }
+            if (!isFixedHomeDevice("Roku Ultra", "Roku", "Plex for Roku")) {
+                throw new Error("Expected Roku Ultra to be classified as fixed home device");
+            }
+            if (!isFixedHomeDevice("Fire TV Stick 4K", "Android", "Plex for Android")) {
+                throw new Error("Expected Fire TV to be classified as fixed home device");
+            }
+            if (!isFixedHomeDevice("LG OLED C3", "webOS", "Plex for LG")) {
+                throw new Error("Expected LG OLED TV to be classified as fixed home device");
+            }
+            if (isFixedHomeDevice("iPhone 15 Pro", "iOS", "Plex for iOS")) {
+                throw new Error("iPhone must NOT be classified as fixed home device");
+            }
+            if (!isMobileRoamingDevice("iPhone 15 Pro", "iOS", "Plex for iOS")) {
+                throw new Error("Expected iPhone 15 Pro to be classified as mobile roaming device");
+            }
+            if (!isMobileRoamingDevice("MacBook Pro", "macOS", "Chrome")) {
+                throw new Error("Expected MacBook Pro Chrome to be classified as mobile roaming device");
+            }
+            if (isMobileRoamingDevice("Apple TV 4K", "tvOS", "Plex for Apple TV")) {
+                throw new Error("Apple TV must NOT be classified as mobile roaming device");
+            }
+
+            // 4e. Verify Account Sharing Intelligence (Clean LAN, Dual TV Smoking Gun, Vacation, Second Home)
+            // Scenario 1: Clean LAN streaming
+            const lanSessions = [
+                { id: "s1", user: "alice", device: "Apple TV 4K", platform: "tvOS", player: "Plex", ipAddress: "192.168.1.50", watchedAt: new Date(), durationMs: 3600000 }
+            ];
+            const lanEval = analyzeUserAccountSharing(lanSessions);
+            if (lanEval.sharingAssessment.risk !== "CLEAN_SINGLE_HOME") {
+                throw new Error(`Expected LAN streaming to be CLEAN_SINGLE_HOME, got ${lanEval.sharingAssessment.risk}`);
+            }
+
+            // Scenario 2: Dual Fixed Living Room TVs playing simultaneously across distinct public IPs (Smoking Gun)
+            const overlapTime = new Date("2026-06-15T20:00:00Z");
+            const dualTvSessions = [
+                {
+                    id: "dtv1",
+                    user: "bob",
+                    title: "Movie One",
+                    device: "Roku Ultra",
+                    platform: "Roku",
+                    player: "Plex for Roku",
+                    ipAddress: "73.189.44.12",
+                    watchedAt: overlapTime,
+                    durationMs: 7200000
+                },
+                {
+                    id: "dtv2",
+                    user: "bob",
+                    title: "Movie Two",
+                    device: "Apple TV 4K",
+                    platform: "tvOS",
+                    player: "Plex for Apple TV",
+                    ipAddress: "98.245.10.88",
+                    watchedAt: new Date(overlapTime.getTime() + 15 * 60 * 1000), // 15 mins later during same movie
+                    durationMs: 7200000
+                }
+            ];
+            const dualTvEval = analyzeUserAccountSharing(dualTvSessions);
+            if (dualTvEval.sharingAssessment.risk !== "HIGH_SHARING_RISK") {
+                throw new Error(`Expected dual TV concurrent streams to trigger HIGH_SHARING_RISK, got ${dualTvEval.sharingAssessment.risk}`);
+            }
+            if (dualTvEval.sharingAssessment.fixedTvOverlapCount < 1) {
+                throw new Error(`Expected at least 1 fixedTvOverlapCount, got ${dualTvEval.sharingAssessment.fixedTvOverlapCount}`);
+            }
+            if (dualTvEval.detectedOverlaps.length < 1 || !dualTvEval.detectedOverlaps[0].isDualTv) {
+                throw new Error("Expected detectedOverlaps to identify dual TV concurrency");
+            }
+
+            // Scenario 3: Vacation / Travel (temporary away usage <= 14 days, 0 concurrency)
+            const homeDay1 = new Date("2026-07-01T18:00:00Z");
+            const vacationDay1 = new Date("2026-07-05T19:00:00Z");
+            const vacationDay4 = new Date("2026-07-08T20:00:00Z");
+            const vacationSessions = [
+                { id: "v0a", user: "charlie", title: "Show 1", device: "Apple TV", platform: "tvOS", player: "Plex", ipAddress: "73.10.10.1", watchedAt: homeDay1, durationMs: 1800000 },
+                { id: "v0b", user: "charlie", title: "Show 2", device: "Apple TV", platform: "tvOS", player: "Plex", ipAddress: "73.10.10.1", watchedAt: new Date(homeDay1.getTime() + 3600000), durationMs: 1800000 },
+                { id: "v0c", user: "charlie", title: "Show 3", device: "Apple TV", platform: "tvOS", player: "Plex", ipAddress: "73.10.10.1", watchedAt: new Date(homeDay1.getTime() + 7200000), durationMs: 1800000 },
+                { id: "v1", user: "charlie", title: "Vacation Show 1", device: "Roku Stick", platform: "Roku", player: "Plex", ipAddress: "166.80.20.5", watchedAt: vacationDay1, durationMs: 1800000 },
+                { id: "v2", user: "charlie", title: "Vacation Show 2", device: "Roku Stick", platform: "Roku", player: "Plex", ipAddress: "166.80.20.5", watchedAt: vacationDay4, durationMs: 1800000 }
+            ];
+            const vacationEval = analyzeUserAccountSharing(vacationSessions);
+            if (vacationEval.sharingAssessment.risk !== "VACATION_TRAVEL") {
+                throw new Error(`Expected vacation usage to be VACATION_TRAVEL, got ${vacationEval.sharingAssessment.risk}`);
+            }
+            if (vacationEval.sharingAssessment.primaryHomeIp !== "73.10.10.1") {
+                throw new Error(`Expected primary home IP 73.10.10.1, got ${vacationEval.sharingAssessment.primaryHomeIp}`);
+            }
+            if (vacationEval.sharingAssessment.secondaryHomeIp !== "166.80.20.5") {
+                throw new Error(`Expected secondary home IP 166.80.20.5, got ${vacationEval.sharingAssessment.secondaryHomeIp}`);
+            }
+
+            // Scenario 4: Second Home / Cabin (recurring TV streaming across > 14 days, 0 concurrency)
+            const cabinDay1 = new Date("2026-05-01T20:00:00Z");
+            const cabinDay35 = new Date("2026-06-05T20:00:00Z");
+            const cabinSessions = [
+                { id: "c0a", user: "dan", title: "Home Show 1", device: "Apple TV", platform: "tvOS", player: "Plex", ipAddress: "68.4.1.1", watchedAt: new Date("2026-05-02T20:00:00Z"), durationMs: 1800000 },
+                { id: "c0b", user: "dan", title: "Home Show 2", device: "Apple TV", platform: "tvOS", player: "Plex", ipAddress: "68.4.1.1", watchedAt: new Date("2026-05-03T20:00:00Z"), durationMs: 1800000 },
+                { id: "c0c", user: "dan", title: "Home Show 3", device: "Apple TV", platform: "tvOS", player: "Plex", ipAddress: "68.4.1.1", watchedAt: new Date("2026-05-04T20:00:00Z"), durationMs: 1800000 },
+                { id: "c1", user: "dan", title: "Cabin Show 1", device: "Smart TV", platform: "Tizen", player: "Plex", ipAddress: "24.50.60.70", watchedAt: cabinDay1, durationMs: 1800000 },
+                { id: "c2", user: "dan", title: "Cabin Show 2", device: "Smart TV", platform: "Tizen", player: "Plex", ipAddress: "24.50.60.70", watchedAt: cabinDay35, durationMs: 1800000 }
+            ];
+            const cabinEval = analyzeUserAccountSharing(cabinSessions);
+            if (cabinEval.sharingAssessment.risk !== "SECOND_HOME") {
+                throw new Error(`Expected second home usage to be SECOND_HOME, got ${cabinEval.sharingAssessment.risk}`);
+            }
+
+            // 4f. Verify Proactive Stream Quality Doctor Transcode Alert
+            const { getUserTranscodeAlert } = await import("../src/lib/telemetry/device-diagnostics");
+            const { getUserTranscodeAlertAction } = await import("../src/app/actions");
+
+            // Seed a test transcoder session
+            const transcodeUser = `test_transcode_user_${Date.now()}`;
+            await prisma.watchHistory.create({
+                data: {
+                    user: transcodeUser,
+                    title: "Avatar The Way of Water",
+                    mediaType: "movie",
+                    videoDecision: "transcode",
+                    player: "Plex for Roku",
+                    platform: "Roku",
+                    device: "Roku Ultra",
+                    ipAddress: "73.189.44.12",
+                    location: "Remote",
+                    streamBitrate: 3000,
+                    durationMs: 7200000,
+                    watchedAt: new Date()
+                }
+            });
+
+            try {
+                const transcodeAlert = await getUserTranscodeAlert(transcodeUser);
+                if (!transcodeAlert.hasAlert) {
+                    throw new Error("Expected transcode alert for user with recent Roku transcode stream");
+                }
+                if (!transcodeAlert.diagnosis?.title || !transcodeAlert.diagnosis?.stepByStepGuide?.length) {
+                    throw new Error("Expected transcode alert to contain title and step-by-step fix instructions");
+                }
+                if (!transcodeAlert.diagnosis.deviceCategory.toLowerCase().includes("roku")) {
+                    throw new Error(`Expected Roku device category in diagnosis, got ${transcodeAlert.diagnosis.deviceCategory}`);
+                }
+            } finally {
+                await prisma.watchHistory.deleteMany({
+                    where: { user: transcodeUser }
+                }).catch(() => {});
+            }
+
             // 5. Verify Tautulli Backfill Deduplication, Unlimited Support & Execution Safety
             // Calling with non-existent or empty instances safely handles errors and returns summary
             const backfillSummary = await backfillTautulliHistoryInternal({ limit: 10 });

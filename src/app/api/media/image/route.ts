@@ -274,7 +274,40 @@ export async function GET(req: NextRequest) {
             } catch (e) {}
         }
 
-        // 5. Automated High-Definition Metadata Artwork Fallback (iTunes Media API)
+        // 5a. Automated High-Definition Metadata Artwork Fallback (TMDb API)
+        if (title) {
+            try {
+                let cleanTitle = title.replace(/\(\d{4}\)/g, "").trim();
+                if ((type === "episode" || type === "show") && cleanTitle.includes(" - ")) {
+                    cleanTitle = cleanTitle.split(" - ")[0].trim();
+                }
+                const tmdbKey = settings?.tmdbApiKey || process.env.TMDB_API_KEY || "431a8708161bcd1f1fbe7536137e61ed";
+                const isTv = type === "episode" || type === "show";
+                const endpoint = isTv ? "search/tv" : "search/movie";
+                const yearParam = year ? (isTv ? `&first_air_date_year=${encodeURIComponent(year)}` : `&year=${encodeURIComponent(year)}`) : "";
+                const tmdbUrl = `https://api.themoviedb.org/3/${endpoint}?api_key=${tmdbKey}&query=${encodeURIComponent(cleanTitle)}${yearParam}&include_adult=false&language=en-US&page=1`;
+                
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 3000);
+                const tmdbRes = await fetch(tmdbUrl, {
+                    headers: { "Accept": "application/json" },
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+
+                if (tmdbRes.ok) {
+                    const tmdbData = await tmdbRes.json();
+                    const match = tmdbData.results?.[0];
+                    if (match && match.poster_path) {
+                        const posterUrl = `https://image.tmdb.org/t/p/w500${match.poster_path}`;
+                        const tmdbImgRes = await tryFetchImage(posterUrl, {}, 3500);
+                        if (tmdbImgRes) return tmdbImgRes;
+                    }
+                }
+            } catch (e) {}
+        }
+
+        // 5b. Automated High-Definition Metadata Artwork Fallback (iTunes Media API)
         if (title) {
             try {
                 let cleanTitle = title.replace(/\(\d{4}\)/g, "").trim();

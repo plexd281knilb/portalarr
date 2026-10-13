@@ -32,7 +32,8 @@ import {
     Layers, Trophy, Flame, Filter, BarChart3, CheckCircle2,
     ShieldAlert, History, Users, Search, Trash2, Clock, Globe,
     Radio, AlertTriangle, Copy, Check, Download, ExternalLink,
-    Stethoscope, Info, ChevronRight, Smartphone, Laptop
+    Stethoscope, Info, ChevronRight, Smartphone, Laptop,
+    Home, Compass, ShieldCheck
 } from "lucide-react";
 
 export default function StreamIntelligencePage() {
@@ -56,6 +57,10 @@ export default function StreamIntelligencePage() {
     const [userModalTab, setUserModalTab] = useState<string>("history");
     const [userHistorySearch, setUserHistorySearch] = useState<string>("");
     const [userHistoryFilter, setUserHistoryFilter] = useState<string>("all");
+
+    // User directory search & sharing filters
+    const [userDirectorySearch, setUserDirectorySearch] = useState<string>("");
+    const [userSharingFilter, setUserSharingFilter] = useState<string>("all");
 
     // Backfill state
     const [backfillLimit, setBackfillLimit] = useState<number>(500);
@@ -231,6 +236,38 @@ export default function StreamIntelligencePage() {
 
     const monitoredServers = data?.serversUsage || [];
     const userProfiles = data?.userProfiles || [];
+    const filteredUserProfiles = userProfiles.filter((user: any) => {
+        if (userSharingFilter === "sharing") {
+            if (user.sharingAssessment?.risk !== "HIGH_SHARING_RISK" && user.sharingAssessment?.risk !== "MODERATE_SHARING_RISK" && (user.sharingAlerts || 0) === 0) return false;
+        } else if (userSharingFilter === "travel") {
+            if (user.sharingAssessment?.risk !== "SECOND_HOME" && user.sharingAssessment?.risk !== "VACATION_TRAVEL") return false;
+        } else if (userSharingFilter === "roaming") {
+            if (user.sharingAssessment?.risk !== "MOBILE_ROAMING") return false;
+        } else if (userSharingFilter === "transcoding") {
+            if (!user.frequentTranscoder) return false;
+        }
+
+        if (userDirectorySearch.trim()) {
+            const q = userDirectorySearch.toLowerCase().trim();
+            const u = (user.user || "").toLowerCase();
+            const lastTitle = (user.lastWatchedTitle || "").toLowerCase();
+            const platform = (user.lastPlatform || "").toLowerCase();
+            const ip = (user.lastIp || "").toLowerCase();
+            const homeIp = (user.sharingAssessment?.primaryHomeIp || "").toLowerCase();
+            return u.includes(q) || lastTitle.includes(q) || platform.includes(q) || ip.includes(q) || homeIp.includes(q);
+        }
+
+        return true;
+    });
+
+    const userSharingCounts = {
+        all: userProfiles.length,
+        sharing: userProfiles.filter((u: any) => u.sharingAssessment?.risk === "HIGH_SHARING_RISK" || u.sharingAssessment?.risk === "MODERATE_SHARING_RISK" || (u.sharingAlerts || 0) > 0).length,
+        travel: userProfiles.filter((u: any) => u.sharingAssessment?.risk === "SECOND_HOME" || u.sharingAssessment?.risk === "VACATION_TRAVEL").length,
+        roaming: userProfiles.filter((u: any) => u.sharingAssessment?.risk === "MOBILE_ROAMING").length,
+        transcoding: userProfiles.filter((u: any) => u.frequentTranscoder).length,
+    };
+
     const analytics = data?.analytics || {};
     const historyItems = (data?.history?.items || []).filter((h: any) => {
         if (historyFilter === "movies") return h.mediaType === "movie";
@@ -761,31 +798,95 @@ export default function StreamIntelligencePage() {
                 {/* ========================================================================= */}
                 <TabsContent value="users" className="space-y-4">
                     <Card className="bg-slate-900/80 border-slate-800 backdrop-blur-md">
-                        <CardHeader className="p-4 pb-3">
-                            <CardTitle className="text-base font-bold text-white">User Playback Directory</CardTitle>
-                            <CardDescription className="text-xs">
-                                All members ranked by activity, streaming hours, and Direct Play quality ratio across the cluster.
-                            </CardDescription>
+                        <CardHeader className="p-4 pb-3 space-y-3">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                <div>
+                                    <CardTitle className="text-base font-bold text-white flex items-center gap-2">
+                                        <Users className="h-5 w-5 text-cyan-400" />
+                                        User Playback Directory & Account Intelligence
+                                    </CardTitle>
+                                    <CardDescription className="text-xs">
+                                        All members ranked by activity, streaming hours, Direct Play ratio, and smart multi-household sharing detection.
+                                    </CardDescription>
+                                </div>
+                                <div className="relative w-full sm:w-64">
+                                    <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                                    <Input
+                                        placeholder="Search user, device, IP..."
+                                        value={userDirectorySearch}
+                                        onChange={(e) => setUserDirectorySearch(e.target.value)}
+                                        className="h-8 pl-8 text-xs bg-slate-950 border-slate-800 rounded-lg text-white"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Filter Pills */}
+                            <div className="flex flex-wrap items-center gap-1.5 pt-1 text-xs">
+                                <button
+                                    onClick={() => setUserSharingFilter("all")}
+                                    className={`px-3 py-1 rounded-lg font-medium transition-all ${userSharingFilter === "all" ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold" : "bg-slate-950 border border-slate-800 text-muted-foreground hover:text-white"}`}
+                                >
+                                    All Users ({userSharingCounts.all})
+                                </button>
+                                <button
+                                    onClick={() => setUserSharingFilter("sharing")}
+                                    className={`px-3 py-1 rounded-lg font-medium transition-all flex items-center gap-1.5 ${userSharingFilter === "sharing" ? "bg-red-500/20 text-red-300 border border-red-500/40 font-bold" : "bg-slate-950 border border-slate-800 text-muted-foreground hover:text-white"}`}
+                                >
+                                    <span>🚨 Suspected Sharing</span>
+                                    <span className="px-1.5 py-0.2 rounded-full bg-red-950/80 text-[10px] text-red-300 font-mono">{userSharingCounts.sharing}</span>
+                                </button>
+                                <button
+                                    onClick={() => setUserSharingFilter("travel")}
+                                    className={`px-3 py-1 rounded-lg font-medium transition-all flex items-center gap-1.5 ${userSharingFilter === "travel" ? "bg-purple-500/20 text-purple-300 border border-purple-500/40 font-bold" : "bg-slate-950 border border-slate-800 text-muted-foreground hover:text-white"}`}
+                                >
+                                    <span>🏡 2nd Home / Vacation</span>
+                                    <span className="px-1.5 py-0.2 rounded-full bg-purple-950/80 text-[10px] text-purple-300 font-mono">{userSharingCounts.travel}</span>
+                                </button>
+                                <button
+                                    onClick={() => setUserSharingFilter("roaming")}
+                                    className={`px-3 py-1 rounded-lg font-medium transition-all flex items-center gap-1.5 ${userSharingFilter === "roaming" ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 font-bold" : "bg-slate-950 border border-slate-800 text-muted-foreground hover:text-white"}`}
+                                >
+                                    <span>📱 Mobile Roaming</span>
+                                    <span className="px-1.5 py-0.2 rounded-full bg-indigo-950/80 text-[10px] text-indigo-300 font-mono">{userSharingCounts.roaming}</span>
+                                </button>
+                                <button
+                                    onClick={() => setUserSharingFilter("transcoding")}
+                                    className={`px-3 py-1 rounded-lg font-medium transition-all flex items-center gap-1.5 ${userSharingFilter === "transcoding" ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold" : "bg-slate-950 border border-slate-800 text-muted-foreground hover:text-white"}`}
+                                >
+                                    <span>⚠️ Transcoders</span>
+                                    <span className="px-1.5 py-0.2 rounded-full bg-amber-950/80 text-[10px] text-amber-300 font-mono">{userSharingCounts.transcoding}</span>
+                                </button>
+                            </div>
                         </CardHeader>
                         <CardContent className="p-0">
-                            {userProfiles.length === 0 ? (
+                            {filteredUserProfiles.length === 0 ? (
                                 <div className="p-12 text-center text-muted-foreground text-xs">
-                                    No user stream profiles logged yet.
+                                    No user stream profiles match your search or filter criteria.
                                 </div>
                             ) : (
                                 <div className="divide-y divide-slate-800/60 max-h-[600px] overflow-y-auto">
-                                    {userProfiles.map((user: any) => (
+                                    {filteredUserProfiles.map((user: any) => (
                                         <div 
                                             key={user.user} 
                                             onClick={() => handleOpenUserModal(user.user)}
                                             className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-800/60 hover:ring-1 hover:ring-cyan-500/40 rounded-xl cursor-pointer transition-all text-xs group"
                                         >
                                             <div className="space-y-1.5 min-w-0">
-                                                <div className="flex items-center gap-2">
+                                                <div className="flex items-center gap-2 flex-wrap">
                                                     <span className="text-sm font-bold text-white group-hover:text-cyan-300 transition-colors flex items-center gap-1.5">
                                                         <Users className="h-4 w-4 text-cyan-400" />
                                                         {user.user}
                                                     </span>
+                                                    {user.sharingAssessment && (
+                                                        <Badge className={`text-[10px] font-semibold border ${user.sharingAssessment.badgeColor}`}>
+                                                            {user.sharingAssessment.label || user.sharingAssessment.badgeLabel}
+                                                        </Badge>
+                                                    )}
+                                                    {user.sharingAssessment?.fixedTvOverlapCount > 0 && (
+                                                        <Badge className="bg-red-500/20 text-red-300 border-red-500/40 text-[10px] animate-pulse">
+                                                            🚨 {user.sharingAssessment.fixedTvOverlapCount} Dual TV Overlaps
+                                                        </Badge>
+                                                    )}
                                                     {user.frequentTranscoder && (
                                                         <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/30 text-[10px]">
                                                             ⚠️ {user.transcodeRate}% Transcoding
@@ -811,6 +912,18 @@ export default function StreamIntelligencePage() {
                                                         <Globe className="h-3 w-3 text-indigo-400" />
                                                         {user.ips?.length || user.ipsCount || 1} {((user.ips?.length || user.ipsCount || 1) === 1) ? "IP" : "IPs"}
                                                     </span>
+                                                    {user.sharingAssessment?.primaryHomeIp && (
+                                                        <span className="px-2 py-0.5 rounded-full bg-blue-950/40 border border-blue-800/40 text-blue-300 font-medium flex items-center gap-1">
+                                                            <Home className="h-3 w-3 text-blue-400" />
+                                                            Home: {user.sharingAssessment.primaryHomeIp}
+                                                        </span>
+                                                    )}
+                                                    {user.sharingAssessment?.secondaryHomeIp && (
+                                                        <span className="px-2 py-0.5 rounded-full bg-purple-950/40 border border-purple-800/40 text-purple-300 font-medium flex items-center gap-1">
+                                                            <Compass className="h-3 w-3 text-purple-400" />
+                                                            2nd Home: {user.sharingAssessment.secondaryHomeIp}
+                                                        </span>
+                                                    )}
                                                     <span>Servers: {user.servers.join(", ") || "None"}</span>
                                                     <span>•</span>
                                                     <span>IP: {user.lastIp || "Unknown"}</span>
@@ -834,7 +947,7 @@ export default function StreamIntelligencePage() {
                                                     className="h-8 px-3 text-xs rounded-lg border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/20 font-semibold gap-1.5 shrink-0"
                                                 >
                                                     <History className="h-3.5 w-3.5" />
-                                                    <span>Full History & Devices</span>
+                                                    <span>Full History & Overlaps</span>
                                                     <ChevronRight className="h-3.5 w-3.5" />
                                                 </Button>
 
@@ -965,22 +1078,32 @@ export default function StreamIntelligencePage() {
                                 ) : (
                                     <div className="divide-y divide-slate-800/60">
                                         {analytics.topMovies.map((m: any, idx: number) => (
-                                            <div key={idx} className="p-3 flex items-center justify-between text-xs hover:bg-slate-800/20">
-                                                <div className="flex items-center gap-2.5 truncate">
-                                                    <span className="font-mono font-bold text-slate-500 w-4">{idx + 1}.</span>
-                                                    <div className="relative w-7 h-10 rounded overflow-hidden shrink-0 bg-slate-950 border border-slate-800 flex items-center justify-center shadow-sm">
-                                                        <Film className="h-3.5 w-3.5 text-slate-600 absolute" />
+                                            <div key={idx} className="p-3 flex items-center justify-between text-xs hover:bg-slate-800/20 transition-colors">
+                                                <div className="flex items-center gap-3 min-w-0 pr-2">
+                                                    <span className="font-mono font-bold text-slate-500 w-5 text-right shrink-0">{idx + 1}.</span>
+                                                    <div className="relative w-9 h-13 sm:w-10 sm:h-14 rounded-md overflow-hidden shrink-0 bg-slate-950 border border-slate-800 flex items-center justify-center shadow-md">
+                                                        <Film className="h-4 w-4 text-slate-600 absolute" />
                                                         <img 
-                                                            src={m.thumb || `/api/media/image?title=${encodeURIComponent(m.title)}&type=movie`}
-                                                            alt={m.title}
-                                                            className="w-full h-full object-cover relative z-10"
-                                                            onError={(e) => { (e.target as HTMLElement).style.display = "none"; }}
+                                                            src={m.thumb || `/api/media/image?title=${encodeURIComponent(m.title)}&type=movie`} 
+                                                            alt={m.title} 
+                                                            className="w-full h-full object-cover relative z-10" 
+                                                            onError={(e) => { 
+                                                                const img = e.target as HTMLImageElement;
+                                                                if (!img.src.includes("&fallback=1")) {
+                                                                    img.src = `/api/media/image?title=${encodeURIComponent(m.title)}&type=movie&fallback=1`;
+                                                                } else {
+                                                                    img.style.display = "none";
+                                                                }
+                                                            }}
                                                         />
                                                     </div>
-                                                    <span className="font-semibold text-white truncate">{m.title}</span>
+                                                    <div className="min-w-0">
+                                                        <span className="font-semibold text-white truncate block">{m.title}</span>
+                                                        {m.year && <span className="text-[10px] text-muted-foreground font-mono">{m.year}</span>}
+                                                    </div>
                                                 </div>
-                                                <Badge variant="outline" className="text-[10px] font-mono bg-cyan-500/10 text-cyan-300 border-cyan-500/30">
-                                                    {m.plays} Plays
+                                                <Badge variant="outline" className="text-[10px] font-mono bg-cyan-500/10 text-cyan-300 border-cyan-500/30 shrink-0">
+                                                    {m.plays} {m.plays === 1 ? "Play" : "Plays"}
                                                 </Badge>
                                             </div>
                                         ))}
@@ -1003,22 +1126,32 @@ export default function StreamIntelligencePage() {
                                 ) : (
                                     <div className="divide-y divide-slate-800/60">
                                         {analytics.topShows.map((s: any, idx: number) => (
-                                            <div key={idx} className="p-3 flex items-center justify-between text-xs hover:bg-slate-800/20">
-                                                <div className="flex items-center gap-2.5 truncate">
-                                                    <span className="font-mono font-bold text-slate-500 w-4">{idx + 1}.</span>
-                                                    <div className="relative w-7 h-10 rounded overflow-hidden shrink-0 bg-slate-950 border border-slate-800 flex items-center justify-center shadow-sm">
-                                                        <Tv className="h-3.5 w-3.5 text-slate-600 absolute" />
+                                            <div key={idx} className="p-3 flex items-center justify-between text-xs hover:bg-slate-800/20 transition-colors">
+                                                <div className="flex items-center gap-3 min-w-0 pr-2">
+                                                    <span className="font-mono font-bold text-slate-500 w-5 text-right shrink-0">{idx + 1}.</span>
+                                                    <div className="relative w-9 h-13 sm:w-10 sm:h-14 rounded-md overflow-hidden shrink-0 bg-slate-950 border border-slate-800 flex items-center justify-center shadow-md">
+                                                        <Tv className="h-4 w-4 text-slate-600 absolute" />
                                                         <img 
-                                                            src={s.thumb || `/api/media/image?title=${encodeURIComponent(s.title)}&type=show`}
-                                                            alt={s.title}
-                                                            className="w-full h-full object-cover relative z-10"
-                                                            onError={(e) => { (e.target as HTMLElement).style.display = "none"; }}
+                                                            src={s.thumb || `/api/media/image?title=${encodeURIComponent(s.title)}&type=show`} 
+                                                            alt={s.title} 
+                                                            className="w-full h-full object-cover relative z-10" 
+                                                            onError={(e) => { 
+                                                                const img = e.target as HTMLImageElement;
+                                                                if (!img.src.includes("&fallback=1")) {
+                                                                    img.src = `/api/media/image?title=${encodeURIComponent(s.title)}&type=show&fallback=1`;
+                                                                } else {
+                                                                    img.style.display = "none";
+                                                                }
+                                                            }}
                                                         />
                                                     </div>
-                                                    <span className="font-semibold text-white truncate">{s.title}</span>
+                                                    <div className="min-w-0">
+                                                        <span className="font-semibold text-white truncate block">{s.title}</span>
+                                                        {s.year && <span className="text-[10px] text-muted-foreground font-mono">{s.year}</span>}
+                                                    </div>
                                                 </div>
-                                                <Badge variant="outline" className="text-[10px] font-mono bg-purple-500/10 text-purple-300 border-purple-500/30">
-                                                    {s.plays} Plays
+                                                <Badge variant="outline" className="text-[10px] font-mono bg-purple-500/10 text-purple-300 border-purple-500/30 shrink-0">
+                                                    {s.plays} {s.plays === 1 ? "Play" : "Plays"}
                                                 </Badge>
                                             </div>
                                         ))}
@@ -1347,10 +1480,22 @@ export default function StreamIntelligencePage() {
                                     <Globe className="h-3.5 w-3.5 text-indigo-400 mr-1.5" />
                                     {userDetails?.ips?.length ?? "..."} IP Addresses
                                 </Badge>
+                                {userDetails?.sharingAssessment && (
+                                    <Badge className={`text-xs py-1 px-2.5 font-bold border ${userDetails.sharingAssessment.badgeColor}`}>
+                                        <ShieldAlert className="h-3.5 w-3.5 mr-1.5" />
+                                        Household: {userDetails.sharingAssessment.label || userDetails.sharingAssessment.badgeLabel}
+                                    </Badge>
+                                )}
+                                {userDetails?.sharingAssessment?.primaryHomeIp && (
+                                    <Badge variant="outline" className="text-xs bg-blue-950/30 border-blue-800/50 text-blue-300 py-1 px-2.5 font-mono">
+                                        <Home className="h-3.5 w-3.5 mr-1.5 text-blue-400" />
+                                        Home IP: {userDetails.sharingAssessment.primaryHomeIp}
+                                    </Badge>
+                                )}
                             </div>
 
                             {/* Inner Tab Selectors */}
-                            <div className="flex items-center gap-2 pt-4">
+                            <div className="flex flex-wrap items-center gap-2 pt-4">
                                 <button
                                     onClick={() => setUserModalTab("history")}
                                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${userModalTab === "history" ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm" : "bg-slate-900 text-muted-foreground hover:text-white border border-slate-800"}`}
@@ -1371,6 +1516,21 @@ export default function StreamIntelligencePage() {
                                 >
                                     <Globe className="h-3.5 w-3.5" />
                                     All IP Addresses ({userDetails?.ips?.length || 0})
+                                </button>
+                                <button
+                                    onClick={() => setUserModalTab("sharing")}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${userModalTab === "sharing" ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm" : "bg-slate-900 text-muted-foreground hover:text-white border border-slate-800"}`}
+                                >
+                                    <ShieldAlert className="h-3.5 w-3.5" />
+                                    <span>Sharing & Overlap Intelligence</span>
+                                    {(userDetails?.sharingAssessment?.risk === "HIGH_SHARING_RISK" || userDetails?.sharingAssessment?.risk === "SUSPECTED_SHARING") && (
+                                        <span className="ml-1 px-1.5 py-0.2 rounded-full bg-red-500 text-white text-[9px] font-black animate-pulse">!</span>
+                                    )}
+                                    {userDetails?.detectedOverlaps?.length > 0 && (
+                                        <Badge className="ml-1 text-[9px] py-0 px-1.5 bg-red-500/30 text-red-200 border-red-500/40">
+                                            {userDetails.detectedOverlaps.length}
+                                        </Badge>
+                                    )}
                                 </button>
                             </div>
                         </div>
@@ -1547,7 +1707,7 @@ export default function StreamIntelligencePage() {
                                         </div>
                                     )}
                                 </div>
-                            ) : (
+                            ) : userModalTab === "ips" ? (
                                 <div className="space-y-3.5">
                                     <div className="text-xs text-muted-foreground">
                                         All network IP addresses used by <strong className="text-white">{selectedUser}</strong> to access your media servers:
@@ -1598,7 +1758,205 @@ export default function StreamIntelligencePage() {
                                         </div>
                                     )}
                                 </div>
-                            )}
+                            ) : userModalTab === "sharing" ? (
+                                <div className="space-y-4">
+                                    {/* Verdict Banner */}
+                                    <Card className={`p-4 border ${userDetails?.sharingAssessment?.badgeColor || "bg-slate-900 border-slate-800"}`}>
+                                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                                            <div className="space-y-1">
+                                                <div className="flex items-center gap-2">
+                                                    <ShieldAlert className="h-5 w-5" />
+                                                    <h3 className="font-bold text-base text-white">
+                                                        {userDetails?.sharingAssessment?.label || userDetails?.sharingAssessment?.verdict || "Single Household Activity"}
+                                                    </h3>
+                                                </div>
+                                                <p className="text-xs text-muted-foreground">
+                                                    Deterministic household anchoring analysis examining fixed living room TVs (Apple TV, Roku, Smart TVs) vs mobile devices (phones, laptops) and simultaneous multi-IP streams.
+                                                </p>
+                                            </div>
+                                            <Badge className={`text-xs py-1 px-3 font-bold border shrink-0 ${userDetails?.sharingAssessment?.badgeColor}`}>
+                                                {userDetails?.sharingAssessment?.label || userDetails?.sharingAssessment?.badgeLabel || "Normal"}
+                                            </Badge>
+                                        </div>
+
+                                        {userDetails?.sharingAssessment?.explanation && (
+                                            <div className="mt-3.5 pt-3 border-t border-slate-800/80 space-y-1.5 text-xs">
+                                                {(Array.isArray(userDetails.sharingAssessment.explanation)
+                                                    ? userDetails.sharingAssessment.explanation
+                                                    : [userDetails.sharingAssessment.explanation]
+                                                ).map((item: string, i: number) => (
+                                                    <div key={i} className="flex items-start gap-2 text-slate-300">
+                                                        <span className="text-cyan-400 font-bold">•</span>
+                                                        <span>{item}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </Card>
+
+                                    {/* Intelligence Metric Cards */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                                        <Card className="bg-slate-950/70 border-slate-800 p-3.5 space-y-1.5 shadow-md">
+                                            <div className="flex items-center justify-between text-muted-foreground text-xs">
+                                                <span className="flex items-center gap-1.5 font-medium">
+                                                    <Home className="h-4 w-4 text-blue-400" />
+                                                    Primary Home IP
+                                                </span>
+                                            </div>
+                                            <div className="font-mono font-bold text-sm text-white truncate">
+                                                {userDetails?.sharingAssessment?.primaryHomeIp || "LAN / Local"}
+                                            </div>
+                                            <p className="text-[10px] text-muted-foreground">
+                                                Primary residential IP where fixed TV playback is anchored.
+                                            </p>
+                                        </Card>
+
+                                        <Card className="bg-slate-950/70 border-slate-800 p-3.5 space-y-1.5 shadow-md">
+                                            <div className="flex items-center justify-between text-muted-foreground text-xs">
+                                                <span className="flex items-center gap-1.5 font-medium">
+                                                    <Compass className="h-4 w-4 text-purple-400" />
+                                                    Secondary Location
+                                                </span>
+                                            </div>
+                                            <div className="font-mono font-bold text-sm text-white truncate">
+                                                {userDetails?.sharingAssessment?.secondaryHomeIp || "None Detected"}
+                                            </div>
+                                            <p className="text-[10px] text-muted-foreground">
+                                                {userDetails?.sharingAssessment?.travelSpanDays 
+                                                    ? `Active across ${userDetails.sharingAssessment.travelSpanDays} days (Vacation pattern)` 
+                                                    : "No secondary recurring residence detected."}
+                                            </p>
+                                        </Card>
+
+                                        <Card className="bg-slate-950/70 border-slate-800 p-3.5 space-y-1.5 shadow-md">
+                                            <div className="flex items-center justify-between text-muted-foreground text-xs">
+                                                <span className="flex items-center gap-1.5 font-medium">
+                                                    <Tv className="h-4 w-4 text-cyan-400" />
+                                                    Device Typology
+                                                </span>
+                                            </div>
+                                            <div className="text-sm font-bold text-white flex items-center gap-2">
+                                                <span className="text-cyan-300">{userDetails?.sharingAssessment?.fixedHomeDeviceCount || 0} Fixed TVs</span>
+                                                <span className="text-slate-600">/</span>
+                                                <span className="text-indigo-300">{userDetails?.sharingAssessment?.mobileDeviceCount || 0} Mobile</span>
+                                            </div>
+                                            <p className="text-[10px] text-muted-foreground">
+                                                Fixed living room TVs stay anchored; mobile phones roam safely.
+                                            </p>
+                                        </Card>
+
+                                        <Card className="bg-slate-950/70 border-slate-800 p-3.5 space-y-1.5 shadow-md">
+                                            <div className="flex items-center justify-between text-muted-foreground text-xs">
+                                                <span className="flex items-center gap-1.5 font-medium">
+                                                    <ShieldAlert className="h-4 w-4 text-red-400" />
+                                                    Simultaneous Overlaps
+                                                </span>
+                                            </div>
+                                            <div className="text-sm font-bold text-white flex items-center gap-2">
+                                                <span className={(userDetails?.sharingAssessment?.fixedTvOverlapCount || 0) > 0 ? "text-red-400 font-black animate-pulse" : "text-slate-300"}>
+                                                    {userDetails?.sharingAssessment?.fixedTvOverlapCount || 0} Dual TVs
+                                                </span>
+                                                <span className="text-slate-600">/</span>
+                                                <span className="text-slate-400">
+                                                    {userDetails?.sharingAssessment?.concurrentOverlapCount || 0} Total
+                                                </span>
+                                            </div>
+                                            <p className="text-[10px] text-muted-foreground">
+                                                Simultaneous multi-IP streams during the same playback window.
+                                            </p>
+                                        </Card>
+                                    </div>
+
+                                    {/* Timeline of Detected Concurrent Overlaps */}
+                                    <div className="space-y-3 pt-2">
+                                        <div className="flex items-center justify-between">
+                                            <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                                                <Clock className="h-3.5 w-3.5 text-cyan-400" />
+                                                Detected Concurrent Overlap Incidents ({userDetails?.detectedOverlaps?.length || 0})
+                                            </h4>
+                                            <span className="text-[10px] text-muted-foreground">
+                                                Private LAN streams are safely excluded from overlap detection
+                                            </span>
+                                        </div>
+
+                                        {(!userDetails?.detectedOverlaps || userDetails.detectedOverlaps.length === 0) ? (
+                                            <div className="p-8 rounded-xl bg-slate-950/60 border border-slate-800/80 text-center space-y-2">
+                                                <ShieldCheck className="h-8 w-8 text-emerald-400 mx-auto" />
+                                                <h5 className="font-bold text-white text-xs">Zero Concurrent Cross-IP Overlaps Detected</h5>
+                                                <p className="text-[11px] text-muted-foreground max-w-md mx-auto">
+                                                    This account has never had simultaneous streams playing from different public IP addresses. All activity is consistent with a single household.
+                                                </p>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-3">
+                                                {userDetails.detectedOverlaps.map((overlap: any, idx: number) => (
+                                                    <Card key={idx} className={`p-4 space-y-3 border ${overlap.isDualTv ? "bg-red-950/20 border-red-500/50 ring-1 ring-red-500/30" : "bg-slate-950/70 border-slate-800"}`}>
+                                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-800/60 text-xs">
+                                                            <div className="flex items-center gap-2">
+                                                                <Badge className={`text-[10px] ${overlap.isDualTv ? "bg-red-500/30 text-red-200 border-red-500/50 font-bold" : "bg-amber-500/20 text-amber-300 border-amber-500/40"}`}>
+                                                                    {overlap.isDualTv ? "🚨 HIGH CONFIDENCE: DUAL FIXED TV OVERLAP" : "⚠️ Simultaneous Multi-IP Stream"}
+                                                                </Badge>
+                                                                <span className="text-[11px] text-muted-foreground font-mono">
+                                                                    {new Date(overlap.timestamp).toLocaleString()}
+                                                                </span>
+                                                            </div>
+                                                            <span className="text-[10px] text-slate-400 italic">
+                                                                {overlap.reason}
+                                                            </span>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                                                            {/* Stream 1 */}
+                                                            <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2">
+                                                                <div className="flex items-center justify-between">
+                                                                    <div className="flex items-center gap-1.5 font-bold text-white truncate">
+                                                                        {getDeviceIcon(overlap.session1.platform, overlap.session1.device)}
+                                                                        <span>{overlap.session1.device || overlap.session1.platform || "Device 1"}</span>
+                                                                    </div>
+                                                                    {overlap.session1.isFixedTv && (
+                                                                        <Badge className="bg-cyan-500/20 text-cyan-300 border-cyan-500/30 text-[9px]">
+                                                                            Living Room TV
+                                                                        </Badge>
+                                                                    )}
+                                                                </div>
+                                                                <div className="text-slate-300 truncate font-semibold">
+                                                                    "{overlap.session1.title}"
+                                                                </div>
+                                                                <div className="flex items-center justify-between text-[10px] text-muted-foreground font-mono pt-1 border-t border-slate-800">
+                                                                    <span>IP: {overlap.session1.ipAddress || overlap.session1.ip}</span>
+                                                                    <span>{overlap.session1.platform}</span>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Stream 2 */}
+                                                            <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2">
+                                                                <div className="flex items-center justify-between">
+                                                                    <div className="flex items-center gap-1.5 font-bold text-white truncate">
+                                                                        {getDeviceIcon(overlap.session2.platform, overlap.session2.device)}
+                                                                        <span>{overlap.session2.device || overlap.session2.platform || "Device 2"}</span>
+                                                                    </div>
+                                                                    {overlap.session2.isFixedTv && (
+                                                                        <Badge className="bg-red-500/20 text-red-300 border-red-500/30 text-[9px]">
+                                                                            Living Room TV
+                                                                        </Badge>
+                                                                    )}
+                                                                </div>
+                                                                <div className="text-slate-300 truncate font-semibold">
+                                                                    "{overlap.session2.title}"
+                                                                </div>
+                                                                <div className="flex items-center justify-between text-[10px] text-muted-foreground font-mono pt-1 border-t border-slate-800">
+                                                                    <span>IP: {overlap.session2.ipAddress || overlap.session2.ip}</span>
+                                                                    <span>{overlap.session2.platform}</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </Card>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            ) : null}
                         </div>
 
                         {/* Modal Footer */}
