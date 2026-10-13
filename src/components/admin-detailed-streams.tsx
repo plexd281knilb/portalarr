@@ -1,15 +1,24 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getAdminDetailedStreamsAction, killUserStream } from "@/app/actions";
+import { getAdminDetailedStreamsAction, killUserStream, getWatchHistoryAction, clearWatchHistoryAction } from "@/app/actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { Input } from "@/components/ui/input";
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription
+} from "@/components/ui/dialog";
 import { 
     Activity, Tv, Film, Monitor, Cpu, HardDrive, RefreshCw, 
     Play, Pause, XCircle, Zap, Shield, Sparkles, Loader2, Server,
-    Layers, Trophy, Flame, Filter, BarChart3, CheckCircle2
+    Layers, Trophy, Flame, Filter, BarChart3, CheckCircle2,
+    ShieldAlert, History, Users, Search, Trash2, Clock, Globe
 } from "lucide-react";
 
 export default function AdminDetailedStreams() {
@@ -18,6 +27,13 @@ export default function AdminDetailedStreams() {
     const [refreshing, setRefreshing] = useState(false);
     const [killingSessionKey, setKillingSessionKey] = useState<string | null>(null);
     const [selectedServerFilter, setSelectedServerFilter] = useState<string | null>(null);
+
+    // Watch History modal & filter state
+    const [showHistory, setShowHistory] = useState(false);
+    const [historyData, setHistoryData] = useState<any>(null);
+    const [historyLoading, setHistoryLoading] = useState(false);
+    const [historyFilter, setHistoryFilter] = useState<string>("all");
+    const [historySearch, setHistorySearch] = useState<string>("");
 
     const loadStreams = async (isManual = false) => {
         if (isManual) setRefreshing(true);
@@ -54,6 +70,38 @@ export default function AdminDetailedStreams() {
             alert(`Error: ${e.message || "Failed to stop stream"}`);
         } finally {
             setKillingSessionKey(null);
+        }
+    };
+
+    const loadHistory = async (filter = historyFilter, search = historySearch) => {
+        setHistoryLoading(true);
+        try {
+            const options: any = { limit: 50 };
+            if (filter === "movies") options.mediaType = "movie";
+            if (filter === "episodes") options.mediaType = "episode";
+            if (filter === "sharing") options.isSharingAlert = true;
+            if (search.trim()) options.search = search.trim();
+
+            const res = await getWatchHistoryAction(options);
+            if (res) {
+                setHistoryData(res);
+            }
+        } catch (err) {
+            console.error("Failed to load watch history:", err);
+        } finally {
+            setHistoryLoading(false);
+        }
+    };
+
+    const handleClearHistory = async () => {
+        if (!confirm("Are you sure you want to clear the entire watch history log?")) return;
+        try {
+            const res = await clearWatchHistoryAction();
+            if (res.success) {
+                await loadHistory();
+            }
+        } catch (e) {
+            console.error("Error clearing watch history:", e);
         }
     };
 
@@ -111,6 +159,18 @@ export default function AdminDetailedStreams() {
                         <Button
                             variant="outline"
                             size="sm"
+                            onClick={() => {
+                                setShowHistory(true);
+                                loadHistory();
+                            }}
+                            className="h-8 px-2.5 text-xs gap-1.5 border-border/60 hover:bg-white/[0.04]"
+                        >
+                            <History className="h-3.5 w-3.5 text-primary" />
+                            <span>Watch History & Audit</span>
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
                             onClick={() => loadStreams(true)}
                             disabled={refreshing}
                             className="h-8 px-2.5 text-xs gap-1.5 border-border/60 hover:bg-white/[0.04]"
@@ -156,6 +216,24 @@ export default function AdminDetailedStreams() {
                         </div>
                     </div>
                 </div>
+
+                {/* 1B. CREDENTIAL SHARING & SECURITY INTELLIGENCE ALERT STRIP */}
+                {data?.securityTelemetry && (data.securityTelemetry.sharingAlertsCount > 0 || data.securityTelemetry.multiIpUsersCount > 0) && (
+                    <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                            <ShieldAlert className="h-4 w-4 text-rose-400 shrink-0 animate-bounce" />
+                            <div className="text-xs">
+                                <span className="font-bold text-rose-300">Credential Sharing Alert: </span>
+                                <span className="text-rose-200/90">
+                                    {data.securityTelemetry.sharingAlertsCount} active user(s) detected streaming concurrently from multiple distinct public IP locations.
+                                </span>
+                            </div>
+                        </div>
+                        <Badge variant="outline" className="text-[10px] font-bold bg-rose-500/20 text-rose-300 border-rose-500/40 shrink-0">
+                            {data.securityTelemetry.multiIpUsersCount} Multi-IP Account(s) Flagged
+                        </Badge>
+                    </div>
+                )}
 
                 {/* 2. DUAL TELEMETRY COMMAND CENTER (HARDWARE HOSTS VS PLEX SERVERS) */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5 pt-1">
@@ -483,6 +561,24 @@ export default function AdminDetailedStreams() {
                                                         ({stream.ipAddress})
                                                     </span>
                                                 )}
+                                                {/* MULTI-IP SHARING ALERT BADGE */}
+                                                {stream.isSharingAlert && (
+                                                    <Badge className="text-[10px] font-extrabold bg-rose-500/20 text-rose-300 border-rose-500/40 gap-1 animate-pulse" title={stream.sharingReason || "Multi-IP stream"}>
+                                                        <ShieldAlert className="h-3 w-3 text-rose-400" />
+                                                        SHARING ALERT
+                                                    </Badge>
+                                                )}
+                                                {/* CONCURRENT STREAMS BADGE */}
+                                                {stream.userActiveStreamCount > 1 && (
+                                                    <Badge variant="outline" className={`text-[10px] font-semibold gap-1 ${
+                                                        stream.isExcessiveConnections 
+                                                            ? "bg-rose-500/10 text-rose-300 border-rose-500/30" 
+                                                            : "bg-amber-500/10 text-amber-300 border-amber-500/30"
+                                                    }`}>
+                                                        <Layers className="h-3 w-3 text-amber-400" />
+                                                        {stream.userActiveStreamCount} Concurrent
+                                                    </Badge>
+                                                )}
                                                 {/* STREAM PLAYBACK MODE: only show TRANSCODING if it's using video transcoding power */}
                                                 {isTranscoding ? (
                                                     <Badge className="text-[10px] font-bold bg-amber-500/20 text-amber-300 border-amber-500/40 gap-1 animate-pulse">
@@ -623,6 +719,241 @@ export default function AdminDetailedStreams() {
                     </div>
                 )}
             </CardContent>
+
+            {/* WATCH HISTORY & SECURITY AUDIT MODAL */}
+            <Dialog open={showHistory} onOpenChange={setShowHistory}>
+                <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col p-0 overflow-hidden bg-[#121218] border-border/60">
+                    <DialogHeader className="p-5 pb-3 border-b border-border/40">
+                        <div className="flex items-center justify-between gap-3">
+                            <div className="space-y-1">
+                                <DialogTitle className="text-lg font-bold flex items-center gap-2">
+                                    <History className="h-5 w-5 text-primary" />
+                                    Native Plex Watch History & Security Audit Log
+                                </DialogTitle>
+                                <DialogDescription className="text-xs text-muted-foreground">
+                                    Comprehensive stream timeline, playback progress, and concurrent multi-IP sharing anomalies.
+                                </DialogDescription>
+                            </div>
+                            {historyData && (
+                                <div className="flex items-center gap-2 text-xs">
+                                    <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
+                                        {historyData.total || 0} Total Records
+                                    </Badge>
+                                    {(historyData.sharingAlertsCount || 0) > 0 && (
+                                        <Badge className="bg-rose-500/20 text-rose-300 border-rose-500/30 gap-1">
+                                            <ShieldAlert className="h-3 w-3" />
+                                            {historyData.sharingAlertsCount} Alerts
+                                        </Badge>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Search and Filter Toolbar */}
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-3">
+                            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+                                {[
+                                    { id: "all", label: "All Activity" },
+                                    { id: "movies", label: "Movies" },
+                                    { id: "episodes", label: "Episodes" },
+                                    { id: "sharing", label: "🚨 Sharing Alerts" },
+                                ].map((tab) => (
+                                    <Button
+                                        key={tab.id}
+                                        variant={historyFilter === tab.id ? "default" : "outline"}
+                                        size="sm"
+                                        onClick={() => {
+                                            setHistoryFilter(tab.id);
+                                            loadHistory(tab.id, historySearch);
+                                        }}
+                                        className="h-7 text-xs px-2.5"
+                                    >
+                                        {tab.label}
+                                    </Button>
+                                ))}
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                <div className="relative flex-1 sm:w-56">
+                                    <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
+                                    <Input
+                                        placeholder="Search title, user, IP..."
+                                        value={historySearch}
+                                        onChange={(e) => setHistorySearch(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === "Enter") {
+                                                loadHistory(historyFilter, historySearch);
+                                            }
+                                        }}
+                                        className="h-7 pl-8 pr-2 text-xs bg-muted/20 border-white/10"
+                                    />
+                                </div>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => loadHistory(historyFilter, historySearch)}
+                                    disabled={historyLoading}
+                                    className="h-7 px-2 text-xs"
+                                    title="Refresh History"
+                                >
+                                    <RefreshCw className={`h-3.5 w-3.5 ${historyLoading ? "animate-spin" : ""}`} />
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={handleClearHistory}
+                                    className="h-7 px-2 text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-500/10"
+                                    title="Clear All History"
+                                >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                            </div>
+                        </div>
+                    </DialogHeader>
+
+                    {/* Content List Area */}
+                    <div className="flex-1 overflow-y-auto p-4 space-y-2.5 min-h-[300px]">
+                        {historyLoading ? (
+                            <div className="py-20 flex flex-col items-center justify-center gap-2 text-muted-foreground">
+                                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                                <span className="text-xs">Querying watch records & security telemetry...</span>
+                            </div>
+                        ) : !historyData?.items || historyData.items.length === 0 ? (
+                            <div className="py-20 flex flex-col items-center justify-center gap-2 text-muted-foreground">
+                                <History className="h-8 w-8 text-muted-foreground/30" />
+                                <span className="text-xs">No stream activity records match your filter.</span>
+                            </div>
+                        ) : (
+                            historyData.items.map((item: any) => {
+                                const durationFormatted = item.durationMs 
+                                    ? (item.durationMs >= 3600000 
+                                        ? `${Math.floor(item.durationMs / 3600000)}h ${Math.floor((item.durationMs % 3600000) / 60000)}m`
+                                        : `${Math.floor(item.durationMs / 60000)}m`)
+                                    : "";
+                                const dateFormatted = item.watchedAt 
+                                    ? new Date(item.watchedAt).toLocaleDateString("en-US", {
+                                        month: "short",
+                                        day: "numeric",
+                                        hour: "2-digit",
+                                        minute: "2-digit"
+                                    })
+                                    : "";
+
+                                return (
+                                    <div
+                                        key={item.id}
+                                        className={`p-3 rounded-lg border transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
+                                            item.isSharingAlert 
+                                                ? "bg-rose-950/20 border-rose-500/40" 
+                                                : "bg-white/[0.02] border-white/[0.06] hover:border-white/20"
+                                        }`}
+                                    >
+                                        <div className="flex items-start gap-3 flex-1 min-w-0">
+                                            {/* Poster Thumbnail */}
+                                            <div className="relative w-10 h-14 rounded overflow-hidden shrink-0 bg-muted/30 border border-white/10 flex items-center justify-center">
+                                                {item.thumb ? (
+                                                    <img 
+                                                        src={item.thumb} 
+                                                        alt={item.title} 
+                                                        className="w-full h-full object-cover" 
+                                                        onError={(e) => { (e.target as HTMLElement).style.display = "none"; }}
+                                                    />
+                                                ) : (
+                                                    item.mediaType === "episode" ? (
+                                                        <Tv className="h-4 w-4 text-muted-foreground/40" />
+                                                    ) : (
+                                                        <Film className="h-4 w-4 text-muted-foreground/40" />
+                                                    )
+                                                )}
+                                            </div>
+
+                                            {/* Title & Metadata */}
+                                            <div className="space-y-1 min-w-0 flex-1">
+                                                <div className="flex flex-wrap items-center gap-1.5">
+                                                    <Badge className="text-[10px] font-bold bg-primary/20 text-primary border-primary/30">
+                                                        👤 {item.user}
+                                                    </Badge>
+                                                    <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                                                        🖥️ {item.serverName}
+                                                    </Badge>
+                                                    {item.isSharingAlert && (
+                                                        <Badge className="text-[10px] font-extrabold bg-rose-500/20 text-rose-300 border-rose-500/40 gap-1 animate-pulse">
+                                                            <ShieldAlert className="h-3 w-3" />
+                                                            SHARING ALERT
+                                                        </Badge>
+                                                    )}
+                                                    {item.completed && (
+                                                        <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                                                            ✓ Finished
+                                                        </Badge>
+                                                    )}
+                                                </div>
+
+                                                <div className="font-semibold text-xs text-foreground truncate">
+                                                    {item.grandparentTitle ? (
+                                                        <>
+                                                            <span className="text-foreground/80">{item.grandparentTitle}</span>
+                                                            <span className="mx-1 text-muted-foreground">•</span>
+                                                            {item.seasonNum || item.episodeNum ? (
+                                                                <span className="font-mono text-sky-400 mr-1">
+                                                                    S{String(item.seasonNum || 1).padStart(2, "0")}E{String(item.episodeNum || 1).padStart(2, "0")}
+                                                                </span>
+                                                            ) : null}
+                                                            <span>{item.title}</span>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <span>{item.title}</span>
+                                                            {item.year && <span className="text-muted-foreground ml-1">({item.year})</span>}
+                                                        </>
+                                                    )}
+                                                </div>
+
+                                                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
+                                                    <span>{item.player || item.platform || "Plex"}</span>
+                                                    {item.ipAddress && (
+                                                        <>
+                                                            <span>•</span>
+                                                            <span className="font-mono text-[10px]">{item.ipAddress}</span>
+                                                        </>
+                                                    )}
+                                                    {item.videoDecision && (
+                                                        <>
+                                                            <span>•</span>
+                                                            <span className={`text-[10px] font-medium ${item.videoDecision === "transcode" ? "text-amber-400" : "text-emerald-400"}`}>
+                                                                {item.videoDecision.toUpperCase()}
+                                                            </span>
+                                                        </>
+                                                    )}
+                                                </div>
+
+                                                {item.isSharingAlert && item.sharingAlertNote && (
+                                                    <div className="text-[11px] text-rose-300/90 font-medium bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20 mt-1">
+                                                        ⚠️ {item.sharingAlertNote}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Right: Progress & Timestamp */}
+                                        <div className="w-full sm:w-36 shrink-0 space-y-1 sm:text-right pt-2 sm:pt-0 border-t sm:border-t-0 border-white/[0.06]">
+                                            <div className="text-[11px] font-medium text-foreground/90">
+                                                {dateFormatted}
+                                            </div>
+                                            <div className="text-[10px] text-muted-foreground">
+                                                {durationFormatted} {item.progressPercent ? `(${item.progressPercent}%)` : ""}
+                                            </div>
+                                            <div className="w-full sm:w-28 sm:ml-auto">
+                                                <Progress value={item.progressPercent || 0} className="h-1 bg-muted/40" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
         </Card>
     );
 }

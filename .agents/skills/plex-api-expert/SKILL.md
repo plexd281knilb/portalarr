@@ -94,6 +94,9 @@ See detailed runbook: [tags-collections-and-hubs.md](./references/tags-collectio
     - Always determine the image format from magic bytes (`image/png` for `89 50 4E 47`, `image/jpeg` for `FF D8 FF`, `image/webp` for `RIFF...WEBP`) rather than defaulting strictly to `image/jpeg`.
     - Always lock the uploaded poster (`PUT /library/metadata/{ratingKey}?thumb.locked=1`) to prevent PMS scheduled maintenance from overwriting custom or restored artwork.
     - Use multi-candidate URL failover (`expandCandidateUrls`) to ensure direct LAN IP fallback (`http://192.168.1.X:32400`) if `.plex.direct` endpoints time out or encounter DNS rebind blocks.
+15. **Native Stream Intelligence, Watch History & Multi-IP Password Sharing Detection**:
+    - **Native Watch History Engine (`stream-tracker.ts`)**: Portalarr records active playback sessions directly from PMS `/status/sessions` without requiring external Tautulli. Records progress percentage (dynamically calculated from `viewOffset` / `duration` if omitted by PMS), duration, completed status (`progress >= 90%`), video/audio decisions, transcode HW acceleration, client platform/device, and remote IP addresses.
+    - **Password Sharing & Multi-IP Detection Heuristics (`analyzeActiveSessionsForSharing`)**: Detects simultaneous streaming sessions per user. Private/LAN IPs (`192.168.x.x`, `10.x.x.x`, `172.16-31.x.x`, `localhost`) are recognized as same-household playback and do NOT trigger sharing alerts. Multi-IP sharing is strictly flagged when a user streams concurrently from 2 or more distinct public IP addresses (indicating disparate households), recording `isSharingAlert: true`, incrementing `user.sharingAlertCount`, and alerting admins in real time on the Stream Matrix dashboard.
 
 
 

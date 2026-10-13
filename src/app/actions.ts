@@ -39,6 +39,13 @@ import { resolveOrLinkAuthorAndSeries } from "@/lib/books/book-service";
 import { inferBookRating, isKidsLibrary } from "@/lib/books/book-rating";
 import { getBookCleanTitleKey, getBookCompositeDedupKey } from "@/lib/books/book-dedup";
 import { syncUserRoleToDiscord } from "@/lib/discord/discord-role-sync";
+import { 
+    recordActivePlexSessions, 
+    analyzeActiveSessionsForSharing, 
+    getWatchHistory, 
+    getConnectionSecurityInsights, 
+    type WatchHistoryQueryOptions 
+} from "@/lib/telemetry/stream-tracker";
 
 if (typeof process !== "undefined" && process.env) {
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
@@ -15658,15 +15665,105 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
             }
         }));
 
+        // 5. Credential Sharing & Concurrent Connections Analysis
+        const analysesMap = analyzeActiveSessionsForSharing(allSessions, settings?.maxConcurrentStreamsPerUser || 3);
+        const userAnalysesList = Array.from(analysesMap.values());
+
+        // Annotate each session with user connection & sharing telemetry
+        for (const s of allSessions) {
+            const rawUser = (s.user || s.User?.title || s.User?.username || s.username || "Plex User").trim().toLowerCase();
+            const analysis = analysesMap.get(rawUser);
+            if (analysis) {
+                s.userActiveStreamCount = analysis.activeSessionsCount;
+                s.isMultiIp = analysis.isMultiIp;
+                s.isExcessiveConnections = analysis.isExcessiveConnections;
+                s.isSharingAlert = analysis.isSharingSuspected;
+                s.sharingReason = analysis.sharingReason;
+                s.userDistinctIps = analysis.distinctIps;
+                s.userPublicIps = analysis.distinctPublicIps;
+            } else {
+                s.userActiveStreamCount = 1;
+                s.isMultiIp = false;
+                s.isExcessiveConnections = false;
+                s.isSharingAlert = false;
+                s.userDistinctIps = s.ipAddress ? [s.ipAddress] : [];
+                s.userPublicIps = [];
+            }
+        }
+
+        // Record active sessions into persistent WatchHistory in background
+        if (allSessions.length > 0) {
+            recordActivePlexSessions(allSessions).catch(e => {
+                console.error("[ADMIN-STREAMS] Background recordActivePlexSessions error:", e);
+            });
+        }
+
         return {
             success: true,
             totalStreams: totalStreamCount,
             sessions: allSessions,
             glances: glancesStats,
-            serversUsage: serversUsage
+            serversUsage: serversUsage,
+            securityTelemetry: {
+                totalActiveUsers: userAnalysesList.length,
+                multiIpUsersCount: userAnalysesList.filter(a => a.isMultiIp).length,
+                excessiveStreamsUsersCount: userAnalysesList.filter(a => a.isExcessiveConnections).length,
+                sharingAlertsCount: userAnalysesList.filter(a => a.isSharingSuspected).length,
+                userAnalyses: userAnalysesList
+            }
         };
     } catch (e: any) {
         return { success: false, error: e.message || "Failed fetching admin streams" };
+    }
+}
+
+/**
+ * Server Action: Retrieve paginated watch history and audit statistics
+ */
+export async function getWatchHistoryAction(options?: WatchHistoryQueryOptions) {
+    await verifyAdmin();
+    return await getWatchHistory(options);
+}
+
+/**
+ * Server Action: Retrieve connection security insights and credential sharing alerts
+ */
+export async function getConnectionSecurityInsightsAction() {
+    await verifyAdmin();
+    return await getConnectionSecurityInsights();
+}
+
+/**
+ * Server Action: Dismiss/acknowledge a user's sharing alert count
+ */
+export async function dismissSharingAlertAction(userId: string) {
+    await verifyAdmin();
+    try {
+        await prisma.user.update({
+            where: { id: userId },
+            data: { sharingAlertCount: 0 }
+        });
+        return { success: true };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to dismiss sharing alert" };
+    }
+}
+
+/**
+ * Server Action: Delete watch history record or clear all history
+ */
+export async function clearWatchHistoryAction(id?: string) {
+    await verifyAdmin();
+    try {
+        if (id) {
+            await prisma.watchHistory.delete({ where: { id } });
+        } else {
+            await prisma.watchHistory.deleteMany({});
+        }
+        revalidatePath("/settings");
+        return { success: true };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to clear watch history" };
     }
 }
 

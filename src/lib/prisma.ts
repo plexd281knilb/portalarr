@@ -623,7 +623,10 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["requireApprovalForPlexChanges", `ALTER TABLE "Settings" ADD COLUMN "requireApprovalForPlexChanges" BOOLEAN NOT NULL DEFAULT 1;`],
                 ["requireApprovalForEmails", `ALTER TABLE "Settings" ADD COLUMN "requireApprovalForEmails" BOOLEAN NOT NULL DEFAULT 1;`],
                 ["yearlyRenewalReminderDays", `ALTER TABLE "Settings" ADD COLUMN "yearlyRenewalReminderDays" TEXT DEFAULT '60,30,14,3,1';`],
-                ["monthlyRenewalReminderDays", `ALTER TABLE "Settings" ADD COLUMN "monthlyRenewalReminderDays" TEXT DEFAULT '7,3,1';`]
+                ["monthlyRenewalReminderDays", `ALTER TABLE "Settings" ADD COLUMN "monthlyRenewalReminderDays" TEXT DEFAULT '7,3,1';`],
+                ["nativeStreamMonitoringEnabled", `ALTER TABLE "Settings" ADD COLUMN "nativeStreamMonitoringEnabled" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["detectPasswordSharing", `ALTER TABLE "Settings" ADD COLUMN "detectPasswordSharing" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["maxConcurrentStreamsPerUser", `ALTER TABLE "Settings" ADD COLUMN "maxConcurrentStreamsPerUser" INTEGER DEFAULT 3;`]
             ];
 
             for (const [colName, ddl] of settingsAddCols) {
@@ -739,7 +742,10 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["discordUsername", `ALTER TABLE "User" ADD COLUMN "discordUsername" TEXT;`],
                 ["discordDiscriminator", `ALTER TABLE "User" ADD COLUMN "discordDiscriminator" TEXT;`],
                 ["discordAvatar", `ALTER TABLE "User" ADD COLUMN "discordAvatar" TEXT;`],
-                ["discordLinkedAt", `ALTER TABLE "User" ADD COLUMN "discordLinkedAt" DATETIME;`]
+                ["discordLinkedAt", `ALTER TABLE "User" ADD COLUMN "discordLinkedAt" DATETIME;`],
+                ["maxConcurrentStreams", `ALTER TABLE "User" ADD COLUMN "maxConcurrentStreams" INTEGER DEFAULT 3;`],
+                ["sharingAlertCount", `ALTER TABLE "User" ADD COLUMN "sharingAlertCount" INTEGER NOT NULL DEFAULT 0;`],
+                ["lastSharingAlertAt", `ALTER TABLE "User" ADD COLUMN "lastSharingAlertAt" DATETIME;`]
             ];
 
             for (const [colName, ddl] of userAddCols) {
@@ -1892,6 +1898,57 @@ export async function ensureSchemaColumns(): Promise<void> {
             await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "AdminApproval_createdAt_idx" ON "AdminApproval"("createdAt");`).catch(() => {});
         } catch (e: any) {
             console.error("[DB-SCHEMA-AUTOFIX] AdminApproval table check error:", e.message || e);
+        }
+
+        // --- 15. WATCH HISTORY & STREAM AUDIT TABLE ---
+        try {
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "WatchHistory" (
+                    "id" TEXT NOT NULL PRIMARY KEY,
+                    "sessionKey" TEXT,
+                    "ratingKey" TEXT,
+                    "serverName" TEXT NOT NULL DEFAULT 'Plex',
+                    "serverId" TEXT,
+                    "user" TEXT NOT NULL,
+                    "userEmail" TEXT,
+                    "userId" TEXT,
+                    "title" TEXT NOT NULL,
+                    "grandparentTitle" TEXT,
+                    "parentTitle" TEXT,
+                    "seasonNum" INTEGER,
+                    "episodeNum" INTEGER,
+                    "mediaType" TEXT NOT NULL DEFAULT 'movie',
+                    "year" INTEGER,
+                    "thumb" TEXT,
+                    "player" TEXT,
+                    "platform" TEXT,
+                    "device" TEXT,
+                    "ipAddress" TEXT,
+                    "location" TEXT,
+                    "videoDecision" TEXT DEFAULT 'direct play',
+                    "audioDecision" TEXT DEFAULT 'direct play',
+                    "transcodeHw" BOOLEAN NOT NULL DEFAULT 0,
+                    "streamBitrate" INTEGER,
+                    "viewOffsetMs" INTEGER DEFAULT 0,
+                    "durationMs" INTEGER DEFAULT 0,
+                    "progressPercent" INTEGER NOT NULL DEFAULT 0,
+                    "state" TEXT NOT NULL DEFAULT 'playing',
+                    "watchedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "stoppedAt" DATETIME,
+                    "completed" BOOLEAN NOT NULL DEFAULT 0,
+                    "isSharingAlert" BOOLEAN NOT NULL DEFAULT 0,
+                    "sharingAlertNote" TEXT,
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+                );
+            `);
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "WatchHistory_user_idx" ON "WatchHistory"("user");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "WatchHistory_watchedAt_idx" ON "WatchHistory"("watchedAt");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "WatchHistory_isSharingAlert_idx" ON "WatchHistory"("isSharingAlert");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "WatchHistory_ratingKey_idx" ON "WatchHistory"("ratingKey");`).catch(() => {});
+        } catch (e: any) {
+            console.error("[DB-SCHEMA-AUTOFIX] WatchHistory table check error:", e.message || e);
         }
 
         schemaPatchCompleted = true;

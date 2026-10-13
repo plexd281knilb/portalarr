@@ -6991,6 +6991,232 @@ async function runTestSuite() {
         }
     });
 
+    // 100. Stream Intelligence & Security: Native Watch History, Concurrent Streams, and Password Sharing Detection
+    await assertTest("Test 100: Stream Intelligence: Native Watch History & Password Sharing Detection", async () => {
+        const { 
+            normalizeIp, 
+            isPrivateOrLocalIp, 
+            analyzeActiveSessionsForSharing, 
+            recordActivePlexSessions, 
+            getWatchHistory,
+            getConnectionSecurityInsights
+        } = await import("../src/lib/telemetry/stream-tracker");
+
+        // 1. IP normalization & Private/Local Classification
+        if (normalizeIp("::ffff:192.168.1.10") !== "192.168.1.10") {
+            throw new Error(`normalizeIp failed for IPv4 mapped address, got: ${normalizeIp("::ffff:192.168.1.10")}`);
+        }
+        if (!isPrivateOrLocalIp("192.168.1.50")) {
+            throw new Error("isPrivateOrLocalIp failed for 192.168.1.50");
+        }
+        if (!isPrivateOrLocalIp("10.0.0.12")) {
+            throw new Error("isPrivateOrLocalIp failed for 10.0.0.12");
+        }
+        if (!isPrivateOrLocalIp("172.16.5.2")) {
+            throw new Error("isPrivateOrLocalIp failed for 172.16.5.2");
+        }
+        if (!isPrivateOrLocalIp("127.0.0.1") || !isPrivateOrLocalIp("localhost")) {
+            throw new Error("isPrivateOrLocalIp failed for localhost");
+        }
+        if (isPrivateOrLocalIp("73.189.44.12")) {
+            throw new Error("isPrivateOrLocalIp wrongly marked 73.189.44.12 as private");
+        }
+        if (isPrivateOrLocalIp("203.0.113.195")) {
+            throw new Error("isPrivateOrLocalIp wrongly marked 203.0.113.195 as private");
+        }
+
+        // 2. Multi-IP & Concurrent Streams Detection Heuristics
+        const mockSessionsSingleIp = [
+            {
+                sessionKey: "s_lan_1",
+                user: "alice",
+                ipAddress: "192.168.1.100",
+                player: "Apple TV",
+                title: "Inception",
+                viewOffset: 500000,
+                duration: 9000000,
+                videoDecision: "direct play",
+                audioDecision: "direct play"
+            },
+            {
+                sessionKey: "s_lan_2",
+                user: "alice",
+                ipAddress: "192.168.1.105",
+                player: "iPad",
+                title: "Dune",
+                viewOffset: 1200000,
+                duration: 9500000,
+                videoDecision: "direct play",
+                audioDecision: "direct play"
+            }
+        ];
+
+        // LAN streams within a home should NOT trigger a sharing alert even if concurrent
+        const analysisLan = analyzeActiveSessionsForSharing(mockSessionsSingleIp, 5);
+        const lanAlertsCount = Array.from(analysisLan.values()).filter(a => a.isSharingSuspected).length;
+        if (lanAlertsCount !== 0) {
+            throw new Error(`Expected 0 sharing alerts for LAN sessions, got ${lanAlertsCount}`);
+        }
+
+        // Multi-IP across public IPs (different households) MUST trigger a sharing alert
+        const mockSessionsMultiPublicIp = [
+            {
+                sessionKey: "s_pub_1",
+                user: "bob_sharer",
+                ipAddress: "73.189.44.12",
+                player: "Roku",
+                title: "Breaking Bad",
+                grandparentTitle: "Breaking Bad",
+                mediaType: "episode",
+                seasonNum: 1,
+                episodeNum: 1,
+                viewOffset: 600000,
+                duration: 3000000,
+                videoDecision: "direct play",
+                audioDecision: "direct play"
+            },
+            {
+                sessionKey: "s_pub_2",
+                user: "bob_sharer",
+                ipAddress: "203.0.113.195",
+                player: "Fire TV",
+                title: "Oppenheimer",
+                mediaType: "movie",
+                viewOffset: 1500000,
+                duration: 10800000,
+                videoDecision: "transcode",
+                audioDecision: "direct stream"
+            }
+        ];
+
+        const analysisPublic = analyzeActiveSessionsForSharing(mockSessionsMultiPublicIp, 3);
+        const publicAlertsCount = Array.from(analysisPublic.values()).filter(a => a.isSharingSuspected).length;
+        if (publicAlertsCount !== 1) {
+            throw new Error(`Expected 1 sharing alert for multi-public-IP streaming, got ${publicAlertsCount}`);
+        }
+        const bobAnalysis = analysisPublic.get("bob_sharer");
+        if (!bobAnalysis?.isSharingSuspected || !bobAnalysis?.isMultiIp) {
+            throw new Error(`Expected bob_sharer to have isSharingSuspected and isMultiIp true, got: ${JSON.stringify(bobAnalysis)}`);
+        }
+        if (!bobAnalysis.sharingReason?.includes("distinct public IP addresses")) {
+            throw new Error(`Expected sharingReason to mention distinct public IP addresses, got: ${bobAnalysis.sharingReason}`);
+        }
+
+        // 3. Database Recording & Watch History Engine
+        const testUser = `test_telemetry_user_${Date.now()}`;
+        const sessionKey1 = `session_test_${Date.now()}_1`;
+        const sessionKey2 = `session_test_${Date.now()}_2`;
+
+        const testSessionsToRecord = [
+            {
+                sessionKey: sessionKey1,
+                ratingKey: "10001",
+                serverName: "MainPlexServer",
+                serverId: "srv_main",
+                user: testUser,
+                userEmail: `${testUser}@example.com`,
+                title: "Interstellar",
+                mediaType: "movie",
+                year: 2014,
+                player: "Plex for Mac",
+                platform: "macOS",
+                device: "MacBook Pro",
+                ipAddress: "98.12.34.56",
+                viewOffset: 9200000,
+                duration: 10000000, // 92% -> completed
+                videoDecision: "direct play",
+                audioDecision: "direct play",
+                streamBitrate: 12000,
+                state: "playing"
+            },
+            {
+                sessionKey: sessionKey2,
+                ratingKey: "10002",
+                serverName: "MainPlexServer",
+                serverId: "srv_main",
+                user: testUser,
+                userEmail: `${testUser}@example.com`,
+                title: "Pilot",
+                grandparentTitle: "Severance",
+                parentTitle: "Season 1",
+                mediaType: "episode",
+                seasonNum: 1,
+                episodeNum: 1,
+                player: "LG TV",
+                platform: "webOS",
+                device: "OLED C2",
+                ipAddress: "154.20.78.90", // second distinct public IP!
+                viewOffset: 500000,
+                duration: 3600000,
+                videoDecision: "transcode",
+                audioDecision: "direct stream",
+                streamBitrate: 4500,
+                state: "playing"
+            }
+        ];
+
+        try {
+            // Record sessions
+            const recordResult = await recordActivePlexSessions(testSessionsToRecord);
+            if (!recordResult.success || recordResult.recordedCount !== 2) {
+                throw new Error(`Failed to record active plex sessions: ${JSON.stringify(recordResult)}`);
+            }
+
+            // Verify watch history query
+            const historyResult = await getWatchHistory({
+                user: testUser,
+                limit: 10
+            });
+
+            if (historyResult.total !== 2) {
+                throw new Error(`Expected 2 recorded history rows for ${testUser}, got ${historyResult.total}`);
+            }
+
+            const interstellar = historyResult.items.find(h => h.sessionKey === sessionKey1);
+            if (!interstellar) {
+                throw new Error("Missing Interstellar in recorded watch history");
+            }
+            if (!interstellar.completed) {
+                throw new Error("Expected Interstellar to be marked completed (92% progress)");
+            }
+            if (!interstellar.isSharingAlert) {
+                throw new Error("Expected Interstellar to have isSharingAlert: true due to multi-IP streaming");
+            }
+
+            // Query with sharing alert filter
+            const sharingOnlyResult = await getWatchHistory({
+                user: testUser,
+                isSharingAlert: true
+            });
+            if (sharingOnlyResult.total !== 2) {
+                throw new Error(`Expected 2 sharing alert items, got ${sharingOnlyResult.total}`);
+            }
+
+            // Query with mediaType filter
+            const moviesOnlyResult = await getWatchHistory({
+                user: testUser,
+                mediaType: "movie"
+            });
+            if (moviesOnlyResult.total !== 1 || moviesOnlyResult.items[0].title !== "Interstellar") {
+                throw new Error(`Expected 1 movie item (Interstellar), got ${moviesOnlyResult.total}`);
+            }
+
+            // Verify Connection Security Insights
+            const insights = await getConnectionSecurityInsights();
+            if (!insights.recentFlaggedIncidents.some(i => i.user === testUser)) {
+                throw new Error(`Expected ${testUser} to be in recentFlaggedIncidents`);
+            }
+        } finally {
+            // Clean up test rows
+            await prisma.watchHistory.deleteMany({
+                where: { user: testUser }
+            }).catch(() => {});
+            await prisma.user.deleteMany({
+                where: { username: testUser }
+            }).catch(() => {});
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");
