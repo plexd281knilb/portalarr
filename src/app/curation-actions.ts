@@ -11334,7 +11334,11 @@ export async function deployFilteredSmartHubInternal(
             for (const cleanBase of urlsToTry) {
                 if (ratingKey && !ratingKey.startsWith("hub:")) break;
                 try {
-                    const createUrl = `${cleanBase}/library/collections?type=${mediaTypeNum}&title=${encodeURIComponent(defaultTitle)}&smart=1&uri=${encodeURIComponent(fullUri)}&sectionId=${encodeURIComponent(String(sectionKey))}&X-Plex-Token=${encodeURIComponent(token)}`;
+                    const baseMachineId = await getPlexServerMachineIdentifier(cleanBase, token) || machineId;
+                    const cleanFullUri = baseMachineId
+                        ? `server://${baseMachineId}/com.plexapp.plugins.library${filterUri}`
+                        : fullUri;
+                    const createUrl = `${cleanBase}/library/collections?type=${mediaTypeNum}&title=${encodeURIComponent(defaultTitle)}&smart=1&uri=${encodeURIComponent(cleanFullUri)}&sectionId=${encodeURIComponent(String(sectionKey))}&X-Plex-Token=${encodeURIComponent(token)}`;
                     const cRes = await fetch(createUrl, {
                         method: "POST",
                         headers: {

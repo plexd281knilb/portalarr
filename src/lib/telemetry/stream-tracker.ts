@@ -334,6 +334,48 @@ export async function recordActivePlexSessions(
 }
 
 /**
+ * Ensures any watch history thumbnail URL is safely proxied through /api/media/image
+ * to eliminate mixed content warnings and LAN IP unreachability in client browsers.
+ */
+export function formatWatchHistoryThumb(item: any): string | null {
+    if (!item) return null;
+    let rawThumb = item.thumb || "";
+    const title = item.grandparentTitle || item.title || "";
+    const year = item.year ? String(item.year) : "";
+    const type = item.mediaType || (item.grandparentTitle ? "episode" : "movie");
+
+    if (rawThumb && rawThumb.startsWith("/api/media/image")) {
+        return rawThumb;
+    }
+
+    if (rawThumb && (rawThumb.startsWith("http://") || rawThumb.startsWith("https://"))) {
+        try {
+            const parsed = new URL(rawThumb);
+            if (parsed.searchParams.has("img")) {
+                rawThumb = parsed.searchParams.get("img") || "";
+            } else if (parsed.searchParams.has("url")) {
+                rawThumb = parsed.searchParams.get("url") || "";
+            } else if (parsed.pathname.includes("/library/metadata/")) {
+                rawThumb = parsed.pathname;
+            }
+        } catch (e) {}
+    }
+
+    if (rawThumb && rawThumb.includes("pms_image_proxy")) {
+        try {
+            const dummyUrl = new URL(rawThumb.startsWith("http") ? rawThumb : `http://localhost/${rawThumb.replace(/^\/+/, "")}`);
+            const nested = dummyUrl.searchParams.get("img") || dummyUrl.searchParams.get("url");
+            if (nested) rawThumb = nested;
+        } catch (e) {}
+    }
+
+    if (rawThumb || title) {
+        return `/api/media/image?serverId=${encodeURIComponent(item.serverId || "")}&serverName=${encodeURIComponent(item.serverName || "")}&thumb=${encodeURIComponent(rawThumb)}&title=${encodeURIComponent(title)}&year=${encodeURIComponent(year)}&type=${encodeURIComponent(type)}`;
+    }
+    return null;
+}
+
+/**
  * Retrieves paginated watch history with statistical rollups
  */
 export async function getWatchHistory(options?: WatchHistoryQueryOptions) {
@@ -376,8 +418,13 @@ export async function getWatchHistory(options?: WatchHistoryQueryOptions) {
             prisma.watchHistory.count({ where: { completed: true } })
         ]);
 
+        const formattedItems = items.map(it => ({
+            ...it,
+            thumb: formatWatchHistoryThumb(it)
+        }));
+
         return {
-            items,
+            items: formattedItems,
             total,
             sharingAlertsCount: totalAlerts,
             pagination: {
@@ -429,10 +476,15 @@ export async function getConnectionSecurityInsights() {
             })
         ]);
 
+        const formattedAlerts = recentAlerts.map(it => ({
+            ...it,
+            thumb: formatWatchHistoryThumb(it)
+        }));
+
         return {
             usersWithAlerts,
-            recentAlerts,
-            recentFlaggedIncidents: recentAlerts
+            recentAlerts: formattedAlerts,
+            recentFlaggedIncidents: formattedAlerts
         };
     } catch (err: any) {
         console.error("[STREAM-TRACKER] Error fetching security insights:", err.message || err);
@@ -586,12 +638,20 @@ export async function getStreamIntelligenceAnalytics() {
         const directPlayRatio = totalPlayback > 0 ? Math.round((directPlayCount / totalPlayback) * 100) : 100;
 
         const topMovies = Array.from(moviePlays.entries())
-            .map(([title, plays]) => ({ title, plays }))
+            .map(([title, plays]) => ({
+                title,
+                plays,
+                thumb: `/api/media/image?title=${encodeURIComponent(title)}&type=movie`
+            }))
             .sort((a, b) => b.plays - a.plays)
             .slice(0, 10);
 
         const topShows = Array.from(showPlays.entries())
-            .map(([title, plays]) => ({ title, plays }))
+            .map(([title, plays]) => ({
+                title,
+                plays,
+                thumb: `/api/media/image?title=${encodeURIComponent(title)}&type=show`
+            }))
             .sort((a, b) => b.plays - a.plays)
             .slice(0, 10);
 

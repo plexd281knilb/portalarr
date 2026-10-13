@@ -2066,21 +2066,26 @@ export async function syncPlexCollection(
         // 4. Add items that are not yet in the collection (using native collection PUT /items?uri=)
         const keysToAdd = itemRatingKeys.filter(k => !currentKeys.includes(k));
         if (keysToAdd.length > 0) {
-            const machineId = await getPlexServerMachineIdentifier(urlsToTry, token);
-            const chunkSize = 50;
-            const buildItemUri = (k: string) => machineId
-                ? `server://${machineId}/com.plexapp.plugins.library/library/metadata/${k}`
-                : `library:///item/%2Flibrary%2Fmetadata%2F${k}`;
+            // Resolve machine identifier for each candidate URL to ensure exact local server matching
+            const baseMachineIdMap = new Map<string, string>();
+            for (const cleanBase of urlsToTry) {
+                const mId = await getPlexServerMachineIdentifier(cleanBase, token);
+                if (mId) baseMachineIdMap.set(cleanBase, mId);
+            }
 
             const batchSize = 10;
             for (let i = 0; i < keysToAdd.length; i += batchSize) {
                 const batch = keysToAdd.slice(i, i + batchSize);
                 await Promise.all(batch.map(async (rKey) => {
-                    const singleUri = buildItemUri(rKey);
                     let itemAdded = false;
 
                     for (const cleanBase of urlsToTry) {
                         if (itemAdded) break;
+                        const targetMachineId = baseMachineIdMap.get(cleanBase);
+                        const singleUri = targetMachineId
+                            ? `server://${targetMachineId}/com.plexapp.plugins.library/library/metadata/${rKey}`
+                            : `library:///item/%2Flibrary%2Fmetadata%2F${encodeURIComponent(rKey)}`;
+
                         try {
                             const addUrl = `${cleanBase}/library/collections/${encodeURIComponent(collectionRatingKey!)}/items?uri=${encodeURIComponent(singleUri)}&X-Plex-Token=${encodeURIComponent(token)}`;
                             const putRes = await fetch(addUrl, {
@@ -2096,6 +2101,24 @@ export async function syncPlexCollection(
                                 addedCount++;
                                 itemAdded = true;
                                 break;
+                            } else if (putRes.status === 400) {
+                                // If server:// URI was rejected (e.g. LPE: only library URIs are allowed right now), retry with local library URI
+                                const libUri = `library:///item/%2Flibrary%2Fmetadata%2F${encodeURIComponent(rKey)}`;
+                                const libAddUrl = `${cleanBase}/library/collections/${encodeURIComponent(collectionRatingKey!)}/items?uri=${encodeURIComponent(libUri)}&X-Plex-Token=${encodeURIComponent(token)}`;
+                                const libRes = await fetch(libAddUrl, {
+                                    method: "PUT",
+                                    headers: {
+                                        Accept: "application/json",
+                                        "X-Plex-Token": token,
+                                        "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                                    },
+                                    signal: AbortSignal.timeout(4000)
+                                }).catch(() => null);
+                                if (libRes && libRes.ok) {
+                                    addedCount++;
+                                    itemAdded = true;
+                                    break;
+                                }
                             }
                         } catch {}
                     }

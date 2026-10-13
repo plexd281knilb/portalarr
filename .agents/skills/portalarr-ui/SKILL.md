@@ -293,6 +293,32 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 
 ---
 
+### 15. Layered Poster Thumbnail Containers & Graceful Image Fallbacks
+- **Zero Broken Image Boxes & Mixed Content Prevention**:
+  - Whenever rendering dynamic stream session posters, watch history rows, or media items in carousels and lists, never render raw un-proxied LAN URLs (`http://192.168.1.x:32400/...`) which fail in browsers over HTTPS (mixed content blocks) or on remote/VLAN devices.
+  - Route all stream thumbnails through `/api/media/image` (or `formatWatchHistoryThumb`).
+  - Implement the **Layered Fallback Poster Pattern**:
+    ```tsx
+    <div className="relative w-16 h-24 rounded-lg overflow-hidden shrink-0 bg-slate-950 border border-slate-800 flex items-center justify-center shadow-md">
+        <div className="absolute inset-0 flex items-center justify-center text-slate-600">
+            {mediaType === "episode" ? <Tv className="h-6 w-6" /> : <Film className="h-6 w-6" />}
+        </div>
+        {thumbUrl && (
+            <img 
+                src={thumbUrl} 
+                alt={title} 
+                className="w-full h-full object-cover relative z-10" 
+                onError={(e) => { (e.target as HTMLElement).style.display = "none"; }}
+            />
+        )}
+    </div>
+    ```
+  - The fallback icon (`Tv` or `Film`) is placed in the background layer (`absolute inset-0`).
+  - If the image loads, it sits cleanly above on `z-10`.
+  - If the image fails to load or 404s, `onError` sets `display: none` immediately without layout shifts, revealing the clean fallback icon underneath with zero broken image boxes.
+
+---
+
 ### 13. Media Request Quota Visibility & Zero-Limit Suppression Rules
 - **Strict Zero-Limit Suppression**:
   - In Seerr and media request workflows, a quota limit of `0` denotes unlimited requests (e.g. Full Members or Admins).

@@ -378,17 +378,19 @@ export default function StreamIntelligencePage() {
                                         <div>
                                             {/* Poster & Header */}
                                             <div className="p-4 flex gap-3.5">
-                                                {session.thumb ? (
-                                                    <img 
-                                                        src={session.thumb} 
-                                                        alt={session.title} 
-                                                        className="w-16 h-24 object-cover rounded-lg border border-slate-800 shrink-0 shadow-md" 
-                                                    />
-                                                ) : (
-                                                    <div className="w-16 h-24 rounded-lg bg-slate-950 border border-slate-800 shrink-0 flex items-center justify-center text-slate-600">
+                                                <div className="relative w-16 h-24 rounded-lg overflow-hidden shrink-0 bg-slate-950 border border-slate-800 flex items-center justify-center shadow-md">
+                                                    <div className="absolute inset-0 flex items-center justify-center text-slate-600">
                                                         {session.mediaType === "episode" ? <Tv className="h-6 w-6" /> : <Film className="h-6 w-6" />}
                                                     </div>
-                                                )}
+                                                    {session.thumb && (
+                                                        <img 
+                                                            src={session.thumb} 
+                                                            alt={session.title} 
+                                                            className="w-full h-full object-cover relative z-10" 
+                                                            onError={(e) => { (e.target as HTMLElement).style.display = "none"; }}
+                                                        />
+                                                    )}
+                                                </div>
 
                                                 <div className="flex-1 min-w-0 space-y-1">
                                                     <div className="flex items-center justify-between gap-1.5">
@@ -567,8 +569,18 @@ export default function StreamIntelligencePage() {
                                     {historyItems.map((item: any) => (
                                         <div key={item.id} className="p-3.5 flex items-center justify-between gap-3 hover:bg-slate-800/30 transition-all text-xs">
                                             <div className="flex items-center gap-3 min-w-0">
-                                                <div className="w-8 h-8 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-center shrink-0 text-slate-500">
-                                                    {item.mediaType === "episode" ? <Tv className="h-4 w-4" /> : <Film className="h-4 w-4" />}
+                                                <div className="relative w-9 h-13 sm:w-10 sm:h-14 rounded-md overflow-hidden shrink-0 bg-slate-950 border border-slate-800 flex items-center justify-center shadow-sm">
+                                                    <div className="absolute inset-0 flex items-center justify-center text-slate-500">
+                                                        {item.mediaType === "episode" ? <Tv className="h-4 w-4" /> : <Film className="h-4 w-4" />}
+                                                    </div>
+                                                    {item.thumb && (
+                                                        <img 
+                                                            src={item.thumb} 
+                                                            alt={item.title} 
+                                                            className="w-full h-full object-cover relative z-10" 
+                                                            onError={(e) => { (e.target as HTMLElement).style.display = "none"; }}
+                                                        />
+                                                    )}
                                                 </div>
 
                                                 <div className="min-w-0 space-y-0.5">
@@ -800,6 +812,15 @@ export default function StreamIntelligencePage() {
                                             <div key={idx} className="p-3 flex items-center justify-between text-xs hover:bg-slate-800/20">
                                                 <div className="flex items-center gap-2.5 truncate">
                                                     <span className="font-mono font-bold text-slate-500 w-4">{idx + 1}.</span>
+                                                    <div className="relative w-7 h-10 rounded overflow-hidden shrink-0 bg-slate-950 border border-slate-800 flex items-center justify-center shadow-sm">
+                                                        <Film className="h-3.5 w-3.5 text-slate-600 absolute" />
+                                                        <img 
+                                                            src={m.thumb || `/api/media/image?title=${encodeURIComponent(m.title)}&type=movie`}
+                                                            alt={m.title}
+                                                            className="w-full h-full object-cover relative z-10"
+                                                            onError={(e) => { (e.target as HTMLElement).style.display = "none"; }}
+                                                        />
+                                                    </div>
                                                     <span className="font-semibold text-white truncate">{m.title}</span>
                                                 </div>
                                                 <Badge variant="outline" className="text-[10px] font-mono bg-cyan-500/10 text-cyan-300 border-cyan-500/30">
@@ -829,6 +850,15 @@ export default function StreamIntelligencePage() {
                                             <div key={idx} className="p-3 flex items-center justify-between text-xs hover:bg-slate-800/20">
                                                 <div className="flex items-center gap-2.5 truncate">
                                                     <span className="font-mono font-bold text-slate-500 w-4">{idx + 1}.</span>
+                                                    <div className="relative w-7 h-10 rounded overflow-hidden shrink-0 bg-slate-950 border border-slate-800 flex items-center justify-center shadow-sm">
+                                                        <Tv className="h-3.5 w-3.5 text-slate-600 absolute" />
+                                                        <img 
+                                                            src={s.thumb || `/api/media/image?title=${encodeURIComponent(s.title)}&type=show`}
+                                                            alt={s.title}
+                                                            className="w-full h-full object-cover relative z-10"
+                                                            onError={(e) => { (e.target as HTMLElement).style.display = "none"; }}
+                                                        />
+                                                    </div>
                                                     <span className="font-semibold text-white truncate">{s.title}</span>
                                                 </div>
                                                 <Badge variant="outline" className="text-[10px] font-mono bg-purple-500/10 text-purple-300 border-purple-500/30">

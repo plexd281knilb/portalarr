@@ -15458,7 +15458,7 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
                         totalStreamCount += count;
                         const sessions = actResult.data.sessions || [];
                         for (const s of sessions) {
-                            let rawThumb = s.thumb || s.parent_thumb || s.grandparent_thumb || s.art || (s.rating_key ? `/library/metadata/${s.rating_key}/thumb` : "");
+                            let rawThumb = s.grandparent_thumb || s.parent_thumb || s.thumb || s.art || (s.rating_key ? `/library/metadata/${s.rating_key}/thumb` : "");
                             if (rawThumb && rawThumb.includes("pms_image_proxy")) {
                                 try {
                                     const dummyUrl = new URL(rawThumb.startsWith("http") ? rawThumb : `http://localhost/${rawThumb.replace(/^\/+/, "")}`);
@@ -15466,8 +15466,9 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
                                     if (nested) rawThumb = nested;
                                 } catch (e) {}
                             }
-                            const thumbUrl = rawThumb
-                                ? `/api/media/image?instanceId=${encodeURIComponent(t.id)}&img=${encodeURIComponent(rawThumb)}&title=${encodeURIComponent(s.grandparent_title || s.title || "")}&year=${encodeURIComponent(String(s.year || ""))}&type=${encodeURIComponent(s.media_type || (s.grandparent_title ? "episode" : "movie"))}`
+                            const searchTitle = s.grandparent_title || s.title || "";
+                            const thumbUrl = (rawThumb || searchTitle)
+                                ? `/api/media/image?instanceId=${encodeURIComponent(t.id)}&serverName=${encodeURIComponent(t.name)}&img=${encodeURIComponent(rawThumb)}&title=${encodeURIComponent(searchTitle)}&year=${encodeURIComponent(String(s.year || ""))}&type=${encodeURIComponent(s.media_type || (s.grandparent_title ? "episode" : "movie"))}`
                                 : null;
 
                             const isEpisode = s.media_type === "episode" || !!s.grandparent_title;
@@ -15583,7 +15584,9 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
                                 episodeTitle: isEpisode ? (s.title || "") : "",
                                 mediaType: isEpisode ? "episode" : "movie",
                                 year: s.year || "",
-                                thumb: s.thumb ? `${srv.serverUrl}${s.thumb}?X-Plex-Token=${srv.token}` : null,
+                                thumb: (s.grandparentThumb || s.parentThumb || s.thumb || s.art || (s.ratingKey ? `/library/metadata/${s.ratingKey}/thumb` : "") || (s.grandparentTitle || s.title || ""))
+                                    ? `/api/media/image?serverId=${encodeURIComponent(srv.serverId)}&serverName=${encodeURIComponent(srv.serverName)}&serverUrl=${encodeURIComponent(srv.serverUrl)}&thumb=${encodeURIComponent(s.grandparentThumb || s.parentThumb || s.thumb || s.art || (s.ratingKey ? `/library/metadata/${s.ratingKey}/thumb` : ""))}&title=${encodeURIComponent(s.grandparentTitle || s.title || "")}&year=${encodeURIComponent(String(s.year || ""))}&type=${encodeURIComponent(isEpisode ? "episode" : "movie")}&token=${encodeURIComponent(srv.token || "")}`
+                                    : null,
                                 player: s.Player?.title || s.Player?.device || "Plex Client",
                                 device: s.Player?.platform || s.Player?.device || "",
                                 ipAddress: s.Player?.address || "",
@@ -18967,10 +18970,10 @@ export async function getUserPlexHubData() {
                             fullTitle = `${s.title} (${s.year})`;
                         }
 
-                        const rawThumb = s.thumb || s.parentThumb || s.grandparentThumb || s.art || (s.ratingKey ? `/library/metadata/${s.ratingKey}/thumb` : "");
+                        const rawThumb = s.grandparentThumb || s.parentThumb || s.thumb || s.art || (s.ratingKey ? `/library/metadata/${s.ratingKey}/thumb` : "");
                         const searchTitle = s.grandparentTitle || s.title || "";
                         const thumbUrl = rawThumb || searchTitle 
-                            ? `/api/media/image?instanceId=${encodeURIComponent(srvId)}&img=${encodeURIComponent(rawThumb)}&title=${encodeURIComponent(searchTitle)}&year=${encodeURIComponent(String(s.year || ""))}&type=${encodeURIComponent(mediaType)}`
+                            ? `/api/media/image?instanceId=${encodeURIComponent(srvId)}&serverId=${encodeURIComponent(srv.serverId)}&serverName=${encodeURIComponent(srv.serverName)}&serverUrl=${encodeURIComponent(srv.serverUrl)}&token=${encodeURIComponent(srv.token || "")}&img=${encodeURIComponent(rawThumb)}&title=${encodeURIComponent(searchTitle)}&year=${encodeURIComponent(String(s.year || ""))}&type=${encodeURIComponent(mediaType)}`
                             : null;
 
                         const sKey = String(s.sessionKey || s.Session?.id || Math.random());

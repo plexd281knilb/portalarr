@@ -541,7 +541,7 @@ export default function AdminDetailedStreams() {
                                     <div className="flex items-start gap-3 flex-1 min-w-0">
                                         <div className="relative w-12 h-16 sm:w-14 sm:h-20 rounded-lg overflow-hidden shrink-0 bg-muted/30 border border-white/10 flex items-center justify-center">
                                             <div className="absolute inset-0 flex items-center justify-center bg-muted/20">
-                                                <Film className="h-5 w-5 text-muted-foreground/30" />
+                                                {stream.mediaType === "episode" ? <Tv className="h-5 w-5 text-muted-foreground/30" /> : <Film className="h-5 w-5 text-muted-foreground/30" />}
                                             </div>
                                             {stream.thumb && (
                                                 <img 
@@ -863,19 +863,16 @@ export default function AdminDetailedStreams() {
                                         <div className="flex items-start gap-3 flex-1 min-w-0">
                                             {/* Poster Thumbnail */}
                                             <div className="relative w-10 h-14 rounded overflow-hidden shrink-0 bg-muted/30 border border-white/10 flex items-center justify-center">
-                                                {item.thumb ? (
+                                                <div className="absolute inset-0 flex items-center justify-center text-muted-foreground/40">
+                                                    {item.mediaType === "episode" ? <Tv className="h-4 w-4" /> : <Film className="h-4 w-4" />}
+                                                </div>
+                                                {item.thumb && (
                                                     <img 
                                                         src={item.thumb} 
                                                         alt={item.title} 
-                                                        className="w-full h-full object-cover" 
+                                                        className="w-full h-full object-cover relative z-10" 
                                                         onError={(e) => { (e.target as HTMLElement).style.display = "none"; }}
                                                     />
-                                                ) : (
-                                                    item.mediaType === "episode" ? (
-                                                        <Tv className="h-4 w-4 text-muted-foreground/40" />
-                                                    ) : (
-                                                        <Film className="h-4 w-4 text-muted-foreground/40" />
-                                                    )
                                                 )}
                                             </div>
 

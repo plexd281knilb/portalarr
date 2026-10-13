@@ -100,6 +100,10 @@ See detailed runbook: [tags-collections-and-hubs.md](./references/tags-collectio
 16. **Network Fetch Resilience & Next.js Streaming Pipeline Protection**:
     - **Never wrap operational PMS/Tautulli queries in `next: { revalidate: N }`**: In Next.js App Router Turbopack, wrapping dynamic server component or server action calls with Next.js data cache interceptors causes unreachable servers, dead Docker IP candidates, or aborted signals to throw unhandled `TypeError: fetch failed` during response piping, which crashes the stream with `Error: failed to pipe response`.
     - **Enforce `cache: "no-store"` & explicit `AbortSignal.timeout(...)`**: Always supply `{ cache: "no-store" }` and explicit timeout signals (e.g. `AbortSignal.timeout(5000)`) wrapped in `try/catch` blocks returning fallback structures (`null` or empty arrays) so failing endpoints fail gracefully without ever interrupting Next.js response piping.
+17. **Local Machine Identifier URI Matching & Library URI Fallback (`LPE: only library URIs are allowed right now`)**:
+    - **Plex Collection Single-Item URI Constraint**: Adding items to collections via `PUT /library/collections/{id}/items?uri=...` requires the URI to point to the local server's internal database (`server://{machineIdentifier}/com.plexapp.plugins.library/library/metadata/{ratingKey}`). If `{machineIdentifier}` does not match the receiving server, or if a cross-server URI is sent, PMS rejects it with `400 Bad Request` and logs `LPE: only library URIs are allowed right now. Failed to generate a query from uri server://...`.
+    - **Strict Candidate Isolation**: In multi-server environments, `resolveWorkingPlexServerConnection` strictly purges candidate URLs returning mismatched `machineIdentifier` values so candidate lists never leak cross-server URLs. `syncPlexCollection` resolves `machineIdentifier` per candidate base URL (`baseMachineIdMap`), retries with `library:///item/%2Flibrary%2Fmetadata/{ratingKey}` upon HTTP 400 rejection, and falls back to item metadata tagging (`collection[0].tag.tag=...`) to ensure 100% item retention without PMS log errors.
+
 
 
 

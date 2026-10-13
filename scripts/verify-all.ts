@@ -5255,6 +5255,10 @@ async function runTestSuite() {
         const emptyRemoved = await removeItemsFromPlexCollection([], "dummy-token", "Test Coll", []);
         if (emptyRemoved !== 0) throw new Error("Expected 0 removed for empty input");
 
+        // Verify syncPlexCollection safely handles empty inputs
+        const emptySynced = await syncPlexCollection([], "dummy-token", "1", "Test Coll", []);
+        if (emptySynced.success !== false) throw new Error("Expected success: false for empty item list in syncPlexCollection");
+
         // Verify seasonal presets have distinct valid queries
         const { COLLECTION_PRESETS } = await import("../src/lib/curation/presets");
         const halloween = COLLECTION_PRESETS.find(p => p.id === "halloween-horror-fest");
@@ -7306,7 +7310,7 @@ async function runTestSuite() {
         const { diagnoseStreamSettings } = await import("../src/lib/telemetry/device-diagnostics");
         const { toggleStreamMonitorModeAction, getStreamIntelligenceDataAction } = await import("../src/app/actions");
         const { backfillTautulliHistoryInternal } = await import("../src/lib/telemetry/tautulli-backfill");
-        const { getUserStreamProfiles, getStreamIntelligenceAnalytics } = await import("../src/lib/telemetry/stream-tracker");
+        const { getUserStreamProfiles, getStreamIntelligenceAnalytics, formatWatchHistoryThumb, getWatchHistory } = await import("../src/lib/telemetry/stream-tracker");
 
         // 1. Verify Device Quality Doctor Diagnostics
         // A. Suboptimal Roku cap detection
@@ -7450,6 +7454,48 @@ async function runTestSuite() {
             }
             if (typeof analytics.directPlayPercentage !== "number") {
                 throw new Error("Expected directPlayPercentage to be a number");
+            }
+
+            // 4b. Verify Watch History & Tautulli Poster Proxy Protection
+            const rawPlexThumb = "http://192.168.1.87:32400/library/metadata/38163/thumb/1728829182?X-Plex-Token=abc123xyz";
+            const proxiedThumb = formatWatchHistoryThumb({
+                thumb: rawPlexThumb,
+                title: "Severance - S01E01: Good News About Hell",
+                grandparentTitle: "Severance",
+                year: 2022,
+                mediaType: "episode"
+            });
+            if (!proxiedThumb || !proxiedThumb.startsWith("/api/media/image")) {
+                throw new Error(`Expected proxied thumb to start with /api/media/image, got: ${proxiedThumb}`);
+            }
+            if (!proxiedThumb.includes("thumb=%2Flibrary%2Fmetadata%2F38163%2Fthumb%2F1728829182")) {
+                throw new Error(`Expected proxied thumb to extract clean relative path, got: ${proxiedThumb}`);
+            }
+            if (!proxiedThumb.includes("title=Severance")) {
+                throw new Error(`Expected proxied thumb to include show title, got: ${proxiedThumb}`);
+            }
+
+            // Verify existing proxied thumb is preserved
+            const existingProxied = "/api/media/image?title=Severance&type=show";
+            if (formatWatchHistoryThumb({ thumb: existingProxied }) !== existingProxied) {
+                throw new Error("Expected existing /api/media/image thumb to be preserved");
+            }
+
+            // Verify title fallback when thumb is null
+            const titleOnlyThumb = formatWatchHistoryThumb({ title: "Inception", mediaType: "movie", year: 2010 });
+            if (!titleOnlyThumb || !titleOnlyThumb.startsWith("/api/media/image") || !titleOnlyThumb.includes("title=Inception")) {
+                throw new Error("Expected title-only fallback to build valid proxy image URL");
+            }
+
+            // Verify getWatchHistory returns items with proxied thumbs
+            const historyTest = await getWatchHistory({ limit: 5 });
+            if (!Array.isArray(historyTest.items)) {
+                throw new Error("Expected getWatchHistory to return items array");
+            }
+            for (const it of historyTest.items) {
+                if (it.thumb && !it.thumb.startsWith("/api/media/image")) {
+                    throw new Error(`Watch history item has unproxied thumbnail: ${it.thumb}`);
+                }
             }
 
             // 5. Verify Tautulli Backfill Deduplication & Execution Safety
