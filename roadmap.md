@@ -15,6 +15,10 @@
 
 ### 🚀 Coming Soon
 
+- **📈 Built-in Native Tautulli Stream Telemetry Engine:** Fully integrated native stream monitoring and telemetry service embedded directly into Portalarr, replacing the requirement for standalone external Tautulli instances while capturing 100% of watch sessions, stream bandwidth, device platforms, and audio/video transcoding decisions in real time.
+- **🎬 Complete Media Watch History & Playback Analytics:** Comprehensive audit trails and history tracking for all movies, TV series, and individual episodes streamed across the ecosystem—tracking play counts, watch duration, completion rates, paused progress, and user consumption habits.
+- **👥 Per-User Concurrent Connection & Device Monitor:** Real-time visibility into active streaming sessions per account, tracking simultaneous connections, client devices, player apps, and IP addresses to prevent server congestion and ensure fair bandwidth allocation.
+- **🔒 Password Sharing & Credential Abuse Detection:** Automated security auditing and fraud heuristics to identify unauthorized account sharing—flagging simultaneous streams from disparate geographic locations, mismatched IP subnets, and suspicious multi-household device usage.
 - **🤖 Autonomous AI Support Assistant:** In-app conversational helper with live playback diagnostics, stream health fixes, and 1-click ticket escalation right from your stream card.
 - **💬 1-Click Subtitle Search & Auto-Sync:** Search, download, and auto-align missing subtitles directly from your stream viewer in My Plex Hub.
 - **📊 Personal Year-in-Review & Watch Stats:** Deep dive into your personal streaming history, favorite genres, binge stats, and top-watched movies and shows.
