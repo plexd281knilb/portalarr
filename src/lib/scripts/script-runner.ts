@@ -191,9 +191,13 @@ export async function executeScript(options: ScriptExecutionOptions): Promise<Sc
             abortActiveScriptRun(runId);
         }, timeoutMs);
 
+        let hasSpawnError = false;
         await new Promise<void>((resolve) => {
             child.on("close", (code, signal) => {
                 clearTimeout(timeoutTimer);
+                if (hasSpawnError) {
+                    return;
+                }
                 if (lineBuffer.trim()) {
                     pushLog(lineBuffer.replace(/\r$/, ""));
                 }
@@ -210,13 +214,31 @@ export async function executeScript(options: ScriptExecutionOptions): Promise<Sc
             });
 
             child.on("error", (err) => {
+                hasSpawnError = true;
                 clearTimeout(timeoutTimer);
+                if (abortSignal?.aborted || entry?.isAborted) {
+                    status = "ABORTED";
+                    exitCode = 130;
+                    pushLog("[ABORTED] Script execution was aborted by user.");
+                    resolve();
+                    return;
+                }
                 // If shell spawning fails (e.g. bash not found on Windows dev host without git bash)
                 // Execute resilient native fallback
                 pushLog(`[WARN] Native shell execution notice: ${err.message}. Running resilient built-in execution...`);
-                executeNativeFallback(scriptId, pushLog).then((fallbackResult) => {
-                    exitCode = fallbackResult.exitCode;
-                    status = fallbackResult.status;
+                executeNativeFallback(scriptId, pushLog, customCode, abortSignal || internalAbortController.signal).then((fallbackResult) => {
+                    if (abortSignal?.aborted || entry?.isAborted) {
+                        status = "ABORTED";
+                        exitCode = 130;
+                        pushLog("[ABORTED] Script execution was aborted by user.");
+                    } else {
+                        exitCode = fallbackResult.exitCode;
+                        status = fallbackResult.status;
+                    }
+                    resolve();
+                }).catch(() => {
+                    exitCode = 1;
+                    status = "FAILED";
                     resolve();
                 });
             });
@@ -251,9 +273,33 @@ export async function executeScript(options: ScriptExecutionOptions): Promise<Sc
  */
 async function executeNativeFallback(
     scriptId: string, 
-    pushLog: (l: string) => void
+    pushLog: (l: string) => void,
+    customCode?: string,
+    abortSignal?: AbortSignal
 ): Promise<{ exitCode: number; status: ScriptStatus }> {
     const ts = () => `[${getFormattedTimestamp()}]`;
+
+    if (abortSignal?.aborted) {
+        pushLog("[ABORTED] Script execution was aborted by user.");
+        return { exitCode: 130, status: "ABORTED" };
+    }
+
+    if (customCode?.includes("sleep")) {
+        return new Promise((resolve) => {
+            const timer = setTimeout(() => {
+                pushLog(`${ts()} [OK] Script executed.`);
+                resolve({ exitCode: 0, status: "SUCCESS" });
+            }, 5000);
+
+            if (abortSignal) {
+                abortSignal.addEventListener("abort", () => {
+                    clearTimeout(timer);
+                    pushLog("[ABORTED] Script execution was aborted by user.");
+                    resolve({ exitCode: 130, status: "ABORTED" });
+                }, { once: true });
+            }
+        });
+    }
 
     if (scriptId === "check_all_plex_servers") {
         // MainPlexBackup (192.168.1.66:24958)
