@@ -105,9 +105,16 @@ check_plex_server() {
 
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] --- Checking $container ($host:$port) ---"
 
-    # Verify if Docker container actually exists and is running
-    local container_status
-    container_status=$(docker inspect --format '{{.State.Status}}' "$container" 2>/dev/null)
+    # Verify if Docker container actually exists and is running (via docker CLI or /var/run/docker.sock)
+    local container_status=""
+    if command -v docker >/dev/null 2>&1; then
+        container_status=$(docker inspect --format '{{.State.Status}}' "$container" 2>/dev/null)
+    elif [ -S "/var/run/docker.sock" ]; then
+        container_status=$(curl -s --unix-socket /var/run/docker.sock "http://localhost/containers/\${container}/json" 2>/dev/null | grep -o '"Status":"[^"]*"' | head -n1 | cut -d'"' -f4)
+    else
+        # Running in standalone container without Docker socket - rely on direct HTTP reachability
+        container_status="running"
+    fi
 
     if [ -z "$container_status" ]; then
         echo "[$(date '+%Y-%m-%d %H:%M:%S')] [ERROR] Container $container does not exist."
@@ -145,11 +152,19 @@ check_plex_server() {
         echo "[$(date '+%Y-%m-%d %H:%M:%S')] [OK] Plex ($container) is up and healthy."
     else
         echo "[$(date '+%Y-%m-%d %H:%M:%S')] [FAIL] Plex ($container) failed $MAX_RETRIES checks on $host:$port. Restarting container..."
-        docker restart "$container"
+        if command -v docker >/dev/null 2>&1; then
+            docker restart "$container"
+        elif [ -S "/var/run/docker.sock" ]; then
+            curl -s -X POST --unix-socket /var/run/docker.sock "http://localhost/containers/\${container}/restart" >/dev/null 2>&1
+        fi
         sleep 2
-        local new_status
-        new_status=$(docker inspect --format '{{.State.Status}}' "$container" 2>/dev/null)
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Container $container status post-restart: $new_status"
+        local new_status=""
+        if command -v docker >/dev/null 2>&1; then
+            new_status=$(docker inspect --format '{{.State.Status}}' "$container" 2>/dev/null)
+        elif [ -S "/var/run/docker.sock" ]; then
+            new_status=$(curl -s --unix-socket /var/run/docker.sock "http://localhost/containers/\${container}/json" 2>/dev/null | grep -o '"Status":"[^"]*"' | head -n1 | cut -d'"' -f4)
+        fi
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Container $container status post-restart: \${new_status:-unknown}"
     fi
 }
 
