@@ -45,6 +45,7 @@ import {
     getWatchHistory, 
     getConnectionSecurityInsights, 
     getUserStreamProfiles,
+    getUserDetailedTelemetry,
     getStreamIntelligenceAnalytics,
     isPrivateOrLocalIp,
     type WatchHistoryQueryOptions 
@@ -15909,6 +15910,7 @@ export async function backfillTautulliHistoryAction(options?: { instanceId?: str
             update: { tautulliBackfillLastRun: new Date() },
             create: { id: "global", tautulliBackfillLastRun: new Date() }
         }).catch(() => {});
+        try { revalidatePath("/admin/tautulli"); } catch (_) {}
         try { revalidatePath("/tautulli"); } catch (_) {}
     }
     return result;
@@ -15924,6 +15926,7 @@ export async function toggleStreamMonitorModeAction(useBuiltIn: boolean) {
         update: { nativeStreamMonitoringEnabled: useBuiltIn },
         create: { id: "global", nativeStreamMonitoringEnabled: useBuiltIn }
     });
+    try { revalidatePath("/admin/tautulli"); } catch (_) {}
     try { revalidatePath("/tautulli"); } catch (_) {}
     try { revalidatePath("/"); } catch (_) {}
     return { success: true, useBuiltIn };
@@ -15935,6 +15938,14 @@ export async function toggleStreamMonitorModeAction(useBuiltIn: boolean) {
 export async function getWatchHistoryAction(options?: WatchHistoryQueryOptions) {
     await verifyAdmin();
     return await getWatchHistory(options);
+}
+
+/**
+ * Server Action: Retrieve detailed telemetry, all devices, all IPs, and full watch history for a user
+ */
+export async function getUserDetailedTelemetryAction(username: string) {
+    await verifyAdmin();
+    return await getUserDetailedTelemetry(username);
 }
 
 /**

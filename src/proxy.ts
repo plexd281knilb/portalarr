@@ -92,6 +92,8 @@ export async function proxy(req: NextRequest) {
     if (
       (pathname.startsWith("/admin") ||
        pathname.startsWith("/curation") ||
+       pathname.startsWith("/tautulli") ||
+       pathname.startsWith("/streams") ||
        pathname.startsWith("/api/curation") ||
        pathname.startsWith("/api/users") ||
        pathname.startsWith("/api/debug") ||
@@ -118,8 +120,13 @@ export async function proxy(req: NextRequest) {
       return NextResponse.redirect(new URL("/profile", req.url));
     }
 
-    // 6. Role-based protection for Radarr/Sonarr and Stream Intelligence routes
-    if ((pathname.startsWith("/radarr") || pathname.startsWith("/sonarr") || pathname.startsWith("/tautulli") || pathname.startsWith("/streams")) && payload.role !== "ADMIN" && payload.role !== "SUPER_USER") {
+    // Smoothly alias legacy /tautulli and /streams to /admin/tautulli for administrators
+    if (pathname === "/tautulli" || pathname.startsWith("/tautulli/") || pathname === "/streams" || pathname.startsWith("/streams/")) {
+      return NextResponse.redirect(new URL("/admin/tautulli", req.url));
+    }
+
+    // 6. Role-based protection for Radarr/Sonarr routes
+    if ((pathname.startsWith("/radarr") || pathname.startsWith("/sonarr")) && payload.role !== "ADMIN" && payload.role !== "SUPER_USER") {
       if (pathname.startsWith("/api")) {
         return NextResponse.json({ error: "Forbidden: Admin or Super User access required" }, { status: 403 });
       }

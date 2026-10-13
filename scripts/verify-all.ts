@@ -3465,6 +3465,12 @@ async function runTestSuite() {
         if (matchesCloudflareBypass("/api/debug/db")) throw new Error("/api/debug/db must NEVER match bypass");
         if (!matchesCloudflareAdmin("/api/books/upload")) throw new Error("/api/books/upload must match admin");
         if (matchesCloudflareBypass("/api/books/upload")) throw new Error("/api/books/upload must NEVER match bypass");
+        if (!matchesCloudflareAdmin("/admin/tautulli")) throw new Error("/admin/tautulli must match admin");
+        if (!matchesCloudflareAdmin("/admin/streams")) throw new Error("/admin/streams must match admin");
+        if (!matchesCloudflareAdmin("/tautulli")) throw new Error("/tautulli must match admin");
+        if (!matchesCloudflareAdmin("/streams")) throw new Error("/streams must match admin");
+        if (matchesCloudflareBypass("/tautulli")) throw new Error("/tautulli must NEVER match bypass");
+        if (matchesCloudflareSuperUser("/tautulli")) throw new Error("/tautulli must NOT match super user (admin only)");
     });
 
     // 88. Kindle: Amazon Send-to-Kindle Bounce Email Scanner & Rejection Parser
@@ -7487,15 +7493,73 @@ async function runTestSuite() {
                 throw new Error("Expected title-only fallback to build valid proxy image URL");
             }
 
-            // Verify getWatchHistory returns items with proxied thumbs
-            const historyTest = await getWatchHistory({ limit: 5 });
-            if (!Array.isArray(historyTest.items)) {
-                throw new Error("Expected getWatchHistory to return items array");
-            }
-            for (const it of historyTest.items) {
-                if (it.thumb && !it.thumb.startsWith("/api/media/image")) {
-                    throw new Error(`Watch history item has unproxied thumbnail: ${it.thumb}`);
+            // 4c. Verify User Detailed Telemetry (Full History, Devices & IP Addresses)
+            const { getUserDetailedTelemetryAction } = await import("../src/app/actions");
+            const { getUserDetailedTelemetry } = await import("../src/lib/telemetry/stream-tracker");
+
+            // Seed test watch records for verification
+            const testUserName = `test_telemetry_user_${Date.now()}`;
+            await prisma.watchHistory.createMany({
+                data: [
+                    {
+                        user: testUserName,
+                        title: "Test Movie Alpha",
+                        mediaType: "movie",
+                        videoDecision: "direct play",
+                        player: "Plex for Apple TV",
+                        platform: "tvOS",
+                        device: "Apple TV 4K",
+                        ipAddress: "192.168.1.120",
+                        location: "LAN",
+                        durationMs: 7200000,
+                        completed: true
+                    },
+                    {
+                        user: testUserName,
+                        title: "Test Series Beta - S01E01",
+                        grandparentTitle: "Test Series Beta",
+                        seasonNum: 1,
+                        episodeNum: 1,
+                        mediaType: "episode",
+                        videoDecision: "transcode",
+                        player: "Plex for iOS",
+                        platform: "iOS",
+                        device: "iPhone 15 Pro",
+                        ipAddress: "73.189.44.12",
+                        location: "Remote",
+                        durationMs: 3600000,
+                        completed: true
+                    }
+                ]
+            });
+
+            try {
+                const userTelemetry = await getUserDetailedTelemetryAction(testUserName);
+                if (userTelemetry.user !== testUserName) {
+                    throw new Error(`Expected userTelemetry.user to be '${testUserName}', got '${userTelemetry.user}'`);
                 }
+                if (userTelemetry.totalPlays !== 2) {
+                    throw new Error(`Expected totalPlays to be 2, got ${userTelemetry.totalPlays}`);
+                }
+                if (userTelemetry.devices.length !== 2) {
+                    throw new Error(`Expected 2 distinct devices, got ${userTelemetry.devices.length}`);
+                }
+                if (userTelemetry.ips.length !== 2) {
+                    throw new Error(`Expected 2 distinct IPs, got ${userTelemetry.ips.length}`);
+                }
+                if (!userTelemetry.ips.some((i: any) => i.ip === "192.168.1.120" && i.isLan === true)) {
+                    throw new Error("Expected LAN IP 192.168.1.120 with isLan: true");
+                }
+                if (!userTelemetry.ips.some((i: any) => i.ip === "73.189.44.12" && i.isLan === false)) {
+                    throw new Error("Expected Public WAN IP 73.189.44.12 with isLan: false");
+                }
+                if (userTelemetry.history.length !== 2) {
+                    throw new Error(`Expected 2 history items, got ${userTelemetry.history.length}`);
+                }
+            } finally {
+                await prisma.watchHistory.deleteMany({
+                    where: { user: testUserName }
+                }).catch(() => {});
             }
 
             // 5. Verify Tautulli Backfill Deduplication & Execution Safety

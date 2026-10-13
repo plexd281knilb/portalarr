@@ -515,6 +515,8 @@ export async function getUserStreamProfiles() {
             transcodeCount: number;
             servers: Set<string>;
             platforms: Set<string>;
+            devices: Set<string>;
+            ips: Set<string>;
             lastWatchedTitle: string;
             lastWatchedAt: Date;
             lastPlatform: string;
@@ -534,6 +536,8 @@ export async function getUserStreamProfiles() {
                     transcodeCount: 0,
                     servers: new Set(),
                     platforms: new Set(),
+                    devices: new Set(),
+                    ips: new Set(),
                     lastWatchedTitle: r.grandparentTitle ? `${r.grandparentTitle} - ${r.title}` : r.title,
                     lastWatchedAt: r.watchedAt,
                     lastPlatform: r.platform || r.player || "Unknown",
@@ -550,6 +554,8 @@ export async function getUserStreamProfiles() {
             if (r.videoDecision === "transcode") profile.transcodeCount++;
             if (r.serverName) profile.servers.add(r.serverName);
             if (r.platform) profile.platforms.add(r.platform);
+            if (r.device || r.player) profile.devices.add(r.device || r.player || "Client");
+            if (r.ipAddress) profile.ips.add(r.ipAddress);
             if (r.isSharingAlert) profile.sharingAlerts++;
         }
 
@@ -566,6 +572,10 @@ export async function getUserStreamProfiles() {
                 transcodeRate,
                 servers: Array.from(p.servers),
                 platforms: Array.from(p.platforms),
+                devices: Array.from(p.devices),
+                ips: Array.from(p.ips),
+                devicesCount: p.devices.size,
+                ipsCount: p.ips.size,
                 lastWatchedTitle: p.lastWatchedTitle,
                 lastWatchedAt: p.lastWatchedAt,
                 lastPlatform: p.lastPlatform,
@@ -580,6 +590,208 @@ export async function getUserStreamProfiles() {
     } catch (err: any) {
         console.error("[STREAM-TRACKER] Error building user stream profiles:", err);
         return [];
+    }
+}
+
+/**
+ * Detailed telemetry profile for a specific user:
+ * Includes full aggregated devices, all used IP addresses, and chronological playback history.
+ */
+export async function getUserDetailedTelemetry(username: string) {
+    try {
+        const cleanUser = username?.trim() || "";
+        if (!cleanUser) {
+            return {
+                user: "",
+                totalPlays: 0,
+                completedCount: 0,
+                totalWatchHours: 0,
+                directPlayCount: 0,
+                transcodeCount: 0,
+                transcodeRate: 0,
+                sharingAlerts: 0,
+                devices: [],
+                ips: [],
+                history: []
+            };
+        }
+
+        // Query watch history for this user
+        const records = await prisma.watchHistory.findMany({
+            where: {
+                user: {
+                    equals: cleanUser
+                }
+            },
+            orderBy: { watchedAt: "desc" },
+            take: 2000
+        });
+
+        let userRecords = records;
+        if (userRecords.length === 0) {
+            userRecords = await prisma.watchHistory.findMany({
+                where: {
+                    user: {
+                        contains: cleanUser
+                    }
+                },
+                orderBy: { watchedAt: "desc" },
+                take: 2000
+            });
+        }
+
+        let totalWatchSeconds = 0;
+        let completedCount = 0;
+        let directPlayCount = 0;
+        let transcodeCount = 0;
+        let sharingAlerts = 0;
+
+        const deviceMap = new Map<string, {
+            name: string;
+            player: string;
+            platform: string;
+            device: string;
+            playCount: number;
+            directPlayCount: number;
+            transcodeCount: number;
+            lastSeen: Date;
+            firstSeen: Date;
+            servers: Set<string>;
+        }>();
+
+        const ipMap = new Map<string, {
+            ip: string;
+            location: string;
+            isLan: boolean;
+            playCount: number;
+            sharingAlertCount: number;
+            lastSeen: Date;
+            firstSeen: Date;
+            devices: Set<string>;
+        }>();
+
+        const formattedHistory: any[] = [];
+
+        for (const r of userRecords) {
+            totalWatchSeconds += Math.round((r.durationMs || 0) / 1000);
+            if (r.completed) completedCount++;
+            if (r.videoDecision === "direct play") directPlayCount++;
+            if (r.videoDecision === "transcode") transcodeCount++;
+            if (r.isSharingAlert) sharingAlerts++;
+
+            // Device aggregation
+            const devName = r.device || r.player || r.platform || "Plex Client";
+            const platformName = r.platform || "Unknown";
+            const playerName = r.player || "Plex";
+            const devKey = `${platformName}:::${playerName}:::${devName}`.toLowerCase();
+
+            if (!deviceMap.has(devKey)) {
+                deviceMap.set(devKey, {
+                    name: devName,
+                    player: playerName,
+                    platform: platformName,
+                    device: r.device || "Client",
+                    playCount: 0,
+                    directPlayCount: 0,
+                    transcodeCount: 0,
+                    lastSeen: r.watchedAt,
+                    firstSeen: r.watchedAt,
+                    servers: new Set()
+                });
+            }
+            const dev = deviceMap.get(devKey)!;
+            dev.playCount++;
+            if (r.videoDecision === "direct play") dev.directPlayCount++;
+            if (r.videoDecision === "transcode") dev.transcodeCount++;
+            if (r.watchedAt > dev.lastSeen) dev.lastSeen = r.watchedAt;
+            if (r.watchedAt < dev.firstSeen) dev.firstSeen = r.watchedAt;
+            if (r.serverName) dev.servers.add(r.serverName);
+
+            // IP aggregation
+            const ip = r.ipAddress || "Unknown IP";
+            if (!ipMap.has(ip)) {
+                const isLan = isPrivateOrLocalIp(ip);
+                ipMap.set(ip, {
+                    ip,
+                    location: r.location || (isLan ? "LAN" : "Remote"),
+                    isLan,
+                    playCount: 0,
+                    sharingAlertCount: 0,
+                    lastSeen: r.watchedAt,
+                    firstSeen: r.watchedAt,
+                    devices: new Set()
+                });
+            }
+            const ipEntry = ipMap.get(ip)!;
+            ipEntry.playCount++;
+            if (r.isSharingAlert) ipEntry.sharingAlertCount++;
+            if (r.watchedAt > ipEntry.lastSeen) ipEntry.lastSeen = r.watchedAt;
+            if (r.watchedAt < ipEntry.firstSeen) ipEntry.firstSeen = r.watchedAt;
+            ipEntry.devices.add(devName);
+
+            // Formatted history row
+            formattedHistory.push({
+                ...r,
+                thumb: formatWatchHistoryThumb(r)
+            });
+        }
+
+        const totalPlayback = directPlayCount + transcodeCount;
+        const transcodeRate = totalPlayback > 0 ? Math.round((transcodeCount / totalPlayback) * 100) : 0;
+
+        const devices = Array.from(deviceMap.values()).map(d => ({
+            name: d.name,
+            player: d.player,
+            platform: d.platform,
+            device: d.device,
+            playCount: d.playCount,
+            directPlayCount: d.directPlayCount,
+            transcodeCount: d.transcodeCount,
+            directPlayRate: d.playCount > 0 ? Math.round((d.directPlayCount / d.playCount) * 100) : 100,
+            lastSeen: d.lastSeen,
+            firstSeen: d.firstSeen,
+            servers: Array.from(d.servers)
+        })).sort((a, b) => b.playCount - a.playCount);
+
+        const ips = Array.from(ipMap.values()).map(i => ({
+            ip: i.ip,
+            location: i.location,
+            isLan: i.isLan,
+            playCount: i.playCount,
+            sharingAlertCount: i.sharingAlertCount,
+            lastSeen: i.lastSeen,
+            firstSeen: i.firstSeen,
+            devices: Array.from(i.devices)
+        })).sort((a, b) => b.playCount - a.playCount);
+
+        return {
+            user: cleanUser,
+            totalPlays: userRecords.length,
+            completedCount,
+            totalWatchHours: Number((totalWatchSeconds / 3600).toFixed(1)),
+            directPlayCount,
+            transcodeCount,
+            transcodeRate,
+            sharingAlerts,
+            devices,
+            ips,
+            history: formattedHistory
+        };
+    } catch (err: any) {
+        console.error("[STREAM-TRACKER] Error building detailed user telemetry:", err);
+        return {
+            user: username,
+            totalPlays: 0,
+            completedCount: 0,
+            totalWatchHours: 0,
+            directPlayCount: 0,
+            transcodeCount: 0,
+            transcodeRate: 0,
+            sharingAlerts: 0,
+            devices: [],
+            ips: [],
+            history: []
+        };
     }
 }
 

@@ -163,7 +163,7 @@ export default function AdminDetailedStreams() {
                             size="sm"
                             className="h-8 px-2.5 text-xs gap-1.5 border-emerald-500/40 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/30 font-semibold"
                         >
-                            <Link href="/tautulli">
+                            <Link href="/admin/tautulli">
                                 <Activity className="h-3.5 w-3.5" />
                                 <span>Stream Intelligence Hub</span>
                             </Link>

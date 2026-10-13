@@ -759,17 +759,24 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
   - **Role-Scoped Access Control**: Backend action `getTicketsDashboardAction()` scopes ticket queries by role. Standard users see strictly their own submitted tickets, open new tickets with priority tiers (`LOW`, `NORMAL`, `HIGH`, `URGENT`), and view admin comments/resolution notes. Administrators see tickets from all users, filter by status (`ALL`, `OPEN`, `IN_PROGRESS`, `RESOLVED`, `CLOSED`), update ticket status, link to relevant user profiles or Arr apps, and delete tickets.
   - **Sidebar & Navigation Integration**: Accessible via "Support Tickets" (`LifeBuoy` icon) in both desktop and mobile sidebars for all authenticated users.
 
-- **Stream Intelligence & Multi-Server Telemetry Hub (`/tautulli` and `/streams`)**:
+- **Stream Intelligence & Multi-Server Telemetry Hub (`/admin/tautulli` and `/admin/streams`)**:
   - **Unified Mission Control**: Single-pane stream intelligence hub aggregating live sessions, watch history, user leaderboards, and device telemetry across all monitored Plex Media Servers (`MainPlexServer`, `KidsPlexServer`, `MainPlexServerBackup`, etc.) and hardware hosts.
+  - **Admin-Only Guarded Route**: Strictly placed under `/admin/tautulli` and `/admin/streams` (aliased in App Router), guarded by `payload.role === "ADMIN"` in `src/proxy.ts` and registered in `CLOUDFLARE_ADMIN_PATHS`. Non-admins visiting legacy `/tautulli` or `/streams` are bounced to `/`, while admins are automatically redirected to `/admin/tautulli`.
   - **Built-in Telemetry Takeover Mode (`nativeStreamMonitoringEnabled`)**: When enabled (default), DomsHomeLab polls all Plex servers directly and halts live queries to standalone external Tautulli containers, eliminating duplicate stream tracking and redundant polling load while preserving external instances as backfill sources.
   - **Tautulli Historical Backfill Runner (`backfillTautulliHistoryAction`)**: 1-click historical watch log importer from external Tautulli instances into the SQLite `WatchHistory` table with 2-hour window deduplication, custom limit controls (100–5,000 records), and timestamp tracking (`tautulliBackfillLastRun`).
+  - **User Telemetry & Connection Intelligence Modal (`getUserDetailedTelemetryAction`)**:
+    - Clicking on any member in the User Telemetry list, active sessions, or watch history logs opens a dedicated, high-density inspection dialog (`max-w-4xl`).
+    - Features 3 organized sub-tabs:
+      - **Watch History**: Chronological playback feed with search filter, media type badges (`Movie` / `Episode`), completion percentages, and universal poster thumbnails.
+      - **All Devices**: Hardware & player directory listing client apps (e.g. Apple TV, Plex for iOS, Plex Web), device models, Direct Play vs Transcode rates, total plays, and first/last active timestamps.
+      - **All IP Addresses**: Network connection directory identifying private LAN vs public WAN IP addresses, location tags, session counts, detected password sharing alerts, and associated device fingerprints.
   - **Device Quality Doctor (`diagnoseStreamSettings`)**: Proactive client-side settings evaluator detecting downscaling and quality bottlenecks:
     - *Roku Auto-Adjust 720p 4Mbps Cap*: Detects default "Auto Adjust Quality" setting forcing server transcoding.
     - *Default Remote Quality Cap (2-4 Mbps)*: Detects Apple TV, Fire TV, Android TV, and Smart TVs running factory default 720p caps.
     - *Web Browser HEVC/4K Codec Incompatibility*: Prompts users to download the native Plex Desktop App for direct playback.
     - *Subtitle Burn-in & Audio Transcodes*: Detects image-based subtitle burning (PGS/VOBSUB) and passthrough audio downmixing.
     - *Actionable Guidance*: Provides interactive step-by-step fix guides and 1-click copyable user notices ready to send via Discord or email.
-  - **Role & Edge Policy Integration**: Accessible to Admins and Super Users via Media Apps navigation (`Activity` icon, cyan/emerald accents), registered in `CLOUDFLARE_SUPER_USER_PATHS`, and enforced in `src/proxy.ts`.
+  - **Sidebar Navigation**: Positioned under "Administration" (`Activity` icon, cyan/emerald accents) visible exclusively to administrators.
 
 
 ---

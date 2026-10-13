@@ -207,20 +207,6 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
                     Sonarr (TV Shows)
                   </Button>
                 </Link>
-                <Link href="/tautulli">
-                  <Button
-                    variant={pathname.startsWith("/tautulli") || pathname.startsWith("/streams") ? "secondary" : "ghost"}
-                    className={cn(
-                      "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                      pathname.startsWith("/tautulli") || pathname.startsWith("/streams")
-                        ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.25)] ring-1 ring-emerald-500/40 font-bold"
-                        : "text-emerald-400/80 hover:text-emerald-300 hover:bg-emerald-950/30 hover:ring-1 hover:ring-emerald-500/40"
-                    )}
-                  >
-                    <Activity className="mr-2 h-4 w-4 text-emerald-400" />
-                    Stream Intelligence
-                  </Button>
-                </Link>
               </>
             )}
 
@@ -229,6 +215,21 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
                 <div className="pt-2 pb-1 px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
                   Administration
                 </div>
+                <Link href="/admin/tautulli">
+                  <Button
+                    variant={pathname.startsWith("/admin/tautulli") || pathname.startsWith("/admin/streams") || pathname.startsWith("/tautulli") || pathname.startsWith("/streams") ? "secondary" : "ghost"}
+                    className={cn(
+                      "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
+                      pathname.startsWith("/admin/tautulli") || pathname.startsWith("/admin/streams") || pathname.startsWith("/tautulli") || pathname.startsWith("/streams")
+                        ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.25)] ring-1 ring-emerald-500/40 font-bold"
+                        : "text-emerald-400/80 hover:text-emerald-300 hover:bg-emerald-950/30 hover:ring-1 hover:ring-emerald-500/40"
+                    )}
+                  >
+                    <Activity className="mr-2 h-4 w-4 text-emerald-400" />
+                    Stream Intelligence
+                  </Button>
+                </Link>
+
                 <Link href="/curation/kometa">
                   <Button
                     variant={pathname === "/curation" || pathname.startsWith("/curation/kometa") ? "secondary" : "ghost"}
@@ -524,19 +525,6 @@ export function MobileSidebar() {
                           <Tv className="mr-2 h-4 w-4 text-cyan-400" /> Sonarr (TV Shows)
                         </Button>
                       </Link>
-                      <Link href="/tautulli" onClick={() => setIsOpen(false)}>
-                        <Button
-                          variant={pathname.startsWith("/tautulli") || pathname.startsWith("/streams") ? "secondary" : "ghost"}
-                          className={cn(
-                            "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                            pathname.startsWith("/tautulli") || pathname.startsWith("/streams")
-                              ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.25)] ring-1 ring-emerald-500/40 font-bold"
-                              : "text-emerald-400/80 hover:text-emerald-300 hover:bg-emerald-950/30 hover:ring-1 hover:ring-emerald-500/40"
-                          )}
-                        >
-                          <Activity className="mr-2 h-4 w-4 text-emerald-400" /> Stream Intelligence
-                        </Button>
-                      </Link>
                     </>
                   )}
 
@@ -545,6 +533,19 @@ export function MobileSidebar() {
                       <div className="pt-2 pb-1 px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
                         Administration
                       </div>
+                      <Link href="/admin/tautulli" onClick={() => setIsOpen(false)}>
+                        <Button
+                          variant={pathname.startsWith("/admin/tautulli") || pathname.startsWith("/admin/streams") || pathname.startsWith("/tautulli") || pathname.startsWith("/streams") ? "secondary" : "ghost"}
+                          className={cn(
+                            "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
+                            pathname.startsWith("/admin/tautulli") || pathname.startsWith("/admin/streams") || pathname.startsWith("/tautulli") || pathname.startsWith("/streams")
+                              ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-[0_0_10px_rgba(168,185,129,0.25)] ring-1 ring-emerald-500/40 font-bold"
+                              : "text-emerald-400/80 hover:text-emerald-300 hover:bg-emerald-950/30 hover:ring-1 hover:ring-emerald-500/40"
+                          )}
+                        >
+                          <Activity className="mr-2 h-4 w-4 text-emerald-400" /> Stream Intelligence
+                        </Button>
+                      </Link>
                       <Link href="/curation/kometa" onClick={() => setIsOpen(false)}>
                         <Button
                           variant={pathname === "/curation" || pathname.startsWith("/curation/kometa") ? "secondary" : "ghost"}
