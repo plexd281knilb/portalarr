@@ -98,6 +98,7 @@ export async function proxy(req: NextRequest) {
        pathname.startsWith("/api/users") ||
        pathname.startsWith("/api/debug") ||
        pathname.startsWith("/api/system") ||
+       pathname.startsWith("/api/admin") ||
        pathname === "/api/books/upload" ||
        pathname.startsWith("/api/books/upload/")) &&
       payload.role !== "ADMIN"

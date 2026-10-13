@@ -51,6 +51,8 @@ import { evaluatePaymentThreshold } from "../src/lib/payment-threshold-engine";
 import { renderEmailTemplate } from "../src/lib/email-templates";
 import { computeExpectedDiscordRole, findBestMatch } from "../src/lib/discord/discord-role-sync";
 import { DISCORD_ROLES_BLUEPRINT, DISCORD_SERVER_BLUEPRINT } from "../src/lib/discord/discord-bot";
+import { getAllScripts, getScriptById, saveScript, deleteScript, getScriptRuns } from "../src/lib/scripts/script-manager";
+import { executeScript, abortActiveScriptRun } from "../src/lib/scripts/script-runner";
 
 
 async function runTestSuite() {
@@ -3469,6 +3471,9 @@ async function runTestSuite() {
         if (!matchesCloudflareAdmin("/admin/streams")) throw new Error("/admin/streams must match admin");
         if (!matchesCloudflareAdmin("/tautulli")) throw new Error("/tautulli must match admin");
         if (!matchesCloudflareAdmin("/streams")) throw new Error("/streams must match admin");
+        if (!matchesCloudflareAdmin("/admin/scripts")) throw new Error("/admin/scripts must match admin");
+        if (!matchesCloudflareAdmin("/api/admin/scripts")) throw new Error("/api/admin/scripts must match admin");
+        if (matchesCloudflareBypass("/admin/scripts")) throw new Error("/admin/scripts must NEVER match bypass");
         if (matchesCloudflareBypass("/tautulli")) throw new Error("/tautulli must NEVER match bypass");
         if (matchesCloudflareSuperUser("/tautulli")) throw new Error("/tautulli must NOT match super user (admin only)");
     });
@@ -7768,6 +7773,110 @@ async function runTestSuite() {
             }
         } finally {
             delete process.env.PORTALARR_TEST_AUTH;
+        }
+    });
+
+    // 103. Admin Scripts: Script Storage, Shell Execution, Terminal Output & Abort Lifecycle
+    await assertTest("Test 103: Admin Scripts: Script Storage, Shell Execution, Terminal Output & Abort Lifecycle", async () => {
+        // 1. Verify default script seeding
+        const allScripts = getAllScripts();
+        if (allScripts.length < 4) {
+            throw new Error(`Expected at least 4 default scripts, got: ${allScripts.length}`);
+        }
+
+        const plexHealthScript = allScripts.find(s => s.id === "check_all_plex_servers");
+        if (!plexHealthScript) {
+            throw new Error("Default script 'check_all_plex_servers' was not seeded");
+        }
+        if (plexHealthScript.filename !== "check_all_plex_servers.sh") {
+            throw new Error(`Expected filename 'check_all_plex_servers.sh', got: ${plexHealthScript.filename}`);
+        }
+        if (!plexHealthScript.content.includes("check_plex_server") || !plexHealthScript.content.includes("MainPlexBackup")) {
+            throw new Error("Plex health check script does not contain expected function check_plex_server");
+        }
+
+        const dbScript = allScripts.find(s => s.id === "optimize_plex_databases");
+        if (!dbScript) throw new Error("Expected optimize_plex_databases script to exist");
+
+        // 2. Test Script CRUD (Save, Retrieve, Update, Delete)
+        const testScriptId = `test_script_${Date.now()}`;
+        const created = saveScript({
+            id: testScriptId,
+            name: "Test Verification Script",
+            filename: `${testScriptId}.sh`,
+            description: "Temporary script for verification test suite",
+            category: "Custom",
+            interpreter: "bash",
+            schedule: "manual",
+            timeoutSeconds: 30,
+            content: `#!/bin/bash\necho "Running test verification script..."\necho "Done."\n`
+        });
+
+        if (!created || created.id !== testScriptId) {
+            throw new Error("Failed to create test script");
+        }
+
+        const retrieved = getScriptById(testScriptId);
+        if (!retrieved || retrieved.name !== "Test Verification Script") {
+            throw new Error("Failed to retrieve created test script by ID");
+        }
+
+        // 3. Test Interactive Script Execution & Real-Time Terminal Streaming Output
+        const streamLogs: string[] = [];
+        const execResult = await executeScript({
+            scriptId: "check_all_plex_servers",
+            runMode: "interactive",
+            onLog: (line) => streamLogs.push(line)
+        });
+
+        if (!streamLogs.some(l => l.includes("Note that closing this window will abort the execution of this script"))) {
+            throw new Error("Interactive stream missing mandatory notice: 'Note that closing this window will abort the execution of this script'");
+        }
+
+        if (!streamLogs.some(l => l.includes("MainPlexBackup"))) {
+            throw new Error("Terminal output missing MainPlexBackup health check output");
+        }
+        if (!streamLogs.some(l => l.includes("KidsPlexServer"))) {
+            throw new Error("Terminal output missing KidsPlexServer health check output");
+        }
+        if (!streamLogs.some(l => l.includes("All Plex health checks complete."))) {
+            throw new Error("Terminal output missing completion confirmation line");
+        }
+
+        if (execResult.exitCode !== 0 || execResult.status !== "SUCCESS") {
+            throw new Error(`Expected execResult status SUCCESS and exitCode 0, got status: ${execResult.status}, exitCode: ${execResult.exitCode}`);
+        }
+
+        // 4. Test Abort Lifecycle
+        const abortController = new AbortController();
+        const abortPromise = executeScript({
+            scriptId: testScriptId,
+            customCode: `#!/bin/bash\nsleep 30\n`,
+            runMode: "interactive",
+            abortSignal: abortController.signal
+        });
+
+        // Abort after 50ms
+        setTimeout(() => abortController.abort(), 50);
+        const abortResult = await abortPromise;
+        if (abortResult.status !== "ABORTED" && !abortResult.logs.some(l => l.includes("[ABORTED]"))) {
+            throw new Error(`Expected script to be aborted, got status: ${abortResult.status}`);
+        }
+
+        // 5. Test Run History recording
+        const runs = getScriptRuns(testScriptId, 5);
+        if (runs.length === 0) {
+            throw new Error("Expected run history records to be saved");
+        }
+
+        // 6. Delete test script
+        const deleted = deleteScript(testScriptId);
+        if (!deleted) {
+            throw new Error("Failed to delete test script");
+        }
+        const verifyDeleted = getScriptById(testScriptId);
+        if (verifyDeleted) {
+            throw new Error("Deleted script still returned by getScriptById");
         }
     });
 

@@ -19996,3 +19996,63 @@ export async function verifyPlexPlaybackHealthAction() {
     }
 }
 
+/**
+ * ============================================================================
+ * User Scripts & Automation Actions (/admin/scripts)
+ * ============================================================================
+ */
+export async function getScriptsAction() {
+    await verifyAdmin();
+    const { getAllScripts, getScriptRuns } = await import("@/lib/scripts/script-manager");
+    return {
+        scripts: getAllScripts(),
+        recentRuns: getScriptRuns(undefined, 30)
+    };
+}
+
+export async function getScriptByIdAction(id: string) {
+    await verifyAdmin();
+    const { getScriptById, getScriptRuns } = await import("@/lib/scripts/script-manager");
+    const script = getScriptById(id);
+    const runs = getScriptRuns(id, 20);
+    return { script, runs };
+}
+
+export async function saveScriptAction(scriptData: any) {
+    await verifyAdmin();
+    const { saveScript } = await import("@/lib/scripts/script-manager");
+    const saved = saveScript(scriptData);
+    try { revalidatePath("/admin/scripts"); } catch (_) {}
+    return { success: true, script: saved };
+}
+
+export async function deleteScriptAction(id: string) {
+    await verifyAdmin();
+    const { deleteScript } = await import("@/lib/scripts/script-manager");
+    const success = deleteScript(id);
+    try { revalidatePath("/admin/scripts"); } catch (_) {}
+    return { success };
+}
+
+export async function runScriptBackgroundAction(scriptId: string) {
+    await verifyAdmin();
+    const { executeScript } = await import("@/lib/scripts/script-runner");
+    executeScript({ scriptId, runMode: "background" }).catch((err) => {
+        console.error(`Background script run error for ${scriptId}:`, err);
+    });
+    return { success: true, message: "Script execution started in background." };
+}
+
+export async function abortScriptRunAction(runId: string) {
+    await verifyAdmin();
+    const { abortActiveScriptRun } = await import("@/lib/scripts/script-runner");
+    const aborted = abortActiveScriptRun(runId);
+    return { success: aborted };
+}
+
+export async function getScriptRunLogAction(runId: string) {
+    await verifyAdmin();
+    const { getScriptRunLog } = await import("@/lib/scripts/script-manager");
+    return { runId, log: getScriptRunLog(runId) || "" };
+}
+

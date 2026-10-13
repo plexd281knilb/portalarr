@@ -805,6 +805,26 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
     - *Actionable Guidance*: Provides interactive step-by-step fix guides and 1-click copyable user notices ready to send via Discord or email.
   - **Sidebar Navigation**: Positioned under "Administration" (`Activity` icon, cyan/emerald accents) visible exclusively to administrators.
 
+- **User Scripts & Automation Subsystem (`/admin/scripts` & `src/lib/scripts`)**:
+  - **Single-Pane Shell Automation Mission Control**: Unraid-style user scripts dashboard for homelab maintenance, automated database vacuuming, Docker container audits, and database-driven Plex cluster health checks.
+  - **Default Built-in Scripts**:
+    - `check_all_plex_servers.sh`: Resilient database-driven health check and auto-restart probe for `MainPlexBackup` (port 24958) and `KidsPlexServer` (port 32400) featuring quiet hours window checks (3:00 - 6:00), SQLite binary fallback, Docker container status audits, and retry curl probes.
+    - `optimize_plex_databases.sh`: Plex SQLite database optimization executing `PRAGMA optimize` and integrity checks across Plex libraries.
+    - `backup_portalarr_db.sh`: Atomic SQLite database snapshot creation to `data/backups/` with timestamping and integrity verification.
+    - `restart_unresponsive_containers.sh`: Automated Docker health probe identifying dead or crash-looping containers with fast recovery.
+  - **Live Interactive Terminal Modal (`ScriptTerminalModal`)**:
+    - Displays prominent unraid-style abort warning: `"Note that closing this window will abort the execution of this script"`.
+    - Real-time line-by-line streaming via HTTP `ReadableStream` (`/api/admin/scripts/run`).
+    - Smart log syntax colorizer: `[OK]` (bright emerald), `[FAIL]`/`[ERROR]` (bright rose), `[WARN]` (amber), timestamps (sky blue), headers `--- Checking ... ---` (indigo).
+    - Abort lifecycle: Closing the modal window or clicking "Abort Script" terminates the running child process immediately via `AbortController` and signals.
+    - Terminal tools: Auto-scroll toggle, 1-click clipboard copy, and `.log` file download.
+  - **Script Editor Modal (`ScriptEditorModal`)**:
+    - Manage script name, filename, description, category (`Plex & Media`, `Database`, `Docker`, `System & Backup`, `Custom`), interpreter (`bash`, `sh`, `python3`, `node`), schedule cadence, and timeout.
+    - Monospace code editor with quick-insert templates for Bash, Python, and Node.js.
+  - **Execution History Modal (`ScriptHistoryModal`)**:
+    - Chronological log of past runs with duration, exit codes (`Exit 0`, `Failed`, `Aborted`), execution mode (interactive vs background), and full log viewer.
+  - **Admin Route & Security**: Guarded under `/admin/scripts` and `/api/admin*` via `CLOUDFLARE_ADMIN_PATHS` and `src/proxy.ts`. Navigation link integrated in desktop and mobile sidebars with `Terminal` icon.
+
 
 ---
 

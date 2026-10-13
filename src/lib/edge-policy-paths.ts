@@ -46,6 +46,7 @@ export const CLOUDFLARE_ADMIN_PATHS: string[] = [
     "/curation*",
     "/tautulli*",
     "/streams*",
+    "/api/admin*",
     "/api/system*",
     "/api/debug*",
     "/api/curation*",
