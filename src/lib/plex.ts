@@ -248,7 +248,7 @@ export async function getPlexOwnerUser(adminToken: string) {
                 "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
             },
             signal: controller.signal,
-            next: { revalidate: 300 }
+            cache: "no-store"
         });
         clearTimeout(timeoutId);
         if (res.ok) {
@@ -431,6 +431,7 @@ export async function getPlexServers(adminToken: string, forceRefresh = false): 
                 "X-Plex-Token": adminToken,
                 "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
             },
+            signal: AbortSignal.timeout(4000),
             cache: "no-store"
         });
         if (res.ok) {

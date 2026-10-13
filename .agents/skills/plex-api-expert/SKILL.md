@@ -97,6 +97,10 @@ See detailed runbook: [tags-collections-and-hubs.md](./references/tags-collectio
 15. **Native Stream Intelligence, Watch History & Multi-IP Password Sharing Detection**:
     - **Native Watch History Engine (`stream-tracker.ts`)**: Portalarr records active playback sessions directly from PMS `/status/sessions` without requiring external Tautulli. Records progress percentage (dynamically calculated from `viewOffset` / `duration` if omitted by PMS), duration, completed status (`progress >= 90%`), video/audio decisions, transcode HW acceleration, client platform/device, and remote IP addresses.
     - **Password Sharing & Multi-IP Detection Heuristics (`analyzeActiveSessionsForSharing`)**: Detects simultaneous streaming sessions per user. Private/LAN IPs (`192.168.x.x`, `10.x.x.x`, `172.16-31.x.x`, `localhost`) are recognized as same-household playback and do NOT trigger sharing alerts. Multi-IP sharing is strictly flagged when a user streams concurrently from 2 or more distinct public IP addresses (indicating disparate households), recording `isSharingAlert: true`, incrementing `user.sharingAlertCount`, and alerting admins in real time on the Stream Matrix dashboard.
+16. **Network Fetch Resilience & Next.js Streaming Pipeline Protection**:
+    - **Never wrap operational PMS/Tautulli queries in `next: { revalidate: N }`**: In Next.js App Router Turbopack, wrapping dynamic server component or server action calls with Next.js data cache interceptors causes unreachable servers, dead Docker IP candidates, or aborted signals to throw unhandled `TypeError: fetch failed` during response piping, which crashes the stream with `Error: failed to pipe response`.
+    - **Enforce `cache: "no-store"` & explicit `AbortSignal.timeout(...)`**: Always supply `{ cache: "no-store" }` and explicit timeout signals (e.g. `AbortSignal.timeout(5000)`) wrapped in `try/catch` blocks returning fallback structures (`null` or empty arrays) so failing endpoints fail gracefully without ever interrupting Next.js response piping.
+
 
 
 

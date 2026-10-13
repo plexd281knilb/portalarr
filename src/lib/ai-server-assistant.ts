@@ -28,14 +28,12 @@ function cleanUrl(url: string): string {
     return url.replace(/\/$/, ""); 
 }
 
-async function fetchTautulliApiJson(url: string, signal?: AbortSignal, nextOptions?: any): Promise<{ ok: boolean; data: any; error?: string }> {
+async function fetchTautulliApiJson(url: string, signal?: AbortSignal, _nextOptions?: any): Promise<{ ok: boolean; data: any; error?: string }> {
     try {
-        const fetchOpts: any = { signal };
-        if (nextOptions) {
-            fetchOpts.next = nextOptions;
-        } else {
-            fetchOpts.cache = "no-store";
-        }
+        const fetchOpts: any = { 
+            signal: signal || AbortSignal.timeout(5000),
+            cache: "no-store"
+        };
 
         const res = await fetch(url, fetchOpts);
         if (!res.ok) {

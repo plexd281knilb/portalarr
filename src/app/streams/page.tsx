@@ -1,3 +1,5 @@
+"use client";
+
 import StreamIntelligencePage from "@/app/tautulli/page";
 
 export default function StreamsAliasPage() {

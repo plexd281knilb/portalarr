@@ -201,7 +201,9 @@ export async function sendSeerrDiscordWebhook(
                     username: botUsername,
                     avatar_url: botAvatar,
                     embeds: [embed]
-                })
+                }),
+                signal: AbortSignal.timeout(6000),
+                cache: "no-store"
             });
 
             if (!res.ok) {
@@ -272,7 +274,9 @@ export async function sendTestSeerrDiscordWebhook(
                 username: botUsername || "DomsHomeLab",
                 avatar_url: botAvatarUrl || undefined,
                 embeds: [testEmbed]
-            })
+            }),
+            signal: AbortSignal.timeout(6000),
+            cache: "no-store"
         });
 
         if (!res.ok) {

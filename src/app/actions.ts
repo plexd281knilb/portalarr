@@ -99,14 +99,12 @@ function cleanUrl(url: string): string {
     return url.replace(/\/$/, ""); 
 }
 
-async function fetchTautulliApiJson(url: string, signal?: AbortSignal, nextOptions?: any): Promise<{ ok: boolean; data: any; error?: string }> {
+async function fetchTautulliApiJson(url: string, signal?: AbortSignal, _nextOptions?: any): Promise<{ ok: boolean; data: any; error?: string }> {
     try {
-        const fetchOpts: any = { signal };
-        if (nextOptions) {
-            fetchOpts.next = nextOptions;
-        } else {
-            fetchOpts.cache = "no-store";
-        }
+        const fetchOpts: any = { 
+            signal: signal || AbortSignal.timeout(5000),
+            cache: "no-store"
+        };
 
         const res = await fetch(url, fetchOpts);
         if (!res.ok) {
@@ -10009,7 +10007,7 @@ async function expandSeriesRequest(seriesTitle: string, author: string, requeste
         const query = `series:"${seriesTitle}"`;
         const response = await fetchWithRetry(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&fields=key,title,author_name,cover_i,first_publish_year`, {
             headers: { "Accept": "application/json" },
-            next: { revalidate: 3600 }
+            cache: "no-store"
         });
         
         const data = response.ok ? await response.json() : { docs: [] };
@@ -10019,7 +10017,7 @@ async function expandSeriesRequest(seriesTitle: string, author: string, requeste
             console.log(`[SERIES-EXPANSION] No books found for series:"${seriesTitle}". Trying general keyword fallback...`);
             const fallbackResponse = await fetchWithRetry(`https://openlibrary.org/search.json?q=${encodeURIComponent(seriesTitle)}&fields=key,title,author_name,cover_i,first_publish_year`, {
                 headers: { "Accept": "application/json" },
-                next: { revalidate: 3600 }
+                cache: "no-store"
             });
             if (fallbackResponse.ok) {
                 const fallbackData = await fallbackResponse.json();
@@ -10234,32 +10232,36 @@ function cleanSearchQuery(searchQuery: string): string {
 }
 
 async function fetchOpenLibraryWithFallback(cleanedQuery: string, signal: AbortSignal): Promise<any> {
-    const headers = { 
-        "Accept": "application/json",
-        "User-Agent": "Portalarr/3.0 (https://github.com/plexd281knilb/portalarr; contact@portalarr.local)"
-    };
-    const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(cleanedQuery)}&limit=1&fields=key,title,author_name,cover_i,first_publish_year`;
-    const res = await fetch(url, { headers, signal });
-    if (!res.ok) return null;
-    const data = await res.json();
-    
-    if (data && data.docs && data.docs.length > 0) {
-        return data;
-    }
-    
-    // Fallback: Check if prefix is 1-2 chars or standard tags like zlib/libgen/epub/pdf, and retry search without it
-    const prefixRegex = /^(?:[a-z]{1,2}|zlib|libgen|epub|pdf)\b\s*/i;
-    if (prefixRegex.test(cleanedQuery)) {
-        const fallbackQuery = cleanedQuery.replace(prefixRegex, "").trim();
-        console.log(`[OPEN-LIBRARY-FALLBACK] No matches for "${cleanedQuery}". Retrying with stripped prefix: "${fallbackQuery}"`);
-        const fallbackUrl = `https://openlibrary.org/search.json?q=${encodeURIComponent(fallbackQuery)}&limit=1&fields=key,title,author_name,cover_i,first_publish_year`;
-        const fallbackRes = await fetch(fallbackUrl, { headers, signal });
-        if (fallbackRes.ok) {
-            return await fallbackRes.json();
+    try {
+        const headers = { 
+            "Accept": "application/json",
+            "User-Agent": "Portalarr/3.0 (https://github.com/plexd281knilb/portalarr; contact@portalarr.local)"
+        };
+        const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(cleanedQuery)}&limit=1&fields=key,title,author_name,cover_i,first_publish_year`;
+        const res = await fetch(url, { headers, signal, cache: "no-store" });
+        if (!res.ok) return null;
+        const data = await res.json();
+        
+        if (data && data.docs && data.docs.length > 0) {
+            return data;
         }
+        
+        // Fallback: Check if prefix is 1-2 chars or standard tags like zlib/libgen/epub/pdf, and retry search without it
+        const prefixRegex = /^(?:[a-z]{1,2}|zlib|libgen|epub|pdf)\b\s*/i;
+        if (prefixRegex.test(cleanedQuery)) {
+            const fallbackQuery = cleanedQuery.replace(prefixRegex, "").trim();
+            console.log(`[OPEN-LIBRARY-FALLBACK] No matches for "${cleanedQuery}". Retrying with stripped prefix: "${fallbackQuery}"`);
+            const fallbackUrl = `https://openlibrary.org/search.json?q=${encodeURIComponent(fallbackQuery)}&limit=1&fields=key,title,author_name,cover_i,first_publish_year`;
+            const fallbackRes = await fetch(fallbackUrl, { headers, signal, cache: "no-store" });
+            if (fallbackRes.ok) {
+                return await fallbackRes.json();
+            }
+        }
+        
+        return data;
+    } catch {
+        return null;
     }
-    
-    return data;
 }
 
 function parseFilenameMetadata(rawBase: string): { title: string, author: string, series: string | null, volumeNumber: string | null, cleanQuery: string } {
@@ -15172,15 +15174,12 @@ export async function getServicesHealthPulse() {
             prisma.mediaApp.findFirst({ where: { type: { contains: "qbit" } } })
         ]);
 
-        const checkService = async (app: any, checkFn: () => Promise<boolean>) => {
+        const checkService = async (app: any, checkFn: (signal: AbortSignal) => Promise<boolean>) => {
             if (!app) return { configured: false, online: false, name: "Not configured" };
             try {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 3000);
-                const online = await Promise.race([
-                    checkFn(),
-                    new Promise<boolean>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 3000))
-                ]);
+                const online = await checkFn(controller.signal);
                 clearTimeout(timeoutId);
                 return { configured: true, online: Boolean(online), name: app.name || app.type };
             } catch (e) {
@@ -15189,21 +15188,21 @@ export async function getServicesHealthPulse() {
         };
 
         const [prowlarr, sabnzbd, qbittorrent] = await Promise.all([
-            checkService(prowlarrApp, async () => {
+            checkService(prowlarrApp, async (signal) => {
                 const url = cleanUrl(prowlarrApp!.url);
                 const key = decryptData(prowlarrApp!.apiKey as string);
-                const res = await fetch(`${url}/api/v1/health?apikey=${key}`, { cache: "no-store" });
+                const res = await fetch(`${url}/api/v1/health?apikey=${key}`, { cache: "no-store", signal });
                 return res.ok;
             }),
-            checkService(sabApp, async () => {
+            checkService(sabApp, async (signal) => {
                 const url = cleanUrl(sabApp!.url);
                 const key = decryptData(sabApp!.apiKey as string);
-                const res = await fetch(`${url}/api?mode=version&output=json&apikey=${key}`, { cache: "no-store" });
+                const res = await fetch(`${url}/api?mode=version&output=json&apikey=${key}`, { cache: "no-store", signal });
                 return res.ok;
             }),
-            checkService(qbitApp, async () => {
+            checkService(qbitApp, async (signal) => {
                 const url = cleanUrl(qbitApp!.url);
-                const res = await fetch(`${url}/api/v2/app/version`, { cache: "no-store" });
+                const res = await fetch(`${url}/api/v2/app/version`, { cache: "no-store", signal });
                 return res.ok || res.status === 403;
             })
         ]);
@@ -16677,7 +16676,7 @@ export async function getSeriesBooksList(seriesTitle: string, author: string = "
         try {
             const response = await fetchWithRetry(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=45&fields=key,title,author_name,cover_i,first_publish_year`, {
                 headers: { "Accept": "application/json" },
-                next: { revalidate: 3600 }
+                cache: "no-store"
             });
             if (response && response.ok) {
                 const data = await response.json();
@@ -18496,6 +18495,7 @@ export async function runPlexDiagnosticsAction() {
                     "X-Plex-Token": adminToken,
                     "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
                 },
+                signal: AbortSignal.timeout(6000),
                 cache: "no-store"
             });
             if (userRes.ok) {
@@ -18518,6 +18518,7 @@ export async function runPlexDiagnosticsAction() {
                     "X-Plex-Token": adminToken,
                     "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
                 },
+                signal: AbortSignal.timeout(6000),
                 cache: "no-store"
             });
             if (resRes.ok) {
@@ -18545,6 +18546,7 @@ export async function runPlexDiagnosticsAction() {
                     "X-Plex-Token": adminToken,
                     "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
                 },
+                signal: AbortSignal.timeout(6000),
                 cache: "no-store"
             });
             if (srvXmlRes.ok) {
@@ -19333,7 +19335,7 @@ export async function getUserPlexHubData() {
                                 "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
                             },
                             signal: controller.signal,
-                            next: { revalidate: 30 }
+                            cache: "no-store"
                         });
                         clearTimeout(timeoutId);
 
@@ -19541,6 +19543,7 @@ export async function killUserStream(instanceId: string, sessionKey: string) {
                     "X-Plex-Token": adminToken,
                     "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
                 },
+                signal: AbortSignal.timeout(5000),
                 cache: "no-store"
             });
 
