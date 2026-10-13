@@ -1708,7 +1708,7 @@ export function matchesPlexUser(
         }
     }
 
-    // 3. Exact Email-to-Username or Username-to-Email prefix match (e.g. "trevsky313@gmail.com" matches "trevsky313")
+    // 3. Exact Email-to-Username or Username-to-Email prefix match (e.g. "user313@example.com" matches "user313")
     for (const te of targetEmails) {
         const prefix = te.split("@")[0];
         if (prefix && prefix.length >= 3) {
@@ -1727,7 +1727,7 @@ export function matchesPlexUser(
     }
 
     // 4. Normalized alphanumeric EXACT match for usernames (stripping '.', '_', '-')
-    // E.g. "trev_sky313" === "trevsky313", "black.jordan" === "blackjordan"
+    // E.g. "alex_smith" === "alexsmith", "taylor.jordan" === "taylorjordan"
     for (const tu of targetUsernames) {
         const tuAlnum = alphanumeric(tu);
         if (tuAlnum.length >= 3) {

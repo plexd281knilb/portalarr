@@ -1413,38 +1413,38 @@ async function runTestSuite() {
     await assertTest("Plex: User Matching & Substring Collision Guards", async () => {
         // Exact email & username match
         if (!matchesPlexUser(
-            { email: "plexd281knilb@gmail.com", username: "dominicjuliano" },
-            { user: { email: "plexd281knilb@gmail.com", username: "dominicjuliano" } }
+            { email: "user_primary@example.com", username: "userprimary" },
+            { user: { email: "user_primary@example.com", username: "userprimary" } }
         )) throw new Error("Exact email & username failed to match");
 
         // Email prefix matches Plex username
         if (!matchesPlexUser(
-            { email: "trevsky313@gmail.com", username: "trevscar1121" },
-            { user: { email: "different@email.com", username: "trevsky313" } }
+            { email: "prefixmatch313@example.com", username: "prefix_alias" },
+            { user: { email: "different@example.com", username: "prefixmatch313" } }
         )) throw new Error("Email prefix failed to match Plex username");
 
-        // Guard against substring collisions (dominicjuliano must NOT match mjuliano7 or mjuli86)
+        // Guard against substring collisions (userprimary must NOT match primary7 or mjprimary86)
         if (matchesPlexUser(
-            { email: "plexd281knilb@gmail.com", username: "dominicjuliano", name: "David Garza" },
-            { user: { email: "mjuliano7@yahoo.com", username: "mjuli86" } }
-        )) throw new Error("CRITICAL: Substring collision allowed! dominicjuliano matched mjuli86");
+            { email: "user_primary@example.com", username: "userprimary", name: "David Garcia" },
+            { user: { email: "primary7@example.com", username: "mjprimary86" } }
+        )) throw new Error("CRITICAL: Substring collision allowed! userprimary matched mjprimary86");
 
-        // Guard against substring collisions (dominicjuliano must NOT match juliano)
+        // Guard against substring collisions (userprimary must NOT match primary)
         if (matchesPlexUser(
-            { email: "plexd281knilb@gmail.com", username: "dominicjuliano" },
-            { user: { email: "juliano@gmail.com", username: "juliano" } }
-        )) throw new Error("CRITICAL: Substring collision allowed! dominicjuliano matched juliano");
+            { email: "user_primary@example.com", username: "userprimary" },
+            { user: { email: "primary@example.com", username: "primary" } }
+        )) throw new Error("CRITICAL: Substring collision allowed! userprimary matched primary");
 
         // Guard against matching unrelated friend with same display title
         if (matchesPlexUser(
-            { email: "plexd281knilb@gmail.com", username: "dominicjuliano" },
-            { user: { email: "davidgarza@gmail.com", username: "dgarza", title: "David Garza" } }
+            { email: "user_primary@example.com", username: "userprimary" },
+            { user: { email: "davidgarcia@example.com", username: "dgarcia", title: "David Garcia" } }
         )) throw new Error("CRITICAL: Matched unrelated user based on display title");
 
         // Normalized alphanumeric match
         if (!matchesPlexUser(
-            { email: "test@test.com", username: "trev_sky313" },
-            { user: { email: "other@other.com", username: "trevsky313" } }
+            { email: "test@example.com", username: "prefix_match313" },
+            { user: { email: "other@example.com", username: "prefixmatch313" } }
         )) throw new Error("Normalized alphanumeric matching failed");
 
         // Plex numeric ID match
@@ -6396,7 +6396,7 @@ async function runTestSuite() {
         // 3. Heuristic Matching Engine (findBestMatch)
         const candidates = [
             { id: "u1", username: "plexmaster", email: "plexmaster@example.com", plexUsername: "PlexMaster99", name: "John Doe" },
-            { id: "u2", username: "moviebuff", email: "mbuff_stream@gmail.com", plexUsername: "mbuff", name: "Jane Smith" },
+            { id: "u2", username: "moviebuff", email: "mbuff_stream@example.com", plexUsername: "mbuff", name: "Jane Smith" },
             { id: "u3", username: "spiderman", email: "peter.parker@dailybugle.com", plexUsername: "peterp", name: "Peter Parker" }
         ];
 
