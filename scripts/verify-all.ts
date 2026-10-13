@@ -7314,8 +7314,18 @@ async function runTestSuite() {
     // 102. Stream Intelligence: Multi-Server Monitoring, Tautulli Takeover, Device Quality Doctor & Historical Backfill Engine
     await assertTest("Test 102: Stream Intelligence: Multi-Server Monitoring, Tautulli Takeover, Device Quality Doctor & Historical Backfill", async () => {
         const { diagnoseStreamSettings } = await import("../src/lib/telemetry/device-diagnostics");
-        const { toggleStreamMonitorModeAction, getStreamIntelligenceDataAction } = await import("../src/app/actions");
-        const { backfillTautulliHistoryInternal } = await import("../src/lib/telemetry/tautulli-backfill");
+        const { 
+            toggleStreamMonitorModeAction, 
+            getStreamIntelligenceDataAction,
+            startTautulliBackfillAction,
+            getTautulliBackfillStatusAction,
+            stopTautulliBackfillAction
+        } = await import("../src/app/actions");
+        const { 
+            backfillTautulliHistoryInternal, 
+            getTautulliBackfillProgress, 
+            stopTautulliBackfill 
+        } = await import("../src/lib/telemetry/tautulli-backfill");
         const { getUserStreamProfiles, getStreamIntelligenceAnalytics, formatWatchHistoryThumb, getWatchHistory } = await import("../src/lib/telemetry/stream-tracker");
 
         // 1. Verify Device Quality Doctor Diagnostics
@@ -7562,11 +7572,36 @@ async function runTestSuite() {
                 }).catch(() => {});
             }
 
-            // 5. Verify Tautulli Backfill Deduplication & Execution Safety
+            // 5. Verify Tautulli Backfill Deduplication, Unlimited Support & Execution Safety
             // Calling with non-existent or empty instances safely handles errors and returns summary
             const backfillSummary = await backfillTautulliHistoryInternal({ limit: 10 });
             if (typeof backfillSummary.imported !== "number" || typeof backfillSummary.skipped !== "number") {
                 throw new Error("Expected backfill summary to contain imported/skipped counts");
+            }
+
+            // Verify Unlimited / Complete Backfill Mode execution safety
+            const unlimitedSummary = await backfillTautulliHistoryInternal({ unlimited: true });
+            if (typeof unlimitedSummary.imported !== "number" || typeof unlimitedSummary.skipped !== "number") {
+                throw new Error("Expected unlimited backfill summary to contain imported/skipped counts");
+            }
+
+            // Verify Live Progress tracking state query
+            const progress = getTautulliBackfillProgress();
+            if (typeof progress.isRunning !== "boolean" || typeof progress.importedCount !== "number" || typeof progress.skippedCount !== "number") {
+                throw new Error("Expected getTautulliBackfillProgress to return valid BackfillProgressState");
+            }
+            if (progress.isUnlimited !== true) {
+                throw new Error("Expected progress state to reflect unlimited mode from recent run");
+            }
+
+            // Verify Status Action & Stop Action
+            const statusFromAction = await getTautulliBackfillStatusAction();
+            if (typeof statusFromAction.isRunning !== "boolean") {
+                throw new Error("Expected getTautulliBackfillStatusAction to return status object");
+            }
+            const stopResult = await stopTautulliBackfillAction();
+            if (typeof stopResult !== "boolean") {
+                throw new Error("Expected stopTautulliBackfillAction to return boolean");
             }
 
             // Verify tautulliBackfillLastRun timestamp update in Settings

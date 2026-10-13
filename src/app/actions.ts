@@ -51,7 +51,12 @@ import {
     type WatchHistoryQueryOptions 
 } from "@/lib/telemetry/stream-tracker";
 import { diagnoseStreamSettings, detectDeviceCategory } from "@/lib/telemetry/device-diagnostics";
-import { backfillTautulliHistoryInternal } from "@/lib/telemetry/tautulli-backfill";
+import { 
+    backfillTautulliHistoryInternal, 
+    startTautulliBackfillInternal, 
+    getTautulliBackfillProgress, 
+    stopTautulliBackfill 
+} from "@/lib/telemetry/tautulli-backfill";
 
 if (typeof process !== "undefined" && process.env) {
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
@@ -15900,8 +15905,9 @@ export async function getStreamIntelligenceDataAction(options?: {
 
 /**
  * Server Action: Backfill Historical Watch Data from External Tautulli
+ * Supports specific batch limits as well as unlimited / complete historical sync.
  */
-export async function backfillTautulliHistoryAction(options?: { instanceId?: string; limit?: number }) {
+export async function backfillTautulliHistoryAction(options?: { instanceId?: string; limit?: number; unlimited?: boolean }) {
     await verifyAdmin();
     const result = await backfillTautulliHistoryInternal(options);
     if (result.success) {
@@ -15911,10 +15917,39 @@ export async function backfillTautulliHistoryAction(options?: { instanceId?: str
             create: { id: "global", tautulliBackfillLastRun: new Date() }
         }).catch(() => {});
         try { revalidatePath("/admin/tautulli"); } catch (_) {}
+        try { revalidatePath("/admin/streams"); } catch (_) {}
         try { revalidatePath("/tautulli"); } catch (_) {}
+        try { revalidatePath("/streams"); } catch (_) {}
     }
     return result;
 }
+
+/**
+ * Server Action: Start Asynchronous Background History Backfill
+ * Returns immediately and reports live progress via getTautulliBackfillStatusAction
+ */
+export async function startTautulliBackfillAction(options?: { instanceId?: string; limit?: number; unlimited?: boolean }) {
+    await verifyAdmin();
+    const result = await startTautulliBackfillInternal(options);
+    return result;
+}
+
+/**
+ * Server Action: Query Live Progress of Running Backfill
+ */
+export async function getTautulliBackfillStatusAction() {
+    await verifyAdmin();
+    return getTautulliBackfillProgress();
+}
+
+/**
+ * Server Action: Stop / Cancel Active Backfill
+ */
+export async function stopTautulliBackfillAction() {
+    await verifyAdmin();
+    return stopTautulliBackfill();
+}
+
 
 /**
  * Server Action: Toggle between Built-in Stream Monitoring and External Tautulli

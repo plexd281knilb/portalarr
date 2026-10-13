@@ -4,6 +4,9 @@ import { useState, useEffect, useTransition } from "react";
 import { 
     getStreamIntelligenceDataAction, 
     backfillTautulliHistoryAction, 
+    startTautulliBackfillAction,
+    getTautulliBackfillStatusAction,
+    stopTautulliBackfillAction,
     toggleStreamMonitorModeAction,
     killUserStream,
     clearWatchHistoryAction,
@@ -57,6 +60,7 @@ export default function StreamIntelligencePage() {
     // Backfill state
     const [backfillLimit, setBackfillLimit] = useState<number>(500);
     const [isBackfilling, setIsBackfilling] = useState(false);
+    const [backfillProgress, setBackfillProgress] = useState<any | null>(null);
     const [backfillResult, setBackfillResult] = useState<any | null>(null);
 
     // Takeover toggle transition
@@ -145,17 +149,71 @@ export default function StreamIntelligencePage() {
         });
     };
 
+    // Check on mount if a backfill is already running in background
+    useEffect(() => {
+        let mounted = true;
+        getTautulliBackfillStatusAction()
+            .then((status) => {
+                if (mounted && status?.isRunning) {
+                    setIsBackfilling(true);
+                    setBackfillProgress(status);
+                }
+            })
+            .catch(() => {});
+        return () => {
+            mounted = false;
+        };
+    }, []);
+
+    // Poll status while backfill is running
+    useEffect(() => {
+        if (!isBackfilling) return;
+
+        const interval = setInterval(async () => {
+            try {
+                const status = await getTautulliBackfillStatusAction();
+                setBackfillProgress(status);
+
+                if (!status.isRunning) {
+                    setIsBackfilling(false);
+                    if (status.result) {
+                        setBackfillResult(status.result);
+                    } else if (status.error) {
+                        setBackfillResult({ success: false, message: status.error });
+                    }
+                    await loadData(true);
+                }
+            } catch (e: any) {
+                console.error("Failed polling backfill status:", e);
+            }
+        }, 1200);
+
+        return () => clearInterval(interval);
+    }, [isBackfilling]);
+
     const handleRunBackfill = async () => {
         setIsBackfilling(true);
         setBackfillResult(null);
+        setBackfillProgress(null);
         try {
-            const res = await backfillTautulliHistoryAction({ limit: backfillLimit });
-            setBackfillResult(res);
-            await loadData(true);
+            const res = await startTautulliBackfillAction({
+                limit: backfillLimit === 0 ? undefined : backfillLimit,
+                unlimited: backfillLimit === 0
+            });
+            if (res.progress) {
+                setBackfillProgress(res.progress);
+            }
         } catch (e: any) {
-            setBackfillResult({ success: false, message: e.message || "Failed running backfill" });
-        } finally {
             setIsBackfilling(false);
+            setBackfillResult({ success: false, message: e.message || "Failed starting backfill" });
+        }
+    };
+
+    const handleStopBackfill = async () => {
+        try {
+            await stopTautulliBackfillAction();
+        } catch (e: any) {
+            console.error("Failed stopping backfill:", e);
         }
     };
 
@@ -1014,7 +1072,12 @@ export default function StreamIntelligencePage() {
                             {/* Backfill Controls */}
                             <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 space-y-4">
                                 <div className="space-y-1">
-                                    <h4 className="text-xs font-bold text-white">Import Historical Sessions from Tautulli</h4>
+                                    <div className="flex items-center gap-2">
+                                        <h4 className="text-xs font-bold text-white">Import Historical Sessions from Tautulli</h4>
+                                        <Badge variant="outline" className="text-[10px] bg-indigo-950/40 border-indigo-500/30 text-indigo-300">
+                                            Unlimited Supported
+                                        </Badge>
+                                    </div>
                                     <p className="text-[11px] text-muted-foreground">
                                         Pulls past play history, maps all users and media records, and skips any duplicate rows that are already recorded in SQLite.
                                     </p>
@@ -1026,12 +1089,16 @@ export default function StreamIntelligencePage() {
                                         <select
                                             value={backfillLimit}
                                             onChange={(e) => setBackfillLimit(Number(e.target.value))}
-                                            className="h-8 px-2 rounded-lg bg-slate-900 border border-slate-800 text-xs text-white"
+                                            disabled={isBackfilling}
+                                            className="h-8 px-2.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-white disabled:opacity-50"
                                         >
-                                            <option value={100}>100 records</option>
-                                            <option value={500}>500 records</option>
+                                            <option value={100}>100 records (Quick sample)</option>
+                                            <option value={500}>500 records (Standard batch)</option>
                                             <option value={1000}>1,000 records</option>
                                             <option value={5000}>5,000 records (Deep backfill)</option>
+                                            <option value={10000}>10,000 records</option>
+                                            <option value={25000}>25,000 records</option>
+                                            <option value={0}>✨ All Records / Unlimited (Complete History)</option>
                                         </select>
                                     </div>
 
@@ -1043,7 +1110,7 @@ export default function StreamIntelligencePage() {
                                         {isBackfilling ? (
                                             <>
                                                 <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-                                                Importing Sessions...
+                                                Running Backfill...
                                             </>
                                         ) : (
                                             <>
@@ -1060,9 +1127,95 @@ export default function StreamIntelligencePage() {
                                     )}
                                 </div>
 
+                                {backfillLimit === 0 && !isBackfilling && (
+                                    <div className="flex items-start gap-2 p-3 rounded-lg bg-indigo-950/30 border border-indigo-500/30 text-[11px] text-indigo-200">
+                                        <Sparkles className="h-4 w-4 text-indigo-400 shrink-0 mt-0.5" />
+                                        <span>
+                                            <strong>Complete Unlimited Mode:</strong> Portalarr will paginate through your entire Tautulli history without any record caps until all sessions are imported. Runs asynchronously in the background even if it takes a long time, with live progress tracking and cancellation support below.
+                                        </span>
+                                    </div>
+                                )}
+
+                                {/* Live Progress Cockpit */}
+                                {isBackfilling && (
+                                    <div className="p-4 rounded-xl bg-slate-900/90 border border-indigo-500/40 space-y-3 shadow-lg">
+                                        <div className="flex flex-wrap items-center justify-between gap-2">
+                                            <div className="flex items-center gap-2">
+                                                <Loader2 className="h-4 w-4 text-indigo-400 animate-spin" />
+                                                <span className="text-xs font-semibold text-white">
+                                                    {backfillProgress?.isUnlimited ? "Unlimited Complete Backfill in Progress..." : "Backfill in Progress..."}
+                                                </span>
+                                                {backfillProgress?.instanceName && (
+                                                    <Badge variant="outline" className="text-[10px] bg-slate-950/60 border-slate-700 text-cyan-300">
+                                                        {backfillProgress.instanceName}
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={handleStopBackfill}
+                                                className="h-7 px-3 text-[11px] rounded-lg border-red-500/40 text-red-400 hover:bg-red-950/40 hover:text-red-300"
+                                            >
+                                                <XCircle className="h-3 w-3 mr-1" />
+                                                Cancel Backfill
+                                            </Button>
+                                        </div>
+
+                                        {/* Animated Progress Bar */}
+                                        <div className="space-y-1.5">
+                                            <div className="w-full bg-slate-950 rounded-full h-2.5 overflow-hidden border border-slate-800">
+                                                <div 
+                                                    className="bg-gradient-to-r from-indigo-500 via-cyan-400 to-emerald-400 h-2.5 rounded-full transition-all duration-300"
+                                                    style={{
+                                                        width: `${
+                                                            backfillProgress?.totalAvailable && backfillProgress.totalAvailable > 0
+                                                                ? Math.min(100, Math.max(5, Math.round((backfillProgress.processedCount / (backfillProgress.isUnlimited ? backfillProgress.totalAvailable : Math.min(backfillProgress.totalAvailable, backfillProgress.limit || backfillProgress.totalAvailable))) * 100)))
+                                                                : Math.min(95, Math.max(10, ((backfillProgress?.currentPage || 1) * 8) % 95))
+                                                        }%`
+                                                    }}
+                                                />
+                                            </div>
+                                            <div className="flex items-center justify-between text-[10px] text-muted-foreground font-mono">
+                                                <span>
+                                                    {backfillProgress?.statusText || "Fetching and processing sessions from Tautulli..."}
+                                                </span>
+                                                <span>
+                                                    {backfillProgress?.totalAvailable && backfillProgress.totalAvailable > 0
+                                                        ? `${(backfillProgress.processedCount || 0).toLocaleString()} / ${backfillProgress.totalAvailable.toLocaleString()} records (${Math.min(100, Math.round(((backfillProgress.processedCount || 0) / backfillProgress.totalAvailable) * 100))}%)`
+                                                        : `${(backfillProgress?.processedCount || 0).toLocaleString()} records inspected`}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* Live Stat Badges */}
+                                        <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px]">
+                                            <span className="px-2.5 py-1 rounded-md bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 font-medium">
+                                                ✨ {(backfillProgress?.importedCount || 0).toLocaleString()} Imported
+                                            </span>
+                                            <span className="px-2.5 py-1 rounded-md bg-slate-950/80 border border-slate-800 text-muted-foreground font-medium">
+                                                🔁 {(backfillProgress?.skippedCount || 0).toLocaleString()} Skipped Duplicates
+                                            </span>
+                                            {backfillProgress?.currentPage ? (
+                                                <span className="px-2.5 py-1 rounded-md bg-indigo-950/40 border border-indigo-500/30 text-indigo-300 font-mono text-[10px]">
+                                                    Page {backfillProgress.currentPage}{backfillProgress.totalPages ? ` of ${backfillProgress.totalPages}` : ""}
+                                                </span>
+                                            ) : null}
+                                        </div>
+                                    </div>
+                                )}
+
                                 {backfillResult && (
-                                    <div className={`p-3 rounded-xl text-xs font-medium ${backfillResult.success ? "bg-emerald-950/40 border border-emerald-500/40 text-emerald-300" : "bg-red-950/40 border border-red-500/40 text-red-300"}`}>
-                                        {backfillResult.message}
+                                    <div className={`p-3.5 rounded-xl text-xs font-medium space-y-1 ${backfillResult.success ? "bg-emerald-950/40 border border-emerald-500/40 text-emerald-300" : "bg-red-950/40 border border-red-500/40 text-red-300"}`}>
+                                        <div className="flex items-center gap-1.5 font-bold">
+                                            {backfillResult.success ? <CheckCircle2 className="h-4 w-4 text-emerald-400" /> : <AlertTriangle className="h-4 w-4 text-red-400" />}
+                                            <span>{backfillResult.message}</span>
+                                        </div>
+                                        {backfillResult.imported !== undefined && (
+                                            <div className="text-[11px] text-muted-foreground font-mono">
+                                                Total Imported: {backfillResult.imported.toLocaleString()} | Skipped: {backfillResult.skipped.toLocaleString()} | Available in Tautulli: {(backfillResult.totalAvailable || 0).toLocaleString()}
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>
