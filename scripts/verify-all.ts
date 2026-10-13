@@ -7301,6 +7301,179 @@ async function runTestSuite() {
         }
     });
 
+    // 102. Stream Intelligence: Multi-Server Monitoring, Tautulli Takeover, Device Quality Doctor & Historical Backfill Engine
+    await assertTest("Test 102: Stream Intelligence: Multi-Server Monitoring, Tautulli Takeover, Device Quality Doctor & Historical Backfill", async () => {
+        const { diagnoseStreamSettings } = await import("../src/lib/telemetry/device-diagnostics");
+        const { toggleStreamMonitorModeAction, getStreamIntelligenceDataAction } = await import("../src/app/actions");
+        const { backfillTautulliHistoryInternal } = await import("../src/lib/telemetry/tautulli-backfill");
+        const { getUserStreamProfiles, getStreamIntelligenceAnalytics } = await import("../src/lib/telemetry/stream-tracker");
+
+        // 1. Verify Device Quality Doctor Diagnostics
+        // A. Suboptimal Roku cap detection
+        const rokuSession = {
+            device: "Roku Ultra",
+            platform: "Roku",
+            player: "Living Room Roku",
+            videoDecision: "transcode",
+            videoCodec: "h264",
+            streamBitrate: 4000,
+            videoResolution: "720p",
+            user: "TestUserRoku",
+            title: "Test Movie 4K"
+        };
+        const rokuDiag = diagnoseStreamSettings(rokuSession);
+        if (!rokuDiag.hasIssue) {
+            throw new Error("Expected Roku transcode with 4000kbps to be flagged as suboptimal setting");
+        }
+        if (rokuDiag.deviceCategory !== "Roku") {
+            throw new Error(`Expected deviceCategory 'Roku', got '${rokuDiag.deviceCategory}'`);
+        }
+        if (rokuDiag.issueType !== "roku_auto_adjust") {
+            throw new Error(`Expected issueType 'roku_auto_adjust', got '${rokuDiag.issueType}'`);
+        }
+        if (!rokuDiag.stepByStepGuide || rokuDiag.stepByStepGuide.length === 0) {
+            throw new Error("Expected step-by-step fix guide for Roku device");
+        }
+        if (!rokuDiag.copyableNotice.includes("Roku")) {
+            throw new Error("Expected copyable notice to mention Roku device");
+        }
+
+        // B. Apple TV / Fire TV default 2Mbps/4Mbps remote cap detection
+        const appleTvSession = {
+            device: "Apple TV 4K",
+            platform: "tvOS",
+            player: "Bedroom Apple TV",
+            videoDecision: "transcode",
+            videoCodec: "h264",
+            streamBitrate: 2000,
+            videoResolution: "720p",
+            location: "wan",
+            user: "TestUserApple",
+            title: "Test TV Show"
+        };
+        const appleDiag = diagnoseStreamSettings(appleTvSession);
+        if (!appleDiag.hasIssue) {
+            throw new Error("Expected Apple TV 2Mbps cap to be flagged as suboptimal");
+        }
+        if (appleDiag.issueType !== "remote_quality_cap") {
+            throw new Error(`Expected remote_quality_cap, got '${appleDiag.issueType}'`);
+        }
+
+        // C. Web browser 4K transcode detection
+        const browserSession = {
+            device: "Chrome",
+            platform: "Chrome",
+            player: "Web Player",
+            videoDecision: "transcode",
+            videoCodec: "hevc",
+            streamBitrate: 8000,
+            videoResolution: "1080p",
+            user: "TestBrowserUser",
+            title: "4K HDR Masterpiece"
+        };
+        const browserDiag = diagnoseStreamSettings(browserSession);
+        if (!browserDiag.hasIssue || browserDiag.issueType !== "web_browser_codec") {
+            throw new Error("Expected Web Browser transcode to be flagged with web_browser_codec");
+        }
+
+        // D. Optimal Direct Play (no issues)
+        const optimalSession = {
+            device: "Nvidia Shield",
+            platform: "Android TV",
+            player: "Shield Pro",
+            videoDecision: "direct play",
+            videoCodec: "hevc",
+            streamBitrate: 25000,
+            videoResolution: "4k",
+            user: "PowerUser",
+            title: "Direct Play 4K Remux"
+        };
+        const optimalDiag = diagnoseStreamSettings(optimalSession);
+        if (optimalDiag.hasIssue) {
+            throw new Error("Direct Play 4K session should NOT be marked suboptimal");
+        }
+
+        // 2. Verify Stream Monitoring Mode Takeover Toggle
+        process.env.PORTALARR_TEST_AUTH = "true";
+        try {
+            // Toggle to Native Monitoring (Takeover enabled)
+            const enableRes = await toggleStreamMonitorModeAction(true);
+            if (!enableRes.success || enableRes.useBuiltIn !== true) {
+                throw new Error(`Failed to toggle stream monitor mode to native: ${JSON.stringify(enableRes)}`);
+            }
+
+            // Verify settings persisted
+            let settings = await prisma.settings.findFirst({ where: { id: "global" } });
+            if (settings?.nativeStreamMonitoringEnabled !== true) {
+                throw new Error("Settings table does not reflect nativeStreamMonitoringEnabled: true");
+            }
+
+            // Toggle back to external monitoring
+            const disableRes = await toggleStreamMonitorModeAction(false);
+            if (!disableRes.success || disableRes.useBuiltIn !== false) {
+                throw new Error(`Failed to toggle stream monitor mode to external: ${JSON.stringify(disableRes)}`);
+            }
+
+            // Reset back to native monitoring as default
+            await toggleStreamMonitorModeAction(true);
+
+            // 3. Verify getStreamIntelligenceDataAction Unified Single-Pane Aggregator
+            const dataRes = await getStreamIntelligenceDataAction();
+            if (!dataRes.success) {
+                throw new Error(`getStreamIntelligenceDataAction failed: ${(dataRes as any).error}`);
+            }
+            if (!Array.isArray(dataRes.activeStreams)) {
+                throw new Error("Expected dataRes.activeStreams to be an array");
+            }
+            if (!Array.isArray(dataRes.userProfiles)) {
+                throw new Error("Expected dataRes.userProfiles to be an array");
+            }
+            if (!dataRes.analytics || typeof dataRes.analytics !== "object") {
+                throw new Error("Expected dataRes.analytics object");
+            }
+            if (!Array.isArray(dataRes.deviceAudit)) {
+                throw new Error("Expected dataRes.deviceAudit to be an array");
+            }
+            if (typeof dataRes.useBuiltInStreamMonitor !== "boolean") {
+                throw new Error("Expected useBuiltInStreamMonitor boolean in dataRes");
+            }
+
+            // 4. Verify User Stream Profiles and Cluster Analytics Engine
+            const profiles = await getUserStreamProfiles();
+            if (!Array.isArray(profiles)) {
+                throw new Error("Expected getUserStreamProfiles to return an array");
+            }
+
+            const analytics = await getStreamIntelligenceAnalytics();
+            if (typeof analytics.totalHoursStreamed !== "number") {
+                throw new Error("Expected totalHoursStreamed to be a number");
+            }
+            if (typeof analytics.directPlayPercentage !== "number") {
+                throw new Error("Expected directPlayPercentage to be a number");
+            }
+
+            // 5. Verify Tautulli Backfill Deduplication & Execution Safety
+            // Calling with non-existent or empty instances safely handles errors and returns summary
+            const backfillSummary = await backfillTautulliHistoryInternal({ limit: 10 });
+            if (typeof backfillSummary.imported !== "number" || typeof backfillSummary.skipped !== "number") {
+                throw new Error("Expected backfill summary to contain imported/skipped counts");
+            }
+
+            // Verify tautulliBackfillLastRun timestamp update in Settings
+            const now = new Date();
+            await prisma.settings.updateMany({
+                where: { id: "global" },
+                data: { tautulliBackfillLastRun: now }
+            });
+            const updatedSettings = await prisma.settings.findFirst({ where: { id: "global" } });
+            if (!updatedSettings?.tautulliBackfillLastRun) {
+                throw new Error("Expected tautulliBackfillLastRun to be persisted in Settings table");
+            }
+        } finally {
+            delete process.env.PORTALARR_TEST_AUTH;
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

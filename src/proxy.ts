@@ -118,8 +118,8 @@ export async function proxy(req: NextRequest) {
       return NextResponse.redirect(new URL("/profile", req.url));
     }
 
-    // 6. Role-based protection for Radarr/Sonarr routes
-    if ((pathname.startsWith("/radarr") || pathname.startsWith("/sonarr")) && payload.role !== "ADMIN" && payload.role !== "SUPER_USER") {
+    // 6. Role-based protection for Radarr/Sonarr and Stream Intelligence routes
+    if ((pathname.startsWith("/radarr") || pathname.startsWith("/sonarr") || pathname.startsWith("/tautulli") || pathname.startsWith("/streams")) && payload.role !== "ADMIN" && payload.role !== "SUPER_USER") {
       if (pathname.startsWith("/api")) {
         return NextResponse.json({ error: "Forbidden: Admin or Super User access required" }, { status: 403 });
       }
@@ -128,13 +128,15 @@ export async function proxy(req: NextRequest) {
 
     // 7. Strict route protection for TRIAL accounts
     // Trial accounts have access to: /, /discover, /requests, /guides, /profile.
-    // They are strictly forbidden from /library (Book Library), /radarr, /sonarr, /beta, /curation, /admin.
+    // They are strictly forbidden from /library (Book Library), /radarr, /sonarr, /tautulli, /streams, /beta, /curation, /admin.
     const isTrialUser = (userStatus === "TRIAL" || payload.role === "TRIAL" || (payload as any).isTrial === true) && userStatus !== "APPROVED" && payload.role !== "ADMIN";
     if (isTrialUser) {
       if (
         pathname.startsWith("/library") || 
         pathname.startsWith("/radarr") || 
         pathname.startsWith("/sonarr") || 
+        pathname.startsWith("/tautulli") || 
+        pathname.startsWith("/streams") || 
         pathname.startsWith("/beta") ||
         pathname.startsWith("/curation") ||
         pathname.startsWith("/admin") ||

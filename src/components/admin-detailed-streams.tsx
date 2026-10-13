@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { getAdminDetailedStreamsAction, killUserStream, getWatchHistoryAction, clearWatchHistoryAction } from "@/app/actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -156,6 +157,17 @@ export default function AdminDetailedStreams() {
                     </div>
 
                     <div className="flex items-center gap-2">
+                        <Button
+                            asChild
+                            variant="outline"
+                            size="sm"
+                            className="h-8 px-2.5 text-xs gap-1.5 border-emerald-500/40 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/30 font-semibold"
+                        >
+                            <Link href="/tautulli">
+                                <Activity className="h-3.5 w-3.5" />
+                                <span>Stream Intelligence Hub</span>
+                            </Link>
+                        </Button>
                         <Button
                             variant="outline"
                             size="sm"

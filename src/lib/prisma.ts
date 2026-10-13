@@ -626,7 +626,8 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["monthlyRenewalReminderDays", `ALTER TABLE "Settings" ADD COLUMN "monthlyRenewalReminderDays" TEXT DEFAULT '7,3,1';`],
                 ["nativeStreamMonitoringEnabled", `ALTER TABLE "Settings" ADD COLUMN "nativeStreamMonitoringEnabled" BOOLEAN NOT NULL DEFAULT 1;`],
                 ["detectPasswordSharing", `ALTER TABLE "Settings" ADD COLUMN "detectPasswordSharing" BOOLEAN NOT NULL DEFAULT 1;`],
-                ["maxConcurrentStreamsPerUser", `ALTER TABLE "Settings" ADD COLUMN "maxConcurrentStreamsPerUser" INTEGER DEFAULT 3;`]
+                ["maxConcurrentStreamsPerUser", `ALTER TABLE "Settings" ADD COLUMN "maxConcurrentStreamsPerUser" INTEGER DEFAULT 3;`],
+                ["tautulliBackfillLastRun", `ALTER TABLE "Settings" ADD COLUMN "tautulliBackfillLastRun" DATETIME;`]
             ];
 
             for (const [colName, ddl] of settingsAddCols) {

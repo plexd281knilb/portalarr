@@ -62,6 +62,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
     if (pathname.startsWith("/library")) return "Book Library";
     if (pathname.startsWith("/radarr")) return "Radarr (Movies)";
     if (pathname.startsWith("/sonarr")) return "Sonarr (TV Shows)";
+    if (pathname.startsWith("/tautulli") || pathname.startsWith("/streams")) return "Stream Intelligence";
     if (pathname.startsWith("/curation/kometa")) return "Kometa Overlays";
     if (pathname.startsWith("/curation/agregarr")) return "Agregarr Hubs";
     if (pathname.startsWith("/curation/prune")) return "Maintainerr Prune";

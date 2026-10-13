@@ -44,8 +44,13 @@ import {
     analyzeActiveSessionsForSharing, 
     getWatchHistory, 
     getConnectionSecurityInsights, 
+    getUserStreamProfiles,
+    getStreamIntelligenceAnalytics,
+    isPrivateOrLocalIp,
     type WatchHistoryQueryOptions 
 } from "@/lib/telemetry/stream-tracker";
+import { diagnoseStreamSettings, detectDeviceCategory } from "@/lib/telemetry/device-diagnostics";
+import { backfillTautulliHistoryInternal } from "@/lib/telemetry/tautulli-backfill";
 
 if (typeof process !== "undefined" && process.env) {
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
@@ -15433,88 +15438,98 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
             plexServers.filter(ps => ps.monitored === false).map(ps => ps.name.toLowerCase().trim())
         );
 
-        // 1. Tautulli Session Collection
-        for (const t of tautulliInstances) {
-            if (t.monitored === false) continue; // Skip unmonitored Tautulli instances
-            let baseUrl = cleanUrl(t.url).replace(/\/api\/v2\/?$/, "");
-            const apiKey = decryptData(t.apiKey);
-            const fullUrl = `${baseUrl}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_activity`;
+        // Built-in Telemetry Takeover Mode:
+        // When nativeStreamMonitoringEnabled is true (default), Portalarr monitors all active Plex servers directly.
+        // Standalone external Tautulli instances are NOT queried for active sessions to prevent duplicate tracking.
+        const useBuiltIn = settings?.nativeStreamMonitoringEnabled !== false;
 
-            try {
-                const actResult = await fetchTautulliApiJson(fullUrl, undefined, { revalidate: 0 });
-                if (actResult.ok && actResult.data) {
-                    coveredServerNames.add(t.name.toLowerCase().trim());
-                    const count = actResult.data.stream_count ? Number(actResult.data.stream_count) : 0;
-                    totalStreamCount += count;
-                    const sessions = actResult.data.sessions || [];
-                    for (const s of sessions) {
-                        let rawThumb = s.thumb || s.parent_thumb || s.grandparent_thumb || s.art || (s.rating_key ? `/library/metadata/${s.rating_key}/thumb` : "");
-                        if (rawThumb && rawThumb.includes("pms_image_proxy")) {
-                            try {
-                                const dummyUrl = new URL(rawThumb.startsWith("http") ? rawThumb : `http://localhost/${rawThumb.replace(/^\/+/, "")}`);
-                                const nested = dummyUrl.searchParams.get("img") || dummyUrl.searchParams.get("url");
-                                if (nested) rawThumb = nested;
-                            } catch (e) {}
-                        }
-                        const thumbUrl = rawThumb
-                            ? `/api/media/image?instanceId=${encodeURIComponent(t.id)}&img=${encodeURIComponent(rawThumb)}&title=${encodeURIComponent(s.grandparent_title || s.title || "")}&year=${encodeURIComponent(String(s.year || ""))}&type=${encodeURIComponent(s.media_type || (s.grandparent_title ? "episode" : "movie"))}`
-                            : null;
+        // 1. Tautulli Session Collection (Only when Built-in takeover is OFF)
+        if (!useBuiltIn) {
+            for (const t of tautulliInstances) {
+                if (t.monitored === false) continue; // Skip unmonitored Tautulli instances
+                let baseUrl = cleanUrl(t.url).replace(/\/api\/v2\/?$/, "");
+                const apiKey = decryptData(t.apiKey);
+                const fullUrl = `${baseUrl}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_activity`;
 
-                        const isEpisode = s.media_type === "episode" || !!s.grandparent_title;
-                        const seasonNum = s.parent_media_index ? Number(s.parent_media_index) : undefined;
-                        const episodeNum = s.media_index ? Number(s.media_index) : undefined;
-                        const seasonEpisodeTag = (seasonNum !== undefined && episodeNum !== undefined)
-                            ? `S${String(seasonNum).padStart(2, "0")}E${String(episodeNum).padStart(2, "0")}`
-                            : (seasonNum !== undefined ? `S${String(seasonNum).padStart(2, "0")}` : (s.parent_title || ""));
-
-                        let fullTitle = s.title || "Unknown Media";
-                        if (isEpisode && s.grandparent_title) {
-                            if (seasonEpisodeTag) {
-                                fullTitle = `${s.grandparent_title} - ${seasonEpisodeTag}${s.title ? `: ${s.title}` : ""}`;
-                            } else {
-                                fullTitle = `${s.grandparent_title} - ${s.title || (s.parent_title ? `${s.parent_title} Ep` : "Episode")}`;
+                try {
+                    const actResult = await fetchTautulliApiJson(fullUrl, undefined, { revalidate: 0 });
+                    if (actResult.ok && actResult.data) {
+                        coveredServerNames.add(t.name.toLowerCase().trim());
+                        const count = actResult.data.stream_count ? Number(actResult.data.stream_count) : 0;
+                        totalStreamCount += count;
+                        const sessions = actResult.data.sessions || [];
+                        for (const s of sessions) {
+                            let rawThumb = s.thumb || s.parent_thumb || s.grandparent_thumb || s.art || (s.rating_key ? `/library/metadata/${s.rating_key}/thumb` : "");
+                            if (rawThumb && rawThumb.includes("pms_image_proxy")) {
+                                try {
+                                    const dummyUrl = new URL(rawThumb.startsWith("http") ? rawThumb : `http://localhost/${rawThumb.replace(/^\/+/, "")}`);
+                                    const nested = dummyUrl.searchParams.get("img") || dummyUrl.searchParams.get("url");
+                                    if (nested) rawThumb = nested;
+                                } catch (e) {}
                             }
-                        }
+                            const thumbUrl = rawThumb
+                                ? `/api/media/image?instanceId=${encodeURIComponent(t.id)}&img=${encodeURIComponent(rawThumb)}&title=${encodeURIComponent(s.grandparent_title || s.title || "")}&year=${encodeURIComponent(String(s.year || ""))}&type=${encodeURIComponent(s.media_type || (s.grandparent_title ? "episode" : "movie"))}`
+                                : null;
 
-                        allSessions.push({
-                            instanceId: t.id,
-                            serverName: t.name,
-                            sessionKey: String(s.session_key || ""),
-                            sessionId: String(s.session_id || ""),
-                            user: s.friendly_name || s.user || "Plex User",
-                            email: s.email || "",
-                            title: fullTitle,
-                            grandparentTitle: s.grandparent_title || "",
-                            parentTitle: s.parent_title || "",
-                            seasonNum: seasonNum,
-                            episodeNum: episodeNum,
-                            seasonEpisodeTag: seasonEpisodeTag,
-                            episodeTitle: isEpisode ? (s.title || "") : "",
-                            mediaType: isEpisode ? "episode" : "movie",
-                            year: s.year || "",
-                            thumb: thumbUrl,
-                            player: s.player || s.platform || "Plex Client",
-                            device: s.device || s.platform || "",
-                            ipAddress: s.ip_address || "",
-                            videoDecision: (s.video_decision || "direct play").toLowerCase(),
-                            audioDecision: (s.audio_decision || "direct play").toLowerCase(),
-                            videoCodec: (s.video_codec || "").toUpperCase(),
-                            audioCodec: (s.audio_codec || "").toUpperCase(),
-                            streamBitrate: s.stream_bitrate ? Math.round(Number(s.stream_bitrate)) : (s.bitrate ? Math.round(Number(s.bitrate)) : 0),
-                            transcodeHwRequested: !!s.transcode_hw_requested,
-                            transcodeHwDecoding: s.transcode_hw_decoding || "",
-                            transcodeHwEncoding: s.transcode_hw_encoding || "",
-                            progressPercent: s.progress_percent ? Number(s.progress_percent) : 0,
-                            state: s.state || "playing"
-                        });
+                            const isEpisode = s.media_type === "episode" || !!s.grandparent_title;
+                            const seasonNum = s.parent_media_index ? Number(s.parent_media_index) : undefined;
+                            const episodeNum = s.media_index ? Number(s.media_index) : undefined;
+                            const seasonEpisodeTag = (seasonNum !== undefined && episodeNum !== undefined)
+                                ? `S${String(seasonNum).padStart(2, "0")}E${String(episodeNum).padStart(2, "0")}`
+                                : (seasonNum !== undefined ? `S${String(seasonNum).padStart(2, "0")}` : (s.parent_title || ""));
+
+                            let fullTitle = s.title || "Unknown Media";
+                            if (isEpisode && s.grandparent_title) {
+                                if (seasonEpisodeTag) {
+                                    fullTitle = `${s.grandparent_title} - ${seasonEpisodeTag}${s.title ? `: ${s.title}` : ""}`;
+                                } else {
+                                    fullTitle = `${s.grandparent_title} - ${s.title || (s.parent_title ? `${s.parent_title} Ep` : "Episode")}`;
+                                }
+                            }
+
+                            const sessionItem: any = {
+                                instanceId: t.id,
+                                serverName: t.name,
+                                sessionKey: String(s.session_key || ""),
+                                sessionId: String(s.session_id || ""),
+                                user: s.friendly_name || s.user || "Plex User",
+                                email: s.email || "",
+                                title: fullTitle,
+                                grandparentTitle: s.grandparent_title || "",
+                                parentTitle: s.parent_title || "",
+                                seasonNum: seasonNum,
+                                episodeNum: episodeNum,
+                                seasonEpisodeTag: seasonEpisodeTag,
+                                episodeTitle: isEpisode ? (s.title || "") : "",
+                                mediaType: isEpisode ? "episode" : "movie",
+                                year: s.year || "",
+                                thumb: thumbUrl,
+                                player: s.player || s.platform || "Plex Client",
+                                device: s.device || s.platform || "",
+                                ipAddress: s.ip_address || "",
+                                videoDecision: (s.video_decision || "direct play").toLowerCase(),
+                                audioDecision: (s.audio_decision || "direct play").toLowerCase(),
+                                videoCodec: (s.video_codec || "").toUpperCase(),
+                                audioCodec: (s.audio_codec || "").toUpperCase(),
+                                streamBitrate: s.stream_bitrate ? Math.round(Number(s.stream_bitrate)) : (s.bitrate ? Math.round(Number(s.bitrate)) : 0),
+                                transcodeHwRequested: !!s.transcode_hw_requested,
+                                transcodeHwDecoding: s.transcode_hw_decoding || "",
+                                transcodeHwEncoding: s.transcode_hw_encoding || "",
+                                progressPercent: s.progress_percent ? Number(s.progress_percent) : 0,
+                                state: s.state || "playing"
+                            };
+
+                            sessionItem.deviceDiagnosis = diagnoseStreamSettings(sessionItem);
+                            allSessions.push(sessionItem);
+                        }
                     }
+                } catch (err: any) {
+                    console.warn(`[ADMIN-STREAMS] Failed to fetch activity for Tautulli "${t.name}":`, err.message || err);
                 }
-            } catch (err: any) {
-                console.warn(`[ADMIN-STREAMS] Failed to fetch activity for Tautulli "${t.name}":`, err.message || err);
             }
         }
 
-        // 2. Direct Plex Active Sessions Fallback (for configured Plex servers not monitored by Tautulli)
+        // 2. Direct Multi-Server Plex Active Sessions Collection
         let adminToken = "";
         if (settings?.mainPlexToken) {
             try {
@@ -15530,7 +15545,7 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
                     // Skip if Plex server is unmonitored (monitored: false)
                     if (unmonitoredPlexNames.has(norm)) continue;
 
-                    const isCovered = Array.from(coveredServerNames).some(c => c === norm || c.includes(norm) || norm.includes(c));
+                    const isCovered = !useBuiltIn && Array.from(coveredServerNames).some(c => c === norm || c.includes(norm) || norm.includes(c));
                     if (!isCovered && srv.sessions && srv.sessions.length > 0) {
                         for (const s of srv.sessions) {
                             const isTranscode = s.TranscodeSession || (s.Media && s.Media[0]?.Part && s.Media[0]?.Part[0]?.decision === "transcode");
@@ -15551,9 +15566,9 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
                                 }
                             }
                             
-                            const bitrate = s.Media && s.Media[0]?.bitrate ? Number(s.Media[0].bitrate) : 0;
+                            const bitrate = s.Media && s.Media[0]?.bitrate ? Number(s.Media[0].bitrate) : (s.Session?.bandwidth ? Number(s.Session.bandwidth) : 0);
                             totalStreamCount++;
-                            allSessions.push({
+                            const sessionItem: any = {
                                 instanceId: `plex_${srv.serverId}`,
                                 serverName: srv.serverName,
                                 sessionKey: String(s.sessionKey || s.ratingKey || Math.random()),
@@ -15573,8 +15588,9 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
                                 player: s.Player?.title || s.Player?.device || "Plex Client",
                                 device: s.Player?.platform || s.Player?.device || "",
                                 ipAddress: s.Player?.address || "",
+                                location: (s.Session?.location || (isPrivateOrLocalIp(s.Player?.address) ? "lan" : "wan")),
                                 videoDecision: isTranscode ? "transcode" : "direct play",
-                                audioDecision: "direct play",
+                                audioDecision: s.TranscodeSession?.audioDecision || "direct play",
                                 videoCodec: (s.Media && s.Media[0]?.videoCodec || "H264").toUpperCase(),
                                 audioCodec: (s.Media && s.Media[0]?.audioCodec || "AAC").toUpperCase(),
                                 streamBitrate: bitrate,
@@ -15583,7 +15599,10 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
                                 transcodeHwEncoding: s.TranscodeSession?.videoEncoder || "",
                                 progressPercent: s.viewOffset && s.duration ? Math.round((Number(s.viewOffset) / Number(s.duration)) * 100) : 0,
                                 state: s.Player?.state || "playing"
-                            });
+                            };
+
+                            sessionItem.deviceDiagnosis = diagnoseStreamSettings(sessionItem);
+                            allSessions.push(sessionItem);
                         }
                     }
                 }
@@ -15750,6 +15769,8 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
             sessions: allSessions,
             glances: glancesStats,
             serversUsage: serversUsage,
+            useBuiltInStreamMonitor: useBuiltIn,
+            tautulliBackfillLastRun: settings?.tautulliBackfillLastRun,
             securityTelemetry: {
                 totalActiveUsers: userAnalysesList.length,
                 multiIpUsersCount: userAnalysesList.filter(a => a.isMultiIp).length,
@@ -15761,6 +15782,149 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
     } catch (e: any) {
         return { success: false, error: e.message || "Failed fetching admin streams" };
     }
+}
+
+/**
+ * Server Action: Full Single-Pane Stream Intelligence Aggregator
+ * Merges watches, views, history, users, streams, types across all monitored servers
+ * with device settings diagnostics and Tautulli status.
+ */
+export async function getStreamIntelligenceDataAction(options?: {
+    serverFilter?: string;
+    view?: string;
+    search?: string;
+    page?: number;
+}) {
+    await verifyAdmin();
+    const [streamsRes, userProfiles, analytics, historyRes, settings, tautulliInstances, plexServers] = await Promise.all([
+        getAdminDetailedStreamsAction(true),
+        getUserStreamProfiles(),
+        getStreamIntelligenceAnalytics(),
+        getWatchHistory({
+            search: options?.search,
+            page: options?.page || 1,
+            limit: 50
+        }),
+        prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null),
+        prisma.tautulliInstance.findMany({ orderBy: { createdAt: "asc" } }).catch(() => []),
+        prisma.plexServer.findMany({ orderBy: { createdAt: "asc" } }).catch(() => [])
+    ]);
+
+    // Build device audit items from active streams and recent history
+    const deviceAuditList: any[] = [];
+    const seenAuditKeys = new Set<string>();
+
+    if (streamsRes.success && streamsRes.sessions) {
+        for (const s of streamsRes.sessions) {
+            const diag = s.deviceDiagnosis || diagnoseStreamSettings(s);
+            if (diag && diag.hasIssue) {
+                const key = `${s.user}_${diag.deviceCategory}_${diag.issueType}`;
+                if (!seenAuditKeys.has(key)) {
+                    seenAuditKeys.add(key);
+                    deviceAuditList.push({
+                        user: s.user,
+                        title: s.title,
+                        serverName: s.serverName,
+                        device: s.device || s.player,
+                        diagnosis: diag,
+                        isActiveNow: true,
+                        detectedAt: new Date()
+                    });
+                }
+            }
+        }
+    }
+
+    // Also inspect user profiles for chronic transcoders who have bad remote quality settings
+    for (const p of userProfiles) {
+        if (p.frequentTranscoder) {
+            const key = `user_chronic_${p.user}`;
+            if (!seenAuditKeys.has(key)) {
+                seenAuditKeys.add(key);
+                deviceAuditList.push({
+                    user: p.user,
+                    title: p.lastWatchedTitle,
+                    serverName: p.servers[0] || "Plex",
+                    device: p.lastPlatform || p.platforms[0] || "Plex Client",
+                    diagnosis: {
+                        hasIssue: true,
+                        issueType: "remote_quality_cap",
+                        title: `Chronic Transcoding (${p.transcodeRate}% of streams)`,
+                        description: `User "${p.user}" transcoded ${p.transcodeCount} out of ${p.totalPlays} plays. Their client app likely has 'Remote Quality' defaulted to 2-4 Mbps 720p.`,
+                        severity: "warning",
+                        deviceCategory: detectDeviceCategory(p.lastPlatform),
+                        quickFix: "Send user step-by-step instructions to set Remote Quality to Maximum / Original.",
+                        stepByStepGuide: [
+                            `Open Plex on ${p.lastPlatform || "their device"}.`,
+                            "Go to Settings (⚙️) → Video / Quality.",
+                            "Change 'Remote Streaming Quality' to Maximum / Original.",
+                            "Turn 'Auto Adjust Quality' to OFF."
+                        ],
+                        copyableNotice: `Hey @${p.user}! We noticed that ${p.transcodeRate}% of your recent streams are downscaling to 720p. To unlock full 1080p/4K Direct Play without server buffering, open Plex on your ${p.lastPlatform || "device"} → Settings (⚙️) → Video, and set Remote Streaming Quality to Maximum/Original!`
+                    },
+                    isActiveNow: false,
+                    detectedAt: p.lastWatchedAt
+                });
+            }
+        }
+    }
+
+    return {
+        success: true,
+        activeStreams: streamsRes.success ? (streamsRes.sessions || []) : [],
+        serversUsage: streamsRes.success ? (streamsRes.serversUsage || []) : [],
+        glances: streamsRes.success ? (streamsRes.glances || []) : [],
+        userProfiles,
+        analytics,
+        history: historyRes,
+        deviceAudit: deviceAuditList,
+        tautulliInstances: tautulliInstances.map(t => ({
+            id: t.id,
+            name: t.name,
+            url: t.url,
+            monitored: t.monitored
+        })),
+        monitoredPlexServers: plexServers.filter(p => p.monitored !== false).map(p => ({
+            id: p.id,
+            name: p.name,
+            url: p.url,
+            isDefault: p.isDefault
+        })),
+        useBuiltInStreamMonitor: settings?.nativeStreamMonitoringEnabled !== false,
+        tautulliBackfillLastRun: settings?.tautulliBackfillLastRun
+    };
+}
+
+/**
+ * Server Action: Backfill Historical Watch Data from External Tautulli
+ */
+export async function backfillTautulliHistoryAction(options?: { instanceId?: string; limit?: number }) {
+    await verifyAdmin();
+    const result = await backfillTautulliHistoryInternal(options);
+    if (result.success) {
+        await prisma.settings.upsert({
+            where: { id: "global" },
+            update: { tautulliBackfillLastRun: new Date() },
+            create: { id: "global", tautulliBackfillLastRun: new Date() }
+        }).catch(() => {});
+        try { revalidatePath("/tautulli"); } catch (_) {}
+    }
+    return result;
+}
+
+/**
+ * Server Action: Toggle between Built-in Stream Monitoring and External Tautulli
+ */
+export async function toggleStreamMonitorModeAction(useBuiltIn: boolean) {
+    await verifyAdmin();
+    await prisma.settings.upsert({
+        where: { id: "global" },
+        update: { nativeStreamMonitoringEnabled: useBuiltIn },
+        create: { id: "global", nativeStreamMonitoringEnabled: useBuiltIn }
+    });
+    try { revalidatePath("/tautulli"); } catch (_) {}
+    try { revalidatePath("/"); } catch (_) {}
+    return { success: true, useBuiltIn };
 }
 
 /**

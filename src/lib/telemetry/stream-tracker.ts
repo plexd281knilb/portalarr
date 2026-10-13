@@ -443,3 +443,194 @@ export async function getConnectionSecurityInsights() {
         };
     }
 }
+
+/**
+ * Aggregates all watch history into per-user telemetry profiles across all servers
+ */
+export async function getUserStreamProfiles() {
+    try {
+        const records = await prisma.watchHistory.findMany({
+            orderBy: { watchedAt: "desc" },
+            take: 2000
+        });
+
+        const userMap = new Map<string, {
+            user: string;
+            totalPlays: number;
+            completedCount: number;
+            totalWatchSeconds: number;
+            directPlayCount: number;
+            transcodeCount: number;
+            servers: Set<string>;
+            platforms: Set<string>;
+            lastWatchedTitle: string;
+            lastWatchedAt: Date;
+            lastPlatform: string;
+            lastIp: string;
+            sharingAlerts: number;
+        }>();
+
+        for (const r of records) {
+            const uKey = r.user.toLowerCase().trim();
+            if (!userMap.has(uKey)) {
+                userMap.set(uKey, {
+                    user: r.user,
+                    totalPlays: 0,
+                    completedCount: 0,
+                    totalWatchSeconds: 0,
+                    directPlayCount: 0,
+                    transcodeCount: 0,
+                    servers: new Set(),
+                    platforms: new Set(),
+                    lastWatchedTitle: r.grandparentTitle ? `${r.grandparentTitle} - ${r.title}` : r.title,
+                    lastWatchedAt: r.watchedAt,
+                    lastPlatform: r.platform || r.player || "Unknown",
+                    lastIp: r.ipAddress || "",
+                    sharingAlerts: 0
+                });
+            }
+
+            const profile = userMap.get(uKey)!;
+            profile.totalPlays++;
+            if (r.completed) profile.completedCount++;
+            profile.totalWatchSeconds += Math.round((r.durationMs || 0) / 1000);
+            if (r.videoDecision === "direct play") profile.directPlayCount++;
+            if (r.videoDecision === "transcode") profile.transcodeCount++;
+            if (r.serverName) profile.servers.add(r.serverName);
+            if (r.platform) profile.platforms.add(r.platform);
+            if (r.isSharingAlert) profile.sharingAlerts++;
+        }
+
+        const profiles = Array.from(userMap.values()).map(p => {
+            const total = p.directPlayCount + p.transcodeCount;
+            const transcodeRate = total > 0 ? Math.round((p.transcodeCount / total) * 100) : 0;
+            return {
+                user: p.user,
+                totalPlays: p.totalPlays,
+                completedCount: p.completedCount,
+                totalWatchHours: Number((p.totalWatchSeconds / 3600).toFixed(1)),
+                directPlayCount: p.directPlayCount,
+                transcodeCount: p.transcodeCount,
+                transcodeRate,
+                servers: Array.from(p.servers),
+                platforms: Array.from(p.platforms),
+                lastWatchedTitle: p.lastWatchedTitle,
+                lastWatchedAt: p.lastWatchedAt,
+                lastPlatform: p.lastPlatform,
+                lastIp: p.lastIp,
+                sharingAlerts: p.sharingAlerts,
+                frequentTranscoder: transcodeRate >= 50 && p.totalPlays >= 2
+            };
+        });
+
+        profiles.sort((a, b) => b.totalPlays - a.totalPlays);
+        return profiles;
+    } catch (err: any) {
+        console.error("[STREAM-TRACKER] Error building user stream profiles:", err);
+        return [];
+    }
+}
+
+/**
+ * Returns multi-server cluster statistics and top content leaderboards
+ */
+export async function getStreamIntelligenceAnalytics() {
+    try {
+        const [totalSessions, allHistory, completedCount] = await Promise.all([
+            prisma.watchHistory.count(),
+            prisma.watchHistory.findMany({
+                select: {
+                    title: true,
+                    grandparentTitle: true,
+                    mediaType: true,
+                    durationMs: true,
+                    videoDecision: true,
+                    serverName: true
+                },
+                take: 3000
+            }),
+            prisma.watchHistory.count({ where: { completed: true } })
+        ]);
+
+        let totalDurationSeconds = 0;
+        let directPlayCount = 0;
+        let transcodeCount = 0;
+
+        const moviePlays = new Map<string, number>();
+        const showPlays = new Map<string, number>();
+        const serverPlays = new Map<string, number>();
+        let moviesCount = 0;
+        let episodesCount = 0;
+
+        for (const h of allHistory) {
+            totalDurationSeconds += Math.round((h.durationMs || 0) / 1000);
+            if (h.videoDecision === "direct play") directPlayCount++;
+            if (h.videoDecision === "transcode") transcodeCount++;
+
+            if (h.serverName) {
+                serverPlays.set(h.serverName, (serverPlays.get(h.serverName) || 0) + 1);
+            }
+
+            if (h.mediaType === "movie" || !h.grandparentTitle) {
+                moviesCount++;
+                const key = h.title;
+                moviePlays.set(key, (moviePlays.get(key) || 0) + 1);
+            } else {
+                episodesCount++;
+                const key = h.grandparentTitle || h.title;
+                showPlays.set(key, (showPlays.get(key) || 0) + 1);
+            }
+        }
+
+        const totalPlayback = directPlayCount + transcodeCount;
+        const directPlayRatio = totalPlayback > 0 ? Math.round((directPlayCount / totalPlayback) * 100) : 100;
+
+        const topMovies = Array.from(moviePlays.entries())
+            .map(([title, plays]) => ({ title, plays }))
+            .sort((a, b) => b.plays - a.plays)
+            .slice(0, 10);
+
+        const topShows = Array.from(showPlays.entries())
+            .map(([title, plays]) => ({ title, plays }))
+            .sort((a, b) => b.plays - a.plays)
+            .slice(0, 10);
+
+        const playsByServer = Array.from(serverPlays.entries())
+            .map(([server, plays]) => ({ server, plays }))
+            .sort((a, b) => b.plays - a.plays);
+
+        return {
+            totalSessions,
+            completedCount,
+            totalWatchHours: Number((totalDurationSeconds / 3600).toFixed(1)),
+            totalHoursStreamed: Number((totalDurationSeconds / 3600).toFixed(1)),
+            directPlayCount,
+            transcodeCount,
+            directPlayRatio,
+            directPlayPercentage: directPlayRatio,
+            moviesCount,
+            episodesCount,
+            topMovies,
+            topShows,
+            playsByServer
+        };
+    } catch (err: any) {
+        console.error("[STREAM-TRACKER] Error calculating stream analytics:", err);
+        return {
+            totalSessions: 0,
+            completedCount: 0,
+            totalWatchHours: 0,
+            totalHoursStreamed: 0,
+            directPlayCount: 0,
+            transcodeCount: 0,
+            directPlayRatio: 100,
+            directPlayPercentage: 100,
+            moviesCount: 0,
+            episodesCount: 0,
+            topMovies: [],
+            topShows: [],
+            playsByServer: []
+        };
+    }
+}
+

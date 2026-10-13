@@ -95,6 +95,7 @@ model Settings {
   nativeStreamMonitoringEnabled   Boolean   @default(true) // Built-in Tautulli telemetry active
   detectPasswordSharing           Boolean   @default(true) // Detect multi-IP concurrent playback
   maxConcurrentStreamsPerUser     Int       @default(3)    // Default concurrent stream limit
+  tautulliBackfillLastRun         DateTime? // Last historical backfill from Tautulli
 
   // Curation, Agregarr & Kometa (PMM) Settings
   tmdbApiKey                  String?
