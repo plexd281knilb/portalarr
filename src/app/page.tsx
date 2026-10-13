@@ -514,7 +514,7 @@ export default async function UserLandingPage() {
                                 </div>
                             </Link>
 
-                            <Link href="/admin/tickets" className="block group">
+                            <Link href="/tickets" className="block group">
                                 <div className="p-3 rounded-xl bg-white/[0.02] border border-border/50 group-hover:border-rose-500/50 text-center space-y-1.5 transition-all">
                                     <LifeBuoy className="h-5 w-5 mx-auto text-rose-400" />
                                     <span className="text-xs font-bold block text-foreground">Tickets</span>

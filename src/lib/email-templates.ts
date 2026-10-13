@@ -200,6 +200,10 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
     <p style="margin: 0; white-space: pre-wrap; font-size: 14px; color: #334155;">{issue}</p>
 </div>
 
+<div style="text-align: center; margin: 20px 0;">
+    <a href="{appUrl}/tickets" style="background-color: #3b82f6; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">View Support Tickets</a>
+</div>
+
 <p style="font-size: 13px; color: #64748b;">Thanks for using DomsHomeLab Support!</p>`,
         variables: [
             { key: "{name}", description: "Name or username of user who opened the ticket", sampleValue: "David" },

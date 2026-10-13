@@ -727,6 +727,13 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
     - Mass Delete: Rose filled action (`Trash2` icon) executing two-way cascade permanent deletion.
   - **0ms Optimistic UI Transitions**: Mutated or deleted cards immediately disappear from the view with 0ms latency, backed by floating glassmorphic toasts for feedback.
 
+- **Support Tickets Unified Portal & Edge Policy Bypass (`/tickets`)**:
+  - **Public User Route & Cloudflare Admin Policy Bypass**: Aliased and served from `/tickets` with entry in `CLOUDFLARE_BYPASS_PATHS` (`src/lib/edge-policy-paths.ts`). This allows all standard members and trial users to access support without encountering Cloudflare Access or Admin path policies.
+  - **Automatic Route Normalization**: Visiting `/admin/tickets` redirects non-admins transparently to `/tickets` via `src/proxy.ts`, while administrators retain full mission-control features.
+  - **Role-Scoped Access Control**: Backend action `getTicketsDashboardAction()` scopes ticket queries by role. Standard users see strictly their own submitted tickets, open new tickets with priority tiers (`LOW`, `NORMAL`, `HIGH`, `URGENT`), and view admin comments/resolution notes. Administrators see tickets from all users, filter by status (`ALL`, `OPEN`, `IN_PROGRESS`, `RESOLVED`, `CLOSED`), update ticket status, link to relevant user profiles or Arr apps, and delete tickets.
+  - **Sidebar & Navigation Integration**: Accessible via "Support Tickets" (`LifeBuoy` icon) in both desktop and mobile sidebars for all authenticated users.
+
+
 ---
 
 As the Portalarr frontend evolves or new design decisions are finalized:

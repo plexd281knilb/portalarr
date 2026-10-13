@@ -21,6 +21,7 @@ export const CLOUDFLARE_BYPASS_PATHS: string[] = [
     "/library*",
     "/guides*",
     "/profile*",
+    "/tickets*",
     "/beta*",
     "/api/books*",
     "/api/cover*",

@@ -143,22 +143,20 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
               </Button>
             </Link>
 
-            {isAdmin && (
-              <Link href="/admin/tickets">
-                <Button
-                  variant={pathname.startsWith("/admin/tickets") ? "secondary" : "ghost"}
-                  className={cn(
-                    "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                    pathname.startsWith("/admin/tickets")
-                      ? "bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-[0_0_10px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/40 font-bold"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-amber-500/40"
-                  )}
-                >
-                  <LifeBuoy className="mr-2 h-4 w-4 text-amber-400" />
-                  Support Tickets
-                </Button>
-              </Link>
-            )}
+            <Link href="/tickets">
+              <Button
+                variant={pathname.startsWith("/tickets") || pathname.startsWith("/admin/tickets") ? "secondary" : "ghost"}
+                className={cn(
+                  "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
+                  pathname.startsWith("/tickets") || pathname.startsWith("/admin/tickets")
+                    ? "bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-[0_0_10px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/40 font-bold"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-amber-500/40"
+                )}
+              >
+                <LifeBuoy className="mr-2 h-4 w-4 text-amber-400" />
+                Support Tickets
+              </Button>
+            </Link>
 
             <Link href="/profile">
               <Button
@@ -452,21 +450,19 @@ export function MobileSidebar() {
                     </Button>
                   </Link>
                   
-                  {isAdmin && (
-                    <Link href="/admin/tickets" onClick={() => setIsOpen(false)}>
-                      <Button
-                        variant={pathname.startsWith("/admin/tickets") ? "secondary" : "ghost"}
-                        className={cn(
-                          "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                          pathname.startsWith("/admin/tickets")
-                            ? "bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-[0_0_10px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/40 font-bold"
-                            : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-amber-500/40"
-                        )}
-                      >
-                        <LifeBuoy className="mr-2 h-4 w-4 text-amber-400" /> Support Tickets
-                      </Button>
-                    </Link>
-                  )}
+                  <Link href="/tickets" onClick={() => setIsOpen(false)}>
+                    <Button
+                      variant={pathname.startsWith("/tickets") || pathname.startsWith("/admin/tickets") ? "secondary" : "ghost"}
+                      className={cn(
+                        "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
+                        pathname.startsWith("/tickets") || pathname.startsWith("/admin/tickets")
+                          ? "bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-[0_0_10px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/40 font-bold"
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-amber-500/40"
+                      )}
+                    >
+                      <LifeBuoy className="mr-2 h-4 w-4 text-amber-400" /> Support Tickets
+                    </Button>
+                  </Link>
 
                   <Link href="/profile" onClick={() => setIsOpen(false)}>
                     <Button

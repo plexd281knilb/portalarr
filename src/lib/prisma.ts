@@ -2088,12 +2088,15 @@ export function isScheduleDue(
 // --- BACKGROUND SCHEDULER ---
 const globalForScheduler = global as unknown as { schedulerInitialized?: boolean; lastSeerrSyncTime?: number };
 
-if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDULER_INITIALIZED) {
+if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDULER_INITIALIZED && process.env.NODE_ENV !== "test" && process.env.PORTALARR_TEST !== "true") {
   globalForScheduler.schedulerInitialized = true;
   process.env.__PORTALARR_SCHEDULER_INITIALIZED = "true";
 
   // Let Next.js boot finish before running initial checks
   setTimeout(async () => {
+    if (process.env.NODE_ENV === "test" || process.env.PORTALARR_TEST === "true") {
+      return;
+    }
     await ensureSchemaColumns();
     const settings = await prisma.settings.findUnique({ where: { id: "global" } }).catch(() => null);
     const intervalMinutes = settings?.autoSyncInterval || 5;

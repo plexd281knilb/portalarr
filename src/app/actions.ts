@@ -3754,12 +3754,45 @@ export async function approveAllPendingAppUsers() {
     }
 }
 
+export async function getTicketsDashboardAction() {
+    const user: any = await verifyUser();
+    const isAdmin = String(user?.role || "").toUpperCase() === "ADMIN";
+
+    let tickets: any[] = [];
+    if (isAdmin) {
+        tickets = await prisma.supportTicket.findMany({
+            orderBy: { createdAt: 'desc' },
+            take: 100
+        });
+    } else {
+        const userEmail = (user?.email || "").trim();
+        const username = (user?.username || "").trim();
+        tickets = await prisma.supportTicket.findMany({
+            where: {
+                OR: [
+                    ...(userEmail ? [{ email: { equals: userEmail } }, { email: { equals: userEmail.toLowerCase() } }] : []),
+                    ...(username ? [{ name: { equals: username } }, { name: { equals: username.toLowerCase() } }] : [])
+                ]
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 50
+        });
+    }
+
+    return {
+        isAdmin,
+        currentUser: {
+            username: user.username,
+            email: user.email,
+            role: user.role
+        },
+        tickets
+    };
+}
+
 export async function getSupportTickets() {
-    await verifyAdmin();
-    return await prisma.supportTicket.findMany({
-        orderBy: { createdAt: 'desc' },
-        take: 50
-    });
+    const res = await getTicketsDashboardAction();
+    return res.tickets;
 }
 
 export async function updateTicketStatus(id: string, status: string, adminComment?: string) {
@@ -3795,8 +3828,13 @@ export async function updateTicketStatus(id: string, status: string, adminCommen
         }
     }
 
-    revalidatePath("/");
-    revalidatePath("/admin/tickets");
+    try {
+        revalidatePath("/");
+        revalidatePath("/tickets");
+        revalidatePath("/admin/tickets");
+    } catch (e) {
+        // Safe fallback outside Next.js request lifecycle
+    }
 }
 
 export async function deleteSupportTicket(id: string) {
@@ -3805,8 +3843,11 @@ export async function deleteSupportTicket(id: string) {
         await prisma.supportTicket.delete({
             where: { id }
         });
-        revalidatePath("/admin/tickets");
-        revalidatePath("/settings");
+        try {
+            revalidatePath("/tickets");
+            revalidatePath("/admin/tickets");
+            revalidatePath("/settings");
+        } catch (e) {}
         return { success: true };
     } catch (e) {
         console.error("Failed to delete ticket:", e);
@@ -7680,7 +7721,11 @@ export async function submitSupportTicket(formData: FormData) {
                 targetUser: name
             });
         }
-        revalidatePath("/");
+        try {
+            revalidatePath("/");
+            revalidatePath("/tickets");
+            revalidatePath("/admin/tickets");
+        } catch (e) {}
         return { success: true };
     } catch (e) {
         console.error("Support Ticket Error:", e);
@@ -7766,6 +7811,7 @@ export async function submitAutoErrorTicketAction(errorPayload: {
 
         try {
             revalidatePath("/");
+            revalidatePath("/tickets");
             revalidatePath("/admin/tickets");
         } catch (e) {
             // Safe fallback outside Next.js request lifecycle

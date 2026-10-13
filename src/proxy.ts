@@ -103,6 +103,10 @@ export async function proxy(req: NextRequest) {
       if (pathname.startsWith("/api")) {
         return NextResponse.json({ error: "Forbidden: Admin access required" }, { status: 403 });
       }
+      // If a non-admin hits /admin/tickets, smoothly direct them to their tickets portal (/tickets)
+      if (pathname === "/admin/tickets" || pathname.startsWith("/admin/tickets/")) {
+        return NextResponse.redirect(new URL("/tickets", req.url));
+      }
       return NextResponse.redirect(new URL("/", req.url));
     }
 
