@@ -117,8 +117,8 @@ export async function setMediaCache<T>(key: string, data: T, options?: CacheOpti
 
     memoryCache.set(key, payload);
 
-    // Save to disk asynchronously
-    writeDiskCache(payload).catch(() => {});
+    // Save to disk
+    await writeDiskCache(payload).catch(() => {});
 }
 
 /**

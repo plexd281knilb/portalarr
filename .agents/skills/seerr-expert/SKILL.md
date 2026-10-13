@@ -182,7 +182,7 @@ To achieve sub-second page loads and eliminate blank-screen flashing on tab chan
 
 
 13. **Dual-Tier Persistent Media Caching & Pre-Warming Engine (`src/lib/seerr/media-cache.ts`)**:
-    - **Dual-Tier Cache Architecture**: Pairs ultra-fast RAM Tier 1 (`Map`) with persistent filesystem JSON Tier 2 (`data/cache/tmdb/`), mirroring Overseerr's snappy instantaneous page responses even across cold server reboots.
+    - **Dual-Tier Cache Architecture**: Pairs ultra-fast RAM Tier 1 (`Map`) with persistent filesystem JSON Tier 2 (`data/cache/tmdb/`), mirroring Overseerr's snappy instantaneous page responses even across cold server reboots. `setMediaCache` writes to RAM and awaits `writeDiskCache` to guarantee atomic persistence on disk before resolving.
     - **Stale-While-Revalidate (SWR) Engine**: Automatically delivers stale data immediately in <5ms while refreshing upstream TMDb/TVDb APIs asynchronously in background threads.
     - **In-Flight Stampede Deduplication**: Coalesces identical concurrent upstream requests into a single promise, completely eliminating redundant network calls.
     - **Automated Pre-Warming Runner**: `prewarmDiscoverCachesInternal` triggers 10 seconds post-boot and every 30 minutes in `src/lib/prisma.ts` to pre-populate trending, popular, upcoming, and kids media categories.
