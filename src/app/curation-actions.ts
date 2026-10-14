@@ -5901,7 +5901,46 @@ export async function getGlancesDisksAction() {
     }
 }
 
-export async function recheckLeavingSoonWatchActivityInternal(targetServerId?: string, syncHub = true) {
+// In-memory debounce guard to prevent rapid back-to-back runs from hammering Plex servers
+const lastWatchCheckByServer = new Map<string, number>();
+
+async function unflagWatchedLeavingSoonItem(
+    rec: { id: string; ratingKey: string; title?: string | null },
+    watchedTimestampMs: number,
+    sourceDesc: string,
+    resolved: { serverUrl: string; allCandidateUrls?: string[]; token: string; serverName?: string },
+    sId: string,
+    unflaggedItems: Array<{ ratingKey: string; title: string; reason: string; lastViewedAt?: string }>
+) {
+    try {
+        await prisma.mediaContentAdvisory.update({
+            where: { id: rec.id },
+            data: {
+                isLeavingSoon: false,
+                leavingSoonDate: null,
+                leavingReason: `Unflagged: Watched by user on ${new Date(watchedTimestampMs).toLocaleDateString()} (${sourceDesc})`
+            }
+        });
+    } catch (dbErr: any) {
+        console.warn(`[WatchStatus] Failed to update advisory for ${rec.ratingKey}:`, dbErr?.message || dbErr);
+    }
+
+    try {
+        const urlsToTry = [resolved.serverUrl, ...(resolved.allCandidateUrls || []).filter(u => u !== resolved.serverUrl)];
+        await restoreItemOriginalArtwork(urlsToTry, resolved.token, sId, rec.ratingKey, resolved.serverName);
+    } catch (artErr: any) {
+        console.warn(`[WatchStatus] Poster restore skipped/failed for ${rec.ratingKey}:`, artErr?.message || artErr);
+    }
+
+    unflaggedItems.push({
+        ratingKey: rec.ratingKey,
+        title: rec.title || rec.ratingKey,
+        reason: `Watched on ${new Date(watchedTimestampMs).toLocaleString()} (${sourceDesc})`,
+        lastViewedAt: new Date(watchedTimestampMs).toISOString()
+    });
+}
+
+export async function recheckLeavingSoonWatchActivityInternal(targetServerId?: string, syncHub = true, force = false) {
     try {
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
@@ -5936,56 +5975,219 @@ export async function recheckLeavingSoonWatchActivityInternal(targetServerId?: s
         }
 
         for (const [sId, records] of Object.entries(byServer)) {
-            const resolved = await resolveWorkingPlexServerConnection(sId);
-            if (!resolved || !resolved.serverUrl || !resolved.token) continue;
+            // Debounce guard: prevent re-running within 60s for the same server unless forced
+            const now = Date.now();
+            const lastCheck = lastWatchCheckByServer.get(sId) || 0;
+            if (!force && now - lastCheck < 60000) {
+                continue;
+            }
+            lastWatchCheckByServer.set(sId, now);
+
+            const resolved = await resolveWorkingPlexServerConnection(sId).catch(() => null);
+            const safeResolved = resolved || {
+                serverUrl: settings?.mainPlexUrl || "",
+                allCandidateUrls: settings?.mainPlexUrl ? [settings.mainPlexUrl] : [],
+                token: token,
+                serverName: sId,
+                serverId: sId
+            };
+
+            const remainingRecords: typeof records = [];
+
+            // =========================================================================
+            // TIER 1: Check Local SQLite WatchHistory (<1ms, ZERO Plex PMS network calls)
+            // =========================================================================
+            const ratingKeySet = new Set(records.map(r => String(r.ratingKey)));
+            const titleSet = new Set(records.map(r => (r.title || "").trim().toLowerCase()).filter(Boolean));
+
+            const localWatches = await prisma.watchHistory.findMany({
+                where: {
+                    OR: [
+                        { ratingKey: { in: Array.from(ratingKeySet) } },
+                        ...(titleSet.size > 0 ? [{ grandparentTitle: { in: Array.from(titleSet) } }] : [])
+                    ]
+                },
+                orderBy: { watchedAt: "desc" }
+            }).catch(() => []);
+
+            const localWatchByRatingKey = new Map<string, number>();
+            const localWatchByTitle = new Map<string, number>();
+
+            for (const w of localWatches) {
+                const timeMs = w.watchedAt ? w.watchedAt.getTime() : 0;
+                if (!timeMs) continue;
+
+                if (w.ratingKey) {
+                    const cur = localWatchByRatingKey.get(String(w.ratingKey)) || 0;
+                    if (timeMs > cur) localWatchByRatingKey.set(String(w.ratingKey), timeMs);
+                }
+                if (w.grandparentTitle) {
+                    const k = w.grandparentTitle.trim().toLowerCase();
+                    const cur = localWatchByTitle.get(k) || 0;
+                    if (timeMs > cur) localWatchByTitle.set(k, timeMs);
+                }
+                if (w.title) {
+                    const k = w.title.trim().toLowerCase();
+                    const cur = localWatchByTitle.get(k) || 0;
+                    if (timeMs > cur) localWatchByTitle.set(k, timeMs);
+                }
+            }
 
             for (const rec of records) {
+                const flaggedAt = rec.updatedAt ? rec.updatedAt.getTime() : rec.createdAt.getTime();
+                const threshold = flaggedAt - 86400000; // 24h grace buffer
+
+                const matchTime = localWatchByRatingKey.get(String(rec.ratingKey)) ||
+                    (rec.title ? localWatchByTitle.get(rec.title.trim().toLowerCase()) : 0) || 0;
+
+                if (matchTime >= threshold) {
+                    await unflagWatchedLeavingSoonItem(
+                        rec,
+                        matchTime,
+                        "Local Watch History",
+                        safeResolved,
+                        sId,
+                        unflaggedItems
+                    );
+                } else {
+                    remainingRecords.push(rec);
+                }
+            }
+
+            // =========================================================================
+            // TIER 2: Single Plex Batch Call for Native History (/status/sessions/history)
+            // Fetches up to 500 recent sessions in ONE single request instead of 50+
+            // =========================================================================
+            if (remainingRecords.length > 0 && safeResolved.serverUrl) {
                 try {
-                    // Query Plex item metadata directly
-                    const metaUrl = `${resolved.serverUrl}/library/metadata/${encodeURIComponent(rec.ratingKey)}?X-Plex-Token=${encodeURIComponent(resolved.token)}`;
-                    const res = await fetch(metaUrl, {
-                        headers: { "Accept": "application/json", "X-Plex-Token": resolved.token },
-                        signal: AbortSignal.timeout(4000),
+                    const historyUrl = `${safeResolved.serverUrl}/status/sessions/history/all?sort=viewedAt:desc&X-Plex-Container-Start=0&X-Plex-Container-Size=500`;
+                    const hRes = await fetch(historyUrl, {
+                        headers: {
+                            "Accept": "application/json",
+                            "X-Plex-Token": safeResolved.token,
+                            "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                        },
+                        signal: AbortSignal.timeout(5000),
                         cache: "no-store"
                     });
 
-                    if (res.ok) {
-                        const data = await res.json();
-                        const itemMeta = data.MediaContainer?.Metadata?.[0];
-                        if (itemMeta) {
-                            const currentViewCount = parseInt(itemMeta.viewCount || "0", 10);
-                            const currentLastViewedAt = itemMeta.lastViewedAt ? parseInt(itemMeta.lastViewedAt, 10) * 1000 : null;
-                            const flaggedAt = rec.updatedAt ? rec.updatedAt.getTime() : rec.createdAt.getTime();
+                    if (hRes.ok) {
+                        const hJson = await hRes.json();
+                        const hRows = hJson.MediaContainer?.Metadata || [];
+                        const rows = Array.isArray(hRows) ? hRows : [hRows];
 
-                            // Item is watched during grace period if lastViewedAt is since (or within 24h prior to) staging
-                            const isRecentlyWatched = Boolean(currentLastViewedAt && (currentLastViewedAt >= (flaggedAt - 86400000)));
+                        const pmsHistoryByRatingKey = new Map<string, number>();
+                        const pmsHistoryByTitle = new Map<string, number>();
 
-                            if (isRecentlyWatched) {
-                                // Unflag in database
-                                await prisma.mediaContentAdvisory.update({
-                                    where: { id: rec.id },
-                                    data: {
-                                        isLeavingSoon: false,
-                                        leavingSoonDate: null,
-                                        leavingReason: `Unflagged: Watched by user on ${currentLastViewedAt ? new Date(currentLastViewedAt).toLocaleDateString() : 'recently'}`
-                                    }
-                                });
+                        for (const r of rows) {
+                            const viewedAtSec = parseInt(r.viewedAt || "0", 10);
+                            if (!viewedAtSec) continue;
+                            const viewedAtMs = viewedAtSec * 1000;
 
-                                // Restore original poster artwork
-                                const urlsToTry = [resolved.serverUrl, ...(resolved.allCandidateUrls || []).filter(u => u !== resolved.serverUrl)];
-                                await restoreItemOriginalArtwork(urlsToTry, resolved.token, sId, rec.ratingKey, resolved.serverName);
-
-                                unflaggedItems.push({
-                                    ratingKey: rec.ratingKey,
-                                    title: rec.title || itemMeta.title || rec.ratingKey,
-                                    reason: `Watched (${currentViewCount} plays, last on ${currentLastViewedAt ? new Date(currentLastViewedAt).toLocaleString() : 'recently'})`,
-                                    lastViewedAt: currentLastViewedAt ? new Date(currentLastViewedAt).toISOString() : undefined
-                                });
+                            if (r.ratingKey) {
+                                const cur = pmsHistoryByRatingKey.get(String(r.ratingKey)) || 0;
+                                if (viewedAtMs > cur) pmsHistoryByRatingKey.set(String(r.ratingKey), viewedAtMs);
+                            }
+                            if (r.parentRatingKey) {
+                                const cur = pmsHistoryByRatingKey.get(String(r.parentRatingKey)) || 0;
+                                if (viewedAtMs > cur) pmsHistoryByRatingKey.set(String(r.parentRatingKey), viewedAtMs);
+                            }
+                            if (r.grandparentRatingKey) {
+                                const cur = pmsHistoryByRatingKey.get(String(r.grandparentRatingKey)) || 0;
+                                if (viewedAtMs > cur) pmsHistoryByRatingKey.set(String(r.grandparentRatingKey), viewedAtMs);
+                            }
+                            if (r.title) {
+                                const k = String(r.title).trim().toLowerCase();
+                                const cur = pmsHistoryByTitle.get(k) || 0;
+                                if (viewedAtMs > cur) pmsHistoryByTitle.set(k, viewedAtMs);
+                            }
+                            if (r.grandparentTitle) {
+                                const k = String(r.grandparentTitle).trim().toLowerCase();
+                                const cur = pmsHistoryByTitle.get(k) || 0;
+                                if (viewedAtMs > cur) pmsHistoryByTitle.set(k, viewedAtMs);
                             }
                         }
+
+                        const stillRemaining: typeof remainingRecords = [];
+                        for (const rec of remainingRecords) {
+                            const flaggedAt = rec.updatedAt ? rec.updatedAt.getTime() : rec.createdAt.getTime();
+                            const threshold = flaggedAt - 86400000;
+
+                            const matchTime = pmsHistoryByRatingKey.get(String(rec.ratingKey)) ||
+                                (rec.title ? pmsHistoryByTitle.get(rec.title.trim().toLowerCase()) : 0) || 0;
+
+                            if (matchTime >= threshold) {
+                                await unflagWatchedLeavingSoonItem(
+                                    rec,
+                                    matchTime,
+                                    "Plex Session History",
+                                    safeResolved,
+                                    sId,
+                                    unflaggedItems
+                                );
+                            } else {
+                                stillRemaining.push(rec);
+                            }
+                        }
+
+                        remainingRecords.length = 0;
+                        remainingRecords.push(...stillRemaining);
                     }
-                } catch (e) {
-                    console.error(`Error checking watch status for ${rec.ratingKey}:`, e);
+                } catch (batchErr: any) {
+                    console.warn(`[WatchStatus] Plex session history batch query skipped/failed on ${safeResolved.serverName || sId}: ${batchErr?.message || batchErr}`);
+                }
+            }
+
+            // =========================================================================
+            // TIER 3: Throttled Circuit-Breaker Fallback for any remaining unverified items
+            // Capped at 10 items, 100ms throttle, aborts immediately after 2 consecutive errors
+            // =========================================================================
+            if (remainingRecords.length > 0 && safeResolved.serverUrl) {
+                const fallbackBatch = remainingRecords.slice(0, 10);
+                let consecutiveFailures = 0;
+
+                for (const rec of fallbackBatch) {
+                    if (consecutiveFailures >= 2) {
+                        console.warn(`[WatchStatus] Plex server ${safeResolved.serverName || sId} encountered 2 consecutive timeouts/errors. Aborting individual metadata checks to protect server stability.`);
+                        break;
+                    }
+
+                    try {
+                        await new Promise(r => setTimeout(r, 100)); // 100ms throttle between calls
+                        const metaUrl = `${safeResolved.serverUrl}/library/metadata/${encodeURIComponent(rec.ratingKey)}?X-Plex-Token=${encodeURIComponent(safeResolved.token)}`;
+                        const res = await fetch(metaUrl, {
+                            headers: { "Accept": "application/json", "X-Plex-Token": safeResolved.token },
+                            signal: AbortSignal.timeout(3000),
+                            cache: "no-store"
+                        });
+
+                        if (res.ok) {
+                            consecutiveFailures = 0;
+                            const data = await res.json();
+                            const itemMeta = data.MediaContainer?.Metadata?.[0];
+                            if (itemMeta) {
+                                const currentLastViewedAt = itemMeta.lastViewedAt ? parseInt(itemMeta.lastViewedAt, 10) * 1000 : null;
+                                const flaggedAt = rec.updatedAt ? rec.updatedAt.getTime() : rec.createdAt.getTime();
+                                const isRecentlyWatched = Boolean(currentLastViewedAt && (currentLastViewedAt >= (flaggedAt - 86400000)));
+
+                                if (isRecentlyWatched) {
+                                    await unflagWatchedLeavingSoonItem(
+                                        rec,
+                                        currentLastViewedAt!,
+                                        "Plex Item Metadata",
+                                        safeResolved,
+                                        sId,
+                                        unflaggedItems
+                                    );
+                                }
+                            }
+                        } else {
+                            consecutiveFailures++;
+                        }
+                    } catch (e: any) {
+                        consecutiveFailures++;
+                        console.warn(`[WatchStatus] Plex metadata check failed for ratingKey ${rec.ratingKey} on ${sId}: ${e?.message || e}`);
+                    }
                 }
             }
         }
@@ -6016,7 +6218,7 @@ export async function recheckLeavingSoonWatchActivityInternal(targetServerId?: s
 export async function recheckLeavingSoonWatchActivityAction(targetServerId?: string) {
     try {
         await verifyAdmin();
-        return await recheckLeavingSoonWatchActivityInternal(targetServerId, true);
+        return await recheckLeavingSoonWatchActivityInternal(targetServerId, true, true);
     } catch (e: any) {
         return { success: false, error: e.message };
     }
