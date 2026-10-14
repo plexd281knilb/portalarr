@@ -498,6 +498,13 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
   - Natural language pronoun resolution (`extractContextFromHistory`) seamlessly resolves anaphoric pronouns ("can you test it on the main server?", "does that play on kids?", "is it working?") to the canonical media title discussed in previous turns, preventing erroneous matches or searching Plex for filler words.
   - Conversational title corrections (e.g. "no the sandlot", "actually the sandlot") automatically inherit requested target servers and playback test intent from context.
   - Dedicated server infrastructure status handler (`isServerStatusQuery`) provides comprehensive cluster health reports ("what all servers are online?").
+- **Structured Function / Tool Calling Subsystem & Admin Homelab Command Center (`ai-assistant-tools.ts`)**:
+  - Implements native function declarations for Google Gemini (`v1beta` `function_declarations`) and OpenAI (`tools` + `tool_calls`) with multi-turn synthesis dispatching across 10 structured tools.
+  - Standard user tools: `probe_playback_health`, `get_cluster_status`, `terminate_playback_stream` (scoped to user's streams), `inspect_media_container`, `search_and_replace_media`, `redownload_book`.
+  - Admin-only homelab command center: `get_homelab_hardware_telemetry` (Glances host CPU/RAM %), `get_docker_fleet_status` (multi-engine container fleet inspection), `restart_docker_container` (safe socket/CLI/TCP container restarts), and `get_account_sharing_alerts` (multi-IP concurrent streaming audits).
+  - Strict Permission Isolation: Non-admin users attempting to invoke admin tools are denied at both prompt filtering and execution dispatch levels with explicit security notices.
+  - Offline Heuristic Engine Fallback: Guarantees 100% operational uptime by executing tools locally and rendering high-density markdown cards even when external LLM keys are absent or unreachable.
+  - Dynamic Admin Quick Prompts: When `snapshot?.role === "ADMIN"`, the quick prompt toolbar automatically prepends `🐳 Docker Fleet`, `🖥️ Host Hardware`, and `🚨 Sharing Alerts`.
 - **Integrated High-Tech Header & Identity**:
   - Features an animated glowing Bot avatar with status pulse, operational counter badge reflecting all online server nodes (`4`), and `Autonomous v3.1` live indicator badge.
   - Quick action buttons in the header provide instant access to setup guides (`PlexSetupGuides`), feature tours (`FeatureGuideModal`), and clearing session history.

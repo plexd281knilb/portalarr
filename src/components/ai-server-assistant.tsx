@@ -239,7 +239,28 @@ export function AiServerAssistant() {
         router.push(`/tickets?prefill=${encodeURIComponent(report)}`);
     };
 
-    const quickPrompts = [
+    const adminPrompts = snapshot?.role === "ADMIN" ? [
+        { 
+            icon: "🐳",
+            label: "Docker Fleet", 
+            category: "Homelab Fleet",
+            query: "What is the status of the Docker container fleet across the homelab?" 
+        },
+        { 
+            icon: "🖥️",
+            label: "Host Hardware", 
+            category: "Hardware",
+            query: "Query Glances hardware telemetry: what are host CPU and RAM percentages?" 
+        },
+        { 
+            icon: "🚨",
+            label: "Sharing Alerts", 
+            category: "Security",
+            query: "Check account sharing intelligence: are any accounts streaming from multiple public IPs?" 
+        }
+    ] : [];
+
+    const basePrompts = [
         { 
             icon: "🟢",
             label: "Is Plex Working?", 
@@ -283,6 +304,8 @@ export function AiServerAssistant() {
             query: "What are the recommended Plex settings for my device to avoid the 720p 2Mbps limit?" 
         }
     ];
+
+    const quickPrompts = [...adminPrompts, ...basePrompts];
 
     const activeStream = snapshot?.primaryActiveStream;
     const detectedIssues = snapshot?.detectedIssues || [];

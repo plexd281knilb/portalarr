@@ -4620,6 +4620,109 @@ async function runTestSuite() {
             throw new Error(`Expected server status query response, got: ${JSON.stringify(serverQueryRes)}`);
         }
 
+        // 6. Structured Tool Calling & Admin Homelab Command Center
+        const { 
+            GEMINI_TOOL_DECLARATIONS, 
+            OPENAI_TOOL_DEFINITIONS, 
+            executeAiAssistantTool 
+        } = await import("../src/lib/ai-assistant-tools");
+
+        // 6a. Tool schema integrity
+        if (!Array.isArray(GEMINI_TOOL_DECLARATIONS) || GEMINI_TOOL_DECLARATIONS.length < 10) {
+            throw new Error(`Expected at least 10 Gemini tool declarations, got: ${GEMINI_TOOL_DECLARATIONS?.length}`);
+        }
+        if (!Array.isArray(OPENAI_TOOL_DEFINITIONS) || OPENAI_TOOL_DEFINITIONS.length < 10) {
+            throw new Error(`Expected at least 10 OpenAI tool definitions, got: ${OPENAI_TOOL_DEFINITIONS?.length}`);
+        }
+
+        // Verify required admin tools are present in both schemas
+        const expectedTools = [
+            "probe_playback_health",
+            "get_cluster_status",
+            "terminate_playback_stream",
+            "inspect_media_container",
+            "search_and_replace_media",
+            "redownload_book",
+            "get_homelab_hardware_telemetry",
+            "get_docker_fleet_status",
+            "restart_docker_container",
+            "get_account_sharing_alerts"
+        ];
+        for (const tName of expectedTools) {
+            if (!GEMINI_TOOL_DECLARATIONS.some(t => t.name === tName)) {
+                throw new Error(`Missing Gemini tool declaration: ${tName}`);
+            }
+            if (!OPENAI_TOOL_DEFINITIONS.some(t => t.function.name === tName)) {
+                throw new Error(`Missing OpenAI tool definition: ${tName}`);
+            }
+        }
+
+        // 6b. Permission Denied on admin tools for standard users
+        const mockUserCtx: any = {
+            user: testUser,
+            snapshot: adminSnapshot,
+            actionsTaken: [],
+            autonomyLevel: "autonomous",
+            mediaInspectionHolder: {},
+            playbackProbeHolder: {}
+        };
+
+        const deniedTelemetry = await executeAiAssistantTool("get_homelab_hardware_telemetry", {}, mockUserCtx);
+        if (deniedTelemetry.success || !deniedTelemetry.summary.includes("Permission Denied")) {
+            throw new Error(`Expected Permission Denied for user on hardware telemetry, got: ${JSON.stringify(deniedTelemetry)}`);
+        }
+
+        const deniedDocker = await executeAiAssistantTool("get_docker_fleet_status", {}, mockUserCtx);
+        if (deniedDocker.success || !deniedDocker.summary.includes("Permission Denied")) {
+            throw new Error(`Expected Permission Denied for user on docker fleet status, got: ${JSON.stringify(deniedDocker)}`);
+        }
+
+        const deniedRestart = await executeAiAssistantTool("restart_docker_container", { container_name_or_id: "plex" }, mockUserCtx);
+        if (deniedRestart.success || !deniedRestart.summary.includes("Permission Denied")) {
+            throw new Error(`Expected Permission Denied for user on container restart, got: ${JSON.stringify(deniedRestart)}`);
+        }
+
+        const deniedSharing = await executeAiAssistantTool("get_account_sharing_alerts", {}, mockUserCtx);
+        if (deniedSharing.success || !deniedSharing.summary.includes("Permission Denied")) {
+            throw new Error(`Expected Permission Denied for user on sharing alerts, got: ${JSON.stringify(deniedSharing)}`);
+        }
+
+        // 6c. Admin tool execution permissions
+        const mockAdminCtx: any = {
+            user: testAdmin,
+            snapshot: adminSnapshot,
+            actionsTaken: [],
+            autonomyLevel: "autonomous",
+            mediaInspectionHolder: {},
+            playbackProbeHolder: {}
+        };
+
+        const adminSharing = await executeAiAssistantTool("get_account_sharing_alerts", {}, mockAdminCtx);
+        if (!adminSharing.success || typeof adminSharing.result?.totalAlerts !== "number") {
+            throw new Error(`Expected successful sharing alerts query for admin, got: ${JSON.stringify(adminSharing)}`);
+        }
+
+        const adminHardware = await executeAiAssistantTool("get_homelab_hardware_telemetry", {}, mockAdminCtx);
+        if (!adminHardware.success || !Array.isArray(adminHardware.result?.hosts)) {
+            throw new Error(`Expected successful hardware telemetry for admin, got: ${JSON.stringify(adminHardware)}`);
+        }
+
+        // 6d. End-to-end admin command queries in askAiServerMaster
+        const nonAdminDockerQuery = await askAiServerMaster("what is the docker fleet status?", [], testUser);
+        if (!nonAdminDockerQuery.answer.includes("Access Restricted") && !nonAdminDockerQuery.answer.includes("Permission Denied")) {
+            throw new Error(`Expected permission restricted answer for non-admin docker query, got: ${nonAdminDockerQuery.answer}`);
+        }
+
+        const adminHardwareQuery = await askAiServerMaster("query glances hardware telemetry cpu ram", [], testAdmin);
+        if (!adminHardwareQuery.success || !adminHardwareQuery.answer.includes("Homelab Host Hardware Telemetry (Glances)")) {
+            throw new Error(`Expected Glances hardware telemetry answer for admin, got: ${adminHardwareQuery.answer}`);
+        }
+
+        const adminSharingQuery = await askAiServerMaster("check account sharing alerts multi-ip", [], testAdmin);
+        if (!adminSharingQuery.success || !adminSharingQuery.answer.includes("Account Sharing & Multi-IP Intelligence")) {
+            throw new Error(`Expected sharing intelligence answer for admin, got: ${adminSharingQuery.answer}`);
+        }
+
         // Restore Settings to autonomous
         await prisma.settings.update({
             where: { id: "global" },
