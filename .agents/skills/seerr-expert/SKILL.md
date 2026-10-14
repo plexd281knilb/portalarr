@@ -60,8 +60,13 @@ Portalarr's native Seerr engine features deep per-episode monitoring synchroniza
 - **Targeted Episode Grabs**: Allows users to select individual unmonitored episodes or unmonitored seasons, dispatching `/api/v3/episode/monitor` and triggering `EpisodeSearch` commands without redundant series re-imports.
 
 ### 4. Multi-Channel Notification Engine (Discord Webhooks & HTML Emails)
-- **Discord Webhook Cards**: Dispatches embed cards for `PENDING`, `AUTO_APPROVED`, `APPROVED`, `DECLINED`, `AVAILABLE`, and `FAILED` events. Embeds feature poster artwork, format badges (🎬 MOVIE vs 📺 TV SERIES, 4K UHD vs 1080p), requester username, season counts, and direct action links.
-- **Rich HTML Emails**: Sends branded HTML emails via SMTP for admin approval alerts and user status updates, using dynamic public host resolution (`getAppUrl()`).
+- **Discord Webhook Cards**: Dispatches embed cards for `PENDING`, `AUTO_APPROVED`, `APPROVED`, `DECLINED`, `AVAILABLE`, and `FAILED` events. Embeds feature poster artwork, format badges (🎬 Movie, 📺 TV Series, 📖 Book, 🎧 Audiobook), author credits, requester username, season counts, and direct action links.
+- **Rich HTML Emails & Auto-Approved Admin Routing**:
+  - Automatically notifies all `ADMIN` and `SUPER_USER` accounts on **both** `PENDING` (needs manual review) and `AUTO_APPROVED` (automatically approved and queued) request events.
+  - Formats movie & TV show requests via `seerr_request_new_admin` and book/audiobook requests via `media_request_admin`.
+  - Sends user transactional status confirmations (`seerr_request_auto_approved`, `seerr_request_approved`, `seerr_request_available`).
+  - Sets `bypassApproval: true` on administrative alerts and user transactional status updates to prevent request notifications from being trapped in the `AdminApproval` queue.
+  - Automatically logs diagnostic warnings to Live System Logs (`logger.addLog("WARN", "EMAIL", ...)`) whenever SMTP credentials (`smtpHost`, `smtpUser`, `smtpPass`) or email delivery are unconfigured in Settings.
 
 ### 5. Automated Background Queue & Availability Reconciliation
 - **Unauthenticated Internal Runner (`syncMediaRequestsQueueAndAvailabilityInternal`)**:

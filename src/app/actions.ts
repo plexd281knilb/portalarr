@@ -9767,35 +9767,37 @@ export async function sendRequestCompletionNotification(requestIdOrBook: any, ma
             html,
             templateId: "media_ready",
             targetUser: requester.username,
-            userId: requester.id
+            userId: requester.id,
+            bypassApproval: true
         });
-        console.log(`[SMTP-NOTIFICATION] Sent or queued request completion email to ${requester.email} for "${title}"`);
+        logger.addLog("INFO", "EMAIL", `Dispatched request completion email to ${requester.email} for "${title}"`);
     } catch (e: any) {
-        console.error("[SMTP-NOTIFICATION] Failed to send request completion email:", e.message || e);
+        logger.addLog("ERROR", "EMAIL", `Failed to send request completion email: ${e.message || e}`);
     }
 }
 
-async function sendRequestNotificationToAdmins(request: { title: string, author: string, requestedBy: string, type: string, mediaType?: string, publishYear?: string | null }) {
+export async function sendRequestNotificationToAdmins(request: { title: string, author: string, requestedBy: string, type: string, mediaType?: string, publishYear?: string | null }) {
     try {
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         if (!settings || !settings.smtpHost || !settings.smtpUser || !settings.smtpPass || settings.emailNotificationsEnabled === false || settings.notifyMediaRequests === false) {
-            console.log("[SMTP-NOTIFICATION] Request notifications to admins disabled or not configured.");
+            if (!settings?.smtpHost || !settings?.smtpUser || !settings?.smtpPass) {
+                logger.addLog("WARN", "EMAIL", `Skipping book request email notification for "${request.title}": SMTP host/user/pass is not configured in Settings > Email.`);
+            }
             return;
         }
 
         const admins = await prisma.user.findMany({
-            where: { role: "ADMIN" }
+            where: { role: { in: ["ADMIN", "SUPER_USER"] } }
         });
 
         if (admins.length === 0) {
-            console.log("[SMTP-NOTIFICATION] No admin users found. Skipping request notification.");
             return;
         }
 
         const isAudiobook = request.mediaType === "audiobook";
         const mediaLabel = isAudiobook ? "Audiobook" : "Ebook";
 
-        const adminEmails = admins.map(a => a.email).filter(Boolean) as string[];
+        const adminEmails = admins.map(a => a.email).filter(e => e && e.includes("@")) as string[];
         if (adminEmails.length === 0) return;
 
         const appUrl = await getAppUrl();
@@ -9816,11 +9818,12 @@ async function sendRequestNotificationToAdmins(request: { title: string, author:
             subject,
             html,
             templateId: "media_request_admin",
-            targetUser: request.requestedBy
+            targetUser: request.requestedBy,
+            bypassApproval: true
         });
-        console.log(`[SMTP-NOTIFICATION] Request notification sent or queued for "${request.title}" (${mediaLabel})`);
+        logger.addLog("INFO", "EMAIL", `Dispatched book request notification to admins for "${request.title}" (${mediaLabel})`);
     } catch (e: any) {
-        console.error("[SMTP-NOTIFICATION] Failed to send request email notification to admins:", e);
+        logger.addLog("ERROR", "EMAIL", `Failed to send book request email notification to admins: ${e.message || e}`);
     }
 }
 

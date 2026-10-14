@@ -31,6 +31,8 @@ export interface SeerrNotificationPayload {
     requestedByUsername: string;
     requestedByUserId?: string | null;
     seasons?: string | null;
+    author?: string | null;
+    series?: string | null;
 }
 
 export interface SeerrNotificationExtra {
@@ -79,9 +81,13 @@ export async function sendSeerrDiscordWebhook(
         if (event === "FAILED" && settings.seerrDiscordNotifyFailed === false) return { success: true };
 
         const isMovie = request.mediaType === "movie";
-        const mediaLabel = isMovie ? "Movie" : "TV Series";
+        const isAudiobook = request.mediaType === "audiobook";
+        const isBook = request.mediaType === "book" || request.mediaType === "ebook";
+        const mediaLabel = isMovie ? "Movie" : (isAudiobook ? "Audiobook" : (isBook ? "Book" : "TV Series"));
         const yearStr = request.releaseYear ? ` (${request.releaseYear})` : "";
-        const qualityStr = request.is4k ? "4K UHD" : "1080p Standard";
+        const qualityStr = (isBook || isAudiobook) 
+            ? (isAudiobook ? "Audiobook Edition" : "Ebook Edition") 
+            : (request.is4k ? "4K UHD" : "1080p Standard");
         const sectionStr = request.isKids ? "Kids & Family" : "Main Library";
 
         let titleText = "";
@@ -150,6 +156,10 @@ export async function sendSeerrDiscordWebhook(
             { name: "Media Type", value: mediaLabel, inline: true },
             { name: "Library Section", value: sectionStr, inline: true }
         ];
+
+        if (request.author) {
+            fields.push({ name: "Author", value: request.author, inline: true });
+        }
 
         if (request.contentRating) {
             fields.push({ name: "Rating", value: request.contentRating, inline: true });
@@ -311,25 +321,31 @@ export async function sendSeerrEmailNotification(
 
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         if (!settings || !settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
+            logger.addLog("WARN", "EMAIL", `Skipping media request email notification for "${request.title}": SMTP settings (host, user, pass) are not configured in Settings > Email.`);
             return { success: true }; // SMTP not configured, skip
         }
 
         if (settings.emailNotificationsEnabled === false) {
+            logger.addLog("INFO", "EMAIL", `Skipping media request email notification for "${request.title}": Email notifications are disabled in Settings.`);
             return { success: true }; // Master email notifications disabled
         }
 
         // Check event email toggle
         if (event === "PENDING" && settings.seerrEmailNotifyAdminNewRequest === false) return { success: true };
-        if (event === "AUTO_APPROVED" && settings.seerrEmailNotifyUserAutoApproved === false) return { success: true };
+        if (event === "AUTO_APPROVED" && settings.seerrEmailNotifyUserAutoApproved === false && settings.seerrEmailNotifyAdminNewRequest === false) return { success: true };
         if (event === "APPROVED" && settings.seerrEmailNotifyUserApproved === false) return { success: true };
         if (event === "DECLINED" && settings.seerrEmailNotifyUserDeclined === false) return { success: true };
         if (event === "AVAILABLE" && (settings.seerrEmailNotifyUserAvailable === false || settings.seerrNotificationOnAvailable === false)) return { success: true };
         if (event === "FAILED" && settings.seerrEmailNotifyUserFailed === false) return { success: true };
 
         const isMovie = request.mediaType === "movie";
-        const mediaLabel = isMovie ? "Movie" : "TV Series";
+        const isAudiobook = request.mediaType === "audiobook";
+        const isBook = request.mediaType === "book" || request.mediaType === "ebook";
+        const mediaLabel = isMovie ? "Movie" : (isAudiobook ? "Audiobook" : (isBook ? "Book" : "TV Series"));
         const yearStr = request.releaseYear || "";
-        const qualityStr = request.is4k ? "4K UHD" : "1080p Standard";
+        const qualityStr = (isBook || isAudiobook)
+            ? (isAudiobook ? "Audiobook Edition" : "Ebook Edition")
+            : (request.is4k ? "4K UHD" : "1080p Standard");
         const sectionStr = request.isKids ? "Kids & Family" : "Main Library";
         const appUrl = await getAppUrl();
         const senderEmail = settings.smtpFrom || settings.smtpUser;
@@ -373,32 +389,70 @@ export async function sendSeerrEmailNotification(
             errorMessage: extra?.errorMessage || "Unknown dispatch or download error."
         };
 
-        if (event === "PENDING") {
-            // Send alert to all Admin accounts
-            const admins = await prisma.user.findMany({
-                where: { role: { in: ["ADMIN", "SUPER_USER"] } }
-            });
+        if (event === "PENDING" || event === "AUTO_APPROVED") {
+            // Send alert to all Admin accounts if enabled
+            if (settings.seerrEmailNotifyAdminNewRequest !== false) {
+                const admins = await prisma.user.findMany({
+                    where: { role: { in: ["ADMIN", "SUPER_USER"] } }
+                });
 
-            if (admins.length === 0) return { success: true };
+                if (admins.length > 0) {
+                    const adminEmails = admins.map(a => a.email).filter(e => e && e.includes("@")) as string[];
+                    if (adminEmails.length > 0) {
+                        const isAuto = event === "AUTO_APPROVED";
+                        const adminSubjectPrefix = isAuto ? "🚀 [Auto-Approved]" : "⏳ [New Request]";
 
-            const adminEmails = admins.map(a => a.email).filter(e => e && e.includes("@")) as string[];
-            if (adminEmails.length === 0) return { success: true };
+                        if (isBook || isAudiobook) {
+                            const { subject, html } = await renderEmailTemplate("media_request_admin", {
+                                title: request.title,
+                                author: request.author || "Unknown Author",
+                                mediaType: isAudiobook ? "audiobook" : "ebook",
+                                mediaLabel,
+                                requestedBy: request.requestedByUsername,
+                                type: request.series ? "series" : "book",
+                                publishYear: yearStr,
+                                manageUrl: `${appUrl}/requests`,
+                                appUrl
+                            });
 
-            const { subject, html } = await renderEmailTemplate("seerr_request_new_admin", {
-                ...commonVars,
-                requestedBy: request.requestedByUsername
-            });
+                            const { sendOrQueueEmail } = await import("../../app/actions");
+                            await sendOrQueueEmail({
+                                to: adminEmails,
+                                subject: isAuto ? `${adminSubjectPrefix} ${subject}` : subject,
+                                html,
+                                templateId: "media_request_admin",
+                                targetUser: request.requestedByUsername,
+                                bypassApproval: true
+                            });
+                        } else {
+                            const { subject, html } = await renderEmailTemplate("seerr_request_new_admin", {
+                                ...commonVars,
+                                requestedBy: request.requestedByUsername,
+                                status: isAuto ? "Auto-Approved & Queued for Download" : "Pending Administrator Review"
+                            });
 
-            const { sendOrQueueEmail } = await import("../../app/actions");
-            await sendOrQueueEmail({
-                to: adminEmails,
-                subject,
-                html,
-                templateId: "seerr_request_new_admin",
-                targetUser: request.requestedByUsername
-            });
+                            const { sendOrQueueEmail } = await import("../../app/actions");
+                            await sendOrQueueEmail({
+                                to: adminEmails,
+                                subject: isAuto ? `${adminSubjectPrefix} ${subject}` : subject,
+                                html,
+                                templateId: "seerr_request_new_admin",
+                                targetUser: request.requestedByUsername,
+                                bypassApproval: true
+                            });
+                        }
 
-            logger.addLog("INFO", "SEERR", `Dispatched or staged admin request notification for "${request.title}"`);
+                        logger.addLog("INFO", "SEERR", `Dispatched admin request notification for "${request.title}" (${event})`);
+                    }
+                }
+            }
+
+            if (event === "PENDING") {
+                return { success: true };
+            }
+        }
+
+        if (event === "AUTO_APPROVED" && settings.seerrEmailNotifyUserAutoApproved === false) {
             return { success: true };
         }
 
@@ -448,7 +502,8 @@ export async function sendSeerrEmailNotification(
             html,
             templateId,
             targetUser: requesterUser.username,
-            userId: requesterUser.id
+            userId: requesterUser.id,
+            bypassApproval: true
         });
 
         logger.addLog("INFO", "SEERR", `Dispatched or staged ${templateId} email for ${requesterUser.email} ("${request.title}")`);
@@ -496,7 +551,9 @@ export async function notifyMediaRequestEvent(
             contentRating: req.contentRating,
             requestedByUsername: req.requestedByUsername,
             requestedByUserId: req.requestedByUserId,
-            seasons: req.seasons
+            seasons: req.seasons,
+            author: (req as any).bookAuthor || null,
+            series: (req as any).bookSeries || null
         };
 
         // Fire both Discord Webhook and Email in parallel in the background

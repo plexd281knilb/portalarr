@@ -433,6 +433,22 @@ export async function submitBookOrAudiobookRequestAction(input: BookRequestInput
 
         logger.addLog("SUCCESS", "SEERR", `User ${session.username} submitted ${mediaType.toUpperCase()} request: "${title}" by ${author} (${isKidsBook ? "Kids - Pending Admin Review" : (autoApprove ? "Auto-Approved" : "Pending")})`);
 
+        // Trigger request notifications (Email & Discord)
+        if (mediaReq?.id) {
+            const { notifyMediaRequestEvent } = await import("@/lib/seerr/notifications");
+            notifyMediaRequestEvent(autoApprove ? "AUTO_APPROVED" : "PENDING", mediaReq.id).catch(() => {});
+        } else {
+            const { sendRequestNotificationToAdmins } = await import("./actions");
+            sendRequestNotificationToAdmins({
+                title,
+                author,
+                requestedBy: session.username,
+                type: input.series ? "series" : "book",
+                mediaType,
+                publishYear: input.publishYear || null
+            }).catch(() => {});
+        }
+
         // 5. If auto-approved, trigger Prowlarr search & grab
         if (autoApprove) {
             console.log(`[BOOK-REQUEST] Auto-approving request ${bookRequest.id} for "${title}"...`);

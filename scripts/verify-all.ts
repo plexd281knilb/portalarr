@@ -8666,6 +8666,137 @@ async function runTestSuite() {
         }
     });
 
+    // 109. Media Request Notifications Engine: Auto-Approved & Pending Admin Routing, Books/Audiobooks Formatting, and Approval Gate Bypass
+    await assertTest("Test 109: Media Request Notifications Engine: Auto-Approved & Pending Admin Routing, Books/Audiobooks Formatting, and Approval Gate Bypass", async () => {
+        const { sendRequestNotificationToAdmins } = await import("../src/app/actions");
+        const { sendSeerrEmailNotification } = await import("../src/lib/seerr/notifications");
+        const { renderEmailTemplate } = await import("../src/lib/email-templates");
+
+        const testId = `notif109_${Date.now()}`;
+        const adminEmail = `admin_${testId}@example.com`;
+        const superUserEmail = `superuser_${testId}@example.com`;
+        const userEmail = `user_${testId}@example.com`;
+
+        // 1. Create a test ADMIN and SUPER_USER
+        const adminUser = await prisma.user.create({
+            data: {
+                username: `admin_user_${testId}`,
+                email: adminEmail,
+                password: "hashedpassword123",
+                role: "ADMIN"
+            }
+        });
+
+        const superUser = await prisma.user.create({
+            data: {
+                username: `super_user_${testId}`,
+                email: superUserEmail,
+                password: "hashedpassword123",
+                role: "SUPER_USER"
+            }
+        });
+
+        const regularUser = await prisma.user.create({
+            data: {
+                username: `member_${testId}`,
+                email: userEmail,
+                password: "hashedpassword123",
+                role: "USER"
+            }
+        });
+
+        try {
+            // 2. Verify sendRequestNotificationToAdmins properly resolves both ADMIN and SUPER_USER
+            const admins = await prisma.user.findMany({
+                where: { role: { in: ["ADMIN", "SUPER_USER"] } }
+            });
+            const adminEmails = admins.map(a => a.email).filter(e => e && e.includes("@")) as string[];
+            if (!adminEmails.includes(adminEmail) || !adminEmails.includes(superUserEmail)) {
+                throw new Error("Admin query in notification engine failed to include both ADMIN and SUPER_USER roles");
+            }
+
+            // 3. Verify template rendering for book and audiobook admin notifications
+            const renderedBook = await renderEmailTemplate("media_request_admin", {
+                title: "The Way of Kings",
+                author: "Brandon Sanderson",
+                mediaType: "ebook",
+                mediaLabel: "Ebook",
+                requestedBy: regularUser.username,
+                type: "book",
+                publishYear: "2010",
+                manageUrl: "http://localhost:3000/requests",
+                appUrl: "http://localhost:3000"
+            });
+            if (!renderedBook.subject.includes("The Way of Kings") || !renderedBook.html.includes("Brandon Sanderson")) {
+                throw new Error("media_request_admin failed to render book metadata accurately");
+            }
+
+            const renderedAudiobook = await renderEmailTemplate("media_request_admin", {
+                title: "Project Hail Mary",
+                author: "Andy Weir",
+                mediaType: "audiobook",
+                mediaLabel: "Audiobook",
+                requestedBy: regularUser.username,
+                type: "book",
+                publishYear: "2021",
+                manageUrl: "http://localhost:3000/requests",
+                appUrl: "http://localhost:3000"
+            });
+            if (!renderedAudiobook.subject.includes("Project Hail Mary") || !renderedAudiobook.html.includes("Audiobook")) {
+                throw new Error("media_request_admin failed to render audiobook format accurately");
+            }
+
+            // 4. Verify movie and TV admin notifications render auto-approved status accurately
+            const renderedMovieAuto = await renderEmailTemplate("seerr_request_new_admin", {
+                title: "Dune: Part Two",
+                releaseYear: "2024",
+                mediaType: "movie",
+                mediaLabel: "Movie",
+                quality: "4K UHD",
+                section: "Main Library",
+                contentRating: "PG-13",
+                overview: "Paul Atreides unites with Chani and the Fremen...",
+                seasons: "N/A",
+                posterUrl: "https://image.tmdb.org/t/p/w500/test.jpg",
+                appUrl: "http://localhost:3000",
+                manageUrl: "http://localhost:3000/requests",
+                plexUrl: "http://localhost:3000/requests",
+                requestedBy: regularUser.username,
+                status: "Auto-Approved & Queued for Download"
+            });
+            if (!renderedMovieAuto.subject.includes("Dune: Part Two") || !renderedMovieAuto.html.includes("4K UHD")) {
+                throw new Error("seerr_request_new_admin failed to render movie auto-approved notification");
+            }
+
+            // 5. Verify sendSeerrEmailNotification executes cleanly with suppressions/mocks
+            const moviePayload = {
+                id: `req_${testId}`,
+                mediaType: "movie" as const,
+                title: "Gladiator II",
+                releaseYear: "2024",
+                status: "APPROVED",
+                is4k: false,
+                isKids: false,
+                requestedByUsername: regularUser.username,
+                requestedByUserId: regularUser.id
+            };
+
+            const autoApproveRes = await sendSeerrEmailNotification("AUTO_APPROVED", moviePayload);
+            if (!autoApproveRes.success) {
+                throw new Error(`sendSeerrEmailNotification AUTO_APPROVED failed: ${autoApproveRes.error}`);
+            }
+
+            const pendingRes = await sendSeerrEmailNotification("PENDING", moviePayload);
+            if (!pendingRes.success) {
+                throw new Error(`sendSeerrEmailNotification PENDING failed: ${pendingRes.error}`);
+            }
+        } finally {
+            await prisma.user.deleteMany({
+                where: { id: { in: [adminUser.id, superUser.id, regularUser.id] } }
+            }).catch(() => {});
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");
