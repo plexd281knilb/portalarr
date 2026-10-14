@@ -843,15 +843,17 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
     - Rolling Uptime Telemetry Scorecards: precise 24-hour, 7-day, and 30-day uptime percentages with current streak badges ("Up for 14d 6h" or "Down for 12m").
     - Mini Sparkline Ping History: last 10 probe indicators (emerald for responsive, crimson for failed).
   - **Tab 2: Docker Container Fleet (`containers`)** (`text-emerald-400`, `data-[state=active]:text-emerald-400 data-[state=active]:bg-emerald-500/15 data-[state=active]:border-emerald-500/40`):
-    - Multi-engine Docker connectivity: direct Unix domain socket (`/var/run/docker.sock`), Windows named pipe (`//./pipe/docker_engine`), Docker CLI (`docker ps`), and remote Glances container API (`/api/3/containers`).
-    - Live container status badges (`running`, `exited`, `unhealthy`, `restarting`) with image tags and container short IDs.
-    - Live Resource Utilization: dynamic CPU % meters and RAM allocated memory meters with color-coded progress bars.
-    - 1-Click Container Actions: instant **Restart Container** (`restartDockerContainerAction`), **Start Container**, and **Stop Container** with loading spinners and glassmorphic toast notifications.
+    - Multi-engine Docker connectivity: direct Unix domain socket (`/var/run/docker.sock`), Windows named pipe (`//./pipe/docker_engine`), Docker CLI (`docker ps`), remote Glances container API (`/api/3/containers`), and remote Docker daemon TCP probes on port 2375.
+    - **Container Application Branding**: Dynamic Lucide icons and accent tints mapped to container names and images (`Film` for Plex/Radarr, `Tv` for Sonarr, `ArrowDownCircle` for SABnzbd/qBittorrent, `FileText` for Bazarr, `Image` for Immich, `Zap` for TeslaMate, `BarChart2` for Grafana, `Cpu` for Glances, `HardDrive` for DiskSpeed).
+    - **Multi-Core Linux CPU Hot Load Engine**: Automatically detects multi-core cumulative CPU reporting ($\ge 100\%$, e.g. `185.1%`), rendering animated flame icons (`Flame`), live core estimations (`~1.9 cores`), and vibrant heat gradients (`from-amber-500 via-orange-500 to-rose-500`) alongside color-coded RAM utilization.
+    - **Instant Fleet Sorting**: 1-click sorting pills: `A-Z` (Default), `🔥 CPU` (Highest CPU load first), and `💾 RAM` (Highest memory consumption first).
+    - **Cleaned Telemetry & Host Identification**: Replaces raw monitoring agent tags (`Up (Glances)`) with clean status (`Running`, `Stopped`) and displays physical host pills (`<Server /> Main Unraid`).
+    - 1-Click Container Actions: instant **Restart Container** (`restartDockerContainerAction`), **Start Container**, and **Stop Container** with multi-tier execution across Docker socket, CLI, and remote Docker TCP API with glassmorphic toast notifications.
   - **Tab 3: Outages & Alerts (`incidents`)** (`text-amber-400`, `data-[state=active]:text-amber-400 data-[state=active]:bg-amber-500/15 data-[state=active]:border-amber-500/40`):
     - Overall Fleet Uptime Scorecards (24h Uptime %, 7d Uptime %, active incidents count).
     - Automated Outage Notification Engine: dispatches rich Discord embeds (crimson on failure, emerald on recovery) to `#system-status` channel or custom Discord Webhook URLs.
     - Chronological incident log tracking start time, failure details, total downtime duration, and 1-click incident clearance.
-- **Navigation Integration**: Desktop and mobile sidebars under Administration via `Layers` icon, with direct jump button ("Docker Fleet & Uptime") embedded in `AdminSystemHealthGrid` on the home dashboard.
+- **Navigation Integration**: Desktop and mobile sidebars under Administration via `Layers` icon, with direct jump button ("Docker Fleet & Uptime") embedded in `AdminSystemHealthGrid` on the home dashboard. Ultra-wide layout container (`max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[2200px]`) ensures perfect fit across all monitor sizes.
 
 ---
 

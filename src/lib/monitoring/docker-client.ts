@@ -133,6 +133,57 @@ function normalizeContainerState(stateStr: string, statusStr: string): DockerCon
 }
 
 /**
+ * Formats container status string avoiding raw internal provider names.
+ */
+function formatContainerStatus(item: any, state: string): string {
+    const raw = item.Status || item.status;
+    if (raw && typeof raw === "string") {
+        const clean = raw.trim();
+        if (clean.toLowerCase() === "running") return "Running";
+        if (clean.toLowerCase() === "exited") return "Stopped";
+        if (!clean.toLowerCase().includes("glances")) return clean;
+    }
+    if (item.uptime) {
+        if (typeof item.uptime === "number") {
+            const secs = item.uptime;
+            const days = Math.floor(secs / 86400);
+            const hours = Math.floor((secs % 86400) / 3600);
+            const mins = Math.floor((secs % 3600) / 60);
+            if (days > 0) return `Up ${days}d ${hours}h`;
+            if (hours > 0) return `Up ${hours}h ${mins}m`;
+            return `Up ${mins}m`;
+        } else if (typeof item.uptime === "string") {
+            return `Up ${item.uptime.replace(/^Up\s+/i, "")}`;
+        }
+    }
+    if (state === "running") return "Running";
+    if (state === "exited" || state === "dead") return "Stopped";
+    return state ? state.charAt(0).toUpperCase() + state.slice(1) : "Running";
+}
+
+/**
+ * Deduce default homelab container ports when monitoring agents do not report port bindings.
+ */
+function deduceDefaultContainerPorts(name: string, image: string): DockerPortBinding[] {
+    const n = (name + " " + image).toLowerCase();
+    if (n.includes("plex")) return [{ privatePort: 32400, publicPort: 32400, type: "tcp" }];
+    if (n.includes("sonarr")) return [{ privatePort: 8989, publicPort: 8989, type: "tcp" }];
+    if (n.includes("radarr")) return [{ privatePort: 7878, publicPort: 7878, type: "tcp" }];
+    if (n.includes("sabnzbd")) return [{ privatePort: 8085, publicPort: 8085, type: "tcp" }];
+    if (n.includes("bazarr")) return [{ privatePort: 6767, publicPort: 6767, type: "tcp" }];
+    if (n.includes("prowlarr")) return [{ privatePort: 9696, publicPort: 9696, type: "tcp" }];
+    if (n.includes("tautulli")) return [{ privatePort: 8181, publicPort: 8181, type: "tcp" }];
+    if (n.includes("immich")) return [{ privatePort: 2283, publicPort: 2283, type: "tcp" }];
+    if (n.includes("glances")) return [{ privatePort: 61208, publicPort: 61208, type: "tcp" }];
+    if (n.includes("grafana")) return [{ privatePort: 3000, publicPort: 3000, type: "tcp" }];
+    if (n.includes("teslamate")) return [{ privatePort: 4000, publicPort: 4000, type: "tcp" }];
+    if (n.includes("diskspeed")) return [{ privatePort: 18888, publicPort: 18888, type: "tcp" }];
+    if (n.includes("qbit")) return [{ privatePort: 8080, publicPort: 8080, type: "tcp" }];
+    if (n.includes("overseerr") || n.includes("seerr")) return [{ privatePort: 5055, publicPort: 5055, type: "tcp" }];
+    return [];
+}
+
+/**
  * Query Docker containers via remote Glances instances (e.g. Unraid Glances Docker plugin).
  */
 async function queryGlancesContainers(): Promise<DockerContainerItem[] | null> {
@@ -175,15 +226,19 @@ async function queryGlancesContainers(): Promise<DockerContainerItem[] | null> {
                                 const memLimit = item.memory?.limit ?? 16777216000;
                                 const memPct = memLimit > 0 ? (memUsage / memLimit) * 100 : 0;
 
+                                const rawImage = item.image || item.Image || "unknown";
+                                const status = formatContainerStatus(item, state);
+                                const ports = deduceDefaultContainerPorts(rawName, rawImage);
+
                                 return {
                                     id: rawId,
                                     fullId: item.Id || rawId,
                                     name: rawName,
-                                    image: item.image || item.Image || "unknown",
+                                    image: rawImage,
                                     state,
-                                    status: item.Status || (state === "running" ? "Up (Glances)" : "Stopped"),
+                                    status,
                                     created: Date.now() - 86400000,
-                                    ports: [],
+                                    ports,
                                     cpuPercent: Math.round(cpuPct * 10) / 10,
                                     memoryUsage: Math.round(memUsage),
                                     memoryLimit: Math.round(memLimit),
@@ -517,6 +572,40 @@ export async function listDockerContainers(): Promise<{
 }
 
 /**
+ * Attempt container action via remote Docker HTTP API (e.g. port 2375 on Glances host).
+ */
+async function tryRemoteDockerHost(containerId: string, action: "restart" | "stop" | "start"): Promise<boolean> {
+    try {
+        const glancesList = await prisma.glancesInstance.findMany({
+            where: { monitored: true },
+            take: 3
+        }).catch(() => []);
+
+        for (const g of glancesList) {
+            if (!g.url) continue;
+            try {
+                const u = new URL(g.url.startsWith("http") ? g.url : `http://${g.url}`);
+                const host = u.hostname;
+                const port = 2375;
+                const endpoint = action === "restart" 
+                    ? `/containers/${encodeURIComponent(containerId)}/restart?t=10`
+                    : action === "stop"
+                        ? `/containers/${encodeURIComponent(containerId)}/stop?t=10`
+                        : `/containers/${encodeURIComponent(containerId)}/start`;
+                
+                const res = await fetch(`http://${host}:${port}${endpoint}`, {
+                    method: "POST",
+                    signal: AbortSignal.timeout(4000),
+                    cache: "no-store"
+                });
+                if (res.ok) return true;
+            } catch (_) {}
+        }
+    } catch (_) {}
+    return false;
+}
+
+/**
  * Restart a Docker container by name or ID.
  */
 export async function restartDockerContainer(containerId: string): Promise<{ success: boolean; message: string }> {
@@ -537,7 +626,13 @@ export async function restartDockerContainer(containerId: string): Promise<{ suc
         return { success: true, message: `Container ${cleanId} restarted via Docker CLI.` };
     } catch (_) {}
 
-    // 3. Fallback: Check lastDiscoveredContainers or simulated cache
+    // 3. Try Remote Docker Host (port 2375)
+    const remoteOk = await tryRemoteDockerHost(cleanId, "restart");
+    if (remoteOk) {
+        return { success: true, message: `Container ${cleanId} restarted via remote Docker host.` };
+    }
+
+    // 4. Fallback: Check lastDiscoveredContainers or simulated cache
     const item = (lastDiscoveredContainers || []).find(c => c.id === cleanId || c.fullId === cleanId || c.name === cleanId) ||
                  (simulatedContainersCache || []).find(c => c.id === cleanId || c.fullId === cleanId || c.name === cleanId);
     if (item) {
@@ -573,7 +668,13 @@ export async function stopDockerContainer(containerId: string): Promise<{ succes
         return { success: true, message: `Container ${cleanId} stopped via Docker CLI.` };
     } catch (_) {}
 
-    // 3. Fallback: Check lastDiscoveredContainers or simulated cache
+    // 3. Try Remote Docker Host (port 2375)
+    const remoteOk = await tryRemoteDockerHost(cleanId, "stop");
+    if (remoteOk) {
+        return { success: true, message: `Container ${cleanId} stopped via remote Docker host.` };
+    }
+
+    // 4. Fallback: Check lastDiscoveredContainers or simulated cache
     const item = (lastDiscoveredContainers || []).find(c => c.id === cleanId || c.fullId === cleanId || c.name === cleanId) ||
                  (simulatedContainersCache || []).find(c => c.id === cleanId || c.fullId === cleanId || c.name === cleanId);
     if (item) {
@@ -606,7 +707,13 @@ export async function startDockerContainer(containerId: string): Promise<{ succe
         return { success: true, message: `Container ${cleanId} started via Docker CLI.` };
     } catch (_) {}
 
-    // 3. Fallback: Check lastDiscoveredContainers or simulated cache
+    // 3. Try Remote Docker Host (port 2375)
+    const remoteOk = await tryRemoteDockerHost(cleanId, "start");
+    if (remoteOk) {
+        return { success: true, message: `Container ${cleanId} started via remote Docker host.` };
+    }
+
+    // 4. Fallback: Check lastDiscoveredContainers or simulated cache
     const item = (lastDiscoveredContainers || []).find(c => c.id === cleanId || c.fullId === cleanId || c.name === cleanId) ||
                  (simulatedContainersCache || []).find(c => c.id === cleanId || c.fullId === cleanId || c.name === cleanId);
     if (item) {

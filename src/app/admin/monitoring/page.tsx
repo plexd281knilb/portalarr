@@ -28,8 +28,76 @@ import {
     Activity, Server, Cpu, RefreshCw, Layers, ShieldCheck, 
     AlertTriangle, CheckCircle2, PauseCircle, ExternalLink, 
     Search, Terminal, Play, Square, Bell, Settings, ArrowDownCircle,
-    Check, X, HardDrive, Clock, Flame, Radio, Zap
+    Check, X, HardDrive, Clock, Flame, Radio, Zap,
+    Tv, Film, Image, FileText, BarChart2, Database, Shield, Box, Home, ArrowUpDown
 } from "lucide-react";
+
+interface AppBranding {
+    icon: any;
+    color: string;
+    bg: string;
+    border: string;
+}
+
+function getContainerAppBranding(name: string, image: string): AppBranding {
+    const combined = `${name || ""} ${image || ""}`.toLowerCase();
+
+    if (combined.includes("plex")) {
+        return { icon: Film, color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/30" };
+    }
+    if (combined.includes("sonarr")) {
+        return { icon: Tv, color: "text-sky-400", bg: "bg-sky-500/10", border: "border-sky-500/30" };
+    }
+    if (combined.includes("radarr")) {
+        return { icon: Film, color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/30" };
+    }
+    if (combined.includes("sabnzbd")) {
+        return { icon: ArrowDownCircle, color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/30" };
+    }
+    if (combined.includes("qbit") || combined.includes("torrent")) {
+        return { icon: ArrowDownCircle, color: "text-blue-400", bg: "bg-blue-500/10", border: "border-blue-500/30" };
+    }
+    if (combined.includes("nzbget")) {
+        return { icon: ArrowDownCircle, color: "text-teal-400", bg: "bg-teal-500/10", border: "border-teal-500/30" };
+    }
+    if (combined.includes("bazarr")) {
+        return { icon: FileText, color: "text-teal-400", bg: "bg-teal-500/10", border: "border-teal-500/30" };
+    }
+    if (combined.includes("prowlarr")) {
+        return { icon: Radio, color: "text-rose-400", bg: "bg-rose-500/10", border: "border-rose-500/30" };
+    }
+    if (combined.includes("tautulli")) {
+        return { icon: Activity, color: "text-orange-400", bg: "bg-orange-500/10", border: "border-orange-500/30" };
+    }
+    if (combined.includes("immich") || combined.includes("photo")) {
+        return { icon: Image, color: "text-purple-400", bg: "bg-purple-500/10", border: "border-purple-500/30" };
+    }
+    if (combined.includes("grafana")) {
+        return { icon: BarChart2, color: "text-orange-400", bg: "bg-orange-500/10", border: "border-orange-500/30" };
+    }
+    if (combined.includes("teslamate")) {
+        return { icon: Zap, color: "text-red-400", bg: "bg-red-500/10", border: "border-red-500/30" };
+    }
+    if (combined.includes("glances")) {
+        return { icon: Cpu, color: "text-cyan-400", bg: "bg-cyan-500/10", border: "border-cyan-500/30" };
+    }
+    if (combined.includes("diskspeed") || combined.includes("disk")) {
+        return { icon: HardDrive, color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/30" };
+    }
+    if (combined.includes("overseerr") || combined.includes("seerr") || combined.includes("jellyseerr")) {
+        return { icon: Layers, color: "text-indigo-400", bg: "bg-indigo-500/10", border: "border-indigo-500/30" };
+    }
+    if (combined.includes("pihole") || combined.includes("adguard") || combined.includes("vaultwarden")) {
+        return { icon: Shield, color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/30" };
+    }
+    if (combined.includes("homeassistant") || combined.includes("hass")) {
+        return { icon: Home, color: "text-sky-400", bg: "bg-sky-500/10", border: "border-sky-500/30" };
+    }
+    if (combined.includes("postgres") || combined.includes("redis") || combined.includes("mariadb") || combined.includes("mysql") || combined.includes("mongo")) {
+        return { icon: Database, color: "text-blue-400", bg: "bg-blue-500/10", border: "border-blue-500/30" };
+    }
+    return { icon: Box, color: "text-slate-400", bg: "bg-slate-500/10", border: "border-slate-500/30" };
+}
 
 export default function AdminFleetMonitoringPage() {
     const [activeTab, setActiveTab] = useState<"systems" | "containers" | "incidents">("systems");
@@ -67,6 +135,7 @@ export default function AdminFleetMonitoringPage() {
     // Filter states: Containers
     const [containerStateFilter, setContainerStateFilter] = useState<"ALL" | "running" | "exited" | "unhealthy">("ALL");
     const [containerSearch, setContainerSearch] = useState("");
+    const [containerSort, setContainerSort] = useState<"name_asc" | "cpu_desc" | "mem_desc">("name_asc");
 
     // Alert config states
     const [config, setConfig] = useState<MonitoringConfig | null>(null);
@@ -237,7 +306,7 @@ export default function AdminFleetMonitoringPage() {
 
     // Filtered containers
     const filteredContainers = useMemo(() => {
-        return containers.filter(c => {
+        const list = containers.filter(c => {
             if (containerStateFilter === "running" && c.state !== "running") return false;
             if (containerStateFilter === "exited" && c.state !== "exited" && c.state !== "dead") return false;
             if (containerStateFilter === "unhealthy" && c.state !== "unhealthy") return false;
@@ -251,7 +320,19 @@ export default function AdminFleetMonitoringPage() {
             }
             return true;
         });
-    }, [containers, containerStateFilter, containerSearch]);
+
+        list.sort((a, b) => {
+            if (containerSort === "cpu_desc") {
+                return (b.cpuPercent || 0) - (a.cpuPercent || 0);
+            }
+            if (containerSort === "mem_desc") {
+                return (b.memoryUsage || 0) - (a.memoryUsage || 0);
+            }
+            return (a.name || "").localeCompare(b.name || "");
+        });
+
+        return list;
+    }, [containers, containerStateFilter, containerSearch, containerSort]);
 
     const formatBytes = (bytes: number): string => {
         if (!bytes || bytes === 0) return "0 MB";
@@ -690,14 +771,52 @@ export default function AdminFleetMonitoringPage() {
                                     )}
                                 </div>
 
-                                <div className="relative flex-1 sm:w-56">
-                                    <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                                    <Input
-                                        placeholder="Search container or image..."
-                                        value={containerSearch}
-                                        onChange={(e) => setContainerSearch(e.target.value)}
-                                        className="h-8 pl-8 pr-2.5 text-xs bg-black/40 border-white/10"
-                                    />
+                                <div className="flex items-center gap-2">
+                                    <div className="flex items-center bg-black/40 border border-white/10 rounded-lg p-0.5 h-8 shrink-0">
+                                        <button
+                                            onClick={() => setContainerSort("name_asc")}
+                                            title="Sort A-Z"
+                                            className={`px-2 py-1 text-[11px] font-semibold rounded-md transition-all cursor-pointer ${
+                                                containerSort === "name_asc" 
+                                                    ? "bg-white/15 text-foreground shadow-xs" 
+                                                    : "text-muted-foreground hover:text-foreground"
+                                            }`}
+                                        >
+                                            A-Z
+                                        </button>
+                                        <button
+                                            onClick={() => setContainerSort("cpu_desc")}
+                                            title="Sort by Highest CPU load"
+                                            className={`px-2 py-1 text-[11px] font-semibold rounded-md transition-all cursor-pointer ${
+                                                containerSort === "cpu_desc" 
+                                                    ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-xs" 
+                                                    : "text-muted-foreground hover:text-amber-400"
+                                            }`}
+                                        >
+                                            🔥 CPU
+                                        </button>
+                                        <button
+                                            onClick={() => setContainerSort("mem_desc")}
+                                            title="Sort by Highest RAM usage"
+                                            className={`px-2 py-1 text-[11px] font-semibold rounded-md transition-all cursor-pointer ${
+                                                containerSort === "mem_desc" 
+                                                    ? "bg-sky-500/20 text-sky-300 border border-sky-500/40 shadow-xs" 
+                                                    : "text-muted-foreground hover:text-sky-400"
+                                            }`}
+                                        >
+                                            💾 RAM
+                                        </button>
+                                    </div>
+
+                                    <div className="relative flex-1 sm:w-56">
+                                        <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                                        <Input
+                                            placeholder="Search container or image..."
+                                            value={containerSearch}
+                                            onChange={(e) => setContainerSearch(e.target.value)}
+                                            className="h-8 pl-8 pr-2.5 text-xs bg-black/40 border-white/10"
+                                        />
+                                    </div>
                                 </div>
                             </div>
                         </CardHeader>
@@ -716,6 +835,15 @@ export default function AdminFleetMonitoringPage() {
                                         const isRestarting = c.state === "restarting";
                                         const isBusy = containerActionLoading[c.id];
 
+                                        const branding = getContainerAppBranding(c.name, c.image);
+                                        const AppIcon = branding.icon;
+                                        const isHighCpu = c.cpuPercent >= 100;
+                                        const isMediumCpu = c.cpuPercent >= 50 && c.cpuPercent < 100;
+                                        const displayImage = c.image.replace(/^(lscr\.io|ghcr\.io|docker\.io)\//, "");
+                                        const cleanStatus = (c.status || "").toLowerCase().includes("glances") 
+                                            ? (isRunning ? "Running" : "Stopped") 
+                                            : (c.status || (isRunning ? "Running" : "Stopped"));
+
                                         return (
                                             <div
                                                 key={c.id}
@@ -729,31 +857,36 @@ export default function AdminFleetMonitoringPage() {
                                                                 : "bg-white/[0.01] border-white/[0.06]"
                                                 }`}
                                             >
-                                                {/* ROW 1: NAME + STATE + SHORT ID */}
-                                                <div className="flex items-start justify-between gap-2">
-                                                    <div className="min-w-0">
-                                                        <div className="flex items-center gap-2">
-                                                            <h4 className="text-xs font-bold text-foreground truncate" title={c.name}>
-                                                                {c.name}
-                                                            </h4>
-                                                            <Badge
-                                                                variant="outline"
-                                                                className={`text-[9px] font-semibold px-1.5 py-0 ${
-                                                                    isRunning 
-                                                                        ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" 
-                                                                        : isUnhealthy 
-                                                                            ? "bg-amber-500/10 text-amber-400 border-amber-500/30" 
-                                                                            : isExited 
-                                                                                ? "bg-rose-500/10 text-rose-400 border-rose-500/30" 
-                                                                                : "bg-slate-500/10 text-slate-400 border-slate-500/30"
-                                                                }`}
-                                                            >
-                                                                {c.state}
-                                                            </Badge>
+                                                {/* ROW 1: BRANDED APP ICON + NAME + STATE + SHORT ID */}
+                                                <div className="flex items-start justify-between gap-2.5">
+                                                    <div className="flex items-start gap-2.5 min-w-0">
+                                                        <div className={`p-2 rounded-xl shrink-0 border ${branding.bg} ${branding.border} ${branding.color}`}>
+                                                            <AppIcon className="h-4 w-4" />
                                                         </div>
-                                                        <p className="text-[10px] text-muted-foreground/70 truncate pt-0.5 font-mono" title={c.image}>
-                                                            {c.image}
-                                                        </p>
+                                                        <div className="min-w-0">
+                                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                                <h4 className="text-xs font-bold text-foreground truncate" title={c.name}>
+                                                                    {c.name}
+                                                                </h4>
+                                                                <Badge
+                                                                    variant="outline"
+                                                                    className={`text-[9px] font-semibold px-1.5 py-0 ${
+                                                                        isRunning 
+                                                                            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" 
+                                                                            : isUnhealthy 
+                                                                                ? "bg-amber-500/10 text-amber-400 border-amber-500/30" 
+                                                                                : isExited 
+                                                                                    ? "bg-rose-500/10 text-rose-400 border-rose-500/30" 
+                                                                                    : "bg-slate-500/10 text-slate-400 border-slate-500/30"
+                                                                    }`}
+                                                                >
+                                                                    {c.state}
+                                                                </Badge>
+                                                            </div>
+                                                            <p className="text-[10px] text-muted-foreground/70 truncate pt-0.5 font-mono" title={c.image}>
+                                                                {displayImage}
+                                                            </p>
+                                                        </div>
                                                     </div>
 
                                                     <span className="font-mono text-[9px] text-muted-foreground/60 bg-black/40 px-1.5 py-0.5 rounded border border-white/5 shrink-0">
@@ -761,43 +894,83 @@ export default function AdminFleetMonitoringPage() {
                                                     </span>
                                                 </div>
 
-                                                {/* ROW 2: UPTIME / STATUS TEXT */}
+                                                {/* ROW 2: UPTIME / STATUS TEXT & HOST SOURCE */}
                                                 <div className="flex items-center justify-between text-[11px] text-muted-foreground border-t border-white/[0.04] pt-1">
-                                                    <span className="flex items-center gap-1.5">
-                                                        <Clock className="h-3.5 w-3.5 text-muted-foreground/60" />
-                                                        <span className="truncate">{c.status || "Status unknown"}</span>
+                                                    <span className="flex items-center gap-1.5 truncate">
+                                                        <Clock className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />
+                                                        <span className="truncate">{cleanStatus}</span>
                                                     </span>
+
+                                                    {c.hostName && (
+                                                        <span className="text-[9px] font-medium text-muted-foreground/80 bg-white/[0.04] px-1.5 py-0.5 rounded border border-white/[0.06] flex items-center gap-1 shrink-0">
+                                                            <Server className="h-2.5 w-2.5 text-muted-foreground/50" />
+                                                            <span>{c.hostName}</span>
+                                                        </span>
+                                                    )}
                                                 </div>
 
-                                                {/* ROW 3: RESOURCE USAGE BARS (IF AVAILABLE) */}
+                                                {/* ROW 3: RESOURCE USAGE BARS (WITH MULTI-CORE HOT ENGINE) */}
                                                 {(c.cpuPercent > 0 || c.memoryUsage > 0) && (
-                                                    <div className="space-y-1.5 p-2 rounded-lg bg-black/40 border border-white/[0.04] text-[10px]">
-                                                        <div className="flex items-center justify-between text-muted-foreground">
-                                                            <span className="flex items-center gap-1">
-                                                                <Cpu className="h-3 w-3 text-emerald-400" /> CPU
-                                                            </span>
-                                                            <span className="font-mono font-bold text-foreground">{c.cpuPercent}%</span>
-                                                        </div>
-                                                        <div className="w-full bg-white/5 h-1 rounded-full overflow-hidden">
-                                                            <div 
-                                                                className="bg-emerald-400 h-full rounded-full transition-all" 
-                                                                style={{ width: `${Math.min(100, c.cpuPercent)}%` }} 
-                                                            />
+                                                    <div className="space-y-2 p-2.5 rounded-lg bg-black/40 border border-white/[0.04] text-[10px]">
+                                                        {/* CPU ROW */}
+                                                        <div className="space-y-1">
+                                                            <div className="flex items-center justify-between text-muted-foreground">
+                                                                <span className={`flex items-center gap-1 font-semibold ${isHighCpu ? "text-rose-400" : isMediumCpu ? "text-amber-400" : "text-muted-foreground"}`}>
+                                                                    {isHighCpu ? (
+                                                                        <Flame className="h-3 w-3 text-rose-400 animate-pulse" />
+                                                                    ) : (
+                                                                        <Cpu className={`h-3 w-3 ${isMediumCpu ? "text-amber-400" : "text-emerald-400"}`} />
+                                                                    )}
+                                                                    <span>CPU</span>
+                                                                </span>
+                                                                <span className="font-mono font-bold flex items-center gap-1.5">
+                                                                    <span className={isHighCpu ? "text-rose-400 font-black" : isMediumCpu ? "text-amber-400" : "text-foreground"}>
+                                                                        {isHighCpu && "🔥 "}{c.cpuPercent}%
+                                                                    </span>
+                                                                    {isHighCpu && (
+                                                                        <span className="text-[9px] text-rose-400/80 font-normal">
+                                                                            (~{(c.cpuPercent / 100).toFixed(1)} cores)
+                                                                        </span>
+                                                                    )}
+                                                                </span>
+                                                            </div>
+                                                            <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden">
+                                                                <div 
+                                                                    className={`h-full rounded-full transition-all ${
+                                                                        isHighCpu 
+                                                                            ? "bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500" 
+                                                                            : isMediumCpu 
+                                                                                ? "bg-amber-400" 
+                                                                                : "bg-emerald-400"
+                                                                    }`} 
+                                                                    style={{ width: `${Math.max(2, Math.min(100, c.cpuPercent))}%` }} 
+                                                                />
+                                                            </div>
                                                         </div>
 
-                                                        <div className="flex items-center justify-between text-muted-foreground pt-1">
-                                                            <span className="flex items-center gap-1">
-                                                                <HardDrive className="h-3 w-3 text-sky-400" /> RAM
-                                                            </span>
-                                                            <span className="font-mono font-bold text-foreground">
-                                                                {formatBytes(c.memoryUsage)} ({c.memoryPercent}%)
-                                                            </span>
-                                                        </div>
-                                                        <div className="w-full bg-white/5 h-1 rounded-full overflow-hidden">
-                                                            <div 
-                                                                className="bg-sky-400 h-full rounded-full transition-all" 
-                                                                style={{ width: `${Math.min(100, c.memoryPercent)}%` }} 
-                                                            />
+                                                        {/* RAM ROW */}
+                                                        <div className="space-y-1 pt-0.5">
+                                                            <div className="flex items-center justify-between text-muted-foreground">
+                                                                <span className={`flex items-center gap-1 font-semibold ${c.memoryPercent >= 85 ? "text-rose-400" : c.memoryPercent >= 70 ? "text-amber-400" : "text-muted-foreground"}`}>
+                                                                    <HardDrive className={`h-3 w-3 ${c.memoryPercent >= 85 ? "text-rose-400" : c.memoryPercent >= 70 ? "text-amber-400" : "text-sky-400"}`} />
+                                                                    <span>RAM</span>
+                                                                </span>
+                                                                <span className={`font-mono font-bold ${c.memoryPercent >= 85 ? "text-rose-400" : c.memoryPercent >= 70 ? "text-amber-400" : "text-foreground"}`}>
+                                                                    {formatBytes(c.memoryUsage)} ({c.memoryPercent}%)
+                                                                </span>
+                                                            </div>
+                                                            <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden">
+                                                                <div 
+                                                                    className={`h-full rounded-full transition-all ${
+                                                                        c.memoryPercent >= 85 
+                                                                            ? "bg-rose-500" 
+                                                                            : c.memoryPercent >= 70 
+                                                                                ? "bg-amber-400" 
+                                                                                : "bg-sky-400"
+                                                                    }`} 
+                                                                    style={{ width: `${Math.max(2, Math.min(100, c.memoryPercent))}%` }} 
+                                                                />
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 )}

@@ -356,7 +356,7 @@ export default function StreamIntelligencePage() {
     const useBuiltIn = data?.useBuiltInStreamMonitor ?? true;
 
     return (
-        <div className="space-y-6 max-w-7xl mx-auto pb-12 select-none">
+        <div className="space-y-6 max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[2200px] mx-auto w-full min-w-0 pb-12 select-none">
             {/* --- TOP HEADER & TAKEOVER CONTROL BAR --- */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 rounded-2xl bg-gradient-to-r from-slate-900/90 via-[#0c0c14]/90 to-slate-900/90 border border-slate-800 shadow-xl backdrop-blur-md">
                 <div className="space-y-1">
