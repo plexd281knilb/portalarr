@@ -70,6 +70,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
     if (pathname.startsWith("/curation")) return "Curation Studio";
     if (pathname.startsWith("/tickets") || pathname.startsWith("/admin/tickets")) return "Support Tickets";
     if (pathname.startsWith("/admin/scripts")) return "User Scripts & Automation";
+    if (pathname.startsWith("/admin/monitoring")) return "Fleet & System Monitoring";
     if (pathname.startsWith("/profile") || pathname.startsWith("/settings/profile")) return "Account Settings";
     if (pathname.startsWith("/settings/access")) return "Access Control";
     if (pathname.startsWith("/settings")) return "System Settings";

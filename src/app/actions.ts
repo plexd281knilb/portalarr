@@ -20081,3 +20081,145 @@ export async function getScriptRunLogAction(runId: string) {
     return { runId, log: getScriptRunLog(runId) || "" };
 }
 
+/**
+ * System & Docker Fleet Monitoring Actions (/admin/monitoring)
+ */
+export async function getFleetMonitoringDataAction(): Promise<import("@/lib/monitoring/types").FleetTelemetryResponse> {
+    await verifyAdmin();
+    try {
+        const { recordServiceProbes, calculateServiceUptime, getIncidentHistory } = await import("@/lib/monitoring/uptime-tracker");
+        const { listDockerContainers } = await import("@/lib/monitoring/docker-client");
+
+        // 1. Probe infrastructure services
+        const infraRes = await getAdminInfrastructureStatusAction(true);
+        const rawServices = infraRes.services || [];
+
+        // 2. Persist rolling probe history and update incidents
+        await recordServiceProbes(rawServices);
+
+        // 3. Calculate rich uptimes and streaks per service
+        const services: import("@/lib/monitoring/types").ServiceUptimeSummary[] = rawServices.map(s => {
+            const up = calculateServiceUptime(s.id, s.status, s.latencyMs);
+            return {
+                id: s.id,
+                name: s.name,
+                type: s.type,
+                category: s.category as any,
+                url: s.url,
+                monitored: s.monitored,
+                status: s.status,
+                latencyMs: s.latencyMs,
+                details: s.details,
+                uptimePercentage24h: up.pct24h,
+                uptimePercentage7d: up.pct7d,
+                uptimePercentage30d: up.pct30d,
+                currentStreak: up.currentStreak,
+                lastChecked: new Date().toISOString(),
+                pingHistory: up.pingHistory
+            };
+        });
+
+        // 4. Fetch Docker container fleet
+        const dockerData = await listDockerContainers();
+
+        // 5. Fetch incident history
+        const incidents = getIncidentHistory();
+        const activeIncidents = incidents.filter(i => i.status === "ACTIVE");
+
+        // 6. Overall fleet uptime calculations
+        const monitoredServices = services.filter(s => s.monitored);
+        const overall24h = monitoredServices.length > 0
+            ? Math.round((monitoredServices.reduce((acc, s) => acc + s.uptimePercentage24h, 0) / monitoredServices.length) * 10) / 10
+            : 100;
+        const overall7d = monitoredServices.length > 0
+            ? Math.round((monitoredServices.reduce((acc, s) => acc + s.uptimePercentage7d, 0) / monitoredServices.length) * 10) / 10
+            : 100;
+
+        return {
+            success: true,
+            services,
+            containers: dockerData.containers,
+            fleetSummary: dockerData.summary,
+            incidents,
+            activeIncidentsCount: activeIncidents.length,
+            overallUptime24h: overall24h,
+            overallUptime7d: overall7d,
+            lastProbeTime: new Date().toISOString()
+        };
+    } catch (e: any) {
+        return {
+            success: false,
+            error: e.message || "Failed fetching fleet monitoring data",
+            services: [],
+            containers: [],
+            fleetSummary: {
+                totalContainers: 0,
+                runningCount: 0,
+                stoppedCount: 0,
+                unhealthyCount: 0,
+                restartingCount: 0,
+                source: "Unreachable",
+                serverTime: new Date().toISOString()
+            },
+            incidents: [],
+            activeIncidentsCount: 0,
+            overallUptime24h: 0,
+            overallUptime7d: 0,
+            lastProbeTime: new Date().toISOString()
+        };
+    }
+}
+
+export async function restartDockerContainerAction(containerId: string) {
+    await verifyAdmin();
+    const { restartDockerContainer } = await import("@/lib/monitoring/docker-client");
+    const res = await restartDockerContainer(containerId);
+    try { revalidatePath("/admin/monitoring"); } catch (_) {}
+    return res;
+}
+
+export async function stopDockerContainerAction(containerId: string) {
+    await verifyAdmin();
+    const { stopDockerContainer } = await import("@/lib/monitoring/docker-client");
+    const res = await stopDockerContainer(containerId);
+    try { revalidatePath("/admin/monitoring"); } catch (_) {}
+    return res;
+}
+
+export async function startDockerContainerAction(containerId: string) {
+    await verifyAdmin();
+    const { startDockerContainer } = await import("@/lib/monitoring/docker-client");
+    const res = await startDockerContainer(containerId);
+    try { revalidatePath("/admin/monitoring"); } catch (_) {}
+    return res;
+}
+
+export async function getMonitoringConfigAction() {
+    await verifyAdmin();
+    const { getMonitoringConfig } = await import("@/lib/monitoring/uptime-tracker");
+    return getMonitoringConfig();
+}
+
+export async function saveMonitoringConfigAction(config: any) {
+    await verifyAdmin();
+    const { saveMonitoringConfig } = await import("@/lib/monitoring/uptime-tracker");
+    const updated = saveMonitoringConfig(config);
+    try { revalidatePath("/admin/monitoring"); } catch (_) {}
+    return { success: true, config: updated };
+}
+
+export async function sendTestOutageAlertAction() {
+    await verifyAdmin();
+    const { sendTestOutageAlert } = await import("@/lib/monitoring/uptime-tracker");
+    return await sendTestOutageAlert();
+}
+
+export async function clearResolvedIncidentsAction() {
+    await verifyAdmin();
+    const { clearResolvedIncidents } = await import("@/lib/monitoring/uptime-tracker");
+    clearResolvedIncidents();
+    try { revalidatePath("/admin/monitoring"); } catch (_) {}
+    return { success: true };
+}
+
+

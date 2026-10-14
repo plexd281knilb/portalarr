@@ -131,6 +131,16 @@ export default function AdminSystemHealthGrid() {
 
                     {/* TOP ACTION BUTTONS */}
                     <div className="flex items-center gap-2 self-start md:self-auto shrink-0">
+                        <Link href="/admin/monitoring">
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="h-8 px-2.5 text-xs gap-1.5 border-sky-500/30 text-sky-400 hover:bg-sky-500/10 hover:text-sky-300"
+                            >
+                                <Layers className="h-3.5 w-3.5 text-sky-400" />
+                                <span>Docker Fleet & Uptime</span>
+                            </Button>
+                        </Link>
                         <Link href="/settings?tab=monitoring">
                             <Button 
                                 variant="outline" 

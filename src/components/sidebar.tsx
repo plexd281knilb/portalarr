@@ -24,7 +24,8 @@ import {
   Compass,
   Inbox,
   HelpCircle,
-  Activity
+  Activity,
+  Layers
 } from "lucide-react"
 
 export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
@@ -227,6 +228,21 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
                   >
                     <Activity className="mr-2 h-4 w-4 text-emerald-400" />
                     Stream Intelligence
+                  </Button>
+                </Link>
+
+                <Link href="/admin/monitoring">
+                  <Button
+                    variant={pathname.startsWith("/admin/monitoring") ? "secondary" : "ghost"}
+                    className={cn(
+                      "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
+                      pathname.startsWith("/admin/monitoring")
+                        ? "bg-sky-500/15 text-sky-300 border border-sky-500/30 shadow-[0_0_10px_rgba(14,165,233,0.25)] ring-1 ring-sky-500/40 font-bold"
+                        : "text-sky-400/80 hover:text-sky-300 hover:bg-sky-950/30 hover:ring-1 hover:ring-sky-500/40"
+                    )}
+                  >
+                    <Layers className="mr-2 h-4 w-4 text-sky-400" />
+                    Fleet & Monitoring
                   </Button>
                 </Link>
 
@@ -559,6 +575,19 @@ export function MobileSidebar() {
                           )}
                         >
                           <Activity className="mr-2 h-4 w-4 text-emerald-400" /> Stream Intelligence
+                        </Button>
+                      </Link>
+                      <Link href="/admin/monitoring" onClick={() => setIsOpen(false)}>
+                        <Button
+                          variant={pathname.startsWith("/admin/monitoring") ? "secondary" : "ghost"}
+                          className={cn(
+                            "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
+                            pathname.startsWith("/admin/monitoring")
+                              ? "bg-sky-500/15 text-sky-300 border border-sky-500/30 shadow-[0_0_10px_rgba(14,165,233,0.25)] ring-1 ring-sky-500/40 font-bold"
+                              : "text-sky-400/80 hover:text-sky-300 hover:bg-sky-950/30 hover:ring-1 hover:ring-sky-500/40"
+                          )}
+                        >
+                          <Layers className="mr-2 h-4 w-4 text-sky-400" /> Fleet & Monitoring
                         </Button>
                       </Link>
                       <Link href="/curation/kometa" onClick={() => setIsOpen(false)}>

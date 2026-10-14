@@ -8001,6 +8001,120 @@ async function runTestSuite() {
         }
     });
 
+    // 105. System & Docker Fleet Monitoring
+    await assertTest("Test 105: System & Docker Fleet Monitoring: Reachability Telemetry, Container Lifecycle & Incident Engine", async () => {
+        const { listDockerContainers, restartDockerContainer, stopDockerContainer, startDockerContainer } = await import("../src/lib/monitoring/docker-client");
+        const { 
+            recordServiceProbes, 
+            calculateServiceUptime, 
+            getIncidentHistory, 
+            clearResolvedIncidents,
+            getMonitoringConfig,
+            saveMonitoringConfig
+        } = await import("../src/lib/monitoring/uptime-tracker");
+
+        // 1. Verify Docker Fleet Listing
+        const fleetData = await listDockerContainers();
+        if (!fleetData || !fleetData.summary || !Array.isArray(fleetData.containers)) {
+            throw new Error("listDockerContainers() failed to return expected summary and containers array");
+        }
+        if (fleetData.summary.totalContainers <= 0) {
+            throw new Error("Expected at least one container in fleet list");
+        }
+        const sampleContainer = fleetData.containers[0];
+        if (!sampleContainer.id || !sampleContainer.name || !sampleContainer.state) {
+            throw new Error("Container missing required fields (id, name, state)");
+        }
+
+        // 2. Verify Container Restart Lifecycle
+        const restartRes = await restartDockerContainer(sampleContainer.id);
+        if (!restartRes || !restartRes.success) {
+            throw new Error(`restartDockerContainer failed: ${restartRes?.message}`);
+        }
+
+        // 3. Verify Container Stop & Start Lifecycle
+        const stopRes = await stopDockerContainer(sampleContainer.id);
+        if (!stopRes || !stopRes.success) {
+            throw new Error(`stopDockerContainer failed: ${stopRes?.message}`);
+        }
+        const startRes = await startDockerContainer(sampleContainer.id);
+        if (!startRes || !startRes.success) {
+            throw new Error(`startDockerContainer failed: ${startRes?.message}`);
+        }
+
+        // 4. Verify Service Uptime Tracking & Calculations
+        const testServiceId = `test-service-${Date.now()}`;
+        const mockService: any = {
+            id: testServiceId,
+            name: "Test Plex Server",
+            type: "Plex Media Server",
+            category: "plex",
+            url: "http://192.168.1.99:32400",
+            monitored: true,
+            status: "ONLINE",
+            latencyMs: 14
+        };
+
+        // Record successful probes
+        await recordServiceProbes([mockService]);
+        const initialUptime = calculateServiceUptime(testServiceId, "ONLINE", 14);
+        if (initialUptime.pct24h !== 100) {
+            throw new Error(`Expected 100% initial uptime, got ${initialUptime.pct24h}%`);
+        }
+        if (!initialUptime.currentStreak.includes("Up for")) {
+            throw new Error(`Expected streak to indicate 'Up for', got '${initialUptime.currentStreak}'`);
+        }
+
+        // 5. Verify Outage Incident Opening
+        mockService.status = "OFFLINE";
+        mockService.details = "Connection refused (ECONNREFUSED)";
+        await recordServiceProbes([mockService]);
+
+        const incidentsAfterFail = getIncidentHistory();
+        const activeInc = incidentsAfterFail.find(i => i.targetId === testServiceId && i.status === "ACTIVE");
+        if (!activeInc) {
+            throw new Error("Expected active outage incident to be created when service went OFFLINE");
+        }
+        if (activeInc.severity !== "CRITICAL") {
+            throw new Error(`Expected CRITICAL severity, got ${activeInc.severity}`);
+        }
+
+        // 6. Verify Outage Resolution
+        mockService.status = "ONLINE";
+        mockService.details = "PMS reachable (16ms)";
+        await recordServiceProbes([mockService]);
+
+        const incidentsAfterRecover = getIncidentHistory();
+        const resolvedInc = incidentsAfterRecover.find(i => i.targetId === testServiceId);
+        if (!resolvedInc || resolvedInc.status !== "RESOLVED") {
+            throw new Error("Expected incident to transition to RESOLVED when service recovered");
+        }
+        if (!resolvedInc.resolvedAt || (resolvedInc.durationMinutes ?? 0) <= 0) {
+            throw new Error("Expected incident to record resolvedAt and durationMinutes");
+        }
+
+        // 7. Verify Clearing Resolved Incidents
+        clearResolvedIncidents();
+        const postCleanIncidents = getIncidentHistory();
+        const lingeringResolved = postCleanIncidents.find(i => i.targetId === testServiceId && i.status === "RESOLVED");
+        if (lingeringResolved) {
+            throw new Error("clearResolvedIncidents failed to remove resolved incident");
+        }
+
+        // 8. Verify Monitoring Configuration Read / Write
+        const savedCfg = saveMonitoringConfig({
+            discordWebhookUrl: "https://discord.com/api/webhooks/test/mock",
+            notifyDiscord: true
+        });
+        if (savedCfg.discordWebhookUrl !== "https://discord.com/api/webhooks/test/mock") {
+            throw new Error("saveMonitoringConfig failed to persist discordWebhookUrl");
+        }
+        const loadedCfg = getMonitoringConfig();
+        if (loadedCfg.discordWebhookUrl !== "https://discord.com/api/webhooks/test/mock") {
+            throw new Error("getMonitoringConfig failed to read updated config");
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

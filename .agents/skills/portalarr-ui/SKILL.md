@@ -832,6 +832,26 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
     - Chronological log of past runs with duration, exit codes (`Exit 0`, `Failed`, `Aborted`), execution mode (interactive vs background), and full log viewer.
   - **Admin Route & Security**: Guarded under `/admin/scripts` and `/api/admin*` via `CLOUDFLARE_ADMIN_PATHS` and `src/proxy.ts`. Navigation link integrated in desktop and mobile sidebars with `Terminal` icon.
 
+---
+
+### 23. System & Docker Fleet Monitoring Cockpit (`/admin/monitoring` & `admin-system-health-grid.tsx`)
+- **Single-Pane Homelab Cockpit**: Unified administration mission control providing full-fleet container management, real-time service reachability, rolling uptime telemetry (24h/7d/30d), and automated outage alerts.
+- **Tri-Tab Layout & Semantic Accents**:
+  - **Tab 1: Systems & Services (`systems`)** (`text-sky-400`, `data-[state=active]:text-sky-400 data-[state=active]:bg-sky-500/15 data-[state=active]:border-sky-500/40`):
+    - Comprehensive reachability grid covering Plex Media Servers, Host Hardware (Glances), Stream Monitors (Tautulli), Servarr & Request Apps, and Download Clients.
+    - Status badges (`ONLINE`, `OFFLINE`, `PAUSED`) with live ping round-trip latency (`latencyMs`).
+    - Rolling Uptime Telemetry Scorecards: precise 24-hour, 7-day, and 30-day uptime percentages with current streak badges ("Up for 14d 6h" or "Down for 12m").
+    - Mini Sparkline Ping History: last 10 probe indicators (emerald for responsive, crimson for failed).
+  - **Tab 2: Docker Container Fleet (`containers`)** (`text-emerald-400`, `data-[state=active]:text-emerald-400 data-[state=active]:bg-emerald-500/15 data-[state=active]:border-emerald-500/40`):
+    - Multi-engine Docker connectivity: direct Unix domain socket (`/var/run/docker.sock`), Windows named pipe (`//./pipe/docker_engine`), Docker CLI (`docker ps`), and remote Glances container API (`/api/3/containers`).
+    - Live container status badges (`running`, `exited`, `unhealthy`, `restarting`) with image tags and container short IDs.
+    - Live Resource Utilization: dynamic CPU % meters and RAM allocated memory meters with color-coded progress bars.
+    - 1-Click Container Actions: instant **Restart Container** (`restartDockerContainerAction`), **Start Container**, and **Stop Container** with loading spinners and glassmorphic toast notifications.
+  - **Tab 3: Outages & Alerts (`incidents`)** (`text-amber-400`, `data-[state=active]:text-amber-400 data-[state=active]:bg-amber-500/15 data-[state=active]:border-amber-500/40`):
+    - Overall Fleet Uptime Scorecards (24h Uptime %, 7d Uptime %, active incidents count).
+    - Automated Outage Notification Engine: dispatches rich Discord embeds (crimson on failure, emerald on recovery) to `#system-status` channel or custom Discord Webhook URLs.
+    - Chronological incident log tracking start time, failure details, total downtime duration, and 1-click incident clearance.
+- **Navigation Integration**: Desktop and mobile sidebars under Administration via `Layers` icon, with direct jump button ("Docker Fleet & Uptime") embedded in `AdminSystemHealthGrid` on the home dashboard.
 
 ---
 
