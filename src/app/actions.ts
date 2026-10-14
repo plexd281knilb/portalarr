@@ -15499,8 +15499,8 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
                             const sessionItem: any = {
                                 instanceId: t.id,
                                 serverName: t.name,
-                                sessionKey: String(s.session_key || ""),
-                                sessionId: String(s.session_id || ""),
+                                sessionKey: String(s.session_key || s.session_id || `${s.rating_key || "stream"}_${s.ip_address || s.user || "user"}_${t.id}`),
+                                sessionId: String(s.session_id || s.session_key || ""),
                                 user: s.friendly_name || s.user || "Plex User",
                                 email: s.email || "",
                                 title: fullTitle,
@@ -15580,8 +15580,8 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
                             const sessionItem: any = {
                                 instanceId: `plex_${srv.serverId}`,
                                 serverName: srv.serverName,
-                                sessionKey: String(s.sessionKey || s.ratingKey || Math.random()),
-                                sessionId: String(s.Session?.id || ""),
+                                sessionKey: String(s.sessionKey || s.Session?.id || `${s.ratingKey || "stream"}_${s.Player?.machineIdentifier || s.Player?.address || userTitle}_${srv.serverId}`),
+                                sessionId: String(s.Session?.id || s.sessionKey || ""),
                                 user: userTitle,
                                 email: s.User?.email || "",
                                 title: fullTitle,
@@ -15773,6 +15773,23 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
                 console.error("[ADMIN-STREAMS] Background recordActivePlexSessions error:", e);
             });
         }
+
+        // Deterministically sort allSessions so stream cards maintain a stable position across polling cycles
+        allSessions.sort((a: any, b: any) => {
+            const userA = String(a.user || "").toLowerCase().trim();
+            const userB = String(b.user || "").toLowerCase().trim();
+            if (userA !== userB) return userA.localeCompare(userB);
+
+            const serverA = String(a.serverName || "").toLowerCase().trim();
+            const serverB = String(b.serverName || "").toLowerCase().trim();
+            if (serverA !== serverB) return serverA.localeCompare(serverB);
+
+            const titleA = String(a.grandparentTitle || a.title || "").toLowerCase().trim();
+            const titleB = String(b.grandparentTitle || b.title || "").toLowerCase().trim();
+            if (titleA !== titleB) return titleA.localeCompare(titleB);
+
+            return String(a.sessionKey || a.sessionId || "").localeCompare(String(b.sessionKey || b.sessionId || ""));
+        });
 
         return {
             success: true,
@@ -19025,7 +19042,7 @@ export async function getUserPlexHubData() {
                             ? `/api/media/image?instanceId=${encodeURIComponent(srvId)}&serverId=${encodeURIComponent(srv.serverId)}&serverName=${encodeURIComponent(srv.serverName)}&serverUrl=${encodeURIComponent(srv.serverUrl)}&token=${encodeURIComponent(srv.token || "")}&img=${encodeURIComponent(rawThumb)}&title=${encodeURIComponent(searchTitle)}&year=${encodeURIComponent(String(s.year || ""))}&type=${encodeURIComponent(mediaType)}`
                             : null;
 
-                        const sKey = String(s.sessionKey || s.Session?.id || Math.random());
+                        const sKey = String(s.sessionKey || s.Session?.id || `${s.ratingKey || "stream"}_${s.Player?.machineIdentifier || s.Player?.address || sessionUser}_${srv.serverId}`);
                         const sId = String(s.Session?.id || sKey);
                         seenSessionKeys.add(sKey);
                         seenSessionKeys.add(sId);
@@ -19479,6 +19496,14 @@ export async function getUserPlexHubData() {
     watchHistory = watchHistory.slice(0, 20);
 
     const serversList = Array.from(serverMap.values()).filter(srv => srv.monitored !== false);
+
+    // Deterministically sort active streams so stream cards stay stationary
+    activeStreams.sort((a: any, b: any) => {
+        const titleA = String(a.fullTitle || a.title || "").toLowerCase().trim();
+        const titleB = String(b.fullTitle || b.title || "").toLowerCase().trim();
+        if (titleA !== titleB) return titleA.localeCompare(titleB);
+        return String(a.sessionKey || a.sessionId || "").localeCompare(String(b.sessionKey || b.sessionId || ""));
+    });
 
     return {
         success: true,

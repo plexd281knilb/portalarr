@@ -244,6 +244,13 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
   - Each server card displays a Direct Play vs Transcode split (`X DP / Y Transcode`), total bandwidth in Mbps, and a proportional horizontal load bar reflecting its percentage share of total cluster streams.
 - **Interactive Server Filter Pills**:
   - Clicking any server in the Streams Per Plex Server list or the filter pill bar (`All Servers`, `Server 1`, `Server 2`) filters active playback sessions instantly on the client with zero network round-trips. Clear filter action resets back to cluster-wide inspection.
+- **Deterministic Stream Sorting & Stationary Key Stability**:
+  - Live streams across monitored servers are deterministically sorted on both backend (`getAdminDetailedStreamsAction`) and frontend (`StreamIntelligencePage` and `AdminDetailedStreams`), preventing stream cards from shuffling, flapping, or shifting positions during 5–8 second telemetry refresh cycles.
+  - Primary sort options (`user_asc` [Default: User A → Z], `user_desc`, `server`, `bandwidth`, `progress`, `transcode_first`) persist across sessions via `localStorage` (`portalarr_live_activity_sort`).
+  - Strict multi-tier tiebreaker chain (`primaryDiff` → `user` A-Z → `serverName` A-Z → `mediaTitle` A-Z → `sessionKey`) guarantees 100% stationary ordering across asynchronous network polling jitter.
+  - Zero `Math.random()` session key fallbacks: session keys derive deterministically from `${ratingKey}_${machineIdentifier || address || user}_${serverId}`, ensuring React DOM nodes are never unnecessarily unmounted or recreated between renders.
+- **Dialog Width Clamping Guard (`sm:max-w-4xl` / `sm:max-w-5xl`)**:
+  - Radix `DialogContent` injects a default `sm:max-w-lg` class. Wide inspection cockpits (e.g. User Telemetry & Overlap modal, Watch History audit modal) must explicitly pass `w-[95vw] sm:w-[92vw] md:w-[90vw] max-w-5xl sm:max-w-5xl` with `min-w-0` to avoid viewport clamping on desktop and ensure side-by-side stream comparison cards fit cleanly.
 - **Session Telemetry Fidelity**:
   - Active sessions display transcode decisions, hardware NVENC acceleration status, video/audio codecs, real-time bitrate, stream progress, user/device identifiers, and direct admin stream termination controls.
   - In Plex OAuth flow, register client application name as `DomsHomeLab`.

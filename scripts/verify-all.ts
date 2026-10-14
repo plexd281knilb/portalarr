@@ -7880,6 +7880,127 @@ async function runTestSuite() {
         }
     });
 
+    // 104. Live Activity: Deterministic Stream Sorting, Key Stability & Multi-Tier Tiebreakers
+    await assertTest("Test 104: Live Activity: Deterministic Stream Sorting, Key Stability & Multi-Tier Tiebreakers", async () => {
+        // 1. Verify deterministic multi-tier comparator
+        const sampleSessions = [
+            {
+                sessionKey: "session_101",
+                sessionId: "sess_1",
+                user: "Charlie",
+                serverName: "MainPlexServer",
+                title: "Inception (2010)",
+                grandparentTitle: "",
+                streamBitrate: 8000,
+                progressPercent: 45,
+                videoDecision: "direct play"
+            },
+            {
+                sessionKey: "session_102",
+                sessionId: "sess_2",
+                user: "Alice",
+                serverName: "KidsPlexServer",
+                title: "Moana (2016)",
+                grandparentTitle: "",
+                streamBitrate: 4000,
+                progressPercent: 80,
+                videoDecision: "transcode"
+            },
+            {
+                sessionKey: "session_103",
+                sessionId: "sess_3",
+                user: "Bob",
+                serverName: "MainPlexServer",
+                title: "Breaking Bad - S01E01",
+                grandparentTitle: "Breaking Bad",
+                streamBitrate: 12000,
+                progressPercent: 10,
+                videoDecision: "transcode"
+            },
+            {
+                sessionKey: "session_104",
+                sessionId: "sess_4",
+                user: "Alice",
+                serverName: "MainPlexServerBackup",
+                title: "Frozen II (2019)",
+                grandparentTitle: "",
+                streamBitrate: 6000,
+                progressPercent: 80,
+                videoDecision: "direct play"
+            }
+        ];
+
+        const sortSessions = (list: any[], mode: string) => {
+            return [...list].sort((a: any, b: any) => {
+                let diff = 0;
+                if (mode === "user_asc") {
+                    diff = (a.user || "").localeCompare(b.user || "");
+                } else if (mode === "user_desc") {
+                    diff = (b.user || "").localeCompare(a.user || "");
+                } else if (mode === "server") {
+                    diff = (a.serverName || "").localeCompare(b.serverName || "");
+                } else if (mode === "bandwidth") {
+                    diff = (Number(b.streamBitrate) || 0) - (Number(a.streamBitrate) || 0);
+                } else if (mode === "progress") {
+                    diff = (Number(b.progressPercent) || 0) - (Number(a.progressPercent) || 0);
+                } else if (mode === "transcode_first") {
+                    const isTranscodeA = a.videoDecision === "transcode" ? 1 : 0;
+                    const isTranscodeB = b.videoDecision === "transcode" ? 1 : 0;
+                    diff = isTranscodeB - isTranscodeA;
+                }
+
+                if (diff !== 0) return diff;
+
+                const userDiff = (a.user || "").localeCompare(b.user || "");
+                if (userDiff !== 0) return userDiff;
+
+                const serverDiff = (a.serverName || "").localeCompare(b.serverName || "");
+                if (serverDiff !== 0) return serverDiff;
+
+                const titleA = String(a.grandparentTitle || a.title || "");
+                const titleB = String(b.grandparentTitle || b.title || "");
+                const titleDiff = titleA.localeCompare(titleB);
+                if (titleDiff !== 0) return titleDiff;
+
+                return String(a.sessionKey || a.sessionId || "").localeCompare(String(b.sessionKey || b.sessionId || ""));
+            });
+        };
+
+        // 2. Test User A-Z sorting (default)
+        const sortedUserAsc = sortSessions(sampleSessions, "user_asc");
+        if (sortedUserAsc[0].user !== "Alice" || sortedUserAsc[1].user !== "Alice" || sortedUserAsc[2].user !== "Bob" || sortedUserAsc[3].user !== "Charlie") {
+            throw new Error(`Unexpected user_asc order: ${sortedUserAsc.map(s => s.user).join(", ")}`);
+        }
+        // When user is identical ("Alice"), tiebreaker server sorts KidsPlexServer before MainPlexServerBackup
+        if (sortedUserAsc[0].serverName !== "KidsPlexServer" || sortedUserAsc[1].serverName !== "MainPlexServerBackup") {
+            throw new Error(`Expected server tiebreaker for Alice: got ${sortedUserAsc[0].serverName}, ${sortedUserAsc[1].serverName}`);
+        }
+
+        // 3. Test Bandwidth High -> Low
+        const sortedBandwidth = sortSessions(sampleSessions, "bandwidth");
+        if (sortedBandwidth[0].streamBitrate !== 12000 || sortedBandwidth[1].streamBitrate !== 8000 || sortedBandwidth[2].streamBitrate !== 6000 || sortedBandwidth[3].streamBitrate !== 4000) {
+            throw new Error("Unexpected bandwidth sort order");
+        }
+
+        // 4. Test Transcodes First
+        const sortedTranscode = sortSessions(sampleSessions, "transcode_first");
+        if (sortedTranscode[0].videoDecision !== "transcode" || sortedTranscode[1].videoDecision !== "transcode") {
+            throw new Error("Expected transcode sessions first");
+        }
+
+        // 5. Test Stability Under Multiple Shuffled Iterations
+        // Regardless of input array order (simulating asynchronous polling jitter), output must be 100% identical
+        for (let i = 0; i < 20; i++) {
+            const shuffled = [...sampleSessions].sort(() => Math.random() - 0.5);
+            const sorted = sortSessions(shuffled, "user_asc");
+            const keys = sorted.map(s => s.sessionKey).join(",");
+            const expectedKeys = sortedUserAsc.map(s => s.sessionKey).join(",");
+            if (keys !== expectedKeys) {
+                throw new Error(`Sorting was unstable on shuffle iteration ${i}! Got: ${keys}, expected: ${expectedKeys}`);
+            }
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

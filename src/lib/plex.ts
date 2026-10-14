@@ -546,6 +546,9 @@ export async function getPlexActiveSessions(adminToken: string): Promise<{ serve
         }
     }));
 
+    // Ensure deterministic server ordering regardless of network request completion race conditions
+    results.sort((a, b) => a.serverName.localeCompare(b.serverName));
+
     return results;
 }
 

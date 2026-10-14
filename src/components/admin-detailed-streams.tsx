@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { getAdminDetailedStreamsAction, killUserStream, getWatchHistoryAction, clearWatchHistoryAction } from "@/app/actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -19,7 +19,8 @@ import {
     Activity, Tv, Film, Monitor, Cpu, HardDrive, RefreshCw, 
     Play, Pause, XCircle, Zap, Shield, Sparkles, Loader2, Server,
     Layers, Trophy, Flame, Filter, BarChart3, CheckCircle2,
-    ShieldAlert, History, Users, Search, Trash2, Clock, Globe
+    ShieldAlert, History, Users, Search, Trash2, Clock, Globe,
+    ArrowUpDown
 } from "lucide-react";
 
 export default function AdminDetailedStreams() {
@@ -28,6 +29,25 @@ export default function AdminDetailedStreams() {
     const [refreshing, setRefreshing] = useState(false);
     const [killingSessionKey, setKillingSessionKey] = useState<string | null>(null);
     const [selectedServerFilter, setSelectedServerFilter] = useState<string | null>(null);
+
+    // Live Activity sort state with localStorage persistence
+    const [streamSort, setStreamSort] = useState<string>("user_asc");
+
+    useEffect(() => {
+        try {
+            const savedSort = localStorage.getItem("portalarr_live_activity_sort");
+            if (savedSort) {
+                setStreamSort(savedSort);
+            }
+        } catch (e) {}
+    }, []);
+
+    const handleSortChange = (newSort: string) => {
+        setStreamSort(newSort);
+        try {
+            localStorage.setItem("portalarr_live_activity_sort", newSort);
+        } catch (e) {}
+    };
 
     // Watch History modal & filter state
     const [showHistory, setShowHistory] = useState(false);
@@ -136,6 +156,45 @@ export default function AdminDetailedStreams() {
             return sName === fName || sName.includes(fName) || fName.includes(sName);
         })
         : sessions;
+
+    const sortedFilteredSessions = useMemo(() => {
+        const list = [...filteredSessions];
+        list.sort((a: any, b: any) => {
+            let primaryDiff = 0;
+            if (streamSort === "user_asc") {
+                primaryDiff = (a.user || "").localeCompare(b.user || "");
+            } else if (streamSort === "user_desc") {
+                primaryDiff = (b.user || "").localeCompare(a.user || "");
+            } else if (streamSort === "server") {
+                primaryDiff = (a.serverName || "").localeCompare(b.serverName || "");
+            } else if (streamSort === "bandwidth") {
+                primaryDiff = (Number(b.streamBitrate) || 0) - (Number(a.streamBitrate) || 0);
+            } else if (streamSort === "progress") {
+                primaryDiff = (Number(b.progressPercent) || 0) - (Number(a.progressPercent) || 0);
+            } else if (streamSort === "transcode_first") {
+                const aTrans = a.videoDecision === "transcode" ? 1 : 0;
+                const bTrans = b.videoDecision === "transcode" ? 1 : 0;
+                primaryDiff = bTrans - aTrans;
+            }
+
+            if (primaryDiff !== 0) return primaryDiff;
+
+            // Stable multi-tier deterministic tiebreaker chain
+            const userDiff = (a.user || "").localeCompare(b.user || "");
+            if (userDiff !== 0) return userDiff;
+
+            const serverDiff = (a.serverName || "").localeCompare(b.serverName || "");
+            if (serverDiff !== 0) return serverDiff;
+
+            const titleA = String(a.grandparentTitle || a.title || "");
+            const titleB = String(b.grandparentTitle || b.title || "");
+            const titleDiff = titleA.localeCompare(titleB);
+            if (titleDiff !== 0) return titleDiff;
+
+            return String(a.sessionKey || a.sessionId || "").localeCompare(String(b.sessionKey || b.sessionId || ""));
+        });
+        return list;
+    }, [filteredSessions, streamSort]);
 
     return (
         <Card className="border-primary/30 bg-[#121218]/90 backdrop-blur-md shadow-md overflow-hidden">
@@ -453,7 +512,7 @@ export default function AdminDetailedStreams() {
             </CardHeader>
 
             <CardContent className="p-4 sm:p-5 space-y-3">
-                {/* ACTIVE STREAMS SECTION HEADER & SERVER FILTER PILLS */}
+                {/* ACTIVE STREAMS SECTION HEADER, SERVER FILTER PILLS & SORT SELECTOR */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/[0.06] pb-3">
                     <div className="flex items-center gap-2">
                         <Tv className="h-4 w-4 text-primary" />
@@ -461,44 +520,66 @@ export default function AdminDetailedStreams() {
                             Active Playback Sessions
                         </h3>
                         <Badge variant="outline" className="text-[10px] text-muted-foreground">
-                            {filteredSessions.length} {filteredSessions.length === 1 ? "stream" : "streams"}
+                            {sortedFilteredSessions.length} {sortedFilteredSessions.length === 1 ? "stream" : "streams"}
                         </Badge>
                     </div>
 
-                    {serversUsage.length > 1 && totalStreams > 0 && (
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-[10px] text-muted-foreground uppercase font-semibold mr-1">Filter:</span>
-                            <Button
-                                size="sm"
-                                variant={selectedServerFilter === null ? "default" : "outline"}
-                                className={`h-6 text-[10px] px-2 rounded-full ${selectedServerFilter === null ? "bg-primary text-primary-foreground font-bold" : "border-white/10 hover:bg-white/[0.05]"}`}
-                                onClick={() => setSelectedServerFilter(null)}
-                            >
-                                All ({sessions.length})
-                            </Button>
-                            {serversUsage.map((srv: any) => (
+                    <div className="flex flex-wrap items-center gap-2.5">
+                        {serversUsage.length > 1 && totalStreams > 0 && (
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-[10px] text-muted-foreground uppercase font-semibold mr-1">Filter:</span>
                                 <Button
-                                    key={srv.name}
                                     size="sm"
-                                    variant={selectedServerFilter === srv.name ? "default" : "outline"}
-                                    disabled={srv.streamCount === 0}
-                                    className={`h-6 text-[10px] px-2 rounded-full ${
-                                        selectedServerFilter === srv.name 
-                                            ? "bg-primary text-primary-foreground font-bold" 
-                                            : srv.streamCount === 0 
-                                                ? "opacity-40 border-white/[0.04]" 
-                                                : "border-white/10 hover:bg-white/[0.05]"
-                                    }`}
-                                    onClick={() => setSelectedServerFilter(selectedServerFilter === srv.name ? null : srv.name)}
+                                    variant={selectedServerFilter === null ? "default" : "outline"}
+                                    className={`h-6 text-[10px] px-2 rounded-full ${selectedServerFilter === null ? "bg-primary text-primary-foreground font-bold" : "border-white/10 hover:bg-white/[0.05]"}`}
+                                    onClick={() => setSelectedServerFilter(null)}
                                 >
-                                    {srv.name} ({srv.streamCount})
+                                    All ({sessions.length})
                                 </Button>
-                            ))}
+                                {serversUsage.map((srv: any) => (
+                                    <Button
+                                        key={srv.name}
+                                        size="sm"
+                                        variant={selectedServerFilter === srv.name ? "default" : "outline"}
+                                        disabled={srv.streamCount === 0}
+                                        className={`h-6 text-[10px] px-2 rounded-full ${
+                                            selectedServerFilter === srv.name 
+                                                ? "bg-primary text-primary-foreground font-bold" 
+                                                : srv.streamCount === 0 
+                                                    ? "opacity-40 border-white/[0.04]" 
+                                                    : "border-white/10 hover:bg-white/[0.05]"
+                                        }`}
+                                        onClick={() => setSelectedServerFilter(selectedServerFilter === srv.name ? null : srv.name)}
+                                    >
+                                        {srv.name} ({srv.streamCount})
+                                    </Button>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Persistent Stream Sorting Selector */}
+                        <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] text-muted-foreground uppercase font-semibold flex items-center gap-1">
+                                <ArrowUpDown className="h-3 w-3 text-emerald-400" /> Sort:
+                            </span>
+                            <select
+                                value={streamSort}
+                                onChange={(e) => handleSortChange(e.target.value)}
+                                className="h-6 px-2 text-[10px] rounded-lg bg-[#14141c] border border-white/10 text-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
+                                title="Sort active streams"
+                            >
+                                <option value="user_asc">User (A → Z)</option>
+                                <option value="user_desc">User (Z → A)</option>
+                                <option value="server">Server Name</option>
+                                <option value="bandwidth">Bandwidth (High → Low)</option>
+                                <option value="progress">Progress (Most Watched)</option>
+                                <option value="transcode_first">Transcodes First</option>
+                            </select>
                         </div>
-                    )}
+                    </div>
                 </div>
 
-                {filteredSessions.length === 0 ? (
+                {sortedFilteredSessions.length === 0 ? (
                     <div className="py-8 text-center space-y-2 text-muted-foreground">
                         <Tv className="h-8 w-8 mx-auto opacity-40 text-primary" />
                         {selectedServerFilter ? (
@@ -523,7 +604,7 @@ export default function AdminDetailedStreams() {
                     </div>
                 ) : (
                     <div className="space-y-3">
-                        {filteredSessions.map((stream: any, idx: number) => {
+                        {sortedFilteredSessions.map((stream: any, idx: number) => {
                             const isTranscoding = stream.videoDecision === "transcode";
                             const isAudioTranscoding = stream.audioDecision === "transcode";
                             const isHw = isTranscoding && (stream.transcodeHwRequested || stream.transcodeHwEncoding || stream.transcodeHwDecoding);
@@ -734,7 +815,7 @@ export default function AdminDetailedStreams() {
 
             {/* WATCH HISTORY & SECURITY AUDIT MODAL */}
             <Dialog open={showHistory} onOpenChange={setShowHistory}>
-                <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col p-0 overflow-hidden bg-[#121218] border-border/60">
+                <DialogContent className="w-[95vw] sm:w-[92vw] md:w-[90vw] max-w-4xl sm:max-w-4xl max-h-[85vh] flex flex-col p-0 overflow-hidden bg-[#121218] border-border/60">
                     <DialogHeader className="p-5 pb-3 border-b border-border/40">
                         <div className="flex items-center justify-between gap-3">
                             <div className="space-y-1">

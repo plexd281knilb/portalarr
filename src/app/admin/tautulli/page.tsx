@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
+import { useState, useEffect, useTransition, useMemo } from "react";
 import { 
     getStreamIntelligenceDataAction, 
     backfillTautulliHistoryAction, 
@@ -33,7 +33,7 @@ import {
     ShieldAlert, History, Users, Search, Trash2, Clock, Globe,
     Radio, AlertTriangle, Copy, Check, Download, ExternalLink,
     Stethoscope, Info, ChevronRight, Smartphone, Laptop,
-    Home, Compass, ShieldCheck
+    Home, Compass, ShieldCheck, ArrowUpDown
 } from "lucide-react";
 
 export default function StreamIntelligencePage() {
@@ -45,6 +45,25 @@ export default function StreamIntelligencePage() {
     const [historySearch, setHistorySearch] = useState<string>("");
     const [historyFilter, setHistoryFilter] = useState<string>("all");
     const [killingSessionKey, setKillingSessionKey] = useState<string | null>(null);
+
+    // Live Activity sort state with localStorage persistence
+    const [streamSort, setStreamSort] = useState<string>("user_asc");
+
+    useEffect(() => {
+        try {
+            const savedSort = localStorage.getItem("portalarr_live_activity_sort");
+            if (savedSort) {
+                setStreamSort(savedSort);
+            }
+        } catch (e) {}
+    }, []);
+
+    const handleSortChange = (newSort: string) => {
+        setStreamSort(newSort);
+        try {
+            localStorage.setItem("portalarr_live_activity_sort", newSort);
+        } catch (e) {}
+    };
 
     // Device diagnosis modal state
     const [activeDiagnosis, setActiveDiagnosis] = useState<any | null>(null);
@@ -234,6 +253,45 @@ export default function StreamIntelligencePage() {
         ? allSessions.filter((s: any) => s.serverName?.toLowerCase().trim() === serverFilter.toLowerCase().trim())
         : allSessions;
 
+    const sortedFilteredSessions = useMemo(() => {
+        const list = [...filteredSessions];
+        list.sort((a: any, b: any) => {
+            let primaryDiff = 0;
+            if (streamSort === "user_asc") {
+                primaryDiff = (a.user || "").localeCompare(b.user || "");
+            } else if (streamSort === "user_desc") {
+                primaryDiff = (b.user || "").localeCompare(a.user || "");
+            } else if (streamSort === "server") {
+                primaryDiff = (a.serverName || "").localeCompare(b.serverName || "");
+            } else if (streamSort === "bandwidth") {
+                primaryDiff = (Number(b.streamBitrate) || 0) - (Number(a.streamBitrate) || 0);
+            } else if (streamSort === "progress") {
+                primaryDiff = (Number(b.progressPercent) || 0) - (Number(a.progressPercent) || 0);
+            } else if (streamSort === "transcode_first") {
+                const aTrans = a.videoDecision === "transcode" ? 1 : 0;
+                const bTrans = b.videoDecision === "transcode" ? 1 : 0;
+                primaryDiff = bTrans - aTrans;
+            }
+
+            if (primaryDiff !== 0) return primaryDiff;
+
+            // Rock-solid deterministic tiebreaker chain so cards NEVER move or swap places on refresh
+            const userDiff = (a.user || "").localeCompare(b.user || "");
+            if (userDiff !== 0) return userDiff;
+
+            const serverDiff = (a.serverName || "").localeCompare(b.serverName || "");
+            if (serverDiff !== 0) return serverDiff;
+
+            const titleA = String(a.grandparentTitle || a.title || "");
+            const titleB = String(b.grandparentTitle || b.title || "");
+            const titleDiff = titleA.localeCompare(titleB);
+            if (titleDiff !== 0) return titleDiff;
+
+            return String(a.sessionKey || a.sessionId || "").localeCompare(String(b.sessionKey || b.sessionId || ""));
+        });
+        return list;
+    }, [filteredSessions, streamSort]);
+
     const monitoredServers = data?.serversUsage || [];
     const userProfiles = data?.userProfiles || [];
     const filteredUserProfiles = userProfiles.filter((user: any) => {
@@ -320,11 +378,11 @@ export default function StreamIntelligencePage() {
                     </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-between md:justify-end">
                     {/* Standalone Takeover Mode Toggle */}
-                    <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-slate-950/80 border border-slate-800">
-                        <div className="flex flex-col text-right">
-                            <span className="text-[11px] font-bold text-white flex items-center gap-1.5 justify-end">
+                    <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-slate-950/80 border border-slate-800 flex-1 sm:flex-initial justify-between sm:justify-end">
+                        <div className="flex flex-col text-left sm:text-right">
+                            <span className="text-[11px] font-bold text-white flex items-center gap-1.5 sm:justify-end">
                                 <span className={`w-2 h-2 rounded-full ${useBuiltIn ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" : "bg-purple-400"}`} />
                                 {useBuiltIn ? "Native Cluster Monitor" : "External Tautulli Monitor"}
                             </span>
@@ -336,7 +394,7 @@ export default function StreamIntelligencePage() {
                             checked={useBuiltIn}
                             onCheckedChange={handleToggleTakeover}
                             disabled={isPending}
-                            className="data-[state=checked]:bg-cyan-500"
+                            className="data-[state=checked]:bg-cyan-500 shrink-0"
                         />
                     </div>
 
@@ -345,7 +403,7 @@ export default function StreamIntelligencePage() {
                         size="sm"
                         onClick={() => loadData(true)}
                         disabled={refreshing}
-                        className="h-9 px-3 rounded-xl border-slate-800 bg-slate-900/80 hover:bg-slate-800 text-xs text-muted-foreground hover:text-white transition-all shadow-sm"
+                        className="h-9 px-3 rounded-xl border-slate-800 bg-slate-900/80 hover:bg-slate-800 text-xs text-muted-foreground hover:text-white transition-all shadow-sm shrink-0"
                     >
                         <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${refreshing ? "animate-spin text-cyan-400" : ""}`} />
                         Refresh
@@ -478,33 +536,58 @@ export default function StreamIntelligencePage() {
                 {/* --- TAB 1: LIVE ACTIVITY --- */}
                 {/* ========================================================================= */}
                 <TabsContent value="activity" className="space-y-4">
-                    {/* Server Filter Pills */}
-                    {monitoredServers.length > 1 && (
-                        <div className="flex flex-wrap items-center gap-2 pt-1 pb-2">
-                            <span className="text-xs font-semibold text-muted-foreground mr-1 flex items-center gap-1">
-                                <Filter className="h-3.5 w-3.5" /> Server:
-                            </span>
-                            <Button
-                                size="sm"
-                                variant={serverFilter === null ? "secondary" : "outline"}
-                                onClick={() => setServerFilter(null)}
-                                className={`h-7 px-3 text-xs rounded-full ${serverFilter === null ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40 font-bold" : "border-slate-800 text-muted-foreground"}`}
-                            >
-                                All Servers ({allSessions.length})
-                            </Button>
-                            {monitoredServers.map((s: any) => (
-                                <Button
-                                    key={s.name}
-                                    size="sm"
-                                    variant={serverFilter === s.name ? "secondary" : "outline"}
-                                    onClick={() => setServerFilter(serverFilter === s.name ? null : s.name)}
-                                    className={`h-7 px-3 text-xs rounded-full ${serverFilter === s.name ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40 font-bold" : "border-slate-800 text-muted-foreground"}`}
-                                >
-                                    {s.name} ({s.streamCount})
-                                </Button>
-                            ))}
+                    {/* Live Activity Toolbar: Server Filter Pills & Persistent Sort Selector */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1 pb-2">
+                        {/* Server Filter Pills */}
+                        <div className="flex flex-wrap items-center gap-2">
+                            {monitoredServers.length > 1 && (
+                                <>
+                                    <span className="text-xs font-semibold text-muted-foreground mr-1 flex items-center gap-1">
+                                        <Filter className="h-3.5 w-3.5" /> Server:
+                                    </span>
+                                    <Button
+                                        size="sm"
+                                        variant={serverFilter === null ? "secondary" : "outline"}
+                                        onClick={() => setServerFilter(null)}
+                                        className={`h-7 px-3 text-xs rounded-full ${serverFilter === null ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40 font-bold" : "border-slate-800 text-muted-foreground"}`}
+                                    >
+                                        All Servers ({allSessions.length})
+                                    </Button>
+                                    {monitoredServers.map((s: any) => (
+                                        <Button
+                                            key={s.name}
+                                            size="sm"
+                                            variant={serverFilter === s.name ? "secondary" : "outline"}
+                                            onClick={() => setServerFilter(serverFilter === s.name ? null : s.name)}
+                                            className={`h-7 px-3 text-xs rounded-full ${serverFilter === s.name ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40 font-bold" : "border-slate-800 text-muted-foreground"}`}
+                                        >
+                                            {s.name} ({s.streamCount})
+                                        </Button>
+                                    ))}
+                                </>
+                            )}
                         </div>
-                    )}
+
+                        {/* Persistent Stream Sorting Selector */}
+                        <div className="flex items-center gap-2 sm:ml-auto">
+                            <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
+                                <ArrowUpDown className="h-3.5 w-3.5 text-cyan-400" /> Sort:
+                            </span>
+                            <select
+                                value={streamSort}
+                                onChange={(e) => handleSortChange(e.target.value)}
+                                className="h-7 px-2.5 text-xs rounded-lg bg-slate-900 border border-slate-700/70 text-slate-200 focus:outline-none focus:ring-1 focus:ring-cyan-500 cursor-pointer"
+                                title="Sort stream cards"
+                            >
+                                <option value="user_asc">User (A → Z)</option>
+                                <option value="user_desc">User (Z → A)</option>
+                                <option value="server">Server Name</option>
+                                <option value="bandwidth">Bandwidth (High → Low)</option>
+                                <option value="progress">Progress (Most Watched)</option>
+                                <option value="transcode_first">Transcodes First</option>
+                            </select>
+                        </div>
+                    </div>
 
                     {/* Active Sessions Grid */}
                     {loading ? (
@@ -512,7 +595,7 @@ export default function StreamIntelligencePage() {
                             <Loader2 className="h-8 w-8 animate-spin mx-auto text-cyan-400 mb-2" />
                             <p className="text-xs">Polling active stream telemetry across servers...</p>
                         </div>
-                    ) : filteredSessions.length === 0 ? (
+                    ) : sortedFilteredSessions.length === 0 ? (
                         <Card className="bg-slate-900/60 border-slate-800 p-12 text-center">
                             <Monitor className="h-12 w-12 text-slate-700 mx-auto mb-3" />
                             <h3 className="text-base font-bold text-white">No Active Streams</h3>
@@ -522,7 +605,7 @@ export default function StreamIntelligencePage() {
                         </Card>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {filteredSessions.map((session: any) => {
+                            {sortedFilteredSessions.map((session: any) => {
                                 const isTranscode = session.videoDecision === "transcode";
                                 const diagnosis = session.deviceDiagnosis;
 
@@ -679,18 +762,18 @@ export default function StreamIntelligencePage() {
                                 </CardDescription>
                             </div>
 
-                            <div className="flex flex-wrap items-center gap-2">
-                                <div className="relative w-48">
+                            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                                <div className="relative flex-1 sm:w-56 sm:flex-initial">
                                     <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
                                     <Input
                                         placeholder="Search user, title, IP..."
                                         value={historySearch}
                                         onChange={(e) => setHistorySearch(e.target.value)}
-                                        className="h-8 pl-8 text-xs bg-slate-950 border-slate-800 rounded-lg"
+                                        className="h-8 pl-8 text-xs bg-slate-950 border-slate-800 rounded-lg text-white"
                                     />
                                 </div>
 
-                                <div className="flex items-center rounded-lg border border-slate-800 bg-slate-950 p-0.5 text-xs">
+                                <div className="flex flex-wrap items-center rounded-lg border border-slate-800 bg-slate-950 p-0.5 text-xs">
                                     <button
                                         onClick={() => setHistoryFilter("all")}
                                         className={`px-2.5 py-1 rounded-md font-medium ${historyFilter === "all" ? "bg-slate-800 text-white font-bold" : "text-muted-foreground"}`}
@@ -1360,7 +1443,7 @@ export default function StreamIntelligencePage() {
             {/* --- DEVICE DIAGNOSIS & FIX MODAL --- */}
             {activeDiagnosis && (
                 <Dialog open={!!activeDiagnosis} onOpenChange={(open) => !open && setActiveDiagnosis(null)}>
-                    <DialogContent className="max-w-md bg-[#0c0c14] border-slate-800 text-white rounded-2xl p-6">
+                    <DialogContent className="w-[95vw] sm:w-[90vw] max-w-md sm:max-w-md bg-[#0c0c14] border-slate-800 text-white rounded-2xl p-6">
                         <DialogHeader>
                             <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
                                 <AlertTriangle className="h-4 w-4 text-amber-400" />
@@ -1412,9 +1495,9 @@ export default function StreamIntelligencePage() {
             {/* --- COMPREHENSIVE USER TELEMETRY & CONNECTION INTELLIGENCE MODAL --- */}
             {selectedUser && (
                 <Dialog open={!!selectedUser} onOpenChange={(open) => { if (!open) { setSelectedUser(null); setUserDetails(null); } }}>
-                    <DialogContent className="max-w-4xl max-h-[90vh] bg-[#0c0c14] border-slate-800 text-white rounded-2xl p-0 flex flex-col overflow-hidden shadow-2xl">
+                    <DialogContent className="w-[95vw] sm:w-[92vw] md:w-[90vw] max-w-5xl sm:max-w-5xl max-h-[90vh] bg-[#0c0c14] border-slate-800 text-white rounded-2xl p-0 flex flex-col overflow-hidden shadow-2xl">
                         {/* Header */}
-                        <div className="p-5 border-b border-slate-800/80 bg-slate-950/70 shrink-0">
+                        <div className="p-5 border-b border-slate-800/80 bg-slate-950/70 shrink-0 min-w-0">
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                                 <div className="flex items-center gap-3">
                                     <div className="p-2.5 rounded-xl bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 shadow-[0_0_15px_rgba(6,182,212,0.3)]">
@@ -1536,7 +1619,7 @@ export default function StreamIntelligencePage() {
                         </div>
 
                         {/* Content Body */}
-                        <div className="p-5 overflow-y-auto flex-1 space-y-4">
+                        <div className="p-5 overflow-y-auto flex-1 space-y-4 min-w-0">
                             {loadingUserDetails ? (
                                 <div className="p-16 text-center text-muted-foreground space-y-3">
                                     <Loader2 className="h-8 w-8 animate-spin text-cyan-400 mx-auto" />
