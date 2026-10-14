@@ -22,20 +22,24 @@ import {
 import { logAgentEvent, validateUserCrossBoundaryQuery } from "@/lib/ai-agent-guardrails";
 import { runDeepPlexPlaybackHealthCheck, PlexPlaybackDiagnosticReport } from "@/lib/plex-playback-probe";
 import { normalizeGeminiModel, getGeminiCandidateModels, getAvailableGeminiModels } from "@/lib/ai-agent";
+import { 
+    GEMINI_TOOL_DECLARATIONS, 
+    OPENAI_TOOL_DEFINITIONS, 
+    executeAiAssistantTool, 
+    ToolExecutionContext 
+} from "@/lib/ai-assistant-tools";
 
 function cleanUrl(url: string): string {
     if (!url) return "";
     return url.replace(/\/$/, ""); 
 }
 
-async function fetchTautulliApiJson(url: string, signal?: AbortSignal, nextOptions?: any): Promise<{ ok: boolean; data: any; error?: string }> {
+async function fetchTautulliApiJson(url: string, signal?: AbortSignal, _nextOptions?: any): Promise<{ ok: boolean; data: any; error?: string }> {
     try {
-        const fetchOpts: any = { signal };
-        if (nextOptions) {
-            fetchOpts.next = nextOptions;
-        } else {
-            fetchOpts.cache = "no-store";
-        }
+        const fetchOpts: any = { 
+            signal: signal || AbortSignal.timeout(5000),
+            cache: "no-store"
+        };
 
         const res = await fetch(url, fetchOpts);
         if (!res.ok) {
@@ -640,30 +644,42 @@ export async function askAiServerMaster(
     history: AiChatMessage[] = [],
     user?: any
 ): Promise<AiAssistantResponse> {
-    // Quick diagnostic snapshot gathering with 2.5s maximum timeout
+    // Quick diagnostic snapshot gathering with instant memory cache check and 2.5s network race
+    const safeUsername = String(user?.username || "guest").toLowerCase();
+    const { getUserCache, setUserCache } = await import("@/lib/prewarm");
+    const cacheKey = `user_diag_snapshot:${safeUsername}`;
+    const cachedSnapshot = getUserCache<UserDiagnosticSnapshot>(cacheKey);
+
     let snapshot: UserDiagnosticSnapshot;
-    try {
-        snapshot = await Promise.race([
-            getUserDiagnosticSnapshot(user),
-            new Promise<UserDiagnosticSnapshot>((_, reject) => 
-                setTimeout(() => reject(new Error("Telemetry timeout")), 2500)
-            )
-        ]);
-    } catch {
-        snapshot = {
-            username: user?.username || "Plex User",
-            email: user?.email,
-            role: user?.role || "USER",
-            activeStreamsCount: 0,
-            primaryActiveStream: null,
-            activeStreams: [],
-            recentDevices: [],
-            recentWatchHistory: [],
-            serversOnlineCount: 1,
-            detectedIssues: [],
-            linkedSubAccounts: [],
-            generatedAt: new Date().toISOString()
-        };
+    if (cachedSnapshot) {
+        snapshot = cachedSnapshot;
+    } else {
+        try {
+            snapshot = await Promise.race([
+                getUserDiagnosticSnapshot(user),
+                new Promise<UserDiagnosticSnapshot>((_, reject) => 
+                    setTimeout(() => reject(new Error("Telemetry timeout")), 2500)
+                )
+            ]);
+            if (snapshot) {
+                setUserCache(cacheKey, snapshot, 3 * 60 * 1000);
+            }
+        } catch {
+            snapshot = {
+                username: user?.username || "Plex User",
+                email: user?.email,
+                role: user?.role || "USER",
+                activeStreamsCount: 0,
+                primaryActiveStream: null,
+                activeStreams: [],
+                recentDevices: [],
+                recentWatchHistory: [],
+                serversOnlineCount: 1,
+                detectedIssues: [],
+                linkedSubAccounts: [],
+                generatedAt: new Date().toISOString()
+            };
+        }
     }
 
     const actionsTaken: AgentActionReport[] = [];
@@ -671,7 +687,9 @@ export async function askAiServerMaster(
     let playbackProbe: PlexPlaybackDiagnosticReport | undefined;
 
     const settings = await prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null);
-    const autonomyLevel = settings?.aiAutonomyLevel || "autonomous";
+    const rawAutonomy = settings?.aiAutonomyLevel || "autonomous";
+    const autonomyLevel: "advisory" | "assisted" | "autonomous" = 
+        rawAutonomy === "advisory" || rawAutonomy === "assisted" ? rawAutonomy : "autonomous";
 
     const lowerQ = question.toLowerCase();
 
@@ -1016,6 +1034,32 @@ ${serverListMarkdown}
     const rawKey = settings?.aiApiKey ? decryptData(settings.aiApiKey) : "";
     const modelName = normalizeGeminiModel(settings?.aiModel);
 
+    const isAdmin = snapshot.role === "ADMIN";
+
+    const ADMIN_TOOL_NAMES = new Set([
+        "get_homelab_hardware_telemetry",
+        "get_docker_fleet_status",
+        "restart_docker_container",
+        "get_account_sharing_alerts"
+    ]);
+
+    const activeGeminiTools = isAdmin 
+        ? GEMINI_TOOL_DECLARATIONS 
+        : GEMINI_TOOL_DECLARATIONS.filter(t => !ADMIN_TOOL_NAMES.has(t.name));
+
+    const activeOpenAiTools = isAdmin
+        ? OPENAI_TOOL_DEFINITIONS
+        : OPENAI_TOOL_DEFINITIONS.filter(t => !ADMIN_TOOL_NAMES.has(t.function.name));
+
+    const toolCtx: ToolExecutionContext = {
+        user,
+        snapshot,
+        actionsTaken,
+        autonomyLevel,
+        mediaInspectionHolder: { current: mediaInspection },
+        playbackProbeHolder: { current: playbackProbe }
+    };
+
     // Build context-rich prompt
     const systemPrompt = `You are the elite "Plex & Server Master AI" for the private media ecosystem "DomsHomeLab (d281knilb)".
 You provide friendly, authoritative, step-by-step troubleshooting, optimization advice, and diagnostic fixes for Plex users and server administrators.
@@ -1054,6 +1098,28 @@ STRICT USER PRIVACY & CROSS-USER ISOLATION POLICY:
 - Directly Linked Sub-Accounts (Allowed): ${snapshot.linkedSubAccounts && snapshot.linkedSubAccounts.length > 0 ? snapshot.linkedSubAccounts.map(s => `"${s.username}" (${s.label || s.accountType})`).join(", ") : "None (Individual profile)"}
 - ZERO CROSS-USER DISCLOSURE: Unless caller is an ADMIN, you are STRICTLY FORBIDDEN from discussing, revealing, querying, or taking action on any user other than "${snapshot.username}" and their directly authorized linked sub-accounts.
 - If the user asks about other users' streams, watch history, or accounts, or asks to terminate another user's stream or shut off their access, refuse immediately with our privacy policy.
+
+${isAdmin ? `
+SERVER ADMINISTRATOR CAPABILITIES & HOMELAB MISSION CONTROL:
+- Caller is a verified SERVER ADMINISTRATOR ("${snapshot.username}").
+- You are equipped with structured function tools to inspect and manage the homelab infrastructure:
+  * "get_homelab_hardware_telemetry": Query physical host CPU %, RAM %, and load via Glances.
+  * "get_docker_fleet_status": Inspect running, stopped, and unhealthy Docker containers across the fleet.
+  * "restart_docker_container": Safely restart a specific container by name/id (e.g. plex, sonarr, radarr, glances).
+  * "get_account_sharing_alerts": Audit active streams for multi-IP password sharing across distinct residential locations.
+  * "probe_playback_health": Run synthetic playback byte-streaming checks against Plex servers.
+  * "terminate_playback_stream": Terminate any active stream on the server.
+- Whenever an administrator asks about host hardware, Docker containers, container restarts, or password sharing, CALL THE RELEVANT FUNCTION TOOL immediately to obtain real-time ground truth.
+` : `
+USER PERMISSIONS:
+- Standard user. Homelab infrastructure tools, Docker fleet management, and sharing audits are restricted to administrators.
+- Focus on playback troubleshooting, audio/subtitle settings, and media discovery.
+`}
+
+FUNCTION CALLING INSTRUCTIONS:
+- You have access to tools to execute actions or retrieve live server telemetry.
+- When the user asks to inspect a media file, test playback, terminate a stream, check server or cluster status, check Docker containers, or inspect host hardware, ALWAYS call the corresponding function tool.
+- After receiving the function response, present the information clearly with Markdown formatting, bullet points, and actionable next steps.
 
 ${actionsTaken.length > 0 ? `
 AUTONOMOUS AGENT ACTIONS PERFORMED:
@@ -1108,7 +1174,7 @@ INSTRUCTIONS:
         const dynamicModels = await getAvailableGeminiModels(geminiKey).catch(() => []);
         const candidateModels = getGeminiCandidateModels(modelName, dynamicModels);
 
-        logAgentEvent("INFO", `Querying Google Gemini (${candidateModels[0]}) for user "${snapshot.username}"`);
+        logAgentEvent("INFO", `Querying Google Gemini (${candidateModels[0]}) with ${activeGeminiTools.length} tool(s) for user "${snapshot.username}"`);
 
         for (const activeModel of candidateModels) {
             const controller = new AbortController();
@@ -1129,14 +1195,17 @@ INSTRUCTIONS:
                     parts: [{ text: question }]
                 });
 
+                const requestBody: any = {
+                    system_instruction: { parts: [{ text: systemPrompt }] },
+                    contents: contents,
+                    tools: [{ function_declarations: activeGeminiTools }],
+                    generationConfig: { temperature: 0.2, maxOutputTokens: 1200 }
+                };
+
                 let res = await fetch(url, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        system_instruction: { parts: [{ text: systemPrompt }] },
-                        contents: contents,
-                        generationConfig: { temperature: 0.2, maxOutputTokens: 1200 }
-                    }),
+                    body: JSON.stringify(requestBody),
                     signal: controller.signal
                 });
 
@@ -1151,11 +1220,7 @@ INSTRUCTIONS:
                         res = await fetch(url, {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({
-                                system_instruction: { parts: [{ text: systemPrompt }] },
-                                contents: contents,
-                                generationConfig: { temperature: 0.2, maxOutputTokens: 1200 }
-                            }),
+                            body: JSON.stringify(requestBody),
                             signal: retryController.signal
                         });
                     } finally {
@@ -1165,7 +1230,82 @@ INSTRUCTIONS:
 
                 if (res.ok) {
                     const data = await res.json();
-                    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                    const candidate = data.candidates?.[0];
+                    const functionCall = candidate?.content?.parts?.find((p: any) => p.functionCall)?.functionCall;
+
+                    if (functionCall && functionCall.name) {
+                        const fnName = functionCall.name;
+                        const fnArgs = functionCall.args || {};
+                        logAgentEvent("INFO", `⚡ Gemini (${activeModel}) invoked tool "${fnName}"`, fnArgs);
+
+                        const toolResult = await executeAiAssistantTool(fnName, fnArgs, toolCtx);
+                        if (toolCtx.mediaInspectionHolder.current) mediaInspection = toolCtx.mediaInspectionHolder.current;
+                        if (toolCtx.playbackProbeHolder.current) playbackProbe = toolCtx.playbackProbeHolder.current;
+
+                        // Follow-up synthesis turn
+                        try {
+                            const followUpContents = [
+                                ...contents,
+                                {
+                                    role: "model",
+                                    parts: [{ functionCall }]
+                                },
+                                {
+                                    role: "function",
+                                    parts: [{
+                                        functionResponse: {
+                                            name: fnName,
+                                            response: { output: toolResult.result }
+                                        }
+                                    }]
+                                }
+                            ];
+
+                            const synthRes = await fetch(url, {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                    system_instruction: { parts: [{ text: systemPrompt }] },
+                                    contents: followUpContents,
+                                    generationConfig: { temperature: 0.2, maxOutputTokens: 1200 }
+                                }),
+                                signal: AbortSignal.timeout(20000)
+                            });
+
+                            if (synthRes.ok) {
+                                const synthData = await synthRes.json();
+                                const synthText = synthData.candidates?.[0]?.content?.parts?.[0]?.text;
+                                if (synthText && synthText.trim().length > 10) {
+                                    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+                                    logAgentEvent("INFO", `✨ Gemini synthesized tool response in ${elapsed}s for user "${snapshot.username}"`);
+                                    return {
+                                        success: true,
+                                        answer: synthText.trim(),
+                                        diagnostics: snapshot,
+                                        providerUsed: `Gemini (${activeModel}) [Tool: ${fnName}]`,
+                                        actionsTaken,
+                                        mediaInspection,
+                                        playbackProbe
+                                    };
+                                }
+                            }
+                        } catch (synthErr: any) {
+                            logAgentEvent("WARN", `Gemini follow-up synthesis error: ${synthErr.message}`);
+                        }
+
+                        // Fallback to formatted tool summary
+                        return {
+                            success: true,
+                            answer: toolResult.summary || "Action completed.",
+                            diagnostics: snapshot,
+                            providerUsed: `Gemini (${activeModel}) [Tool: ${fnName}]`,
+                            actionsTaken,
+                            mediaInspection,
+                            playbackProbe
+                        };
+                    }
+
+                    const text = candidate?.content?.parts?.[0]?.text;
                     if (text && text.trim().length > 10) {
                         const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
                         logAgentEvent("INFO", `✨ Gemini (${activeModel}) generated response in ${elapsed}s for user "${snapshot.username}"`);
@@ -1195,7 +1335,7 @@ INSTRUCTIONS:
 
     // 2. OpenAI Provider
     if (provider === "openai" && rawKey) {
-        logAgentEvent("INFO", `Querying OpenAI (${modelName || 'gpt-4o-mini'}) for user "${snapshot.username}"`);
+        logAgentEvent("INFO", `Querying OpenAI (${modelName || 'gpt-4o-mini'}) with ${activeOpenAiTools.length} tool(s) for user "${snapshot.username}"`);
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 35000);
         try {
@@ -1218,6 +1358,7 @@ INSTRUCTIONS:
                 body: JSON.stringify({
                     model: activeModel,
                     messages: messages,
+                    tools: activeOpenAiTools,
                     temperature: 0.2,
                     max_tokens: 1200
                 }),
@@ -1226,7 +1367,79 @@ INSTRUCTIONS:
 
             if (res.ok) {
                 const data = await res.json();
-                const text = data.choices?.[0]?.message?.content;
+                const choice = data.choices?.[0];
+                const message = choice?.message;
+
+                if (message?.tool_calls && message.tool_calls.length > 0) {
+                    const toolCall = message.tool_calls[0];
+                    const fnName = toolCall.function.name;
+                    let fnArgs: any = {};
+                    try {
+                        fnArgs = JSON.parse(toolCall.function.arguments || "{}");
+                    } catch (_) {}
+
+                    logAgentEvent("INFO", `⚡ OpenAI (${activeModel}) invoked tool "${fnName}"`, fnArgs);
+                    const toolResult = await executeAiAssistantTool(fnName, fnArgs, toolCtx);
+                    if (toolCtx.mediaInspectionHolder.current) mediaInspection = toolCtx.mediaInspectionHolder.current;
+                    if (toolCtx.playbackProbeHolder.current) playbackProbe = toolCtx.playbackProbeHolder.current;
+
+                    try {
+                        const followUpMessages = [
+                            ...messages,
+                            message,
+                            {
+                                role: "tool",
+                                tool_call_id: toolCall.id,
+                                content: JSON.stringify(toolResult.result)
+                            }
+                        ];
+
+                        const synthRes = await fetch("https://api.openai.com/v1/chat/completions", {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                                "Authorization": `Bearer ${rawKey}`
+                            },
+                            body: JSON.stringify({
+                                model: activeModel,
+                                messages: followUpMessages,
+                                temperature: 0.2,
+                                max_tokens: 1200
+                            }),
+                            signal: AbortSignal.timeout(20000)
+                        });
+
+                        if (synthRes.ok) {
+                            const synthData = await synthRes.json();
+                            const synthText = synthData.choices?.[0]?.message?.content;
+                            if (synthText && synthText.trim().length > 10) {
+                                return {
+                                    success: true,
+                                    answer: synthText.trim(),
+                                    diagnostics: snapshot,
+                                    providerUsed: `OpenAI (${activeModel}) [Tool: ${fnName}]`,
+                                    actionsTaken,
+                                    mediaInspection,
+                                    playbackProbe
+                                };
+                            }
+                        }
+                    } catch (synthErr: any) {
+                        logAgentEvent("WARN", `OpenAI follow-up synthesis error: ${synthErr.message}`);
+                    }
+
+                    return {
+                        success: true,
+                        answer: toolResult.summary || "Action completed.",
+                        diagnostics: snapshot,
+                        providerUsed: `OpenAI (${activeModel}) [Tool: ${fnName}]`,
+                        actionsTaken,
+                        mediaInspection,
+                        playbackProbe
+                    };
+                }
+
+                const text = message?.content;
                 if (text && text.trim().length > 10) {
                     logAgentEvent("INFO", `✨ OpenAI (${activeModel}) generated response for user "${snapshot.username}"`);
                     return {
@@ -1253,6 +1466,41 @@ INSTRUCTIONS:
     }
 
     // 3. Built-in Plex Master Knowledge Base & Heuristic Engine (Guaranteed Instant Response)
+    // Run offline tool dispatcher if query matches admin commands or stream termination
+    if (isAdmin) {
+        if (lowerQ.includes("restart") && (lowerQ.includes("container") || lowerQ.includes("docker"))) {
+            const match = question.match(/restart\s+(?:container|docker)?\s*([a-zA-Z0-9_\-]+)/i);
+            const containerName = match ? match[1] : "";
+            if (containerName) {
+                await executeAiAssistantTool("restart_docker_container", { container_name_or_id: containerName }, toolCtx);
+            }
+        } else if (lowerQ.includes("docker") || lowerQ.includes("container fleet") || lowerQ.includes("fleet status")) {
+            await executeAiAssistantTool("get_docker_fleet_status", {}, toolCtx);
+        } else if (lowerQ.includes("glances") || lowerQ.includes("hardware") || (lowerQ.includes("cpu") && (lowerQ.includes("ram") || lowerQ.includes("host") || lowerQ.includes("load")))) {
+            await executeAiAssistantTool("get_homelab_hardware_telemetry", {}, toolCtx);
+        } else if (lowerQ.includes("sharing") || lowerQ.includes("multi-ip") || lowerQ.includes("multi ip") || lowerQ.includes("password sharing")) {
+            await executeAiAssistantTool("get_account_sharing_alerts", {}, toolCtx);
+        }
+    } else {
+        // Standard user asking for restricted admin commands:
+        if (lowerQ.includes("docker") || lowerQ.includes("glances") || lowerQ.includes("hardware") || lowerQ.includes("restart container") || lowerQ.includes("sharing alert")) {
+            actionsTaken.push({
+                action: "STREAM_PATTERN_DIAGNOSTIC",
+                status: "FAILED",
+                target: "Homelab Mission Control",
+                summary: "Permission Denied: Docker fleet, host hardware telemetry, and security sharing audits are strictly restricted to Server Administrators.",
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            });
+        }
+    }
+
+    if ((lowerQ.includes("stop") || lowerQ.includes("kill") || lowerQ.includes("terminate")) && (lowerQ.includes("stream") || lowerQ.includes("playback"))) {
+        await executeAiAssistantTool("terminate_playback_stream", {}, toolCtx);
+    }
+
+    if (toolCtx.mediaInspectionHolder.current) mediaInspection = toolCtx.mediaInspectionHolder.current;
+    if (toolCtx.playbackProbeHolder.current) playbackProbe = toolCtx.playbackProbeHolder.current;
+
     logAgentEvent("INFO", `Serving diagnostic response via Built-in Plex Master Autonomous Engine for user "${snapshot.username}"`);
     const heuristicAnswer = resolvePlexMasterHeuristic(question, snapshot, actionsTaken, mediaInspection, playbackProbe);
     return {
@@ -1276,6 +1524,122 @@ function resolvePlexMasterHeuristic(
     const q = question.toLowerCase();
     const primary = snapshot.primaryActiveStream;
     const deviceName = primary?.player || snapshot.recentDevices[0] || "your Roku / Plex device";
+
+    // --- CASE -5: DOCKER CONTAINER RESTART ---
+    const restartAction = actionsTaken.find(a => a.target.startsWith("Docker Container:"));
+    if (restartAction) {
+        const isSuccess = restartAction.status === "SUCCESS";
+        const cName = restartAction.target.replace("Docker Container: ", "");
+        return `### ${isSuccess ? "🔄" : "❌"} Docker Container Lifecycle: *${cName}*
+
+${isSuccess 
+    ? `**Container Successfully Restarted!**\n\n* **Container Name / ID:** \`${cName}\`\n* **Status:** \`RUNNING\` ✅\n* **Summary:** ${restartAction.summary}\n\nThe container has been re-initialized by the Docker engine and should resume serving requests momentarily.`
+    : `**Container Restart Failed**\n\n* **Container Name / ID:** \`${cName}\`\n* **Error Details:** ${restartAction.summary}\n\nPlease inspect the Docker daemon logs or verify host connectivity.`
+}`;
+    }
+
+    // --- CASE -4: DOCKER FLEET STATUS ---
+    const dockerAction = actionsTaken.find(a => a.target === "Docker Fleet");
+    if (dockerAction) {
+        const d = dockerAction.details || {};
+        const containers = (d.containers || []) as any[];
+        const topContainers = containers.slice(0, 10);
+
+        return `### 🐳 Docker Container Fleet Status
+
+I queried the Docker daemon across your homelab environment:
+
+* **Total Containers:** **${d.totalContainers ?? containers.length}**
+* **Running:** **${d.runningCount ?? 0}** ✅
+* **Stopped / Exited:** **${d.stoppedCount ?? 0}** ⏹️
+* **Unhealthy:** **${d.unhealthyCount ?? 0}** ${d.unhealthyCount > 0 ? "⚠️" : "✅"}
+* **Docker Engine Source:** \`${d.source || d.engine || "Docker Socket"}\`
+
+---
+
+#### 📦 Container Fleet Breakdown:
+${topContainers.length > 0 ? topContainers.map((c: any) => {
+    const stateBadge = c.state === "running" ? "🟢 RUNNING" : c.state === "exited" ? "⏹️ EXITED" : `⚠️ ${String(c.state).toUpperCase()}`;
+    return `* **${c.name}** (${stateBadge})
+  * **Image:** \`${c.image}\`
+  * **Status:** ${c.statusText || c.state}
+  * **CPU:** ${c.cpuPercent != null ? `${c.cpuPercent.toFixed(1)}%` : "N/A"} • **RAM:** ${c.memoryUsage || "N/A"}`;
+}).join("\n") : "*No containers reported.*"}
+${containers.length > 10 ? `\n*... and ${containers.length - 10} more container(s).* View complete fleet in **[Docker Fleet & Uptime](/admin/monitoring)**.` : ""}
+
+> 💡 **Admin Command:** You can ask me to restart any container at any time (e.g. *"Restart container sonarr"*).`;
+    }
+
+    // --- CASE -3: HOMELAB HOST HARDWARE (GLANCES) ---
+    const hardwareAction = actionsTaken.find(a => a.target === "Homelab Hardware (Glances)");
+    if (hardwareAction) {
+        const hosts: any[] = hardwareAction.details || [];
+        const renderBar = (pct: number) => {
+            const filled = Math.min(10, Math.max(0, Math.round(pct / 10)));
+            return `${"█".repeat(filled)}${"░".repeat(10 - filled)} ${pct}%`;
+        };
+
+        return `### 🖥️ Homelab Host Hardware Telemetry (Glances)
+
+I queried connected physical host machines running the Glances monitoring agent:
+
+---
+
+${hosts.length > 0 ? hosts.map(h => {
+    const statusBadge = h.online ? "🟢 ONLINE" : "🔴 OFFLINE";
+    return `#### 💻 Host: **${h.name}** (${statusBadge})
+* **Endpoint:** \`${h.url}\` (Latency: \`${h.latencyMs}ms\`)
+* **CPU Utilization:** \`[${renderBar(h.cpuPercent)}]\`
+* **RAM Usage:** \`[${renderBar(h.ramPercent)}]\`
+${h.cpuPercent > 85 ? "> ⚠️ **High CPU Warning:** Host CPU usage exceeds 85%. Active transcodes or background jobs may be consuming cores.\n" : ""}${h.ramPercent > 90 ? "> ⚠️ **High RAM Warning:** Memory utilization is above 90%.\n" : ""}`;
+}).join("\n\n---\n\n") : "*No monitored Glances instances found in database. Configure hosts in Settings → Monitoring.*"}
+
+> 💡 Telemetry is refreshed live from the Glances REST API. Full host sparklines are available in **[Admin Monitoring](/admin/monitoring)**.`;
+    }
+
+    // --- CASE -2: ACCOUNT SHARING ALERTS ---
+    const sharingAction = actionsTaken.find(a => a.target === "Account Sharing Intelligence");
+    if (sharingAction) {
+        const { totalAlerts, sharingAlerts } = sharingAction.details || { totalAlerts: 0, sharingAlerts: [] };
+
+        return `### 🚨 Account Sharing & Multi-IP Intelligence
+
+I analyzed active playback sessions across all monitored Plex Media Servers for concurrent multi-IP streaming:
+
+* **Detection Logic:** Normal household devices sharing private LAN subnets (\`192.168.x.x\`, \`10.x.x.x\`, \`172.16-31.x.x\`) or identical public WAN addresses are treated as valid single-household streaming. Only accounts streaming simultaneously from **$\ge 2$ distinct public residential IP addresses** are flagged.
+* **Violations Detected Right Now:** **${totalAlerts}** ${totalAlerts > 0 ? "⚠️" : "✅"}
+
+---
+
+${totalAlerts > 0 ? `#### ⚠️ Flagged Accounts:
+${(sharingAlerts || []).map((a: any) => `* **User: \`${a.username}\`**
+  * **Distinct Public IPs:** ${a.publicIpsCount} (${(a.publicIps || []).join(", ")})
+  * **Devices:** ${(a.devices || []).join(", ")}
+  * **Details:** ${(a.reasons || []).join(" | ")}`).join("\n\n")}` : `> ✅ **Zero Account Sharing Violations:**  
+> All active playback sessions are originating from expected single households or private LAN connections. No simultaneous multi-location credential sharing detected.`}
+
+> 💡 Full audit logs and geographic IP resolution are available in **[Stream Matrix & Telemetry](/admin/streams)**.`;
+    }
+
+    // --- CASE -1: PERMISSION DENIED OR RESTRICTED ACCESS ---
+    const deniedAction = actionsTaken.find(a => a.summary.includes("Permission Denied") || a.summary.includes("Admin role required"));
+    if (deniedAction) {
+        return `### 🔒 Access Restricted: Server Administrator Role Required
+
+${deniedAction.summary}
+
+Standard user accounts can troubleshoot their own playback streams, check audio/subtitle settings, and explore media guides. Host hardware telemetry, Docker fleet controls, and security audits are strictly reserved for Server Administrators.`;
+    }
+
+    // --- CASE -0.5: STREAM TERMINATION ---
+    const terminateAction = actionsTaken.find(a => a.summary.includes("Stream Termination"));
+    if (terminateAction) {
+        return `### ⏹️ Stream Termination: ${terminateAction.target}
+
+${terminateAction.summary}
+
+Playback has been stopped and the session released on the media server.`;
+    }
 
     // --- CASE 0: DEEP PLAYBACK SYNTHETIC PROBE ---
     if (playbackProbe && playbackProbe.servers.length > 0) {

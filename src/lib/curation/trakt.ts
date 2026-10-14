@@ -42,7 +42,8 @@ async function traktFetch(endpoint: string, params: Record<string, string | numb
             "trakt-api-version": "2",
             "trakt-api-key": clientId
         },
-        next: { revalidate: 3600 } // Cache for 1 hour
+        signal: AbortSignal.timeout(8000),
+        cache: "no-store"
     });
 
     if (!res.ok) {

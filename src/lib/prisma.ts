@@ -623,7 +623,11 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["requireApprovalForPlexChanges", `ALTER TABLE "Settings" ADD COLUMN "requireApprovalForPlexChanges" BOOLEAN NOT NULL DEFAULT 1;`],
                 ["requireApprovalForEmails", `ALTER TABLE "Settings" ADD COLUMN "requireApprovalForEmails" BOOLEAN NOT NULL DEFAULT 1;`],
                 ["yearlyRenewalReminderDays", `ALTER TABLE "Settings" ADD COLUMN "yearlyRenewalReminderDays" TEXT DEFAULT '60,30,14,3,1';`],
-                ["monthlyRenewalReminderDays", `ALTER TABLE "Settings" ADD COLUMN "monthlyRenewalReminderDays" TEXT DEFAULT '7,3,1';`]
+                ["monthlyRenewalReminderDays", `ALTER TABLE "Settings" ADD COLUMN "monthlyRenewalReminderDays" TEXT DEFAULT '7,3,1';`],
+                ["nativeStreamMonitoringEnabled", `ALTER TABLE "Settings" ADD COLUMN "nativeStreamMonitoringEnabled" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["detectPasswordSharing", `ALTER TABLE "Settings" ADD COLUMN "detectPasswordSharing" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["maxConcurrentStreamsPerUser", `ALTER TABLE "Settings" ADD COLUMN "maxConcurrentStreamsPerUser" INTEGER DEFAULT 3;`],
+                ["tautulliBackfillLastRun", `ALTER TABLE "Settings" ADD COLUMN "tautulliBackfillLastRun" DATETIME;`]
             ];
 
             for (const [colName, ddl] of settingsAddCols) {
@@ -739,7 +743,10 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["discordUsername", `ALTER TABLE "User" ADD COLUMN "discordUsername" TEXT;`],
                 ["discordDiscriminator", `ALTER TABLE "User" ADD COLUMN "discordDiscriminator" TEXT;`],
                 ["discordAvatar", `ALTER TABLE "User" ADD COLUMN "discordAvatar" TEXT;`],
-                ["discordLinkedAt", `ALTER TABLE "User" ADD COLUMN "discordLinkedAt" DATETIME;`]
+                ["discordLinkedAt", `ALTER TABLE "User" ADD COLUMN "discordLinkedAt" DATETIME;`],
+                ["maxConcurrentStreams", `ALTER TABLE "User" ADD COLUMN "maxConcurrentStreams" INTEGER DEFAULT 3;`],
+                ["sharingAlertCount", `ALTER TABLE "User" ADD COLUMN "sharingAlertCount" INTEGER NOT NULL DEFAULT 0;`],
+                ["lastSharingAlertAt", `ALTER TABLE "User" ADD COLUMN "lastSharingAlertAt" DATETIME;`]
             ];
 
             for (const [colName, ddl] of userAddCols) {
@@ -1894,6 +1901,57 @@ export async function ensureSchemaColumns(): Promise<void> {
             console.error("[DB-SCHEMA-AUTOFIX] AdminApproval table check error:", e.message || e);
         }
 
+        // --- 15. WATCH HISTORY & STREAM AUDIT TABLE ---
+        try {
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "WatchHistory" (
+                    "id" TEXT NOT NULL PRIMARY KEY,
+                    "sessionKey" TEXT,
+                    "ratingKey" TEXT,
+                    "serverName" TEXT NOT NULL DEFAULT 'Plex',
+                    "serverId" TEXT,
+                    "user" TEXT NOT NULL,
+                    "userEmail" TEXT,
+                    "userId" TEXT,
+                    "title" TEXT NOT NULL,
+                    "grandparentTitle" TEXT,
+                    "parentTitle" TEXT,
+                    "seasonNum" INTEGER,
+                    "episodeNum" INTEGER,
+                    "mediaType" TEXT NOT NULL DEFAULT 'movie',
+                    "year" INTEGER,
+                    "thumb" TEXT,
+                    "player" TEXT,
+                    "platform" TEXT,
+                    "device" TEXT,
+                    "ipAddress" TEXT,
+                    "location" TEXT,
+                    "videoDecision" TEXT DEFAULT 'direct play',
+                    "audioDecision" TEXT DEFAULT 'direct play',
+                    "transcodeHw" BOOLEAN NOT NULL DEFAULT 0,
+                    "streamBitrate" INTEGER,
+                    "viewOffsetMs" INTEGER DEFAULT 0,
+                    "durationMs" INTEGER DEFAULT 0,
+                    "progressPercent" INTEGER NOT NULL DEFAULT 0,
+                    "state" TEXT NOT NULL DEFAULT 'playing',
+                    "watchedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "stoppedAt" DATETIME,
+                    "completed" BOOLEAN NOT NULL DEFAULT 0,
+                    "isSharingAlert" BOOLEAN NOT NULL DEFAULT 0,
+                    "sharingAlertNote" TEXT,
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+                );
+            `);
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "WatchHistory_user_idx" ON "WatchHistory"("user");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "WatchHistory_watchedAt_idx" ON "WatchHistory"("watchedAt");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "WatchHistory_isSharingAlert_idx" ON "WatchHistory"("isSharingAlert");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "WatchHistory_ratingKey_idx" ON "WatchHistory"("ratingKey");`).catch(() => {});
+        } catch (e: any) {
+            console.error("[DB-SCHEMA-AUTOFIX] WatchHistory table check error:", e.message || e);
+        }
+
         schemaPatchCompleted = true;
     } catch (globalErr: any) {
         console.error("[DB-SCHEMA-AUTOFIX] Critical error in ensureSchemaColumns:", globalErr.message || globalErr);
@@ -2031,12 +2089,15 @@ export function isScheduleDue(
 // --- BACKGROUND SCHEDULER ---
 const globalForScheduler = global as unknown as { schedulerInitialized?: boolean; lastSeerrSyncTime?: number };
 
-if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDULER_INITIALIZED) {
+if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDULER_INITIALIZED && process.env.NODE_ENV !== "test" && process.env.PORTALARR_TEST !== "true") {
   globalForScheduler.schedulerInitialized = true;
   process.env.__PORTALARR_SCHEDULER_INITIALIZED = "true";
 
   // Let Next.js boot finish before running initial checks
   setTimeout(async () => {
+    if (process.env.NODE_ENV === "test" || process.env.PORTALARR_TEST === "true") {
+      return;
+    }
     await ensureSchemaColumns();
     const settings = await prisma.settings.findUnique({ where: { id: "global" } }).catch(() => null);
     const intervalMinutes = settings?.autoSyncInterval || 5;
@@ -2068,14 +2129,14 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
       console.error(`[BACKGROUND-SCHEDULER] Boot scan failed:`, bootErr.message || bootErr);
     }
 
-    // Trigger initial pre-warming of Discovery Media Caches (RAM + Disk)
+    // Trigger initial pre-warming of Global System & Discovery Caches
     (async () => {
       try {
-        const { prewarmDiscoverCachesInternal } = await import("./seerr/media-cache");
-        console.log("[BACKGROUND-SCHEDULER] Pre-warming Discovery Media Caches (RAM + Disk)...");
-        await prewarmDiscoverCachesInternal();
+        const { prewarmGlobalSystem } = await import("./prewarm");
+        console.log("[BACKGROUND-SCHEDULER] Pre-warming Global System & Discovery Caches...");
+        await prewarmGlobalSystem();
       } catch (pwErr: any) {
-        console.warn("[BACKGROUND-SCHEDULER] Boot discovery pre-warming error:", pwErr.message || pwErr);
+        console.warn("[BACKGROUND-SCHEDULER] Boot system pre-warming error:", pwErr.message || pwErr);
       }
     })();
     
@@ -2317,7 +2378,7 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
         }
       }
 
-      // 6c. Discovery Media Cache Pre-Warmer & Pruning (every 30 minutes)
+      // 6c. Global System & Discovery Cache Pre-Warmer & Pruning (every 30 minutes)
       if (!(global as any).__PORTALARR_DISCOVER_CACHE_WARMER_RUNNING) {
         const lastWarmerTime = (global as any).__PORTALARR_LAST_DISCOVER_WARMER_TIME || 0;
         if (now.getTime() - lastWarmerTime >= 30 * 60 * 1000) {
@@ -2325,11 +2386,12 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
           (global as any).__PORTALARR_DISCOVER_CACHE_WARMER_RUNNING = true;
           (async () => {
             try {
-              const { prewarmDiscoverCachesInternal, pruneExpiredDiskMediaCache } = await import("./seerr/media-cache");
-              await prewarmDiscoverCachesInternal();
+              const { prewarmGlobalSystem } = await import("./prewarm");
+              const { pruneExpiredDiskMediaCache } = await import("./seerr/media-cache");
+              await prewarmGlobalSystem();
               await pruneExpiredDiskMediaCache();
             } catch (warmErr: any) {
-              console.error("[DISCOVER-CACHE-TIMER] Error in discovery cache warmer/pruner:", warmErr.message || warmErr);
+              console.error("[DISCOVER-CACHE-TIMER] Error in system cache warmer/pruner:", warmErr.message || warmErr);
             } finally {
               (global as any).__PORTALARR_DISCOVER_CACHE_WARMER_RUNNING = false;
             }
@@ -2417,17 +2479,19 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
 
                 if (pendingRequests.length > 0) {
                   const { autoDownloadBookRequest } = await import("../app/actions");
-                  const { inferBookRating, isKidsLibrary } = await import("./books/book-rating");
+                  const { inferBookRating, isKidsLibrary, isAutoApprovedBookLibrary } = await import("./books/book-rating");
                   const allLibs = await prisma.library.findMany();
                   const kidsLibIds = new Set(allLibs.filter(l => isKidsLibrary(l)).map(l => l.id));
+                  const autoApprovedLibIds = new Set(allLibs.filter(l => isAutoApprovedBookLibrary(l)).map(l => l.id));
 
                   for (const req of pendingRequests) {
                     const isKidsLib = req.libraryId ? kidsLibIds.has(req.libraryId) : false;
+                    const isKyraOrPublic = req.libraryId ? autoApprovedLibIds.has(req.libraryId) : false;
                     const rating = req.ageRating ? req.ageRating : inferBookRating({ title: req.title, author: req.author || "", series: req.series || undefined }).ageRating;
                     const isKids = isKidsLib || rating === "Kids";
 
-                    if (isKids) {
-                      // Kids requests require explicit admin approval - keep Pending
+                    if (isKids && !isKyraOrPublic) {
+                      // Kids requests require explicit admin approval unless for Kyra's library or Public library - keep Pending
                       continue;
                     }
 

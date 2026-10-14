@@ -27,6 +27,7 @@ import WhatsNewModal from "@/components/whats-new-modal";
 import AdminUserSwitcher from "@/components/admin-user-switcher";
 import AdminDetailedStreams from "@/components/admin-detailed-streams";
 import AdminSystemHealthGrid from "@/components/admin-system-health-grid";
+import StreamQualityDoctorBanner from "@/components/stream-quality-doctor-banner";
 import TrialDashboardView from "@/components/trial-dashboard-view";
 import SuperUserCard from "@/components/super-user-card";
 import SupportTicketModal from "@/components/support-ticket-modal";
@@ -190,6 +191,11 @@ export default async function UserLandingPage() {
                     </div>
                 )}
 
+                {/* --- PROACTIVE STREAM QUALITY DOCTOR BANNER --- */}
+                {isLoggedIn && (
+                    <StreamQualityDoctorBanner />
+                )}
+
                 {/* ========================================================================= */}
                 {/* ACCOUNT VIEW 1: TRIAL ACCOUNT (MINIMAL, NO INVITES, NO SYSTEM STATUS, NO VOTING) */}
                 {/* ========================================================================= */}
@@ -217,7 +223,15 @@ export default async function UserLandingPage() {
                             appUrl={referralInfo?.appUrl || joinConfig?.config?.appUrl}
                         />
 
-                        {/* 2. MEDIA REQUESTS SECTION (BUILT-IN IS MAIN, SEERR, OMBI AT BOTTOM WITH NOTE) */}
+                        {/* 2. PROMINENT 24/7 AI SERVER ASSISTANT WITH SUPPORT TICKET BUTTON */}
+                        <div className="space-y-2">
+                            <AiServerAssistant />
+                            <div className="flex justify-end pt-1">
+                                <SupportTicketModal />
+                            </div>
+                        </div>
+
+                        {/* 3. MEDIA REQUESTS SECTION (BUILT-IN IS MAIN, SEERR, OMBI AT BOTTOM WITH NOTE) */}
                         <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm">
                             <CardHeader className="pb-3">
                                 <CardTitle className="text-base sm:text-lg font-bold flex items-center gap-2 text-foreground">
@@ -291,16 +305,8 @@ export default async function UserLandingPage() {
                             </CardContent>
                         </Card>
 
-                        {/* 3. OVERALL SYSTEM HEALTH INDICATOR */}
+                        {/* 4. OVERALL SYSTEM HEALTH INDICATOR */}
                         <SimpleSystemHealth />
-
-                        {/* 4. AI SERVER ASSISTANT WITH SMALL SUPPORT TICKET BUTTON */}
-                        <div className="space-y-2">
-                            <AiServerAssistant />
-                            <div className="flex justify-end pt-1">
-                                <SupportTicketModal />
-                            </div>
-                        </div>
 
                         {/* 5. PROMINENT SUPER USER PROMOTION CARD */}
                         <SuperUserCard initialRole="USER" />
@@ -451,6 +457,11 @@ export default async function UserLandingPage() {
                             </Link>
                         </div>
 
+                        {/* 24/7 AI SERVER ASSISTANT */}
+                        <div className="w-full">
+                            <AiServerAssistant />
+                        </div>
+
                         {/* HARDWARE & SYSTEM STATUS */}
                         <div className="w-full">
                             <SystemStatus />
@@ -484,6 +495,11 @@ export default async function UserLandingPage() {
                         {/* INTRICATE ADMIN SYSTEM STATUS & STREAM TELEMETRY TABLE */}
                         <AdminDetailedStreams />
 
+                        {/* 24/7 AI SERVER ASSISTANT */}
+                        <div className="w-full">
+                            <AiServerAssistant />
+                        </div>
+
                         {/* QUICK ACCESS ADMIN TOOL MATRIX */}
                         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                             <Link href="/discover" className="block group">
@@ -514,7 +530,7 @@ export default async function UserLandingPage() {
                                 </div>
                             </Link>
 
-                            <Link href="/admin/tickets" className="block group">
+                            <Link href="/tickets" className="block group">
                                 <div className="p-3 rounded-xl bg-white/[0.02] border border-border/50 group-hover:border-rose-500/50 text-center space-y-1.5 transition-all">
                                     <LifeBuoy className="h-5 w-5 mx-auto text-rose-400" />
                                     <span className="text-xs font-bold block text-foreground">Tickets</span>

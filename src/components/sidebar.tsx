@@ -23,7 +23,10 @@ import {
   Tag,
   Compass,
   Inbox,
-  HelpCircle
+  HelpCircle,
+  Activity,
+  Layers,
+  Bot
 } from "lucide-react"
 
 export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
@@ -143,22 +146,42 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
               </Button>
             </Link>
 
-            {isAdmin && (
-              <Link href="/admin/tickets">
-                <Button
-                  variant={pathname.startsWith("/admin/tickets") ? "secondary" : "ghost"}
-                  className={cn(
-                    "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                    pathname.startsWith("/admin/tickets")
-                      ? "bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-[0_0_10px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/40 font-bold"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-amber-500/40"
-                  )}
-                >
-                  <LifeBuoy className="mr-2 h-4 w-4 text-amber-400" />
-                  Support Tickets
-                </Button>
-              </Link>
-            )}
+            <Link 
+              href="/?openAssistant=true"
+              onClick={() => {
+                if (typeof window !== "undefined") {
+                  window.dispatchEvent(new CustomEvent("open-ai-assistant"));
+                }
+              }}
+            >
+              <Button
+                variant="ghost"
+                className="w-full justify-between text-xs font-semibold h-9 rounded-lg transition-all duration-200 text-purple-400/90 hover:text-purple-200 hover:bg-purple-950/30 hover:ring-1 hover:ring-purple-500/40"
+              >
+                <div className="flex items-center">
+                  <Bot className="mr-2 h-4 w-4 text-purple-400" />
+                  <span>AI Assistant</span>
+                </div>
+                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                  24/7 Fixes
+                </span>
+              </Button>
+            </Link>
+
+            <Link href="/tickets">
+              <Button
+                variant={pathname.startsWith("/tickets") || pathname.startsWith("/admin/tickets") ? "secondary" : "ghost"}
+                className={cn(
+                  "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
+                  pathname.startsWith("/tickets") || pathname.startsWith("/admin/tickets")
+                    ? "bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-[0_0_10px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/40 font-bold"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-amber-500/40"
+                )}
+              >
+                <LifeBuoy className="mr-2 h-4 w-4 text-amber-400" />
+                Support Tickets
+              </Button>
+            </Link>
 
             <Link href="/profile">
               <Button
@@ -216,6 +239,36 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
                 <div className="pt-2 pb-1 px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
                   Administration
                 </div>
+                <Link href="/admin/tautulli">
+                  <Button
+                    variant={pathname.startsWith("/admin/tautulli") || pathname.startsWith("/admin/streams") || pathname.startsWith("/tautulli") || pathname.startsWith("/streams") ? "secondary" : "ghost"}
+                    className={cn(
+                      "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
+                      pathname.startsWith("/admin/tautulli") || pathname.startsWith("/admin/streams") || pathname.startsWith("/tautulli") || pathname.startsWith("/streams")
+                        ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.25)] ring-1 ring-emerald-500/40 font-bold"
+                        : "text-emerald-400/80 hover:text-emerald-300 hover:bg-emerald-950/30 hover:ring-1 hover:ring-emerald-500/40"
+                    )}
+                  >
+                    <Activity className="mr-2 h-4 w-4 text-emerald-400" />
+                    Stream Intelligence
+                  </Button>
+                </Link>
+
+                <Link href="/admin/monitoring">
+                  <Button
+                    variant={pathname.startsWith("/admin/monitoring") ? "secondary" : "ghost"}
+                    className={cn(
+                      "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
+                      pathname.startsWith("/admin/monitoring")
+                        ? "bg-sky-500/15 text-sky-300 border border-sky-500/30 shadow-[0_0_10px_rgba(14,165,233,0.25)] ring-1 ring-sky-500/40 font-bold"
+                        : "text-sky-400/80 hover:text-sky-300 hover:bg-sky-950/30 hover:ring-1 hover:ring-sky-500/40"
+                    )}
+                  >
+                    <Layers className="mr-2 h-4 w-4 text-sky-400" />
+                    Fleet & Monitoring
+                  </Button>
+                </Link>
+
                 <Link href="/curation/kometa">
                   <Button
                     variant={pathname === "/curation" || pathname.startsWith("/curation/kometa") ? "secondary" : "ghost"}
@@ -273,6 +326,21 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
                   >
                     <Tag className="mr-2 h-4 w-4 text-emerald-400" />
                     Tagging Studio
+                  </Button>
+                </Link>
+
+                <Link href="/admin/scripts">
+                  <Button
+                    variant={pathname.startsWith("/admin/scripts") ? "secondary" : "ghost"}
+                    className={cn(
+                      "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
+                      pathname.startsWith("/admin/scripts")
+                        ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.25)] ring-1 ring-emerald-500/40 font-bold"
+                        : "text-emerald-400/80 hover:text-emerald-300 hover:bg-emerald-950/30 hover:ring-1 hover:ring-emerald-500/40"
+                    )}
+                  >
+                    <Terminal className="mr-2 h-4 w-4 text-emerald-400" />
+                    User Scripts
                   </Button>
                 </Link>
 
@@ -451,22 +519,43 @@ export function MobileSidebar() {
                       <HelpCircle className="mr-2 h-4 w-4 text-sky-400" /> Setup Guides
                     </Button>
                   </Link>
+
+                  <Link 
+                    href="/?openAssistant=true" 
+                    onClick={() => {
+                      setIsOpen(false);
+                      if (typeof window !== "undefined") {
+                        window.dispatchEvent(new CustomEvent("open-ai-assistant"));
+                      }
+                    }}
+                  >
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-between text-xs font-semibold h-9 rounded-lg transition-all duration-200 text-purple-400/90 hover:text-purple-200 hover:bg-purple-950/30 hover:ring-1 hover:ring-purple-500/40"
+                    >
+                      <div className="flex items-center">
+                        <Bot className="mr-2 h-4 w-4 text-purple-400" />
+                        <span>AI Assistant</span>
+                      </div>
+                      <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                        24/7 Fixes
+                      </span>
+                    </Button>
+                  </Link>
                   
-                  {isAdmin && (
-                    <Link href="/admin/tickets" onClick={() => setIsOpen(false)}>
-                      <Button
-                        variant={pathname.startsWith("/admin/tickets") ? "secondary" : "ghost"}
-                        className={cn(
-                          "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                          pathname.startsWith("/admin/tickets")
-                            ? "bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-[0_0_10px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/40 font-bold"
-                            : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-amber-500/40"
-                        )}
-                      >
-                        <LifeBuoy className="mr-2 h-4 w-4 text-amber-400" /> Support Tickets
-                      </Button>
-                    </Link>
-                  )}
+                  <Link href="/tickets" onClick={() => setIsOpen(false)}>
+                    <Button
+                      variant={pathname.startsWith("/tickets") || pathname.startsWith("/admin/tickets") ? "secondary" : "ghost"}
+                      className={cn(
+                        "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
+                        pathname.startsWith("/tickets") || pathname.startsWith("/admin/tickets")
+                          ? "bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-[0_0_10px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/40 font-bold"
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-amber-500/40"
+                      )}
+                    >
+                      <LifeBuoy className="mr-2 h-4 w-4 text-amber-400" /> Support Tickets
+                    </Button>
+                  </Link>
 
                   <Link href="/profile" onClick={() => setIsOpen(false)}>
                     <Button
@@ -521,6 +610,32 @@ export function MobileSidebar() {
                       <div className="pt-2 pb-1 px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
                         Administration
                       </div>
+                      <Link href="/admin/tautulli" onClick={() => setIsOpen(false)}>
+                        <Button
+                          variant={pathname.startsWith("/admin/tautulli") || pathname.startsWith("/admin/streams") || pathname.startsWith("/tautulli") || pathname.startsWith("/streams") ? "secondary" : "ghost"}
+                          className={cn(
+                            "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
+                            pathname.startsWith("/admin/tautulli") || pathname.startsWith("/admin/streams") || pathname.startsWith("/tautulli") || pathname.startsWith("/streams")
+                              ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-[0_0_10px_rgba(168,185,129,0.25)] ring-1 ring-emerald-500/40 font-bold"
+                              : "text-emerald-400/80 hover:text-emerald-300 hover:bg-emerald-950/30 hover:ring-1 hover:ring-emerald-500/40"
+                          )}
+                        >
+                          <Activity className="mr-2 h-4 w-4 text-emerald-400" /> Stream Intelligence
+                        </Button>
+                      </Link>
+                      <Link href="/admin/monitoring" onClick={() => setIsOpen(false)}>
+                        <Button
+                          variant={pathname.startsWith("/admin/monitoring") ? "secondary" : "ghost"}
+                          className={cn(
+                            "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
+                            pathname.startsWith("/admin/monitoring")
+                              ? "bg-sky-500/15 text-sky-300 border border-sky-500/30 shadow-[0_0_10px_rgba(14,165,233,0.25)] ring-1 ring-sky-500/40 font-bold"
+                              : "text-sky-400/80 hover:text-sky-300 hover:bg-sky-950/30 hover:ring-1 hover:ring-sky-500/40"
+                          )}
+                        >
+                          <Layers className="mr-2 h-4 w-4 text-sky-400" /> Fleet & Monitoring
+                        </Button>
+                      </Link>
                       <Link href="/curation/kometa" onClick={() => setIsOpen(false)}>
                         <Button
                           variant={pathname === "/curation" || pathname.startsWith("/curation/kometa") ? "secondary" : "ghost"}
@@ -574,6 +689,20 @@ export function MobileSidebar() {
                           )}
                         >
                           <Tag className="mr-2 h-4 w-4 text-emerald-400" /> Tagging Studio
+                        </Button>
+                      </Link>
+
+                      <Link href="/admin/scripts" onClick={() => setIsOpen(false)}>
+                        <Button
+                          variant={pathname.startsWith("/admin/scripts") ? "secondary" : "ghost"}
+                          className={cn(
+                            "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
+                            pathname.startsWith("/admin/scripts")
+                              ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.25)] ring-1 ring-emerald-500/40 font-bold"
+                              : "text-emerald-400/80 hover:text-emerald-300 hover:bg-emerald-950/30 hover:ring-1 hover:ring-emerald-500/40"
+                          )}
+                        >
+                          <Terminal className="mr-2 h-4 w-4 text-emerald-400" /> User Scripts
                         </Button>
                       </Link>
 

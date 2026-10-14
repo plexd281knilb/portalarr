@@ -218,7 +218,7 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
   - Email header banner: `DOMS<span style="color: #6366f1;">HOMELAB</span>` with subtitle `d281knilb Media Server & Dashboard`.
   - Email footer: `DomsHomeLab • d281knilb Media Server • Open Dashboard` and `© {year} DomsHomeLab. All rights reserved.`.
 - **Payment Reconciliation Memo Notes**:
-  - Payment memo notes are cleanly formatted as the member's username (e.g. `dominicjuliano`), making it simple and frictionless for members to include in transaction notes.
+  - Payment memo notes are cleanly formatted as the member's username (e.g. `johndoe`), making it simple and frictionless for members to include in transaction notes.
   - Payment scrapers retain backwards-compatible substring matching for plain usernames as well as legacy `#DOMSHOMELAB-`, `#D281KNILB-`, and `#PORTALARR-` tags.
 - **Client & Device Dialogs**:
   - In Plex stream termination messages, prompt kill alerts as: `"Stream ended by user via DomsHomeLab My Plex Hub"`.
@@ -244,8 +244,19 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
   - Each server card displays a Direct Play vs Transcode split (`X DP / Y Transcode`), total bandwidth in Mbps, and a proportional horizontal load bar reflecting its percentage share of total cluster streams.
 - **Interactive Server Filter Pills**:
   - Clicking any server in the Streams Per Plex Server list or the filter pill bar (`All Servers`, `Server 1`, `Server 2`) filters active playback sessions instantly on the client with zero network round-trips. Clear filter action resets back to cluster-wide inspection.
-- **Session Telemetry Fidelity**:
-  - Active sessions display transcode decisions, hardware NVENC acceleration status, video/audio codecs, real-time bitrate, stream progress, user/device identifiers, and direct admin stream termination controls.
+- **Deterministic Stream Sorting & Stationary Key Stability**:
+  - Live streams across monitored servers are deterministically sorted on both backend (`getAdminDetailedStreamsAction`) and frontend (`StreamIntelligencePage` and `AdminDetailedStreams`), preventing stream cards from shuffling, flapping, or shifting positions during 5–8 second telemetry refresh cycles.
+  - Primary sort options (`user_asc` [Default: User A → Z], `user_desc`, `server`, `bandwidth`, `progress`, `transcode_first`) persist across sessions via `localStorage` (`portalarr_live_activity_sort`).
+  - Strict multi-tier tiebreaker chain (`primaryDiff` → `user` A-Z → `serverName` A-Z → `mediaTitle` A-Z → `sessionKey`) guarantees 100% stationary ordering across asynchronous network polling jitter.
+  - Zero `Math.random()` session key fallbacks: session keys derive deterministically from `${ratingKey}_${machineIdentifier || address || user}_${serverId}`, ensuring React DOM nodes are never unnecessarily unmounted or recreated between renders.
+- **Dialog Width Clamping Guard (`sm:max-w-4xl` / `sm:max-w-5xl`)**:
+  - Radix `DialogContent` injects a default `sm:max-w-lg` class. Wide inspection cockpits (e.g. User Telemetry & Overlap modal, Watch History audit modal) must explicitly pass `w-[95vw] sm:w-[92vw] md:w-[90vw] max-w-5xl sm:max-w-5xl` with `min-w-0` to avoid viewport clamping on desktop and ensure side-by-side stream comparison cards fit cleanly.
+- **Session Telemetry Fidelity & Household Anchoring**:
+  - **User & Household Anchoring**: Active session cards display user avatars (from Plex or local profiles) alongside the **Household Anchoring Badge**: `🏡 Primary Home` (emerald, local LAN or anchored to primary living room IP), `🏡 2nd Home / Cabin` (cyan, recurring vacation property or secondary residence), `📱 Mobile Roaming` (purple, cellular/mobile roaming players), `✈️ Travel / Away` (amber, remote travel), and pulsing `🚨 Suspected Sharing` (rose, simultaneous playback across distinct public residential IPs or dual living room TVs).
+  - **Connection Mode**: `⚡ Direct LAN`, `🌐 Direct WAN`, or `⚠️ Plex Relay (Throttled)`.
+  - **Video & Dynamic Range**: Resolution scaling badges (`4K UHD ➔ 1080p` or original resolution), HDR badges (`✨ Dolby Vision`, `✨ HDR10`), video codecs, real-time bitrate, and hardware NVENC acceleration status with transcode speed multipliers (`⚡ 2.8x (Fast/Throttled)` vs `< 1.0x (Buffering Risk)`).
+  - **Audio & Subtitle Diagnostics**: Channel and codec conversions (e.g. `TRUEHD 7.1 ➔ AAC Stereo` or `DTS-HD MA 5.1 (Direct)`), subtitle format/language (`💬 English SRT`), and prominent `🔥 Burned In` alert informing administrators when subtitle burn-in is forcing video transcoding.
+  - **Timing Clock & Finish ETA**: Displays elapsed/total clock time paired with real-time calculated ETA finish time: `42:15 / 1:00:20 (70%) • Ends at 1:45 PM (-18:05 left)`.
   - In Plex OAuth flow, register client application name as `DomsHomeLab`.
 
 ---
@@ -290,6 +301,59 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
   - For wrapped lists, also specify `flex-wrap items-center justify-start` to ensure left-alignment across line breaks.
 - **Chevron Scroll Controls**:
   - When tab lists exceed normal screen boundaries, provide subtle left (`ChevronLeft`) and right (`ChevronRight`) scroll buttons that programmatically execute `tabsRef.current.scrollBy({ left: -260, behavior: 'smooth' })`.
+
+---
+
+### 15. Layered Poster Thumbnail Containers & Graceful Image Fallbacks
+- **Zero Broken Image Boxes & Mixed Content Prevention**:
+  - Whenever rendering dynamic stream session posters, watch history rows, or media items in carousels and lists, never render raw un-proxied LAN URLs (`http://192.168.1.x:32400/...`) which fail in browsers over HTTPS (mixed content blocks) or on remote/VLAN devices.
+  - Route all stream thumbnails through `/api/media/image` (or `formatWatchHistoryThumb`).
+  - Implement the **Layered Fallback Poster Pattern**:
+    ```tsx
+    <div className="relative w-16 h-24 rounded-lg overflow-hidden shrink-0 bg-slate-950 border border-slate-800 flex items-center justify-center shadow-md">
+        <div className="absolute inset-0 flex items-center justify-center text-slate-600">
+            {mediaType === "episode" ? <Tv className="h-6 w-6" /> : <Film className="h-6 w-6" />}
+        </div>
+        {thumbUrl && (
+            <img 
+                src={thumbUrl} 
+                alt={title} 
+                className="w-full h-full object-cover relative z-10" 
+                onError={(e) => { (e.target as HTMLElement).style.display = "none"; }}
+            />
+        )}
+    </div>
+    ```
+  - The fallback icon (`Tv` or `Film`) is placed in the background layer (`absolute inset-0`).
+  - If the image loads, it sits cleanly above on `z-10`.
+  - If the image fails to load or 404s, `onError` sets `display: none` immediately without layout shifts, revealing the clean fallback icon underneath with zero broken image boxes.
+
+---
+
+### 16. Proactive Stream Quality Doctor Alert Banner (`stream-quality-doctor-banner.tsx`)
+- **Proactive Main Screen Alerting**:
+  - Automatically mounted at the top of the main screen (`/`) for all authenticated members directly below the header/user switcher.
+  - Queries `getUserTranscodeAlertAction()` on mount; non-intrusive (returns nothing if all streams direct play).
+  - Triggers if an active or recent stream (within 14 days) was downscaling/transcoding due to client default quality caps (e.g. Roku 720p auto-adjust bug, default 2-4 Mbps remote streaming limits on Apple TV, Fire TV, Android TV, Smart TVs, or web browser HEVC incompatibility).
+  - Features an animated glassmorphic banner (`bg-amber-500/10 border-amber-500/30 text-amber-300`) with quick summary, "Fix in 30 Seconds" action button, and dismissible close.
+  - Clicking "Fix in 30 Seconds" opens an interactive step-by-step resolution dialog tailored to the member's specific client device with 1-click clipboard copy of the guide.
+
+---
+
+### 17. Smart Account Sharing & Overlap Intelligence Engine (`/admin/tautulli` & `stream-tracker.ts`)
+- **Household Device Anchoring (Fixed TV vs Mobile Roaming)**:
+  - Living room devices (`isFixedHomeDevice`: Apple TV, Roku, Fire TV, Smart TVs, Google TV, Shield, PlayStation, Xbox) stay physically anchored to a household.
+  - Mobile devices (`isMobileRoamingDevice`: iPhones, Android phones, tablets, cellular CGNAT, laptops, web browsers) roam legitimately.
+  - Local LAN IP addresses (`192.168.x.x`, `10.x.x.x`, `172.16-31.x.x`, `localhost`) are strictly excluded from sharing suspicion.
+- **Deterministic Multi-Household Overlap Detection (`analyzeUserAccountSharing`)**:
+  - **Single Household (`CLEAN_SINGLE_HOME`)**: Exclusively LAN or single residential IP playback with zero remote cross-IP concurrency.
+  - **Vacation / Travel (`VACATION_TRAVEL`)**: Remote IP usage span $\le 14$ days with 0 concurrent overlap with primary home base.
+  - **Second Home / Cabin (`SECOND_HOME`)**: Recurring TV playback across $> 14$ days with 0 concurrent overlap at primary home base.
+  - **Mobile Roaming (`MOBILE_ROAMING`)**: Roaming on cellular networks strictly on phones/laptops while fixed TVs remain anchored at home.
+  - **High-Confidence Account Sharing (`HIGH_SHARING_RISK`)**: Concurrent simultaneous playback on $\ge 2$ physical living room TVs across distinct public residential IPs (`isDualTvOverlap`).
+- **Telemetry Cockpit & Directory Integration**:
+  - Filter pills in User Directory: `All Users`, `🚨 Suspected Sharing`, `🏡 2nd Home / Vacation`, `📱 Mobile Roaming`, `⚠️ Transcoders`.
+  - Comprehensive inspection modal with 4th tab: **Sharing & Overlap Intelligence** rendering primary home IP, secondary location, device typology meter, and chronological timeline of concurrent overlap incidents with side-by-side stream comparison cards.
 
 ---
 
@@ -434,6 +498,13 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
   - Natural language pronoun resolution (`extractContextFromHistory`) seamlessly resolves anaphoric pronouns ("can you test it on the main server?", "does that play on kids?", "is it working?") to the canonical media title discussed in previous turns, preventing erroneous matches or searching Plex for filler words.
   - Conversational title corrections (e.g. "no the sandlot", "actually the sandlot") automatically inherit requested target servers and playback test intent from context.
   - Dedicated server infrastructure status handler (`isServerStatusQuery`) provides comprehensive cluster health reports ("what all servers are online?").
+- **Structured Function / Tool Calling Subsystem & Admin Homelab Command Center (`ai-assistant-tools.ts`)**:
+  - Implements native function declarations for Google Gemini (`v1beta` `function_declarations`) and OpenAI (`tools` + `tool_calls`) with multi-turn synthesis dispatching across 10 structured tools.
+  - Standard user tools: `probe_playback_health`, `get_cluster_status`, `terminate_playback_stream` (scoped to user's streams), `inspect_media_container`, `search_and_replace_media`, `redownload_book`.
+  - Admin-only homelab command center: `get_homelab_hardware_telemetry` (Glances host CPU/RAM %), `get_docker_fleet_status` (multi-engine container fleet inspection), `restart_docker_container` (safe socket/CLI/TCP container restarts), and `get_account_sharing_alerts` (multi-IP concurrent streaming audits).
+  - Strict Permission Isolation: Non-admin users attempting to invoke admin tools are denied at both prompt filtering and execution dispatch levels with explicit security notices.
+  - Offline Heuristic Engine Fallback: Guarantees 100% operational uptime by executing tools locally and rendering high-density markdown cards even when external LLM keys are absent or unreachable.
+  - Dynamic Admin Quick Prompts: When `snapshot?.role === "ADMIN"`, the quick prompt toolbar automatically prepends `🐳 Docker Fleet`, `🖥️ Host Hardware`, and `🚨 Sharing Alerts`.
 - **Integrated High-Tech Header & Identity**:
   - Features an animated glowing Bot avatar with status pulse, operational counter badge reflecting all online server nodes (`4`), and `Autonomous v3.1` live indicator badge.
   - Quick action buttons in the header provide instant access to setup guides (`PlexSetupGuides`), feature tours (`FeatureGuideModal`), and clearing session history.
@@ -726,6 +797,152 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
     - Mass Reject: Rose outline action (`XCircle` icon) with confirmation prompt.
     - Mass Delete: Rose filled action (`Trash2` icon) executing two-way cascade permanent deletion.
   - **0ms Optimistic UI Transitions**: Mutated or deleted cards immediately disappear from the view with 0ms latency, backed by floating glassmorphic toasts for feedback.
+
+- **Support Tickets Unified Portal & Edge Policy Bypass (`/tickets`)**:
+  - **Public User Route & Cloudflare Admin Policy Bypass**: Aliased and served from `/tickets` with entry in `CLOUDFLARE_BYPASS_PATHS` (`src/lib/edge-policy-paths.ts`). This allows all standard members and trial users to access support without encountering Cloudflare Access or Admin path policies.
+  - **Automatic Route Normalization**: Visiting `/admin/tickets` redirects non-admins transparently to `/tickets` via `src/proxy.ts`, while administrators retain full mission-control features.
+  - **Role-Scoped Access Control**: Backend action `getTicketsDashboardAction()` scopes ticket queries by role. Standard users see strictly their own submitted tickets, open new tickets with priority tiers (`LOW`, `NORMAL`, `HIGH`, `URGENT`), and view admin comments/resolution notes. Administrators see tickets from all users, filter by status (`ALL`, `OPEN`, `IN_PROGRESS`, `RESOLVED`, `CLOSED`), update ticket status, link to relevant user profiles or Arr apps, and delete tickets.
+  - **Sidebar & Navigation Integration**: Accessible via "Support Tickets" (`LifeBuoy` icon) in both desktop and mobile sidebars for all authenticated users.
+
+- **Stream Intelligence & Multi-Server Telemetry Hub (`/admin/tautulli` and `/admin/streams`)**:
+  - **Unified Mission Control**: Single-pane stream intelligence hub aggregating live sessions, watch history, user leaderboards, and device telemetry across all monitored Plex Media Servers (`MainPlexServer`, `KidsPlexServer`, `MainPlexServerBackup`, etc.) and hardware hosts.
+  - **Admin-Only Guarded Route**: Strictly placed under `/admin/tautulli` and `/admin/streams` (aliased in App Router), guarded by `payload.role === "ADMIN"` in `src/proxy.ts` and registered in `CLOUDFLARE_ADMIN_PATHS`. Non-admins visiting legacy `/tautulli` or `/streams` are bounced to `/`, while admins are automatically redirected to `/admin/tautulli`.
+  - **Built-in Telemetry Takeover Mode (`nativeStreamMonitoringEnabled`)**: When enabled (default), DomsHomeLab polls all Plex servers directly and halts live queries to standalone external Tautulli containers, eliminating duplicate stream tracking and redundant polling load while preserving external instances as backfill sources.
+  - **Tautulli Complete Historical Backfill Runner (`backfillTautulliHistoryAction`, `startTautulliBackfillAction`, `getTautulliBackfillStatusAction`, `stopTautulliBackfillAction`)**: 1-click historical watch log importer from external Tautulli instances into the SQLite `WatchHistory` table with 2-hour window deduplication, configurable batch limits (100–25,000 records), and 100% **Unlimited Mode** paginating all historical records across time without limits. Features asynchronous background execution, 500x optimized batch queries, parameter-safe insertion chunks, interactive cancellation, and a live progress cockpit displaying animated progress bars, live inspected vs total counts, imported vs skipped duplicates, and current page metrics.
+  - **User Telemetry & Connection Intelligence Modal (`getUserDetailedTelemetryAction`)**:
+    - Clicking on any member in the User Telemetry list, active sessions, or watch history logs opens a dedicated, high-density inspection dialog (`max-w-4xl`).
+    - Features 3 organized sub-tabs:
+      - **Watch History**: Chronological playback feed with search filter, media type badges (`Movie` / `Episode`), completion percentages, and universal poster thumbnails.
+      - **All Devices**: Hardware & player directory listing client apps (e.g. Apple TV, Plex for iOS, Plex Web), device models, Direct Play vs Transcode rates, total plays, and first/last active timestamps.
+      - **All IP Addresses**: Network connection directory identifying private LAN vs public WAN IP addresses, location tags, session counts, detected password sharing alerts, and associated device fingerprints.
+  - **Device Quality Doctor (`diagnoseStreamSettings`)**: Proactive client-side settings evaluator detecting downscaling and quality bottlenecks:
+    - *Roku Auto-Adjust 720p 4Mbps Cap*: Detects default "Auto Adjust Quality" setting forcing server transcoding.
+    - *Default Remote Quality Cap (2-4 Mbps)*: Detects Apple TV, Fire TV, Android TV, and Smart TVs running factory default 720p caps.
+    - *Web Browser HEVC/4K Codec Incompatibility*: Prompts users to download the native Plex Desktop App for direct playback.
+    - *Subtitle Burn-in & Audio Transcodes*: Detects image-based subtitle burning (PGS/VOBSUB) and passthrough audio downmixing.
+    - *Actionable Guidance*: Provides interactive step-by-step fix guides and 1-click copyable user notices ready to send via Discord or email.
+  - **Sidebar Navigation**: Positioned under "Administration" (`Activity` icon, cyan/emerald accents) visible exclusively to administrators.
+
+- **User Scripts & Automation Subsystem (`/admin/scripts` & `src/lib/scripts`)**:
+  - **Single-Pane Shell Automation Mission Control**: Unraid-style user scripts dashboard for homelab maintenance, automated database vacuuming, Docker container audits, and database-driven Plex cluster health checks.
+  - **Default Built-in Scripts**:
+    - `check_all_plex_servers.sh`: Resilient database-driven health check and auto-restart probe for `MainPlexBackup` (port 24958) and `KidsPlexServer` (port 32400) featuring quiet hours window checks (3:00 - 6:00), SQLite binary fallback, Docker container status audits, and retry curl probes.
+    - `optimize_plex_databases.sh`: Plex SQLite database optimization executing `PRAGMA optimize` and integrity checks across Plex libraries.
+    - `backup_portalarr_db.sh`: Atomic SQLite database snapshot creation to `data/backups/` with timestamping and integrity verification.
+    - `restart_unresponsive_containers.sh`: Automated Docker health probe identifying dead or crash-looping containers with fast recovery.
+  - **Live Interactive Terminal Modal (`ScriptTerminalModal`)**:
+    - Displays prominent unraid-style abort warning: `"Note that closing this window will abort the execution of this script"`.
+    - Real-time line-by-line streaming via HTTP `ReadableStream` (`/api/admin/scripts/run`).
+    - Smart log syntax colorizer: `[OK]` (bright emerald), `[FAIL]`/`[ERROR]` (bright rose), `[WARN]` (amber), timestamps (sky blue), headers `--- Checking ... ---` (indigo).
+    - Abort lifecycle: Closing the modal window or clicking "Abort Script" terminates the running child process immediately via `AbortController` and signals.
+    - Terminal tools: Auto-scroll toggle, 1-click clipboard copy, and `.log` file download.
+  - **Script Editor Modal (`ScriptEditorModal`)**:
+    - Manage script name, filename, description, category (`Plex & Media`, `Database`, `Docker`, `System & Backup`, `Custom`), interpreter (`bash`, `sh`, `python3`, `node`), schedule cadence, and timeout.
+    - Monospace code editor with quick-insert templates for Bash, Python, and Node.js.
+  - **Execution History Modal (`ScriptHistoryModal`)**:
+    - Chronological log of past runs with duration, exit codes (`Exit 0`, `Failed`, `Aborted`), execution mode (interactive vs background), and full log viewer.
+  - **Admin Route & Security**: Guarded under `/admin/scripts` and `/api/admin*` via `CLOUDFLARE_ADMIN_PATHS` and `src/proxy.ts`. Navigation link integrated in desktop and mobile sidebars with `Terminal` icon.
+
+---
+
+### 23. System & Docker Fleet Monitoring Cockpit (`/admin/monitoring` & `admin-system-health-grid.tsx`)
+- **Single-Pane Homelab Cockpit**: Unified administration mission control providing full-fleet container management, real-time service reachability, rolling uptime telemetry (24h/7d/30d), and automated outage alerts.
+- **Tri-Tab Layout & Semantic Accents**:
+  - **Tab 1: Systems & Services (`systems`)** (`text-sky-400`, `data-[state=active]:text-sky-400 data-[state=active]:bg-sky-500/15 data-[state=active]:border-sky-500/40`):
+    - Comprehensive reachability grid covering Plex Media Servers, Host Hardware (Glances), Stream Monitors (Tautulli), Servarr & Request Apps, and Download Clients.
+    - Status badges (`ONLINE`, `OFFLINE`, `PAUSED`) with live ping round-trip latency (`latencyMs`).
+    - Rolling Uptime Telemetry Scorecards: precise 24-hour, 7-day, and 30-day uptime percentages with current streak badges ("Up for 14d 6h" or "Down for 12m").
+    - Mini Sparkline Ping History: last 10 probe indicators (emerald for responsive, crimson for failed).
+  - **Tab 2: Docker Container Fleet (`containers`)** (`text-emerald-400`, `data-[state=active]:text-emerald-400 data-[state=active]:bg-emerald-500/15 data-[state=active]:border-emerald-500/40`):
+    - Multi-engine Docker connectivity: direct Unix domain socket (`/var/run/docker.sock`), Windows named pipe (`//./pipe/docker_engine`), Docker CLI (`docker ps`), remote Glances container API (`/api/3/containers`), and remote Docker daemon TCP probes on port 2375.
+    - **Container Application Branding**: Dynamic Lucide icons and accent tints mapped to container names and images (`Film` for Plex/Radarr, `Tv` for Sonarr, `ArrowDownCircle` for SABnzbd/qBittorrent, `FileText` for Bazarr, `Image` for Immich, `Zap` for TeslaMate, `BarChart2` for Grafana, `Cpu` for Glances, `HardDrive` for DiskSpeed).
+    - **Multi-Core Linux CPU Hot Load Engine**: Automatically detects multi-core cumulative CPU reporting ($\ge 100\%$, e.g. `185.1%`), rendering animated flame icons (`Flame`), live core estimations (`~1.9 cores`), and vibrant heat gradients (`from-amber-500 via-orange-500 to-rose-500`) alongside color-coded RAM utilization.
+    - **Instant Fleet Sorting**: 1-click sorting pills: `A-Z` (Default), `🔥 CPU` (Highest CPU load first), and `💾 RAM` (Highest memory consumption first).
+    - **Cleaned Telemetry & Host Identification**: Replaces raw monitoring agent tags (`Up (Glances)`) with clean status (`Running`, `Stopped`) and displays physical host pills (`<Server /> Main Unraid`).
+    - **Container Image & Field Normalization Resilience**: Guarantees zero `e.image.replace is not a function` exceptions. Container attributes returned from multi-host agents (Glances python lists, Docker API arrays, or missing properties) are strictly normalized via `normalizeContainerImage` and defensively cast to strings before string operations (`.replace`, `.toLowerCase`) and UI rendering.
+    - 1-Click Container Actions: instant **Restart Container** (`restartDockerContainerAction`), **Start Container**, and **Stop Container** with multi-tier execution across Docker socket, CLI, and remote Docker TCP API with glassmorphic toast notifications.
+  - **Tab 3: Outages & Alerts (`incidents`)** (`text-amber-400`, `data-[state=active]:text-amber-400 data-[state=active]:bg-amber-500/15 data-[state=active]:border-amber-500/40`):
+    - Overall Fleet Uptime Scorecards (24h Uptime %, 7d Uptime %, active incidents count).
+    - Automated Outage Notification Engine: dispatches rich Discord embeds (crimson on failure, emerald on recovery) to `#system-status` channel or custom Discord Webhook URLs.
+    - Chronological incident log tracking start time, failure details, total downtime duration, and 1-click incident clearance.
+- **Navigation Integration**: Desktop and mobile sidebars under Administration via `Layers` icon, with direct jump button ("Docker Fleet & Uptime") embedded in `AdminSystemHealthGrid` on the home dashboard. Ultra-wide layout container (`max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[2200px]`) ensures perfect fit across all monitor sizes.
+
+### 14. Strict React Hook Ordering & Early Return Safety (Zero Error #310 Guard)
+- **The Golden Rule**: React hooks (`useState`, `useEffect`, `useMemo`, `useCallback`, `useRef`, `useTransition`, `useId`) must **NEVER** be called conditionally or placed below an early return statement (e.g. `if (loading && !data) return <Skeleton />`).
+- **Minified React Error #310**: Calling hooks after a conditional early return causes React Error #310 (*"Rendered more hooks than during the previous render"*). On the initial render, the component exits early before reaching subsequent hooks. Once data resolves and triggers a re-render, the early return is skipped and React encounters more hooks than in the prior render, crashing the application.
+- **Enforcement Pattern**:
+  - Always declare all state, effects, and memoized values (`useMemo`, `useCallback`) unconditionally at the very top of the component.
+  - Safe fallback defaults (`data?.items || []`) must be supplied so calculations execute cleanly even when `data` is initially `null` or `undefined`.
+  - Place early loading or error returns (`if (loading && !data) return ...`) strictly **after** all hook declarations, immediately before the primary JSX return.
+
+### 15. Server Management vs Cloud Discovery Inbox Pattern & State Synchronization
+- **Separation of Master Management vs Discovery Inbox**:
+  - The primary server list (**Configured Servers**) serves as the single source of truth for active management controls: Default selection, live connection testing, deletion actions, and master Monitored / Paused switches.
+  - The cloud auto-discovery section (**Account Discovery Inbox**) strictly serves as an onboarding queue for new, unadded servers found on the linked cloud account.
+- **Deduplication & Inbox Partitioning**:
+  - Cloud-discovered servers must be partitioned into `unconfiguredDiscovered` (new discoveries) and `configuredDiscovered` (already added).
+  - When all account servers are already added, collapse and summarize them into a clean confirmation badge (`✓ All Plex account servers are configured & active above.`) with an optional read-only "View Details" disclosure, completely omitting duplicate interactive switches.
+  - Interactive onboarding buttons (`+ Add & Monitor`, `+ Add (Paused)`) must strictly be reserved for new, unadded discoveries.
+- **Bidirectional State Synchronization**:
+  - Any server-level status toggles must update both `configuredServers` and `discoveredServers` state arrays simultaneously, preventing desynchronized UI switches when viewing secondary details.
+
+### 16. Stream Telemetry, React Reconciliation Key Stability & Ghost Stream Immunity
+- **Plex Session Key Collision Vulnerability**:
+  - Plex Media Server assigns integer session keys starting at `"1"` or `"2"` independently on each server instance.
+  - In multi-server environments (e.g. `MainPlexServer` and `KidsPlexServer`), two concurrent active streams frequently share identical `sessionKey: "1"`.
+  - Binding `<Card key={session.sessionKey}>` causes catastrophic React virtual DOM reconciliation key collisions. When sort orders change, React cannot differentiate colliding elements, reuses/clones stale DOM nodes, and renders phantom or duplicate "ghost streams".
+- **Globally Unique React Stream Key Contract**:
+  - All streaming cards must bind a compound, globally unique key incorporating server identity, session key, user, and media:
+    ```tsx
+    key={session.uniqueStreamKey || `${session.serverName}_${session.sessionKey}_${session.user}_${idx}`}
+    ```
+  - Backend actions (`getAdminDetailedStreamsAction`, `getUserPlexHubData`) must construct `uniqueStreamKey`:
+    ```ts
+    const uniqueStreamKey = `plex_${srv.serverId || srv.serverName}_${rawSessionKey}_${userTitle}_${s.ratingKey || fullTitle}`.replace(/[^a-zA-Z0-9_-]/g, "_");
+    ```
+- **Defensive Stream Array Sanitization**:
+  - When clients disconnect or when PMS reports empty XML containers, Plex can return empty session objects `{}` or lingering `state: "stopped"` items.
+  - Memoized stream sorting (`useMemo`) must defensively sanitize the stream array prior to sorting:
+    ```ts
+    const list = filteredSessions.filter((s: any) => 
+        s && (s.title || s.grandparentTitle || s.fullTitle) && s.state !== "stopped"
+    );
+    ```
+- **Deterministic Multi-Tier Tiebreaker Chain**:
+  - Stream sorting must always culminate in a stable 4-tier tiebreaker (`user` ➔ `serverName` ➔ `title` ➔ `uniqueStreamKey`) so stream cards maintain 100% position stability across background polling intervals and sorting changes without visual jitter.
+
+---
+
+### 38. AI Server Assistant Mission Control & Universal Floating Launcher (`AiServerAssistant` & `FloatingAiLauncher`)
+- **Prominent User Mission Control Placement**:
+  - Positioned prominently on the main dashboard (position #2 on user/trial/super-user views, and directly accessible in Admin Mission Control) for all accounts (Admins, Full Accounts, Super Users, and Trial Users).
+  - Styled with glowing purple/cyan linear gradient borders (`from-purple-500/20 via-primary/10 to-transparent`), a pulse status badge (`24/7 AI Diagnostic Engine Active`), and 6 instant 1-click quick-chips (`⚡ Buffering`, `🔊 Quiet Dialogue`, `💬 Subtitles`, `📺 Unlock 4K/1080p`, `🎬 Missing Media`, `🟢 Server Health`).
+  - Automatically loads the user's active streaming session telemetry into the diagnostic prompt for zero-click context awareness.
+- **Universal Floating Launcher & Event Bus**:
+  - Rendered globally via `<FloatingAiLauncher />` in `LayoutWrapper` at `fixed bottom-4 right-4 z-40` for all authenticated members.
+  - Supports programmatic triggers via `openAiAssistant(initialQuery?: string)` custom DOM events (`window.dispatchEvent(new CustomEvent("open-ai-assistant", ...))`) and query params (`?openAssistant=true`).
+- **Support Ticket Triage Redirection & Diagnostic Hand-off**:
+  - Mounts a prominent callout banner at the top of `/tickets` (*"Fix Playback or Media Issues in 30 Seconds"*) prompting members to test with the AI Assistant before creating manual support tickets.
+  - Clicking *"Open Support Ticket With This Diagnosis"* in any chat bubble closes the assistant, navigates to `/tickets?prefill=...`, automatically opens the ticket submission dialog, and pre-populates the complete AI diagnosis into the issue description without clipboard copy.
+
+---
+
+### 39. Dual-Tier Prewarming Engine & High-Speed SWR RAM Caching (`src/lib/prewarm.ts`)
+- **Dual-Tier Prewarming Architecture**:
+  - **Global System Prewarm (`prewarmGlobalSystem`)**: Prewarms Discovery TMDb carousels (RAM + disk), Plex library availability GUID index, system landing reachability stats, active streams matrix, and Docker container fleet telemetry. Executed automatically on server boot, every 30 minutes in background cron (`src/lib/prisma.ts`), and on-demand via the 1-click **"⚡ Prewarm Caches"** button in `admin-system-health-grid.tsx`.
+  - **Personalized User Prewarm (`prewarmUserSession`)**: Prewarms individual user request quotas (`user_quota:${userId}`), AI Server Assistant diagnostic snapshots (`user_diag_snapshot:${userKey}`), proactive Stream Quality Doctor alerts (`user_transcode_alert:${userKey}`), book library access permission (`user_lib_access:${userId}`), and personal Plex Hub stats (`user_plex_hub:${userKey}`).
+- **Asynchronous Non-Blocking Lifecycle**:
+  - Triggered automatically the instant a member logs in (`login()` in `auth-actions.ts`) and on initial client layout mount (`LayoutWrapper`).
+  - Debounced per user session to run at most once every 3 minutes, completely eliminating redundant overhead.
+  - Backed by an in-memory SWR cache (`getUserCache`, `setUserCache`, `clearUserCache`) with fine-grained TTLs (10s for landing stats, 15s for Docker fleet, 60s for user stream hubs, 3m for request quotas and library access).
+
+---
+
+### 40. Dynamic Residential ISP Subnet Matching & Remote Household Anchoring
+- **Subnet Matching Heuristics (`isSameSubnetOrIp`)**:
+  - Distinguishes residential ISP DHCP rotation by matching IPv4 `/24` subnets (first 3 octets, e.g. `73.18.20.15` and `73.18.20.210`) and IPv6 `/64` routing prefixes.
+- **Remote Living Room TV Cold-Start Anchoring**:
+  - When remote users without an established `primaryHomeIp` stream on a fixed living room TV (Apple TV, Roku, Fire TV, Smart TVs, Android TV) with zero concurrent multi-IP overlap, the system recognizes the stream as `🏡 Primary Home` ("Remote Home TV (IP)") rather than defaulting to `✈️ Travel / Away`.
 
 ---
 

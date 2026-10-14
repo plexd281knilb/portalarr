@@ -21,8 +21,8 @@ function runTests() {
     // 1. Exact email match
     assert(
         matchesPlexUser(
-            { email: "plexd281knilb@gmail.com", username: "dominicjuliano" },
-            { user: { email: "plexd281knilb@gmail.com", username: "dominicjuliano" } }
+            { email: "user_primary@example.com", username: "userprimary" },
+            { user: { email: "user_primary@example.com", username: "userprimary" } }
         ) === true,
         "Exact email & username matches"
     );
@@ -30,46 +30,46 @@ function runTests() {
     // 2. Email prefix matches username
     assert(
         matchesPlexUser(
-            { email: "trevsky313@gmail.com", username: "trevscar1121" },
-            { user: { email: "different@email.com", username: "trevsky313" } }
+            { email: "prefixmatch313@example.com", username: "prefix_alias" },
+            { user: { email: "different@example.com", username: "prefixmatch313" } }
         ) === true,
-        "Email prefix (trevsky313) matches Plex username (trevsky313)"
+        "Email prefix (prefixmatch313) matches Plex username (prefixmatch313)"
     );
 
-    // 3. Substring collision guard 1: dominicjuliano vs mjuli86 (mjuliano7@yahoo.com)
+    // 3. Substring collision guard 1: userprimary vs mjprimary86 (primary7@example.com)
     assert(
         matchesPlexUser(
-            { email: "plexd281knilb@gmail.com", username: "dominicjuliano", name: "David Garza" },
-            { user: { email: "mjuliano7@yahoo.com", username: "mjuli86" } }
+            { email: "user_primary@example.com", username: "userprimary", name: "David Garcia" },
+            { user: { email: "primary7@example.com", username: "mjprimary86" } }
         ) === false,
-        "Substring collision: dominicjuliano MUST NOT match mjuliano7/mjuli86"
+        "Substring collision: userprimary MUST NOT match primary7/mjprimary86"
     );
 
-    // 4. Substring collision guard 2: dominicjuliano vs juliano
+    // 4. Substring collision guard 2: userprimary vs primary
     assert(
         matchesPlexUser(
-            { email: "plexd281knilb@gmail.com", username: "dominicjuliano" },
-            { user: { email: "juliano@gmail.com", username: "juliano" } }
+            { email: "user_primary@example.com", username: "userprimary" },
+            { user: { email: "primary@example.com", username: "primary" } }
         ) === false,
-        "Substring collision: dominicjuliano MUST NOT match juliano"
+        "Substring collision: userprimary MUST NOT match primary"
     );
 
-    // 5. Unrelated user with same display name: dominicjuliano vs David Garza
+    // 5. Unrelated user with same display name: userprimary vs David Garcia
     assert(
         matchesPlexUser(
-            { email: "plexd281knilb@gmail.com", username: "dominicjuliano" },
-            { user: { email: "davidgarza@gmail.com", username: "dgarza", title: "David Garza" } }
+            { email: "user_primary@example.com", username: "userprimary" },
+            { user: { email: "davidgarcia@example.com", username: "dgarcia", title: "David Garcia" } }
         ) === false,
-        "Unrelated user: dominicjuliano MUST NOT match David Garza friend"
+        "Unrelated user: userprimary MUST NOT match David Garcia friend"
     );
 
-    // 6. Alphanumeric match: trev_sky313 vs trevsky313
+    // 6. Alphanumeric match: prefix_match313 vs prefixmatch313
     assert(
         matchesPlexUser(
-            { email: "test@test.com", username: "trev_sky313" },
-            { user: { email: "other@other.com", username: "trevsky313" } }
+            { email: "test@example.com", username: "prefix_match313" },
+            { user: { email: "other@example.com", username: "prefixmatch313" } }
         ) === true,
-        "Normalized alnum match: trev_sky313 matches trevsky313"
+        "Normalized alnum match: prefix_match313 matches prefixmatch313"
     );
 
     // 7. Numeric Plex ID match

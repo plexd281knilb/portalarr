@@ -52,7 +52,7 @@ async function tmdbFetch(endpoint: string, params: Record<string, string | numbe
         const res = await fetch(url, {
             headers: { "Accept": "application/json" },
             signal: AbortSignal.timeout(7000), // 7-second network timeout to prevent hanging
-            next: { revalidate: 3600 } // Cache for 1 hour
+            cache: "no-store"
         });
 
         if (!res.ok) {

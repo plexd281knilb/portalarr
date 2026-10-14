@@ -162,5 +162,36 @@ export function isKidsLibrary(lib?: { name?: string | null; path?: string | null
     const name = (lib.name || "").toLowerCase();
     const p = (lib.path || "").toLowerCase();
     const desc = (lib.description || "").toLowerCase();
-    return name.includes("kid") || p.includes("kid") || desc.includes("kid");
+    return name.includes("kid") || p.includes("kid") || desc.includes("kid") || name.includes("kyra") || p.includes("kyra");
+}
+
+/**
+ * Checks if a library object is Kyra's shelf / kids reading shelf
+ */
+export function isKyrasLibrary(lib?: { name?: string | null; path?: string | null; description?: string | null } | null): boolean {
+    if (!lib) return false;
+    const name = (lib.name || "").toLowerCase();
+    const p = (lib.path || "").toLowerCase();
+    const desc = (lib.description || "").toLowerCase();
+    return name.includes("kyra") || p.includes("kyra") || name.includes("kid") || p.includes("kid") || desc.includes("kid");
+}
+
+/**
+ * Checks if a library object is a public reading shelf
+ */
+export function isPublicLibrary(lib?: { name?: string | null; path?: string | null; description?: string | null } | null): boolean {
+    if (!lib) return false;
+    const name = (lib.name || "").toLowerCase();
+    const p = (lib.path || "").toLowerCase();
+    const desc = (lib.description || "").toLowerCase();
+    return name.includes("public") || p.includes("public") || name.includes("general") || desc.includes("public");
+}
+
+/**
+ * Evaluates whether requests targeting this library should be auto-approved
+ * (Kyra's library and Public libraries are explicitly auto-approved per server policy)
+ */
+export function isAutoApprovedBookLibrary(lib?: { name?: string | null; path?: string | null; description?: string | null } | null): boolean {
+    if (!lib) return true;
+    return isKyrasLibrary(lib) || isPublicLibrary(lib);
 }

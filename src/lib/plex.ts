@@ -248,7 +248,7 @@ export async function getPlexOwnerUser(adminToken: string) {
                 "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
             },
             signal: controller.signal,
-            next: { revalidate: 300 }
+            cache: "no-store"
         });
         clearTimeout(timeoutId);
         if (res.ok) {
@@ -285,9 +285,9 @@ export interface PlexServerResource {
 let cachedServers: { token: string; timestamp: number; data: PlexServerResource[] } | null = null;
 const SERVERS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-export async function getPlexServers(adminToken: string, forceRefresh = false): Promise<PlexServerResource[]> {
+export async function getPlexServers(adminToken: string, forceRefresh = false, includeManual = true): Promise<PlexServerResource[]> {
     if (!adminToken) return [];
-    if (!forceRefresh && cachedServers && cachedServers.token === adminToken && (Date.now() - cachedServers.timestamp < SERVERS_CACHE_TTL)) {
+    if (!forceRefresh && includeManual && cachedServers && cachedServers.token === adminToken && (Date.now() - cachedServers.timestamp < SERVERS_CACHE_TTL)) {
         return cachedServers.data;
     }
 
@@ -348,10 +348,20 @@ export async function getPlexServers(adminToken: string, forceRefresh = false): 
     const mergeWithManualServers = (discovered: PlexServerResource[]): PlexServerResource[] => {
         const merged: PlexServerResource[] = [...discovered];
         for (const man of manualServers) {
-            const matchIndex = merged.findIndex(s => 
-                (s.clientIdentifier && s.clientIdentifier.toLowerCase() === man.clientIdentifier.toLowerCase()) ||
-                s.name.toLowerCase() === man.name.toLowerCase()
-            );
+            const matchIndex = merged.findIndex(s => {
+                if (s.clientIdentifier && man.clientIdentifier && s.clientIdentifier.toLowerCase() === man.clientIdentifier.toLowerCase()) return true;
+                if (s.name.toLowerCase() === man.name.toLowerCase()) return true;
+                return s.connections.some(sc => 
+                    man.connections.some(mc => {
+                        const scHost = (sc.address || "").toLowerCase().trim();
+                        const mcHost = (mc.address || "").toLowerCase().trim();
+                        const scUri = sc.uri ? sc.uri.replace(/\/+$/, "").toLowerCase() : "";
+                        const mcUri = mc.uri ? mc.uri.replace(/\/+$/, "").toLowerCase() : "";
+                        if (scUri && mcUri && scUri === mcUri) return true;
+                        return scHost && mcHost && scHost === mcHost && Number(sc.port) === Number(mc.port);
+                    })
+                );
+            });
             if (matchIndex >= 0) {
                 const existingConns = merged[matchIndex].connections;
                 for (const mc of man.connections) {
@@ -361,6 +371,9 @@ export async function getPlexServers(adminToken: string, forceRefresh = false): 
                 }
                 if (man.accessToken && man.accessToken !== adminToken) {
                     merged[matchIndex].accessToken = man.accessToken;
+                }
+                if (man.name) {
+                    merged[matchIndex].name = man.name;
                 }
             } else {
                 merged.push(man);
@@ -387,9 +400,13 @@ export async function getPlexServers(adminToken: string, forceRefresh = false): 
             const data = await res.json();
             if (Array.isArray(data)) {
                 let srvs = parseResources(data);
-                srvs = mergeWithManualServers(srvs);
+                if (includeManual) {
+                    srvs = mergeWithManualServers(srvs);
+                }
                 if (srvs.length > 0) {
-                    cachedServers = { token: adminToken, timestamp: Date.now(), data: srvs };
+                    if (includeManual) {
+                        cachedServers = { token: adminToken, timestamp: Date.now(), data: srvs };
+                    }
                     return srvs;
                 }
             }
@@ -414,9 +431,13 @@ export async function getPlexServers(adminToken: string, forceRefresh = false): 
             const data = await res.json();
             if (Array.isArray(data)) {
                 let srvs = parseResources(data);
-                srvs = mergeWithManualServers(srvs);
+                if (includeManual) {
+                    srvs = mergeWithManualServers(srvs);
+                }
                 if (srvs.length > 0) {
-                    cachedServers = { token: adminToken, timestamp: Date.now(), data: srvs };
+                    if (includeManual) {
+                        cachedServers = { token: adminToken, timestamp: Date.now(), data: srvs };
+                    }
                     return srvs;
                 }
             }
@@ -431,6 +452,7 @@ export async function getPlexServers(adminToken: string, forceRefresh = false): 
                 "X-Plex-Token": adminToken,
                 "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
             },
+            signal: AbortSignal.timeout(4000),
             cache: "no-store"
         });
         if (res.ok) {
@@ -460,18 +482,24 @@ export async function getPlexServers(adminToken: string, forceRefresh = false): 
                     });
                 }
             }
-            const merged = mergeWithManualServers(servers);
-            if (merged.length > 0) {
-                cachedServers = { token: adminToken, timestamp: Date.now(), data: merged };
-                return merged;
+            const finalServers = includeManual ? mergeWithManualServers(servers) : servers;
+            if (finalServers.length > 0) {
+                if (includeManual) {
+                    cachedServers = { token: adminToken, timestamp: Date.now(), data: finalServers };
+                }
+                return finalServers;
             }
         }
     } catch (e) {}
 
-    // 4. Return manual servers directly if cloud discovery failed
-    if (manualServers.length > 0) {
+    // 4. Return manual servers directly if cloud discovery failed and includeManual is enabled
+    if (includeManual && manualServers.length > 0) {
         cachedServers = { token: adminToken, timestamp: Date.now(), data: manualServers };
         return manualServers;
+    }
+
+    if (!includeManual) {
+        return [];
     }
 
     // 5. Fallback: Lookup configured DB URLs from Settings / MediaApp
@@ -508,7 +536,29 @@ export async function getPlexActiveSessions(adminToken: string): Promise<{ serve
     const servers = await getPlexServers(adminToken);
     const results: { serverName: string; serverUrl: string; serverId: string; token: string; sessions: any[] }[] = [];
 
-    await Promise.allSettled(servers.map(async (srv) => {
+    // Deduplicate servers by clientIdentifier or primary connection address:port before querying
+    const uniqueServers: PlexServerResource[] = [];
+    const seenServerKeys = new Set<string>();
+    for (const s of servers) {
+        const clientId = (s.clientIdentifier || "").toLowerCase().trim();
+        const primaryConn = s.connections[0];
+        const endpointKey = primaryConn ? `${(primaryConn.address || "").toLowerCase().trim()}:${primaryConn.port}` : "";
+        const uriKey = primaryConn?.uri ? primaryConn.uri.replace(/\/+$/, "").toLowerCase().trim() : "";
+
+        let isDup = false;
+        if (clientId && seenServerKeys.has(`id:${clientId}`)) isDup = true;
+        if (endpointKey && endpointKey !== ":32400" && endpointKey !== ":" && seenServerKeys.has(`ep:${endpointKey}`)) isDup = true;
+        if (uriKey && seenServerKeys.has(`uri:${uriKey}`)) isDup = true;
+
+        if (!isDup) {
+            if (clientId) seenServerKeys.add(`id:${clientId}`);
+            if (endpointKey && endpointKey !== ":32400" && endpointKey !== ":") seenServerKeys.add(`ep:${endpointKey}`);
+            if (uriKey) seenServerKeys.add(`uri:${uriKey}`);
+            uniqueServers.push(s);
+        }
+    }
+
+    await Promise.allSettled(uniqueServers.map(async (srv) => {
         const token = srv.accessToken || adminToken;
         for (const conn of srv.connections) {
             try {
@@ -529,13 +579,26 @@ export async function getPlexActiveSessions(adminToken: string): Promise<{ serve
 
                 if (res.ok) {
                     const data = await res.json();
-                    const metadata = data.MediaContainer?.Metadata || [];
+                    const metadata = data.MediaContainer?.Metadata;
+                    const rawList = Array.isArray(metadata)
+                        ? metadata
+                        : (metadata && typeof metadata === "object" && Object.keys(metadata).length > 0 ? [metadata] : []);
+
+                    // Strict filter: session must be a valid media item with at least one title/ratingKey and not stopped
+                    const validSessions = rawList.filter((s: any) => {
+                        if (!s || typeof s !== "object") return false;
+                        if (!s.ratingKey && !s.title && !s.grandparentTitle && !s.key) return false;
+                        const playerState = String(s.Player?.state || s.state || "").toLowerCase().trim();
+                        if (playerState === "stopped") return false;
+                        return true;
+                    });
+
                     results.push({
                         serverName: srv.name,
                         serverUrl: cleanBase,
                         serverId: srv.clientIdentifier,
                         token,
-                        sessions: Array.isArray(metadata) ? metadata : [metadata]
+                        sessions: validSessions
                     });
                     break; // Successfully queried this server via this connection
                 }
@@ -544,6 +607,9 @@ export async function getPlexActiveSessions(adminToken: string): Promise<{ serve
             }
         }
     }));
+
+    // Ensure deterministic server ordering regardless of network request completion race conditions
+    results.sort((a, b) => a.serverName.localeCompare(b.serverName));
 
     return results;
 }
@@ -1070,6 +1136,13 @@ export async function resolveWorkingPlexServerConnection(
     let token = adminToken || "";
     let mainPlexUrl = customPlexUrl || "";
 
+    let targetLookup = serverIdOrName;
+    if (targetLookup && targetLookup.startsWith("plex::")) {
+        const parts = targetLookup.split("::");
+        if (parts.length >= 2 && parts[1]) targetLookup = parts[1];
+        if (parts.length >= 3 && parts[2] && !mainPlexUrl) mainPlexUrl = parts[2];
+    }
+
     try {
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         if (!token && settings?.mainPlexToken) {
@@ -1082,7 +1155,7 @@ export async function resolveWorkingPlexServerConnection(
 
     if (!token) return null;
 
-    const cacheKey = `${serverIdOrName || "default"}_${token}`;
+    const cacheKey = `${targetLookup || "default"}_${token}`;
     if (!forceRefresh && resolvedServerCache.has(cacheKey)) {
         const cached = resolvedServerCache.get(cacheKey)!;
         if (Date.now() - cached.timestamp < RESOLVED_SERVER_CACHE_TTL) {
@@ -1099,10 +1172,10 @@ export async function resolveWorkingPlexServerConnection(
         const manualPlex = await prisma.plexServer.findMany();
         for (const s of manualPlex) {
             if (s.url && !dbPlexUrls.includes(s.url)) dbPlexUrls.push(s.url);
-            if (serverIdOrName && (
-                s.id === serverIdOrName || 
-                s.name.toLowerCase() === serverIdOrName.toLowerCase() || 
-                (s.clientIdentifier && s.clientIdentifier.toLowerCase() === serverIdOrName.toLowerCase())
+            if (targetLookup && (
+                s.id === targetLookup || 
+                s.name.toLowerCase() === targetLookup.toLowerCase() || 
+                (s.clientIdentifier && s.clientIdentifier.toLowerCase() === targetLookup.toLowerCase())
             )) {
                 if (s.token) token = decryptData(s.token);
             }
@@ -1120,10 +1193,10 @@ export async function resolveWorkingPlexServerConnection(
     try {
         const manualPlex = await prisma.plexServer.findMany();
         for (const s of manualPlex) {
-            if (serverIdOrName && (
-                s.id === serverIdOrName || 
-                s.name.toLowerCase() === serverIdOrName.toLowerCase() || 
-                (s.clientIdentifier && s.clientIdentifier.toLowerCase() === serverIdOrName.toLowerCase())
+            if (targetLookup && (
+                s.id === targetLookup || 
+                s.name.toLowerCase() === targetLookup.toLowerCase() || 
+                (s.clientIdentifier && s.clientIdentifier.toLowerCase() === targetLookup.toLowerCase())
             )) {
                 manualMatchingServer = s;
                 if (s.token) token = decryptData(s.token);
@@ -1134,20 +1207,30 @@ export async function resolveWorkingPlexServerConnection(
 
     // Locate target server from resources
     const isSpecificTargetRequested = Boolean(
-        serverIdOrName && 
-        serverIdOrName.trim().length > 0 && 
-        serverIdOrName !== "default" && 
-        serverIdOrName !== "main"
+        targetLookup && 
+        targetLookup.trim().length > 0 && 
+        targetLookup !== "default" && 
+        targetLookup !== "main"
     );
 
     let targetServer: PlexServerResource | undefined;
     if (isSpecificTargetRequested) {
         targetServer = servers.find(s => 
-            s.clientIdentifier.toLowerCase() === serverIdOrName!.toLowerCase() ||
-            s.name.toLowerCase() === serverIdOrName!.toLowerCase()
+            s.clientIdentifier.toLowerCase() === targetLookup!.toLowerCase() ||
+            s.name.toLowerCase() === targetLookup!.toLowerCase()
         );
     } else {
-        targetServer = servers[0];
+        // Resolve primary server matching mainPlexUrl or with "main" in name, falling back to servers[0]
+        if (mainPlexUrl) {
+            const cleanMain = mainPlexUrl.replace(/\/+$/, "").toLowerCase();
+            targetServer = servers.find(s => 
+                s.connections?.some(c => cleanMain.includes(c.address.toLowerCase()) || (c.uri && c.uri.toLowerCase().includes(cleanMain))) ||
+                (s.name.toLowerCase().includes("main") && !s.name.toLowerCase().includes("backup"))
+            );
+        }
+        if (!targetServer) {
+            targetServer = servers.find(s => s.name.toLowerCase().includes("main") && !s.name.toLowerCase().includes("backup")) || servers[0];
+        }
     }
 
     // Lazy cloud fallback only if target server not found in resources
@@ -1176,9 +1259,16 @@ export async function resolveWorkingPlexServerConnection(
     const serverToken = targetServer?.accessToken || token;
 
     // Determine if this server is the primary / main server
-    const isMainServer = !isSpecificTargetRequested || 
-                         (servers.length > 0 && servers[0].clientIdentifier === serverId) ||
-                         (servers.length > 0 && servers[0].name.toLowerCase() === serverName.toLowerCase());
+    let isMainServer = false;
+    if (!isSpecificTargetRequested) {
+        isMainServer = true;
+    } else {
+        const lowerName = serverName.toLowerCase();
+        const cleanMain = mainPlexUrl.replace(/\/+$/, "").toLowerCase();
+        const hasMainInName = lowerName === "main" || lowerName.includes("mainplex") || (lowerName.includes("main") && !lowerName.includes("backup"));
+        const matchesMainUrl = Boolean(targetServer?.connections?.some(c => cleanMain && (cleanMain.includes(c.address.toLowerCase()) || (c.uri && c.uri.toLowerCase().includes(cleanMain)))));
+        isMainServer = Boolean(hasMainInName || matchesMainUrl);
+    }
 
     // Build candidates in optimal priority order FOR THIS SPECIFIC SERVER:
     const priorityUrls: string[] = [];
@@ -1377,12 +1467,21 @@ export async function resolveWorkingPlexServerConnection(
         logger.addLog("WARN", "PLEX", `Could not verify connection to Plex server "${serverName}" across ${candidateUrls.length} candidate URLs: ${probeFailures.join("; ")}. Falling back to ${finalUrl}`);
     }
 
+    const verifiedUrls = verified.map(v => v.cand);
+    // Exclude any candidate URLs that explicitly failed probe due to mismatched server identity
+    const safeCandidates = candidateUrls.filter(u => 
+        !probeFailures.some(f => f.startsWith(u) && f.includes("mismatched server identity"))
+    );
+    const finalCandidateUrls = verifiedUrls.length > 0
+        ? Array.from(new Set([...verifiedUrls, ...safeCandidates.filter(u => !verifiedUrls.includes(u))]))
+        : safeCandidates;
+
     const result: ResolvedPlexConnection = {
         serverId,
         serverName,
         serverUrl: finalUrl,
         token: serverToken,
-        allCandidateUrls: candidateUrls
+        allCandidateUrls: finalCandidateUrls
     };
 
     resolvedServerCache.set(cacheKey, { timestamp: Date.now(), data: result });
@@ -1708,7 +1807,7 @@ export function matchesPlexUser(
         }
     }
 
-    // 3. Exact Email-to-Username or Username-to-Email prefix match (e.g. "trevsky313@gmail.com" matches "trevsky313")
+    // 3. Exact Email-to-Username or Username-to-Email prefix match (e.g. "user313@example.com" matches "user313")
     for (const te of targetEmails) {
         const prefix = te.split("@")[0];
         if (prefix && prefix.length >= 3) {
@@ -1727,7 +1826,7 @@ export function matchesPlexUser(
     }
 
     // 4. Normalized alphanumeric EXACT match for usernames (stripping '.', '_', '-')
-    // E.g. "trev_sky313" === "trevsky313", "black.jordan" === "blackjordan"
+    // E.g. "alex_smith" === "alexsmith", "taylor.jordan" === "taylorjordan"
     for (const tu of targetUsernames) {
         const tuAlnum = alphanumeric(tu);
         if (tuAlnum.length >= 3) {

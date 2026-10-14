@@ -28,6 +28,26 @@ export default function AdminSystemHealthGrid() {
     const [statusFilter, setStatusFilter] = useState<"ALL" | "ONLINE" | "OFFLINE" | "PAUSED">("ALL");
     const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
     const [searchQuery, setSearchQuery] = useState("");
+    const [prewarming, setPrewarming] = useState(false);
+    const [prewarmSuccessMessage, setPrewarmSuccessMessage] = useState<string | null>(null);
+
+    const handlePrewarmAll = async () => {
+        setPrewarming(true);
+        setPrewarmSuccessMessage(null);
+        try {
+            const { prewarmAllCachesAction } = await import("@/app/actions");
+            const res = await prewarmAllCachesAction();
+            if (res && res.success) {
+                setPrewarmSuccessMessage(`Prewarmed ${res.warmedKeys?.length || 6} items (${res.durationMs || 0}ms)`);
+                setTimeout(() => setPrewarmSuccessMessage(null), 4000);
+                await loadStatus(true);
+            }
+        } catch (err) {
+            console.error("Failed to prewarm caches:", err);
+        } finally {
+            setPrewarming(false);
+        }
+    };
 
     const loadStatus = async (isManual = false) => {
         if (isManual) setRefreshing(true);
@@ -101,7 +121,7 @@ export default function AdminSystemHealthGrid() {
         switch (cat) {
             case "plex": return "Plex PMS";
             case "glances": return "Host Glances";
-            case "tautulli": return "Tautulli";
+            case "tautulli": return "Tautulli (Archive)";
             case "downloaders": return "Downloader";
             case "apps": return "Media App";
             default: return cat.toUpperCase();
@@ -119,9 +139,15 @@ export default function AdminSystemHealthGrid() {
                                 <Radio className="h-5 w-5 animate-pulse" />
                             </div>
                             <div>
-                                <CardTitle className="text-base sm:text-lg font-bold text-foreground flex items-center gap-2">
-                                    Infrastructure Health & Monitoring
-                                </CardTitle>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <CardTitle className="text-base sm:text-lg font-bold text-foreground flex items-center gap-2">
+                                        Infrastructure Health & Monitoring
+                                    </CardTitle>
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                        Direct Plex Telemetry Active
+                                    </span>
+                                </div>
                                 <CardDescription className="text-xs text-muted-foreground">
                                     Real-time status, reachability, and response telemetry across all configured hosts, servers, and apps.
                                 </CardDescription>
@@ -131,6 +157,16 @@ export default function AdminSystemHealthGrid() {
 
                     {/* TOP ACTION BUTTONS */}
                     <div className="flex items-center gap-2 self-start md:self-auto shrink-0">
+                        <Link href="/admin/monitoring">
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="h-8 px-2.5 text-xs gap-1.5 border-sky-500/30 text-sky-400 hover:bg-sky-500/10 hover:text-sky-300"
+                            >
+                                <Layers className="h-3.5 w-3.5 text-sky-400" />
+                                <span>Docker Fleet & Uptime</span>
+                            </Button>
+                        </Link>
                         <Link href="/settings?tab=monitoring">
                             <Button 
                                 variant="outline" 
@@ -141,6 +177,17 @@ export default function AdminSystemHealthGrid() {
                                 <span>Manage Apps</span>
                             </Button>
                         </Link>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handlePrewarmAll}
+                            disabled={prewarming || refreshing}
+                            className="h-8 px-2.5 text-xs gap-1.5 border-amber-500/30 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300"
+                            title="Prewarm Discovery carousels, Plex availability indices, system stats, and Docker fleet in RAM"
+                        >
+                            <Zap className={`h-3.5 w-3.5 ${prewarming ? "animate-spin text-amber-300" : "text-amber-400"}`} />
+                            <span>{prewarming ? "Warming..." : prewarmSuccessMessage ? prewarmSuccessMessage : "Prewarm Caches"}</span>
+                        </Button>
                         <Button
                             variant="outline"
                             size="sm"
@@ -253,9 +300,9 @@ export default function AdminSystemHealthGrid() {
                             className="bg-black/40 border border-white/10 rounded-lg text-xs text-foreground px-2 py-1.5 h-8 focus:outline-hidden focus:border-primary/50"
                         >
                             <option value="ALL">All Categories</option>
-                            <option value="plex">Plex Media Servers</option>
+                            <option value="plex">Plex Media Servers (Live Telemetry)</option>
                             <option value="glances">Host Hardware (Glances)</option>
-                            <option value="tautulli">Stream Monitors (Tautulli)</option>
+                            <option value="tautulli">Historical Archive (Tautulli)</option>
                             <option value="apps">Servarr & Request Apps</option>
                             <option value="downloaders">Download Clients</option>
                         </select>

@@ -36,9 +36,35 @@ import fs from "fs";
 import path from "path";
 import { convertEbookToEpub, validateAndFixEpubForKindle } from "@/lib/books/epub-converter";
 import { resolveOrLinkAuthorAndSeries } from "@/lib/books/book-service";
-import { inferBookRating, isKidsLibrary } from "@/lib/books/book-rating";
+import { inferBookRating, isKidsLibrary, isAutoApprovedBookLibrary } from "@/lib/books/book-rating";
 import { getBookCleanTitleKey, getBookCompositeDedupKey } from "@/lib/books/book-dedup";
 import { syncUserRoleToDiscord } from "@/lib/discord/discord-role-sync";
+import { 
+    recordActivePlexSessions, 
+    analyzeActiveSessionsForSharing, 
+    getWatchHistory, 
+    getConnectionSecurityInsights, 
+    getUserStreamProfiles,
+    getUserDetailedTelemetry,
+    getStreamIntelligenceAnalytics,
+    isPrivateOrLocalIp,
+    normalizeIp,
+    isSameSubnetOrIp,
+    isMobileRoamingDevice,
+    isFixedHomeDevice,
+    extractStreamTelemetry,
+    formatDurationMs,
+    formatEtaTimestamp,
+    type WatchHistoryQueryOptions 
+} from "@/lib/telemetry/stream-tracker";
+import { diagnoseStreamSettings, detectDeviceCategory } from "@/lib/telemetry/device-diagnostics";
+import { 
+    backfillTautulliHistoryInternal, 
+    startTautulliBackfillInternal, 
+    getTautulliBackfillProgress, 
+    stopTautulliBackfill 
+} from "@/lib/telemetry/tautulli-backfill";
+import { getUserCache, setUserCache, clearUserCache } from "@/lib/prewarm";
 
 if (typeof process !== "undefined" && process.env) {
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
@@ -87,14 +113,12 @@ function cleanUrl(url: string): string {
     return url.replace(/\/$/, ""); 
 }
 
-async function fetchTautulliApiJson(url: string, signal?: AbortSignal, nextOptions?: any): Promise<{ ok: boolean; data: any; error?: string }> {
+async function fetchTautulliApiJson(url: string, signal?: AbortSignal, _nextOptions?: any): Promise<{ ok: boolean; data: any; error?: string }> {
     try {
-        const fetchOpts: any = { signal };
-        if (nextOptions) {
-            fetchOpts.next = nextOptions;
-        } else {
-            fetchOpts.cache = "no-store";
-        }
+        const fetchOpts: any = { 
+            signal: signal || AbortSignal.timeout(5000),
+            cache: "no-store"
+        };
 
         const res = await fetch(url, fetchOpts);
         if (!res.ok) {
@@ -1565,7 +1589,7 @@ export async function getDiscoveredPlexServersAction() {
         }
 
         const [rawDiscovered, dbServers] = await Promise.all([
-            getPlexServers(adminToken, true).catch(() => []),
+            getPlexServers(adminToken, true, false).catch(() => []),
             prisma.plexServer.findMany().catch(() => [])
         ]);
 
@@ -3747,12 +3771,45 @@ export async function approveAllPendingAppUsers() {
     }
 }
 
+export async function getTicketsDashboardAction() {
+    const user: any = await verifyUser();
+    const isAdmin = String(user?.role || "").toUpperCase() === "ADMIN";
+
+    let tickets: any[] = [];
+    if (isAdmin) {
+        tickets = await prisma.supportTicket.findMany({
+            orderBy: { createdAt: 'desc' },
+            take: 100
+        });
+    } else {
+        const userEmail = (user?.email || "").trim();
+        const username = (user?.username || "").trim();
+        tickets = await prisma.supportTicket.findMany({
+            where: {
+                OR: [
+                    ...(userEmail ? [{ email: { equals: userEmail } }, { email: { equals: userEmail.toLowerCase() } }] : []),
+                    ...(username ? [{ name: { equals: username } }, { name: { equals: username.toLowerCase() } }] : [])
+                ]
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 50
+        });
+    }
+
+    return {
+        isAdmin,
+        currentUser: {
+            username: user.username,
+            email: user.email,
+            role: user.role
+        },
+        tickets
+    };
+}
+
 export async function getSupportTickets() {
-    await verifyAdmin();
-    return await prisma.supportTicket.findMany({
-        orderBy: { createdAt: 'desc' },
-        take: 50
-    });
+    const res = await getTicketsDashboardAction();
+    return res.tickets;
 }
 
 export async function updateTicketStatus(id: string, status: string, adminComment?: string) {
@@ -3788,8 +3845,13 @@ export async function updateTicketStatus(id: string, status: string, adminCommen
         }
     }
 
-    revalidatePath("/");
-    revalidatePath("/admin/tickets");
+    try {
+        revalidatePath("/");
+        revalidatePath("/tickets");
+        revalidatePath("/admin/tickets");
+    } catch (e) {
+        // Safe fallback outside Next.js request lifecycle
+    }
 }
 
 export async function deleteSupportTicket(id: string) {
@@ -3798,8 +3860,11 @@ export async function deleteSupportTicket(id: string) {
         await prisma.supportTicket.delete({
             where: { id }
         });
-        revalidatePath("/admin/tickets");
-        revalidatePath("/settings");
+        try {
+            revalidatePath("/tickets");
+            revalidatePath("/admin/tickets");
+            revalidatePath("/settings");
+        } catch (e) {}
         return { success: true };
     } catch (e) {
         console.error("Failed to delete ticket:", e);
@@ -7673,7 +7738,11 @@ export async function submitSupportTicket(formData: FormData) {
                 targetUser: name
             });
         }
-        revalidatePath("/");
+        try {
+            revalidatePath("/");
+            revalidatePath("/tickets");
+            revalidatePath("/admin/tickets");
+        } catch (e) {}
         return { success: true };
     } catch (e) {
         console.error("Support Ticket Error:", e);
@@ -7759,6 +7828,7 @@ export async function submitAutoErrorTicketAction(errorPayload: {
 
         try {
             revalidatePath("/");
+            revalidatePath("/tickets");
             revalidatePath("/admin/tickets");
         } catch (e) {
             // Safe fallback outside Next.js request lifecycle
@@ -8021,8 +8091,13 @@ export async function checkMediaAppReachability(app: { name: string; type?: stri
     return false;
 }
 
-export async function getLandingStats() {
+export async function getLandingStats(options?: { skipCache?: boolean }) {
     try {
+        if (!options?.skipCache) {
+            const cached = getUserCache<any>("system_landing_stats");
+            if (cached) return cached;
+        }
+
         await ensureSchemaColumns();
         const settings = await prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null);
         let adminToken = "";
@@ -8132,7 +8207,9 @@ export async function getLandingStats() {
             }
         }));
 
-        return { streamStats, serverStats, downApps };
+        const result = { streamStats, serverStats, downApps };
+        setUserCache("system_landing_stats", result, 10000); // 10s fresh cache
+        return result;
     } catch (e) {
         console.error("getLandingStats error:", e);
         return { streamStats: [], serverStats: [], downApps: [] };
@@ -9265,9 +9342,12 @@ export async function getLibraryBooks(libraryId?: string) {
         where: whereClause,
         orderBy: { createdAt: "desc" }
     });
-    
-    // Evaluate and repair ratings dynamically (e.g. adult romance formerly saved as "All Ages" or null)
+    // Evaluate and repair ratings and cover URLs dynamically
     for (const b of books) {
+        if (!b.coverUrl || b.coverUrl === "local" || b.coverUrl.trim() === "") {
+            b.coverUrl = `/api/cover?id=${b.id}`;
+        }
+
         if (!b.ageRating || b.ageRating === "All Ages") {
             const inferred = inferBookRating({
                 title: b.title,
@@ -9687,35 +9767,37 @@ export async function sendRequestCompletionNotification(requestIdOrBook: any, ma
             html,
             templateId: "media_ready",
             targetUser: requester.username,
-            userId: requester.id
+            userId: requester.id,
+            bypassApproval: true
         });
-        console.log(`[SMTP-NOTIFICATION] Sent or queued request completion email to ${requester.email} for "${title}"`);
+        logger.addLog("INFO", "EMAIL", `Dispatched request completion email to ${requester.email} for "${title}"`);
     } catch (e: any) {
-        console.error("[SMTP-NOTIFICATION] Failed to send request completion email:", e.message || e);
+        logger.addLog("ERROR", "EMAIL", `Failed to send request completion email: ${e.message || e}`);
     }
 }
 
-async function sendRequestNotificationToAdmins(request: { title: string, author: string, requestedBy: string, type: string, mediaType?: string, publishYear?: string | null }) {
+export async function sendRequestNotificationToAdmins(request: { title: string, author: string, requestedBy: string, type: string, mediaType?: string, publishYear?: string | null }) {
     try {
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         if (!settings || !settings.smtpHost || !settings.smtpUser || !settings.smtpPass || settings.emailNotificationsEnabled === false || settings.notifyMediaRequests === false) {
-            console.log("[SMTP-NOTIFICATION] Request notifications to admins disabled or not configured.");
+            if (!settings?.smtpHost || !settings?.smtpUser || !settings?.smtpPass) {
+                logger.addLog("WARN", "EMAIL", `Skipping book request email notification for "${request.title}": SMTP host/user/pass is not configured in Settings > Email.`);
+            }
             return;
         }
 
         const admins = await prisma.user.findMany({
-            where: { role: "ADMIN" }
+            where: { role: { in: ["ADMIN", "SUPER_USER"] } }
         });
 
         if (admins.length === 0) {
-            console.log("[SMTP-NOTIFICATION] No admin users found. Skipping request notification.");
             return;
         }
 
         const isAudiobook = request.mediaType === "audiobook";
         const mediaLabel = isAudiobook ? "Audiobook" : "Ebook";
 
-        const adminEmails = admins.map(a => a.email).filter(Boolean) as string[];
+        const adminEmails = admins.map(a => a.email).filter(e => e && e.includes("@")) as string[];
         if (adminEmails.length === 0) return;
 
         const appUrl = await getAppUrl();
@@ -9736,11 +9818,12 @@ async function sendRequestNotificationToAdmins(request: { title: string, author:
             subject,
             html,
             templateId: "media_request_admin",
-            targetUser: request.requestedBy
+            targetUser: request.requestedBy,
+            bypassApproval: true
         });
-        console.log(`[SMTP-NOTIFICATION] Request notification sent or queued for "${request.title}" (${mediaLabel})`);
+        logger.addLog("INFO", "EMAIL", `Dispatched book request notification to admins for "${request.title}" (${mediaLabel})`);
     } catch (e: any) {
-        console.error("[SMTP-NOTIFICATION] Failed to send request email notification to admins:", e);
+        logger.addLog("ERROR", "EMAIL", `Failed to send book request email notification to admins: ${e.message || e}`);
     }
 }
 
@@ -9812,15 +9895,17 @@ export async function createBookRequest(formData: FormData) {
         }
 
         const isKidsLib = targetLib ? isKidsLibrary(targetLib) : false;
+        const isKyraOrPublicLib = targetLib ? isAutoApprovedBookLibrary(targetLib) : false;
         const inferredRating = inferBookRating({
             title: finalTitle,
             author: finalAuthor,
             series: finalSeries
         });
         const isKidsBook = isKidsLib || inferredRating.ageRating === "Kids";
+        const isApproved = isKyraOrPublicLib || !isKidsBook;
 
         if (type === "series") {
-            const expanded = await expandSeriesRequest(finalTitle, finalAuthor, targetUser, mediaType, libraryId, isKidsBook);
+            const expanded = await expandSeriesRequest(finalTitle, finalAuthor, targetUser, mediaType, libraryId, isKidsBook, isApproved);
             if (expanded) {
                 // Save the parent series request record itself in the DB
                 await prisma.bookRequest.create({
@@ -9836,7 +9921,7 @@ export async function createBookRequest(formData: FormData) {
                         requestedBy: targetUser,
                         type: "series",
                         mediaType,
-                        status: isKidsBook ? "Pending" : "Approved"
+                        status: isApproved ? "Approved" : "Pending"
                     }
                 });
 
@@ -9853,14 +9938,13 @@ export async function createBookRequest(formData: FormData) {
                 revalidatePath("/library");
                 return { 
                     success: true, 
-                    message: isKidsBook 
+                    message: !isApproved 
                         ? "Kids series request submitted for admin review." 
                         : "Series request submitted successfully!" 
                 };
             }
         }
         
-        const isApproved = !isKidsBook; // Kids books require admin approval
         const disableAutoDownload = formData.get("disableAutoDownload") === "true";
         const sendToKindleVal = formData.get("sendToKindle") === "true";
         
@@ -9936,7 +10020,7 @@ export async function createBookRequest(formData: FormData) {
         revalidatePath("/library");
         return { 
             success: true, 
-            message: isKidsBook 
+            message: !isApproved 
                 ? "Kids book request submitted for admin review." 
                 : "Request submitted successfully!" 
         };
@@ -9946,12 +10030,12 @@ export async function createBookRequest(formData: FormData) {
     }
 }
 
-async function expandSeriesRequest(seriesTitle: string, author: string, requestedBy: string, mediaType: string = "ebook", libraryId?: string, isKidsSeries: boolean = false): Promise<boolean> {
+async function expandSeriesRequest(seriesTitle: string, author: string, requestedBy: string, mediaType: string = "ebook", libraryId?: string, isKidsSeries: boolean = false, autoApproveSeries?: boolean): Promise<boolean> {
     try {
         const query = `series:"${seriesTitle}"`;
         const response = await fetchWithRetry(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&fields=key,title,author_name,cover_i,first_publish_year`, {
             headers: { "Accept": "application/json" },
-            next: { revalidate: 3600 }
+            cache: "no-store"
         });
         
         const data = response.ok ? await response.json() : { docs: [] };
@@ -9961,7 +10045,7 @@ async function expandSeriesRequest(seriesTitle: string, author: string, requeste
             console.log(`[SERIES-EXPANSION] No books found for series:"${seriesTitle}". Trying general keyword fallback...`);
             const fallbackResponse = await fetchWithRetry(`https://openlibrary.org/search.json?q=${encodeURIComponent(seriesTitle)}&fields=key,title,author_name,cover_i,first_publish_year`, {
                 headers: { "Accept": "application/json" },
-                next: { revalidate: 3600 }
+                cache: "no-store"
             });
             if (fallbackResponse.ok) {
                 const fallbackData = await fallbackResponse.json();
@@ -10011,6 +10095,12 @@ async function expandSeriesRequest(seriesTitle: string, author: string, requeste
         }
         
         if (uniqueBooks.length === 0) return false;
+
+        let targetLib: any = null;
+        if (libraryId) {
+            targetLib = await prisma.library.findUnique({ where: { id: libraryId } }).catch(() => null);
+        }
+        const isKyraOrPublicLib = targetLib ? isAutoApprovedBookLibrary(targetLib) : (autoApproveSeries ?? false);
         
         for (const book of uniqueBooks) {
             const inferred = inferBookRating({
@@ -10019,6 +10109,7 @@ async function expandSeriesRequest(seriesTitle: string, author: string, requeste
                 series: seriesTitle
             });
             const isKidsBook = isKidsSeries || inferred.ageRating === "Kids";
+            const isApproved = isKyraOrPublicLib || !isKidsBook;
 
             const req = await prisma.bookRequest.create({
                 data: {
@@ -10033,11 +10124,11 @@ async function expandSeriesRequest(seriesTitle: string, author: string, requeste
                     libraryId: libraryId || null,
                     type: "book",
                     mediaType,
-                    status: isKidsBook ? "Pending" : "Approved"
+                    status: isApproved ? "Approved" : "Pending"
                 }
             });
             
-            if (!isKidsBook) {
+            if (isApproved) {
                 autoDownloadBookRequest(req.id, book.title, book.author).catch(err => {
                     console.error(`[AUTO-DOWNLOAD] Background process failed for series book:`, err);
                 });
@@ -10176,32 +10267,36 @@ function cleanSearchQuery(searchQuery: string): string {
 }
 
 async function fetchOpenLibraryWithFallback(cleanedQuery: string, signal: AbortSignal): Promise<any> {
-    const headers = { 
-        "Accept": "application/json",
-        "User-Agent": "Portalarr/3.0 (https://github.com/plexd281knilb/portalarr; contact@portalarr.local)"
-    };
-    const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(cleanedQuery)}&limit=1&fields=key,title,author_name,cover_i,first_publish_year`;
-    const res = await fetch(url, { headers, signal });
-    if (!res.ok) return null;
-    const data = await res.json();
-    
-    if (data && data.docs && data.docs.length > 0) {
-        return data;
-    }
-    
-    // Fallback: Check if prefix is 1-2 chars or standard tags like zlib/libgen/epub/pdf, and retry search without it
-    const prefixRegex = /^(?:[a-z]{1,2}|zlib|libgen|epub|pdf)\b\s*/i;
-    if (prefixRegex.test(cleanedQuery)) {
-        const fallbackQuery = cleanedQuery.replace(prefixRegex, "").trim();
-        console.log(`[OPEN-LIBRARY-FALLBACK] No matches for "${cleanedQuery}". Retrying with stripped prefix: "${fallbackQuery}"`);
-        const fallbackUrl = `https://openlibrary.org/search.json?q=${encodeURIComponent(fallbackQuery)}&limit=1&fields=key,title,author_name,cover_i,first_publish_year`;
-        const fallbackRes = await fetch(fallbackUrl, { headers, signal });
-        if (fallbackRes.ok) {
-            return await fallbackRes.json();
+    try {
+        const headers = { 
+            "Accept": "application/json",
+            "User-Agent": "Portalarr/3.0 (https://github.com/plexd281knilb/portalarr; contact@portalarr.local)"
+        };
+        const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(cleanedQuery)}&limit=1&fields=key,title,author_name,cover_i,first_publish_year`;
+        const res = await fetch(url, { headers, signal, cache: "no-store" });
+        if (!res.ok) return null;
+        const data = await res.json();
+        
+        if (data && data.docs && data.docs.length > 0) {
+            return data;
         }
+        
+        // Fallback: Check if prefix is 1-2 chars or standard tags like zlib/libgen/epub/pdf, and retry search without it
+        const prefixRegex = /^(?:[a-z]{1,2}|zlib|libgen|epub|pdf)\b\s*/i;
+        if (prefixRegex.test(cleanedQuery)) {
+            const fallbackQuery = cleanedQuery.replace(prefixRegex, "").trim();
+            console.log(`[OPEN-LIBRARY-FALLBACK] No matches for "${cleanedQuery}". Retrying with stripped prefix: "${fallbackQuery}"`);
+            const fallbackUrl = `https://openlibrary.org/search.json?q=${encodeURIComponent(fallbackQuery)}&limit=1&fields=key,title,author_name,cover_i,first_publish_year`;
+            const fallbackRes = await fetch(fallbackUrl, { headers, signal, cache: "no-store" });
+            if (fallbackRes.ok) {
+                return await fallbackRes.json();
+            }
+        }
+        
+        return data;
+    } catch {
+        return null;
     }
-    
-    return data;
 }
 
 function parseFilenameMetadata(rawBase: string): { title: string, author: string, series: string | null, volumeNumber: string | null, cleanQuery: string } {
@@ -15114,15 +15209,12 @@ export async function getServicesHealthPulse() {
             prisma.mediaApp.findFirst({ where: { type: { contains: "qbit" } } })
         ]);
 
-        const checkService = async (app: any, checkFn: () => Promise<boolean>) => {
+        const checkService = async (app: any, checkFn: (signal: AbortSignal) => Promise<boolean>) => {
             if (!app) return { configured: false, online: false, name: "Not configured" };
             try {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 3000);
-                const online = await Promise.race([
-                    checkFn(),
-                    new Promise<boolean>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 3000))
-                ]);
+                const online = await checkFn(controller.signal);
                 clearTimeout(timeoutId);
                 return { configured: true, online: Boolean(online), name: app.name || app.type };
             } catch (e) {
@@ -15131,21 +15223,21 @@ export async function getServicesHealthPulse() {
         };
 
         const [prowlarr, sabnzbd, qbittorrent] = await Promise.all([
-            checkService(prowlarrApp, async () => {
+            checkService(prowlarrApp, async (signal) => {
                 const url = cleanUrl(prowlarrApp!.url);
                 const key = decryptData(prowlarrApp!.apiKey as string);
-                const res = await fetch(`${url}/api/v1/health?apikey=${key}`, { cache: "no-store" });
+                const res = await fetch(`${url}/api/v1/health?apikey=${key}`, { cache: "no-store", signal });
                 return res.ok;
             }),
-            checkService(sabApp, async () => {
+            checkService(sabApp, async (signal) => {
                 const url = cleanUrl(sabApp!.url);
                 const key = decryptData(sabApp!.apiKey as string);
-                const res = await fetch(`${url}/api?mode=version&output=json&apikey=${key}`, { cache: "no-store" });
+                const res = await fetch(`${url}/api?mode=version&output=json&apikey=${key}`, { cache: "no-store", signal });
                 return res.ok;
             }),
-            checkService(qbitApp, async () => {
+            checkService(qbitApp, async (signal) => {
                 const url = cleanUrl(qbitApp!.url);
-                const res = await fetch(`${url}/api/v2/app/version`, { cache: "no-store" });
+                const res = await fetch(`${url}/api/v2/app/version`, { cache: "no-store", signal });
                 return res.ok || res.status === 403;
             })
         ]);
@@ -15206,14 +15298,25 @@ export async function getPublicSmtpFromEmail() {
     }
 }
 
-export async function checkUserLibraryAccess(): Promise<boolean> {
+export async function checkUserLibraryAccess(options?: { skipCache?: boolean }): Promise<boolean> {
     try {
         await ensureSchemaColumns();
         const session = await verifyUser();
-        if (session.role === "ADMIN") return true;
+        const userId = session.userId || session.id;
+
+        if (!options?.skipCache) {
+            const cached = getUserCache<boolean>(`user_lib_access:${userId}`);
+            if (cached !== null && cached !== undefined) return cached;
+        }
+
+        if (session.role === "ADMIN") {
+            setUserCache(`user_lib_access:${userId}`, true, 3 * 60 * 1000);
+            return true;
+        }
 
         // Trial accounts never have access to the Book Library
         if ((session.status === "TRIAL" || (session as any).isTrial === true) && session.status !== "APPROVED") {
+            setUserCache(`user_lib_access:${userId}`, false, 3 * 60 * 1000);
             return false;
         }
 
@@ -15225,6 +15328,7 @@ export async function checkUserLibraryAccess(): Promise<boolean> {
             select: { kindleEmail: true }
         });
         if (!user?.kindleEmail || user.kindleEmail.trim() === "") {
+            setUserCache(`user_lib_access:${userId}`, false, 3 * 60 * 1000);
             return false;
         }
 
@@ -15239,7 +15343,9 @@ export async function checkUserLibraryAccess(): Promise<boolean> {
             return users.includes(username);
         });
 
-        return filtered.length > 0;
+        const hasAccess = filtered.length > 0;
+        setUserCache(`user_lib_access:${userId}`, hasAccess, 3 * 60 * 1000);
+        return hasAccess;
     } catch (e) {
         return false;
     }
@@ -15290,6 +15396,7 @@ export async function setupBookLibraryAccessAction(options: { kindleEmail?: stri
             }
         }
 
+        clearUserCache("user_lib_access");
         revalidatePath("/");
         revalidatePath("/library");
         revalidatePath("/settings/profile");
@@ -15364,104 +15471,139 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
         if (!skipAuth) {
             await verifyAdmin();
         }
-        const [tautulliInstances, glances, plexServers, settings] = await Promise.all([
+        const [tautulliInstances, glances, plexServers, settings, userProfiles] = await Promise.all([
             prisma.tautulliInstance.findMany({ orderBy: { createdAt: 'asc' } }).catch(() => []),
             prisma.glancesInstance.findMany({ orderBy: { createdAt: 'asc' } }).catch(() => []),
             prisma.plexServer.findMany({ orderBy: { createdAt: 'asc' } }).catch(() => []),
-            prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null)
+            prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null),
+            getUserStreamProfiles().catch(() => [])
         ]);
+
+        const userProfileMap = new Map<string, any>();
+        for (const up of userProfiles) {
+            if (up?.user) {
+                userProfileMap.set(up.user.toLowerCase().trim(), up);
+            }
+        }
 
         const allSessions: any[] = [];
         let totalStreamCount = 0;
         const coveredServerNames = new Set<string>();
+        const seenSessionFingerprints = new Set<string>();
 
         // Build set of unmonitored Plex server names to strictly exclude from active stream tallies
         const unmonitoredPlexNames = new Set(
             plexServers.filter(ps => ps.monitored === false).map(ps => ps.name.toLowerCase().trim())
         );
 
-        // 1. Tautulli Session Collection
-        for (const t of tautulliInstances) {
-            if (t.monitored === false) continue; // Skip unmonitored Tautulli instances
-            let baseUrl = cleanUrl(t.url).replace(/\/api\/v2\/?$/, "");
-            const apiKey = decryptData(t.apiKey);
-            const fullUrl = `${baseUrl}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_activity`;
+        // Built-in Telemetry Takeover Mode:
+        // When nativeStreamMonitoringEnabled is true (default), Portalarr monitors all active Plex servers directly.
+        // Standalone external Tautulli instances are NOT queried for active sessions to prevent duplicate tracking.
+        const useBuiltIn = settings?.nativeStreamMonitoringEnabled !== false;
 
-            try {
-                const actResult = await fetchTautulliApiJson(fullUrl, undefined, { revalidate: 0 });
-                if (actResult.ok && actResult.data) {
-                    coveredServerNames.add(t.name.toLowerCase().trim());
-                    const count = actResult.data.stream_count ? Number(actResult.data.stream_count) : 0;
-                    totalStreamCount += count;
-                    const sessions = actResult.data.sessions || [];
-                    for (const s of sessions) {
-                        let rawThumb = s.thumb || s.parent_thumb || s.grandparent_thumb || s.art || (s.rating_key ? `/library/metadata/${s.rating_key}/thumb` : "");
-                        if (rawThumb && rawThumb.includes("pms_image_proxy")) {
-                            try {
-                                const dummyUrl = new URL(rawThumb.startsWith("http") ? rawThumb : `http://localhost/${rawThumb.replace(/^\/+/, "")}`);
-                                const nested = dummyUrl.searchParams.get("img") || dummyUrl.searchParams.get("url");
-                                if (nested) rawThumb = nested;
-                            } catch (e) {}
-                        }
-                        const thumbUrl = rawThumb
-                            ? `/api/media/image?instanceId=${encodeURIComponent(t.id)}&img=${encodeURIComponent(rawThumb)}&title=${encodeURIComponent(s.grandparent_title || s.title || "")}&year=${encodeURIComponent(String(s.year || ""))}&type=${encodeURIComponent(s.media_type || (s.grandparent_title ? "episode" : "movie"))}`
-                            : null;
+        // 1. Tautulli Session Collection (Only when Built-in takeover is OFF)
+        if (!useBuiltIn) {
+            for (const t of tautulliInstances) {
+                if (t.monitored === false) continue; // Skip unmonitored Tautulli instances
+                let baseUrl = cleanUrl(t.url).replace(/\/api\/v2\/?$/, "");
+                const apiKey = decryptData(t.apiKey);
+                const fullUrl = `${baseUrl}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_activity`;
 
-                        const isEpisode = s.media_type === "episode" || !!s.grandparent_title;
-                        const seasonNum = s.parent_media_index ? Number(s.parent_media_index) : undefined;
-                        const episodeNum = s.media_index ? Number(s.media_index) : undefined;
-                        const seasonEpisodeTag = (seasonNum !== undefined && episodeNum !== undefined)
-                            ? `S${String(seasonNum).padStart(2, "0")}E${String(episodeNum).padStart(2, "0")}`
-                            : (seasonNum !== undefined ? `S${String(seasonNum).padStart(2, "0")}` : (s.parent_title || ""));
+                try {
+                    const actResult = await fetchTautulliApiJson(fullUrl, undefined, { revalidate: 0 });
+                    if (actResult.ok && actResult.data) {
+                        coveredServerNames.add(t.name.toLowerCase().trim());
+                        const sessions = actResult.data.sessions || [];
+                        for (const s of sessions) {
+                            if (!s || typeof s !== "object") continue;
+                            if (!s.rating_key && !s.title && !s.grandparent_title) continue;
+                            if (String(s.state || "").toLowerCase().trim() === "stopped") continue;
 
-                        let fullTitle = s.title || "Unknown Media";
-                        if (isEpisode && s.grandparent_title) {
-                            if (seasonEpisodeTag) {
-                                fullTitle = `${s.grandparent_title} - ${seasonEpisodeTag}${s.title ? `: ${s.title}` : ""}`;
-                            } else {
-                                fullTitle = `${s.grandparent_title} - ${s.title || (s.parent_title ? `${s.parent_title} Ep` : "Episode")}`;
+                            let rawThumb = s.grandparent_thumb || s.parent_thumb || s.thumb || s.art || (s.rating_key ? `/library/metadata/${s.rating_key}/thumb` : "");
+                            if (rawThumb && rawThumb.includes("pms_image_proxy")) {
+                                try {
+                                    const dummyUrl = new URL(rawThumb.startsWith("http") ? rawThumb : `http://localhost/${rawThumb.replace(/^\/+/, "")}`);
+                                    const nested = dummyUrl.searchParams.get("img") || dummyUrl.searchParams.get("url");
+                                    if (nested) rawThumb = nested;
+                                } catch (e) {}
                             }
-                        }
+                            const searchTitle = s.grandparent_title || s.title || "";
+                            const thumbUrl = (rawThumb || searchTitle)
+                                ? `/api/media/image?instanceId=${encodeURIComponent(t.id)}&serverName=${encodeURIComponent(t.name)}&img=${encodeURIComponent(rawThumb)}&title=${encodeURIComponent(searchTitle)}&year=${encodeURIComponent(String(s.year || ""))}&type=${encodeURIComponent(s.media_type || (s.grandparent_title ? "episode" : "movie"))}`
+                                : null;
 
-                        allSessions.push({
-                            instanceId: t.id,
-                            serverName: t.name,
-                            sessionKey: String(s.session_key || ""),
-                            sessionId: String(s.session_id || ""),
-                            user: s.friendly_name || s.user || "Plex User",
-                            email: s.email || "",
-                            title: fullTitle,
-                            grandparentTitle: s.grandparent_title || "",
-                            parentTitle: s.parent_title || "",
-                            seasonNum: seasonNum,
-                            episodeNum: episodeNum,
-                            seasonEpisodeTag: seasonEpisodeTag,
-                            episodeTitle: isEpisode ? (s.title || "") : "",
-                            mediaType: isEpisode ? "episode" : "movie",
-                            year: s.year || "",
-                            thumb: thumbUrl,
-                            player: s.player || s.platform || "Plex Client",
-                            device: s.device || s.platform || "",
-                            ipAddress: s.ip_address || "",
-                            videoDecision: (s.video_decision || "direct play").toLowerCase(),
-                            audioDecision: (s.audio_decision || "direct play").toLowerCase(),
-                            videoCodec: (s.video_codec || "").toUpperCase(),
-                            audioCodec: (s.audio_codec || "").toUpperCase(),
-                            streamBitrate: s.stream_bitrate ? Math.round(Number(s.stream_bitrate)) : (s.bitrate ? Math.round(Number(s.bitrate)) : 0),
-                            transcodeHwRequested: !!s.transcode_hw_requested,
-                            transcodeHwDecoding: s.transcode_hw_decoding || "",
-                            transcodeHwEncoding: s.transcode_hw_encoding || "",
-                            progressPercent: s.progress_percent ? Number(s.progress_percent) : 0,
-                            state: s.state || "playing"
-                        });
+                            const isEpisode = s.media_type === "episode" || !!s.grandparent_title;
+                            const seasonNum = s.parent_media_index ? Number(s.parent_media_index) : undefined;
+                            const episodeNum = s.media_index ? Number(s.media_index) : undefined;
+                            const seasonEpisodeTag = (seasonNum !== undefined && episodeNum !== undefined)
+                                ? `S${String(seasonNum).padStart(2, "0")}E${String(episodeNum).padStart(2, "0")}`
+                                : (seasonNum !== undefined ? `S${String(seasonNum).padStart(2, "0")}` : (s.parent_title || ""));
+
+                            let fullTitle = s.title || "Unknown Media";
+                            if (isEpisode && s.grandparent_title) {
+                                if (seasonEpisodeTag) {
+                                    fullTitle = `${s.grandparent_title} - ${seasonEpisodeTag}${s.title ? `: ${s.title}` : ""}`;
+                                } else {
+                                    fullTitle = `${s.grandparent_title} - ${s.title || (s.parent_title ? `${s.parent_title} Ep` : "Episode")}`;
+                                }
+                            }
+
+                            const userTitle = s.friendly_name || s.user || "Plex User";
+                            const rawSessionKey = String(s.session_key || s.session_id || `${s.rating_key || "stream"}_${s.ip_address || userTitle}_${t.id}`);
+                            const uniqueStreamKey = `tautulli_${t.id}_${rawSessionKey}_${userTitle}_${s.rating_key || fullTitle}`.replace(/[^a-zA-Z0-9_-]/g, "_");
+
+                            const fingerprint = s.session_id 
+                                ? `sess_${s.session_id}` 
+                                : `${userTitle.toLowerCase().trim()}:::${String(s.rating_key || fullTitle).toLowerCase().trim()}:::${String(s.ip_address || t.id).toLowerCase().trim()}`;
+                            if (seenSessionFingerprints.has(fingerprint)) continue;
+                            seenSessionFingerprints.add(fingerprint);
+
+                            const sessionItem: any = {
+                                instanceId: t.id,
+                                serverName: t.name,
+                                sessionKey: rawSessionKey,
+                                sessionId: String(s.session_id || s.session_key || ""),
+                                uniqueStreamKey,
+                                user: userTitle,
+                                email: s.email || "",
+                                title: fullTitle,
+                                grandparentTitle: s.grandparent_title || "",
+                                parentTitle: s.parent_title || "",
+                                seasonNum: seasonNum,
+                                episodeNum: episodeNum,
+                                seasonEpisodeTag: seasonEpisodeTag,
+                                episodeTitle: isEpisode ? (s.title || "") : "",
+                                mediaType: isEpisode ? "episode" : "movie",
+                                year: s.year || "",
+                                thumb: thumbUrl,
+                                player: s.player || s.platform || "Plex Client",
+                                device: s.device || s.platform || "",
+                                ipAddress: s.ip_address || "",
+                                videoDecision: (s.video_decision || "direct play").toLowerCase(),
+                                audioDecision: (s.audio_decision || "direct play").toLowerCase(),
+                                videoCodec: (s.video_codec || "").toUpperCase(),
+                                audioCodec: (s.audio_codec || "").toUpperCase(),
+                                streamBitrate: s.stream_bitrate ? Math.round(Number(s.stream_bitrate)) : (s.bitrate ? Math.round(Number(s.bitrate)) : 0),
+                                transcodeHwRequested: !!s.transcode_hw_requested,
+                                transcodeHwDecoding: s.transcode_hw_decoding || "",
+                                transcodeHwEncoding: s.transcode_hw_encoding || "",
+                                progressPercent: s.progress_percent ? Number(s.progress_percent) : 0,
+                                state: s.state || "playing"
+                            };
+
+                            sessionItem.deviceDiagnosis = diagnoseStreamSettings(sessionItem);
+                            const telemetry = extractStreamTelemetry(s);
+                            Object.assign(sessionItem, telemetry);
+                            allSessions.push(sessionItem);
+                        }
                     }
+                } catch (err: any) {
+                    console.warn(`[ADMIN-STREAMS] Failed to fetch activity for Tautulli "${t.name}":`, err.message || err);
                 }
-            } catch (err: any) {
-                console.warn(`[ADMIN-STREAMS] Failed to fetch activity for Tautulli "${t.name}":`, err.message || err);
             }
         }
 
-        // 2. Direct Plex Active Sessions Fallback (for configured Plex servers not monitored by Tautulli)
+        // 2. Direct Multi-Server Plex Active Sessions Collection
         let adminToken = "";
         if (settings?.mainPlexToken) {
             try {
@@ -15477,9 +15619,14 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
                     // Skip if Plex server is unmonitored (monitored: false)
                     if (unmonitoredPlexNames.has(norm)) continue;
 
-                    const isCovered = Array.from(coveredServerNames).some(c => c === norm || c.includes(norm) || norm.includes(c));
+                    const isCovered = !useBuiltIn && Array.from(coveredServerNames).some(c => c === norm || c.includes(norm) || norm.includes(c));
                     if (!isCovered && srv.sessions && srv.sessions.length > 0) {
                         for (const s of srv.sessions) {
+                            if (!s || typeof s !== "object") continue;
+                            if (!s.ratingKey && !s.title && !s.grandparentTitle) continue;
+                            const playerState = String(s.Player?.state || s.state || "").toLowerCase().trim();
+                            if (playerState === "stopped") continue;
+
                             const isTranscode = s.TranscodeSession || (s.Media && s.Media[0]?.Part && s.Media[0]?.Part[0]?.decision === "transcode");
                             const userTitle = s.User?.title || s.User?.username || s.User?.name || s.username || "Plex User";
                             const isEpisode = s.type === "episode" || !!s.grandparentTitle;
@@ -15497,14 +15644,28 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
                                     fullTitle = `${s.grandparentTitle} - ${s.title || "Episode"}`;
                                 }
                             }
+
+                            const rawSessionKey = String(s.sessionKey || s.Session?.id || `${s.ratingKey || "stream"}_${s.Player?.machineIdentifier || s.Player?.address || userTitle}_${srv.serverId}`);
+                            const uniqueStreamKey = `plex_${srv.serverId || srv.serverName}_${rawSessionKey}_${userTitle}_${s.ratingKey || fullTitle}`.replace(/[^a-zA-Z0-9_-]/g, "_");
+
+                            // Deduplication fingerprint:
+                            // Avoid duplicate cards if the same user is playing the same item on the same player or server
+                            const fingerprint = s.Session?.id 
+                                ? `sess_${s.Session.id}` 
+                                : `${userTitle.toLowerCase().trim()}:::${String(s.ratingKey || fullTitle).toLowerCase().trim()}:::${String(s.Player?.machineIdentifier || s.Player?.address || srv.serverId).toLowerCase().trim()}`;
+
+                            if (seenSessionFingerprints.has(fingerprint)) {
+                                continue;
+                            }
+                            seenSessionFingerprints.add(fingerprint);
                             
-                            const bitrate = s.Media && s.Media[0]?.bitrate ? Number(s.Media[0].bitrate) : 0;
-                            totalStreamCount++;
-                            allSessions.push({
+                            const bitrate = s.Media && s.Media[0]?.bitrate ? Number(s.Media[0].bitrate) : (s.Session?.bandwidth ? Number(s.Session.bandwidth) : 0);
+                            const sessionItem: any = {
                                 instanceId: `plex_${srv.serverId}`,
                                 serverName: srv.serverName,
-                                sessionKey: String(s.sessionKey || s.ratingKey || Math.random()),
-                                sessionId: String(s.Session?.id || ""),
+                                sessionKey: rawSessionKey,
+                                sessionId: String(s.Session?.id || s.sessionKey || ""),
+                                uniqueStreamKey,
                                 user: userTitle,
                                 email: s.User?.email || "",
                                 title: fullTitle,
@@ -15516,12 +15677,15 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
                                 episodeTitle: isEpisode ? (s.title || "") : "",
                                 mediaType: isEpisode ? "episode" : "movie",
                                 year: s.year || "",
-                                thumb: s.thumb ? `${srv.serverUrl}${s.thumb}?X-Plex-Token=${srv.token}` : null,
+                                thumb: (s.grandparentThumb || s.parentThumb || s.thumb || s.art || (s.ratingKey ? `/library/metadata/${s.ratingKey}/thumb` : "") || (s.grandparentTitle || s.title || ""))
+                                    ? `/api/media/image?serverId=${encodeURIComponent(srv.serverId)}&serverName=${encodeURIComponent(srv.serverName)}&serverUrl=${encodeURIComponent(srv.serverUrl)}&thumb=${encodeURIComponent(s.grandparentThumb || s.parentThumb || s.thumb || s.art || (s.ratingKey ? `/library/metadata/${s.ratingKey}/thumb` : ""))}&title=${encodeURIComponent(s.grandparentTitle || s.title || "")}&year=${encodeURIComponent(String(s.year || ""))}&type=${encodeURIComponent(isEpisode ? "episode" : "movie")}&token=${encodeURIComponent(srv.token || "")}`
+                                    : null,
                                 player: s.Player?.title || s.Player?.device || "Plex Client",
                                 device: s.Player?.platform || s.Player?.device || "",
                                 ipAddress: s.Player?.address || "",
+                                location: (s.Session?.location || (isPrivateOrLocalIp(s.Player?.address) ? "lan" : "wan")),
                                 videoDecision: isTranscode ? "transcode" : "direct play",
-                                audioDecision: "direct play",
+                                audioDecision: s.TranscodeSession?.audioDecision || "direct play",
                                 videoCodec: (s.Media && s.Media[0]?.videoCodec || "H264").toUpperCase(),
                                 audioCodec: (s.Media && s.Media[0]?.audioCodec || "AAC").toUpperCase(),
                                 streamBitrate: bitrate,
@@ -15530,12 +15694,23 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
                                 transcodeHwEncoding: s.TranscodeSession?.videoEncoder || "",
                                 progressPercent: s.viewOffset && s.duration ? Math.round((Number(s.viewOffset) / Number(s.duration)) * 100) : 0,
                                 state: s.Player?.state || "playing"
-                            });
+                            };
+
+                            sessionItem.deviceDiagnosis = diagnoseStreamSettings(sessionItem);
+                            const telemetry = extractStreamTelemetry(s);
+                            Object.assign(sessionItem, telemetry);
+                            if (telemetry.userThumb && telemetry.userThumb.startsWith("/") && srv.serverUrl && srv.token) {
+                                sessionItem.userThumb = `${srv.serverUrl}${telemetry.userThumb}?X-Plex-Token=${encodeURIComponent(srv.token)}`;
+                            }
+                            allSessions.push(sessionItem);
                         }
                     }
                 }
             } catch (e) {}
         }
+
+        // Align totalStreamCount exactly with deduplicated active sessions
+        totalStreamCount = allSessions.length;
 
         // 3. Streams Per Plex Server Registry & Usage Calculation (ONLY monitored servers with monitoring turned on)
         const serverUsageMap = new Map<string, {
@@ -15658,15 +15833,370 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
             }
         }));
 
+        // 5. Credential Sharing & Concurrent Connections Analysis
+        const analysesMap = analyzeActiveSessionsForSharing(allSessions, settings?.maxConcurrentStreamsPerUser || 3);
+        const userAnalysesList = Array.from(analysesMap.values());
+
+        // Annotate each session with user connection & sharing telemetry and household anchoring
+        for (const s of allSessions) {
+            const rawUser = (s.user || s.User?.title || s.User?.username || s.username || "Plex User").trim();
+            const userKey = rawUser.toLowerCase();
+            const analysis = analysesMap.get(userKey);
+            const profile = userProfileMap.get(userKey);
+
+            if (analysis) {
+                s.userActiveStreamCount = analysis.activeSessionsCount;
+                s.isMultiIp = analysis.isMultiIp;
+                s.isExcessiveConnections = analysis.isExcessiveConnections;
+                s.isSharingAlert = analysis.isSharingSuspected;
+                s.sharingReason = analysis.sharingReason;
+                s.userDistinctIps = analysis.distinctIps;
+                s.userPublicIps = analysis.distinctPublicIps;
+            } else {
+                s.userActiveStreamCount = 1;
+                s.isMultiIp = false;
+                s.isExcessiveConnections = false;
+                s.isSharingAlert = false;
+                s.userDistinctIps = s.ipAddress ? [s.ipAddress] : [];
+                s.userPublicIps = [];
+            }
+
+            // Determine Household Anchoring Badge
+            const cleanIp = normalizeIp(s.ipAddress);
+            const isLocal = isPrivateOrLocalIp(cleanIp);
+            const isTv = isFixedHomeDevice(s.device, s.platform, s.player);
+            const isMobile = isMobileRoamingDevice(s.device, s.platform, s.player);
+            const primaryHomeIp = profile?.sharingAssessment?.primaryHomeIp;
+            const secondaryHomeIp = profile?.sharingAssessment?.secondaryHomeIp;
+            const hasEstablishedHome = Boolean(primaryHomeIp && primaryHomeIp !== "Unknown IP" && primaryHomeIp !== "LAN / Local Network");
+
+            const matchesPrimaryHome = Boolean(hasEstablishedHome && (cleanIp === primaryHomeIp || isSameSubnetOrIp(cleanIp, primaryHomeIp)));
+            const matchesSecondaryHome = Boolean(secondaryHomeIp && (cleanIp === secondaryHomeIp || isSameSubnetOrIp(cleanIp, secondaryHomeIp)));
+
+            if (s.isSharingAlert) {
+                s.householdBadge = {
+                    label: "🚨 Suspected Sharing",
+                    type: "sharing",
+                    color: "bg-rose-500/20 text-rose-300 border-rose-500/40",
+                    desc: s.sharingReason || "Simultaneous stream from distinct public IP"
+                };
+            } else if (isLocal || matchesPrimaryHome) {
+                s.householdBadge = {
+                    label: "🏡 Primary Home",
+                    type: "primary",
+                    color: "bg-emerald-500/20 text-emerald-300 border-emerald-500/40",
+                    desc: isLocal ? "Local private home network" : `Primary Home IP (${cleanIp})`
+                };
+            } else if (matchesSecondaryHome) {
+                s.householdBadge = {
+                    label: "🏡 2nd Home / Cabin",
+                    type: "second_home",
+                    color: "bg-cyan-500/20 text-cyan-300 border-cyan-500/40",
+                    desc: `Secondary Residence (${cleanIp})`
+                };
+            } else if (!hasEstablishedHome && isTv) {
+                // Remote user watching on a living room TV with cold start or single location:
+                // Fixed TV with no multi-IP sharing alert is anchored as their Primary Home!
+                s.householdBadge = {
+                    label: "🏡 Primary Home",
+                    type: "primary",
+                    color: "bg-emerald-500/20 text-emerald-300 border-emerald-500/40",
+                    desc: `Remote Home TV (${cleanIp || "Residential IP"})`
+                };
+            } else if (isMobile) {
+                s.householdBadge = {
+                    label: "📱 Mobile Roaming",
+                    type: "mobile",
+                    color: "bg-purple-500/20 text-purple-300 border-purple-500/40",
+                    desc: `Mobile / Cellular player (${cleanIp || "Remote"})`
+                };
+            } else {
+                s.householdBadge = {
+                    label: "✈️ Travel / Away",
+                    type: "away",
+                    color: "bg-amber-500/20 text-amber-300 border-amber-500/40",
+                    desc: `Remote away streaming (${cleanIp || "Remote IP"})`
+                };
+            }
+        }
+
+        // Record active sessions into persistent WatchHistory in background
+        if (allSessions.length > 0) {
+            recordActivePlexSessions(allSessions).catch(e => {
+                console.error("[ADMIN-STREAMS] Background recordActivePlexSessions error:", e);
+            });
+        }
+
+        // Deterministically sort allSessions so stream cards maintain a stable position across polling cycles
+        allSessions.sort((a: any, b: any) => {
+            const userA = String(a.user || "").toLowerCase().trim();
+            const userB = String(b.user || "").toLowerCase().trim();
+            if (userA !== userB) return userA.localeCompare(userB);
+
+            const serverA = String(a.serverName || "").toLowerCase().trim();
+            const serverB = String(b.serverName || "").toLowerCase().trim();
+            if (serverA !== serverB) return serverA.localeCompare(serverB);
+
+            const titleA = String(a.grandparentTitle || a.title || "").toLowerCase().trim();
+            const titleB = String(b.grandparentTitle || b.title || "").toLowerCase().trim();
+            if (titleA !== titleB) return titleA.localeCompare(titleB);
+
+            const keyA = String(a.uniqueStreamKey || a.sessionKey || a.sessionId || "");
+            const keyB = String(b.uniqueStreamKey || b.sessionKey || b.sessionId || "");
+            return keyA.localeCompare(keyB);
+        });
+
         return {
             success: true,
             totalStreams: totalStreamCount,
             sessions: allSessions,
             glances: glancesStats,
-            serversUsage: serversUsage
+            serversUsage: serversUsage,
+            useBuiltInStreamMonitor: useBuiltIn,
+            tautulliBackfillLastRun: settings?.tautulliBackfillLastRun,
+            securityTelemetry: {
+                totalActiveUsers: userAnalysesList.length,
+                multiIpUsersCount: userAnalysesList.filter(a => a.isMultiIp).length,
+                excessiveStreamsUsersCount: userAnalysesList.filter(a => a.isExcessiveConnections).length,
+                sharingAlertsCount: userAnalysesList.filter(a => a.isSharingSuspected).length,
+                userAnalyses: userAnalysesList
+            }
         };
     } catch (e: any) {
         return { success: false, error: e.message || "Failed fetching admin streams" };
+    }
+}
+
+/**
+ * Server Action: Full Single-Pane Stream Intelligence Aggregator
+ * Merges watches, views, history, users, streams, types across all monitored servers
+ * with device settings diagnostics and Tautulli status.
+ */
+export async function getStreamIntelligenceDataAction(options?: {
+    serverFilter?: string;
+    view?: string;
+    search?: string;
+    page?: number;
+}) {
+    await verifyAdmin();
+    const [streamsRes, userProfiles, analytics, historyRes, settings, tautulliInstances, plexServers] = await Promise.all([
+        getAdminDetailedStreamsAction(true),
+        getUserStreamProfiles(),
+        getStreamIntelligenceAnalytics(),
+        getWatchHistory({
+            search: options?.search,
+            page: options?.page || 1,
+            limit: 50
+        }),
+        prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null),
+        prisma.tautulliInstance.findMany({ orderBy: { createdAt: "asc" } }).catch(() => []),
+        prisma.plexServer.findMany({ orderBy: { createdAt: "asc" } }).catch(() => [])
+    ]);
+
+    // Build device audit items from active streams and recent history
+    const deviceAuditList: any[] = [];
+    const seenAuditKeys = new Set<string>();
+
+    if (streamsRes.success && streamsRes.sessions) {
+        for (const s of streamsRes.sessions) {
+            const diag = s.deviceDiagnosis || diagnoseStreamSettings(s);
+            if (diag && diag.hasIssue) {
+                const key = `${s.user}_${diag.deviceCategory}_${diag.issueType}`;
+                if (!seenAuditKeys.has(key)) {
+                    seenAuditKeys.add(key);
+                    deviceAuditList.push({
+                        user: s.user,
+                        title: s.title,
+                        serverName: s.serverName,
+                        device: s.device || s.player,
+                        diagnosis: diag,
+                        isActiveNow: true,
+                        detectedAt: new Date()
+                    });
+                }
+            }
+        }
+    }
+
+    // Also inspect user profiles for chronic transcoders who have bad remote quality settings
+    for (const p of userProfiles) {
+        if (p.frequentTranscoder) {
+            const key = `user_chronic_${p.user}`;
+            if (!seenAuditKeys.has(key)) {
+                seenAuditKeys.add(key);
+                deviceAuditList.push({
+                    user: p.user,
+                    title: p.lastWatchedTitle,
+                    serverName: p.servers[0] || "Plex",
+                    device: p.lastPlatform || p.platforms[0] || "Plex Client",
+                    diagnosis: {
+                        hasIssue: true,
+                        issueType: "remote_quality_cap",
+                        title: `Chronic Transcoding (${p.transcodeRate}% of streams)`,
+                        description: `User "${p.user}" transcoded ${p.transcodeCount} out of ${p.totalPlays} plays. Their client app likely has 'Remote Quality' defaulted to 2-4 Mbps 720p.`,
+                        severity: "warning",
+                        deviceCategory: detectDeviceCategory(p.lastPlatform),
+                        quickFix: "Send user step-by-step instructions to set Remote Quality to Maximum / Original.",
+                        stepByStepGuide: [
+                            `Open Plex on ${p.lastPlatform || "their device"}.`,
+                            "Go to Settings (⚙️) → Video / Quality.",
+                            "Change 'Remote Streaming Quality' to Maximum / Original.",
+                            "Turn 'Auto Adjust Quality' to OFF."
+                        ],
+                        copyableNotice: `Hey @${p.user}! We noticed that ${p.transcodeRate}% of your recent streams are downscaling to 720p. To unlock full 1080p/4K Direct Play without server buffering, open Plex on your ${p.lastPlatform || "device"} → Settings (⚙️) → Video, and set Remote Streaming Quality to Maximum/Original!`
+                    },
+                    isActiveNow: false,
+                    detectedAt: p.lastWatchedAt
+                });
+            }
+        }
+    }
+
+    return {
+        success: true,
+        activeStreams: streamsRes.success ? (streamsRes.sessions || []) : [],
+        serversUsage: streamsRes.success ? (streamsRes.serversUsage || []) : [],
+        glances: streamsRes.success ? (streamsRes.glances || []) : [],
+        userProfiles,
+        analytics,
+        history: historyRes,
+        deviceAudit: deviceAuditList,
+        tautulliInstances: tautulliInstances.map(t => ({
+            id: t.id,
+            name: t.name,
+            url: t.url,
+            monitored: t.monitored
+        })),
+        monitoredPlexServers: plexServers.filter(p => p.monitored !== false).map(p => ({
+            id: p.id,
+            name: p.name,
+            url: p.url,
+            isDefault: p.isDefault
+        })),
+        useBuiltInStreamMonitor: settings?.nativeStreamMonitoringEnabled !== false,
+        tautulliBackfillLastRun: settings?.tautulliBackfillLastRun
+    };
+}
+
+/**
+ * Server Action: Backfill Historical Watch Data from External Tautulli
+ * Supports specific batch limits as well as unlimited / complete historical sync.
+ */
+export async function backfillTautulliHistoryAction(options?: { instanceId?: string; limit?: number; unlimited?: boolean }) {
+    await verifyAdmin();
+    const result = await backfillTautulliHistoryInternal(options);
+    if (result.success) {
+        await prisma.settings.upsert({
+            where: { id: "global" },
+            update: { tautulliBackfillLastRun: new Date() },
+            create: { id: "global", tautulliBackfillLastRun: new Date() }
+        }).catch(() => {});
+        try { revalidatePath("/admin/tautulli"); } catch (_) {}
+        try { revalidatePath("/admin/streams"); } catch (_) {}
+        try { revalidatePath("/tautulli"); } catch (_) {}
+        try { revalidatePath("/streams"); } catch (_) {}
+    }
+    return result;
+}
+
+/**
+ * Server Action: Start Asynchronous Background History Backfill
+ * Returns immediately and reports live progress via getTautulliBackfillStatusAction
+ */
+export async function startTautulliBackfillAction(options?: { instanceId?: string; limit?: number; unlimited?: boolean }) {
+    await verifyAdmin();
+    const result = await startTautulliBackfillInternal(options);
+    return result;
+}
+
+/**
+ * Server Action: Query Live Progress of Running Backfill
+ */
+export async function getTautulliBackfillStatusAction() {
+    await verifyAdmin();
+    return getTautulliBackfillProgress();
+}
+
+/**
+ * Server Action: Stop / Cancel Active Backfill
+ */
+export async function stopTautulliBackfillAction() {
+    await verifyAdmin();
+    return stopTautulliBackfill();
+}
+
+
+/**
+ * Server Action: Toggle between Built-in Stream Monitoring and External Tautulli
+ */
+export async function toggleStreamMonitorModeAction(useBuiltIn: boolean) {
+    await verifyAdmin();
+    await prisma.settings.upsert({
+        where: { id: "global" },
+        update: { nativeStreamMonitoringEnabled: useBuiltIn },
+        create: { id: "global", nativeStreamMonitoringEnabled: useBuiltIn }
+    });
+    try { revalidatePath("/admin/tautulli"); } catch (_) {}
+    try { revalidatePath("/tautulli"); } catch (_) {}
+    try { revalidatePath("/"); } catch (_) {}
+    return { success: true, useBuiltIn };
+}
+
+/**
+ * Server Action: Retrieve paginated watch history and audit statistics
+ */
+export async function getWatchHistoryAction(options?: WatchHistoryQueryOptions) {
+    await verifyAdmin();
+    return await getWatchHistory(options);
+}
+
+/**
+ * Server Action: Retrieve detailed telemetry, all devices, all IPs, and full watch history for a user
+ */
+export async function getUserDetailedTelemetryAction(username: string) {
+    await verifyAdmin();
+    return await getUserDetailedTelemetry(username);
+}
+
+/**
+ * Server Action: Retrieve connection security insights and credential sharing alerts
+ */
+export async function getConnectionSecurityInsightsAction() {
+    await verifyAdmin();
+    return await getConnectionSecurityInsights();
+}
+
+/**
+ * Server Action: Dismiss/acknowledge a user's sharing alert count
+ */
+export async function dismissSharingAlertAction(userId: string) {
+    await verifyAdmin();
+    try {
+        await prisma.user.update({
+            where: { id: userId },
+            data: { sharingAlertCount: 0 }
+        });
+        return { success: true };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to dismiss sharing alert" };
+    }
+}
+
+/**
+ * Server Action: Delete watch history record or clear all history
+ */
+export async function clearWatchHistoryAction(id?: string) {
+    await verifyAdmin();
+    try {
+        if (id) {
+            await prisma.watchHistory.delete({ where: { id } });
+        } else {
+            await prisma.watchHistory.deleteMany({});
+        }
+        revalidatePath("/settings");
+        return { success: true };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to clear watch history" };
     }
 }
 
@@ -15814,14 +16344,14 @@ export async function getAdminInfrastructureStatusAction(skipAuth: boolean = fal
             return baseItem;
         });
 
-        // 3. Tautulli Stream Monitors
+        // 3. Tautulli Historical Watch Archives
         const tautulliPromises = tautulli.map(async (t): Promise<InfrastructureServiceItem> => {
             const isMonitored = t.monitored !== false;
             const clean = cleanUrl(t.url?.trim() || "");
             const baseItem: InfrastructureServiceItem = {
                 id: t.id,
                 name: t.name,
-                type: "Stream Monitor (Tautulli)",
+                type: "Historical Archive (Tautulli)",
                 category: "tautulli",
                 url: clean,
                 monitored: isMonitored,
@@ -15847,10 +16377,10 @@ export async function getAdminInfrastructureStatusAction(skipAuth: boolean = fal
                     baseItem.status = "ONLINE";
                     const streamCount = actResult.data.stream_count ? Number(actResult.data.stream_count) : 0;
                     baseItem.metrics = { streamCount };
-                    baseItem.details = `${streamCount} active stream${streamCount === 1 ? "" : "s"} (${elapsed}ms)`;
+                    baseItem.details = `Historical archive ready (${elapsed}ms)`;
                 } else {
                     baseItem.status = "OFFLINE";
-                    baseItem.details = actResult.error || "Tautulli API unreachable";
+                    baseItem.details = actResult.error || "Tautulli archive unreachable";
                 }
             } catch (err: any) {
                 baseItem.status = "OFFLINE";
@@ -16370,7 +16900,7 @@ export async function getSeriesBooksList(seriesTitle: string, author: string = "
         try {
             const response = await fetchWithRetry(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=45&fields=key,title,author_name,cover_i,first_publish_year`, {
                 headers: { "Accept": "application/json" },
-                next: { revalidate: 3600 }
+                cache: "no-store"
             });
             if (response && response.ok) {
                 const data = await response.json();
@@ -16497,6 +17027,7 @@ export async function createMultipleBookRequests(booksList: { title: string, aut
             targetLib = await prisma.library.findUnique({ where: { id: libraryId } }).catch(() => null);
         }
         const isKidsLib = targetLib ? isKidsLibrary(targetLib) : false;
+        const isKyraOrPublicLib = targetLib ? isAutoApprovedBookLibrary(targetLib) : false;
 
         for (const book of booksList) {
             let finalCover = book.coverUrl;
@@ -16506,7 +17037,7 @@ export async function createMultipleBookRequests(booksList: { title: string, aut
                 author: book.author
             });
             const isKidsBook = isKidsLib || rating.ageRating === "Kids";
-            const isApproved = !isKidsBook;
+            const isApproved = isKyraOrPublicLib || !isKidsBook;
 
             const request = await prisma.bookRequest.create({
                 data: {
@@ -18189,6 +18720,7 @@ export async function runPlexDiagnosticsAction() {
                     "X-Plex-Token": adminToken,
                     "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
                 },
+                signal: AbortSignal.timeout(6000),
                 cache: "no-store"
             });
             if (userRes.ok) {
@@ -18211,6 +18743,7 @@ export async function runPlexDiagnosticsAction() {
                     "X-Plex-Token": adminToken,
                     "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
                 },
+                signal: AbortSignal.timeout(6000),
                 cache: "no-store"
             });
             if (resRes.ok) {
@@ -18238,6 +18771,7 @@ export async function runPlexDiagnosticsAction() {
                     "X-Plex-Token": adminToken,
                     "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
                 },
+                signal: AbortSignal.timeout(6000),
                 cache: "no-store"
             });
             if (srvXmlRes.ok) {
@@ -18464,7 +18998,7 @@ export async function analyzeStreamHealth(s: any): Promise<StreamDiagnosis> {
     };
 }
 
-export async function getUserPlexHubData() {
+export async function getUserPlexHubData(options?: { skipCache?: boolean }) {
     try {
         await ensureSchemaColumns();
         let user: any = null;
@@ -18477,17 +19011,23 @@ export async function getUserPlexHubData() {
             return { success: false, error: "Unauthorized" };
         }
 
+        const safeUsername = String(user?.username || "");
+        const safeEmail = String(user?.email || "");
+        const userKey = safeUsername.toLowerCase().trim();
+
+        if (!options?.skipCache && userKey) {
+            const cached = getUserCache<any>(`user_plex_hub:${userKey}`);
+            if (cached) return cached;
+        }
+
         const isAdmin = user.role === "ADMIN";
         const [settings, tautulli, dbPlexServers] = await Promise.all([
             prisma.settings.findFirst().catch(() => null),
             prisma.tautulliInstance.findMany().catch(() => []),
             prisma.plexServer.findMany().catch(() => [])
         ]);
-    
-    const safeUsername = String(user?.username || "");
-    const safeEmail = String(user?.email || "");
 
-    const userAliases = new Set<string>();
+        const userAliases = new Set<string>();
     if (safeUsername) userAliases.add(safeUsername.toLowerCase().trim());
     if (safeEmail) userAliases.add(safeEmail.toLowerCase().trim());
 
@@ -18658,16 +19198,18 @@ export async function getUserPlexHubData() {
                             fullTitle = `${s.title} (${s.year})`;
                         }
 
-                        const rawThumb = s.thumb || s.parentThumb || s.grandparentThumb || s.art || (s.ratingKey ? `/library/metadata/${s.ratingKey}/thumb` : "");
+                        const rawThumb = s.grandparentThumb || s.parentThumb || s.thumb || s.art || (s.ratingKey ? `/library/metadata/${s.ratingKey}/thumb` : "");
                         const searchTitle = s.grandparentTitle || s.title || "";
                         const thumbUrl = rawThumb || searchTitle 
-                            ? `/api/media/image?instanceId=${encodeURIComponent(srvId)}&img=${encodeURIComponent(rawThumb)}&title=${encodeURIComponent(searchTitle)}&year=${encodeURIComponent(String(s.year || ""))}&type=${encodeURIComponent(mediaType)}`
+                            ? `/api/media/image?instanceId=${encodeURIComponent(srvId)}&serverId=${encodeURIComponent(srv.serverId)}&serverName=${encodeURIComponent(srv.serverName)}&serverUrl=${encodeURIComponent(srv.serverUrl)}&token=${encodeURIComponent(srv.token || "")}&img=${encodeURIComponent(rawThumb)}&title=${encodeURIComponent(searchTitle)}&year=${encodeURIComponent(String(s.year || ""))}&type=${encodeURIComponent(mediaType)}`
                             : null;
 
-                        const sKey = String(s.sessionKey || s.Session?.id || Math.random());
+                        const sKey = String(s.sessionKey || s.Session?.id || `${s.ratingKey || "stream"}_${s.Player?.machineIdentifier || s.Player?.address || sessionUser}_${srv.serverId}`);
                         const sId = String(s.Session?.id || sKey);
+                        const uniqueStreamKey = `plex_${srv.serverId || srv.serverName}_${sKey}_${sessionUser}_${s.ratingKey || fullTitle}`.replace(/[^a-zA-Z0-9_-]/g, "_");
                         seenSessionKeys.add(sKey);
                         seenSessionKeys.add(sId);
+                        seenSessionKeys.add(uniqueStreamKey);
 
                         const durMs = Number(s.duration || 0);
                         const offsetMs = Number(s.viewOffset || 0);
@@ -18678,6 +19220,7 @@ export async function getUserPlexHubData() {
                             instanceName: srv.serverName,
                             sessionKey: sKey,
                             sessionId: sId,
+                            uniqueStreamKey,
                             title: s.title || "Unknown",
                             parentTitle: s.parentTitle || "",
                             grandparentTitle: s.grandparentTitle || "",
@@ -19026,7 +19569,7 @@ export async function getUserPlexHubData() {
                                 "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
                             },
                             signal: controller.signal,
-                            next: { revalidate: 30 }
+                            cache: "no-store"
                         });
                         clearTimeout(timeoutId);
 
@@ -19119,7 +19662,17 @@ export async function getUserPlexHubData() {
 
     const serversList = Array.from(serverMap.values()).filter(srv => srv.monitored !== false);
 
-    return {
+    // Deterministically sort active streams so stream cards stay stationary
+    activeStreams.sort((a: any, b: any) => {
+        const titleA = String(a.fullTitle || a.title || "").toLowerCase().trim();
+        const titleB = String(b.fullTitle || b.title || "").toLowerCase().trim();
+        if (titleA !== titleB) return titleA.localeCompare(titleB);
+        const keyA = String(a.uniqueStreamKey || a.sessionKey || a.sessionId || "");
+        const keyB = String(b.uniqueStreamKey || b.sessionKey || b.sessionId || "");
+        return keyA.localeCompare(keyB);
+    });
+
+    const result = {
         success: true,
         user: {
             username: user.username,
@@ -19138,6 +19691,10 @@ export async function getUserPlexHubData() {
             kindleDeliveries: userKindleLogs.length
         }
     };
+    if (userKey) {
+        setUserCache(`user_plex_hub:${userKey}`, result, 60000); // 60s fresh
+    }
+    return result;
     } catch (e: any) {
         console.error("getUserPlexHubData error:", e);
         return { success: false, error: e.message || "Failed to load Plex Hub data" };
@@ -19234,6 +19791,7 @@ export async function killUserStream(instanceId: string, sessionKey: string) {
                     "X-Plex-Token": adminToken,
                     "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
                 },
+                signal: AbortSignal.timeout(5000),
                 cache: "no-store"
             });
 
@@ -19283,6 +19841,10 @@ export async function killUserStream(instanceId: string, sessionKey: string) {
             );
 
             if (termResult.success) {
+                clearUserCache("user_plex_hub");
+                clearUserCache("user_diag_snapshot");
+                clearUserCache("user_transcode_alert");
+                clearUserCache("admin_detailed_streams");
                 logger.addLog("INFO", "PLEX", `User "${user.username}" terminated active stream "${targetSession.title || 'Media'}" on Plex server "${serverUrl}".`);
                 return { success: true, message: "Stream terminated successfully." };
             } else {
@@ -19369,6 +19931,10 @@ export async function killUserStream(instanceId: string, sessionKey: string) {
         }
 
         if (killed) {
+            clearUserCache("user_plex_hub");
+            clearUserCache("user_diag_snapshot");
+            clearUserCache("user_transcode_alert");
+            clearUserCache("admin_detailed_streams");
             logger.addLog("INFO", "TAUTULLI", `User "${user.username}" terminated active stream "${targetSession.title || 'Media'}" on server "${instance.name}".`);
             return { success: true, message: "Stream terminated successfully." };
         } else {
@@ -19377,6 +19943,37 @@ export async function killUserStream(instanceId: string, sessionKey: string) {
 
     } catch (e: any) {
         return { success: false, error: e.message || "Failed to terminate stream" };
+    }
+}
+
+/**
+ * Evaluates whether the currently authenticated user has an active or recent stream
+ * that experienced transcoding or quality capping, returning a targeted fix action.
+ */
+export async function getUserTranscodeAlertAction(options?: { skipCache?: boolean }) {
+    try {
+        let user: any = null;
+        try {
+            user = await verifyUser();
+        } catch {
+            return { hasAlert: false };
+        }
+        if (!user) return { hasAlert: false };
+
+        const userKey = (user.username || "").toLowerCase().trim();
+        if (!options?.skipCache && userKey) {
+            const cached = getUserCache<any>(`user_transcode_alert:${userKey}`);
+            if (cached) return cached;
+        }
+
+        const { getUserTranscodeAlert } = await import("@/lib/telemetry/device-diagnostics");
+        const alert = await getUserTranscodeAlert(user.username, user.email || undefined);
+        if (alert && userKey) {
+            setUserCache(`user_transcode_alert:${userKey}`, alert, 60000); // 60s fresh
+        }
+        return alert;
+    } catch (e) {
+        return { hasAlert: false };
     }
 }
 
@@ -19560,8 +20157,20 @@ export async function getUserAiDiagnosticSnapshotAction() {
         } catch (e) {
             user = { username: "Guest User", role: "USER" };
         }
+
+        const safeUsername = String(user?.username || "guest").toLowerCase();
+        const { getUserCache, setUserCache } = await import("@/lib/prewarm");
+        const cacheKey = `user_diag_snapshot:${safeUsername}`;
+        const cached = getUserCache<any>(cacheKey);
+        if (cached) {
+            return { success: true, snapshot: cached };
+        }
+
         const { getUserDiagnosticSnapshot } = await import("@/lib/ai-server-assistant");
         const snapshot = await getUserDiagnosticSnapshot(user);
+        if (snapshot) {
+            setUserCache(cacheKey, snapshot, 3 * 60 * 1000);
+        }
         return { success: true, snapshot };
     } catch (e: any) {
         console.error("getUserAiDiagnosticSnapshotAction error:", e);
@@ -19612,4 +20221,260 @@ export async function verifyPlexPlaybackHealthAction() {
         };
     }
 }
+
+/**
+ * ============================================================================
+ * User Scripts & Automation Actions (/admin/scripts)
+ * ============================================================================
+ */
+export async function getScriptsAction() {
+    await verifyAdmin();
+    const { getAllScripts, getScriptRuns } = await import("@/lib/scripts/script-manager");
+    return {
+        scripts: getAllScripts(),
+        recentRuns: getScriptRuns(undefined, 30)
+    };
+}
+
+export async function getScriptByIdAction(id: string) {
+    await verifyAdmin();
+    const { getScriptById, getScriptRuns } = await import("@/lib/scripts/script-manager");
+    const script = getScriptById(id);
+    const runs = getScriptRuns(id, 20);
+    return { script, runs };
+}
+
+export async function saveScriptAction(scriptData: any) {
+    await verifyAdmin();
+    const { saveScript } = await import("@/lib/scripts/script-manager");
+    const saved = saveScript(scriptData);
+    try { revalidatePath("/admin/scripts"); } catch (_) {}
+    return { success: true, script: saved };
+}
+
+export async function deleteScriptAction(id: string) {
+    await verifyAdmin();
+    const { deleteScript } = await import("@/lib/scripts/script-manager");
+    const success = deleteScript(id);
+    try { revalidatePath("/admin/scripts"); } catch (_) {}
+    return { success };
+}
+
+export async function runScriptBackgroundAction(scriptId: string) {
+    await verifyAdmin();
+    const { executeScript } = await import("@/lib/scripts/script-runner");
+    executeScript({ scriptId, runMode: "background" }).catch((err) => {
+        console.error(`Background script run error for ${scriptId}:`, err);
+    });
+    return { success: true, message: "Script execution started in background." };
+}
+
+export async function abortScriptRunAction(runId: string) {
+    await verifyAdmin();
+    const { abortActiveScriptRun } = await import("@/lib/scripts/script-runner");
+    const aborted = abortActiveScriptRun(runId);
+    return { success: aborted };
+}
+
+export async function getScriptRunLogAction(runId: string) {
+    await verifyAdmin();
+    const { getScriptRunLog } = await import("@/lib/scripts/script-manager");
+    return { runId, log: getScriptRunLog(runId) || "" };
+}
+
+/**
+ * System & Docker Fleet Monitoring Actions (/admin/monitoring)
+ */
+export async function getFleetMonitoringDataAction(options?: { skipCache?: boolean }): Promise<import("@/lib/monitoring/types").FleetTelemetryResponse> {
+    await verifyAdmin();
+    try {
+        if (!options?.skipCache) {
+            const cached = getUserCache<import("@/lib/monitoring/types").FleetTelemetryResponse>("system_fleet_dashboard");
+            if (cached) return cached;
+        }
+
+        const { recordServiceProbes, calculateServiceUptime, getIncidentHistory } = await import("@/lib/monitoring/uptime-tracker");
+        const { listDockerContainers } = await import("@/lib/monitoring/docker-client");
+
+        // 1. Probe infrastructure services
+        const infraRes = await getAdminInfrastructureStatusAction(true);
+        const rawServices = infraRes.services || [];
+
+        // 2. Persist rolling probe history and update incidents
+        await recordServiceProbes(rawServices);
+
+        // 3. Calculate rich uptimes and streaks per service
+        const services: import("@/lib/monitoring/types").ServiceUptimeSummary[] = rawServices.map(s => {
+            const up = calculateServiceUptime(s.id, s.status, s.latencyMs);
+            return {
+                id: s.id,
+                name: s.name,
+                type: s.type,
+                category: s.category as any,
+                url: s.url,
+                monitored: s.monitored,
+                status: s.status,
+                latencyMs: s.latencyMs,
+                details: s.details,
+                uptimePercentage24h: up.pct24h,
+                uptimePercentage7d: up.pct7d,
+                uptimePercentage30d: up.pct30d,
+                currentStreak: up.currentStreak,
+                lastChecked: new Date().toISOString(),
+                pingHistory: up.pingHistory
+            };
+        });
+
+        // 4. Fetch Docker container fleet
+        const dockerData = await listDockerContainers();
+
+        // 5. Fetch incident history
+        const incidents = getIncidentHistory();
+        const activeIncidents = incidents.filter(i => i.status === "ACTIVE");
+
+        // 6. Overall fleet uptime calculations
+        const monitoredServices = services.filter(s => s.monitored);
+        const overall24h = monitoredServices.length > 0
+            ? Math.round((monitoredServices.reduce((acc, s) => acc + s.uptimePercentage24h, 0) / monitoredServices.length) * 10) / 10
+            : 100;
+        const overall7d = monitoredServices.length > 0
+            ? Math.round((monitoredServices.reduce((acc, s) => acc + s.uptimePercentage7d, 0) / monitoredServices.length) * 10) / 10
+            : 100;
+
+        const result = {
+            success: true,
+            services,
+            containers: dockerData.containers,
+            fleetSummary: dockerData.summary,
+            incidents,
+            activeIncidentsCount: activeIncidents.length,
+            overallUptime24h: overall24h,
+            overallUptime7d: overall7d,
+            lastProbeTime: new Date().toISOString()
+        };
+        setUserCache("system_fleet_dashboard", result, 15000); // 15s fresh cache
+        return result;
+    } catch (e: any) {
+        return {
+            success: false,
+            error: e.message || "Failed fetching fleet monitoring data",
+            services: [],
+            containers: [],
+            fleetSummary: {
+                totalContainers: 0,
+                runningCount: 0,
+                stoppedCount: 0,
+                unhealthyCount: 0,
+                restartingCount: 0,
+                source: "Unreachable",
+                serverTime: new Date().toISOString()
+            },
+            incidents: [],
+            activeIncidentsCount: 0,
+            overallUptime24h: 0,
+            overallUptime7d: 0,
+            lastProbeTime: new Date().toISOString()
+        };
+    }
+}
+
+export async function restartDockerContainerAction(containerId: string) {
+    await verifyAdmin();
+    clearUserCache("system_fleet_dashboard");
+    const { restartDockerContainer } = await import("@/lib/monitoring/docker-client");
+    const res = await restartDockerContainer(containerId);
+    try { revalidatePath("/admin/monitoring"); } catch (_) {}
+    return res;
+}
+
+export async function stopDockerContainerAction(containerId: string) {
+    await verifyAdmin();
+    clearUserCache("system_fleet_dashboard");
+    const { stopDockerContainer } = await import("@/lib/monitoring/docker-client");
+    const res = await stopDockerContainer(containerId);
+    try { revalidatePath("/admin/monitoring"); } catch (_) {}
+    return res;
+}
+
+export async function startDockerContainerAction(containerId: string) {
+    await verifyAdmin();
+    clearUserCache("system_fleet_dashboard");
+    const { startDockerContainer } = await import("@/lib/monitoring/docker-client");
+    const res = await startDockerContainer(containerId);
+    try { revalidatePath("/admin/monitoring"); } catch (_) {}
+    return res;
+}
+
+export async function getMonitoringConfigAction() {
+    await verifyAdmin();
+    const { getMonitoringConfig } = await import("@/lib/monitoring/uptime-tracker");
+    return getMonitoringConfig();
+}
+
+export async function saveMonitoringConfigAction(config: any) {
+    await verifyAdmin();
+    const { saveMonitoringConfig } = await import("@/lib/monitoring/uptime-tracker");
+    const updated = saveMonitoringConfig(config);
+    try { revalidatePath("/admin/monitoring"); } catch (_) {}
+    return { success: true, config: updated };
+}
+
+export async function sendTestOutageAlertAction() {
+    await verifyAdmin();
+    const { sendTestOutageAlert } = await import("@/lib/monitoring/uptime-tracker");
+    return await sendTestOutageAlert();
+}
+
+export async function clearResolvedIncidentsAction() {
+    await verifyAdmin();
+    const { clearResolvedIncidents } = await import("@/lib/monitoring/uptime-tracker");
+    clearResolvedIncidents();
+    try { revalidatePath("/admin/monitoring"); } catch (_) {}
+    return { success: true };
+}
+
+/**
+ * Server Action: Prewarm all user-scoped data (quota, diagnostics, transcode alerts, library access, Plex hub)
+ * Called asynchronously in the background by LayoutWrapper when a user loads the app.
+ */
+export async function prewarmUserSessionAction() {
+    try {
+        const session: any = await verifyUser().catch(() => null);
+        const userId = String(session?.userId || session?.id || "");
+        if (!session || !userId) return { success: false, message: "Not logged in" };
+        const { prewarmUserSession } = await import("@/lib/prewarm");
+        const res = await prewarmUserSession({
+            id: userId,
+            username: String(session.username || ""),
+            role: session.role ? String(session.role) : undefined,
+            email: session.email ? String(session.email) : undefined,
+            status: session.status ? String(session.status) : undefined
+        });
+        return res;
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+/**
+ * Server Action: Prewarm all system caches (Discovery TMDb, Plex Availability, Fleet Health, Active Streams)
+ * Admin-restricted command callable from Settings or Admin Fleet Dashboard.
+ */
+export async function prewarmAllCachesAction() {
+    try {
+        await verifyAdmin();
+        const { prewarmGlobalSystem } = await import("@/lib/prewarm");
+        const res = await prewarmGlobalSystem();
+        return {
+            success: true,
+            durationMs: res.durationMs,
+            warmedKeys: res.warmedKeys,
+            message: `Prewarmed ${res.warmedKeys.length} system components in ${res.durationMs}ms.`
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to prewarm caches" };
+    }
+}
+
+
 

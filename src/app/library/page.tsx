@@ -875,11 +875,16 @@ function BookLibraryPageContent() {
       >
         {book.coverUrl ? (
           <div className="relative aspect-[2/3] w-full bg-muted overflow-hidden flex items-center justify-center border-b border-muted/40">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={book.coverUrl}
+              src={book.coverUrl === "local" ? `/api/cover?id=${book.id}` : book.coverUrl}
               alt={book.title}
               className={`object-cover w-full h-full transition-transform duration-300 group-hover:scale-105 ${book.fileType === "missing" ? "opacity-40 grayscale" : ""}`}
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                if (!target.src.includes("/api/cover")) {
+                  target.src = `/api/cover?id=${book.id}`;
+                }
+              }}
             />
             <div className="absolute top-2 right-2 flex flex-col items-end gap-1.5">
               <Badge className="bg-background/80 backdrop-blur text-foreground border border-muted/50 text-[10px] uppercase font-bold tracking-wider">
@@ -1182,11 +1187,16 @@ function BookLibraryPageContent() {
       >
         <div className="relative aspect-[1/1] w-full bg-gradient-to-br from-slate-900 via-slate-800 to-black overflow-hidden flex items-center justify-center border-b border-muted/40">
           {book.coverUrl ? (
-            /* eslint-disable-next-line @next/next/no-img-element */
             <img
-              src={book.coverUrl}
+              src={book.coverUrl === "local" ? `/api/cover?id=${book.id}` : (book.coverUrl || `/api/cover?id=${book.id}`)}
               alt={book.title}
               className={`object-cover w-full h-full transition-transform duration-300 group-hover:scale-105 ${book.fileType === "missing" ? "opacity-40 grayscale" : ""}`}
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                if (!target.src.includes("/api/cover")) {
+                  target.src = `/api/cover?id=${book.id}`;
+                }
+              }}
             />
           ) : (
             <div className="flex flex-col items-center justify-center p-4 text-center space-y-2">

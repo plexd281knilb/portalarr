@@ -78,19 +78,40 @@ export async function GET(req: NextRequest) {
 
         const searchParams = req.nextUrl.searchParams;
         const targetServerId = searchParams.get("serverId") || searchParams.get("instanceId") || "";
-        const serverUrl = searchParams.get("serverUrl") || "";
+        const serverName = searchParams.get("serverName") || "";
+        let serverUrl = searchParams.get("serverUrl") || "";
+        const tokenParam = searchParams.get("token") || "";
         const rawImg = searchParams.get("thumb") || searchParams.get("url") || searchParams.get("img") || searchParams.get("path") || "";
         const title = searchParams.get("title") || "";
         const year = searchParams.get("year") || "";
         const type = (searchParams.get("type") || "movie").toLowerCase();
 
-        // 1. Direct HTTP/HTTPS external image
-        if (rawImg && (rawImg.startsWith("http://") || rawImg.startsWith("https://"))) {
-            const directRes = await tryFetchImage(rawImg, {}, 4000);
-            if (directRes) return directRes;
+        let lookupServerId = targetServerId;
+        if (lookupServerId.startsWith("plex::")) {
+            const parts = lookupServerId.split("::");
+            if (parts[1]) lookupServerId = parts[1];
+            if (parts[2] && !serverUrl) serverUrl = parts[2];
         }
 
+        // 1. Direct HTTP/HTTPS external image
         let cleanImg = rawImg;
+        if (rawImg && (rawImg.startsWith("http://") || rawImg.startsWith("https://"))) {
+            const directRes = await tryFetchImage(rawImg, {}, 3500);
+            if (directRes) return directRes;
+
+            // If direct fetch fails (e.g. LAN IP unreachable or token expired), extract relative path for PMS candidate resolution
+            try {
+                const parsed = new URL(rawImg);
+                if (parsed.searchParams.has("img")) {
+                    cleanImg = parsed.searchParams.get("img") || parsed.pathname;
+                } else if (parsed.searchParams.has("url")) {
+                    cleanImg = parsed.searchParams.get("url") || parsed.pathname;
+                } else if (parsed.pathname.includes("/library/metadata/")) {
+                    cleanImg = parsed.pathname;
+                }
+            } catch (e) {}
+        }
+
         if (cleanImg.includes("pms_image_proxy")) {
             try {
                 const dummyUrl = new URL(cleanImg, "http://localhost");
@@ -103,7 +124,7 @@ export async function GET(req: NextRequest) {
         }
 
         // 2. Direct Tautulli Resolution (Fast-path if targetServerId matches a Tautulli instance)
-        const tautulliId = searchParams.get("instanceId") || targetServerId;
+        const tautulliId = searchParams.get("instanceId") || lookupServerId;
         let tautulliInstance = null;
         if (cleanImg && tautulliId && !tautulliId.startsWith("plex::")) {
             tautulliInstance = await prisma.tautulliInstance.findUnique({
@@ -145,29 +166,29 @@ export async function GET(req: NextRequest) {
         const settings = (await prisma.settings.findFirst()) || (await prisma.settings.findUnique({ where: { id: "global" } }));
         const adminToken = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
 
-        // 3. Direct Plex Media Server image resolution using targetServerId or serverUrl
-        if (cleanImg && (targetServerId || serverUrl || adminToken)) {
+        // 3. Direct Plex Media Server image resolution using lookupServerId, serverName or serverUrl
+        if (cleanImg && (lookupServerId || serverUrl || serverName || adminToken)) {
             let candidateUrls: string[] = [];
-            let candidateToken = adminToken;
+            let candidateToken = tokenParam || adminToken;
 
             // Try resolving targeted server
-            if (targetServerId || serverUrl) {
-                const resolved = await resolveWorkingPlexServerConnection(targetServerId || undefined, adminToken, serverUrl || undefined).catch(() => null);
+            if (lookupServerId || serverUrl || serverName) {
+                const resolved = await resolveWorkingPlexServerConnection(lookupServerId || serverName || undefined, adminToken, serverUrl || undefined).catch(() => null);
                 if (resolved) {
-                    if (resolved.token) candidateToken = resolved.token;
+                    if (resolved.token && !tokenParam) candidateToken = resolved.token;
                     candidateUrls.push(resolved.serverUrl, ...resolved.allCandidateUrls);
                 }
             }
 
             // Also check manual Plex servers directly
-            if (targetServerId && candidateUrls.length === 0) {
+            if ((lookupServerId || serverName) && candidateUrls.length === 0) {
                 const manual = await prisma.plexServer.findFirst({
                     where: {
                         OR: [
-                            { id: targetServerId },
-                            { clientIdentifier: targetServerId },
-                            { url: targetServerId },
-                            { name: targetServerId }
+                            { id: lookupServerId || undefined },
+                            { clientIdentifier: lookupServerId || undefined },
+                            { url: lookupServerId || undefined },
+                            { name: lookupServerId || serverName || undefined }
                         ]
                     }
                 }).catch(() => null);
@@ -175,7 +196,7 @@ export async function GET(req: NextRequest) {
                     let cleanUrl = manual.url.replace(/\/+$/, "");
                     if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) cleanUrl = `http://${cleanUrl}`;
                     candidateUrls.push(cleanUrl);
-                    if (manual.token) {
+                    if (manual.token && !tokenParam) {
                         const dec = decryptData(manual.token);
                         if (dec) candidateToken = dec;
                     }
@@ -191,6 +212,7 @@ export async function GET(req: NextRequest) {
             const strippedThumb = cleanImg.replace(/\/thumb\/[0-9]+$/, "/thumb");
             if (strippedThumb !== cleanImg) imgCandidates.push(strippedThumb);
             if (cleanImg.includes("/art/")) imgCandidates.push(cleanImg.replace("/art/", "/thumb/").replace(/\/thumb\/[0-9]+$/, "/thumb"));
+            if (cleanImg.includes("/thumb/")) imgCandidates.push(cleanImg.replace("/thumb/", "/art/").replace(/\/art\/[0-9]+$/, "/art"));
 
             for (const serverBase of Array.from(new Set(candidateUrls))) {
                 for (const targetPath of imgCandidates) {
@@ -210,7 +232,7 @@ export async function GET(req: NextRequest) {
 
         // 4. Try any available Tautulli instance if still unresolved
         let fallbackInstance = null;
-        if (cleanImg && !targetServerId.startsWith("plex::")) {
+        if (cleanImg && !lookupServerId.startsWith("plex::")) {
             fallbackInstance = await prisma.tautulliInstance.findFirst().catch(() => null);
         }
 
@@ -231,7 +253,7 @@ export async function GET(req: NextRequest) {
             }
         }
 
-        // 4. Fallback: Search all discovered Plex Servers concurrently
+        // 4b. Fallback: Search all discovered Plex Servers concurrently
         if (cleanImg && adminToken) {
             try {
                 const plexServers = await getPlexServers(adminToken);
@@ -252,10 +274,46 @@ export async function GET(req: NextRequest) {
             } catch (e) {}
         }
 
-        // 5. Automated High-Definition Metadata Artwork Fallback (iTunes Media API)
+        // 5a. Automated High-Definition Metadata Artwork Fallback (TMDb API)
         if (title) {
             try {
-                const cleanTitle = title.replace(/\(\d{4}\)/g, "").trim();
+                let cleanTitle = title.replace(/\(\d{4}\)/g, "").trim();
+                if ((type === "episode" || type === "show") && cleanTitle.includes(" - ")) {
+                    cleanTitle = cleanTitle.split(" - ")[0].trim();
+                }
+                const tmdbKey = settings?.tmdbApiKey || process.env.TMDB_API_KEY || "431a8708161bcd1f1fbe7536137e61ed";
+                const isTv = type === "episode" || type === "show";
+                const endpoint = isTv ? "search/tv" : "search/movie";
+                const yearParam = year ? (isTv ? `&first_air_date_year=${encodeURIComponent(year)}` : `&year=${encodeURIComponent(year)}`) : "";
+                const tmdbUrl = `https://api.themoviedb.org/3/${endpoint}?api_key=${tmdbKey}&query=${encodeURIComponent(cleanTitle)}${yearParam}&include_adult=false&language=en-US&page=1`;
+                
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 3000);
+                const tmdbRes = await fetch(tmdbUrl, {
+                    headers: { "Accept": "application/json" },
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+
+                if (tmdbRes.ok) {
+                    const tmdbData = await tmdbRes.json();
+                    const match = tmdbData.results?.[0];
+                    if (match && match.poster_path) {
+                        const posterUrl = `https://image.tmdb.org/t/p/w500${match.poster_path}`;
+                        const tmdbImgRes = await tryFetchImage(posterUrl, {}, 3500);
+                        if (tmdbImgRes) return tmdbImgRes;
+                    }
+                }
+            } catch (e) {}
+        }
+
+        // 5b. Automated High-Definition Metadata Artwork Fallback (iTunes Media API)
+        if (title) {
+            try {
+                let cleanTitle = title.replace(/\(\d{4}\)/g, "").trim();
+                if ((type === "episode" || type === "show") && cleanTitle.includes(" - ")) {
+                    cleanTitle = cleanTitle.split(" - ")[0].trim();
+                }
                 const itunesEntity = type === "episode" || type === "show" ? "tvSeason" : (type === "track" ? "song" : "movie");
                 const itunesMedia = type === "episode" || type === "show" ? "tvShow" : (type === "track" ? "music" : "movie");
                 

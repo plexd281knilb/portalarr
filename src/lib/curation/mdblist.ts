@@ -50,7 +50,8 @@ export async function getMdblistRatings(imdbId?: string, tmdbId?: number, mediaT
         query.set("m", mediaType);
 
         const res = await fetch(`${MDBLIST_BASE_URL}?${query.toString()}`, {
-            next: { revalidate: 86400 } // Cache for 24h
+            signal: AbortSignal.timeout(8000),
+            cache: "no-store"
         });
 
         if (!res.ok) return null;
@@ -105,13 +106,15 @@ export async function getMdblistItems(listIdOrUrl: string): Promise<MdblistItem[
         });
 
         let res = await fetch(`${MDBLIST_BASE_URL}/lists/items?${query.toString()}`, {
-            next: { revalidate: 3600 }
+            signal: AbortSignal.timeout(8000),
+            cache: "no-store"
         });
 
         // If /lists/items?l= did not return ok, fallback to /lists/{listParam}/items/
         if (!res.ok) {
             res = await fetch(`https://api.mdblist.com/lists/${encodeURIComponent(listParam)}/items/?apikey=${apiKey}`, {
-                next: { revalidate: 3600 }
+                signal: AbortSignal.timeout(8000),
+                cache: "no-store"
             });
         }
 

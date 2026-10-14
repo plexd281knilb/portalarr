@@ -22,6 +22,9 @@ services:
       - /mnt/user:/mnt/user:ro
       - /mnt/remotes:/mnt/remotes:ro
 
+      # Host Docker Socket (Enables Scripts & Automation tab to inspect and restart host containers)
+      - /var/run/docker.sock:/var/run/docker.sock
+
       # Book Library Share (Read/Write mount for book upload & processing)
       # Map this to your Unraid book share (e.g. /mnt/user/books:/books)
       # - /mnt/user/books:/books

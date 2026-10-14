@@ -4,6 +4,7 @@ import prisma, { ensureSchemaColumns } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/app/auth-actions";
 import { logger } from "@/lib/logger";
+import { getUserCache, setUserCache, clearUserCache } from "@/lib/prewarm";
 
 function safeRevalidatePath(path: string) {
     try {
@@ -774,6 +775,12 @@ export async function getUserRequestQuotaAction() {
             return { success: false, error: "User not found" };
         }
 
+        const userQuotaKey = `user_quota:${user.id}`;
+        const cachedQuota = getUserCache<any>(userQuotaKey);
+        if (cachedQuota) {
+            return { success: true, data: cachedQuota };
+        }
+
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
 
         const isAdmin = user.role === "ADMIN" || user.role === "SUPER_USER";
@@ -849,26 +856,28 @@ export async function getUserRequestQuotaAction() {
             })
         ]);
 
+        const quotaData = {
+            accountTier,
+            canRequest,
+            canRequest4k,
+            autoApproveMovies,
+            autoApproveTv,
+            quotaDays,
+            movies: {
+                used: recentMovieCount,
+                limit: movieLimit, // 0 = unlimited
+                remaining: movieLimit === 0 ? null : Math.max(0, movieLimit - recentMovieCount)
+            },
+            tv: {
+                used: recentTvCount,
+                limit: tvLimit, // 0 = unlimited
+                remaining: tvLimit === 0 ? null : Math.max(0, tvLimit - recentTvCount)
+            }
+        };
+        setUserCache(userQuotaKey, quotaData, 3 * 60 * 1000); // 3 minutes fresh
         return {
             success: true,
-            data: {
-                accountTier,
-                canRequest,
-                canRequest4k,
-                autoApproveMovies,
-                autoApproveTv,
-                quotaDays,
-                movies: {
-                    used: recentMovieCount,
-                    limit: movieLimit, // 0 = unlimited
-                    remaining: movieLimit === 0 ? null : Math.max(0, movieLimit - recentMovieCount)
-                },
-                tv: {
-                    used: recentTvCount,
-                    limit: tvLimit, // 0 = unlimited
-                    remaining: tvLimit === 0 ? null : Math.max(0, tvLimit - recentTvCount)
-                }
-            }
+            data: quotaData
         };
     } catch (e: any) {
         return { success: false, error: e.message };
@@ -1068,6 +1077,7 @@ export async function submitMediaRequestAction(payload: {
             }
         });
 
+        clearUserCache(`user_quota:${user.id}`);
         logger.addLog("INFO", "SEERR", `User ${user.username} (${isTrial ? "Trial" : "Full"}) submitted request for "${payload.title}" (${payload.mediaType.toUpperCase()}${payload.isKids ? " - Kids" : ""}) - Status: ${initialStatus}`);
 
         // If auto-approved, trigger immediate Servarr dispatch and notification
@@ -1684,6 +1694,7 @@ export async function deleteMediaRequestAction(requestId: string) {
         // 3. Delete from MediaRequest
         await prisma.mediaRequest.delete({ where: { id: requestId } });
 
+        clearUserCache("user_quota");
         safeRevalidatePath("/requests");
         safeRevalidatePath("/discover");
         safeRevalidatePath("/library");

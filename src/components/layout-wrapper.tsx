@@ -9,6 +9,7 @@ import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import ImpersonationBanner from "@/components/impersonation-banner";
+import FloatingAiLauncher from "@/components/floating-ai-launcher";
 
 export default function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -34,6 +35,10 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
           const isAdm = session.role === "ADMIN";
           setIsAdmin(isAdm);
           setUsername((session.username as string) || "");
+
+          // Asynchronously prewarm user data in background (debounced to once every 3 min)
+          import("@/app/actions").then(m => m.prewarmUserSessionAction?.()).catch(() => {});
+
           if (isAdm) {
             setHasLibraryAccess(true);
           } else {
@@ -62,12 +67,15 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
     if (pathname.startsWith("/library")) return "Book Library";
     if (pathname.startsWith("/radarr")) return "Radarr (Movies)";
     if (pathname.startsWith("/sonarr")) return "Sonarr (TV Shows)";
+    if (pathname.startsWith("/admin/tautulli") || pathname.startsWith("/admin/streams") || pathname.startsWith("/tautulli") || pathname.startsWith("/streams")) return "Stream Intelligence";
     if (pathname.startsWith("/curation/kometa")) return "Kometa Overlays";
     if (pathname.startsWith("/curation/agregarr")) return "Agregarr Hubs";
     if (pathname.startsWith("/curation/prune")) return "Maintainerr Prune";
     if (pathname.startsWith("/curation/tagging")) return "Tagging Studio";
     if (pathname.startsWith("/curation")) return "Curation Studio";
-    if (pathname.startsWith("/admin/tickets")) return "Support Tickets";
+    if (pathname.startsWith("/tickets") || pathname.startsWith("/admin/tickets")) return "Support Tickets";
+    if (pathname.startsWith("/admin/scripts")) return "User Scripts & Automation";
+    if (pathname.startsWith("/admin/monitoring")) return "Fleet & System Monitoring";
     if (pathname.startsWith("/profile") || pathname.startsWith("/settings/profile")) return "Account Settings";
     if (pathname.startsWith("/settings/access")) return "Access Control";
     if (pathname.startsWith("/settings")) return "System Settings";
@@ -195,6 +203,9 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
           </main>
         </div>
       </div>
+
+      {/* Floating 24/7 AI Assistant Launcher */}
+      {isLoggedIn && <FloatingAiLauncher />}
     </div>
   );
 }

@@ -805,10 +805,10 @@ export async function matchPaymentToUser(payment: ScrapedPayment): Promise<any |
         // D. First Initial + Last Name pattern & Shortened First Name patterns
         // e.g. "Edward McDonald" vs "edwmcdonald", "EdwardMcDonald1"
         // "Patrick King" vs "patrick.j.king", "patrick304"
-        // "Dane Heidelman" vs "dheidelman", "dheid7"
-        // "Cullin Lassiter" vs "cullin.lassiter@gmail.com", "cwbyzer0"
-        // "David Garza" vs "dgarza"
-        // "Trevor Scarborough" vs "trevscar1121", "trevsky313@gmail.com"
+        // "Dane Miller" vs "dmiller", "dmill7"
+        // "Chris Larson" vs "chris.larson@example.com", "clarson0"
+        // "David Garcia" vs "dgarcia"
+        // "Taylor Scott" vs "tscott1121", "tscott313@example.com"
         const nameParts = senderName.split(/\s+/).filter(Boolean);
         if (nameParts.length >= 2) {
             const firstName = nameParts[0];

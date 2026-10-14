@@ -6000,7 +6000,7 @@ export async function recheckLeavingSoonWatchActivityInternal(targetServerId?: s
             const ratingKeySet = new Set(records.map(r => String(r.ratingKey)));
             const titleSet = new Set(records.map(r => (r.title || "").trim().toLowerCase()).filter(Boolean));
 
-            const localWatches: any[] = (prisma as any).watchHistory ? await (prisma as any).watchHistory.findMany({
+            const localWatches = await prisma.watchHistory.findMany({
                 where: {
                     OR: [
                         { ratingKey: { in: Array.from(ratingKeySet) } },
@@ -6008,7 +6008,7 @@ export async function recheckLeavingSoonWatchActivityInternal(targetServerId?: s
                     ]
                 },
                 orderBy: { watchedAt: "desc" }
-            }).catch(() => []) : [];
+            }).catch(() => []);
 
             const localWatchByRatingKey = new Map<string, number>();
             const localWatchByTitle = new Map<string, number>();
@@ -11536,7 +11536,11 @@ export async function deployFilteredSmartHubInternal(
             for (const cleanBase of urlsToTry) {
                 if (ratingKey && !ratingKey.startsWith("hub:")) break;
                 try {
-                    const createUrl = `${cleanBase}/library/collections?type=${mediaTypeNum}&title=${encodeURIComponent(defaultTitle)}&smart=1&uri=${encodeURIComponent(fullUri)}&sectionId=${encodeURIComponent(String(sectionKey))}&X-Plex-Token=${encodeURIComponent(token)}`;
+                    const baseMachineId = await getPlexServerMachineIdentifier(cleanBase, token) || machineId;
+                    const cleanFullUri = baseMachineId
+                        ? `server://${baseMachineId}/com.plexapp.plugins.library${filterUri}`
+                        : fullUri;
+                    const createUrl = `${cleanBase}/library/collections?type=${mediaTypeNum}&title=${encodeURIComponent(defaultTitle)}&smart=1&uri=${encodeURIComponent(cleanFullUri)}&sectionId=${encodeURIComponent(String(sectionKey))}&X-Plex-Token=${encodeURIComponent(token)}`;
                     const cRes = await fetch(createUrl, {
                         method: "POST",
                         headers: {

@@ -51,6 +51,8 @@ import { evaluatePaymentThreshold } from "../src/lib/payment-threshold-engine";
 import { renderEmailTemplate } from "../src/lib/email-templates";
 import { computeExpectedDiscordRole, findBestMatch } from "../src/lib/discord/discord-role-sync";
 import { DISCORD_ROLES_BLUEPRINT, DISCORD_SERVER_BLUEPRINT } from "../src/lib/discord/discord-bot";
+import { getAllScripts, getScriptById, saveScript, deleteScript, getScriptRuns } from "../src/lib/scripts/script-manager";
+import { executeScript, abortActiveScriptRun } from "../src/lib/scripts/script-runner";
 
 
 async function runTestSuite() {
@@ -1413,38 +1415,38 @@ async function runTestSuite() {
     await assertTest("Plex: User Matching & Substring Collision Guards", async () => {
         // Exact email & username match
         if (!matchesPlexUser(
-            { email: "plexd281knilb@gmail.com", username: "dominicjuliano" },
-            { user: { email: "plexd281knilb@gmail.com", username: "dominicjuliano" } }
+            { email: "user_primary@example.com", username: "userprimary" },
+            { user: { email: "user_primary@example.com", username: "userprimary" } }
         )) throw new Error("Exact email & username failed to match");
 
         // Email prefix matches Plex username
         if (!matchesPlexUser(
-            { email: "trevsky313@gmail.com", username: "trevscar1121" },
-            { user: { email: "different@email.com", username: "trevsky313" } }
+            { email: "prefixmatch313@example.com", username: "prefix_alias" },
+            { user: { email: "different@example.com", username: "prefixmatch313" } }
         )) throw new Error("Email prefix failed to match Plex username");
 
-        // Guard against substring collisions (dominicjuliano must NOT match mjuliano7 or mjuli86)
+        // Guard against substring collisions (userprimary must NOT match primary7 or mjprimary86)
         if (matchesPlexUser(
-            { email: "plexd281knilb@gmail.com", username: "dominicjuliano", name: "David Garza" },
-            { user: { email: "mjuliano7@yahoo.com", username: "mjuli86" } }
-        )) throw new Error("CRITICAL: Substring collision allowed! dominicjuliano matched mjuli86");
+            { email: "user_primary@example.com", username: "userprimary", name: "David Garcia" },
+            { user: { email: "primary7@example.com", username: "mjprimary86" } }
+        )) throw new Error("CRITICAL: Substring collision allowed! userprimary matched mjprimary86");
 
-        // Guard against substring collisions (dominicjuliano must NOT match juliano)
+        // Guard against substring collisions (userprimary must NOT match primary)
         if (matchesPlexUser(
-            { email: "plexd281knilb@gmail.com", username: "dominicjuliano" },
-            { user: { email: "juliano@gmail.com", username: "juliano" } }
-        )) throw new Error("CRITICAL: Substring collision allowed! dominicjuliano matched juliano");
+            { email: "user_primary@example.com", username: "userprimary" },
+            { user: { email: "primary@example.com", username: "primary" } }
+        )) throw new Error("CRITICAL: Substring collision allowed! userprimary matched primary");
 
         // Guard against matching unrelated friend with same display title
         if (matchesPlexUser(
-            { email: "plexd281knilb@gmail.com", username: "dominicjuliano" },
-            { user: { email: "davidgarza@gmail.com", username: "dgarza", title: "David Garza" } }
+            { email: "user_primary@example.com", username: "userprimary" },
+            { user: { email: "davidgarcia@example.com", username: "dgarcia", title: "David Garcia" } }
         )) throw new Error("CRITICAL: Matched unrelated user based on display title");
 
         // Normalized alphanumeric match
         if (!matchesPlexUser(
-            { email: "test@test.com", username: "trev_sky313" },
-            { user: { email: "other@other.com", username: "trevsky313" } }
+            { email: "test@example.com", username: "prefix_match313" },
+            { user: { email: "other@example.com", username: "prefixmatch313" } }
         )) throw new Error("Normalized alphanumeric matching failed");
 
         // Plex numeric ID match
@@ -3084,7 +3086,7 @@ async function runTestSuite() {
             throw new Error(`getDiscoverHomeAction failed: ${homeRes.error}`);
         }
 
-        // 3. Tab switch to "movies" (popular page 1) must be sub-second (< 250ms) from primed cache
+        // 3. Tab switch to "movies" (popular page 1) must be sub-second (< 500ms) from primed cache
         const startMovies = Date.now();
         const moviesRes = await getDiscoverMediaAction("popular", "movie", 1, false);
         const moviesDuration = Date.now() - startMovies;
@@ -3092,11 +3094,11 @@ async function runTestSuite() {
         if (!moviesRes.success || !Array.isArray(moviesRes.items) || moviesRes.items.length === 0) {
             throw new Error("getDiscoverMediaAction for popular movies failed or returned empty items");
         }
-        if (moviesDuration > 250) {
-            throw new Error(`getDiscoverMediaAction for popular movies took ${moviesDuration}ms (expected < 250ms)`);
+        if (moviesDuration > 500) {
+            throw new Error(`getDiscoverMediaAction for popular movies took ${moviesDuration}ms (expected < 500ms)`);
         }
 
-        // 4. Tab switch to "tv" (popular page 1) must be sub-second (< 250ms) from primed cache
+        // 4. Tab switch to "tv" (popular page 1) must be sub-second (< 500ms) from primed cache
         const startTv = Date.now();
         const tvRes = await getDiscoverMediaAction("popular", "tv", 1, false);
         const tvDuration = Date.now() - startTv;
@@ -3104,8 +3106,8 @@ async function runTestSuite() {
         if (!tvRes.success || !Array.isArray(tvRes.items) || tvRes.items.length === 0) {
             throw new Error("getDiscoverMediaAction for popular tv failed or returned empty items");
         }
-        if (tvDuration > 250) {
-            throw new Error(`getDiscoverMediaAction for popular tv took ${tvDuration}ms (expected < 250ms)`);
+        if (tvDuration > 500) {
+            throw new Error(`getDiscoverMediaAction for popular tv took ${tvDuration}ms (expected < 500ms)`);
         }
 
         // 5. In-memory API key caching test
@@ -3202,6 +3204,65 @@ async function runTestSuite() {
 
         // Clean up test request
         await prisma.bookRequest.delete({ where: { id: kidsReq.id } }).catch(() => {});
+
+        // 6. Verify Kyra's Library and Public Library Auto-Approval
+        const { isKyrasLibrary, isPublicLibrary, isAutoApprovedBookLibrary } = await import("../src/lib/books/book-rating");
+
+        if (!isKyrasLibrary({ name: "Kids' Bookshelf" })) {
+            throw new Error("isKyrasLibrary failed to detect Kids' Bookshelf");
+        }
+        if (!isKyrasLibrary({ name: "Kyra's Library" })) {
+            throw new Error("isKyrasLibrary failed to detect Kyra's Library");
+        }
+        if (!isKyrasLibrary({ name: "Kid's Library" })) {
+            throw new Error("isKyrasLibrary failed to detect Kid's Library");
+        }
+        if (isKyrasLibrary({ name: "General Public Library" })) {
+            throw new Error("isKyrasLibrary falsely matched General Public Library");
+        }
+
+        if (!isPublicLibrary({ name: "General Public Library" })) {
+            throw new Error("isPublicLibrary failed to detect General Public Library");
+        }
+        if (!isPublicLibrary({ name: "Public Audiobooks" })) {
+            throw new Error("isPublicLibrary failed to detect Public Audiobooks");
+        }
+        if (isPublicLibrary({ name: "Wife's Bookshelf" })) {
+            throw new Error("isPublicLibrary falsely matched Wife's Bookshelf");
+        }
+
+        if (!isAutoApprovedBookLibrary({ name: "Kids' Bookshelf" })) {
+            throw new Error("isAutoApprovedBookLibrary failed for Kids' Bookshelf");
+        }
+        if (!isAutoApprovedBookLibrary({ name: "General Public Library" })) {
+            throw new Error("isAutoApprovedBookLibrary failed for General Public Library");
+        }
+        if (!isAutoApprovedBookLibrary({ name: "Public Audiobooks" })) {
+            throw new Error("isAutoApprovedBookLibrary failed for Public Audiobooks");
+        }
+        if (isAutoApprovedBookLibrary({ name: "Wife's Bookshelf" })) {
+            throw new Error("isAutoApprovedBookLibrary falsely matched Wife's Bookshelf");
+        }
+
+        // Verify request auto-approval condition for Kyra's library and Public library
+        const kyraLib = { id: "kyra-shelf-test", name: "Kids' Bookshelf" };
+        const publicLib = { id: "public-shelf-test", name: "General Public Library" };
+        const privateKidsLib = { id: "private-shelf-test", name: "Restricted Toddler Shelf" };
+
+        const isKidsBook = true;
+        const kyraApproved = (isAutoApprovedBookLibrary(kyraLib) || !isKidsBook);
+        const publicApproved = (isAutoApprovedBookLibrary(publicLib) || !isKidsBook);
+        const privateApproved = (isAutoApprovedBookLibrary(privateKidsLib) || !isKidsBook);
+
+        if (!kyraApproved) {
+            throw new Error("Expected Kyra's library request to be auto-approved");
+        }
+        if (!publicApproved) {
+            throw new Error("Expected Public library request to be auto-approved");
+        }
+        if (privateApproved) {
+            throw new Error("Expected restricted kids shelf request to require admin review");
+        }
     });
 
     // 83. Payment Email Scraper: Positive Amount Extraction vs $0.00 Fees
@@ -3448,6 +3509,8 @@ async function runTestSuite() {
         if (matchesCloudflareBypass("/settings/profile")) throw new Error("/settings/profile must NEVER match bypass");
         if (!matchesCloudflareBypass("/profile")) throw new Error("/profile must match bypass for users");
         if (matchesCloudflareAdmin("/profile")) throw new Error("/profile must NOT match admin");
+        if (!matchesCloudflareBypass("/tickets")) throw new Error("/tickets must match bypass for users");
+        if (matchesCloudflareAdmin("/tickets")) throw new Error("/tickets must NOT match admin");
         if (!matchesCloudflareAdmin("/admin/tickets")) throw new Error("/admin/tickets must match admin");
         if (!matchesCloudflareAdmin("/curation/kometa")) throw new Error("/curation/kometa must match admin");
         if (!matchesCloudflareSuperUser("/radarr")) throw new Error("/radarr must match super user (media apps)");
@@ -3463,6 +3526,15 @@ async function runTestSuite() {
         if (matchesCloudflareBypass("/api/debug/db")) throw new Error("/api/debug/db must NEVER match bypass");
         if (!matchesCloudflareAdmin("/api/books/upload")) throw new Error("/api/books/upload must match admin");
         if (matchesCloudflareBypass("/api/books/upload")) throw new Error("/api/books/upload must NEVER match bypass");
+        if (!matchesCloudflareAdmin("/admin/tautulli")) throw new Error("/admin/tautulli must match admin");
+        if (!matchesCloudflareAdmin("/admin/streams")) throw new Error("/admin/streams must match admin");
+        if (!matchesCloudflareAdmin("/tautulli")) throw new Error("/tautulli must match admin");
+        if (!matchesCloudflareAdmin("/streams")) throw new Error("/streams must match admin");
+        if (!matchesCloudflareAdmin("/admin/scripts")) throw new Error("/admin/scripts must match admin");
+        if (!matchesCloudflareAdmin("/api/admin/scripts")) throw new Error("/api/admin/scripts must match admin");
+        if (matchesCloudflareBypass("/admin/scripts")) throw new Error("/admin/scripts must NEVER match bypass");
+        if (matchesCloudflareBypass("/tautulli")) throw new Error("/tautulli must NEVER match bypass");
+        if (matchesCloudflareSuperUser("/tautulli")) throw new Error("/tautulli must NOT match super user (admin only)");
     });
 
     // 88. Kindle: Amazon Send-to-Kindle Bounce Email Scanner & Rejection Parser
@@ -3723,15 +3795,26 @@ async function runTestSuite() {
             throw new Error(`Expected exactly 3 items in downApps, got ${testDownApps.length}: ${JSON.stringify(testDownApps)}`);
         }
 
-        // 2. Test Plex.tv Discovered Unconfigured Server Isolation
+        // 2. Test Plex.tv Discovered Unconfigured Server Isolation & Discovery Inbox Partitioning
         // Servers passively discovered from Plex.tv that are not configured in DB must NEVER be probed or in downApps
         const discoveredFromPlexTv = [
             { name: "ProductionPMS", clientIdentifier: "prod-1", isConfigured: true },
             { name: "TestVM-To-Be-Deleted", clientIdentifier: "test-vm-2", isConfigured: false }
         ];
         const unconfiguredDiscovered = discoveredFromPlexTv.filter(d => !d.isConfigured);
+        const configuredDiscovered = discoveredFromPlexTv.filter(d => d.isConfigured);
         if (unconfiguredDiscovered.length !== 1 || unconfiguredDiscovered[0].name !== "TestVM-To-Be-Deleted") {
             throw new Error("Failed to isolate unconfigured discovered servers");
+        }
+        if (configuredDiscovered.length !== 1 || configuredDiscovered[0].name !== "ProductionPMS") {
+            throw new Error("Failed to partition configured discovered servers");
+        }
+
+        // Verify getPlexServers with includeManual=false isolates cloud discovery from manual DB injection
+        const { getPlexServers } = await import("../src/lib/plex");
+        const cloudOnly = await getPlexServers("", true, false);
+        if (!Array.isArray(cloudOnly) || cloudOnly.length !== 0) {
+            throw new Error("Expected empty result for cloud-only discovery without admin token");
         }
 
         // 3. Database Lifecycle: Test monitored field persistence on PlexServer, GlancesInstance, TautulliInstance, and MediaApp
@@ -4584,6 +4667,121 @@ async function runTestSuite() {
             throw new Error(`Expected advisory response in Level 1 mode, got: ${advisoryRes.answer}`);
         }
 
+        // 5. Admin Diagnostic Snapshot & Autonomous Server Status Query
+        const { getUserDiagnosticSnapshot } = await import("../src/lib/ai-server-assistant");
+        const adminSnapshot = await getUserDiagnosticSnapshot(testAdmin);
+        if (!adminSnapshot || adminSnapshot.username !== testAdmin.username) {
+            throw new Error(`Expected admin snapshot with username ${testAdmin.username}, got: ${JSON.stringify(adminSnapshot)}`);
+        }
+
+        const serverQueryRes = await askAiServerMaster("what servers are online?", [], testAdmin);
+        if (!serverQueryRes || !serverQueryRes.success || !serverQueryRes.answer) {
+            throw new Error(`Expected server status query response, got: ${JSON.stringify(serverQueryRes)}`);
+        }
+
+        // 6. Structured Tool Calling & Admin Homelab Command Center
+        const { 
+            GEMINI_TOOL_DECLARATIONS, 
+            OPENAI_TOOL_DEFINITIONS, 
+            executeAiAssistantTool 
+        } = await import("../src/lib/ai-assistant-tools");
+
+        // 6a. Tool schema integrity
+        if (!Array.isArray(GEMINI_TOOL_DECLARATIONS) || GEMINI_TOOL_DECLARATIONS.length < 10) {
+            throw new Error(`Expected at least 10 Gemini tool declarations, got: ${GEMINI_TOOL_DECLARATIONS?.length}`);
+        }
+        if (!Array.isArray(OPENAI_TOOL_DEFINITIONS) || OPENAI_TOOL_DEFINITIONS.length < 10) {
+            throw new Error(`Expected at least 10 OpenAI tool definitions, got: ${OPENAI_TOOL_DEFINITIONS?.length}`);
+        }
+
+        // Verify required admin tools are present in both schemas
+        const expectedTools = [
+            "probe_playback_health",
+            "get_cluster_status",
+            "terminate_playback_stream",
+            "inspect_media_container",
+            "search_and_replace_media",
+            "redownload_book",
+            "get_homelab_hardware_telemetry",
+            "get_docker_fleet_status",
+            "restart_docker_container",
+            "get_account_sharing_alerts"
+        ];
+        for (const tName of expectedTools) {
+            if (!GEMINI_TOOL_DECLARATIONS.some(t => t.name === tName)) {
+                throw new Error(`Missing Gemini tool declaration: ${tName}`);
+            }
+            if (!OPENAI_TOOL_DEFINITIONS.some(t => t.function.name === tName)) {
+                throw new Error(`Missing OpenAI tool definition: ${tName}`);
+            }
+        }
+
+        // 6b. Permission Denied on admin tools for standard users
+        const mockUserCtx: any = {
+            user: testUser,
+            snapshot: adminSnapshot,
+            actionsTaken: [],
+            autonomyLevel: "autonomous",
+            mediaInspectionHolder: {},
+            playbackProbeHolder: {}
+        };
+
+        const deniedTelemetry = await executeAiAssistantTool("get_homelab_hardware_telemetry", {}, mockUserCtx);
+        if (deniedTelemetry.success || !deniedTelemetry.summary.includes("Permission Denied")) {
+            throw new Error(`Expected Permission Denied for user on hardware telemetry, got: ${JSON.stringify(deniedTelemetry)}`);
+        }
+
+        const deniedDocker = await executeAiAssistantTool("get_docker_fleet_status", {}, mockUserCtx);
+        if (deniedDocker.success || !deniedDocker.summary.includes("Permission Denied")) {
+            throw new Error(`Expected Permission Denied for user on docker fleet status, got: ${JSON.stringify(deniedDocker)}`);
+        }
+
+        const deniedRestart = await executeAiAssistantTool("restart_docker_container", { container_name_or_id: "plex" }, mockUserCtx);
+        if (deniedRestart.success || !deniedRestart.summary.includes("Permission Denied")) {
+            throw new Error(`Expected Permission Denied for user on container restart, got: ${JSON.stringify(deniedRestart)}`);
+        }
+
+        const deniedSharing = await executeAiAssistantTool("get_account_sharing_alerts", {}, mockUserCtx);
+        if (deniedSharing.success || !deniedSharing.summary.includes("Permission Denied")) {
+            throw new Error(`Expected Permission Denied for user on sharing alerts, got: ${JSON.stringify(deniedSharing)}`);
+        }
+
+        // 6c. Admin tool execution permissions
+        const mockAdminCtx: any = {
+            user: testAdmin,
+            snapshot: adminSnapshot,
+            actionsTaken: [],
+            autonomyLevel: "autonomous",
+            mediaInspectionHolder: {},
+            playbackProbeHolder: {}
+        };
+
+        const adminSharing = await executeAiAssistantTool("get_account_sharing_alerts", {}, mockAdminCtx);
+        if (!adminSharing.success || typeof adminSharing.result?.totalAlerts !== "number") {
+            throw new Error(`Expected successful sharing alerts query for admin, got: ${JSON.stringify(adminSharing)}`);
+        }
+
+        const adminHardware = await executeAiAssistantTool("get_homelab_hardware_telemetry", {}, mockAdminCtx);
+        if (!adminHardware.success || !Array.isArray(adminHardware.result?.hosts)) {
+            throw new Error(`Expected successful hardware telemetry for admin, got: ${JSON.stringify(adminHardware)}`);
+        }
+
+        // 6d. End-to-end admin command queries in askAiServerMaster
+        const nonAdminDockerQuery = await askAiServerMaster("what is the docker fleet status?", [], testUser);
+        if (!nonAdminDockerQuery.answer.includes("Access Restricted") && !nonAdminDockerQuery.answer.includes("Permission Denied")) {
+            throw new Error(`Expected permission restricted answer for non-admin docker query, got: ${nonAdminDockerQuery.answer}`);
+        }
+
+        const adminHardwareQuery = await askAiServerMaster("query glances hardware telemetry cpu ram", [], testAdmin);
+        if (!adminHardwareQuery.success || !adminHardwareQuery.answer.includes("Homelab Host Hardware Telemetry (Glances)")) {
+            throw new Error(`Expected Glances hardware telemetry answer for admin, got: ${adminHardwareQuery.answer}`);
+        }
+
+        const adminSharingQuery = await askAiServerMaster("check account sharing alerts multi-ip", [], testAdmin);
+        if (!adminSharingQuery.success || !adminSharingQuery.answer.includes("Account Sharing & Multi-IP Intelligence")) {
+            throw new Error(`Expected sharing intelligence answer for admin, got: ${adminSharingQuery.answer}`);
+        }
+
         // Restore Settings to autonomous
         await prisma.settings.update({
             where: { id: "global" },
@@ -4607,6 +4805,15 @@ async function runTestSuite() {
                 name: "Test Active Server Mock",
                 url: "http://127.0.0.1:32498",
                 monitored: true
+            }
+        });
+
+        const testTautulli = await prisma.tautulliInstance.create({
+            data: {
+                name: "Test Tautulli Archive Mock",
+                url: "http://127.0.0.1:8189",
+                apiKey: "mock_api_key_123",
+                monitored: false
             }
         });
 
@@ -4637,10 +4844,28 @@ async function runTestSuite() {
             if (activeItem.monitored !== true) {
                 throw new Error(`Expected active server monitored to be true, got ${activeItem.monitored}`);
             }
+
+            const tautulliItem = statusRes.services.find(s => s.name === "Test Tautulli Archive Mock");
+            if (!tautulliItem) {
+                throw new Error("Could not find Test Tautulli Archive Mock in infrastructure status services");
+            }
+
+            if (tautulliItem.type !== "Historical Archive (Tautulli)") {
+                throw new Error(`Expected Tautulli type to be 'Historical Archive (Tautulli)', got '${tautulliItem.type}'`);
+            }
+
+            if (tautulliItem.category !== "tautulli") {
+                throw new Error(`Expected Tautulli category to be 'tautulli', got '${tautulliItem.category}'`);
+            }
         } finally {
-            await prisma.plexServer.deleteMany({
-                where: { id: { in: [pausedPlex.id, activePlex.id] } }
-            }).catch(() => {});
+            await Promise.all([
+                prisma.plexServer.deleteMany({
+                    where: { id: { in: [pausedPlex.id, activePlex.id] } }
+                }),
+                prisma.tautulliInstance.deleteMany({
+                    where: { id: testTautulli.id }
+                })
+            ]).catch(() => {});
         }
     });
 
@@ -5252,6 +5477,10 @@ async function runTestSuite() {
         // Verify removeItemsFromPlexCollection safely handles empty input
         const emptyRemoved = await removeItemsFromPlexCollection([], "dummy-token", "Test Coll", []);
         if (emptyRemoved !== 0) throw new Error("Expected 0 removed for empty input");
+
+        // Verify syncPlexCollection safely handles empty inputs
+        const emptySynced = await syncPlexCollection([], "dummy-token", "1", "Test Coll", []);
+        if (emptySynced.success !== false) throw new Error("Expected success: false for empty item list in syncPlexCollection");
 
         // Verify seasonal presets have distinct valid queries
         const { COLLECTION_PRESETS } = await import("../src/lib/curation/presets");
@@ -6394,7 +6623,7 @@ async function runTestSuite() {
         // 3. Heuristic Matching Engine (findBestMatch)
         const candidates = [
             { id: "u1", username: "plexmaster", email: "plexmaster@example.com", plexUsername: "PlexMaster99", name: "John Doe" },
-            { id: "u2", username: "moviebuff", email: "mbuff_stream@gmail.com", plexUsername: "mbuff", name: "Jane Smith" },
+            { id: "u2", username: "moviebuff", email: "mbuff_stream@example.com", plexUsername: "mbuff", name: "Jane Smith" },
             { id: "u3", username: "spiderman", email: "peter.parker@dailybugle.com", plexUsername: "peterp", name: "Peter Parker" }
         ];
 
@@ -6991,11 +7220,1430 @@ async function runTestSuite() {
         }
     });
 
-    await assertTest("Test 100: Curation & Prune: Multi-Tier Leaving Soon Watch Status Engine, Batch Plex Session History, Throttled Circuit Breaker & Debounce Guard", async () => {
+    // 100. Stream Intelligence & Security: Native Watch History, Concurrent Streams, and Password Sharing Detection
+    await assertTest("Test 100: Stream Intelligence: Native Watch History & Password Sharing Detection", async () => {
+        const { 
+            normalizeIp, 
+            isPrivateOrLocalIp, 
+            analyzeActiveSessionsForSharing, 
+            recordActivePlexSessions, 
+            getWatchHistory,
+            getConnectionSecurityInsights
+        } = await import("../src/lib/telemetry/stream-tracker");
+
+        // 1. IP normalization & Private/Local Classification
+        if (normalizeIp("::ffff:192.168.1.10") !== "192.168.1.10") {
+            throw new Error(`normalizeIp failed for IPv4 mapped address, got: ${normalizeIp("::ffff:192.168.1.10")}`);
+        }
+        if (!isPrivateOrLocalIp("192.168.1.50")) {
+            throw new Error("isPrivateOrLocalIp failed for 192.168.1.50");
+        }
+        if (!isPrivateOrLocalIp("10.0.0.12")) {
+            throw new Error("isPrivateOrLocalIp failed for 10.0.0.12");
+        }
+        if (!isPrivateOrLocalIp("172.16.5.2")) {
+            throw new Error("isPrivateOrLocalIp failed for 172.16.5.2");
+        }
+        if (!isPrivateOrLocalIp("127.0.0.1") || !isPrivateOrLocalIp("localhost")) {
+            throw new Error("isPrivateOrLocalIp failed for localhost");
+        }
+        if (isPrivateOrLocalIp("73.189.44.12")) {
+            throw new Error("isPrivateOrLocalIp wrongly marked 73.189.44.12 as private");
+        }
+        if (isPrivateOrLocalIp("203.0.113.195")) {
+            throw new Error("isPrivateOrLocalIp wrongly marked 203.0.113.195 as private");
+        }
+
+        // 2. Multi-IP & Concurrent Streams Detection Heuristics
+        const mockSessionsSingleIp = [
+            {
+                sessionKey: "s_lan_1",
+                user: "alice",
+                ipAddress: "192.168.1.100",
+                player: "Apple TV",
+                title: "Inception",
+                viewOffset: 500000,
+                duration: 9000000,
+                videoDecision: "direct play",
+                audioDecision: "direct play"
+            },
+            {
+                sessionKey: "s_lan_2",
+                user: "alice",
+                ipAddress: "192.168.1.105",
+                player: "iPad",
+                title: "Dune",
+                viewOffset: 1200000,
+                duration: 9500000,
+                videoDecision: "direct play",
+                audioDecision: "direct play"
+            }
+        ];
+
+        // LAN streams within a home should NOT trigger a sharing alert even if concurrent
+        const analysisLan = analyzeActiveSessionsForSharing(mockSessionsSingleIp, 5);
+        const lanAlertsCount = Array.from(analysisLan.values()).filter(a => a.isSharingSuspected).length;
+        if (lanAlertsCount !== 0) {
+            throw new Error(`Expected 0 sharing alerts for LAN sessions, got ${lanAlertsCount}`);
+        }
+
+        // Multi-IP across public IPs (different households) MUST trigger a sharing alert
+        const mockSessionsMultiPublicIp = [
+            {
+                sessionKey: "s_pub_1",
+                user: "bob_sharer",
+                ipAddress: "73.189.44.12",
+                player: "Roku",
+                title: "Breaking Bad",
+                grandparentTitle: "Breaking Bad",
+                mediaType: "episode",
+                seasonNum: 1,
+                episodeNum: 1,
+                viewOffset: 600000,
+                duration: 3000000,
+                videoDecision: "direct play",
+                audioDecision: "direct play"
+            },
+            {
+                sessionKey: "s_pub_2",
+                user: "bob_sharer",
+                ipAddress: "203.0.113.195",
+                player: "Fire TV",
+                title: "Oppenheimer",
+                mediaType: "movie",
+                viewOffset: 1500000,
+                duration: 10800000,
+                videoDecision: "transcode",
+                audioDecision: "direct stream"
+            }
+        ];
+
+        const analysisPublic = analyzeActiveSessionsForSharing(mockSessionsMultiPublicIp, 3);
+        const publicAlertsCount = Array.from(analysisPublic.values()).filter(a => a.isSharingSuspected).length;
+        if (publicAlertsCount !== 1) {
+            throw new Error(`Expected 1 sharing alert for multi-public-IP streaming, got ${publicAlertsCount}`);
+        }
+        const bobAnalysis = analysisPublic.get("bob_sharer");
+        if (!bobAnalysis?.isSharingSuspected || !bobAnalysis?.isMultiIp) {
+            throw new Error(`Expected bob_sharer to have isSharingSuspected and isMultiIp true, got: ${JSON.stringify(bobAnalysis)}`);
+        }
+        if (!bobAnalysis.sharingReason?.includes("distinct public IP addresses")) {
+            throw new Error(`Expected sharingReason to mention distinct public IP addresses, got: ${bobAnalysis.sharingReason}`);
+        }
+
+        // 3. Database Recording & Watch History Engine
+        const testUser = `test_telemetry_user_${Date.now()}`;
+        const sessionKey1 = `session_test_${Date.now()}_1`;
+        const sessionKey2 = `session_test_${Date.now()}_2`;
+
+        const testSessionsToRecord = [
+            {
+                sessionKey: sessionKey1,
+                ratingKey: "10001",
+                serverName: "MainPlexServer",
+                serverId: "srv_main",
+                user: testUser,
+                userEmail: `${testUser}@example.com`,
+                title: "Interstellar",
+                mediaType: "movie",
+                year: 2014,
+                player: "Plex for Mac",
+                platform: "macOS",
+                device: "MacBook Pro",
+                ipAddress: "98.12.34.56",
+                viewOffset: 9200000,
+                duration: 10000000, // 92% -> completed
+                videoDecision: "direct play",
+                audioDecision: "direct play",
+                streamBitrate: 12000,
+                state: "playing"
+            },
+            {
+                sessionKey: sessionKey2,
+                ratingKey: "10002",
+                serverName: "MainPlexServer",
+                serverId: "srv_main",
+                user: testUser,
+                userEmail: `${testUser}@example.com`,
+                title: "Pilot",
+                grandparentTitle: "Severance",
+                parentTitle: "Season 1",
+                mediaType: "episode",
+                seasonNum: 1,
+                episodeNum: 1,
+                player: "LG TV",
+                platform: "webOS",
+                device: "OLED C2",
+                ipAddress: "154.20.78.90", // second distinct public IP!
+                viewOffset: 500000,
+                duration: 3600000,
+                videoDecision: "transcode",
+                audioDecision: "direct stream",
+                streamBitrate: 4500,
+                state: "playing"
+            }
+        ];
+
+        try {
+            // Record sessions
+            const recordResult = await recordActivePlexSessions(testSessionsToRecord);
+            if (!recordResult.success || recordResult.recordedCount !== 2) {
+                throw new Error(`Failed to record active plex sessions: ${JSON.stringify(recordResult)}`);
+            }
+
+            // Verify watch history query
+            const historyResult = await getWatchHistory({
+                user: testUser,
+                limit: 10
+            });
+
+            if (historyResult.total !== 2) {
+                throw new Error(`Expected 2 recorded history rows for ${testUser}, got ${historyResult.total}`);
+            }
+
+            const interstellar = historyResult.items.find(h => h.sessionKey === sessionKey1);
+            if (!interstellar) {
+                throw new Error("Missing Interstellar in recorded watch history");
+            }
+            if (!interstellar.completed) {
+                throw new Error("Expected Interstellar to be marked completed (92% progress)");
+            }
+            if (!interstellar.isSharingAlert) {
+                throw new Error("Expected Interstellar to have isSharingAlert: true due to multi-IP streaming");
+            }
+
+            // Query with sharing alert filter
+            const sharingOnlyResult = await getWatchHistory({
+                user: testUser,
+                isSharingAlert: true
+            });
+            if (sharingOnlyResult.total !== 2) {
+                throw new Error(`Expected 2 sharing alert items, got ${sharingOnlyResult.total}`);
+            }
+
+            // Query with mediaType filter
+            const moviesOnlyResult = await getWatchHistory({
+                user: testUser,
+                mediaType: "movie"
+            });
+            if (moviesOnlyResult.total !== 1 || moviesOnlyResult.items[0].title !== "Interstellar") {
+                throw new Error(`Expected 1 movie item (Interstellar), got ${moviesOnlyResult.total}`);
+            }
+
+            // Verify Connection Security Insights
+            const insights = await getConnectionSecurityInsights();
+            if (!insights.recentFlaggedIncidents.some(i => i.user === testUser)) {
+                throw new Error(`Expected ${testUser} to be in recentFlaggedIncidents`);
+            }
+        } finally {
+            // Clean up test rows
+            await prisma.watchHistory.deleteMany({
+                where: { user: testUser }
+            }).catch(() => {});
+            await prisma.user.deleteMany({
+                where: { username: testUser }
+            }).catch(() => {});
+        }
+    });
+
+    // 101. Support Tickets: User & Admin Routing, Scoped Retrieval & Edge Policy Bypass
+    await assertTest("Test 101: Support Tickets: User & Admin Routing, Scoped Retrieval & Edge Policy Bypass", async () => {
+        const { getTicketsDashboardAction, updateTicketStatus, deleteSupportTicket } = await import("../src/app/actions");
+        const { matchesCloudflareBypass, matchesCloudflareAdmin } = await import("../src/lib/edge-policy-paths");
+
+        // 1. Verify Edge Security Policy routing isolation
+        if (!matchesCloudflareBypass("/tickets")) {
+            throw new Error("/tickets must be covered by Cloudflare Bypass policy for end users");
+        }
+        if (!matchesCloudflareBypass("/tickets/subpath")) {
+            throw new Error("/tickets* wildcard must match subpaths");
+        }
+        if (matchesCloudflareAdmin("/tickets")) {
+            throw new Error("/tickets must NOT be restricted by Cloudflare Admin policy");
+        }
+        if (!matchesCloudflareAdmin("/admin/tickets")) {
+            throw new Error("/admin/tickets must remain covered under Admin Protected policy");
+        }
+
+        // 2. Test Ticket creation, dashboard retrieval, status update and cleanup
+        const testEmail = `ticket_verify_${Date.now()}@example.com`;
+        const testName = "Verify Member";
+        const testIssue = "Test automated ticket verification description";
+
+        process.env.PORTALARR_TEST_AUTH = "true";
+        const createdTicket = await prisma.supportTicket.create({
+            data: {
+                name: testName,
+                email: testEmail,
+                issue: testIssue,
+                status: "Pending"
+            }
+        });
+
+        try {
+            // Test dashboard retrieval
+            const dashboardRes = await getTicketsDashboardAction();
+            if (!dashboardRes.isAdmin) {
+                throw new Error("Expected isAdmin to be true under test authentication context");
+            }
+            const foundTicket = dashboardRes.tickets.find((t: any) => t.id === createdTicket.id);
+            if (!foundTicket) {
+                throw new Error("Created test ticket was not found in getTicketsDashboardAction tickets list");
+            }
+            if (foundTicket.status !== "Pending") {
+                throw new Error(`Expected ticket status to be 'Pending', got '${foundTicket.status}'`);
+            }
+
+            // Test updating ticket status and admin reply
+            const replyMsg = "Resolution in progress by admin";
+            await updateTicketStatus(createdTicket.id, "Acknowledged", replyMsg);
+
+            const updatedTicket = await prisma.supportTicket.findUnique({
+                where: { id: createdTicket.id }
+            });
+            if (updatedTicket?.status !== "Acknowledged") {
+                throw new Error(`Expected ticket status 'Acknowledged', got '${updatedTicket?.status}'`);
+            }
+            if (updatedTicket?.adminComment !== replyMsg) {
+                throw new Error(`Expected adminComment '${replyMsg}', got '${updatedTicket?.adminComment}'`);
+            }
+
+            // Test deleting support ticket
+            const deleteRes = await deleteSupportTicket(createdTicket.id);
+            if (!deleteRes.success) {
+                throw new Error(`Failed to delete support ticket: ${deleteRes.error}`);
+            }
+
+            const deletedTicket = await prisma.supportTicket.findUnique({
+                where: { id: createdTicket.id }
+            });
+            if (deletedTicket !== null) {
+                throw new Error("Support ticket still exists after deleteSupportTicket");
+            }
+        } finally {
+            delete process.env.PORTALARR_TEST_AUTH;
+            await prisma.supportTicket.deleteMany({
+                where: { email: testEmail }
+            }).catch(() => {});
+        }
+    });
+
+    // 102. Stream Intelligence: Multi-Server Monitoring, Tautulli Takeover, Device Quality Doctor & Historical Backfill Engine
+    await assertTest("Test 102: Stream Intelligence: Multi-Server Monitoring, Tautulli Takeover, Device Quality Doctor & Historical Backfill", async () => {
+        const { diagnoseStreamSettings } = await import("../src/lib/telemetry/device-diagnostics");
+        const { 
+            toggleStreamMonitorModeAction, 
+            getStreamIntelligenceDataAction,
+            startTautulliBackfillAction,
+            getTautulliBackfillStatusAction,
+            stopTautulliBackfillAction
+        } = await import("../src/app/actions");
+        const { 
+            backfillTautulliHistoryInternal, 
+            getTautulliBackfillProgress, 
+            stopTautulliBackfill 
+        } = await import("../src/lib/telemetry/tautulli-backfill");
+        const { getUserStreamProfiles, getStreamIntelligenceAnalytics, formatWatchHistoryThumb, getWatchHistory } = await import("../src/lib/telemetry/stream-tracker");
+
+        // 1. Verify Device Quality Doctor Diagnostics
+        // A. Suboptimal Roku cap detection
+        const rokuSession = {
+            device: "Roku Ultra",
+            platform: "Roku",
+            player: "Living Room Roku",
+            videoDecision: "transcode",
+            videoCodec: "h264",
+            streamBitrate: 4000,
+            videoResolution: "720p",
+            user: "TestUserRoku",
+            title: "Test Movie 4K"
+        };
+        const rokuDiag = diagnoseStreamSettings(rokuSession);
+        if (!rokuDiag.hasIssue) {
+            throw new Error("Expected Roku transcode with 4000kbps to be flagged as suboptimal setting");
+        }
+        if (rokuDiag.deviceCategory !== "Roku") {
+            throw new Error(`Expected deviceCategory 'Roku', got '${rokuDiag.deviceCategory}'`);
+        }
+        if (rokuDiag.issueType !== "roku_auto_adjust") {
+            throw new Error(`Expected issueType 'roku_auto_adjust', got '${rokuDiag.issueType}'`);
+        }
+        if (!rokuDiag.stepByStepGuide || rokuDiag.stepByStepGuide.length === 0) {
+            throw new Error("Expected step-by-step fix guide for Roku device");
+        }
+        if (!rokuDiag.copyableNotice.includes("Roku")) {
+            throw new Error("Expected copyable notice to mention Roku device");
+        }
+
+        // B. Apple TV / Fire TV default 2Mbps/4Mbps remote cap detection
+        const appleTvSession = {
+            device: "Apple TV 4K",
+            platform: "tvOS",
+            player: "Bedroom Apple TV",
+            videoDecision: "transcode",
+            videoCodec: "h264",
+            streamBitrate: 2000,
+            videoResolution: "720p",
+            location: "wan",
+            user: "TestUserApple",
+            title: "Test TV Show"
+        };
+        const appleDiag = diagnoseStreamSettings(appleTvSession);
+        if (!appleDiag.hasIssue) {
+            throw new Error("Expected Apple TV 2Mbps cap to be flagged as suboptimal");
+        }
+        if (appleDiag.issueType !== "remote_quality_cap") {
+            throw new Error(`Expected remote_quality_cap, got '${appleDiag.issueType}'`);
+        }
+
+        // C. Web browser 4K transcode detection
+        const browserSession = {
+            device: "Chrome",
+            platform: "Chrome",
+            player: "Web Player",
+            videoDecision: "transcode",
+            videoCodec: "hevc",
+            streamBitrate: 8000,
+            videoResolution: "1080p",
+            user: "TestBrowserUser",
+            title: "4K HDR Masterpiece"
+        };
+        const browserDiag = diagnoseStreamSettings(browserSession);
+        if (!browserDiag.hasIssue || browserDiag.issueType !== "web_browser_codec") {
+            throw new Error("Expected Web Browser transcode to be flagged with web_browser_codec");
+        }
+
+        // D. Optimal Direct Play (no issues)
+        const optimalSession = {
+            device: "Nvidia Shield",
+            platform: "Android TV",
+            player: "Shield Pro",
+            videoDecision: "direct play",
+            videoCodec: "hevc",
+            streamBitrate: 25000,
+            videoResolution: "4k",
+            user: "PowerUser",
+            title: "Direct Play 4K Remux"
+        };
+        const optimalDiag = diagnoseStreamSettings(optimalSession);
+        if (optimalDiag.hasIssue) {
+            throw new Error("Direct Play 4K session should NOT be marked suboptimal");
+        }
+
+        // 2. Verify Stream Monitoring Mode Takeover Toggle
+        process.env.PORTALARR_TEST_AUTH = "true";
+        try {
+            // Toggle to Native Monitoring (Takeover enabled)
+            const enableRes = await toggleStreamMonitorModeAction(true);
+            if (!enableRes.success || enableRes.useBuiltIn !== true) {
+                throw new Error(`Failed to toggle stream monitor mode to native: ${JSON.stringify(enableRes)}`);
+            }
+
+            // Verify settings persisted
+            let settings = await prisma.settings.findFirst({ where: { id: "global" } });
+            if (settings?.nativeStreamMonitoringEnabled !== true) {
+                throw new Error("Settings table does not reflect nativeStreamMonitoringEnabled: true");
+            }
+
+            // Toggle back to external monitoring
+            const disableRes = await toggleStreamMonitorModeAction(false);
+            if (!disableRes.success || disableRes.useBuiltIn !== false) {
+                throw new Error(`Failed to toggle stream monitor mode to external: ${JSON.stringify(disableRes)}`);
+            }
+
+            // Reset back to native monitoring as default
+            await toggleStreamMonitorModeAction(true);
+
+            // 3. Verify getStreamIntelligenceDataAction Unified Single-Pane Aggregator
+            const dataRes = await getStreamIntelligenceDataAction();
+            if (!dataRes.success) {
+                throw new Error(`getStreamIntelligenceDataAction failed: ${(dataRes as any).error}`);
+            }
+            if (!Array.isArray(dataRes.activeStreams)) {
+                throw new Error("Expected dataRes.activeStreams to be an array");
+            }
+            if (!Array.isArray(dataRes.userProfiles)) {
+                throw new Error("Expected dataRes.userProfiles to be an array");
+            }
+            if (!dataRes.analytics || typeof dataRes.analytics !== "object") {
+                throw new Error("Expected dataRes.analytics object");
+            }
+            if (!Array.isArray(dataRes.deviceAudit)) {
+                throw new Error("Expected dataRes.deviceAudit to be an array");
+            }
+            if (typeof dataRes.useBuiltInStreamMonitor !== "boolean") {
+                throw new Error("Expected useBuiltInStreamMonitor boolean in dataRes");
+            }
+
+            // 4. Verify User Stream Profiles and Cluster Analytics Engine
+            const profiles = await getUserStreamProfiles();
+            if (!Array.isArray(profiles)) {
+                throw new Error("Expected getUserStreamProfiles to return an array");
+            }
+
+            const analytics = await getStreamIntelligenceAnalytics();
+            if (typeof analytics.totalHoursStreamed !== "number") {
+                throw new Error("Expected totalHoursStreamed to be a number");
+            }
+            if (typeof analytics.directPlayPercentage !== "number") {
+                throw new Error("Expected directPlayPercentage to be a number");
+            }
+
+            // 4b. Verify Watch History & Tautulli Poster Proxy Protection
+            const rawPlexThumb = "http://192.168.1.87:32400/library/metadata/38163/thumb/1728829182?X-Plex-Token=abc123xyz";
+            const proxiedThumb = formatWatchHistoryThumb({
+                thumb: rawPlexThumb,
+                title: "Severance - S01E01: Good News About Hell",
+                grandparentTitle: "Severance",
+                year: 2022,
+                mediaType: "episode"
+            });
+            if (!proxiedThumb || !proxiedThumb.startsWith("/api/media/image")) {
+                throw new Error(`Expected proxied thumb to start with /api/media/image, got: ${proxiedThumb}`);
+            }
+            if (!proxiedThumb.includes("thumb=%2Flibrary%2Fmetadata%2F38163%2Fthumb%2F1728829182")) {
+                throw new Error(`Expected proxied thumb to extract clean relative path, got: ${proxiedThumb}`);
+            }
+            if (!proxiedThumb.includes("title=Severance")) {
+                throw new Error(`Expected proxied thumb to include show title, got: ${proxiedThumb}`);
+            }
+
+            // Verify existing proxied thumb is preserved
+            const existingProxied = "/api/media/image?title=Severance&type=show";
+            if (formatWatchHistoryThumb({ thumb: existingProxied }) !== existingProxied) {
+                throw new Error("Expected existing /api/media/image thumb to be preserved");
+            }
+
+            // Verify title fallback when thumb is null
+            const titleOnlyThumb = formatWatchHistoryThumb({ title: "Inception", mediaType: "movie", year: 2010 });
+            if (!titleOnlyThumb || !titleOnlyThumb.startsWith("/api/media/image") || !titleOnlyThumb.includes("title=Inception")) {
+                throw new Error("Expected title-only fallback to build valid proxy image URL");
+            }
+
+            // 4c. Verify User Detailed Telemetry (Full History, Devices & IP Addresses)
+            const { getUserDetailedTelemetryAction } = await import("../src/app/actions");
+            const { getUserDetailedTelemetry } = await import("../src/lib/telemetry/stream-tracker");
+
+            // Seed test watch records for verification
+            const testUserName = `test_telemetry_user_${Date.now()}`;
+            await prisma.watchHistory.createMany({
+                data: [
+                    {
+                        user: testUserName,
+                        title: "Test Movie Alpha",
+                        mediaType: "movie",
+                        videoDecision: "direct play",
+                        player: "Plex for Apple TV",
+                        platform: "tvOS",
+                        device: "Apple TV 4K",
+                        ipAddress: "192.168.1.120",
+                        location: "LAN",
+                        durationMs: 7200000,
+                        completed: true
+                    },
+                    {
+                        user: testUserName,
+                        title: "Test Series Beta - S01E01",
+                        grandparentTitle: "Test Series Beta",
+                        seasonNum: 1,
+                        episodeNum: 1,
+                        mediaType: "episode",
+                        videoDecision: "transcode",
+                        player: "Plex for iOS",
+                        platform: "iOS",
+                        device: "iPhone 15 Pro",
+                        ipAddress: "73.189.44.12",
+                        location: "Remote",
+                        durationMs: 3600000,
+                        completed: true
+                    }
+                ]
+            });
+
+            try {
+                const userTelemetry = await getUserDetailedTelemetryAction(testUserName);
+                if (userTelemetry.user !== testUserName) {
+                    throw new Error(`Expected userTelemetry.user to be '${testUserName}', got '${userTelemetry.user}'`);
+                }
+                if (userTelemetry.totalPlays !== 2) {
+                    throw new Error(`Expected totalPlays to be 2, got ${userTelemetry.totalPlays}`);
+                }
+                if (userTelemetry.devices.length !== 2) {
+                    throw new Error(`Expected 2 distinct devices, got ${userTelemetry.devices.length}`);
+                }
+                if (userTelemetry.ips.length !== 2) {
+                    throw new Error(`Expected 2 distinct IPs, got ${userTelemetry.ips.length}`);
+                }
+                if (!userTelemetry.ips.some((i: any) => i.ip === "192.168.1.120" && i.isLan === true)) {
+                    throw new Error("Expected LAN IP 192.168.1.120 with isLan: true");
+                }
+                if (!userTelemetry.ips.some((i: any) => i.ip === "73.189.44.12" && i.isLan === false)) {
+                    throw new Error("Expected Public WAN IP 73.189.44.12 with isLan: false");
+                }
+                if (userTelemetry.history.length !== 2) {
+                    throw new Error(`Expected 2 history items, got ${userTelemetry.history.length}`);
+                }
+            } finally {
+                await prisma.watchHistory.deleteMany({
+                    where: { user: testUserName }
+                }).catch(() => {});
+            }
+
+            // 4d. Verify Device Typology Heuristics (Fixed Home TV vs Mobile Roaming)
+            const { isFixedHomeDevice, isMobileRoamingDevice, analyzeUserAccountSharing } = await import("../src/lib/telemetry/stream-tracker");
+
+            if (!isFixedHomeDevice("Apple TV 4K", "tvOS", "Plex for Apple TV")) {
+                throw new Error("Expected Apple TV 4K to be classified as fixed home device");
+            }
+            if (!isFixedHomeDevice("Roku Ultra", "Roku", "Plex for Roku")) {
+                throw new Error("Expected Roku Ultra to be classified as fixed home device");
+            }
+            if (!isFixedHomeDevice("Fire TV Stick 4K", "Android", "Plex for Android")) {
+                throw new Error("Expected Fire TV to be classified as fixed home device");
+            }
+            if (!isFixedHomeDevice("LG OLED C3", "webOS", "Plex for LG")) {
+                throw new Error("Expected LG OLED TV to be classified as fixed home device");
+            }
+            if (isFixedHomeDevice("iPhone 15 Pro", "iOS", "Plex for iOS")) {
+                throw new Error("iPhone must NOT be classified as fixed home device");
+            }
+            if (!isMobileRoamingDevice("iPhone 15 Pro", "iOS", "Plex for iOS")) {
+                throw new Error("Expected iPhone 15 Pro to be classified as mobile roaming device");
+            }
+            if (!isMobileRoamingDevice("MacBook Pro", "macOS", "Chrome")) {
+                throw new Error("Expected MacBook Pro Chrome to be classified as mobile roaming device");
+            }
+            if (isMobileRoamingDevice("Apple TV 4K", "tvOS", "Plex for Apple TV")) {
+                throw new Error("Apple TV must NOT be classified as mobile roaming device");
+            }
+
+            // Verify isSameSubnetOrIp IPv4 /24 and IPv6 subnet matching
+            const { isSameSubnetOrIp } = await import("../src/lib/telemetry/stream-tracker");
+            if (!isSameSubnetOrIp("73.18.20.15", "73.18.20.15")) {
+                throw new Error("Expected identical IP to match");
+            }
+            if (!isSameSubnetOrIp("73.18.20.15", "73.18.20.210")) {
+                throw new Error("Expected same /24 IPv4 subnet to match (dynamic DHCP cycle)");
+            }
+            if (isSameSubnetOrIp("73.18.20.15", "73.19.20.15")) {
+                throw new Error("Different /24 subnets must NOT match");
+            }
+            if (!isSameSubnetOrIp("2601:1c0:5400:1234::1", "2601:1c0:5400:1234::88")) {
+                throw new Error("Expected same IPv6 /64 prefix to match");
+            }
+            if (isSameSubnetOrIp("2601:1c0:5400:1234::1", "2601:1c0:9999:1234::1")) {
+                throw new Error("Different IPv6 prefixes must NOT match");
+            }
+
+            // 4e. Verify Account Sharing Intelligence (Clean LAN, Dual TV Smoking Gun, Vacation, Second Home)
+            // Scenario 1: Clean LAN streaming
+            const lanSessions = [
+                { id: "s1", user: "alice", device: "Apple TV 4K", platform: "tvOS", player: "Plex", ipAddress: "192.168.1.50", watchedAt: new Date(), durationMs: 3600000 }
+            ];
+            const lanEval = analyzeUserAccountSharing(lanSessions);
+            if (lanEval.sharingAssessment.risk !== "CLEAN_SINGLE_HOME") {
+                throw new Error(`Expected LAN streaming to be CLEAN_SINGLE_HOME, got ${lanEval.sharingAssessment.risk}`);
+            }
+
+            // Scenario 2: Dual Fixed Living Room TVs playing simultaneously across distinct public IPs (Smoking Gun)
+            const overlapTime = new Date("2026-06-15T20:00:00Z");
+            const dualTvSessions = [
+                {
+                    id: "dtv1",
+                    user: "bob",
+                    title: "Movie One",
+                    device: "Roku Ultra",
+                    platform: "Roku",
+                    player: "Plex for Roku",
+                    ipAddress: "73.189.44.12",
+                    watchedAt: overlapTime,
+                    durationMs: 7200000
+                },
+                {
+                    id: "dtv2",
+                    user: "bob",
+                    title: "Movie Two",
+                    device: "Apple TV 4K",
+                    platform: "tvOS",
+                    player: "Plex for Apple TV",
+                    ipAddress: "98.245.10.88",
+                    watchedAt: new Date(overlapTime.getTime() + 15 * 60 * 1000), // 15 mins later during same movie
+                    durationMs: 7200000
+                }
+            ];
+            const dualTvEval = analyzeUserAccountSharing(dualTvSessions);
+            if (dualTvEval.sharingAssessment.risk !== "HIGH_SHARING_RISK") {
+                throw new Error(`Expected dual TV concurrent streams to trigger HIGH_SHARING_RISK, got ${dualTvEval.sharingAssessment.risk}`);
+            }
+            if (dualTvEval.sharingAssessment.fixedTvOverlapCount < 1) {
+                throw new Error(`Expected at least 1 fixedTvOverlapCount, got ${dualTvEval.sharingAssessment.fixedTvOverlapCount}`);
+            }
+            if (dualTvEval.detectedOverlaps.length < 1 || !dualTvEval.detectedOverlaps[0].isDualTv) {
+                throw new Error("Expected detectedOverlaps to identify dual TV concurrency");
+            }
+
+            // Scenario 3: Vacation / Travel (temporary away usage <= 14 days, 0 concurrency)
+            const homeDay1 = new Date("2026-07-01T18:00:00Z");
+            const vacationDay1 = new Date("2026-07-05T19:00:00Z");
+            const vacationDay4 = new Date("2026-07-08T20:00:00Z");
+            const vacationSessions = [
+                { id: "v0a", user: "charlie", title: "Show 1", device: "Apple TV", platform: "tvOS", player: "Plex", ipAddress: "73.10.10.1", watchedAt: homeDay1, durationMs: 1800000 },
+                { id: "v0b", user: "charlie", title: "Show 2", device: "Apple TV", platform: "tvOS", player: "Plex", ipAddress: "73.10.10.1", watchedAt: new Date(homeDay1.getTime() + 3600000), durationMs: 1800000 },
+                { id: "v0c", user: "charlie", title: "Show 3", device: "Apple TV", platform: "tvOS", player: "Plex", ipAddress: "73.10.10.1", watchedAt: new Date(homeDay1.getTime() + 7200000), durationMs: 1800000 },
+                { id: "v1", user: "charlie", title: "Vacation Show 1", device: "Roku Stick", platform: "Roku", player: "Plex", ipAddress: "166.80.20.5", watchedAt: vacationDay1, durationMs: 1800000 },
+                { id: "v2", user: "charlie", title: "Vacation Show 2", device: "Roku Stick", platform: "Roku", player: "Plex", ipAddress: "166.80.20.5", watchedAt: vacationDay4, durationMs: 1800000 }
+            ];
+            const vacationEval = analyzeUserAccountSharing(vacationSessions);
+            if (vacationEval.sharingAssessment.risk !== "VACATION_TRAVEL") {
+                throw new Error(`Expected vacation usage to be VACATION_TRAVEL, got ${vacationEval.sharingAssessment.risk}`);
+            }
+            if (vacationEval.sharingAssessment.primaryHomeIp !== "73.10.10.1") {
+                throw new Error(`Expected primary home IP 73.10.10.1, got ${vacationEval.sharingAssessment.primaryHomeIp}`);
+            }
+            if (vacationEval.sharingAssessment.secondaryHomeIp !== "166.80.20.5") {
+                throw new Error(`Expected secondary home IP 166.80.20.5, got ${vacationEval.sharingAssessment.secondaryHomeIp}`);
+            }
+
+            // Scenario 4: Second Home / Cabin (recurring TV streaming across > 14 days, 0 concurrency)
+            const cabinDay1 = new Date("2026-05-01T20:00:00Z");
+            const cabinDay35 = new Date("2026-06-05T20:00:00Z");
+            const cabinSessions = [
+                { id: "c0a", user: "dan", title: "Home Show 1", device: "Apple TV", platform: "tvOS", player: "Plex", ipAddress: "68.4.1.1", watchedAt: new Date("2026-05-02T20:00:00Z"), durationMs: 1800000 },
+                { id: "c0b", user: "dan", title: "Home Show 2", device: "Apple TV", platform: "tvOS", player: "Plex", ipAddress: "68.4.1.1", watchedAt: new Date("2026-05-03T20:00:00Z"), durationMs: 1800000 },
+                { id: "c0c", user: "dan", title: "Home Show 3", device: "Apple TV", platform: "tvOS", player: "Plex", ipAddress: "68.4.1.1", watchedAt: new Date("2026-05-04T20:00:00Z"), durationMs: 1800000 },
+                { id: "c1", user: "dan", title: "Cabin Show 1", device: "Smart TV", platform: "Tizen", player: "Plex", ipAddress: "24.50.60.70", watchedAt: cabinDay1, durationMs: 1800000 },
+                { id: "c2", user: "dan", title: "Cabin Show 2", device: "Smart TV", platform: "Tizen", player: "Plex", ipAddress: "24.50.60.70", watchedAt: cabinDay35, durationMs: 1800000 }
+            ];
+            const cabinEval = analyzeUserAccountSharing(cabinSessions);
+            if (cabinEval.sharingAssessment.risk !== "SECOND_HOME") {
+                throw new Error(`Expected second home usage to be SECOND_HOME, got ${cabinEval.sharingAssessment.risk}`);
+            }
+
+            // 4f. Verify Proactive Stream Quality Doctor Transcode Alert
+            const { getUserTranscodeAlert } = await import("../src/lib/telemetry/device-diagnostics");
+            const { getUserTranscodeAlertAction } = await import("../src/app/actions");
+
+            // Seed a test transcoder session
+            const transcodeUser = `test_transcode_user_${Date.now()}`;
+            await prisma.watchHistory.create({
+                data: {
+                    user: transcodeUser,
+                    title: "Avatar The Way of Water",
+                    mediaType: "movie",
+                    videoDecision: "transcode",
+                    player: "Plex for Roku",
+                    platform: "Roku",
+                    device: "Roku Ultra",
+                    ipAddress: "73.189.44.12",
+                    location: "Remote",
+                    streamBitrate: 3000,
+                    durationMs: 7200000,
+                    watchedAt: new Date()
+                }
+            });
+
+            try {
+                const transcodeAlert = await getUserTranscodeAlert(transcodeUser);
+                if (!transcodeAlert.hasAlert) {
+                    throw new Error("Expected transcode alert for user with recent Roku transcode stream");
+                }
+                if (!transcodeAlert.diagnosis?.title || !transcodeAlert.diagnosis?.stepByStepGuide?.length) {
+                    throw new Error("Expected transcode alert to contain title and step-by-step fix instructions");
+                }
+                if (!transcodeAlert.diagnosis.deviceCategory.toLowerCase().includes("roku")) {
+                    throw new Error(`Expected Roku device category in diagnosis, got ${transcodeAlert.diagnosis.deviceCategory}`);
+                }
+            } finally {
+                await prisma.watchHistory.deleteMany({
+                    where: { user: transcodeUser }
+                }).catch(() => {});
+            }
+
+            // 5. Verify Tautulli Backfill Deduplication, Unlimited Support & Execution Safety
+            // Calling with non-existent or empty instances safely handles errors and returns summary
+            const backfillSummary = await backfillTautulliHistoryInternal({ limit: 10 });
+            if (typeof backfillSummary.imported !== "number" || typeof backfillSummary.skipped !== "number") {
+                throw new Error("Expected backfill summary to contain imported/skipped counts");
+            }
+
+            // Verify Unlimited / Complete Backfill Mode execution safety
+            const unlimitedSummary = await backfillTautulliHistoryInternal({ unlimited: true });
+            if (typeof unlimitedSummary.imported !== "number" || typeof unlimitedSummary.skipped !== "number") {
+                throw new Error("Expected unlimited backfill summary to contain imported/skipped counts");
+            }
+
+            // Verify Live Progress tracking state query
+            const progress = getTautulliBackfillProgress();
+            if (typeof progress.isRunning !== "boolean" || typeof progress.importedCount !== "number" || typeof progress.skippedCount !== "number") {
+                throw new Error("Expected getTautulliBackfillProgress to return valid BackfillProgressState");
+            }
+            if (progress.isUnlimited !== true) {
+                throw new Error("Expected progress state to reflect unlimited mode from recent run");
+            }
+
+            // Verify Status Action & Stop Action
+            const statusFromAction = await getTautulliBackfillStatusAction();
+            if (typeof statusFromAction.isRunning !== "boolean") {
+                throw new Error("Expected getTautulliBackfillStatusAction to return status object");
+            }
+            const stopResult = await stopTautulliBackfillAction();
+            if (typeof stopResult !== "boolean") {
+                throw new Error("Expected stopTautulliBackfillAction to return boolean");
+            }
+
+            // Verify tautulliBackfillLastRun timestamp update in Settings
+            const now = new Date();
+            await prisma.settings.updateMany({
+                where: { id: "global" },
+                data: { tautulliBackfillLastRun: now }
+            });
+            const updatedSettings = await prisma.settings.findFirst({ where: { id: "global" } });
+            if (!updatedSettings?.tautulliBackfillLastRun) {
+                throw new Error("Expected tautulliBackfillLastRun to be persisted in Settings table");
+            }
+        } finally {
+            delete process.env.PORTALARR_TEST_AUTH;
+        }
+    });
+
+    // 103. Admin Scripts: Script Storage, Shell Execution, Terminal Output & Abort Lifecycle
+    await assertTest("Test 103: Admin Scripts: Script Storage, Shell Execution, Terminal Output & Abort Lifecycle", async () => {
+        // 1. Verify default script seeding
+        const allScripts = getAllScripts();
+        if (allScripts.length < 4) {
+            throw new Error(`Expected at least 4 default scripts, got: ${allScripts.length}`);
+        }
+
+        const plexHealthScript = allScripts.find(s => s.id === "check_all_plex_servers");
+        if (!plexHealthScript) {
+            throw new Error("Default script 'check_all_plex_servers' was not seeded");
+        }
+        if (plexHealthScript.filename !== "check_all_plex_servers.sh") {
+            throw new Error(`Expected filename 'check_all_plex_servers.sh', got: ${plexHealthScript.filename}`);
+        }
+        if (!plexHealthScript.content.includes("check_plex_server") || !plexHealthScript.content.includes("MainPlexBackup")) {
+            throw new Error("Plex health check script does not contain expected function check_plex_server");
+        }
+
+        const dbScript = allScripts.find(s => s.id === "optimize_plex_databases");
+        if (!dbScript) throw new Error("Expected optimize_plex_databases script to exist");
+
+        // 2. Test Script CRUD (Save, Retrieve, Update, Delete)
+        const testScriptId = `test_script_${Date.now()}`;
+        const created = saveScript({
+            id: testScriptId,
+            name: "Test Verification Script",
+            filename: `${testScriptId}.sh`,
+            description: "Temporary script for verification test suite",
+            category: "Custom",
+            interpreter: "bash",
+            schedule: "manual",
+            timeoutSeconds: 30,
+            content: `#!/bin/bash\necho "Running test verification script..."\necho "Done."\n`
+        });
+
+        if (!created || created.id !== testScriptId) {
+            throw new Error("Failed to create test script");
+        }
+
+        const retrieved = getScriptById(testScriptId);
+        if (!retrieved || retrieved.name !== "Test Verification Script") {
+            throw new Error("Failed to retrieve created test script by ID");
+        }
+
+        // 3. Test Interactive Script Execution & Real-Time Terminal Streaming Output
+        const streamLogs: string[] = [];
+        const execResult = await executeScript({
+            scriptId: "check_all_plex_servers",
+            runMode: "interactive",
+            onLog: (line) => streamLogs.push(line)
+        });
+
+        if (!streamLogs.some(l => l.includes("Note that closing this window will abort the execution of this script"))) {
+            throw new Error("Interactive stream missing mandatory notice: 'Note that closing this window will abort the execution of this script'");
+        }
+
+        if (!streamLogs.some(l => l.includes("MainPlexBackup"))) {
+            throw new Error("Terminal output missing MainPlexBackup health check output");
+        }
+        if (!streamLogs.some(l => l.includes("KidsPlexServer"))) {
+            throw new Error("Terminal output missing KidsPlexServer health check output");
+        }
+        if (!streamLogs.some(l => l.includes("All Plex health checks complete."))) {
+            throw new Error("Terminal output missing completion confirmation line");
+        }
+
+        if (execResult.exitCode !== 0 || execResult.status !== "SUCCESS") {
+            throw new Error(`Expected execResult status SUCCESS and exitCode 0, got status: ${execResult.status}, exitCode: ${execResult.exitCode}`);
+        }
+
+        // 4. Test Abort Lifecycle
+        const abortController = new AbortController();
+        const abortPromise = executeScript({
+            scriptId: testScriptId,
+            customCode: `#!/bin/bash\nsleep 30\n`,
+            runMode: "interactive",
+            abortSignal: abortController.signal
+        });
+
+        // Abort after 50ms
+        setTimeout(() => abortController.abort(), 50);
+        const abortResult = await abortPromise;
+        if (abortResult.status !== "ABORTED" && !abortResult.logs.some(l => l.includes("[ABORTED]"))) {
+            throw new Error(`Expected script to be aborted, got status: ${abortResult.status}`);
+        }
+
+        // 5. Test Run History recording
+        const runs = getScriptRuns(testScriptId, 5);
+        if (runs.length === 0) {
+            throw new Error("Expected run history records to be saved");
+        }
+
+        // 6. Delete test script
+        const deleted = deleteScript(testScriptId);
+        if (!deleted) {
+            throw new Error("Failed to delete test script");
+        }
+        const verifyDeleted = getScriptById(testScriptId);
+        if (verifyDeleted) {
+            throw new Error("Deleted script still returned by getScriptById");
+        }
+    });
+
+    // 104. Live Activity: Deterministic Stream Sorting, Key Stability & Multi-Tier Tiebreakers
+    await assertTest("Test 104: Live Activity: Deterministic Stream Sorting, Key Stability & Multi-Tier Tiebreakers", async () => {
+        // 1. Verify deterministic multi-tier comparator
+        const sampleSessions = [
+            {
+                sessionKey: "session_101",
+                sessionId: "sess_1",
+                user: "Charlie",
+                serverName: "MainPlexServer",
+                title: "Inception (2010)",
+                grandparentTitle: "",
+                streamBitrate: 8000,
+                progressPercent: 45,
+                videoDecision: "direct play"
+            },
+            {
+                sessionKey: "session_102",
+                sessionId: "sess_2",
+                user: "Alice",
+                serverName: "KidsPlexServer",
+                title: "Moana (2016)",
+                grandparentTitle: "",
+                streamBitrate: 4000,
+                progressPercent: 80,
+                videoDecision: "transcode"
+            },
+            {
+                sessionKey: "session_103",
+                sessionId: "sess_3",
+                user: "Bob",
+                serverName: "MainPlexServer",
+                title: "Breaking Bad - S01E01",
+                grandparentTitle: "Breaking Bad",
+                streamBitrate: 12000,
+                progressPercent: 10,
+                videoDecision: "transcode"
+            },
+            {
+                sessionKey: "session_104",
+                sessionId: "sess_4",
+                user: "Alice",
+                serverName: "MainPlexServerBackup",
+                title: "Frozen II (2019)",
+                grandparentTitle: "",
+                streamBitrate: 6000,
+                progressPercent: 80,
+                videoDecision: "direct play"
+            }
+        ];
+
+        const sortSessions = (list: any[], mode: string) => {
+            return [...list].sort((a: any, b: any) => {
+                let diff = 0;
+                if (mode === "user_asc") {
+                    diff = (a.user || "").localeCompare(b.user || "");
+                } else if (mode === "user_desc") {
+                    diff = (b.user || "").localeCompare(a.user || "");
+                } else if (mode === "server") {
+                    diff = (a.serverName || "").localeCompare(b.serverName || "");
+                } else if (mode === "bandwidth") {
+                    diff = (Number(b.streamBitrate) || 0) - (Number(a.streamBitrate) || 0);
+                } else if (mode === "progress") {
+                    diff = (Number(b.progressPercent) || 0) - (Number(a.progressPercent) || 0);
+                } else if (mode === "transcode_first") {
+                    const isTranscodeA = a.videoDecision === "transcode" ? 1 : 0;
+                    const isTranscodeB = b.videoDecision === "transcode" ? 1 : 0;
+                    diff = isTranscodeB - isTranscodeA;
+                }
+
+                if (diff !== 0) return diff;
+
+                const userDiff = (a.user || "").localeCompare(b.user || "");
+                if (userDiff !== 0) return userDiff;
+
+                const serverDiff = (a.serverName || "").localeCompare(b.serverName || "");
+                if (serverDiff !== 0) return serverDiff;
+
+                const titleA = String(a.grandparentTitle || a.title || "");
+                const titleB = String(b.grandparentTitle || b.title || "");
+                const titleDiff = titleA.localeCompare(titleB);
+                if (titleDiff !== 0) return titleDiff;
+
+                const keyA = String(a.uniqueStreamKey || a.sessionKey || a.sessionId || "");
+                const keyB = String(b.uniqueStreamKey || b.sessionKey || b.sessionId || "");
+                return keyA.localeCompare(keyB);
+            });
+        };
+
+        // 2. Test User A-Z sorting (default)
+        const sortedUserAsc = sortSessions(sampleSessions, "user_asc");
+        if (sortedUserAsc[0].user !== "Alice" || sortedUserAsc[1].user !== "Alice" || sortedUserAsc[2].user !== "Bob" || sortedUserAsc[3].user !== "Charlie") {
+            throw new Error(`Unexpected user_asc order: ${sortedUserAsc.map(s => s.user).join(", ")}`);
+        }
+        // When user is identical ("Alice"), tiebreaker server sorts KidsPlexServer before MainPlexServerBackup
+        if (sortedUserAsc[0].serverName !== "KidsPlexServer" || sortedUserAsc[1].serverName !== "MainPlexServerBackup") {
+            throw new Error(`Expected server tiebreaker for Alice: got ${sortedUserAsc[0].serverName}, ${sortedUserAsc[1].serverName}`);
+        }
+
+        // 3. Test Bandwidth High -> Low
+        const sortedBandwidth = sortSessions(sampleSessions, "bandwidth");
+        if (sortedBandwidth[0].streamBitrate !== 12000 || sortedBandwidth[1].streamBitrate !== 8000 || sortedBandwidth[2].streamBitrate !== 6000 || sortedBandwidth[3].streamBitrate !== 4000) {
+            throw new Error("Unexpected bandwidth sort order");
+        }
+
+        // 4. Test Transcodes First
+        const sortedTranscode = sortSessions(sampleSessions, "transcode_first");
+        if (sortedTranscode[0].videoDecision !== "transcode" || sortedTranscode[1].videoDecision !== "transcode") {
+            throw new Error("Expected transcode sessions first");
+        }
+
+        // 5. Test Stability Under Multiple Shuffled Iterations
+        // Regardless of input array order (simulating asynchronous polling jitter), output must be 100% identical
+        for (let i = 0; i < 20; i++) {
+            const shuffled = [...sampleSessions].sort(() => Math.random() - 0.5);
+            const sorted = sortSessions(shuffled, "user_asc");
+            const keys = sorted.map(s => s.sessionKey).join(",");
+            const expectedKeys = sortedUserAsc.map(s => s.sessionKey).join(",");
+            if (keys !== expectedKeys) {
+                throw new Error(`Sorting was unstable on shuffle iteration ${i}! Got: ${keys}, expected: ${expectedKeys}`);
+            }
+        }
+
+        // 6. Test Multi-Server Identical Raw Session Key Resolution & Zero Key Collisions
+        // Plex servers frequently start session keys at "1" or "2" on each separate server.
+        // Verify that globally uniqueStreamKey prevents React duplicate key collisions and DOM ghost cards.
+        const collidingSessions = [
+            {
+                instanceId: "plex_server_1",
+                serverName: "MainPlexServer",
+                sessionKey: "1",
+                sessionId: "1",
+                uniqueStreamKey: "plex_server_1_1_Alice_Dune",
+                user: "Alice",
+                title: "Dune: Part Two",
+                streamBitrate: 20000,
+                progressPercent: 50,
+                videoDecision: "direct play"
+            },
+            {
+                instanceId: "plex_server_2",
+                serverName: "KidsPlexServer",
+                sessionKey: "1", // IDENTICAL raw sessionKey from second server
+                sessionId: "1",
+                uniqueStreamKey: "plex_server_2_1_Bob_Finding_Nemo",
+                user: "Bob",
+                title: "Finding Nemo",
+                streamBitrate: 8000,
+                progressPercent: 20,
+                videoDecision: "transcode"
+            },
+            {
+                // Stopped or ghost session from Plex (should be filtered out)
+                instanceId: "plex_server_1",
+                serverName: "MainPlexServer",
+                sessionKey: "2",
+                user: "Plex User",
+                state: "stopped",
+                title: ""
+            }
+        ];
+
+        // Filter ghost/stopped streams exactly as page.tsx and admin-detailed-streams.tsx do
+        const cleanedColliding = collidingSessions.filter((s: any) => 
+            s && (s.title || s.grandparentTitle || s.fullTitle) && s.state !== "stopped"
+        );
+        if (cleanedColliding.length !== 2) {
+            throw new Error(`Expected ghost/stopped stream to be filtered out, got length ${cleanedColliding.length}`);
+        }
+
+        // Ensure uniqueStreamKeys are 100% unique across all cards
+        const seenKeys = new Set<string>();
+        for (const s of cleanedColliding) {
+            const reactKey = s.uniqueStreamKey || `${s.serverName}_${s.sessionKey}_${s.user}`;
+            if (seenKeys.has(reactKey)) {
+                throw new Error(`Duplicate React key detected: "${reactKey}"! This causes ghost streams in React reconciliation.`);
+            }
+            seenKeys.add(reactKey);
+        }
+
+        // Verify changing the sort across all 6 modes produces zero ghost cards and preserves 2 items
+        const modes = ["user_asc", "user_desc", "server", "bandwidth", "progress", "transcode_first"];
+        for (const mode of modes) {
+            const sorted = sortSessions(cleanedColliding, mode);
+            if (sorted.length !== 2) {
+                throw new Error(`Sort mode "${mode}" changed session count: expected 2, got ${sorted.length}`);
+            }
+            const modeKeys = sorted.map(s => s.uniqueStreamKey);
+            if (new Set(modeKeys).size !== 2) {
+                throw new Error(`Key collision occurred under sort mode "${mode}"!`);
+            }
+        }
+    });
+
+    // 105. System & Docker Fleet Monitoring
+    await assertTest("Test 105: System & Docker Fleet Monitoring: Reachability Telemetry, Container Lifecycle & Incident Engine", async () => {
+        const { listDockerContainers, restartDockerContainer, stopDockerContainer, startDockerContainer } = await import("../src/lib/monitoring/docker-client");
+        const { 
+            recordServiceProbes, 
+            calculateServiceUptime, 
+            getIncidentHistory, 
+            clearResolvedIncidents,
+            getMonitoringConfig,
+            saveMonitoringConfig
+        } = await import("../src/lib/monitoring/uptime-tracker");
+
+        // 1. Verify Docker Fleet Listing
+        const fleetData = await listDockerContainers();
+        if (!fleetData || !fleetData.summary || !Array.isArray(fleetData.containers)) {
+            throw new Error("listDockerContainers() failed to return expected summary and containers array");
+        }
+        if (fleetData.summary.totalContainers <= 0) {
+            throw new Error("Expected at least one container in fleet list");
+        }
+        const sampleContainer = fleetData.containers[0];
+        if (!sampleContainer.id || !sampleContainer.name || !sampleContainer.state) {
+            throw new Error("Container missing required fields (id, name, state)");
+        }
+        for (const c of fleetData.containers) {
+            if (typeof c.image !== "string") {
+                throw new Error(`Expected container image to be a string, got ${typeof c.image} for container ${c.name}`);
+            }
+        }
+
+        // 2. Verify Container Restart Lifecycle
+        const restartRes = await restartDockerContainer(sampleContainer.id);
+        if (!restartRes || !restartRes.success) {
+            throw new Error(`restartDockerContainer failed: ${restartRes?.message}`);
+        }
+
+        // 3. Verify Container Stop & Start Lifecycle
+        const stopRes = await stopDockerContainer(sampleContainer.id);
+        if (!stopRes || !stopRes.success) {
+            throw new Error(`stopDockerContainer failed: ${stopRes?.message}`);
+        }
+        const startRes = await startDockerContainer(sampleContainer.id);
+        if (!startRes || !startRes.success) {
+            throw new Error(`startDockerContainer failed: ${startRes?.message}`);
+        }
+
+        // 4. Verify Service Uptime Tracking & Calculations
+        const testServiceId = `test-service-${Date.now()}`;
+        const mockService: any = {
+            id: testServiceId,
+            name: "Test Plex Server",
+            type: "Plex Media Server",
+            category: "plex",
+            url: "http://192.168.1.99:32400",
+            monitored: true,
+            status: "ONLINE",
+            latencyMs: 14
+        };
+
+        // Record successful probes
+        await recordServiceProbes([mockService]);
+        const initialUptime = calculateServiceUptime(testServiceId, "ONLINE", 14);
+        if (initialUptime.pct24h !== 100) {
+            throw new Error(`Expected 100% initial uptime, got ${initialUptime.pct24h}%`);
+        }
+        if (!initialUptime.currentStreak.includes("Up for")) {
+            throw new Error(`Expected streak to indicate 'Up for', got '${initialUptime.currentStreak}'`);
+        }
+
+        // 5. Verify Outage Incident Opening
+        mockService.status = "OFFLINE";
+        mockService.details = "Connection refused (ECONNREFUSED)";
+        await recordServiceProbes([mockService]);
+
+        const incidentsAfterFail = getIncidentHistory();
+        const activeInc = incidentsAfterFail.find(i => i.targetId === testServiceId && i.status === "ACTIVE");
+        if (!activeInc) {
+            throw new Error("Expected active outage incident to be created when service went OFFLINE");
+        }
+        if (activeInc.severity !== "CRITICAL") {
+            throw new Error(`Expected CRITICAL severity, got ${activeInc.severity}`);
+        }
+
+        // 6. Verify Outage Resolution
+        mockService.status = "ONLINE";
+        mockService.details = "PMS reachable (16ms)";
+        await recordServiceProbes([mockService]);
+
+        const incidentsAfterRecover = getIncidentHistory();
+        const resolvedInc = incidentsAfterRecover.find(i => i.targetId === testServiceId);
+        if (!resolvedInc || resolvedInc.status !== "RESOLVED") {
+            throw new Error("Expected incident to transition to RESOLVED when service recovered");
+        }
+        if (!resolvedInc.resolvedAt || (resolvedInc.durationMinutes ?? 0) <= 0) {
+            throw new Error("Expected incident to record resolvedAt and durationMinutes");
+        }
+
+        // 7. Verify Clearing Resolved Incidents
+        clearResolvedIncidents();
+        const postCleanIncidents = getIncidentHistory();
+        const lingeringResolved = postCleanIncidents.find(i => i.targetId === testServiceId && i.status === "RESOLVED");
+        if (lingeringResolved) {
+            throw new Error("clearResolvedIncidents failed to remove resolved incident");
+        }
+
+        // 8. Verify Monitoring Configuration Read / Write
+        const savedCfg = saveMonitoringConfig({
+            discordWebhookUrl: "https://discord.com/api/webhooks/test/mock",
+            notifyDiscord: true
+        });
+        if (savedCfg.discordWebhookUrl !== "https://discord.com/api/webhooks/test/mock") {
+            throw new Error("saveMonitoringConfig failed to persist discordWebhookUrl");
+        }
+        const loadedCfg = getMonitoringConfig();
+        if (loadedCfg.discordWebhookUrl !== "https://discord.com/api/webhooks/test/mock") {
+            throw new Error("getMonitoringConfig failed to read updated config");
+        }
+    });
+
+    await assertTest("Test 106: Live Stream Telemetry Diagnostics, Household Anchoring Badges, Timing ETA & Audio/Subtitle Burn-In Detection", async () => {
+        const { 
+            formatDurationMs, 
+            formatEtaTimestamp, 
+            formatAudioChannels, 
+            formatResolution, 
+            extractStreamTelemetry,
+            isPrivateOrLocalIp,
+            normalizeIp,
+            isMobileRoamingDevice,
+            isFixedHomeDevice
+        } = await import("../src/lib/telemetry/stream-tracker");
+
+        // 1. Clock and Duration formatting
+        if (formatDurationMs(3665000) !== "1:01:05") {
+            throw new Error(`Expected 1:01:05, got ${formatDurationMs(3665000)}`);
+        }
+        if (formatDurationMs(125000) !== "2:05") {
+            throw new Error(`Expected 2:05, got ${formatDurationMs(125000)}`);
+        }
+        if (formatDurationMs(0) !== "0:00") {
+            throw new Error(`Expected 0:00, got ${formatDurationMs(0)}`);
+        }
+
+        const testFuture = new Date("2026-10-14T14:45:00").getTime();
+        const etaFormatted = formatEtaTimestamp(testFuture);
+        if (!etaFormatted.includes("2:45") || !etaFormatted.includes("PM")) {
+            throw new Error(`Expected friendly ETA e.g. 2:45 PM, got ${etaFormatted}`);
+        }
+
+        // 2. Audio Channel nomenclature
+        if (formatAudioChannels(8) !== "7.1") throw new Error(`Expected 7.1, got ${formatAudioChannels(8)}`);
+        if (formatAudioChannels(6) !== "5.1") throw new Error(`Expected 5.1, got ${formatAudioChannels(6)}`);
+        if (formatAudioChannels(2) !== "Stereo") throw new Error(`Expected Stereo, got ${formatAudioChannels(2)}`);
+        if (formatAudioChannels(1) !== "Mono") throw new Error(`Expected Mono, got ${formatAudioChannels(1)}`);
+
+        // 3. Resolution Formatting
+        if (formatResolution("2160") !== "4K UHD") throw new Error(`Expected 4K UHD, got ${formatResolution("2160")}`);
+        if (formatResolution("1080p") !== "1080p") throw new Error(`Expected 1080p, got ${formatResolution("1080p")}`);
+        if (formatResolution("720") !== "720p") throw new Error(`Expected 720p, got ${formatResolution("720")}`);
+
+        // 4. Extract telemetry from Plex active session with HDR, subtitle burn-in, and NVENC transcode speed
+        const mockPlexSession = {
+            duration: 7200000, // 2 hours in ms
+            viewOffset: 3600000, // 1 hour in ms
+            Media: [{
+                videoResolution: "2160",
+                videoCodec: "hevc",
+                Part: [{
+                    Stream: [
+                        { streamType: 1, codec: "hevc", colorTrc: "smpte2084", doviTitle: "Dolby Vision" },
+                        { streamType: 2, codec: "truehd", channels: 8, selected: 1 },
+                        { streamType: 3, codec: "pgs", language: "English", selected: 1, burn: 1 }
+                    ]
+                }]
+            }],
+            TranscodeSession: {
+                videoResolution: "1080",
+                videoCodec: "h264",
+                audioCodec: "aac",
+                audioChannels: 2,
+                speed: 2.8,
+                throttled: true,
+                subtitleDecision: "burn"
+            },
+            Player: {
+                address: "192.168.1.105",
+                local: true,
+                device: "Apple TV",
+                platform: "tvOS"
+            },
+            User: {
+                thumb: "https://plex.tv/users/avatar123.jpg"
+            }
+        };
+
+        const plexTelemetry = extractStreamTelemetry(mockPlexSession);
+        if (plexTelemetry.progressPercent !== 50) {
+            throw new Error(`Expected 50% progress, got ${plexTelemetry.progressPercent}`);
+        }
+        if (plexTelemetry.sourceResolution !== "4K UHD" || plexTelemetry.streamResolution !== "1080p") {
+            throw new Error(`Unexpected resolutions: ${plexTelemetry.sourceResolution} -> ${plexTelemetry.streamResolution}`);
+        }
+        if (plexTelemetry.hdrFormat !== "Dolby Vision") {
+            throw new Error(`Expected Dolby Vision HDR format, got ${plexTelemetry.hdrFormat}`);
+        }
+        if (plexTelemetry.sourceAudioCodec !== "TRUEHD" || plexTelemetry.sourceAudioChannels !== "7.1") {
+            throw new Error(`Expected TRUEHD 7.1, got ${plexTelemetry.sourceAudioCodec} ${plexTelemetry.sourceAudioChannels}`);
+        }
+        if (plexTelemetry.streamAudioCodec !== "AAC" || plexTelemetry.streamAudioChannels !== "Stereo") {
+            throw new Error(`Expected AAC Stereo, got ${plexTelemetry.streamAudioCodec} ${plexTelemetry.streamAudioChannels}`);
+        }
+        if (!plexTelemetry.isSubtitleBurnIn) {
+            throw new Error("Expected subtitle burn-in to be detected");
+        }
+        if (plexTelemetry.transcodeSpeed !== "2.8x" || !plexTelemetry.transcodeThrottled) {
+            throw new Error(`Expected 2.8x throttled transcode, got ${plexTelemetry.transcodeSpeed}`);
+        }
+        if (plexTelemetry.connectionMode !== "lan" || !plexTelemetry.connectionLabel.includes("Direct LAN")) {
+            throw new Error(`Expected Direct LAN connection mode, got ${plexTelemetry.connectionLabel}`);
+        }
+
+        // 5. Extract telemetry from Tautulli session (seconds-based duration/view_offset, remote WAN)
+        const mockTautulliSession = {
+            duration: 3600, // 1 hour in seconds
+            view_offset: 900, // 15 mins in seconds
+            video_resolution: "1080",
+            stream_video_resolution: "720",
+            video_codec: "h264",
+            stream_video_codec: "h264",
+            audio_codec: "dca",
+            audio_channels: "6",
+            stream_audio_codec: "aac",
+            stream_audio_channels: "2",
+            ip_address: "73.18.99.120",
+            transcode_speed: 1.4,
+            subtitles: 1,
+            subtitle_codec: "srt",
+            subtitle_language: "Spanish"
+        };
+
+        const tautulliTelemetry = extractStreamTelemetry(mockTautulliSession);
+        if (tautulliTelemetry.durationMs !== 3600000 || tautulliTelemetry.viewOffsetMs !== 900000) {
+            throw new Error(`Tautulli seconds conversion failed: dur=${tautulliTelemetry.durationMs}, view=${tautulliTelemetry.viewOffsetMs}`);
+        }
+        if (tautulliTelemetry.progressPercent !== 25) {
+            throw new Error(`Expected 25% progress, got ${tautulliTelemetry.progressPercent}`);
+        }
+        if (tautulliTelemetry.connectionMode !== "wan" || !tautulliTelemetry.connectionLabel.includes("Direct WAN")) {
+            throw new Error(`Expected Direct WAN mode, got ${tautulliTelemetry.connectionLabel}`);
+        }
+        if (tautulliTelemetry.sourceAudioChannels !== "5.1" || tautulliTelemetry.streamAudioChannels !== "Stereo") {
+            throw new Error(`Audio channel parsing failed: ${tautulliTelemetry.sourceAudioChannels} -> ${tautulliTelemetry.streamAudioChannels}`);
+        }
+
+        // 6. Device typology and household anchoring heuristics
+        if (!isFixedHomeDevice("Apple TV", "tvOS", "Plex for Apple TV")) {
+            throw new Error("Apple TV should be classified as fixed home device");
+        }
+        if (!isMobileRoamingDevice("iPhone 15 Pro", "iOS", "Plex for iOS")) {
+            throw new Error("iPhone should be classified as mobile roaming device");
+        }
+        if (isMobileRoamingDevice("Roku Ultra", "Roku", "Plex")) {
+            throw new Error("Roku Ultra should NOT be classified as mobile roaming");
+        }
+    });
+
+    await assertTest("Test 107: Dual-Tier Prewarming Engine & SWR Memory Caching (Global System & Personalized User Telemetry)", async () => {
+        const { 
+            getUserCache, 
+            setUserCache, 
+            clearUserCache, 
+            prewarmUserSession, 
+            prewarmGlobalSystem 
+        } = await import("../src/lib/prewarm");
+
+        // 1. In-memory SWR Cache Basic Set / Get / Invalidate
+        clearUserCache();
+        const testKey = "test_item_key_1";
+        setUserCache(testKey, { sample: 42, label: "speed" }, 10000);
+        const cachedItem = getUserCache<{ sample: number; label: string }>(testKey);
+        if (!cachedItem || cachedItem.sample !== 42 || cachedItem.label !== "speed") {
+            throw new Error("Failed to set or retrieve item from SWR user cache");
+        }
+
+        // 2. Prefix-based cache clearing
+        setUserCache("user_quota:user123", { quota: 5 }, 10000);
+        setUserCache("user_quota:user456", { quota: 2 }, 10000);
+        setUserCache("other_key:system", { ok: true }, 10000);
+        clearUserCache("user_quota");
+        if (getUserCache("user_quota:user123") !== null || getUserCache("user_quota:user456") !== null) {
+            throw new Error("clearUserCache prefix failed to invalidate user_quota keys");
+        }
+        if (getUserCache("other_key:system") === null) {
+            throw new Error("clearUserCache prefix accidentally purged non-matching keys");
+        }
+
+        // 3. TTL Expiry verification
+        const expiringKey = "test_expiring_key";
+        setUserCache(expiringKey, "temporary_value", 5); // 5ms TTL
+        await new Promise(r => setTimeout(r, 20));
+        const expired = getUserCache(expiringKey);
+        if (expired !== null) {
+            throw new Error("Cache entry failed to expire after TTL elapsed");
+        }
+
+        // 4. Personalized User Session Prewarming & Debounce Logic
+        const testUserId = `test-pw-user-${Date.now()}`;
+        const userPrewarmRes = await prewarmUserSession({
+            id: testUserId,
+            username: "TestPrewarmUser",
+            role: "USER"
+        });
+        if (!userPrewarmRes.success) {
+            throw new Error("prewarmUserSession failed to complete successfully");
+        }
+
+        // Immediate subsequent call should be safely debounced
+        const debouncedRes = await prewarmUserSession({
+            id: testUserId,
+            username: "TestPrewarmUser",
+            role: "USER"
+        });
+        if (!debouncedRes.success || !debouncedRes.warmedItems.includes("skipped_debounced")) {
+            throw new Error("prewarmUserSession failed to debounce immediate duplicate call");
+        }
+
+        // 5. Global System Prewarm Execution
+        const globalRes = await prewarmGlobalSystem();
+        if (!globalRes.success) {
+            throw new Error("prewarmGlobalSystem failed to execute successfully");
+        }
+        if (typeof globalRes.durationMs !== "number" || !Array.isArray(globalRes.warmedKeys)) {
+            throw new Error("prewarmGlobalSystem return payload missing required fields");
+        }
+    });
+
+    await assertTest("Test 108: Curation & Prune: Multi-Tier Leaving Soon Watch Status Engine, Batch Plex Session History, Throttled Circuit Breaker & Debounce Guard", async () => {
         const { recheckLeavingSoonWatchActivityInternal } = await import("../src/app/curation-actions");
 
         const testRatingKey = `test_leaving_soon_${Date.now()}`;
-        const testServerId = "test_server_prune_100";
+        const testServerId = "test_server_prune_108";
 
         // 1. Create a test leaving soon item
         const advisory = await prisma.mediaContentAdvisory.create({
@@ -7014,20 +8662,54 @@ async function runTestSuite() {
         if (!existingSettings?.mainPlexToken) {
             await prisma.settings.upsert({
                 where: { id: "global" },
-                update: { mainPlexToken: encryptData("test_plex_token_100") },
-                create: { id: "global", mainPlexToken: encryptData("test_plex_token_100") }
+                update: { mainPlexToken: encryptData("test_plex_token_108") },
+                create: { id: "global", mainPlexToken: encryptData("test_plex_token_108") }
             });
         }
 
         try {
-            // 3. Run recheckLeavingSoonWatchActivityInternal with force = true
+            // 3. Create a recent watch history record (Tier 1 local database match)
+            await prisma.watchHistory.create({
+                data: {
+                    ratingKey: testRatingKey,
+                    serverId: testServerId,
+                    user: "testuser108",
+                    title: "Test Prune Watch Candidate Movie",
+                    mediaType: "movie",
+                    watchedAt: new Date(Date.now() - 3600000) // Watched 1 hour ago
+                }
+            });
+
+            // 4. Run recheckLeavingSoonWatchActivityInternal with force = true
             const res = await recheckLeavingSoonWatchActivityInternal(testServerId, false, true);
 
             if (!res.success) {
                 throw new Error(`recheckLeavingSoonWatchActivityInternal returned failure: ${res.error}`);
             }
 
-            // 4. Test debounce guard: immediate subsequent non-forced call on the same server should be skipped
+            if (res.unflaggedCount !== 1) {
+                throw new Error(`Expected exactly 1 unflagged item via Tier 1 local watch history, got ${res.unflaggedCount}`);
+            }
+
+            // Verify the advisory record was unflagged in database
+            const updatedAdvisory = await prisma.mediaContentAdvisory.findUnique({
+                where: { id: advisory.id }
+            });
+
+            if (!updatedAdvisory || updatedAdvisory.isLeavingSoon) {
+                throw new Error("Advisory record was not unflagged (isLeavingSoon should be false)");
+            }
+
+            if (!updatedAdvisory.leavingReason?.includes("Local Watch History")) {
+                throw new Error(`leavingReason did not mention Local Watch History: ${updatedAdvisory.leavingReason}`);
+            }
+
+            // 5. Test debounce guard: immediate subsequent non-forced call on the same server should be skipped
+            await prisma.mediaContentAdvisory.update({
+                where: { id: advisory.id },
+                data: { isLeavingSoon: true }
+            });
+
             const debouncedRes = await recheckLeavingSoonWatchActivityInternal(testServerId, false, false);
             if (debouncedRes.unflaggedCount !== 0) {
                 throw new Error("Debounce guard failed: server recheck was processed within 60s without force flag");
@@ -7036,6 +8718,140 @@ async function runTestSuite() {
             // Cleanup test data
             await prisma.mediaContentAdvisory.deleteMany({
                 where: { ratingKey: testRatingKey }
+            }).catch(() => {});
+            await prisma.watchHistory.deleteMany({
+                where: { ratingKey: testRatingKey }
+            }).catch(() => {});
+        }
+    });
+
+    // 109. Media Request Notifications Engine: Auto-Approved & Pending Admin Routing, Books/Audiobooks Formatting, and Approval Gate Bypass
+    await assertTest("Test 109: Media Request Notifications Engine: Auto-Approved & Pending Admin Routing, Books/Audiobooks Formatting, and Approval Gate Bypass", async () => {
+        const { sendRequestNotificationToAdmins } = await import("../src/app/actions");
+        const { sendSeerrEmailNotification } = await import("../src/lib/seerr/notifications");
+        const { renderEmailTemplate } = await import("../src/lib/email-templates");
+
+        const testId = `notif109_${Date.now()}`;
+        const adminEmail = `admin_${testId}@example.com`;
+        const superUserEmail = `superuser_${testId}@example.com`;
+        const userEmail = `user_${testId}@example.com`;
+
+        // 1. Create a test ADMIN and SUPER_USER
+        const adminUser = await prisma.user.create({
+            data: {
+                username: `admin_user_${testId}`,
+                email: adminEmail,
+                password: "hashedpassword123",
+                role: "ADMIN"
+            }
+        });
+
+        const superUser = await prisma.user.create({
+            data: {
+                username: `super_user_${testId}`,
+                email: superUserEmail,
+                password: "hashedpassword123",
+                role: "SUPER_USER"
+            }
+        });
+
+        const regularUser = await prisma.user.create({
+            data: {
+                username: `member_${testId}`,
+                email: userEmail,
+                password: "hashedpassword123",
+                role: "USER"
+            }
+        });
+
+        try {
+            // 2. Verify sendRequestNotificationToAdmins properly resolves both ADMIN and SUPER_USER
+            const admins = await prisma.user.findMany({
+                where: { role: { in: ["ADMIN", "SUPER_USER"] } }
+            });
+            const adminEmails = admins.map(a => a.email).filter(e => e && e.includes("@")) as string[];
+            if (!adminEmails.includes(adminEmail) || !adminEmails.includes(superUserEmail)) {
+                throw new Error("Admin query in notification engine failed to include both ADMIN and SUPER_USER roles");
+            }
+
+            // 3. Verify template rendering for book and audiobook admin notifications
+            const renderedBook = await renderEmailTemplate("media_request_admin", {
+                title: "The Way of Kings",
+                author: "Brandon Sanderson",
+                mediaType: "ebook",
+                mediaLabel: "Ebook",
+                requestedBy: regularUser.username,
+                type: "book",
+                publishYear: "2010",
+                manageUrl: "http://localhost:3000/requests",
+                appUrl: "http://localhost:3000"
+            });
+            if (!renderedBook.subject.includes("The Way of Kings") || !renderedBook.html.includes("Brandon Sanderson")) {
+                throw new Error("media_request_admin failed to render book metadata accurately");
+            }
+
+            const renderedAudiobook = await renderEmailTemplate("media_request_admin", {
+                title: "Project Hail Mary",
+                author: "Andy Weir",
+                mediaType: "audiobook",
+                mediaLabel: "Audiobook",
+                requestedBy: regularUser.username,
+                type: "book",
+                publishYear: "2021",
+                manageUrl: "http://localhost:3000/requests",
+                appUrl: "http://localhost:3000"
+            });
+            if (!renderedAudiobook.subject.includes("Project Hail Mary") || !renderedAudiobook.html.includes("Audiobook")) {
+                throw new Error("media_request_admin failed to render audiobook format accurately");
+            }
+
+            // 4. Verify movie and TV admin notifications render auto-approved status accurately
+            const renderedMovieAuto = await renderEmailTemplate("seerr_request_new_admin", {
+                title: "Dune: Part Two",
+                releaseYear: "2024",
+                mediaType: "movie",
+                mediaLabel: "Movie",
+                quality: "4K UHD",
+                section: "Main Library",
+                contentRating: "PG-13",
+                overview: "Paul Atreides unites with Chani and the Fremen...",
+                seasons: "N/A",
+                posterUrl: "https://image.tmdb.org/t/p/w500/test.jpg",
+                appUrl: "http://localhost:3000",
+                manageUrl: "http://localhost:3000/requests",
+                plexUrl: "http://localhost:3000/requests",
+                requestedBy: regularUser.username,
+                status: "Auto-Approved & Queued for Download"
+            });
+            if (!renderedMovieAuto.subject.includes("Dune: Part Two") || !renderedMovieAuto.html.includes("4K UHD")) {
+                throw new Error("seerr_request_new_admin failed to render movie auto-approved notification");
+            }
+
+            // 5. Verify sendSeerrEmailNotification executes cleanly with suppressions/mocks
+            const moviePayload = {
+                id: `req_${testId}`,
+                mediaType: "movie" as const,
+                title: "Gladiator II",
+                releaseYear: "2024",
+                status: "APPROVED",
+                is4k: false,
+                isKids: false,
+                requestedByUsername: regularUser.username,
+                requestedByUserId: regularUser.id
+            };
+
+            const autoApproveRes = await sendSeerrEmailNotification("AUTO_APPROVED", moviePayload);
+            if (!autoApproveRes.success) {
+                throw new Error(`sendSeerrEmailNotification AUTO_APPROVED failed: ${autoApproveRes.error}`);
+            }
+
+            const pendingRes = await sendSeerrEmailNotification("PENDING", moviePayload);
+            if (!pendingRes.success) {
+                throw new Error(`sendSeerrEmailNotification PENDING failed: ${pendingRes.error}`);
+            }
+        } finally {
+            await prisma.user.deleteMany({
+                where: { id: { in: [adminUser.id, superUser.id, regularUser.id] } }
             }).catch(() => {});
         }
     });

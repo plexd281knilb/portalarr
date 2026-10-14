@@ -91,6 +91,12 @@ model Settings {
   notifySupportTickets        Boolean   @default(false)
   notifySendToKindle          Boolean   @default(false)
 
+  // Built-in Telemetry & Security Engine
+  nativeStreamMonitoringEnabled   Boolean   @default(true) // Built-in Tautulli telemetry active
+  detectPasswordSharing           Boolean   @default(true) // Detect multi-IP concurrent playback
+  maxConcurrentStreamsPerUser     Int       @default(3)    // Default concurrent stream limit
+  tautulliBackfillLastRun         DateTime? // Last historical backfill from Tautulli
+
   // Curation, Agregarr & Kometa (PMM) Settings
   tmdbApiKey                  String?
   traktClientId               String?
@@ -387,10 +393,16 @@ model User {
   requestLimitTv         Int?      @default(10)
   requestLimitDays       Int?      @default(7)  // sliding window in days
   
+  // Stream & Credential Security Telemetry
+  maxConcurrentStreams   Int?      @default(3) // Allowed simultaneous streams (default 3)
+  sharingAlertCount      Int       @default(0) // Number of detected credential sharing incidents
+  lastSharingAlertAt     DateTime? // When credential sharing was last detected
+  
   createdAt              DateTime  @default(now())
   paymentTransactions    PaymentTransaction[]
   mediaRequests          MediaRequest[]
   adminApprovals         AdminApproval[]
+  watchHistories         WatchHistory[]
 }
 
 model SupportTicket {
@@ -894,4 +906,51 @@ model AdminApproval {
   @@index([type])
   @@index([userId])
   @@index([createdAt])
+}
+
+model WatchHistory {
+  id               String    @id @default(cuid())
+  sessionKey       String?
+  ratingKey        String?
+  serverName       String    @default("Plex")
+  serverId         String?
+  user             String    // Plex username or normalized Portalarr username
+  userEmail        String?
+  userId           String?   // Mapped User.id if resolved
+  userModel        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  title            String    // Canonical media title
+  grandparentTitle String?   // Series title for TV episodes
+  parentTitle      String?   // Season title for TV episodes
+  seasonNum        Int?
+  episodeNum       Int?
+  mediaType        String    @default("movie") // "movie" | "episode" | "track"
+  year             Int?
+  thumb            String?
+  player           String?   // Player title (e.g., "Plex for Apple TV")
+  platform         String?   // Platform (e.g., "tvOS", "Roku", "Android", "Web")
+  device           String?   // Device model or identifier
+  ipAddress        String?
+  location         String?   // Geolocation or network tag (e.g. "LAN" vs "Remote")
+  videoDecision    String?   @default("direct play") // "direct play" | "transcode"
+  audioDecision    String?   @default("direct play")
+  transcodeHw      Boolean   @default(false)
+  streamBitrate    Int?
+  viewOffsetMs     Int?      @default(0)
+  durationMs       Int?      @default(0)
+  progressPercent  Int       @default(0)
+  state            String    @default("playing") // "playing" | "paused" | "completed" | "stopped"
+  watchedAt        DateTime  @default(now())
+  stoppedAt        DateTime?
+  completed        Boolean   @default(false) // True if watched >= 90%
+  isSharingAlert   Boolean   @default(false) // Flagged if part of a multi-IP concurrent stream
+  sharingAlertNote String?   // Details (e.g., "Concurrent playback with IP 73.4.1.2 on Apple TV")
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([user])
+  @@index([userId])
+  @@index([watchedAt])
+  @@index([mediaType])
+  @@index([ratingKey])
+  @@index([isSharingAlert])
 }
