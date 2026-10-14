@@ -17,9 +17,10 @@ export function FloatingAiLauncher() {
     }
 
     const handleClick = () => {
-        if (pathname === "/") {
+        if (typeof window !== "undefined") {
             window.dispatchEvent(new CustomEvent("open-ai-assistant"));
-        } else {
+        }
+        if (pathname !== "/") {
             router.push("/?openAssistant=true");
         }
     };

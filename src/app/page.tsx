@@ -495,6 +495,11 @@ export default async function UserLandingPage() {
                         {/* INTRICATE ADMIN SYSTEM STATUS & STREAM TELEMETRY TABLE */}
                         <AdminDetailedStreams />
 
+                        {/* 24/7 AI SERVER ASSISTANT */}
+                        <div className="w-full">
+                            <AiServerAssistant />
+                        </div>
+
                         {/* QUICK ACCESS ADMIN TOOL MATRIX */}
                         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                             <Link href="/discover" className="block group">

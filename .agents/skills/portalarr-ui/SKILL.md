@@ -908,7 +908,7 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 
 ### 38. AI Server Assistant Mission Control & Universal Floating Launcher (`AiServerAssistant` & `FloatingAiLauncher`)
 - **Prominent User Mission Control Placement**:
-  - Positioned prominently on the main user dashboard (position #2, right below active invite banners and before Media Requests) for Full Accounts, Super Users, and Trial Users.
+  - Positioned prominently on the main dashboard (position #2 on user/trial/super-user views, and directly accessible in Admin Mission Control) for all accounts (Admins, Full Accounts, Super Users, and Trial Users).
   - Styled with glowing purple/cyan linear gradient borders (`from-purple-500/20 via-primary/10 to-transparent`), a pulse status badge (`24/7 AI Diagnostic Engine Active`), and 6 instant 1-click quick-chips (`⚡ Buffering`, `🔊 Quiet Dialogue`, `💬 Subtitles`, `📺 Unlock 4K/1080p`, `🎬 Missing Media`, `🟢 Server Health`).
   - Automatically loads the user's active streaming session telemetry into the diagnostic prompt for zero-click context awareness.
 - **Universal Floating Launcher & Event Bus**:

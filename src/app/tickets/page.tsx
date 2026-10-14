@@ -229,7 +229,14 @@ export default function TicketsPage() {
                         size="sm"
                         className="bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 text-white font-bold text-xs h-9 px-4 rounded-xl shadow-md transition-all active:scale-95"
                     >
-                        <Link href="/?openAssistant=true">
+                        <Link 
+                            href="/?openAssistant=true"
+                            onClick={() => {
+                                if (typeof window !== "undefined") {
+                                    window.dispatchEvent(new CustomEvent("open-ai-assistant"));
+                                }
+                            }}
+                        >
                             <Sparkles className="h-3.5 w-3.5 mr-1.5" /> Ask AI Assistant First ➔
                         </Link>
                     </Button>

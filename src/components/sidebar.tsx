@@ -146,7 +146,14 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
               </Button>
             </Link>
 
-            <Link href="/?openAssistant=true">
+            <Link 
+              href="/?openAssistant=true"
+              onClick={() => {
+                if (typeof window !== "undefined") {
+                  window.dispatchEvent(new CustomEvent("open-ai-assistant"));
+                }
+              }}
+            >
               <Button
                 variant="ghost"
                 className="w-full justify-between text-xs font-semibold h-9 rounded-lg transition-all duration-200 text-purple-400/90 hover:text-purple-200 hover:bg-purple-950/30 hover:ring-1 hover:ring-purple-500/40"
@@ -513,7 +520,15 @@ export function MobileSidebar() {
                     </Button>
                   </Link>
 
-                  <Link href="/?openAssistant=true" onClick={() => setIsOpen(false)}>
+                  <Link 
+                    href="/?openAssistant=true" 
+                    onClick={() => {
+                      setIsOpen(false);
+                      if (typeof window !== "undefined") {
+                        window.dispatchEvent(new CustomEvent("open-ai-assistant"));
+                      }
+                    }}
+                  >
                     <Button
                       variant="ghost"
                       className="w-full justify-between text-xs font-semibold h-9 rounded-lg transition-all duration-200 text-purple-400/90 hover:text-purple-200 hover:bg-purple-950/30 hover:ring-1 hover:ring-purple-500/40"

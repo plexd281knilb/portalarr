@@ -4608,6 +4608,18 @@ async function runTestSuite() {
             throw new Error(`Expected advisory response in Level 1 mode, got: ${advisoryRes.answer}`);
         }
 
+        // 5. Admin Diagnostic Snapshot & Autonomous Server Status Query
+        const { getUserDiagnosticSnapshot } = await import("../src/lib/ai-server-assistant");
+        const adminSnapshot = await getUserDiagnosticSnapshot(testAdmin);
+        if (!adminSnapshot || adminSnapshot.username !== testAdmin.username) {
+            throw new Error(`Expected admin snapshot with username ${testAdmin.username}, got: ${JSON.stringify(adminSnapshot)}`);
+        }
+
+        const serverQueryRes = await askAiServerMaster("what servers are online?", [], testAdmin);
+        if (!serverQueryRes || !serverQueryRes.success || !serverQueryRes.answer) {
+            throw new Error(`Expected server status query response, got: ${JSON.stringify(serverQueryRes)}`);
+        }
+
         // Restore Settings to autonomous
         await prisma.settings.update({
             where: { id: "global" },

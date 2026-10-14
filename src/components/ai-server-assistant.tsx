@@ -450,7 +450,18 @@ export function AiServerAssistant() {
             </Card>
 
             {/* --- REWORKED PLEX & SERVER MASTER AI MODAL --- */}
-            <Dialog open={isOpen} onOpenChange={setIsOpen}>
+            <Dialog 
+                open={isOpen} 
+                onOpenChange={(open) => {
+                    setIsOpen(open);
+                    if (!open && typeof window !== "undefined" && window.location.search.includes("openAssistant=true")) {
+                        const url = new URL(window.location.href);
+                        url.searchParams.delete("openAssistant");
+                        url.searchParams.delete("q");
+                        window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
+                    }
+                }}
+            >
                 <DialogContent className="w-[98vw] sm:max-w-4xl max-h-[92vh] h-[86vh] flex flex-col bg-[#0c0d14]/98 border-purple-500/30 backdrop-blur-2xl shadow-2xl p-0 overflow-hidden text-foreground">
                     {/* Top Mission Control Header */}
                     <DialogHeader className="p-4 sm:p-5 pb-3 border-b border-border/50 bg-gradient-to-r from-purple-950/40 via-background to-cyan-950/30 shrink-0">
