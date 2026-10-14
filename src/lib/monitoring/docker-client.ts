@@ -162,6 +162,35 @@ function formatContainerStatus(item: any, state: string): string {
 }
 
 /**
+ * Normalizes container image attribute into a clean string, safely handling arrays, objects, and nullish values.
+ */
+function normalizeContainerImage(raw: any): string {
+    if (!raw) return "unknown";
+    if (typeof raw === "string") return raw.trim() || "unknown";
+    if (Array.isArray(raw)) {
+        const found = raw.find((x: any) => typeof x === "string" && x.trim().length > 0);
+        return found ? String(found).trim() : (raw.length > 0 ? String(raw[0]).trim() : "unknown");
+    }
+    if (typeof raw === "object") {
+        if (typeof raw.name === "string" && raw.name.trim()) return raw.name.trim();
+        if (typeof raw.Name === "string" && raw.Name.trim()) return raw.Name.trim();
+        if (typeof raw.tag === "string" && raw.tag.trim()) return raw.tag.trim();
+        if (typeof raw.Tag === "string" && raw.Tag.trim()) return raw.Tag.trim();
+    }
+    return String(raw || "unknown").trim();
+}
+
+/**
+ * Normalizes container name, safely stripping leading slashes and handling arrays or non-strings.
+ */
+function normalizeContainerName(raw: any, fallback: string): string {
+    let name = raw;
+    if (Array.isArray(name)) name = name[0];
+    if (typeof name !== "string") name = fallback;
+    return String(name).replace(/^\//, "").trim() || fallback;
+}
+
+/**
  * Deduce default homelab container ports when monitoring agents do not report port bindings.
  */
 function deduceDefaultContainerPorts(name: string, image: string): DockerPortBinding[] {
@@ -217,8 +246,8 @@ async function queryGlancesContainers(): Promise<DockerContainerItem[] | null> {
                         const raw = await res.json().catch(() => null);
                         if (Array.isArray(raw) && raw.length > 0) {
                             return raw.map((item: any, idx: number): DockerContainerItem => {
-                                const rawName = (item.name || item.Names?.[0] || `container-${idx}`).replace(/^\//, "");
-                                const rawId = (item.Id || item.id || `glances-${idx}`).substring(0, 12);
+                                const rawName = normalizeContainerName(item.name || item.Names, `container-${idx}`);
+                                const rawId = String(item.Id || item.id || `glances-${idx}`).substring(0, 12);
                                 const state = normalizeContainerState(item.Status || item.state || "running", item.status || item.Status || "");
                                 
                                 const cpuPct = typeof item.cpu === "number" ? item.cpu : (item.cpu?.total ?? item.cpu?.percent ?? 0);
@@ -226,13 +255,13 @@ async function queryGlancesContainers(): Promise<DockerContainerItem[] | null> {
                                 const memLimit = item.memory?.limit ?? 16777216000;
                                 const memPct = memLimit > 0 ? (memUsage / memLimit) * 100 : 0;
 
-                                const rawImage = item.image || item.Image || "unknown";
+                                const rawImage = normalizeContainerImage(item.image ?? item.Image);
                                 const status = formatContainerStatus(item, state);
                                 const ports = deduceDefaultContainerPorts(rawName, rawImage);
 
                                 return {
                                     id: rawId,
-                                    fullId: item.Id || rawId,
+                                    fullId: String(item.Id || rawId),
                                     name: rawName,
                                     image: rawImage,
                                     state,
@@ -270,14 +299,15 @@ async function queryDockerCli(): Promise<DockerContainerItem[] | null> {
         for (const line of lines) {
             try {
                 const parsed = JSON.parse(line);
-                const rawName = (parsed.Names || parsed.ID).replace(/^\//, "");
+                const rawName = normalizeContainerName(parsed.Names || parsed.ID, `container-${containers.length}`);
+                const rawImage = normalizeContainerImage(parsed.Image ?? parsed.image);
                 const state = normalizeContainerState(parsed.State, parsed.Status);
 
                 containers.push({
                     id: (parsed.ID || "").substring(0, 12),
                     fullId: parsed.ID || "",
                     name: rawName,
-                    image: parsed.Image || "unknown",
+                    image: rawImage,
                     state,
                     status: parsed.Status || "",
                     created: Date.now() - 86400000,
@@ -462,8 +492,9 @@ export async function listDockerContainers(): Promise<{
     const directRes = await callDockerApi<any[]>("/containers/json?all=1", "GET", null, 3000);
     if (directRes.ok && Array.isArray(directRes.data)) {
         const containers: DockerContainerItem[] = directRes.data.map((c: any) => {
-            const rawName = (c.Names?.[0] || c.Id).replace(/^\//, "");
             const shortId = (c.Id || "").substring(0, 12);
+            const rawName = normalizeContainerName(c.Names || c.Id, `container-${shortId}`);
+            const rawImage = normalizeContainerImage(c.Image ?? c.image);
             const state = normalizeContainerState(c.State, c.Status);
 
             const ports: DockerPortBinding[] = (c.Ports || []).map((p: any) => ({
@@ -475,9 +506,9 @@ export async function listDockerContainers(): Promise<{
 
             return {
                 id: shortId,
-                fullId: c.Id,
+                fullId: String(c.Id || shortId),
                 name: rawName,
-                image: c.Image || "unknown",
+                image: rawImage,
                 state,
                 status: c.Status || "",
                 created: (c.Created || 0) * 1000,

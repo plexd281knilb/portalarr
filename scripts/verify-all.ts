@@ -8025,6 +8025,11 @@ async function runTestSuite() {
         if (!sampleContainer.id || !sampleContainer.name || !sampleContainer.state) {
             throw new Error("Container missing required fields (id, name, state)");
         }
+        for (const c of fleetData.containers) {
+            if (typeof c.image !== "string") {
+                throw new Error(`Expected container image to be a string, got ${typeof c.image} for container ${c.name}`);
+            }
+        }
 
         // 2. Verify Container Restart Lifecycle
         const restartRes = await restartDockerContainer(sampleContainer.id);

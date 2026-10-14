@@ -39,8 +39,10 @@ interface AppBranding {
     border: string;
 }
 
-function getContainerAppBranding(name: string, image: string): AppBranding {
-    const combined = `${name || ""} ${image || ""}`.toLowerCase();
+function getContainerAppBranding(name: any, image: any): AppBranding {
+    const rawName = typeof name === "string" ? name : (Array.isArray(name) ? name.join(" ") : String(name || ""));
+    const rawImage = typeof image === "string" ? image : (Array.isArray(image) ? image.join(" ") : String(image || ""));
+    const combined = `${rawName} ${rawImage}`.toLowerCase();
 
     if (combined.includes("plex")) {
         return { icon: Film, color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/30" };
@@ -313,9 +315,14 @@ export default function AdminFleetMonitoringPage() {
 
             if (containerSearch.trim()) {
                 const q = containerSearch.toLowerCase().trim();
-                const mName = (c.name || "").toLowerCase().includes(q);
-                const mImage = (c.image || "").toLowerCase().includes(q);
-                const mId = (c.id || "").toLowerCase().includes(q);
+                const rawNameVal = (c as any).name;
+                const rawImgVal = (c as any).image;
+                const rawName = typeof rawNameVal === "string" ? rawNameVal : (Array.isArray(rawNameVal) ? rawNameVal.join(" ") : String(rawNameVal || ""));
+                const rawImage = typeof rawImgVal === "string" ? rawImgVal : (Array.isArray(rawImgVal) ? rawImgVal.join(" ") : String(rawImgVal || ""));
+                const rawId = String(c.id || "");
+                const mName = rawName.toLowerCase().includes(q);
+                const mImage = rawImage.toLowerCase().includes(q);
+                const mId = rawId.toLowerCase().includes(q);
                 if (!mName && !mImage && !mId) return false;
             }
             return true;
@@ -835,11 +842,15 @@ export default function AdminFleetMonitoringPage() {
                                         const isRestarting = c.state === "restarting";
                                         const isBusy = containerActionLoading[c.id];
 
-                                        const branding = getContainerAppBranding(c.name, c.image);
+                                        const rawImgVal = (c as any).image;
+                                        const rawImgStr: string = typeof rawImgVal === "string" 
+                                            ? rawImgVal 
+                                            : (Array.isArray(rawImgVal) ? (rawImgVal.find((x: any) => typeof x === "string" && x.trim()) || rawImgVal[0] || "") : String(rawImgVal || ""));
+                                        const branding = getContainerAppBranding(c.name, rawImgStr);
                                         const AppIcon = branding.icon;
-                                        const isHighCpu = c.cpuPercent >= 100;
-                                        const isMediumCpu = c.cpuPercent >= 50 && c.cpuPercent < 100;
-                                        const displayImage = c.image.replace(/^(lscr\.io|ghcr\.io|docker\.io)\//, "");
+                                        const isHighCpu = (Number(c.cpuPercent) || 0) >= 100;
+                                        const isMediumCpu = (Number(c.cpuPercent) || 0) >= 50 && (Number(c.cpuPercent) || 0) < 100;
+                                        const displayImage = (rawImgStr || "unknown").replace(/^(lscr\.io|ghcr\.io|docker\.io)\//, "");
                                         const cleanStatus = (c.status || "").toLowerCase().includes("glances") 
                                             ? (isRunning ? "Running" : "Stopped") 
                                             : (c.status || (isRunning ? "Running" : "Stopped"));
@@ -883,7 +894,7 @@ export default function AdminFleetMonitoringPage() {
                                                                     {c.state}
                                                                 </Badge>
                                                             </div>
-                                                            <p className="text-[10px] text-muted-foreground/70 truncate pt-0.5 font-mono" title={c.image}>
+                                                            <p className="text-[10px] text-muted-foreground/70 truncate pt-0.5 font-mono" title={rawImgStr}>
                                                                 {displayImage}
                                                             </p>
                                                         </div>
