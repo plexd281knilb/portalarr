@@ -16189,14 +16189,14 @@ export async function getAdminInfrastructureStatusAction(skipAuth: boolean = fal
             return baseItem;
         });
 
-        // 3. Tautulli Stream Monitors
+        // 3. Tautulli Historical Watch Archives
         const tautulliPromises = tautulli.map(async (t): Promise<InfrastructureServiceItem> => {
             const isMonitored = t.monitored !== false;
             const clean = cleanUrl(t.url?.trim() || "");
             const baseItem: InfrastructureServiceItem = {
                 id: t.id,
                 name: t.name,
-                type: "Stream Monitor (Tautulli)",
+                type: "Historical Archive (Tautulli)",
                 category: "tautulli",
                 url: clean,
                 monitored: isMonitored,
@@ -16222,10 +16222,10 @@ export async function getAdminInfrastructureStatusAction(skipAuth: boolean = fal
                     baseItem.status = "ONLINE";
                     const streamCount = actResult.data.stream_count ? Number(actResult.data.stream_count) : 0;
                     baseItem.metrics = { streamCount };
-                    baseItem.details = `${streamCount} active stream${streamCount === 1 ? "" : "s"} (${elapsed}ms)`;
+                    baseItem.details = `Historical archive ready (${elapsed}ms)`;
                 } else {
                     baseItem.status = "OFFLINE";
-                    baseItem.details = actResult.error || "Tautulli API unreachable";
+                    baseItem.details = actResult.error || "Tautulli archive unreachable";
                 }
             } catch (err: any) {
                 baseItem.status = "OFFLINE";

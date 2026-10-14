@@ -511,12 +511,18 @@ export default function AdminFleetMonitoringPage() {
                         <CardHeader className="p-4 sm:p-5 border-b border-white/[0.06] space-y-3">
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                                 <div>
-                                    <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
-                                        <Server className="h-4 w-4 text-sky-400" />
-                                        Infrastructure Reachability & Uptime Telemetry
-                                    </CardTitle>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
+                                            <Server className="h-4 w-4 text-sky-400" />
+                                            Infrastructure Reachability & Uptime Telemetry
+                                        </CardTitle>
+                                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                            Direct Plex Telemetry Active
+                                        </span>
+                                    </div>
                                     <CardDescription className="text-xs text-muted-foreground">
-                                        Probed every 20 seconds. Rolling 24-hour, 7-day, and 30-day uptime calculations with latency sparklines.
+                                        Probed every 20 seconds. Live streams monitored directly via Plex PMS; external Tautulli instances serve as optional historical archives.
                                     </CardDescription>
                                 </div>
                             </div>
@@ -574,9 +580,9 @@ export default function AdminFleetMonitoringPage() {
                                         className="bg-black/40 border border-white/10 rounded-lg text-xs text-foreground px-2 py-1.5 h-8 focus:outline-hidden focus:border-primary/50"
                                     >
                                         <option value="ALL">All Categories</option>
-                                        <option value="plex">Plex Media Servers</option>
+                                        <option value="plex">Plex Media Servers (Live Telemetry)</option>
                                         <option value="glances">Host Hardware (Glances)</option>
-                                        <option value="tautulli">Stream Monitors (Tautulli)</option>
+                                        <option value="tautulli">Historical Archive (Tautulli)</option>
                                         <option value="apps">Servarr & Request Apps</option>
                                         <option value="downloaders">Download Clients</option>
                                     </select>

@@ -101,7 +101,7 @@ export default function AdminSystemHealthGrid() {
         switch (cat) {
             case "plex": return "Plex PMS";
             case "glances": return "Host Glances";
-            case "tautulli": return "Tautulli";
+            case "tautulli": return "Tautulli (Archive)";
             case "downloaders": return "Downloader";
             case "apps": return "Media App";
             default: return cat.toUpperCase();
@@ -119,9 +119,15 @@ export default function AdminSystemHealthGrid() {
                                 <Radio className="h-5 w-5 animate-pulse" />
                             </div>
                             <div>
-                                <CardTitle className="text-base sm:text-lg font-bold text-foreground flex items-center gap-2">
-                                    Infrastructure Health & Monitoring
-                                </CardTitle>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <CardTitle className="text-base sm:text-lg font-bold text-foreground flex items-center gap-2">
+                                        Infrastructure Health & Monitoring
+                                    </CardTitle>
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                        Direct Plex Telemetry Active
+                                    </span>
+                                </div>
                                 <CardDescription className="text-xs text-muted-foreground">
                                     Real-time status, reachability, and response telemetry across all configured hosts, servers, and apps.
                                 </CardDescription>
@@ -263,9 +269,9 @@ export default function AdminSystemHealthGrid() {
                             className="bg-black/40 border border-white/10 rounded-lg text-xs text-foreground px-2 py-1.5 h-8 focus:outline-hidden focus:border-primary/50"
                         >
                             <option value="ALL">All Categories</option>
-                            <option value="plex">Plex Media Servers</option>
+                            <option value="plex">Plex Media Servers (Live Telemetry)</option>
                             <option value="glances">Host Hardware (Glances)</option>
-                            <option value="tautulli">Stream Monitors (Tautulli)</option>
+                            <option value="tautulli">Historical Archive (Tautulli)</option>
                             <option value="apps">Servarr & Request Apps</option>
                             <option value="downloaders">Download Clients</option>
                         </select>

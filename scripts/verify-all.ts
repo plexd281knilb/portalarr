@@ -4623,6 +4623,15 @@ async function runTestSuite() {
             }
         });
 
+        const testTautulli = await prisma.tautulliInstance.create({
+            data: {
+                name: "Test Tautulli Archive Mock",
+                url: "http://127.0.0.1:8189",
+                apiKey: "mock_api_key_123",
+                monitored: false
+            }
+        });
+
         try {
             const statusRes = await getAdminInfrastructureStatusAction(true);
             if (!statusRes.success) {
@@ -4650,10 +4659,28 @@ async function runTestSuite() {
             if (activeItem.monitored !== true) {
                 throw new Error(`Expected active server monitored to be true, got ${activeItem.monitored}`);
             }
+
+            const tautulliItem = statusRes.services.find(s => s.name === "Test Tautulli Archive Mock");
+            if (!tautulliItem) {
+                throw new Error("Could not find Test Tautulli Archive Mock in infrastructure status services");
+            }
+
+            if (tautulliItem.type !== "Historical Archive (Tautulli)") {
+                throw new Error(`Expected Tautulli type to be 'Historical Archive (Tautulli)', got '${tautulliItem.type}'`);
+            }
+
+            if (tautulliItem.category !== "tautulli") {
+                throw new Error(`Expected Tautulli category to be 'tautulli', got '${tautulliItem.category}'`);
+            }
         } finally {
-            await prisma.plexServer.deleteMany({
-                where: { id: { in: [pausedPlex.id, activePlex.id] } }
-            }).catch(() => {});
+            await Promise.all([
+                prisma.plexServer.deleteMany({
+                    where: { id: { in: [pausedPlex.id, activePlex.id] } }
+                }),
+                prisma.tautulliInstance.deleteMany({
+                    where: { id: testTautulli.id }
+                })
+            ]).catch(() => {});
         }
     });
 

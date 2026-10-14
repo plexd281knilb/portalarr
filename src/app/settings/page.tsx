@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense, useRef } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { 
     getAppUsers, createAppUser, deleteAppUser, 
     getSettings, saveSettings, saveAppUrlAction, savePlexSettingsAction, clearPlexSettings, saveJobSettings, clearSmtpSettings, sendTestEmailAction, syncPlexFriendsAction, autoLinkAdminPlexTokenAction,
@@ -34,7 +35,7 @@ import {
     AlertTriangle, PlaySquare, Activity, Sliders, Megaphone, Beaker, 
     CheckCircle2, XCircle, MailCheck, RefreshCw, Mail, FolderCheck, 
     Radio, ExternalLink, FileCode, Check, Bot, Sparkles, Key, Cpu, Eye, EyeOff, Terminal, Zap, Tv,
-    Bell, BellOff, UserCheck, BookOpen, LifeBuoy, Save, RotateCcw, Star, Globe, Compass, MessageSquare
+    Bell, BellOff, UserCheck, BookOpen, LifeBuoy, Save, RotateCcw, Star, Globe, Compass, MessageSquare, History
 } from "lucide-react";
 import { 
     Dialog, 
@@ -3186,6 +3187,32 @@ function SettingsPageContent() {
 
                 {/* --- TAB 4: MONITORING & APPS --- */}
                 <TabsContent value="monitoring" className="space-y-6">
+                    {/* DIRECT PLEX STREAM TELEMETRY BANNER */}
+                    <div className="p-4 rounded-xl bg-gradient-to-r from-amber-500/10 via-purple-500/5 to-sky-500/10 border border-amber-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md backdrop-blur-md">
+                        <div className="flex items-start gap-3">
+                            <div className="p-2 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30 shrink-0 mt-0.5 sm:mt-0">
+                                <Zap className="h-4 w-4" />
+                            </div>
+                            <div className="space-y-0.5">
+                                <div className="text-xs font-bold text-foreground flex items-center gap-2">
+                                    <span>Direct-Plex Stream Engine (Active)</span>
+                                    <Badge variant="outline" className="text-[9px] bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-semibold">
+                                        Native Telemetry
+                                    </Badge>
+                                </div>
+                                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                                    Portalarr connects directly to your Plex Media Servers to capture live playback, hardware transcoding metrics, and stream quality telemetry. External Tautulli instances are completely optional and used exclusively for importing past historical watch records.
+                                </p>
+                            </div>
+                        </div>
+                        <Link href="/admin/tautulli">
+                            <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1.5 border-purple-500/30 text-purple-400 hover:bg-purple-500/10 shrink-0 cursor-pointer">
+                                <History className="h-3.5 w-3.5" />
+                                <span>Historical Backfill Tool</span>
+                            </Button>
+                        </Link>
+                    </div>
+
                     <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
                         {/* PLEX MEDIA SERVERS & AUTO-DISCOVERY */}
                         <Card className="flex flex-col bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
@@ -3195,7 +3222,7 @@ function SettingsPageContent() {
                                         <CardTitle className="flex items-center gap-2">
                                             <Tv className="h-5 w-5 text-amber-500"/> Plex Media Servers
                                         </CardTitle>
-                                        <CardDescription>Direct Plex servers and Plex.tv account auto-discovery with per-server monitoring controls.</CardDescription>
+                                        <CardDescription>Primary direct stream monitoring source, PMS hardware telemetry, and Plex.tv account auto-discovery.</CardDescription>
                                     </div>
                                     <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-[10px]">
                                         {plexServers.length} {plexServers.length === 1 ? "Server" : "Servers"}
@@ -3404,18 +3431,30 @@ function SettingsPageContent() {
                             </CardContent>
                         </Card>
 
-                        {/* TAUTULLI INSTANCES */}
+                        {/* TAUTULLI HISTORICAL WATCH ARCHIVE */}
                         <Card className="flex flex-col bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
                             <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                    <PlaySquare className="h-5 w-5 text-primary"/> {editingTautulli ? "Edit Tautulli" : "Tautulli Streams"}
-                                </CardTitle>
-                                <CardDescription>{editingTautulli ? `Modifying ${editingTautulli.name}` : "Plex stream monitoring instances."}</CardDescription>
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <CardTitle className="flex items-center gap-2">
+                                            <History className="h-5 w-5 text-purple-400"/> {editingTautulli ? "Edit Historical Archive" : "Tautulli (Historical Watch Archive)"}
+                                        </CardTitle>
+                                        <CardDescription>{editingTautulli ? `Modifying ${editingTautulli.name}` : "Optional watch archive for importing historical play records into Portalarr."}</CardDescription>
+                                    </div>
+                                    <Badge variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/30 text-[10px] shrink-0">
+                                        Optional • History Import
+                                    </Badge>
+                                </div>
                             </CardHeader>
                             <CardContent className="space-y-4 flex-1">
                                 {!editingTautulli && (
                                     <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
-                                        {tautulli.length === 0 && <p className="text-xs text-muted-foreground italic">No Tautulli instances added.</p>}
+                                        {tautulli.length === 0 && (
+                                            <div className="p-3 rounded-lg bg-white/[0.02] border border-dashed border-white/10 text-xs text-muted-foreground space-y-1">
+                                                <p className="font-semibold text-foreground">No Tautulli instances configured.</p>
+                                                <p className="text-[11px]">Portalarr monitors Plex streams directly. Only add Tautulli if you have past watch history you wish to backfill.</p>
+                                            </div>
+                                        )}
                                         {tautulli.map(t => (
                                             <div key={t.id} className="space-y-1.5 border border-border/40 p-2.5 rounded-xl bg-[#101014]/90 backdrop-blur-md hover:border-border/80 transition-all text-sm">
                                                 <div className="flex justify-between items-center">
@@ -3430,8 +3469,8 @@ function SettingsPageContent() {
                                                             />
                                                             <Label htmlFor={`monitored-tautulli-${t.id}`} className="text-[10px] cursor-pointer font-medium select-none">
                                                                 {t.monitored !== false ? (
-                                                                    <span className="text-emerald-400 font-semibold flex items-center gap-1">
-                                                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Monitored
+                                                                    <span className="text-purple-400 font-semibold flex items-center gap-1">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-purple-400" /> Archive Active
                                                                     </span>
                                                                 ) : (
                                                                     <span className="text-muted-foreground flex items-center gap-1">
@@ -3443,7 +3482,7 @@ function SettingsPageContent() {
                                                         <Button 
                                                             size="sm" 
                                                             variant="ghost" 
-                                                            className="h-7 text-[11px] px-2 text-primary hover:ring-1 hover:ring-primary/40 active:scale-95 transition-all"
+                                                            className="h-7 text-[11px] px-2 text-purple-400 hover:ring-1 hover:ring-purple-400/40 active:scale-95 transition-all"
                                                             disabled={testingTautulliId === t.id}
                                                             onClick={() => handleTestTautulli(t.id)}
                                                         >
@@ -3478,7 +3517,7 @@ function SettingsPageContent() {
                                     autoComplete="off"
                                     data-1p-ignore="true"
                                     data-lpignore="true"
-                                >
+                                 >
                                     {editingTautulli && <input type="hidden" name="id" value={editingTautulli.id} />}
                                     <div className="grid gap-2">
                                         <Input 
@@ -3535,10 +3574,10 @@ function SettingsPageContent() {
                                             name="monitored" 
                                             value="true" 
                                             defaultChecked={editingTautulli ? editingTautulli.monitored !== false : true} 
-                                            className="h-4 w-4 rounded border-gray-300 text-emerald-500 focus:ring-emerald-400" 
+                                            className="h-4 w-4 rounded border-gray-300 text-purple-500 focus:ring-purple-400" 
                                         />
                                         <Label htmlFor="tautulli-monitored" className="text-xs font-medium cursor-pointer">
-                                            Monitor active streams and reachability
+                                            Enable reachability audits & historical sync for this instance
                                         </Label>
                                     </div>
                                     {tautulliFormTestResult && (
@@ -3560,7 +3599,7 @@ function SettingsPageContent() {
                                             Test
                                         </Button>
                                         <Button type="submit" size="sm" className="flex-1 font-semibold hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all">
-                                            {editingTautulli ? "Save Changes" : "Add Tautulli Instance"}
+                                            {editingTautulli ? "Save Changes" : "Add Historical Archive"}
                                         </Button>
                                         {editingTautulli && (
                                             <Button type="button" size="sm" variant="outline" className="hover:ring-1 hover:ring-border active:scale-95 transition-all" onClick={() => { setEditingTautulli(null); setTautulliFormTestResult(null); }}>
@@ -3569,6 +3608,18 @@ function SettingsPageContent() {
                                         )}
                                     </div>
                                 </form>
+
+                                <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-between gap-3 text-xs">
+                                    <div className="space-y-0.5">
+                                        <span className="font-semibold text-purple-300 block">Looking to import past history?</span>
+                                        <span className="text-[11px] text-muted-foreground block">Run a 1-click historical backfill across all past sessions.</span>
+                                    </div>
+                                    <Link href="/admin/tautulli">
+                                        <Button size="sm" variant="outline" className="h-7 text-[10px] px-2.5 border-purple-500/30 text-purple-300 hover:bg-purple-500/20 shrink-0 cursor-pointer">
+                                            Open Backfill Tool
+                                        </Button>
+                                    </Link>
+                                </div>
                             </CardContent>
                         </Card>
 
