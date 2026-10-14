@@ -855,6 +855,14 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
     - Chronological incident log tracking start time, failure details, total downtime duration, and 1-click incident clearance.
 - **Navigation Integration**: Desktop and mobile sidebars under Administration via `Layers` icon, with direct jump button ("Docker Fleet & Uptime") embedded in `AdminSystemHealthGrid` on the home dashboard. Ultra-wide layout container (`max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[2200px]`) ensures perfect fit across all monitor sizes.
 
+### 14. Strict React Hook Ordering & Early Return Safety (Zero Error #310 Guard)
+- **The Golden Rule**: React hooks (`useState`, `useEffect`, `useMemo`, `useCallback`, `useRef`, `useTransition`, `useId`) must **NEVER** be called conditionally or placed below an early return statement (e.g. `if (loading && !data) return <Skeleton />`).
+- **Minified React Error #310**: Calling hooks after a conditional early return causes React Error #310 (*"Rendered more hooks than during the previous render"*). On the initial render, the component exits early before reaching subsequent hooks. Once data resolves and triggers a re-render, the early return is skipped and React encounters more hooks than in the prior render, crashing the application.
+- **Enforcement Pattern**:
+  - Always declare all state, effects, and memoized values (`useMemo`, `useCallback`) unconditionally at the very top of the component.
+  - Safe fallback defaults (`data?.items || []`) must be supplied so calculations execute cleanly even when `data` is initially `null` or `undefined`.
+  - Place early loading or error returns (`if (loading && !data) return ...`) strictly **after** all hook declarations, immediately before the primary JSX return.
+
 ---
 
 As the Portalarr frontend evolves or new design decisions are finalized:

@@ -126,17 +126,6 @@ export default function AdminDetailedStreams() {
         }
     };
 
-    if (loading && !data) {
-        return (
-            <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md">
-                <CardContent className="py-12 flex flex-col items-center justify-center gap-3 text-muted-foreground">
-                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                    <p className="text-xs font-medium">Loading administrative stream telemetry...</p>
-                </CardContent>
-            </Card>
-        );
-    }
-
     const sessions = data?.sessions || [];
     const totalStreams = data?.totalStreams || sessions.length;
     const glances = data?.glances || [];
@@ -195,6 +184,17 @@ export default function AdminDetailedStreams() {
         });
         return list;
     }, [filteredSessions, streamSort]);
+
+    if (loading && !data) {
+        return (
+            <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md">
+                <CardContent className="py-12 flex flex-col items-center justify-center gap-3 text-muted-foreground">
+                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                    <p className="text-xs font-medium">Loading administrative stream telemetry...</p>
+                </CardContent>
+            </Card>
+        );
+    }
 
     return (
         <Card className="border-primary/30 bg-[#121218]/90 backdrop-blur-md shadow-md overflow-hidden">
