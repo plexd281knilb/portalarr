@@ -71,6 +71,12 @@ import { UserDiagnosticSnapshot, AiChatMessage } from "@/lib/ai-server-assistant
 import PlexSetupGuides from "@/components/plex-setup-guides";
 import FeatureGuideModal from "@/components/feature-guide-modal";
 
+export function openAiAssistant(query?: string) {
+    if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("open-ai-assistant", { detail: { query } }));
+    }
+}
+
 export function AiServerAssistant() {
     const [isOpen, setIsOpen] = useState(false);
     const [activeTab, setActiveTab] = useState<"chat" | "telemetry" | "probes" | "fixes">("chat");
@@ -103,6 +109,32 @@ export function AiServerAssistant() {
         fetchSnapshot();
         const interval = setInterval(fetchSnapshot, 15000);
         return () => clearInterval(interval);
+    }, []);
+
+    // Listen for global open-ai-assistant events & URL parameters
+    useEffect(() => {
+        const handleOpenEvent = (e: any) => {
+            setIsOpen(true);
+            setActiveTab("chat");
+            if (e?.detail?.query) {
+                handleSend(e.detail.query);
+            }
+        };
+        window.addEventListener("open-ai-assistant", handleOpenEvent);
+
+        if (typeof window !== "undefined") {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get("openAssistant") === "true") {
+                setIsOpen(true);
+                setActiveTab("chat");
+                const initialQuery = params.get("q");
+                if (initialQuery) {
+                    handleSend(initialQuery);
+                }
+            }
+        }
+
+        return () => window.removeEventListener("open-ai-assistant", handleOpenEvent);
     }, []);
 
     // Auto-scroll chat to bottom
@@ -262,99 +294,158 @@ export function AiServerAssistant() {
 
     return (
         <>
-            {/* --- DASHBOARD CARD (4TH CARD NEXT TO SUPPORT) --- */}
-            <Card className="h-full flex flex-col border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm hover:shadow-md hover:border-purple-500/30 transition-all duration-200 animate-in fade-in duration-700">
-                <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between gap-2">
-                        <CardTitle className="flex items-center gap-2 text-lg font-bold">
-                            <div className="p-1.5 rounded-lg bg-gradient-to-tr from-purple-600 to-cyan-500 text-white shadow-sm">
-                                <Bot className="h-4 w-4" />
-                            </div>
-                            <span>AI Server Master</span>
-                        </CardTitle>
-                        <Badge variant="outline" className="text-[10px] font-bold px-1.5 py-0.5 bg-purple-950/40 text-purple-300 border-purple-500/40">
-                            Plex AI
-                        </Badge>
-                    </div>
-                    <CardDescription className="text-xs text-muted-foreground">
-                        Instant diagnostics, playback fixes, stream inspection &amp; server help.
-                    </CardDescription>
-                </CardHeader>
-                
-                <CardContent className="flex-1 flex flex-col justify-between space-y-3 pt-0">
-                    {/* Live Telemetry Pill */}
-                    <div className="p-2.5 rounded-xl bg-background/50 border border-border/40 text-xs flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                            <span className={`h-2 w-2 rounded-full shrink-0 ${activeStream ? "bg-emerald-400 animate-pulse" : "bg-cyan-400"}`} />
-                            <div className="truncate">
-                                {activeStream ? (
-                                    <span className="font-semibold text-foreground truncate block">
-                                        {activeStream.player}: <span className="font-normal text-muted-foreground">{activeStream.title}</span>
-                                    </span>
-                                ) : (
-                                    <span className="text-muted-foreground">System Ready (All Nodes Online)</span>
-                                )}
+            {/* --- DASHBOARD CARD (PROMINENT MISSION CONTROL HERO CARD) --- */}
+            <Card className="w-full relative overflow-hidden border-2 border-purple-500/40 bg-gradient-to-br from-purple-950/25 via-[#121218]/95 to-cyan-950/20 backdrop-blur-md shadow-xl hover:border-purple-500/60 transition-all duration-300 animate-in fade-in duration-500">
+                <div className="absolute top-0 right-0 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
+                <div className="absolute bottom-0 left-0 w-80 h-80 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
+
+                <CardHeader className="pb-3.5">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="space-y-1">
+                            <div className="flex items-center gap-2.5">
+                                <div className="p-2 sm:p-2.5 rounded-2xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-cyan-500 text-white shadow-lg shadow-purple-900/40 ring-1 ring-white/20 shrink-0">
+                                    <Bot className="h-5 w-5 sm:h-6 sm:w-6" />
+                                </div>
+                                <div>
+                                    <CardTitle className="text-base sm:text-xl font-extrabold tracking-tight text-foreground flex items-center gap-2 flex-wrap">
+                                        <span>Got an Issue or Question? Ask the 24/7 AI Assistant</span>
+                                    </CardTitle>
+                                    <CardDescription className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+                                        Instant answers &amp; self-service fixes for buffering, quiet audio, subtitle desync, quality settings, or server status.
+                                    </CardDescription>
+                                </div>
                             </div>
                         </div>
-                        {activeStream && (
-                            <Badge variant="outline" className={`text-[9px] uppercase px-1.5 py-0 shrink-0 ${
-                                activeStream.transcodeDecision === "direct play" 
-                                    ? "bg-emerald-950/40 text-emerald-300 border-emerald-500/30" 
-                                    : "bg-amber-950/40 text-amber-300 border-amber-500/30"
-                            }`}>
-                                {activeStream.transcodeDecision}
+
+                        <div className="flex items-center gap-2 shrink-0">
+                            <Badge variant="outline" className="bg-emerald-500/15 text-emerald-300 border-emerald-500/40 text-[11px] sm:text-xs font-bold gap-1.5 px-2.5 py-1">
+                                <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                                24/7 Live AI Master
                             </Badge>
-                        )}
+                        </div>
+                    </div>
+                </CardHeader>
+
+                <CardContent className="space-y-4 pt-0">
+                    {/* 1-Click Common Issue Quick-Chips */}
+                    <div className="space-y-1.5">
+                        <div className="text-[11px] font-bold uppercase tracking-wider text-purple-300/80 flex items-center gap-1.5">
+                            <Zap className="h-3.5 w-3.5 text-purple-400" />
+                            <span>1-Click Common Issues &amp; Fixes:</span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            {[
+                                { icon: "⚡", label: "Stream Buffering", query: "Why is my stream buffering and how do I get 100% Direct Play on my device?" },
+                                { icon: "🔊", label: "Quiet Dialogue", query: "Dialogue is too quiet or audio is transcoding. How do I fix dialogue boost and audio settings?" },
+                                { icon: "💬", label: "Subtitle Stutter", query: "Why do subtitles cause video buffering and how do I fix subtitle burn-in?" },
+                                { icon: "📺", label: "Unlock 4K & 1080p", query: "What are the recommended Plex settings for my device to avoid the 720p 2Mbps limit?" },
+                                { icon: "🎬", label: "Missing Movie/Show", query: "I cannot find a movie or episode in my library. How do I request it or check download status?" },
+                                { icon: "🟢", label: "Is Server Working?", query: "Is Plex working right now? Test actual file playback and disk access for each server." }
+                            ].map((chip, idx) => (
+                                <button
+                                    key={idx}
+                                    type="button"
+                                    onClick={() => {
+                                        setIsOpen(true);
+                                        setActiveTab("chat");
+                                        handleSend(chip.query);
+                                    }}
+                                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/[0.04] hover:bg-purple-500/20 text-xs font-medium text-foreground hover:text-purple-200 border border-border/50 hover:border-purple-500/40 transition-all active:scale-95 cursor-pointer shadow-sm"
+                                >
+                                    <span>{chip.icon}</span>
+                                    <span>{chip.label}</span>
+                                </button>
+                            ))}
+                        </div>
                     </div>
 
-                    {/* Detected Issue Alert (if active) */}
-                    {detectedIssues.length > 0 && (
-                        <div 
-                            onClick={() => {
-                                setIsOpen(true);
-                                setActiveTab("chat");
-                                handleSend(detectedIssues[0].quickFix);
-                            }}
-                            className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-300 flex items-center justify-between gap-2 cursor-pointer hover:bg-amber-500/15 transition-colors"
-                        >
-                            <div className="flex items-center gap-1.5 truncate">
-                                <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-400" />
-                                <span className="font-medium truncate">{detectedIssues[0].title}</span>
-                            </div>
-                            <span className="text-[10px] underline font-bold shrink-0">Fix</span>
-                        </div>
-                    )}
-
-                    {/* Quick Ask Form */}
-                    <form onSubmit={handleQuickCardSubmit} className="space-y-2">
-                        <div className="relative">
-                            <Input
-                                value={quickQuestion}
-                                onChange={(e) => setQuickQuestion(e.target.value)}
-                                placeholder="e.g. Why is The Sandlot in Spanish?"
-                                className="h-9 text-xs bg-background/60 pr-8"
-                            />
-                            <Button 
-                                type="submit" 
-                                size="icon" 
-                                variant="ghost" 
-                                className="absolute right-1 top-1 h-7 w-7 text-purple-400 hover:text-purple-300 hover:bg-purple-950/40"
-                                disabled={loading}
-                            >
-                                {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-                            </Button>
-                        </div>
-
+                    {/* Quick Ask Search Bar */}
+                    <form onSubmit={handleQuickCardSubmit} className="relative">
+                        <Input
+                            value={quickQuestion}
+                            onChange={(e) => setQuickQuestion(e.target.value)}
+                            placeholder="Type your question or issue (e.g. why is my stream buffering, or dialogue too quiet?)..."
+                            className="h-11 text-xs sm:text-sm bg-black/40 border-purple-500/30 focus-visible:border-purple-400 focus-visible:ring-purple-500/30 pl-4 pr-32 rounded-xl"
+                        />
                         <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => setIsOpen(true)}
-                            className="w-full text-xs font-semibold h-8 border-purple-500/30 text-purple-300 hover:bg-purple-950/30 hover:border-purple-500/50 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                            type="submit"
+                            size="sm"
+                            className="absolute right-1.5 top-1.5 h-8 px-3.5 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 text-white font-semibold text-xs rounded-lg shadow-md cursor-pointer flex items-center gap-1.5 active:scale-95 transition-all"
+                            disabled={loading}
                         >
-                            <Sparkles className="h-3.5 w-3.5 text-purple-400" />
-                            <span>Launch Plex &amp; Server Master AI</span>
+                            {loading ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                                <>
+                                    <Sparkles className="h-3.5 w-3.5 text-purple-200" />
+                                    <span>Ask Assistant</span>
+                                </>
+                            )}
                         </Button>
                     </form>
+
+                    {/* Live Playback Inspection Bar */}
+                    <div className="pt-1">
+                        {activeStream ? (
+                            <div className="p-3 rounded-xl bg-white/[0.03] border border-border/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                    <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                                    <div className="truncate">
+                                        <span className="font-semibold text-foreground">Now Playing on {activeStream.player}:</span>{" "}
+                                        <span className="text-muted-foreground">{activeStream.title}</span>
+                                    </div>
+                                    <Badge variant="outline" className={`text-[10px] uppercase px-1.5 py-0.5 shrink-0 ${
+                                        activeStream.transcodeDecision === "direct play"
+                                            ? "bg-emerald-950/40 text-emerald-300 border-emerald-500/30"
+                                            : "bg-amber-950/40 text-amber-300 border-amber-500/30"
+                                    }`}>
+                                        {activeStream.transcodeDecision}
+                                    </Badge>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                    {activeStream.transcodeDecision !== "direct play" && (
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            onClick={() => {
+                                                setIsOpen(true);
+                                                setActiveTab("chat");
+                                                handleSend("Why is my current stream transcoding and how do I fix it for direct play?");
+                                            }}
+                                            className="h-7 text-xs bg-amber-500 hover:bg-amber-600 text-black font-bold px-2.5 rounded-lg active:scale-95 transition-all"
+                                        >
+                                            <Wrench className="h-3 w-3 mr-1" /> Fix Transcoding
+                                        </Button>
+                                    )}
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setIsOpen(true)}
+                                        className="h-7 text-xs border-purple-500/30 text-purple-300 hover:bg-purple-950/30 px-2.5 rounded-lg"
+                                    >
+                                        Inspect Stream ➔
+                                    </Button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.05] flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                                <div className="flex items-center gap-2 truncate">
+                                    <span className="h-2 w-2 rounded-full bg-cyan-400 shrink-0" />
+                                    <span className="truncate">💡 Need help? Click any issue chip above or type your question for instant device &amp; playback solutions.</span>
+                                </div>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setIsOpen(true)}
+                                    className="h-7 text-xs text-purple-400 hover:text-purple-300 hover:bg-purple-950/20 shrink-0 font-semibold"
+                                >
+                                    Open Full AI Assistant ➔
+                                </Button>
+                            </div>
+                        )}
+                    </div>
                 </CardContent>
             </Card>
 

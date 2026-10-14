@@ -98,6 +98,19 @@ export async function login(formData: FormData) {
   }
 
   await createSession(user.id, user.username, user.role, currentStatus, user.trialEndsAt, user.subscriptionEndsAt, currentTier);
+
+  // Asynchronously trigger personalized user prewarming for instant subsequent navigation
+  try {
+    const { prewarmUserSession } = await import("@/lib/prewarm");
+    prewarmUserSession({
+      id: user.id,
+      username: user.username,
+      role: user.role,
+      email: user.email,
+      status: currentStatus
+    }).catch(() => {});
+  } catch (e) {}
+
   return { success: true };
 }
 

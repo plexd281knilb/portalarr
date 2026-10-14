@@ -132,6 +132,11 @@ export default function TrialDashboardView({ user, quota, billing }: TrialDashbo
                 </CardContent>
             </Card>
 
+            {/* --- PROMINENT 24/7 AI SERVER ASSISTANT --- */}
+            <div className="w-full">
+                <AiServerAssistant />
+            </div>
+
             {/* --- MEDIA REQUESTS CARD (BUILT-IN ONLY WITH QUOTA COUNTER) --- */}
             <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm">
                 <CardHeader className="pb-3">
@@ -192,11 +197,6 @@ export default function TrialDashboardView({ user, quota, billing }: TrialDashbo
                     </Button>
                 </CardContent>
             </Card>
-
-            {/* --- AI ASSISTANT --- */}
-            <div className="w-full">
-                <AiServerAssistant />
-            </div>
 
             {/* --- MY PLEX HUB --- */}
             <div className="w-full">

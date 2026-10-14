@@ -906,6 +906,38 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 
 ---
 
+### 38. AI Server Assistant Mission Control & Universal Floating Launcher (`AiServerAssistant` & `FloatingAiLauncher`)
+- **Prominent User Mission Control Placement**:
+  - Positioned prominently on the main user dashboard (position #2, right below active invite banners and before Media Requests) for Full Accounts, Super Users, and Trial Users.
+  - Styled with glowing purple/cyan linear gradient borders (`from-purple-500/20 via-primary/10 to-transparent`), a pulse status badge (`24/7 AI Diagnostic Engine Active`), and 6 instant 1-click quick-chips (`⚡ Buffering`, `🔊 Quiet Dialogue`, `💬 Subtitles`, `📺 Unlock 4K/1080p`, `🎬 Missing Media`, `🟢 Server Health`).
+  - Automatically loads the user's active streaming session telemetry into the diagnostic prompt for zero-click context awareness.
+- **Universal Floating Launcher & Event Bus**:
+  - Rendered globally via `<FloatingAiLauncher />` in `LayoutWrapper` at `fixed bottom-4 right-4 z-40` for all authenticated members.
+  - Supports programmatic triggers via `openAiAssistant(initialQuery?: string)` custom DOM events (`window.dispatchEvent(new CustomEvent("open-ai-assistant", ...))`) and query params (`?openAssistant=true`).
+- **Support Ticket Triage Redirection**:
+  - Mounts a prominent callout banner at the top of `/tickets` (*"Fix Playback or Media Issues in 30 Seconds"*) prompting members to test with the AI Assistant before creating manual support tickets.
+
+---
+
+### 39. Dual-Tier Prewarming Engine & High-Speed SWR RAM Caching (`src/lib/prewarm.ts`)
+- **Dual-Tier Prewarming Architecture**:
+  - **Global System Prewarm (`prewarmGlobalSystem`)**: Prewarms Discovery TMDb carousels (RAM + disk), Plex library availability GUID index, system landing reachability stats, active streams matrix, and Docker container fleet telemetry. Executed automatically on server boot, every 30 minutes in background cron (`src/lib/prisma.ts`), and on-demand via the 1-click **"⚡ Prewarm Caches"** button in `admin-system-health-grid.tsx`.
+  - **Personalized User Prewarm (`prewarmUserSession`)**: Prewarms individual user request quotas (`user_quota:${userId}`), AI Server Assistant diagnostic snapshots (`user_diag_snapshot:${userKey}`), proactive Stream Quality Doctor alerts (`user_transcode_alert:${userKey}`), book library access permission (`user_lib_access:${userId}`), and personal Plex Hub stats (`user_plex_hub:${userKey}`).
+- **Asynchronous Non-Blocking Lifecycle**:
+  - Triggered automatically the instant a member logs in (`login()` in `auth-actions.ts`) and on initial client layout mount (`LayoutWrapper`).
+  - Debounced per user session to run at most once every 3 minutes, completely eliminating redundant overhead.
+  - Backed by an in-memory SWR cache (`getUserCache`, `setUserCache`, `clearUserCache`) with fine-grained TTLs (10s for landing stats, 15s for Docker fleet, 60s for user stream hubs, 3m for request quotas and library access).
+
+---
+
+### 40. Dynamic Residential ISP Subnet Matching & Remote Household Anchoring
+- **Subnet Matching Heuristics (`isSameSubnetOrIp`)**:
+  - Distinguishes residential ISP DHCP rotation by matching IPv4 `/24` subnets (first 3 octets, e.g. `73.18.20.15` and `73.18.20.210`) and IPv6 `/64` routing prefixes.
+- **Remote Living Room TV Cold-Start Anchoring**:
+  - When remote users without an established `primaryHomeIp` stream on a fixed living room TV (Apple TV, Roku, Fire TV, Smart TVs, Android TV) with zero concurrent multi-IP overlap, the system recognizes the stream as `🏡 Primary Home` ("Remote Home TV (IP)") rather than defaulting to `✈️ Travel / Away`.
+
+---
+
 As the Portalarr frontend evolves or new design decisions are finalized:
 1. **Adding a New UI Rule**: Add the rule to the relevant section above or under `references/`.
 2. **Tweaking Component Defaults**: Update the corresponding reference file in `references/`.

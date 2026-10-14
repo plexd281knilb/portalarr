@@ -112,6 +112,36 @@ export function isPrivateOrLocalIp(rawIp?: string | null): boolean {
 }
 
 /**
+ * Checks if two IP addresses match either exactly or belong to the same /24 IPv4 subnet
+ * (common for residential dynamic ISP DHCP lease cycling).
+ */
+export function isSameSubnetOrIp(ipA?: string | null, ipB?: string | null): boolean {
+    if (!ipA || !ipB) return false;
+    const cleanA = normalizeIp(ipA).trim();
+    const cleanB = normalizeIp(ipB).trim();
+    if (!cleanA || !cleanB) return false;
+    if (cleanA === cleanB) return true;
+
+    // Check IPv4 /24 subnet (e.g. 73.18.20.15 vs 73.18.20.120)
+    const partsA = cleanA.split(".");
+    const partsB = cleanB.split(".");
+    if (partsA.length === 4 && partsB.length === 4) {
+        return partsA[0] === partsB[0] && partsA[1] === partsB[1] && partsA[2] === partsB[2];
+    }
+
+    // Check IPv6 /64 prefix (e.g. 2601:1c0:... vs 2601:1c0:...)
+    if (cleanA.includes(":") && cleanB.includes(":")) {
+        const segsA = cleanA.split(":").filter(Boolean);
+        const segsB = cleanB.split(":").filter(Boolean);
+        if (segsA.length >= 4 && segsB.length >= 4) {
+            return segsA.slice(0, 4).join(":") === segsB.slice(0, 4).join(":");
+        }
+    }
+
+    return false;
+}
+
+/**
  * Detects whether a device is a fixed living room / home appliance (TV, streaming stick, console)
  * that stays anchored to a physical residence.
  */

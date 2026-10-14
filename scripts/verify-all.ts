@@ -7643,6 +7643,24 @@ async function runTestSuite() {
                 throw new Error("Apple TV must NOT be classified as mobile roaming device");
             }
 
+            // Verify isSameSubnetOrIp IPv4 /24 and IPv6 subnet matching
+            const { isSameSubnetOrIp } = await import("../src/lib/telemetry/stream-tracker");
+            if (!isSameSubnetOrIp("73.18.20.15", "73.18.20.15")) {
+                throw new Error("Expected identical IP to match");
+            }
+            if (!isSameSubnetOrIp("73.18.20.15", "73.18.20.210")) {
+                throw new Error("Expected same /24 IPv4 subnet to match (dynamic DHCP cycle)");
+            }
+            if (isSameSubnetOrIp("73.18.20.15", "73.19.20.15")) {
+                throw new Error("Different /24 subnets must NOT match");
+            }
+            if (!isSameSubnetOrIp("2601:1c0:5400:1234::1", "2601:1c0:5400:1234::88")) {
+                throw new Error("Expected same IPv6 /64 prefix to match");
+            }
+            if (isSameSubnetOrIp("2601:1c0:5400:1234::1", "2601:1c0:9999:1234::1")) {
+                throw new Error("Different IPv6 prefixes must NOT match");
+            }
+
             // 4e. Verify Account Sharing Intelligence (Clean LAN, Dual TV Smoking Gun, Vacation, Second Home)
             // Scenario 1: Clean LAN streaming
             const lanSessions = [
@@ -8374,6 +8392,76 @@ async function runTestSuite() {
         }
         if (isMobileRoamingDevice("Roku Ultra", "Roku", "Plex")) {
             throw new Error("Roku Ultra should NOT be classified as mobile roaming");
+        }
+    });
+
+    await assertTest("Test 107: Dual-Tier Prewarming Engine & SWR Memory Caching (Global System & Personalized User Telemetry)", async () => {
+        const { 
+            getUserCache, 
+            setUserCache, 
+            clearUserCache, 
+            prewarmUserSession, 
+            prewarmGlobalSystem 
+        } = await import("../src/lib/prewarm");
+
+        // 1. In-memory SWR Cache Basic Set / Get / Invalidate
+        clearUserCache();
+        const testKey = "test_item_key_1";
+        setUserCache(testKey, { sample: 42, label: "speed" }, 10000);
+        const cachedItem = getUserCache<{ sample: number; label: string }>(testKey);
+        if (!cachedItem || cachedItem.sample !== 42 || cachedItem.label !== "speed") {
+            throw new Error("Failed to set or retrieve item from SWR user cache");
+        }
+
+        // 2. Prefix-based cache clearing
+        setUserCache("user_quota:user123", { quota: 5 }, 10000);
+        setUserCache("user_quota:user456", { quota: 2 }, 10000);
+        setUserCache("other_key:system", { ok: true }, 10000);
+        clearUserCache("user_quota");
+        if (getUserCache("user_quota:user123") !== null || getUserCache("user_quota:user456") !== null) {
+            throw new Error("clearUserCache prefix failed to invalidate user_quota keys");
+        }
+        if (getUserCache("other_key:system") === null) {
+            throw new Error("clearUserCache prefix accidentally purged non-matching keys");
+        }
+
+        // 3. TTL Expiry verification
+        const expiringKey = "test_expiring_key";
+        setUserCache(expiringKey, "temporary_value", 5); // 5ms TTL
+        await new Promise(r => setTimeout(r, 20));
+        const expired = getUserCache(expiringKey);
+        if (expired !== null) {
+            throw new Error("Cache entry failed to expire after TTL elapsed");
+        }
+
+        // 4. Personalized User Session Prewarming & Debounce Logic
+        const testUserId = `test-pw-user-${Date.now()}`;
+        const userPrewarmRes = await prewarmUserSession({
+            id: testUserId,
+            username: "TestPrewarmUser",
+            role: "USER"
+        });
+        if (!userPrewarmRes.success) {
+            throw new Error("prewarmUserSession failed to complete successfully");
+        }
+
+        // Immediate subsequent call should be safely debounced
+        const debouncedRes = await prewarmUserSession({
+            id: testUserId,
+            username: "TestPrewarmUser",
+            role: "USER"
+        });
+        if (!debouncedRes.success || !debouncedRes.warmedItems.includes("skipped_debounced")) {
+            throw new Error("prewarmUserSession failed to debounce immediate duplicate call");
+        }
+
+        // 5. Global System Prewarm Execution
+        const globalRes = await prewarmGlobalSystem();
+        if (!globalRes.success) {
+            throw new Error("prewarmGlobalSystem failed to execute successfully");
+        }
+        if (typeof globalRes.durationMs !== "number" || !Array.isArray(globalRes.warmedKeys)) {
+            throw new Error("prewarmGlobalSystem return payload missing required fields");
         }
     });
 

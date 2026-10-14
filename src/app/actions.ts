@@ -49,6 +49,7 @@ import {
     getStreamIntelligenceAnalytics,
     isPrivateOrLocalIp,
     normalizeIp,
+    isSameSubnetOrIp,
     isMobileRoamingDevice,
     isFixedHomeDevice,
     extractStreamTelemetry,
@@ -63,6 +64,7 @@ import {
     getTautulliBackfillProgress, 
     stopTautulliBackfill 
 } from "@/lib/telemetry/tautulli-backfill";
+import { getUserCache, setUserCache, clearUserCache } from "@/lib/prewarm";
 
 if (typeof process !== "undefined" && process.env) {
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
@@ -8089,8 +8091,13 @@ export async function checkMediaAppReachability(app: { name: string; type?: stri
     return false;
 }
 
-export async function getLandingStats() {
+export async function getLandingStats(options?: { skipCache?: boolean }) {
     try {
+        if (!options?.skipCache) {
+            const cached = getUserCache<any>("system_landing_stats");
+            if (cached) return cached;
+        }
+
         await ensureSchemaColumns();
         const settings = await prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null);
         let adminToken = "";
@@ -8200,7 +8207,9 @@ export async function getLandingStats() {
             }
         }));
 
-        return { streamStats, serverStats, downApps };
+        const result = { streamStats, serverStats, downApps };
+        setUserCache("system_landing_stats", result, 10000); // 10s fresh cache
+        return result;
     } catch (e) {
         console.error("getLandingStats error:", e);
         return { streamStats: [], serverStats: [], downApps: [] };
@@ -15278,14 +15287,25 @@ export async function getPublicSmtpFromEmail() {
     }
 }
 
-export async function checkUserLibraryAccess(): Promise<boolean> {
+export async function checkUserLibraryAccess(options?: { skipCache?: boolean }): Promise<boolean> {
     try {
         await ensureSchemaColumns();
         const session = await verifyUser();
-        if (session.role === "ADMIN") return true;
+        const userId = session.userId || session.id;
+
+        if (!options?.skipCache) {
+            const cached = getUserCache<boolean>(`user_lib_access:${userId}`);
+            if (cached !== null && cached !== undefined) return cached;
+        }
+
+        if (session.role === "ADMIN") {
+            setUserCache(`user_lib_access:${userId}`, true, 3 * 60 * 1000);
+            return true;
+        }
 
         // Trial accounts never have access to the Book Library
         if ((session.status === "TRIAL" || (session as any).isTrial === true) && session.status !== "APPROVED") {
+            setUserCache(`user_lib_access:${userId}`, false, 3 * 60 * 1000);
             return false;
         }
 
@@ -15297,6 +15317,7 @@ export async function checkUserLibraryAccess(): Promise<boolean> {
             select: { kindleEmail: true }
         });
         if (!user?.kindleEmail || user.kindleEmail.trim() === "") {
+            setUserCache(`user_lib_access:${userId}`, false, 3 * 60 * 1000);
             return false;
         }
 
@@ -15311,7 +15332,9 @@ export async function checkUserLibraryAccess(): Promise<boolean> {
             return users.includes(username);
         });
 
-        return filtered.length > 0;
+        const hasAccess = filtered.length > 0;
+        setUserCache(`user_lib_access:${userId}`, hasAccess, 3 * 60 * 1000);
+        return hasAccess;
     } catch (e) {
         return false;
     }
@@ -15362,6 +15385,7 @@ export async function setupBookLibraryAccessAction(options: { kindleEmail?: stri
             }
         }
 
+        clearUserCache("user_lib_access");
         revalidatePath("/");
         revalidatePath("/library");
         revalidatePath("/settings/profile");
@@ -15829,9 +15853,14 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
             // Determine Household Anchoring Badge
             const cleanIp = normalizeIp(s.ipAddress);
             const isLocal = isPrivateOrLocalIp(cleanIp);
+            const isTv = isFixedHomeDevice(s.device, s.platform, s.player);
             const isMobile = isMobileRoamingDevice(s.device, s.platform, s.player);
             const primaryHomeIp = profile?.sharingAssessment?.primaryHomeIp;
             const secondaryHomeIp = profile?.sharingAssessment?.secondaryHomeIp;
+            const hasEstablishedHome = Boolean(primaryHomeIp && primaryHomeIp !== "Unknown IP" && primaryHomeIp !== "LAN / Local Network");
+
+            const matchesPrimaryHome = Boolean(hasEstablishedHome && (cleanIp === primaryHomeIp || isSameSubnetOrIp(cleanIp, primaryHomeIp)));
+            const matchesSecondaryHome = Boolean(secondaryHomeIp && (cleanIp === secondaryHomeIp || isSameSubnetOrIp(cleanIp, secondaryHomeIp)));
 
             if (s.isSharingAlert) {
                 s.householdBadge = {
@@ -15840,19 +15869,28 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
                     color: "bg-rose-500/20 text-rose-300 border-rose-500/40",
                     desc: s.sharingReason || "Simultaneous stream from distinct public IP"
                 };
-            } else if (isLocal || (primaryHomeIp && cleanIp === primaryHomeIp)) {
+            } else if (isLocal || matchesPrimaryHome) {
                 s.householdBadge = {
                     label: "🏡 Primary Home",
                     type: "primary",
                     color: "bg-emerald-500/20 text-emerald-300 border-emerald-500/40",
                     desc: isLocal ? "Local private home network" : `Primary Home IP (${cleanIp})`
                 };
-            } else if (secondaryHomeIp && cleanIp === secondaryHomeIp) {
+            } else if (matchesSecondaryHome) {
                 s.householdBadge = {
                     label: "🏡 2nd Home / Cabin",
                     type: "second_home",
                     color: "bg-cyan-500/20 text-cyan-300 border-cyan-500/40",
                     desc: `Secondary Residence (${cleanIp})`
+                };
+            } else if (!hasEstablishedHome && isTv) {
+                // Remote user watching on a living room TV with cold start or single location:
+                // Fixed TV with no multi-IP sharing alert is anchored as their Primary Home!
+                s.householdBadge = {
+                    label: "🏡 Primary Home",
+                    type: "primary",
+                    color: "bg-emerald-500/20 text-emerald-300 border-emerald-500/40",
+                    desc: `Remote Home TV (${cleanIp || "Residential IP"})`
                 };
             } else if (isMobile) {
                 s.householdBadge = {
@@ -18948,7 +18986,7 @@ export async function analyzeStreamHealth(s: any): Promise<StreamDiagnosis> {
     };
 }
 
-export async function getUserPlexHubData() {
+export async function getUserPlexHubData(options?: { skipCache?: boolean }) {
     try {
         await ensureSchemaColumns();
         let user: any = null;
@@ -18961,17 +18999,23 @@ export async function getUserPlexHubData() {
             return { success: false, error: "Unauthorized" };
         }
 
+        const safeUsername = String(user?.username || "");
+        const safeEmail = String(user?.email || "");
+        const userKey = safeUsername.toLowerCase().trim();
+
+        if (!options?.skipCache && userKey) {
+            const cached = getUserCache<any>(`user_plex_hub:${userKey}`);
+            if (cached) return cached;
+        }
+
         const isAdmin = user.role === "ADMIN";
         const [settings, tautulli, dbPlexServers] = await Promise.all([
             prisma.settings.findFirst().catch(() => null),
             prisma.tautulliInstance.findMany().catch(() => []),
             prisma.plexServer.findMany().catch(() => [])
         ]);
-    
-    const safeUsername = String(user?.username || "");
-    const safeEmail = String(user?.email || "");
 
-    const userAliases = new Set<string>();
+        const userAliases = new Set<string>();
     if (safeUsername) userAliases.add(safeUsername.toLowerCase().trim());
     if (safeEmail) userAliases.add(safeEmail.toLowerCase().trim());
 
@@ -19616,7 +19660,7 @@ export async function getUserPlexHubData() {
         return keyA.localeCompare(keyB);
     });
 
-    return {
+    const result = {
         success: true,
         user: {
             username: user.username,
@@ -19635,6 +19679,10 @@ export async function getUserPlexHubData() {
             kindleDeliveries: userKindleLogs.length
         }
     };
+    if (userKey) {
+        setUserCache(`user_plex_hub:${userKey}`, result, 60000); // 60s fresh
+    }
+    return result;
     } catch (e: any) {
         console.error("getUserPlexHubData error:", e);
         return { success: false, error: e.message || "Failed to load Plex Hub data" };
@@ -19781,6 +19829,10 @@ export async function killUserStream(instanceId: string, sessionKey: string) {
             );
 
             if (termResult.success) {
+                clearUserCache("user_plex_hub");
+                clearUserCache("user_diag_snapshot");
+                clearUserCache("user_transcode_alert");
+                clearUserCache("admin_detailed_streams");
                 logger.addLog("INFO", "PLEX", `User "${user.username}" terminated active stream "${targetSession.title || 'Media'}" on Plex server "${serverUrl}".`);
                 return { success: true, message: "Stream terminated successfully." };
             } else {
@@ -19867,6 +19919,10 @@ export async function killUserStream(instanceId: string, sessionKey: string) {
         }
 
         if (killed) {
+            clearUserCache("user_plex_hub");
+            clearUserCache("user_diag_snapshot");
+            clearUserCache("user_transcode_alert");
+            clearUserCache("admin_detailed_streams");
             logger.addLog("INFO", "TAUTULLI", `User "${user.username}" terminated active stream "${targetSession.title || 'Media'}" on server "${instance.name}".`);
             return { success: true, message: "Stream terminated successfully." };
         } else {
@@ -19882,7 +19938,7 @@ export async function killUserStream(instanceId: string, sessionKey: string) {
  * Evaluates whether the currently authenticated user has an active or recent stream
  * that experienced transcoding or quality capping, returning a targeted fix action.
  */
-export async function getUserTranscodeAlertAction() {
+export async function getUserTranscodeAlertAction(options?: { skipCache?: boolean }) {
     try {
         let user: any = null;
         try {
@@ -19892,8 +19948,18 @@ export async function getUserTranscodeAlertAction() {
         }
         if (!user) return { hasAlert: false };
 
+        const userKey = (user.username || "").toLowerCase().trim();
+        if (!options?.skipCache && userKey) {
+            const cached = getUserCache<any>(`user_transcode_alert:${userKey}`);
+            if (cached) return cached;
+        }
+
         const { getUserTranscodeAlert } = await import("@/lib/telemetry/device-diagnostics");
-        return await getUserTranscodeAlert(user.username, user.email || undefined);
+        const alert = await getUserTranscodeAlert(user.username, user.email || undefined);
+        if (alert && userKey) {
+            setUserCache(`user_transcode_alert:${userKey}`, alert, 60000); // 60s fresh
+        }
+        return alert;
     } catch (e) {
         return { hasAlert: false };
     }
@@ -20079,8 +20145,20 @@ export async function getUserAiDiagnosticSnapshotAction() {
         } catch (e) {
             user = { username: "Guest User", role: "USER" };
         }
+
+        const safeUsername = String(user?.username || "guest").toLowerCase();
+        const { getUserCache, setUserCache } = await import("@/lib/prewarm");
+        const cacheKey = `user_diag_snapshot:${safeUsername}`;
+        const cached = getUserCache<any>(cacheKey);
+        if (cached) {
+            return { success: true, snapshot: cached };
+        }
+
         const { getUserDiagnosticSnapshot } = await import("@/lib/ai-server-assistant");
         const snapshot = await getUserDiagnosticSnapshot(user);
+        if (snapshot) {
+            setUserCache(cacheKey, snapshot, 3 * 60 * 1000);
+        }
         return { success: true, snapshot };
     } catch (e: any) {
         console.error("getUserAiDiagnosticSnapshotAction error:", e);
@@ -20195,9 +20273,14 @@ export async function getScriptRunLogAction(runId: string) {
 /**
  * System & Docker Fleet Monitoring Actions (/admin/monitoring)
  */
-export async function getFleetMonitoringDataAction(): Promise<import("@/lib/monitoring/types").FleetTelemetryResponse> {
+export async function getFleetMonitoringDataAction(options?: { skipCache?: boolean }): Promise<import("@/lib/monitoring/types").FleetTelemetryResponse> {
     await verifyAdmin();
     try {
+        if (!options?.skipCache) {
+            const cached = getUserCache<import("@/lib/monitoring/types").FleetTelemetryResponse>("system_fleet_dashboard");
+            if (cached) return cached;
+        }
+
         const { recordServiceProbes, calculateServiceUptime, getIncidentHistory } = await import("@/lib/monitoring/uptime-tracker");
         const { listDockerContainers } = await import("@/lib/monitoring/docker-client");
 
@@ -20246,7 +20329,7 @@ export async function getFleetMonitoringDataAction(): Promise<import("@/lib/moni
             ? Math.round((monitoredServices.reduce((acc, s) => acc + s.uptimePercentage7d, 0) / monitoredServices.length) * 10) / 10
             : 100;
 
-        return {
+        const result = {
             success: true,
             services,
             containers: dockerData.containers,
@@ -20257,6 +20340,8 @@ export async function getFleetMonitoringDataAction(): Promise<import("@/lib/moni
             overallUptime7d: overall7d,
             lastProbeTime: new Date().toISOString()
         };
+        setUserCache("system_fleet_dashboard", result, 15000); // 15s fresh cache
+        return result;
     } catch (e: any) {
         return {
             success: false,
@@ -20283,6 +20368,7 @@ export async function getFleetMonitoringDataAction(): Promise<import("@/lib/moni
 
 export async function restartDockerContainerAction(containerId: string) {
     await verifyAdmin();
+    clearUserCache("system_fleet_dashboard");
     const { restartDockerContainer } = await import("@/lib/monitoring/docker-client");
     const res = await restartDockerContainer(containerId);
     try { revalidatePath("/admin/monitoring"); } catch (_) {}
@@ -20291,6 +20377,7 @@ export async function restartDockerContainerAction(containerId: string) {
 
 export async function stopDockerContainerAction(containerId: string) {
     await verifyAdmin();
+    clearUserCache("system_fleet_dashboard");
     const { stopDockerContainer } = await import("@/lib/monitoring/docker-client");
     const res = await stopDockerContainer(containerId);
     try { revalidatePath("/admin/monitoring"); } catch (_) {}
@@ -20299,6 +20386,7 @@ export async function stopDockerContainerAction(containerId: string) {
 
 export async function startDockerContainerAction(containerId: string) {
     await verifyAdmin();
+    clearUserCache("system_fleet_dashboard");
     const { startDockerContainer } = await import("@/lib/monitoring/docker-client");
     const res = await startDockerContainer(containerId);
     try { revalidatePath("/admin/monitoring"); } catch (_) {}
@@ -20332,5 +20420,49 @@ export async function clearResolvedIncidentsAction() {
     try { revalidatePath("/admin/monitoring"); } catch (_) {}
     return { success: true };
 }
+
+/**
+ * Server Action: Prewarm all user-scoped data (quota, diagnostics, transcode alerts, library access, Plex hub)
+ * Called asynchronously in the background by LayoutWrapper when a user loads the app.
+ */
+export async function prewarmUserSessionAction() {
+    try {
+        const session: any = await verifyUser().catch(() => null);
+        const userId = String(session?.userId || session?.id || "");
+        if (!session || !userId) return { success: false, message: "Not logged in" };
+        const { prewarmUserSession } = await import("@/lib/prewarm");
+        const res = await prewarmUserSession({
+            id: userId,
+            username: String(session.username || ""),
+            role: session.role ? String(session.role) : undefined,
+            email: session.email ? String(session.email) : undefined,
+            status: session.status ? String(session.status) : undefined
+        });
+        return res;
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
+
+/**
+ * Server Action: Prewarm all system caches (Discovery TMDb, Plex Availability, Fleet Health, Active Streams)
+ * Admin-restricted command callable from Settings or Admin Fleet Dashboard.
+ */
+export async function prewarmAllCachesAction() {
+    try {
+        await verifyAdmin();
+        const { prewarmGlobalSystem } = await import("@/lib/prewarm");
+        const res = await prewarmGlobalSystem();
+        return {
+            success: true,
+            durationMs: res.durationMs,
+            warmedKeys: res.warmedKeys,
+            message: `Prewarmed ${res.warmedKeys.length} system components in ${res.durationMs}ms.`
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to prewarm caches" };
+    }
+}
+
 
 

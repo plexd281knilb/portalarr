@@ -9,6 +9,7 @@ import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import ImpersonationBanner from "@/components/impersonation-banner";
+import FloatingAiLauncher from "@/components/floating-ai-launcher";
 
 export default function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -34,6 +35,10 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
           const isAdm = session.role === "ADMIN";
           setIsAdmin(isAdm);
           setUsername((session.username as string) || "");
+
+          // Asynchronously prewarm user data in background (debounced to once every 3 min)
+          import("@/app/actions").then(m => m.prewarmUserSessionAction?.()).catch(() => {});
+
           if (isAdm) {
             setHasLibraryAccess(true);
           } else {
@@ -198,6 +203,9 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
           </main>
         </div>
       </div>
+
+      {/* Floating 24/7 AI Assistant Launcher */}
+      {isLoggedIn && <FloatingAiLauncher />}
     </div>
   );
 }

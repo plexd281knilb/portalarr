@@ -2129,14 +2129,14 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
       console.error(`[BACKGROUND-SCHEDULER] Boot scan failed:`, bootErr.message || bootErr);
     }
 
-    // Trigger initial pre-warming of Discovery Media Caches (RAM + Disk)
+    // Trigger initial pre-warming of Global System & Discovery Caches
     (async () => {
       try {
-        const { prewarmDiscoverCachesInternal } = await import("./seerr/media-cache");
-        console.log("[BACKGROUND-SCHEDULER] Pre-warming Discovery Media Caches (RAM + Disk)...");
-        await prewarmDiscoverCachesInternal();
+        const { prewarmGlobalSystem } = await import("./prewarm");
+        console.log("[BACKGROUND-SCHEDULER] Pre-warming Global System & Discovery Caches...");
+        await prewarmGlobalSystem();
       } catch (pwErr: any) {
-        console.warn("[BACKGROUND-SCHEDULER] Boot discovery pre-warming error:", pwErr.message || pwErr);
+        console.warn("[BACKGROUND-SCHEDULER] Boot system pre-warming error:", pwErr.message || pwErr);
       }
     })();
     
@@ -2378,7 +2378,7 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
         }
       }
 
-      // 6c. Discovery Media Cache Pre-Warmer & Pruning (every 30 minutes)
+      // 6c. Global System & Discovery Cache Pre-Warmer & Pruning (every 30 minutes)
       if (!(global as any).__PORTALARR_DISCOVER_CACHE_WARMER_RUNNING) {
         const lastWarmerTime = (global as any).__PORTALARR_LAST_DISCOVER_WARMER_TIME || 0;
         if (now.getTime() - lastWarmerTime >= 30 * 60 * 1000) {
@@ -2386,11 +2386,12 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
           (global as any).__PORTALARR_DISCOVER_CACHE_WARMER_RUNNING = true;
           (async () => {
             try {
-              const { prewarmDiscoverCachesInternal, pruneExpiredDiskMediaCache } = await import("./seerr/media-cache");
-              await prewarmDiscoverCachesInternal();
+              const { prewarmGlobalSystem } = await import("./prewarm");
+              const { pruneExpiredDiskMediaCache } = await import("./seerr/media-cache");
+              await prewarmGlobalSystem();
               await pruneExpiredDiskMediaCache();
             } catch (warmErr: any) {
-              console.error("[DISCOVER-CACHE-TIMER] Error in discovery cache warmer/pruner:", warmErr.message || warmErr);
+              console.error("[DISCOVER-CACHE-TIMER] Error in system cache warmer/pruner:", warmErr.message || warmErr);
             } finally {
               (global as any).__PORTALARR_DISCOVER_CACHE_WARMER_RUNNING = false;
             }

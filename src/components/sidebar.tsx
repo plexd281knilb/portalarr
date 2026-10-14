@@ -25,7 +25,8 @@ import {
   Inbox,
   HelpCircle,
   Activity,
-  Layers
+  Layers,
+  Bot
 } from "lucide-react"
 
 export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
@@ -142,6 +143,21 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
               >
                 <HelpCircle className="mr-2 h-4 w-4 text-sky-400" />
                 Setup Guides
+              </Button>
+            </Link>
+
+            <Link href="/?openAssistant=true">
+              <Button
+                variant="ghost"
+                className="w-full justify-between text-xs font-semibold h-9 rounded-lg transition-all duration-200 text-purple-400/90 hover:text-purple-200 hover:bg-purple-950/30 hover:ring-1 hover:ring-purple-500/40"
+              >
+                <div className="flex items-center">
+                  <Bot className="mr-2 h-4 w-4 text-purple-400" />
+                  <span>AI Assistant</span>
+                </div>
+                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                  24/7 Fixes
+                </span>
               </Button>
             </Link>
 
@@ -494,6 +510,21 @@ export function MobileSidebar() {
                       )}
                     >
                       <HelpCircle className="mr-2 h-4 w-4 text-sky-400" /> Setup Guides
+                    </Button>
+                  </Link>
+
+                  <Link href="/?openAssistant=true" onClick={() => setIsOpen(false)}>
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-between text-xs font-semibold h-9 rounded-lg transition-all duration-200 text-purple-400/90 hover:text-purple-200 hover:bg-purple-950/30 hover:ring-1 hover:ring-purple-500/40"
+                    >
+                      <div className="flex items-center">
+                        <Bot className="mr-2 h-4 w-4 text-purple-400" />
+                        <span>AI Assistant</span>
+                      </div>
+                      <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                        24/7 Fixes
+                      </span>
                     </Button>
                   </Link>
                   

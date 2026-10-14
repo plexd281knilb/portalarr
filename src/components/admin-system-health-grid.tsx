@@ -28,6 +28,26 @@ export default function AdminSystemHealthGrid() {
     const [statusFilter, setStatusFilter] = useState<"ALL" | "ONLINE" | "OFFLINE" | "PAUSED">("ALL");
     const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
     const [searchQuery, setSearchQuery] = useState("");
+    const [prewarming, setPrewarming] = useState(false);
+    const [prewarmSuccessMessage, setPrewarmSuccessMessage] = useState<string | null>(null);
+
+    const handlePrewarmAll = async () => {
+        setPrewarming(true);
+        setPrewarmSuccessMessage(null);
+        try {
+            const { prewarmAllCachesAction } = await import("@/app/actions");
+            const res = await prewarmAllCachesAction();
+            if (res && res.success) {
+                setPrewarmSuccessMessage(`Prewarmed ${res.warmedKeys?.length || 6} items (${res.durationMs || 0}ms)`);
+                setTimeout(() => setPrewarmSuccessMessage(null), 4000);
+                await loadStatus(true);
+            }
+        } catch (err) {
+            console.error("Failed to prewarm caches:", err);
+        } finally {
+            setPrewarming(false);
+        }
+    };
 
     const loadStatus = async (isManual = false) => {
         if (isManual) setRefreshing(true);
@@ -157,6 +177,17 @@ export default function AdminSystemHealthGrid() {
                                 <span>Manage Apps</span>
                             </Button>
                         </Link>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handlePrewarmAll}
+                            disabled={prewarming || refreshing}
+                            className="h-8 px-2.5 text-xs gap-1.5 border-amber-500/30 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300"
+                            title="Prewarm Discovery carousels, Plex availability indices, system stats, and Docker fleet in RAM"
+                        >
+                            <Zap className={`h-3.5 w-3.5 ${prewarming ? "animate-spin text-amber-300" : "text-amber-400"}`} />
+                            <span>{prewarming ? "Warming..." : prewarmSuccessMessage ? prewarmSuccessMessage : "Prewarm Caches"}</span>
+                        </Button>
                         <Button
                             variant="outline"
                             size="sm"

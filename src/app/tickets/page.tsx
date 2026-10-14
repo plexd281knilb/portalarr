@@ -26,7 +26,9 @@ import {
     Search,
     Shield,
     MessageSquare,
-    Clock
+    Clock,
+    Bot,
+    Sparkles
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
@@ -198,6 +200,38 @@ export default function TicketsPage() {
                     >
                         <Loader2 className={`h-4 w-4 mr-1.5 ${loading ? 'animate-spin' : ''}`} />
                         Refresh
+                    </Button>
+                </div>
+            </div>
+
+            {/* AI ASSISTANT FAST-FIX CALLOUT BANNER */}
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-950/40 via-[#121218] to-cyan-950/30 border border-purple-500/40 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs sm:text-sm">
+                <div className="flex items-center gap-3 min-w-0">
+                    <div className="p-2.5 rounded-xl bg-gradient-to-tr from-purple-600 to-cyan-500 text-white shrink-0 shadow-md">
+                        <Bot className="h-5 w-5" />
+                    </div>
+                    <div>
+                        <div className="font-bold text-foreground flex items-center gap-2 flex-wrap">
+                            <span>Fix Playback or Media Issues in 30 Seconds</span>
+                            <Badge variant="outline" className="text-[10px] bg-purple-500/15 text-purple-300 border-purple-500/40 font-semibold">
+                                24/7 AI Master
+                            </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                            The AI Server Assistant automatically diagnoses stream buffering, quiet audio, subtitle desync, and player quality limits.
+                        </p>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                    <Button 
+                        asChild
+                        size="sm"
+                        className="bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 text-white font-bold text-xs h-9 px-4 rounded-xl shadow-md transition-all active:scale-95"
+                    >
+                        <Link href="/?openAssistant=true">
+                            <Sparkles className="h-3.5 w-3.5 mr-1.5" /> Ask AI Assistant First ➔
+                        </Link>
                     </Button>
                 </div>
             </div>
