@@ -36,7 +36,7 @@ import fs from "fs";
 import path from "path";
 import { convertEbookToEpub, validateAndFixEpubForKindle } from "@/lib/books/epub-converter";
 import { resolveOrLinkAuthorAndSeries } from "@/lib/books/book-service";
-import { inferBookRating, isKidsLibrary } from "@/lib/books/book-rating";
+import { inferBookRating, isKidsLibrary, isAutoApprovedBookLibrary } from "@/lib/books/book-rating";
 import { getBookCleanTitleKey, getBookCompositeDedupKey } from "@/lib/books/book-dedup";
 import { syncUserRoleToDiscord } from "@/lib/discord/discord-role-sync";
 import { 
@@ -9895,15 +9895,17 @@ export async function createBookRequest(formData: FormData) {
         }
 
         const isKidsLib = targetLib ? isKidsLibrary(targetLib) : false;
+        const isKyraOrPublicLib = targetLib ? isAutoApprovedBookLibrary(targetLib) : false;
         const inferredRating = inferBookRating({
             title: finalTitle,
             author: finalAuthor,
             series: finalSeries
         });
         const isKidsBook = isKidsLib || inferredRating.ageRating === "Kids";
+        const isApproved = isKyraOrPublicLib || !isKidsBook;
 
         if (type === "series") {
-            const expanded = await expandSeriesRequest(finalTitle, finalAuthor, targetUser, mediaType, libraryId, isKidsBook);
+            const expanded = await expandSeriesRequest(finalTitle, finalAuthor, targetUser, mediaType, libraryId, isKidsBook, isApproved);
             if (expanded) {
                 // Save the parent series request record itself in the DB
                 await prisma.bookRequest.create({
@@ -9919,7 +9921,7 @@ export async function createBookRequest(formData: FormData) {
                         requestedBy: targetUser,
                         type: "series",
                         mediaType,
-                        status: isKidsBook ? "Pending" : "Approved"
+                        status: isApproved ? "Approved" : "Pending"
                     }
                 });
 
@@ -9936,14 +9938,13 @@ export async function createBookRequest(formData: FormData) {
                 revalidatePath("/library");
                 return { 
                     success: true, 
-                    message: isKidsBook 
+                    message: !isApproved 
                         ? "Kids series request submitted for admin review." 
                         : "Series request submitted successfully!" 
                 };
             }
         }
         
-        const isApproved = !isKidsBook; // Kids books require admin approval
         const disableAutoDownload = formData.get("disableAutoDownload") === "true";
         const sendToKindleVal = formData.get("sendToKindle") === "true";
         
@@ -10019,7 +10020,7 @@ export async function createBookRequest(formData: FormData) {
         revalidatePath("/library");
         return { 
             success: true, 
-            message: isKidsBook 
+            message: !isApproved 
                 ? "Kids book request submitted for admin review." 
                 : "Request submitted successfully!" 
         };
@@ -10029,7 +10030,7 @@ export async function createBookRequest(formData: FormData) {
     }
 }
 
-async function expandSeriesRequest(seriesTitle: string, author: string, requestedBy: string, mediaType: string = "ebook", libraryId?: string, isKidsSeries: boolean = false): Promise<boolean> {
+async function expandSeriesRequest(seriesTitle: string, author: string, requestedBy: string, mediaType: string = "ebook", libraryId?: string, isKidsSeries: boolean = false, autoApproveSeries?: boolean): Promise<boolean> {
     try {
         const query = `series:"${seriesTitle}"`;
         const response = await fetchWithRetry(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&fields=key,title,author_name,cover_i,first_publish_year`, {
@@ -10094,6 +10095,12 @@ async function expandSeriesRequest(seriesTitle: string, author: string, requeste
         }
         
         if (uniqueBooks.length === 0) return false;
+
+        let targetLib: any = null;
+        if (libraryId) {
+            targetLib = await prisma.library.findUnique({ where: { id: libraryId } }).catch(() => null);
+        }
+        const isKyraOrPublicLib = targetLib ? isAutoApprovedBookLibrary(targetLib) : (autoApproveSeries ?? false);
         
         for (const book of uniqueBooks) {
             const inferred = inferBookRating({
@@ -10102,6 +10109,7 @@ async function expandSeriesRequest(seriesTitle: string, author: string, requeste
                 series: seriesTitle
             });
             const isKidsBook = isKidsSeries || inferred.ageRating === "Kids";
+            const isApproved = isKyraOrPublicLib || !isKidsBook;
 
             const req = await prisma.bookRequest.create({
                 data: {
@@ -10116,11 +10124,11 @@ async function expandSeriesRequest(seriesTitle: string, author: string, requeste
                     libraryId: libraryId || null,
                     type: "book",
                     mediaType,
-                    status: isKidsBook ? "Pending" : "Approved"
+                    status: isApproved ? "Approved" : "Pending"
                 }
             });
             
-            if (!isKidsBook) {
+            if (isApproved) {
                 autoDownloadBookRequest(req.id, book.title, book.author).catch(err => {
                     console.error(`[AUTO-DOWNLOAD] Background process failed for series book:`, err);
                 });
@@ -17019,6 +17027,7 @@ export async function createMultipleBookRequests(booksList: { title: string, aut
             targetLib = await prisma.library.findUnique({ where: { id: libraryId } }).catch(() => null);
         }
         const isKidsLib = targetLib ? isKidsLibrary(targetLib) : false;
+        const isKyraOrPublicLib = targetLib ? isAutoApprovedBookLibrary(targetLib) : false;
 
         for (const book of booksList) {
             let finalCover = book.coverUrl;
@@ -17028,7 +17037,7 @@ export async function createMultipleBookRequests(booksList: { title: string, aut
                 author: book.author
             });
             const isKidsBook = isKidsLib || rating.ageRating === "Kids";
-            const isApproved = !isKidsBook;
+            const isApproved = isKyraOrPublicLib || !isKidsBook;
 
             const request = await prisma.bookRequest.create({
                 data: {

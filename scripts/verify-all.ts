@@ -3204,6 +3204,65 @@ async function runTestSuite() {
 
         // Clean up test request
         await prisma.bookRequest.delete({ where: { id: kidsReq.id } }).catch(() => {});
+
+        // 6. Verify Kyra's Library and Public Library Auto-Approval
+        const { isKyrasLibrary, isPublicLibrary, isAutoApprovedBookLibrary } = await import("../src/lib/books/book-rating");
+
+        if (!isKyrasLibrary({ name: "Kids' Bookshelf" })) {
+            throw new Error("isKyrasLibrary failed to detect Kids' Bookshelf");
+        }
+        if (!isKyrasLibrary({ name: "Kyra's Library" })) {
+            throw new Error("isKyrasLibrary failed to detect Kyra's Library");
+        }
+        if (!isKyrasLibrary({ name: "Kid's Library" })) {
+            throw new Error("isKyrasLibrary failed to detect Kid's Library");
+        }
+        if (isKyrasLibrary({ name: "General Public Library" })) {
+            throw new Error("isKyrasLibrary falsely matched General Public Library");
+        }
+
+        if (!isPublicLibrary({ name: "General Public Library" })) {
+            throw new Error("isPublicLibrary failed to detect General Public Library");
+        }
+        if (!isPublicLibrary({ name: "Public Audiobooks" })) {
+            throw new Error("isPublicLibrary failed to detect Public Audiobooks");
+        }
+        if (isPublicLibrary({ name: "Wife's Bookshelf" })) {
+            throw new Error("isPublicLibrary falsely matched Wife's Bookshelf");
+        }
+
+        if (!isAutoApprovedBookLibrary({ name: "Kids' Bookshelf" })) {
+            throw new Error("isAutoApprovedBookLibrary failed for Kids' Bookshelf");
+        }
+        if (!isAutoApprovedBookLibrary({ name: "General Public Library" })) {
+            throw new Error("isAutoApprovedBookLibrary failed for General Public Library");
+        }
+        if (!isAutoApprovedBookLibrary({ name: "Public Audiobooks" })) {
+            throw new Error("isAutoApprovedBookLibrary failed for Public Audiobooks");
+        }
+        if (isAutoApprovedBookLibrary({ name: "Wife's Bookshelf" })) {
+            throw new Error("isAutoApprovedBookLibrary falsely matched Wife's Bookshelf");
+        }
+
+        // Verify request auto-approval condition for Kyra's library and Public library
+        const kyraLib = { id: "kyra-shelf-test", name: "Kids' Bookshelf" };
+        const publicLib = { id: "public-shelf-test", name: "General Public Library" };
+        const privateKidsLib = { id: "private-shelf-test", name: "Restricted Toddler Shelf" };
+
+        const isKidsBook = true;
+        const kyraApproved = (isAutoApprovedBookLibrary(kyraLib) || !isKidsBook);
+        const publicApproved = (isAutoApprovedBookLibrary(publicLib) || !isKidsBook);
+        const privateApproved = (isAutoApprovedBookLibrary(privateKidsLib) || !isKidsBook);
+
+        if (!kyraApproved) {
+            throw new Error("Expected Kyra's library request to be auto-approved");
+        }
+        if (!publicApproved) {
+            throw new Error("Expected Public library request to be auto-approved");
+        }
+        if (privateApproved) {
+            throw new Error("Expected restricted kids shelf request to require admin review");
+        }
     });
 
     // 83. Payment Email Scraper: Positive Amount Extraction vs $0.00 Fees

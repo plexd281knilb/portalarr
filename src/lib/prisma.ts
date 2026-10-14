@@ -2479,17 +2479,19 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
 
                 if (pendingRequests.length > 0) {
                   const { autoDownloadBookRequest } = await import("../app/actions");
-                  const { inferBookRating, isKidsLibrary } = await import("./books/book-rating");
+                  const { inferBookRating, isKidsLibrary, isAutoApprovedBookLibrary } = await import("./books/book-rating");
                   const allLibs = await prisma.library.findMany();
                   const kidsLibIds = new Set(allLibs.filter(l => isKidsLibrary(l)).map(l => l.id));
+                  const autoApprovedLibIds = new Set(allLibs.filter(l => isAutoApprovedBookLibrary(l)).map(l => l.id));
 
                   for (const req of pendingRequests) {
                     const isKidsLib = req.libraryId ? kidsLibIds.has(req.libraryId) : false;
+                    const isKyraOrPublic = req.libraryId ? autoApprovedLibIds.has(req.libraryId) : false;
                     const rating = req.ageRating ? req.ageRating : inferBookRating({ title: req.title, author: req.author || "", series: req.series || undefined }).ageRating;
                     const isKids = isKidsLib || rating === "Kids";
 
-                    if (isKids) {
-                      // Kids requests require explicit admin approval - keep Pending
+                    if (isKids && !isKyraOrPublic) {
+                      // Kids requests require explicit admin approval unless for Kyra's library or Public library - keep Pending
                       continue;
                     }
 

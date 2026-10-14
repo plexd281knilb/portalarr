@@ -19,7 +19,7 @@ import {
     isUserAllowedForLibrary,
     getSimilarBooks
 } from "@/lib/books/book-service";
-import { inferBookRating, isKidsLibrary } from "@/lib/books/book-rating";
+import { inferBookRating, isKidsLibrary, isKyrasLibrary, isPublicLibrary, isAutoApprovedBookLibrary } from "@/lib/books/book-rating";
 import { autoDownloadBookRequest, findMissingBooksInSeries, renameBookFileOnDisk } from "@/app/actions";
 import { resolveMetadataWithAI } from "@/lib/ai-agent";
 import { revalidatePath } from "next/cache";
@@ -351,6 +351,7 @@ export async function submitBookOrAudiobookRequestAction(input: BookRequestInput
         }
 
         const isTargetKidsLib = chosenLib ? isKidsLibrary(chosenLib) : false;
+        const isKyraOrPublicLib = chosenLib ? isAutoApprovedBookLibrary(chosenLib) : false;
         const inferredRating = inferBookRating({
             title,
             author,
@@ -378,6 +379,10 @@ export async function submitBookOrAudiobookRequestAction(input: BookRequestInput
             } catch (e) {}
         }
 
+        // Auto-approve: Kyra's library and Public library are explicitly auto-approved
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        const autoApprove = (isKyraOrPublicLib || !isKidsBook) && (settings?.seerrAutoApproveAll !== false);
+
         // 3. Create BookRequest (Primary legacy & bookshelf sync)
         const bookRequest = await prisma.bookRequest.create({
             data: {
@@ -396,15 +401,12 @@ export async function submitBookOrAudiobookRequestAction(input: BookRequestInput
                 sendToKindle: Boolean(input.sendToKindle && mediaType === "ebook"),
                 mediaType,
                 libraryId: targetLibId,
-                status: "Pending",
+                status: autoApprove ? "Approved" : "Pending",
                 type: input.series ? "series" : "book"
             }
         });
 
         // 4. Also mirror to MediaRequest for unified /requests table
-        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
-        const autoApprove = !isKidsBook && (settings?.seerrAutoApproveAll !== false);
-
         let mediaReq: any = null;
         try {
             await ensureSchemaColumns();
@@ -431,7 +433,10 @@ export async function submitBookOrAudiobookRequestAction(input: BookRequestInput
             console.warn("[BOOK-REQUEST] MediaRequest mirror notice:", mErr?.message || mErr);
         }
 
-        logger.addLog("SUCCESS", "SEERR", `User ${session.username} submitted ${mediaType.toUpperCase()} request: "${title}" by ${author} (${isKidsBook ? "Kids - Pending Admin Review" : (autoApprove ? "Auto-Approved" : "Pending")})`);
+        const approvalLabel = isKidsBook && !isKyraOrPublicLib 
+            ? "Kids - Pending Admin Review" 
+            : (autoApprove ? "Auto-Approved" : "Pending");
+        logger.addLog("SUCCESS", "SEERR", `User ${session.username} submitted ${mediaType.toUpperCase()} request: "${title}" by ${author} (${approvalLabel})`);
 
         // Trigger request notifications (Email & Discord)
         if (mediaReq?.id) {
