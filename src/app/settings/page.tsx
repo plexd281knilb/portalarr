@@ -183,6 +183,7 @@ function SettingsPageContent() {
     const [loadingDiscoveredPlexServers, setLoadingDiscoveredPlexServers] = useState(false);
     const [importingDiscoveredServerKey, setImportingDiscoveredServerKey] = useState<string | null>(null);
     const [discoveredPlexServersMsg, setDiscoveredPlexServersMsg] = useState("");
+    const [showConfiguredDiscovered, setShowConfiguredDiscovered] = useState(false);
 
     // Curation & Metadata API Key States
     const [tmdbKey, setTmdbKey] = useState("");
@@ -536,10 +537,12 @@ function SettingsPageContent() {
         setTogglingPlexServerId(id);
         const next = !current;
         setPlexServers(prev => prev.map(s => s.id === id ? { ...s, monitored: next } : s));
+        setDiscoveredPlexServers(prev => prev.map(s => s.configuredId === id ? { ...s, monitored: next } : s));
         try {
             await togglePlexServerMonitoringAction(id, next);
         } catch {
             setPlexServers(prev => prev.map(s => s.id === id ? { ...s, monitored: current } : s));
+            setDiscoveredPlexServers(prev => prev.map(s => s.configuredId === id ? { ...s, monitored: current } : s));
         } finally {
             setTogglingPlexServerId(null);
         }
@@ -3322,14 +3325,14 @@ function SettingsPageContent() {
                                 </div>
 
                                 {/* PLEX.TV AUTO-DISCOVERY SECTION */}
-                                <div className="border-t border-border/40 pt-3 space-y-2 mt-auto">
+                                <div className="border-t border-border/40 pt-3 space-y-2.5 mt-auto">
                                     <div className="flex justify-between items-center">
                                         <div className="space-y-0.5">
                                             <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                                                 <Radio className="h-3 w-3 text-amber-500 animate-pulse" />
-                                                <span>Plex.tv Discovered Servers</span>
+                                                <span>Plex.tv Account Discovery</span>
                                             </div>
-                                            <p className="text-[10px] text-muted-foreground">Passive inventory on linked account. Unadded servers are never probed or marked down.</p>
+                                            <p className="text-[10px] text-muted-foreground">Scans linked Plex.tv account for unadded servers. Never marks unadded servers down.</p>
                                         </div>
                                         <Button
                                             type="button"
@@ -3350,83 +3353,125 @@ function SettingsPageContent() {
                                         </p>
                                     )}
 
-                                    {discoveredPlexServers.length > 0 && (
-                                        <div className="space-y-1.5 max-h-[200px] overflow-y-auto pr-1">
-                                            {discoveredPlexServers.map((srv, idx) => {
-                                                const conn = (srv.connections || []).find((c: any) => c.local && !c.relay) || (srv.connections || [])[0];
-                                                const connUri = conn ? conn.uri : "No connection URI";
-                                                const isImporting = importingDiscoveredServerKey === (srv.clientIdentifier || srv.name);
+                                    {discoveredPlexServers.length > 0 && (() => {
+                                        const unconfiguredDiscovered = discoveredPlexServers.filter(s => !s.isConfigured);
+                                        const configuredDiscovered = discoveredPlexServers.filter(s => s.isConfigured);
 
-                                                return (
-                                                    <div key={srv.clientIdentifier || idx} className="flex justify-between items-center p-2 rounded-lg bg-background/60 border border-border/30 text-xs">
-                                                        <div className="truncate space-y-0.5 max-w-[55%]">
-                                                            <div className="font-medium truncate flex items-center gap-1.5">
-                                                                <span className="truncate">{srv.name}</span>
-                                                                {srv.isConfigured ? (
-                                                                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30 text-[9px] px-1 py-0 shrink-0">
-                                                                        Configured
-                                                                    </Badge>
-                                                                ) : (
-                                                                    <Badge variant="outline" className="bg-slate-500/10 text-slate-400 border-slate-500/30 text-[9px] px-1 py-0 shrink-0">
-                                                                        Discovered
-                                                                    </Badge>
-                                                                )}
-                                                            </div>
-                                                            <div className="text-[10px] font-mono text-muted-foreground truncate">
-                                                                {connUri}
-                                                            </div>
+                                        return (
+                                            <div className="space-y-2">
+                                                {/* NEW / UNADDED SERVERS */}
+                                                {unconfiguredDiscovered.length > 0 ? (
+                                                    <div className="space-y-1.5 max-h-[180px] overflow-y-auto pr-1">
+                                                        <div className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider flex items-center gap-1">
+                                                            <span>New Servers Found on Plex.tv ({unconfiguredDiscovered.length})</span>
                                                         </div>
-                                                        <div className="flex items-center gap-1 shrink-0">
-                                                            {srv.isConfigured && srv.configuredId ? (
-                                                                <div className="flex items-center gap-1 bg-muted/40 px-2 py-0.5 rounded-md border border-border/40">
-                                                                    <Switch 
-                                                                        id={`disc-monitored-${srv.configuredId}`}
-                                                                        checked={srv.monitored !== false}
-                                                                        disabled={togglingPlexServerId === srv.configuredId}
-                                                                        onCheckedChange={() => handleTogglePlexServerMonitoring(srv.configuredId, srv.monitored !== false)}
-                                                                    />
-                                                                    <Label htmlFor={`disc-monitored-${srv.configuredId}`} className="text-[10px] cursor-pointer font-medium select-none">
+                                                        {unconfiguredDiscovered.map((srv, idx) => {
+                                                            const conn = (srv.connections || []).find((c: any) => c.local && !c.relay) || (srv.connections || [])[0];
+                                                            const connUri = conn ? conn.uri : "No connection URI";
+                                                            const isImporting = importingDiscoveredServerKey === (srv.clientIdentifier || srv.name);
+
+                                                            return (
+                                                                <div key={srv.clientIdentifier || idx} className="flex justify-between items-center p-2 rounded-lg bg-background/60 border border-amber-500/30 text-xs">
+                                                                    <div className="truncate space-y-0.5 max-w-[55%]">
+                                                                        <div className="font-medium truncate flex items-center gap-1.5">
+                                                                            <span className="truncate">{srv.name}</span>
+                                                                            <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-[9px] px-1 py-0 shrink-0">
+                                                                                New Discovery
+                                                                            </Badge>
+                                                                        </div>
+                                                                        <div className="text-[10px] font-mono text-muted-foreground truncate">
+                                                                            {connUri}
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-1 shrink-0">
+                                                                        <Button
+                                                                            type="button"
+                                                                            size="sm"
+                                                                            variant="outline"
+                                                                            className="h-6 text-[10px] px-2 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10 active:scale-95 transition-all"
+                                                                            disabled={isImporting}
+                                                                            onClick={() => handleImportDiscoveredPlexServer(srv, true)}
+                                                                        >
+                                                                            {isImporting ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : "+ Add & Monitor"}
+                                                                        </Button>
+                                                                        <Button
+                                                                            type="button"
+                                                                            size="sm"
+                                                                            variant="ghost"
+                                                                            className="h-6 text-[10px] px-1.5 text-muted-foreground hover:text-foreground active:scale-95 transition-all"
+                                                                            disabled={isImporting}
+                                                                            onClick={() => handleImportDiscoveredPlexServer(srv, false)}
+                                                                        >
+                                                                            + Add (Paused)
+                                                                        </Button>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                ) : (
+                                                    /* ALL SERVERS CONFIGURED STATE */
+                                                    <div className="flex items-center justify-between p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-xs">
+                                                        <div className="flex items-center gap-2">
+                                                            <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                                                            <span className="text-emerald-300 font-medium">All Plex account servers ({configuredDiscovered.length}) are configured & active above.</span>
+                                                        </div>
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="h-6 text-[10px] px-2 text-muted-foreground hover:text-foreground active:scale-95 transition-all shrink-0"
+                                                            onClick={() => setShowConfiguredDiscovered(prev => !prev)}
+                                                        >
+                                                            {showConfiguredDiscovered ? "Hide Details" : `Show Details (${configuredDiscovered.length})`}
+                                                        </Button>
+                                                    </div>
+                                                )}
+
+                                                {/* OPTIONAL EXPANDABLE VIEW FOR ALREADY CONFIGURED CLOUD SERVERS */}
+                                                {showConfiguredDiscovered && configuredDiscovered.length > 0 && (
+                                                    <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
+                                                        {unconfiguredDiscovered.length > 0 && (
+                                                            <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                                                                Already Configured in Portalarr ({configuredDiscovered.length})
+                                                            </div>
+                                                        )}
+                                                        {configuredDiscovered.map((srv, idx) => {
+                                                            const conn = (srv.connections || []).find((c: any) => c.local && !c.relay) || (srv.connections || [])[0];
+                                                            const connUri = conn ? conn.uri : "No connection URI";
+
+                                                            return (
+                                                                <div key={srv.clientIdentifier || idx} className="flex justify-between items-center p-2 rounded-lg bg-background/40 border border-border/20 text-xs opacity-80">
+                                                                    <div className="truncate space-y-0.5 max-w-[70%]">
+                                                                        <div className="font-medium truncate flex items-center gap-1.5 text-foreground">
+                                                                            <span className="truncate">{srv.name}</span>
+                                                                            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30 text-[9px] px-1 py-0 shrink-0">
+                                                                                Configured Above
+                                                                            </Badge>
+                                                                        </div>
+                                                                        <div className="text-[10px] font-mono text-muted-foreground truncate">
+                                                                            {connUri}
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="shrink-0">
                                                                         {srv.monitored !== false ? (
-                                                                            <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                                                                            <span className="text-emerald-400 text-[10px] font-semibold flex items-center gap-1">
                                                                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Monitored
                                                                             </span>
                                                                         ) : (
-                                                                            <span className="text-muted-foreground flex items-center gap-1">
+                                                                            <span className="text-muted-foreground text-[10px] flex items-center gap-1">
                                                                                 <span className="w-1.5 h-1.5 rounded-full bg-slate-500" /> Paused
                                                                             </span>
                                                                         )}
-                                                                    </Label>
+                                                                    </div>
                                                                 </div>
-                                                            ) : (
-                                                                <div className="flex items-center gap-1">
-                                                                    <Button
-                                                                        type="button"
-                                                                        size="sm"
-                                                                        variant="outline"
-                                                                        className="h-6 text-[10px] px-2 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10 active:scale-95 transition-all"
-                                                                        disabled={isImporting}
-                                                                        onClick={() => handleImportDiscoveredPlexServer(srv, true)}
-                                                                    >
-                                                                        {isImporting ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : "+ Add & Monitor"}
-                                                                    </Button>
-                                                                    <Button
-                                                                        type="button"
-                                                                        size="sm"
-                                                                        variant="ghost"
-                                                                        className="h-6 text-[10px] px-1.5 text-muted-foreground hover:text-foreground active:scale-95 transition-all"
-                                                                        disabled={isImporting}
-                                                                        onClick={() => handleImportDiscoveredPlexServer(srv, false)}
-                                                                    >
-                                                                        + Add (Paused)
-                                                                    </Button>
-                                                                </div>
-                                                            )}
-                                                        </div>
+                                                            );
+                                                        })}
                                                     </div>
-                                                );
-                                            })}
-                                        </div>
-                                    )}
+                                                )}
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
                             </CardContent>
                         </Card>

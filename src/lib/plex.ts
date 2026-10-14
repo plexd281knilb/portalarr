@@ -285,9 +285,9 @@ export interface PlexServerResource {
 let cachedServers: { token: string; timestamp: number; data: PlexServerResource[] } | null = null;
 const SERVERS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-export async function getPlexServers(adminToken: string, forceRefresh = false): Promise<PlexServerResource[]> {
+export async function getPlexServers(adminToken: string, forceRefresh = false, includeManual = true): Promise<PlexServerResource[]> {
     if (!adminToken) return [];
-    if (!forceRefresh && cachedServers && cachedServers.token === adminToken && (Date.now() - cachedServers.timestamp < SERVERS_CACHE_TTL)) {
+    if (!forceRefresh && includeManual && cachedServers && cachedServers.token === adminToken && (Date.now() - cachedServers.timestamp < SERVERS_CACHE_TTL)) {
         return cachedServers.data;
     }
 
@@ -387,9 +387,13 @@ export async function getPlexServers(adminToken: string, forceRefresh = false): 
             const data = await res.json();
             if (Array.isArray(data)) {
                 let srvs = parseResources(data);
-                srvs = mergeWithManualServers(srvs);
+                if (includeManual) {
+                    srvs = mergeWithManualServers(srvs);
+                }
                 if (srvs.length > 0) {
-                    cachedServers = { token: adminToken, timestamp: Date.now(), data: srvs };
+                    if (includeManual) {
+                        cachedServers = { token: adminToken, timestamp: Date.now(), data: srvs };
+                    }
                     return srvs;
                 }
             }
@@ -414,9 +418,13 @@ export async function getPlexServers(adminToken: string, forceRefresh = false): 
             const data = await res.json();
             if (Array.isArray(data)) {
                 let srvs = parseResources(data);
-                srvs = mergeWithManualServers(srvs);
+                if (includeManual) {
+                    srvs = mergeWithManualServers(srvs);
+                }
                 if (srvs.length > 0) {
-                    cachedServers = { token: adminToken, timestamp: Date.now(), data: srvs };
+                    if (includeManual) {
+                        cachedServers = { token: adminToken, timestamp: Date.now(), data: srvs };
+                    }
                     return srvs;
                 }
             }
@@ -461,18 +469,24 @@ export async function getPlexServers(adminToken: string, forceRefresh = false): 
                     });
                 }
             }
-            const merged = mergeWithManualServers(servers);
-            if (merged.length > 0) {
-                cachedServers = { token: adminToken, timestamp: Date.now(), data: merged };
-                return merged;
+            const finalServers = includeManual ? mergeWithManualServers(servers) : servers;
+            if (finalServers.length > 0) {
+                if (includeManual) {
+                    cachedServers = { token: adminToken, timestamp: Date.now(), data: finalServers };
+                }
+                return finalServers;
             }
         }
     } catch (e) {}
 
-    // 4. Return manual servers directly if cloud discovery failed
-    if (manualServers.length > 0) {
+    // 4. Return manual servers directly if cloud discovery failed and includeManual is enabled
+    if (includeManual && manualServers.length > 0) {
         cachedServers = { token: adminToken, timestamp: Date.now(), data: manualServers };
         return manualServers;
+    }
+
+    if (!includeManual) {
+        return [];
     }
 
     // 5. Fallback: Lookup configured DB URLs from Settings / MediaApp

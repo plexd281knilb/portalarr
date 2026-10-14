@@ -1581,7 +1581,7 @@ export async function getDiscoveredPlexServersAction() {
         }
 
         const [rawDiscovered, dbServers] = await Promise.all([
-            getPlexServers(adminToken, true).catch(() => []),
+            getPlexServers(adminToken, true, false).catch(() => []),
             prisma.plexServer.findMany().catch(() => [])
         ]);
 

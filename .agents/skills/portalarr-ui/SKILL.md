@@ -864,6 +864,17 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
   - Safe fallback defaults (`data?.items || []`) must be supplied so calculations execute cleanly even when `data` is initially `null` or `undefined`.
   - Place early loading or error returns (`if (loading && !data) return ...`) strictly **after** all hook declarations, immediately before the primary JSX return.
 
+### 15. Server Management vs Cloud Discovery Inbox Pattern & State Synchronization
+- **Separation of Master Management vs Discovery Inbox**:
+  - The primary server list (**Configured Servers**) serves as the single source of truth for active management controls: Default selection, live connection testing, deletion actions, and master Monitored / Paused switches.
+  - The cloud auto-discovery section (**Account Discovery Inbox**) strictly serves as an onboarding queue for new, unadded servers found on the linked cloud account.
+- **Deduplication & Inbox Partitioning**:
+  - Cloud-discovered servers must be partitioned into `unconfiguredDiscovered` (new discoveries) and `configuredDiscovered` (already added).
+  - When all account servers are already added, collapse and summarize them into a clean confirmation badge (`✓ All Plex account servers are configured & active above.`) with an optional read-only "View Details" disclosure, completely omitting duplicate interactive switches.
+  - Interactive onboarding buttons (`+ Add & Monitor`, `+ Add (Paused)`) must strictly be reserved for new, unadded discoveries.
+- **Bidirectional State Synchronization**:
+  - Any server-level status toggles must update both `configuredServers` and `discoveredServers` state arrays simultaneously, preventing desynchronized UI switches when viewing secondary details.
+
 ---
 
 As the Portalarr frontend evolves or new design decisions are finalized:

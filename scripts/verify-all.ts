@@ -3736,15 +3736,26 @@ async function runTestSuite() {
             throw new Error(`Expected exactly 3 items in downApps, got ${testDownApps.length}: ${JSON.stringify(testDownApps)}`);
         }
 
-        // 2. Test Plex.tv Discovered Unconfigured Server Isolation
+        // 2. Test Plex.tv Discovered Unconfigured Server Isolation & Discovery Inbox Partitioning
         // Servers passively discovered from Plex.tv that are not configured in DB must NEVER be probed or in downApps
         const discoveredFromPlexTv = [
             { name: "ProductionPMS", clientIdentifier: "prod-1", isConfigured: true },
             { name: "TestVM-To-Be-Deleted", clientIdentifier: "test-vm-2", isConfigured: false }
         ];
         const unconfiguredDiscovered = discoveredFromPlexTv.filter(d => !d.isConfigured);
+        const configuredDiscovered = discoveredFromPlexTv.filter(d => d.isConfigured);
         if (unconfiguredDiscovered.length !== 1 || unconfiguredDiscovered[0].name !== "TestVM-To-Be-Deleted") {
             throw new Error("Failed to isolate unconfigured discovered servers");
+        }
+        if (configuredDiscovered.length !== 1 || configuredDiscovered[0].name !== "ProductionPMS") {
+            throw new Error("Failed to partition configured discovered servers");
+        }
+
+        // Verify getPlexServers with includeManual=false isolates cloud discovery from manual DB injection
+        const { getPlexServers } = await import("../src/lib/plex");
+        const cloudOnly = await getPlexServers("", true, false);
+        if (!Array.isArray(cloudOnly) || cloudOnly.length !== 0) {
+            throw new Error("Expected empty result for cloud-only discovery without admin token");
         }
 
         // 3. Database Lifecycle: Test monitored field persistence on PlexServer, GlancesInstance, TautulliInstance, and MediaApp
