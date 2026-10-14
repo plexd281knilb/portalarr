@@ -147,7 +147,9 @@ export default function AdminDetailedStreams() {
         : sessions;
 
     const sortedFilteredSessions = useMemo(() => {
-        const list = [...filteredSessions];
+        const list = filteredSessions.filter((s: any) => 
+            s && (s.title || s.grandparentTitle || s.fullTitle) && s.state !== "stopped"
+        );
         list.sort((a: any, b: any) => {
             let primaryDiff = 0;
             if (streamSort === "user_asc") {
@@ -180,7 +182,9 @@ export default function AdminDetailedStreams() {
             const titleDiff = titleA.localeCompare(titleB);
             if (titleDiff !== 0) return titleDiff;
 
-            return String(a.sessionKey || a.sessionId || "").localeCompare(String(b.sessionKey || b.sessionId || ""));
+            const keyA = String(a.uniqueStreamKey || a.sessionKey || a.sessionId || "");
+            const keyB = String(b.uniqueStreamKey || b.sessionKey || b.sessionId || "");
+            return keyA.localeCompare(keyB);
         });
         return list;
     }, [filteredSessions, streamSort]);
@@ -615,7 +619,7 @@ export default function AdminDetailedStreams() {
 
                             return (
                                 <div 
-                                    key={stream.sessionKey || idx}
+                                    key={stream.uniqueStreamKey || `${stream.serverName}_${stream.sessionKey}_${stream.user}_${idx}`}
                                     className="p-3.5 rounded-xl bg-[#14141c]/90 border border-white/[0.08] hover:border-primary/40 transition-all flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
                                 >
                                     {/* Left: Poster + User & Media Info */}

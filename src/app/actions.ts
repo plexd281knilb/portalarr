@@ -15440,6 +15440,7 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
         const allSessions: any[] = [];
         let totalStreamCount = 0;
         const coveredServerNames = new Set<string>();
+        const seenSessionFingerprints = new Set<string>();
 
         // Build set of unmonitored Plex server names to strictly exclude from active stream tallies
         const unmonitoredPlexNames = new Set(
@@ -15463,10 +15464,12 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
                     const actResult = await fetchTautulliApiJson(fullUrl, undefined, { revalidate: 0 });
                     if (actResult.ok && actResult.data) {
                         coveredServerNames.add(t.name.toLowerCase().trim());
-                        const count = actResult.data.stream_count ? Number(actResult.data.stream_count) : 0;
-                        totalStreamCount += count;
                         const sessions = actResult.data.sessions || [];
                         for (const s of sessions) {
+                            if (!s || typeof s !== "object") continue;
+                            if (!s.rating_key && !s.title && !s.grandparent_title) continue;
+                            if (String(s.state || "").toLowerCase().trim() === "stopped") continue;
+
                             let rawThumb = s.grandparent_thumb || s.parent_thumb || s.thumb || s.art || (s.rating_key ? `/library/metadata/${s.rating_key}/thumb` : "");
                             if (rawThumb && rawThumb.includes("pms_image_proxy")) {
                                 try {
@@ -15496,12 +15499,23 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
                                 }
                             }
 
+                            const userTitle = s.friendly_name || s.user || "Plex User";
+                            const rawSessionKey = String(s.session_key || s.session_id || `${s.rating_key || "stream"}_${s.ip_address || userTitle}_${t.id}`);
+                            const uniqueStreamKey = `tautulli_${t.id}_${rawSessionKey}_${userTitle}_${s.rating_key || fullTitle}`.replace(/[^a-zA-Z0-9_-]/g, "_");
+
+                            const fingerprint = s.session_id 
+                                ? `sess_${s.session_id}` 
+                                : `${userTitle.toLowerCase().trim()}:::${String(s.rating_key || fullTitle).toLowerCase().trim()}:::${String(s.ip_address || t.id).toLowerCase().trim()}`;
+                            if (seenSessionFingerprints.has(fingerprint)) continue;
+                            seenSessionFingerprints.add(fingerprint);
+
                             const sessionItem: any = {
                                 instanceId: t.id,
                                 serverName: t.name,
-                                sessionKey: String(s.session_key || s.session_id || `${s.rating_key || "stream"}_${s.ip_address || s.user || "user"}_${t.id}`),
+                                sessionKey: rawSessionKey,
                                 sessionId: String(s.session_id || s.session_key || ""),
-                                user: s.friendly_name || s.user || "Plex User",
+                                uniqueStreamKey,
+                                user: userTitle,
                                 email: s.email || "",
                                 title: fullTitle,
                                 grandparentTitle: s.grandparent_title || "",
@@ -15557,6 +15571,11 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
                     const isCovered = !useBuiltIn && Array.from(coveredServerNames).some(c => c === norm || c.includes(norm) || norm.includes(c));
                     if (!isCovered && srv.sessions && srv.sessions.length > 0) {
                         for (const s of srv.sessions) {
+                            if (!s || typeof s !== "object") continue;
+                            if (!s.ratingKey && !s.title && !s.grandparentTitle) continue;
+                            const playerState = String(s.Player?.state || s.state || "").toLowerCase().trim();
+                            if (playerState === "stopped") continue;
+
                             const isTranscode = s.TranscodeSession || (s.Media && s.Media[0]?.Part && s.Media[0]?.Part[0]?.decision === "transcode");
                             const userTitle = s.User?.title || s.User?.username || s.User?.name || s.username || "Plex User";
                             const isEpisode = s.type === "episode" || !!s.grandparentTitle;
@@ -15574,14 +15593,28 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
                                     fullTitle = `${s.grandparentTitle} - ${s.title || "Episode"}`;
                                 }
                             }
+
+                            const rawSessionKey = String(s.sessionKey || s.Session?.id || `${s.ratingKey || "stream"}_${s.Player?.machineIdentifier || s.Player?.address || userTitle}_${srv.serverId}`);
+                            const uniqueStreamKey = `plex_${srv.serverId || srv.serverName}_${rawSessionKey}_${userTitle}_${s.ratingKey || fullTitle}`.replace(/[^a-zA-Z0-9_-]/g, "_");
+
+                            // Deduplication fingerprint:
+                            // Avoid duplicate cards if the same user is playing the same item on the same player or server
+                            const fingerprint = s.Session?.id 
+                                ? `sess_${s.Session.id}` 
+                                : `${userTitle.toLowerCase().trim()}:::${String(s.ratingKey || fullTitle).toLowerCase().trim()}:::${String(s.Player?.machineIdentifier || s.Player?.address || srv.serverId).toLowerCase().trim()}`;
+
+                            if (seenSessionFingerprints.has(fingerprint)) {
+                                continue;
+                            }
+                            seenSessionFingerprints.add(fingerprint);
                             
                             const bitrate = s.Media && s.Media[0]?.bitrate ? Number(s.Media[0].bitrate) : (s.Session?.bandwidth ? Number(s.Session.bandwidth) : 0);
-                            totalStreamCount++;
                             const sessionItem: any = {
                                 instanceId: `plex_${srv.serverId}`,
                                 serverName: srv.serverName,
-                                sessionKey: String(s.sessionKey || s.Session?.id || `${s.ratingKey || "stream"}_${s.Player?.machineIdentifier || s.Player?.address || userTitle}_${srv.serverId}`),
+                                sessionKey: rawSessionKey,
                                 sessionId: String(s.Session?.id || s.sessionKey || ""),
+                                uniqueStreamKey,
                                 user: userTitle,
                                 email: s.User?.email || "",
                                 title: fullTitle,
@@ -15619,6 +15652,9 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
                 }
             } catch (e) {}
         }
+
+        // Align totalStreamCount exactly with deduplicated active sessions
+        totalStreamCount = allSessions.length;
 
         // 3. Streams Per Plex Server Registry & Usage Calculation (ONLY monitored servers with monitoring turned on)
         const serverUsageMap = new Map<string, {
@@ -15788,7 +15824,9 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
             const titleB = String(b.grandparentTitle || b.title || "").toLowerCase().trim();
             if (titleA !== titleB) return titleA.localeCompare(titleB);
 
-            return String(a.sessionKey || a.sessionId || "").localeCompare(String(b.sessionKey || b.sessionId || ""));
+            const keyA = String(a.uniqueStreamKey || a.sessionKey || a.sessionId || "");
+            const keyB = String(b.uniqueStreamKey || b.sessionKey || b.sessionId || "");
+            return keyA.localeCompare(keyB);
         });
 
         return {
@@ -19044,8 +19082,10 @@ export async function getUserPlexHubData() {
 
                         const sKey = String(s.sessionKey || s.Session?.id || `${s.ratingKey || "stream"}_${s.Player?.machineIdentifier || s.Player?.address || sessionUser}_${srv.serverId}`);
                         const sId = String(s.Session?.id || sKey);
+                        const uniqueStreamKey = `plex_${srv.serverId || srv.serverName}_${sKey}_${sessionUser}_${s.ratingKey || fullTitle}`.replace(/[^a-zA-Z0-9_-]/g, "_");
                         seenSessionKeys.add(sKey);
                         seenSessionKeys.add(sId);
+                        seenSessionKeys.add(uniqueStreamKey);
 
                         const durMs = Number(s.duration || 0);
                         const offsetMs = Number(s.viewOffset || 0);
@@ -19056,6 +19096,7 @@ export async function getUserPlexHubData() {
                             instanceName: srv.serverName,
                             sessionKey: sKey,
                             sessionId: sId,
+                            uniqueStreamKey,
                             title: s.title || "Unknown",
                             parentTitle: s.parentTitle || "",
                             grandparentTitle: s.grandparentTitle || "",
@@ -19502,7 +19543,9 @@ export async function getUserPlexHubData() {
         const titleA = String(a.fullTitle || a.title || "").toLowerCase().trim();
         const titleB = String(b.fullTitle || b.title || "").toLowerCase().trim();
         if (titleA !== titleB) return titleA.localeCompare(titleB);
-        return String(a.sessionKey || a.sessionId || "").localeCompare(String(b.sessionKey || b.sessionId || ""));
+        const keyA = String(a.uniqueStreamKey || a.sessionKey || a.sessionId || "");
+        const keyB = String(b.uniqueStreamKey || b.sessionKey || b.sessionId || "");
+        return keyA.localeCompare(keyB);
     });
 
     return {

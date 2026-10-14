@@ -254,7 +254,9 @@ export default function StreamIntelligencePage() {
         : allSessions;
 
     const sortedFilteredSessions = useMemo(() => {
-        const list = [...filteredSessions];
+        const list = filteredSessions.filter((s: any) => 
+            s && (s.title || s.grandparentTitle || s.fullTitle) && s.state !== "stopped"
+        );
         list.sort((a: any, b: any) => {
             let primaryDiff = 0;
             if (streamSort === "user_asc") {
@@ -287,7 +289,9 @@ export default function StreamIntelligencePage() {
             const titleDiff = titleA.localeCompare(titleB);
             if (titleDiff !== 0) return titleDiff;
 
-            return String(a.sessionKey || a.sessionId || "").localeCompare(String(b.sessionKey || b.sessionId || ""));
+            const keyA = String(a.uniqueStreamKey || a.sessionKey || a.sessionId || "");
+            const keyB = String(b.uniqueStreamKey || b.sessionKey || b.sessionId || "");
+            return keyA.localeCompare(keyB);
         });
         return list;
     }, [filteredSessions, streamSort]);
@@ -605,12 +609,12 @@ export default function StreamIntelligencePage() {
                         </Card>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {sortedFilteredSessions.map((session: any) => {
+                            {sortedFilteredSessions.map((session: any, idx: number) => {
                                 const isTranscode = session.videoDecision === "transcode";
                                 const diagnosis = session.deviceDiagnosis;
 
                                 return (
-                                    <Card key={session.sessionKey} className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden flex flex-col justify-between">
+                                    <Card key={session.uniqueStreamKey || `${session.serverName}_${session.sessionKey}_${session.user}_${idx}`} className="bg-slate-900/90 border-slate-800 shadow-xl overflow-hidden flex flex-col justify-between">
                                         <div>
                                             {/* Poster & Header */}
                                             <div className="p-4 flex gap-3.5">

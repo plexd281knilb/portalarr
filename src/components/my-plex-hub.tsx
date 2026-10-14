@@ -190,7 +190,7 @@ export default function MyPlexHub() {
 
                         return (
                             <Card 
-                                key={stream.sessionKey || idx} 
+                                key={stream.uniqueStreamKey || `${stream.instanceId || stream.instanceName}_${stream.sessionKey}_${idx}`} 
                                 className="relative overflow-hidden bg-gradient-to-br from-[#14141c] via-[#101017] to-[#0d0d12] border-primary/30 backdrop-blur-md shadow-md hover:border-primary/50 transition-all"
                             >
                                 <div className="absolute top-0 left-0 h-1 bg-gradient-to-r from-primary via-emerald-400 to-cyan-400 w-full" />

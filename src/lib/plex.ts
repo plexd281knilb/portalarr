@@ -348,10 +348,20 @@ export async function getPlexServers(adminToken: string, forceRefresh = false, i
     const mergeWithManualServers = (discovered: PlexServerResource[]): PlexServerResource[] => {
         const merged: PlexServerResource[] = [...discovered];
         for (const man of manualServers) {
-            const matchIndex = merged.findIndex(s => 
-                (s.clientIdentifier && s.clientIdentifier.toLowerCase() === man.clientIdentifier.toLowerCase()) ||
-                s.name.toLowerCase() === man.name.toLowerCase()
-            );
+            const matchIndex = merged.findIndex(s => {
+                if (s.clientIdentifier && man.clientIdentifier && s.clientIdentifier.toLowerCase() === man.clientIdentifier.toLowerCase()) return true;
+                if (s.name.toLowerCase() === man.name.toLowerCase()) return true;
+                return s.connections.some(sc => 
+                    man.connections.some(mc => {
+                        const scHost = (sc.address || "").toLowerCase().trim();
+                        const mcHost = (mc.address || "").toLowerCase().trim();
+                        const scUri = sc.uri ? sc.uri.replace(/\/+$/, "").toLowerCase() : "";
+                        const mcUri = mc.uri ? mc.uri.replace(/\/+$/, "").toLowerCase() : "";
+                        if (scUri && mcUri && scUri === mcUri) return true;
+                        return scHost && mcHost && scHost === mcHost && Number(sc.port) === Number(mc.port);
+                    })
+                );
+            });
             if (matchIndex >= 0) {
                 const existingConns = merged[matchIndex].connections;
                 for (const mc of man.connections) {
@@ -361,6 +371,9 @@ export async function getPlexServers(adminToken: string, forceRefresh = false, i
                 }
                 if (man.accessToken && man.accessToken !== adminToken) {
                     merged[matchIndex].accessToken = man.accessToken;
+                }
+                if (man.name) {
+                    merged[matchIndex].name = man.name;
                 }
             } else {
                 merged.push(man);
@@ -523,7 +536,29 @@ export async function getPlexActiveSessions(adminToken: string): Promise<{ serve
     const servers = await getPlexServers(adminToken);
     const results: { serverName: string; serverUrl: string; serverId: string; token: string; sessions: any[] }[] = [];
 
-    await Promise.allSettled(servers.map(async (srv) => {
+    // Deduplicate servers by clientIdentifier or primary connection address:port before querying
+    const uniqueServers: PlexServerResource[] = [];
+    const seenServerKeys = new Set<string>();
+    for (const s of servers) {
+        const clientId = (s.clientIdentifier || "").toLowerCase().trim();
+        const primaryConn = s.connections[0];
+        const endpointKey = primaryConn ? `${(primaryConn.address || "").toLowerCase().trim()}:${primaryConn.port}` : "";
+        const uriKey = primaryConn?.uri ? primaryConn.uri.replace(/\/+$/, "").toLowerCase().trim() : "";
+
+        let isDup = false;
+        if (clientId && seenServerKeys.has(`id:${clientId}`)) isDup = true;
+        if (endpointKey && endpointKey !== ":32400" && endpointKey !== ":" && seenServerKeys.has(`ep:${endpointKey}`)) isDup = true;
+        if (uriKey && seenServerKeys.has(`uri:${uriKey}`)) isDup = true;
+
+        if (!isDup) {
+            if (clientId) seenServerKeys.add(`id:${clientId}`);
+            if (endpointKey && endpointKey !== ":32400" && endpointKey !== ":") seenServerKeys.add(`ep:${endpointKey}`);
+            if (uriKey) seenServerKeys.add(`uri:${uriKey}`);
+            uniqueServers.push(s);
+        }
+    }
+
+    await Promise.allSettled(uniqueServers.map(async (srv) => {
         const token = srv.accessToken || adminToken;
         for (const conn of srv.connections) {
             try {
@@ -544,13 +579,26 @@ export async function getPlexActiveSessions(adminToken: string): Promise<{ serve
 
                 if (res.ok) {
                     const data = await res.json();
-                    const metadata = data.MediaContainer?.Metadata || [];
+                    const metadata = data.MediaContainer?.Metadata;
+                    const rawList = Array.isArray(metadata)
+                        ? metadata
+                        : (metadata && typeof metadata === "object" && Object.keys(metadata).length > 0 ? [metadata] : []);
+
+                    // Strict filter: session must be a valid media item with at least one title/ratingKey and not stopped
+                    const validSessions = rawList.filter((s: any) => {
+                        if (!s || typeof s !== "object") return false;
+                        if (!s.ratingKey && !s.title && !s.grandparentTitle && !s.key) return false;
+                        const playerState = String(s.Player?.state || s.state || "").toLowerCase().trim();
+                        if (playerState === "stopped") return false;
+                        return true;
+                    });
+
                     results.push({
                         serverName: srv.name,
                         serverUrl: cleanBase,
                         serverId: srv.clientIdentifier,
                         token,
-                        sessions: Array.isArray(metadata) ? metadata : [metadata]
+                        sessions: validSessions
                     });
                     break; // Successfully queried this server via this connection
                 }

@@ -8000,7 +8000,9 @@ async function runTestSuite() {
                 const titleDiff = titleA.localeCompare(titleB);
                 if (titleDiff !== 0) return titleDiff;
 
-                return String(a.sessionKey || a.sessionId || "").localeCompare(String(b.sessionKey || b.sessionId || ""));
+                const keyA = String(a.uniqueStreamKey || a.sessionKey || a.sessionId || "");
+                const keyB = String(b.uniqueStreamKey || b.sessionKey || b.sessionId || "");
+                return keyA.localeCompare(keyB);
             });
         };
 
@@ -8035,6 +8037,76 @@ async function runTestSuite() {
             const expectedKeys = sortedUserAsc.map(s => s.sessionKey).join(",");
             if (keys !== expectedKeys) {
                 throw new Error(`Sorting was unstable on shuffle iteration ${i}! Got: ${keys}, expected: ${expectedKeys}`);
+            }
+        }
+
+        // 6. Test Multi-Server Identical Raw Session Key Resolution & Zero Key Collisions
+        // Plex servers frequently start session keys at "1" or "2" on each separate server.
+        // Verify that globally uniqueStreamKey prevents React duplicate key collisions and DOM ghost cards.
+        const collidingSessions = [
+            {
+                instanceId: "plex_server_1",
+                serverName: "MainPlexServer",
+                sessionKey: "1",
+                sessionId: "1",
+                uniqueStreamKey: "plex_server_1_1_Alice_Dune",
+                user: "Alice",
+                title: "Dune: Part Two",
+                streamBitrate: 20000,
+                progressPercent: 50,
+                videoDecision: "direct play"
+            },
+            {
+                instanceId: "plex_server_2",
+                serverName: "KidsPlexServer",
+                sessionKey: "1", // IDENTICAL raw sessionKey from second server
+                sessionId: "1",
+                uniqueStreamKey: "plex_server_2_1_Bob_Finding_Nemo",
+                user: "Bob",
+                title: "Finding Nemo",
+                streamBitrate: 8000,
+                progressPercent: 20,
+                videoDecision: "transcode"
+            },
+            {
+                // Stopped or ghost session from Plex (should be filtered out)
+                instanceId: "plex_server_1",
+                serverName: "MainPlexServer",
+                sessionKey: "2",
+                user: "Plex User",
+                state: "stopped",
+                title: ""
+            }
+        ];
+
+        // Filter ghost/stopped streams exactly as page.tsx and admin-detailed-streams.tsx do
+        const cleanedColliding = collidingSessions.filter((s: any) => 
+            s && (s.title || s.grandparentTitle || s.fullTitle) && s.state !== "stopped"
+        );
+        if (cleanedColliding.length !== 2) {
+            throw new Error(`Expected ghost/stopped stream to be filtered out, got length ${cleanedColliding.length}`);
+        }
+
+        // Ensure uniqueStreamKeys are 100% unique across all cards
+        const seenKeys = new Set<string>();
+        for (const s of cleanedColliding) {
+            const reactKey = s.uniqueStreamKey || `${s.serverName}_${s.sessionKey}_${s.user}`;
+            if (seenKeys.has(reactKey)) {
+                throw new Error(`Duplicate React key detected: "${reactKey}"! This causes ghost streams in React reconciliation.`);
+            }
+            seenKeys.add(reactKey);
+        }
+
+        // Verify changing the sort across all 6 modes produces zero ghost cards and preserves 2 items
+        const modes = ["user_asc", "user_desc", "server", "bandwidth", "progress", "transcode_first"];
+        for (const mode of modes) {
+            const sorted = sortSessions(cleanedColliding, mode);
+            if (sorted.length !== 2) {
+                throw new Error(`Sort mode "${mode}" changed session count: expected 2, got ${sorted.length}`);
+            }
+            const modeKeys = sorted.map(s => s.uniqueStreamKey);
+            if (new Set(modeKeys).size !== 2) {
+                throw new Error(`Key collision occurred under sort mode "${mode}"!`);
             }
         }
     });

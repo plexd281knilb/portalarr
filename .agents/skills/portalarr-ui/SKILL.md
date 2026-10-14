@@ -875,6 +875,31 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 - **Bidirectional State Synchronization**:
   - Any server-level status toggles must update both `configuredServers` and `discoveredServers` state arrays simultaneously, preventing desynchronized UI switches when viewing secondary details.
 
+### 16. Stream Telemetry, React Reconciliation Key Stability & Ghost Stream Immunity
+- **Plex Session Key Collision Vulnerability**:
+  - Plex Media Server assigns integer session keys starting at `"1"` or `"2"` independently on each server instance.
+  - In multi-server environments (e.g. `MainPlexServer` and `KidsPlexServer`), two concurrent active streams frequently share identical `sessionKey: "1"`.
+  - Binding `<Card key={session.sessionKey}>` causes catastrophic React virtual DOM reconciliation key collisions. When sort orders change, React cannot differentiate colliding elements, reuses/clones stale DOM nodes, and renders phantom or duplicate "ghost streams".
+- **Globally Unique React Stream Key Contract**:
+  - All streaming cards must bind a compound, globally unique key incorporating server identity, session key, user, and media:
+    ```tsx
+    key={session.uniqueStreamKey || `${session.serverName}_${session.sessionKey}_${session.user}_${idx}`}
+    ```
+  - Backend actions (`getAdminDetailedStreamsAction`, `getUserPlexHubData`) must construct `uniqueStreamKey`:
+    ```ts
+    const uniqueStreamKey = `plex_${srv.serverId || srv.serverName}_${rawSessionKey}_${userTitle}_${s.ratingKey || fullTitle}`.replace(/[^a-zA-Z0-9_-]/g, "_");
+    ```
+- **Defensive Stream Array Sanitization**:
+  - When clients disconnect or when PMS reports empty XML containers, Plex can return empty session objects `{}` or lingering `state: "stopped"` items.
+  - Memoized stream sorting (`useMemo`) must defensively sanitize the stream array prior to sorting:
+    ```ts
+    const list = filteredSessions.filter((s: any) => 
+        s && (s.title || s.grandparentTitle || s.fullTitle) && s.state !== "stopped"
+    );
+    ```
+- **Deterministic Multi-Tier Tiebreaker Chain**:
+  - Stream sorting must always culminate in a stable 4-tier tiebreaker (`user` ➔ `serverName` ➔ `title` ➔ `uniqueStreamKey`) so stream cards maintain 100% position stability across background polling intervals and sorting changes without visual jitter.
+
 ---
 
 As the Portalarr frontend evolves or new design decisions are finalized:
