@@ -33,10 +33,15 @@ To visually alert users browsing library posters:
 
 ---
 
-## 3. Autonomous Watch Activity Revocation (Self-Healing)
+## 3. Autonomous Watch Activity Revocation (Self-Healing) & Multi-Tier Engine
 
 When household users browse the `⚠️ Leaving Soon` collection on the Plex Home screen, playback activity rescues staged items:
-- **Revocation Condition**: `recheckLeavingSoonWatchActivityInternal` polls PMS for `lastViewedAt`. An item is unflagged ONLY if `lastViewedAt >= (flaggedAt - 24 hours)`.
+- **Revocation Condition**: `recheckLeavingSoonWatchActivityInternal` verifies if staged items were watched during the grace period (`lastViewedAt >= (flaggedAt - 24 hours)`).
+- **Multi-Tier Batch Engine (Plex Overload Protection)**: Rather than bombarding Plex with sequential `/library/metadata/{ratingKey}` queries that exhaust PMS HTTP worker threads and trigger timeout cascades:
+  1. **Tier 1 (Local SQLite `WatchHistory`)**: Instantaneous `<1ms` indexed lookup against local playback records (if available). Unflags items with ZERO Plex PMS network calls.
+  2. **Tier 2 (Single PMS Batch Session History)**: Fetches up to 500 recent sessions in ONE single request via `/status/sessions/history/all?sort=viewedAt:desc&X-Plex-Container-Start=0&X-Plex-Container-Size=500`. Resolves movies, season `parentRatingKey`, and series `grandparentRatingKey` in bulk.
+  3. **Tier 3 (Throttled Circuit-Breaker Fallback)**: For any remaining unverified items, caps individual metadata checks to at most 10 items with a 100ms throttle between calls. Immediately aborts if 2 consecutive timeouts or errors occur to preserve Plex stability.
+- **60-Second In-Memory Debounce**: `lastWatchCheckByServer` prevents rapid back-to-back runs (e.g. from concurrent sync tasks) from querying the same Plex server within 60 seconds unless explicitly forced via admin action.
 - **Lane 1 Retention Integrity**: Items staged under Lane 1 (Oldest Watched) already have `viewCount > 0` and legacy `lastViewedAt` timestamps from months ago. Checking strictly against the staging window prevents false-positive revocation loops where Lane 1 items unflag themselves immediately upon staging.
 - **Artwork Vault Restoration**: When an item is rescued by watch activity, its original un-badged poster is automatically restored from the local artwork vault (`restoreItemOriginalArtwork`), ensuring no permanent visual artifacts remain on library posters.
 

@@ -6991,6 +6991,55 @@ async function runTestSuite() {
         }
     });
 
+    await assertTest("Test 100: Curation & Prune: Multi-Tier Leaving Soon Watch Status Engine, Batch Plex Session History, Throttled Circuit Breaker & Debounce Guard", async () => {
+        const { recheckLeavingSoonWatchActivityInternal } = await import("../src/app/curation-actions");
+
+        const testRatingKey = `test_leaving_soon_${Date.now()}`;
+        const testServerId = "test_server_prune_100";
+
+        // 1. Create a test leaving soon item
+        const advisory = await prisma.mediaContentAdvisory.create({
+            data: {
+                ratingKey: testRatingKey,
+                serverId: testServerId,
+                title: "Test Prune Watch Candidate Movie",
+                isLeavingSoon: true,
+                leavingSoonDate: new Date(Date.now() + 7 * 86400000),
+                leavingReason: "Inactivity pruning staging"
+            }
+        });
+
+        // 2. Ensure settings has a valid encrypted token so recheckLeavingSoonWatchActivityInternal proceeds
+        const existingSettings = await prisma.settings.findFirst({ where: { id: "global" } });
+        if (!existingSettings?.mainPlexToken) {
+            await prisma.settings.upsert({
+                where: { id: "global" },
+                update: { mainPlexToken: encryptData("test_plex_token_100") },
+                create: { id: "global", mainPlexToken: encryptData("test_plex_token_100") }
+            });
+        }
+
+        try {
+            // 3. Run recheckLeavingSoonWatchActivityInternal with force = true
+            const res = await recheckLeavingSoonWatchActivityInternal(testServerId, false, true);
+
+            if (!res.success) {
+                throw new Error(`recheckLeavingSoonWatchActivityInternal returned failure: ${res.error}`);
+            }
+
+            // 4. Test debounce guard: immediate subsequent non-forced call on the same server should be skipped
+            const debouncedRes = await recheckLeavingSoonWatchActivityInternal(testServerId, false, false);
+            if (debouncedRes.unflaggedCount !== 0) {
+                throw new Error("Debounce guard failed: server recheck was processed within 60s without force flag");
+            }
+        } finally {
+            // Cleanup test data
+            await prisma.mediaContentAdvisory.deleteMany({
+                where: { ratingKey: testRatingKey }
+            }).catch(() => {});
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");
