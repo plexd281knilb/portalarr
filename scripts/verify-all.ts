@@ -8230,6 +8230,153 @@ async function runTestSuite() {
         }
     });
 
+    await assertTest("Test 106: Live Stream Telemetry Diagnostics, Household Anchoring Badges, Timing ETA & Audio/Subtitle Burn-In Detection", async () => {
+        const { 
+            formatDurationMs, 
+            formatEtaTimestamp, 
+            formatAudioChannels, 
+            formatResolution, 
+            extractStreamTelemetry,
+            isPrivateOrLocalIp,
+            normalizeIp,
+            isMobileRoamingDevice,
+            isFixedHomeDevice
+        } = await import("../src/lib/telemetry/stream-tracker");
+
+        // 1. Clock and Duration formatting
+        if (formatDurationMs(3665000) !== "1:01:05") {
+            throw new Error(`Expected 1:01:05, got ${formatDurationMs(3665000)}`);
+        }
+        if (formatDurationMs(125000) !== "2:05") {
+            throw new Error(`Expected 2:05, got ${formatDurationMs(125000)}`);
+        }
+        if (formatDurationMs(0) !== "0:00") {
+            throw new Error(`Expected 0:00, got ${formatDurationMs(0)}`);
+        }
+
+        const testFuture = new Date("2026-10-14T14:45:00").getTime();
+        const etaFormatted = formatEtaTimestamp(testFuture);
+        if (!etaFormatted.includes("2:45") || !etaFormatted.includes("PM")) {
+            throw new Error(`Expected friendly ETA e.g. 2:45 PM, got ${etaFormatted}`);
+        }
+
+        // 2. Audio Channel nomenclature
+        if (formatAudioChannels(8) !== "7.1") throw new Error(`Expected 7.1, got ${formatAudioChannels(8)}`);
+        if (formatAudioChannels(6) !== "5.1") throw new Error(`Expected 5.1, got ${formatAudioChannels(6)}`);
+        if (formatAudioChannels(2) !== "Stereo") throw new Error(`Expected Stereo, got ${formatAudioChannels(2)}`);
+        if (formatAudioChannels(1) !== "Mono") throw new Error(`Expected Mono, got ${formatAudioChannels(1)}`);
+
+        // 3. Resolution Formatting
+        if (formatResolution("2160") !== "4K UHD") throw new Error(`Expected 4K UHD, got ${formatResolution("2160")}`);
+        if (formatResolution("1080p") !== "1080p") throw new Error(`Expected 1080p, got ${formatResolution("1080p")}`);
+        if (formatResolution("720") !== "720p") throw new Error(`Expected 720p, got ${formatResolution("720")}`);
+
+        // 4. Extract telemetry from Plex active session with HDR, subtitle burn-in, and NVENC transcode speed
+        const mockPlexSession = {
+            duration: 7200000, // 2 hours in ms
+            viewOffset: 3600000, // 1 hour in ms
+            Media: [{
+                videoResolution: "2160",
+                videoCodec: "hevc",
+                Part: [{
+                    Stream: [
+                        { streamType: 1, codec: "hevc", colorTrc: "smpte2084", doviTitle: "Dolby Vision" },
+                        { streamType: 2, codec: "truehd", channels: 8, selected: 1 },
+                        { streamType: 3, codec: "pgs", language: "English", selected: 1, burn: 1 }
+                    ]
+                }]
+            }],
+            TranscodeSession: {
+                videoResolution: "1080",
+                videoCodec: "h264",
+                audioCodec: "aac",
+                audioChannels: 2,
+                speed: 2.8,
+                throttled: true,
+                subtitleDecision: "burn"
+            },
+            Player: {
+                address: "192.168.1.105",
+                local: true,
+                device: "Apple TV",
+                platform: "tvOS"
+            },
+            User: {
+                thumb: "https://plex.tv/users/avatar123.jpg"
+            }
+        };
+
+        const plexTelemetry = extractStreamTelemetry(mockPlexSession);
+        if (plexTelemetry.progressPercent !== 50) {
+            throw new Error(`Expected 50% progress, got ${plexTelemetry.progressPercent}`);
+        }
+        if (plexTelemetry.sourceResolution !== "4K UHD" || plexTelemetry.streamResolution !== "1080p") {
+            throw new Error(`Unexpected resolutions: ${plexTelemetry.sourceResolution} -> ${plexTelemetry.streamResolution}`);
+        }
+        if (plexTelemetry.hdrFormat !== "Dolby Vision") {
+            throw new Error(`Expected Dolby Vision HDR format, got ${plexTelemetry.hdrFormat}`);
+        }
+        if (plexTelemetry.sourceAudioCodec !== "TRUEHD" || plexTelemetry.sourceAudioChannels !== "7.1") {
+            throw new Error(`Expected TRUEHD 7.1, got ${plexTelemetry.sourceAudioCodec} ${plexTelemetry.sourceAudioChannels}`);
+        }
+        if (plexTelemetry.streamAudioCodec !== "AAC" || plexTelemetry.streamAudioChannels !== "Stereo") {
+            throw new Error(`Expected AAC Stereo, got ${plexTelemetry.streamAudioCodec} ${plexTelemetry.streamAudioChannels}`);
+        }
+        if (!plexTelemetry.isSubtitleBurnIn) {
+            throw new Error("Expected subtitle burn-in to be detected");
+        }
+        if (plexTelemetry.transcodeSpeed !== "2.8x" || !plexTelemetry.transcodeThrottled) {
+            throw new Error(`Expected 2.8x throttled transcode, got ${plexTelemetry.transcodeSpeed}`);
+        }
+        if (plexTelemetry.connectionMode !== "lan" || !plexTelemetry.connectionLabel.includes("Direct LAN")) {
+            throw new Error(`Expected Direct LAN connection mode, got ${plexTelemetry.connectionLabel}`);
+        }
+
+        // 5. Extract telemetry from Tautulli session (seconds-based duration/view_offset, remote WAN)
+        const mockTautulliSession = {
+            duration: 3600, // 1 hour in seconds
+            view_offset: 900, // 15 mins in seconds
+            video_resolution: "1080",
+            stream_video_resolution: "720",
+            video_codec: "h264",
+            stream_video_codec: "h264",
+            audio_codec: "dca",
+            audio_channels: "6",
+            stream_audio_codec: "aac",
+            stream_audio_channels: "2",
+            ip_address: "73.18.99.120",
+            transcode_speed: 1.4,
+            subtitles: 1,
+            subtitle_codec: "srt",
+            subtitle_language: "Spanish"
+        };
+
+        const tautulliTelemetry = extractStreamTelemetry(mockTautulliSession);
+        if (tautulliTelemetry.durationMs !== 3600000 || tautulliTelemetry.viewOffsetMs !== 900000) {
+            throw new Error(`Tautulli seconds conversion failed: dur=${tautulliTelemetry.durationMs}, view=${tautulliTelemetry.viewOffsetMs}`);
+        }
+        if (tautulliTelemetry.progressPercent !== 25) {
+            throw new Error(`Expected 25% progress, got ${tautulliTelemetry.progressPercent}`);
+        }
+        if (tautulliTelemetry.connectionMode !== "wan" || !tautulliTelemetry.connectionLabel.includes("Direct WAN")) {
+            throw new Error(`Expected Direct WAN mode, got ${tautulliTelemetry.connectionLabel}`);
+        }
+        if (tautulliTelemetry.sourceAudioChannels !== "5.1" || tautulliTelemetry.streamAudioChannels !== "Stereo") {
+            throw new Error(`Audio channel parsing failed: ${tautulliTelemetry.sourceAudioChannels} -> ${tautulliTelemetry.streamAudioChannels}`);
+        }
+
+        // 6. Device typology and household anchoring heuristics
+        if (!isFixedHomeDevice("Apple TV", "tvOS", "Plex for Apple TV")) {
+            throw new Error("Apple TV should be classified as fixed home device");
+        }
+        if (!isMobileRoamingDevice("iPhone 15 Pro", "iOS", "Plex for iOS")) {
+            throw new Error("iPhone should be classified as mobile roaming device");
+        }
+        if (isMobileRoamingDevice("Roku Ultra", "Roku", "Plex")) {
+            throw new Error("Roku Ultra should NOT be classified as mobile roaming");
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

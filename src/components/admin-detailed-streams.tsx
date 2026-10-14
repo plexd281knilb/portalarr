@@ -20,7 +20,7 @@ import {
     Play, Pause, XCircle, Zap, Shield, Sparkles, Loader2, Server,
     Layers, Trophy, Flame, Filter, BarChart3, CheckCircle2,
     ShieldAlert, History, Users, Search, Trash2, Clock, Globe,
-    ArrowUpDown
+    ArrowUpDown, Volume2
 } from "lucide-react";
 
 export default function AdminDetailedStreams() {
@@ -647,17 +647,29 @@ export default function AdminDetailedStreams() {
 
                                         <div className="space-y-1 min-w-0 flex-1">
                                             <div className="flex flex-wrap items-center gap-1.5">
-                                                <Badge className="text-[10px] font-bold bg-primary/20 text-primary border-primary/30">
-                                                    👤 {stream.user}
+                                                <Badge className="text-[10px] font-bold bg-primary/20 text-primary border-primary/30 flex items-center gap-1">
+                                                    {stream.userThumb ? (
+                                                        <img src={stream.userThumb} alt="" className="w-3.5 h-3.5 rounded-full object-cover shrink-0" onError={(e) => { (e.target as HTMLElement).style.display = "none"; }} />
+                                                    ) : (
+                                                        <span>👤</span>
+                                                    )}
+                                                    {stream.user}
                                                 </Badge>
+                                                {stream.householdBadge && (
+                                                    <Badge 
+                                                        variant="outline" 
+                                                        className={`text-[9px] font-bold px-1.5 py-0 border ${stream.householdBadge.color} ${stream.isSharingAlert ? "animate-pulse" : ""}`}
+                                                        title={stream.householdBadge.desc}
+                                                    >
+                                                        {stream.householdBadge.label}
+                                                    </Badge>
+                                                )}
                                                 <Badge variant="outline" className="text-[10px] text-muted-foreground">
                                                     🖥️ {stream.serverName}
                                                 </Badge>
-                                                {stream.ipAddress && (
-                                                    <span className="text-[10px] font-mono text-muted-foreground/80">
-                                                        ({stream.ipAddress})
-                                                    </span>
-                                                )}
+                                                <span className="text-[10px] font-mono text-muted-foreground/80">
+                                                    {stream.connectionLabel || (stream.ipAddress ? `(${stream.ipAddress})` : "")}
+                                                </span>
                                                 {/* MULTI-IP SHARING ALERT BADGE */}
                                                 {stream.isSharingAlert && (
                                                     <Badge className="text-[10px] font-extrabold bg-rose-500/20 text-rose-300 border-rose-500/40 gap-1 animate-pulse" title={stream.sharingReason || "Multi-IP stream"}>
@@ -676,7 +688,7 @@ export default function AdminDetailedStreams() {
                                                         {stream.userActiveStreamCount} Concurrent
                                                     </Badge>
                                                 )}
-                                                {/* STREAM PLAYBACK MODE: only show TRANSCODING if it's using video transcoding power */}
+                                                {/* STREAM PLAYBACK MODE */}
                                                 {isTranscoding ? (
                                                     <Badge className="text-[10px] font-bold bg-amber-500/20 text-amber-300 border-amber-500/40 gap-1 animate-pulse">
                                                         <Zap className="h-3 w-3 text-amber-400" />
@@ -742,22 +754,42 @@ export default function AdminDetailedStreams() {
                                                     <Monitor className="h-3 w-3 text-primary" />
                                                     {stream.player} {stream.device ? `• ${stream.device}` : ""}
                                                 </span>
+                                                {stream.sourceResolution && (
+                                                    <span className="px-1.5 py-0.2 rounded font-mono font-bold text-[9px] bg-white/[0.06] text-foreground border border-white/10">
+                                                        {stream.sourceResolution !== stream.streamResolution && stream.streamResolution 
+                                                            ? `${stream.sourceResolution} ➔ ${stream.streamResolution}` 
+                                                            : (stream.streamResolution || stream.sourceResolution)}
+                                                    </span>
+                                                )}
+                                                {stream.hdrFormat && (
+                                                    <Badge className="text-[9px] font-bold bg-amber-500/20 text-amber-300 border-amber-500/30 font-mono py-0">
+                                                        ✨ {stream.hdrFormat}
+                                                    </Badge>
+                                                )}
                                                 <span>•</span>
                                                 <span className="font-mono">{stream.streamBitrate ? (stream.streamBitrate >= 1000 ? `${(stream.streamBitrate / 1000).toFixed(1)} Mbps` : `${stream.streamBitrate} kbps`) : ""}</span>
                                             </div>
 
-                                            {/* Progress */}
+                                            {/* Progress, Clock & Finish ETA */}
                                             <div className="space-y-0.5 pt-1 max-w-sm">
-                                                <div className="flex justify-between text-[10px] text-muted-foreground">
-                                                    <span>Progress</span>
-                                                    <span>{stream.progressPercent || 0}%</span>
+                                                <div className="flex justify-between items-center text-[10px] text-muted-foreground font-mono">
+                                                    <span className="text-foreground/90 font-semibold">
+                                                        {stream.viewOffsetFormatted || "0:00"} / {stream.durationFormatted || "0:00"} ({stream.progressPercent || 0}%)
+                                                    </span>
+                                                    {stream.etaTime ? (
+                                                        <span className="text-primary font-medium">
+                                                            Ends {stream.etaTime} {stream.remainingFormatted ? `(-${stream.remainingFormatted})` : ""}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="capitalize">{stream.state || "playing"}</span>
+                                                    )}
                                                 </div>
                                                 <Progress value={stream.progressPercent || 0} className="h-1 bg-muted/40" />
                                             </div>
                                         </div>
                                     </div>
 
-                                    {/* Middle: Transcode Specs */}
+                                    {/* Middle/Right: Transcode Specs, Audio & Subtitles */}
                                     <div className="flex flex-wrap md:flex-col items-start md:items-end gap-1.5 text-xs shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-border/30 w-full md:w-auto">
                                         <div className="flex items-center gap-1.5">
                                             <span className="text-[10px] text-muted-foreground">Video:</span>
@@ -769,9 +801,15 @@ export default function AdminDetailedStreams() {
                                                         : "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
                                                 }`}
                                             >
-                                                {isTranscoding ? "TRANSCODE" : "DIRECT PLAY"} ({stream.videoCodec || "RAW"})
+                                                {isTranscoding ? "TRANSCODE" : "DIRECT PLAY"} ({stream.videoCodec !== stream.streamVideoCodec && stream.streamVideoCodec ? `${stream.videoCodec} ➔ ${stream.streamVideoCodec}` : (stream.videoCodec || "RAW")})
                                             </Badge>
                                         </div>
+
+                                        {isTranscoding && stream.transcodeSpeed && (
+                                            <Badge variant="outline" className="text-[9px] font-mono bg-amber-500/10 text-amber-300 border-amber-500/30">
+                                                ⚡ {stream.transcodeSpeed} {stream.transcodeThrottled ? "(Throttled)" : ""}
+                                            </Badge>
+                                        )}
 
                                         <div className="flex items-center gap-1.5">
                                             <span className="text-[10px] text-muted-foreground">Audio:</span>
@@ -784,9 +822,20 @@ export default function AdminDetailedStreams() {
                                                 }`}
                                                 title={isAudioTranscoding ? "Audio conversion (Direct Stream - minimal CPU, no transcoding power)" : "Direct Play audio"}
                                             >
-                                                {isAudioTranscoding ? "CONVERT" : "DIRECT PLAY"} ({stream.audioCodec || "RAW"})
+                                                {isAudioTranscoding ? "CONVERT" : "DIRECT PLAY"} ({stream.sourceAudioCodec || stream.audioCodec || "RAW"}{stream.sourceAudioChannels ? ` ${stream.sourceAudioChannels}` : ""}{(stream.sourceAudioCodec !== stream.streamAudioCodec && stream.streamAudioCodec) ? ` ➔ ${stream.streamAudioCodec}` : ""})
                                             </Badge>
                                         </div>
+
+                                        {stream.hasSubtitle && (
+                                            <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                                                <span>💬 {stream.subtitleLanguage || "Sub"} {stream.subtitleCodec ? `(${stream.subtitleCodec})` : ""}</span>
+                                                {stream.isSubtitleBurnIn && (
+                                                    <Badge variant="outline" className="text-[9px] font-bold bg-rose-500/20 text-rose-300 border-rose-500/40 animate-pulse" title="Subtitles are being burned into video, forcing CPU/GPU transcode">
+                                                        🔥 Burned In
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                        )}
 
                                         {isHw && (
                                             <Badge variant="outline" className="text-[9px] bg-cyan-500/20 text-cyan-300 border-cyan-500/40 gap-1 font-mono">

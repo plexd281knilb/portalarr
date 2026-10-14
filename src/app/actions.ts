@@ -48,6 +48,12 @@ import {
     getUserDetailedTelemetry,
     getStreamIntelligenceAnalytics,
     isPrivateOrLocalIp,
+    normalizeIp,
+    isMobileRoamingDevice,
+    isFixedHomeDevice,
+    extractStreamTelemetry,
+    formatDurationMs,
+    formatEtaTimestamp,
     type WatchHistoryQueryOptions 
 } from "@/lib/telemetry/stream-tracker";
 import { diagnoseStreamSettings, detectDeviceCategory } from "@/lib/telemetry/device-diagnostics";
@@ -15430,12 +15436,20 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
         if (!skipAuth) {
             await verifyAdmin();
         }
-        const [tautulliInstances, glances, plexServers, settings] = await Promise.all([
+        const [tautulliInstances, glances, plexServers, settings, userProfiles] = await Promise.all([
             prisma.tautulliInstance.findMany({ orderBy: { createdAt: 'asc' } }).catch(() => []),
             prisma.glancesInstance.findMany({ orderBy: { createdAt: 'asc' } }).catch(() => []),
             prisma.plexServer.findMany({ orderBy: { createdAt: 'asc' } }).catch(() => []),
-            prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null)
+            prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null),
+            getUserStreamProfiles().catch(() => [])
         ]);
+
+        const userProfileMap = new Map<string, any>();
+        for (const up of userProfiles) {
+            if (up?.user) {
+                userProfileMap.set(up.user.toLowerCase().trim(), up);
+            }
+        }
 
         const allSessions: any[] = [];
         let totalStreamCount = 0;
@@ -15543,6 +15557,8 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
                             };
 
                             sessionItem.deviceDiagnosis = diagnoseStreamSettings(sessionItem);
+                            const telemetry = extractStreamTelemetry(s);
+                            Object.assign(sessionItem, telemetry);
                             allSessions.push(sessionItem);
                         }
                     }
@@ -15646,6 +15662,11 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
                             };
 
                             sessionItem.deviceDiagnosis = diagnoseStreamSettings(sessionItem);
+                            const telemetry = extractStreamTelemetry(s);
+                            Object.assign(sessionItem, telemetry);
+                            if (telemetry.userThumb && telemetry.userThumb.startsWith("/") && srv.serverUrl && srv.token) {
+                                sessionItem.userThumb = `${srv.serverUrl}${telemetry.userThumb}?X-Plex-Token=${encodeURIComponent(srv.token)}`;
+                            }
                             allSessions.push(sessionItem);
                         }
                     }
@@ -15781,10 +15802,13 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
         const analysesMap = analyzeActiveSessionsForSharing(allSessions, settings?.maxConcurrentStreamsPerUser || 3);
         const userAnalysesList = Array.from(analysesMap.values());
 
-        // Annotate each session with user connection & sharing telemetry
+        // Annotate each session with user connection & sharing telemetry and household anchoring
         for (const s of allSessions) {
-            const rawUser = (s.user || s.User?.title || s.User?.username || s.username || "Plex User").trim().toLowerCase();
-            const analysis = analysesMap.get(rawUser);
+            const rawUser = (s.user || s.User?.title || s.User?.username || s.username || "Plex User").trim();
+            const userKey = rawUser.toLowerCase();
+            const analysis = analysesMap.get(userKey);
+            const profile = userProfileMap.get(userKey);
+
             if (analysis) {
                 s.userActiveStreamCount = analysis.activeSessionsCount;
                 s.isMultiIp = analysis.isMultiIp;
@@ -15800,6 +15824,50 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
                 s.isSharingAlert = false;
                 s.userDistinctIps = s.ipAddress ? [s.ipAddress] : [];
                 s.userPublicIps = [];
+            }
+
+            // Determine Household Anchoring Badge
+            const cleanIp = normalizeIp(s.ipAddress);
+            const isLocal = isPrivateOrLocalIp(cleanIp);
+            const isMobile = isMobileRoamingDevice(s.device, s.platform, s.player);
+            const primaryHomeIp = profile?.sharingAssessment?.primaryHomeIp;
+            const secondaryHomeIp = profile?.sharingAssessment?.secondaryHomeIp;
+
+            if (s.isSharingAlert) {
+                s.householdBadge = {
+                    label: "🚨 Suspected Sharing",
+                    type: "sharing",
+                    color: "bg-rose-500/20 text-rose-300 border-rose-500/40",
+                    desc: s.sharingReason || "Simultaneous stream from distinct public IP"
+                };
+            } else if (isLocal || (primaryHomeIp && cleanIp === primaryHomeIp)) {
+                s.householdBadge = {
+                    label: "🏡 Primary Home",
+                    type: "primary",
+                    color: "bg-emerald-500/20 text-emerald-300 border-emerald-500/40",
+                    desc: isLocal ? "Local private home network" : `Primary Home IP (${cleanIp})`
+                };
+            } else if (secondaryHomeIp && cleanIp === secondaryHomeIp) {
+                s.householdBadge = {
+                    label: "🏡 2nd Home / Cabin",
+                    type: "second_home",
+                    color: "bg-cyan-500/20 text-cyan-300 border-cyan-500/40",
+                    desc: `Secondary Residence (${cleanIp})`
+                };
+            } else if (isMobile) {
+                s.householdBadge = {
+                    label: "📱 Mobile Roaming",
+                    type: "mobile",
+                    color: "bg-purple-500/20 text-purple-300 border-purple-500/40",
+                    desc: `Mobile / Cellular player (${cleanIp || "Remote"})`
+                };
+            } else {
+                s.householdBadge = {
+                    label: "✈️ Travel / Away",
+                    type: "away",
+                    color: "bg-amber-500/20 text-amber-300 border-amber-500/40",
+                    desc: `Remote away streaming (${cleanIp || "Remote IP"})`
+                };
             }
         }
 

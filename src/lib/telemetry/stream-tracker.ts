@@ -172,6 +172,205 @@ export function isMobileRoamingDevice(device?: string | null, platform?: string 
 }
 
 /**
+ * Formats milliseconds into human-readable H:MM:SS or M:SS clock string
+ */
+export function formatDurationMs(ms?: number | null): string {
+    if (!ms || ms <= 0 || isNaN(ms)) return "0:00";
+    const totalSecs = Math.floor(ms / 1000);
+    const hours = Math.floor(totalSecs / 3600);
+    const minutes = Math.floor((totalSecs % 3600) / 60);
+    const seconds = totalSecs % 60;
+    if (hours > 0) {
+        return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+    }
+    return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+/**
+ * Formats a future ETA epoch timestamp into a friendly clock string (e.g. "1:45 PM")
+ */
+export function formatEtaTimestamp(etaMs?: number | null): string {
+    if (!etaMs || isNaN(etaMs)) return "";
+    try {
+        const date = new Date(etaMs);
+        let hours = date.getHours();
+        const minutes = date.getMinutes();
+        const ampm = hours >= 12 ? "PM" : "AM";
+        hours = hours % 12;
+        hours = hours ? hours : 12;
+        return `${hours}:${String(minutes).padStart(2, "0")} ${ampm}`;
+    } catch {
+        return "";
+    }
+}
+
+/**
+ * Formats audio channel counts into standard home theater nomenclature
+ */
+export function formatAudioChannels(channels?: number | string | null): string {
+    if (!channels) return "";
+    const c = Number(channels);
+    if (isNaN(c) || c <= 0) return "";
+    if (c >= 8) return "7.1";
+    if (c >= 6) return "5.1";
+    if (c === 2) return "Stereo";
+    if (c === 1) return "Mono";
+    return `${c}ch`;
+}
+
+/**
+ * Formats video resolution tags into clean display badges
+ */
+export function formatResolution(res?: string | null): string {
+    if (!res) return "";
+    const r = String(res).toLowerCase().trim();
+    if (r === "4k" || r === "2160" || r === "2160p" || r === "uhd") return "4K UHD";
+    if (r === "1080" || r === "1080p") return "1080p";
+    if (r === "720" || r === "720p") return "720p";
+    if (r === "480" || r === "480p" || r === "sd") return "480p";
+    return String(res).toUpperCase();
+}
+
+/**
+ * Detects dynamic range & HDR formats from video stream metadata
+ */
+export function detectHdrFormat(videoStream?: any, media?: any): string | null {
+    const dovi = Boolean(
+        videoStream?.doviProfile || 
+        videoStream?.doviTitle || 
+        videoStream?.doviPresent ||
+        media?.videoProfile?.toLowerCase().includes("dovi") || 
+        media?.videoProfile?.toLowerCase().includes("dv")
+    );
+    if (dovi) return "Dolby Vision";
+    const trc = String(videoStream?.colorTrc || media?.colorTrc || "").toLowerCase();
+    if (trc.includes("smpte2084") || trc.includes("hdr10") || trc.includes("hdr")) return "HDR10";
+    if (trc.includes("arib-std-b67") || trc.includes("hlg")) return "HLG";
+    const space = String(videoStream?.colorSpace || media?.colorSpace || "").toLowerCase();
+    if (space.includes("bt2020")) return "HDR";
+    return null;
+}
+
+/**
+ * Extracts granular video, audio, timing, and connection telemetry from Plex or Tautulli active sessions
+ */
+export function extractStreamTelemetry(s: any) {
+    let durMs = Number(s.duration || s.durationMs || s.duration_ms || 0);
+    let viewMs = Number(s.viewOffset || s.viewOffsetMs || s.view_offset || s.view_offset_ms || 0);
+
+    // If duration is provided in seconds (e.g. from Tautulli API get_activity), convert to milliseconds
+    const isSeconds = s.view_offset !== undefined || (durMs > 0 && durMs < 86400 && s.viewOffset === undefined && !s.TranscodeSession && !s.Media);
+    if (isSeconds && durMs > 0) {
+        durMs = durMs * 1000;
+        viewMs = viewMs * 1000;
+    }
+
+    const progressPercent = s.progressPercent !== undefined 
+        ? Number(s.progressPercent) 
+        : (durMs > 0 ? Math.min(100, Math.round((viewMs / durMs) * 100)) : 0);
+
+    const remainingMs = Math.max(0, durMs - viewMs);
+    const etaMs = remainingMs > 0 && durMs > 0 ? (Date.now() + remainingMs) : null;
+
+    // Media & Video specs
+    const mediaObj = (s.Media && s.Media[0]) || s.media || {};
+    const partObj = (mediaObj.Part && mediaObj.Part[0]) || {};
+    const streamsList: any[] = Array.isArray(partObj.Stream) ? partObj.Stream : (Array.isArray(s.Stream) ? s.Stream : []);
+
+    const videoStream = streamsList.find((st: any) => st.streamType === 1 || st.streamType === "1" || st.codec_type === "video") || {};
+    const audioStream = streamsList.find((st: any) => (st.streamType === 2 || st.streamType === "2" || st.codec_type === "audio") && (st.selected || st.selected === 1 || st.selected === "1")) || streamsList.find((st: any) => st.streamType === 2 || st.streamType === "2") || {};
+    const subtitleStream = streamsList.find((st: any) => (st.streamType === 3 || st.streamType === "3" || st.codec_type === "subtitle") && (st.selected || st.selected === 1 || st.selected === "1"));
+
+    // Source vs Transcode Resolution
+    const rawSrcRes = mediaObj.videoResolution || s.video_resolution || s.videoResolution || videoStream.videoResolution || "";
+    const sourceResolution = formatResolution(rawSrcRes);
+
+    const rawStreamRes = s.TranscodeSession?.videoResolution || s.stream_video_resolution || rawSrcRes;
+    const streamResolution = formatResolution(rawStreamRes);
+
+    // HDR Format
+    const hdrFormat = detectHdrFormat(videoStream, mediaObj) || (s.video_dynamic_range || (mediaObj.videoProfile?.includes("dovi") ? "Dolby Vision" : null));
+
+    // Video Codecs
+    const videoCodec = (s.videoCodec || s.video_codec || mediaObj.videoCodec || videoStream.codec || "H264").toUpperCase();
+    const streamVideoCodec = (s.TranscodeSession?.videoCodec || s.stream_video_codec || videoCodec).toUpperCase();
+
+    // Audio Codecs & Channels
+    const sourceAudioCodec = (audioStream.codec || mediaObj.audioCodec || s.audio_codec || s.audioCodec || "AAC").toUpperCase();
+    const rawSrcChannels = audioStream.channels || mediaObj.audioChannels || s.audio_channels || s.audioChannels;
+    const sourceAudioChannels = formatAudioChannels(rawSrcChannels);
+
+    const streamAudioCodec = (s.TranscodeSession?.audioCodec || s.stream_audio_codec || sourceAudioCodec).toUpperCase();
+    const rawStreamChannels = s.TranscodeSession?.audioChannels || s.stream_audio_channels || rawSrcChannels;
+    const streamAudioChannels = formatAudioChannels(rawStreamChannels);
+
+    // Subtitles
+    const hasSubtitle = Boolean(subtitleStream || s.subtitles === 1 || s.subtitles === "1" || s.subtitle_codec);
+    const subtitleLanguage = subtitleStream?.language || subtitleStream?.languageCode || s.subtitle_language || null;
+    const subtitleCodec = (subtitleStream?.codec || s.subtitle_codec || "").toUpperCase();
+    const isSubtitleBurnIn = Boolean(
+        s.TranscodeSession?.subtitleDecision === "burn" || 
+        s.subtitle_decision === "burn" || 
+        subtitleStream?.burn === 1 ||
+        subtitleStream?.burn === "1" ||
+        subtitleStream?.burn === true
+    );
+
+    // Transcode Details
+    const transcodeSpeed = s.TranscodeSession?.speed 
+        ? `${Number(s.TranscodeSession.speed).toFixed(1)}x` 
+        : (s.transcode_speed ? `${Number(s.transcode_speed).toFixed(1)}x` : null);
+    const transcodeThrottled = Boolean(s.TranscodeSession?.throttled || s.transcode_throttled);
+
+    // Network / Tunneling
+    const isRelayed = Boolean(s.Player?.relayed || s.relayed === 1 || s.relayed === "1" || s.relayed === true);
+    const isSecure = Boolean(s.Player?.secure !== false && s.secure !== 0 && s.secure !== "0");
+    const cleanIp = normalizeIp(s.ipAddress || s.Player?.address || s.ip_address || "");
+    const isLocal = Boolean(s.Player?.local || isPrivateOrLocalIp(cleanIp));
+
+    let connectionMode: "relay" | "lan" | "wan" = "wan";
+    let connectionLabel = "🌐 Direct WAN";
+    if (isRelayed) {
+        connectionMode = "relay";
+        connectionLabel = "⚠️ Plex Relay (Throttled)";
+    } else if (isLocal) {
+        connectionMode = "lan";
+        connectionLabel = "⚡ Direct LAN";
+    }
+
+    return {
+        durationMs: durMs,
+        viewOffsetMs: viewMs,
+        progressPercent,
+        viewOffsetFormatted: formatDurationMs(viewMs),
+        durationFormatted: formatDurationMs(durMs),
+        remainingFormatted: formatDurationMs(remainingMs),
+        etaTime: etaMs ? formatEtaTimestamp(etaMs) : null,
+        sourceResolution,
+        streamResolution,
+        hdrFormat,
+        videoCodec,
+        streamVideoCodec,
+        sourceAudioCodec,
+        sourceAudioChannels,
+        streamAudioCodec,
+        streamAudioChannels,
+        hasSubtitle,
+        subtitleLanguage,
+        subtitleCodec,
+        isSubtitleBurnIn,
+        transcodeSpeed,
+        transcodeThrottled,
+        isRelayed,
+        isSecure,
+        isLocal,
+        connectionMode,
+        connectionLabel,
+        userThumb: s.User?.thumb || s.user_thumb || null
+    };
+}
+
+/**
  * Evaluates active stream sessions to detect concurrent connections and credential/password sharing
  */
 export function analyzeActiveSessionsForSharing(

@@ -251,8 +251,12 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
   - Zero `Math.random()` session key fallbacks: session keys derive deterministically from `${ratingKey}_${machineIdentifier || address || user}_${serverId}`, ensuring React DOM nodes are never unnecessarily unmounted or recreated between renders.
 - **Dialog Width Clamping Guard (`sm:max-w-4xl` / `sm:max-w-5xl`)**:
   - Radix `DialogContent` injects a default `sm:max-w-lg` class. Wide inspection cockpits (e.g. User Telemetry & Overlap modal, Watch History audit modal) must explicitly pass `w-[95vw] sm:w-[92vw] md:w-[90vw] max-w-5xl sm:max-w-5xl` with `min-w-0` to avoid viewport clamping on desktop and ensure side-by-side stream comparison cards fit cleanly.
-- **Session Telemetry Fidelity**:
-  - Active sessions display transcode decisions, hardware NVENC acceleration status, video/audio codecs, real-time bitrate, stream progress, user/device identifiers, and direct admin stream termination controls.
+- **Session Telemetry Fidelity & Household Anchoring**:
+  - **User & Household Anchoring**: Active session cards display user avatars (from Plex or local profiles) alongside the **Household Anchoring Badge**: `🏡 Primary Home` (emerald, local LAN or anchored to primary living room IP), `🏡 2nd Home / Cabin` (cyan, recurring vacation property or secondary residence), `📱 Mobile Roaming` (purple, cellular/mobile roaming players), `✈️ Travel / Away` (amber, remote travel), and pulsing `🚨 Suspected Sharing` (rose, simultaneous playback across distinct public residential IPs or dual living room TVs).
+  - **Connection Mode**: `⚡ Direct LAN`, `🌐 Direct WAN`, or `⚠️ Plex Relay (Throttled)`.
+  - **Video & Dynamic Range**: Resolution scaling badges (`4K UHD ➔ 1080p` or original resolution), HDR badges (`✨ Dolby Vision`, `✨ HDR10`), video codecs, real-time bitrate, and hardware NVENC acceleration status with transcode speed multipliers (`⚡ 2.8x (Fast/Throttled)` vs `< 1.0x (Buffering Risk)`).
+  - **Audio & Subtitle Diagnostics**: Channel and codec conversions (e.g. `TRUEHD 7.1 ➔ AAC Stereo` or `DTS-HD MA 5.1 (Direct)`), subtitle format/language (`💬 English SRT`), and prominent `🔥 Burned In` alert informing administrators when subtitle burn-in is forcing video transcoding.
+  - **Timing Clock & Finish ETA**: Displays elapsed/total clock time paired with real-time calculated ETA finish time: `42:15 / 1:00:20 (70%) • Ends at 1:45 PM (-18:05 left)`.
   - In Plex OAuth flow, register client application name as `DomsHomeLab`.
 
 ---

@@ -33,7 +33,7 @@ import {
     ShieldAlert, History, Users, Search, Trash2, Clock, Globe,
     Radio, AlertTriangle, Copy, Check, Download, ExternalLink,
     Stethoscope, Info, ChevronRight, Smartphone, Laptop,
-    Home, Compass, ShieldCheck, ArrowUpDown
+    Home, Compass, ShieldCheck, ArrowUpDown, Volume2
 } from "lucide-react";
 
 export default function StreamIntelligencePage() {
@@ -653,8 +653,17 @@ export default function StreamIntelligencePage() {
                                                         </p>
                                                     )}
 
-                                                    <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground pt-0.5">
-                                                        <Users className="h-3 w-3 text-cyan-400" />
+                                                    <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground pt-0.5 flex-wrap">
+                                                        {session.userThumb ? (
+                                                            <img 
+                                                                src={session.userThumb} 
+                                                                alt="" 
+                                                                className="w-4 h-4 rounded-full object-cover shrink-0 border border-slate-700" 
+                                                                onError={(e) => { (e.target as HTMLElement).style.display = "none"; }}
+                                                            />
+                                                        ) : (
+                                                            <Users className="h-3 w-3 text-cyan-400 shrink-0" />
+                                                        )}
                                                         <button 
                                                             type="button"
                                                             onClick={() => handleOpenUserModal(session.user)}
@@ -663,17 +672,30 @@ export default function StreamIntelligencePage() {
                                                         >
                                                             {session.user}
                                                         </button>
+                                                        {session.householdBadge && (
+                                                            <Badge 
+                                                                variant="outline" 
+                                                                className={`text-[9px] font-bold px-1.5 py-0 border ${session.householdBadge.color} ${session.isSharingAlert ? "animate-pulse" : ""}`}
+                                                                title={session.householdBadge.desc}
+                                                            >
+                                                                {session.householdBadge.label}
+                                                            </Badge>
+                                                        )}
                                                     </div>
 
-                                                    <div className="text-[10px] text-muted-foreground truncate">
-                                                        {session.player} • {session.device}
+                                                    <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground truncate pt-0.5">
+                                                        <span className="truncate">{session.player} • {session.device}</span>
+                                                        <span className="text-slate-600">•</span>
+                                                        <span className="font-mono text-slate-400 shrink-0">
+                                                            {session.connectionLabel || (session.location === "lan" ? "⚡ Direct LAN" : "🌐 Direct WAN")}
+                                                        </span>
                                                     </div>
                                                 </div>
                                             </div>
 
-                                            {/* Transcode & Telemetry Badges */}
-                                            <div className="px-4 py-2 bg-slate-950/60 border-y border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-[10px]">
-                                                <div className="flex items-center gap-1.5">
+                                            {/* Transcode, Video & Telemetry Badges */}
+                                            <div className="px-4 py-2 bg-slate-950/60 border-y border-slate-800/80 flex flex-wrap items-center justify-between gap-1.5 text-[10px]">
+                                                <div className="flex items-center gap-1.5 flex-wrap">
                                                     <span className={`px-2 py-0.5 rounded font-bold ${isTranscode ? "bg-amber-500/20 text-amber-300 border border-amber-500/40" : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"}`}>
                                                         {isTranscode ? "Transcode" : "Direct Play"}
                                                     </span>
@@ -682,11 +704,53 @@ export default function StreamIntelligencePage() {
                                                             NVENC HW
                                                         </Badge>
                                                     )}
+                                                    {isTranscode && session.transcodeSpeed && (
+                                                        <Badge variant="outline" className="text-[9px] font-mono bg-amber-500/10 text-amber-300 border-amber-500/30">
+                                                            ⚡ {session.transcodeSpeed} {session.transcodeThrottled ? "(Throttled)" : ""}
+                                                        </Badge>
+                                                    )}
+                                                    {session.sourceResolution && (
+                                                        <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[9px] bg-slate-800 text-slate-200 border border-slate-700">
+                                                            {session.sourceResolution !== session.streamResolution && session.streamResolution 
+                                                                ? `${session.sourceResolution} ➔ ${session.streamResolution}` 
+                                                                : (session.streamResolution || session.sourceResolution)}
+                                                        </span>
+                                                    )}
+                                                    {session.hdrFormat && (
+                                                        <Badge className="text-[9px] font-bold bg-amber-500/20 text-amber-300 border-amber-500/30 font-mono">
+                                                            ✨ {session.hdrFormat}
+                                                        </Badge>
+                                                    )}
                                                 </div>
 
-                                                <span className="font-mono text-muted-foreground">
-                                                    {session.videoCodec} • {session.streamBitrate ? `${(session.streamBitrate / 1000).toFixed(1)} Mbps` : "Auto"}
+                                                <span className="font-mono text-muted-foreground text-[10px]">
+                                                    {session.videoCodec !== session.streamVideoCodec && session.streamVideoCodec
+                                                        ? `${session.videoCodec} ➔ ${session.streamVideoCodec}`
+                                                        : session.videoCodec} • {session.streamBitrate ? `${(session.streamBitrate / 1000).toFixed(1)} Mbps` : "Auto"}
                                                 </span>
+                                            </div>
+
+                                            {/* Audio & Subtitle Diagnostics Row */}
+                                            <div className="px-4 py-1.5 bg-slate-950/40 flex flex-wrap items-center justify-between gap-2 text-[10px] border-b border-slate-800/60 font-mono">
+                                                <div className="flex items-center gap-1.5 truncate text-slate-300">
+                                                    <Volume2 className="h-3 w-3 text-cyan-400 shrink-0" />
+                                                    <span className="truncate">
+                                                        {session.sourceAudioCodec || session.audioCodec || "Audio"} {session.sourceAudioChannels ? `(${session.sourceAudioChannels})` : ""}
+                                                        {(session.sourceAudioCodec !== session.streamAudioCodec && session.streamAudioCodec) || (session.sourceAudioChannels !== session.streamAudioChannels && session.streamAudioChannels)
+                                                            ? ` ➔ ${session.streamAudioCodec} (${session.streamAudioChannels || "Stereo"})` 
+                                                            : (session.audioDecision === "direct play" ? " (Direct)" : "")}
+                                                    </span>
+                                                </div>
+                                                {session.hasSubtitle && (
+                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                        <span className="text-slate-400">💬 {session.subtitleLanguage || "Sub"} {session.subtitleCodec ? `(${session.subtitleCodec})` : ""}</span>
+                                                        {session.isSubtitleBurnIn && (
+                                                            <Badge variant="outline" className="text-[9px] font-bold bg-rose-500/20 text-rose-300 border-rose-500/40 animate-pulse" title="Subtitles are being burned into video, forcing CPU/GPU transcode">
+                                                                🔥 Burned In
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
 
                                             {/* Suboptimal Device Warning Alert */}
@@ -716,9 +780,17 @@ export default function StreamIntelligencePage() {
                                         {/* Progress Bar & Footer Actions */}
                                         <div className="p-4 pt-2 space-y-2.5">
                                             <div className="space-y-1">
-                                                <div className="flex justify-between text-[10px] text-muted-foreground font-mono">
-                                                    <span>{session.progressPercent || 0}%</span>
-                                                    <span className="capitalize">{session.state || "playing"}</span>
+                                                <div className="flex justify-between items-center text-[10px] text-muted-foreground font-mono">
+                                                    <span className="text-slate-200 font-semibold">
+                                                        {session.viewOffsetFormatted || "0:00"} / {session.durationFormatted || "0:00"} ({session.progressPercent || 0}%)
+                                                    </span>
+                                                    {session.etaTime ? (
+                                                        <span className="text-cyan-400 font-medium">
+                                                            Ends at {session.etaTime} {session.remainingFormatted ? `(-${session.remainingFormatted} left)` : ""}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="capitalize">{session.state || "playing"}</span>
+                                                    )}
                                                 </div>
                                                 <Progress value={session.progressPercent || 0} className="h-1.5 bg-slate-800" />
                                             </div>
