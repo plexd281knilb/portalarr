@@ -638,30 +638,42 @@ export async function askAiServerMaster(
     history: AiChatMessage[] = [],
     user?: any
 ): Promise<AiAssistantResponse> {
-    // Quick diagnostic snapshot gathering with 2.5s maximum timeout
+    // Quick diagnostic snapshot gathering with instant memory cache check and 2.5s network race
+    const safeUsername = String(user?.username || "guest").toLowerCase();
+    const { getUserCache, setUserCache } = await import("@/lib/prewarm");
+    const cacheKey = `user_diag_snapshot:${safeUsername}`;
+    const cachedSnapshot = getUserCache<UserDiagnosticSnapshot>(cacheKey);
+
     let snapshot: UserDiagnosticSnapshot;
-    try {
-        snapshot = await Promise.race([
-            getUserDiagnosticSnapshot(user),
-            new Promise<UserDiagnosticSnapshot>((_, reject) => 
-                setTimeout(() => reject(new Error("Telemetry timeout")), 2500)
-            )
-        ]);
-    } catch {
-        snapshot = {
-            username: user?.username || "Plex User",
-            email: user?.email,
-            role: user?.role || "USER",
-            activeStreamsCount: 0,
-            primaryActiveStream: null,
-            activeStreams: [],
-            recentDevices: [],
-            recentWatchHistory: [],
-            serversOnlineCount: 1,
-            detectedIssues: [],
-            linkedSubAccounts: [],
-            generatedAt: new Date().toISOString()
-        };
+    if (cachedSnapshot) {
+        snapshot = cachedSnapshot;
+    } else {
+        try {
+            snapshot = await Promise.race([
+                getUserDiagnosticSnapshot(user),
+                new Promise<UserDiagnosticSnapshot>((_, reject) => 
+                    setTimeout(() => reject(new Error("Telemetry timeout")), 2500)
+                )
+            ]);
+            if (snapshot) {
+                setUserCache(cacheKey, snapshot, 3 * 60 * 1000);
+            }
+        } catch {
+            snapshot = {
+                username: user?.username || "Plex User",
+                email: user?.email,
+                role: user?.role || "USER",
+                activeStreamsCount: 0,
+                primaryActiveStream: null,
+                activeStreams: [],
+                recentDevices: [],
+                recentWatchHistory: [],
+                serversOnlineCount: 1,
+                detectedIssues: [],
+                linkedSubAccounts: [],
+                generatedAt: new Date().toISOString()
+            };
+        }
     }
 
     const actionsTaken: AgentActionReport[] = [];

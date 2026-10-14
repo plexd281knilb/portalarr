@@ -914,8 +914,9 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 - **Universal Floating Launcher & Event Bus**:
   - Rendered globally via `<FloatingAiLauncher />` in `LayoutWrapper` at `fixed bottom-4 right-4 z-40` for all authenticated members.
   - Supports programmatic triggers via `openAiAssistant(initialQuery?: string)` custom DOM events (`window.dispatchEvent(new CustomEvent("open-ai-assistant", ...))`) and query params (`?openAssistant=true`).
-- **Support Ticket Triage Redirection**:
+- **Support Ticket Triage Redirection & Diagnostic Hand-off**:
   - Mounts a prominent callout banner at the top of `/tickets` (*"Fix Playback or Media Issues in 30 Seconds"*) prompting members to test with the AI Assistant before creating manual support tickets.
+  - Clicking *"Open Support Ticket With This Diagnosis"* in any chat bubble closes the assistant, navigates to `/tickets?prefill=...`, automatically opens the ticket submission dialog, and pre-populates the complete AI diagnosis into the issue description without clipboard copy.
 
 ---
 

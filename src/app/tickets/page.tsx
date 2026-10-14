@@ -51,6 +51,7 @@ export default function TicketsPage() {
     const [createLoading, setCreateLoading] = useState(false);
     const [createSuccess, setCreateSuccess] = useState(false);
     const [createError, setCreateError] = useState<string | null>(null);
+    const [prefilledIssue, setPrefilledIssue] = useState("");
 
     const loadDashboard = async () => {
         setLoading(true);
@@ -68,6 +69,15 @@ export default function TicketsPage() {
 
     useEffect(() => {
         loadDashboard();
+
+        if (typeof window !== "undefined") {
+            const params = new URLSearchParams(window.location.search);
+            const prefill = params.get("prefill");
+            if (prefill) {
+                setPrefilledIssue(prefill);
+                setIsCreateOpen(true);
+            }
+        }
     }, []);
 
     const handleUpdate = async (e: React.FormEvent, id: string) => {
@@ -552,6 +562,7 @@ export default function TicketsPage() {
                                 <Textarea
                                     name="issue"
                                     required
+                                    defaultValue={prefilledIssue}
                                     placeholder="Explain the problem (e.g. playback error on Apple TV, missing subtitles, audio desync)..."
                                     rows={4}
                                     className="text-xs bg-background/60 resize-none"

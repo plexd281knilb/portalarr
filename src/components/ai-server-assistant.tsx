@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { 
     Dialog, 
     DialogContent, 
@@ -78,6 +79,7 @@ export function openAiAssistant(query?: string) {
 }
 
 export function AiServerAssistant() {
+    const router = useRouter();
     const [isOpen, setIsOpen] = useState(false);
     const [activeTab, setActiveTab] = useState<"chat" | "telemetry" | "probes" | "fixes">("chat");
     const [quickQuestion, setQuickQuestion] = useState("");
@@ -233,14 +235,8 @@ export function AiServerAssistant() {
 
     const handleTransferToTicket = (issueText: string) => {
         setIsOpen(false);
-        setTimeout(() => {
-            const textarea = document.querySelector('textarea[name="issue"]') as HTMLTextAreaElement;
-            if (textarea) {
-                textarea.value = `[AI Diagnostic Report]\n${issueText.slice(0, 500)}...`;
-                textarea.focus();
-                textarea.scrollIntoView({ behavior: "smooth" });
-            }
-        }, 300);
+        const report = `[AI Diagnostic Report]\n${issueText.slice(0, 500)}...`;
+        router.push(`/tickets?prefill=${encodeURIComponent(report)}`);
     };
 
     const quickPrompts = [
