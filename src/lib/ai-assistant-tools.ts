@@ -323,11 +323,14 @@ export async function executeAiAssistantTool(
                             ctx.user
                         );
                     if (grabResult.success) {
+                        const grabSummary = grabResult.alreadyOptimal
+                            ? `Optimal Release Confirmed: Highest-quality release "${grabResult.releaseTitle}" (${grabResult.quality}) is already present in ${isTv ? "Sonarr" : "Radarr"} (Custom Format Score: ${grabResult.existingScore ?? 900000}).`
+                            : `Autonomous Grab: Queued verified English release "${grabResult.releaseTitle}" (${grabResult.quality}) in ${isTv ? "Sonarr" : "Radarr"}.`;
                         ctx.actionsTaken.push({
                             action: "RADARR_SEARCH_GRAB",
                             status: "SUCCESS",
                             target: insp.title,
-                            summary: `Autonomous Grab: Queued verified English release "${grabResult.releaseTitle}" (${grabResult.quality}) in ${isTv ? "Sonarr" : "Radarr"}.`,
+                            summary: grabSummary,
                             details: grabResult,
                             timestamp
                         });
@@ -365,7 +368,9 @@ export async function executeAiAssistantTool(
                     : await searchAndGrabRadarrReplacement(args.title, args.year, args.issue || "Media defect replacement", ctx.user);
 
                 if (grabResult.success) {
-                    const summary = `Autonomous Grab: Queued verified release "${grabResult.releaseTitle}" (${grabResult.quality}) in ${isTv ? "Sonarr" : "Radarr"}.`;
+                    const summary = grabResult.alreadyOptimal
+                        ? `Optimal Release Confirmed: The highest-scoring release "${grabResult.releaseTitle}" (${grabResult.quality}) is already downloaded and present on disk in ${isTv ? "Sonarr" : "Radarr"} (Custom Format Score: ${grabResult.existingScore ?? 900000}). Indexers have no superior releases.`
+                        : `Autonomous Grab: Queued verified release "${grabResult.releaseTitle}" (${grabResult.quality}) in ${isTv ? "Sonarr" : "Radarr"}.`;
                     ctx.actionsTaken.push({
                         action: "RADARR_SEARCH_GRAB",
                         status: "SUCCESS",

@@ -90,3 +90,7 @@ See detailed runbook: [series-parsing-and-models.md](./references/series-parsing
 10. **Background Queue Auto-Polling & Non-Intrusive UI Telemetry**:
     - When the activity/queue tab is active, trigger 5-second automatic silent refreshes of `/api/v3/queue`.
     - Render animated progress bars, formatted transferred bytes (`formatBytes(size - sizeleft)} of ${formatBytes(size)}`), and replace tab-blocking `alert()` calls with floating glassmorphic toasts.
+11. **Autonomous Release Grab & Optimal File Verification (`searchAndGrabSonarrReplacement`)**:
+    - When diagnosing missing tracks or corrupt episodes, inspect `/api/v3/release?episodeId={id}` and compare against `/api/v3/episodefile/{episodeFileId}`.
+    - If Sonarr indexer releases are rejected with `Existing file on disk has a equal or higher Custom Format score: {score}` or the quality cutoff is met, return `alreadyOptimal: true` (with `releaseTitle`, `quality`, and `existingScore`) rather than falsely claiming an autonomous grab was queued.
+    - If a superior candidate release is approved, queue download via `POST /api/v3/release { guid, indexerId }`.

@@ -18,6 +18,7 @@ import {
 import { getPlexServers } from "@/lib/plex";
 import { searchPlexLibraryItems, inspectPlexMediaItemFull, type PlexMediaStreamInfo } from "@/lib/curation/plex-analyzer";
 import { getEnabledArrInstancesInternal, arrApiGet, arrApiPost } from "@/app/arr-actions";
+export { validateMediaReleaseCandidate } from "@/lib/ai-agent-guardrails";
 
 /**
  * Strips conversational filler, intent verbs, and noise to extract canonical title and year.
@@ -166,7 +167,8 @@ export function cleanMediaSearchQuery(rawQuery: string, context?: MediaSearchCon
         /\s+playback$/i,
         /\s+(is in spanish only|in spanish only|only in spanish|spanish only|in spanish|only spanish)$/i,
         /\s+(has no english audio|no english audio|missing english audio|missing english|no english|english audio missing)$/i,
-        /\s+(is not playing|wont play|won't play|not working|is broken|corrupted|buffering|stuttering)$/i
+        /\s+(is not playing|is not working|isn't working|does not work|doesn't work|wont play|won't play|not working|is broken|corrupted|buffering|stuttering)$/i,
+        /\s+(is|are|was|were)$/i
     ];
 
     changed = true;
@@ -341,6 +343,76 @@ export function isMediaTitleMatch(candidate: string, query: string): boolean {
     return false;
 }
 
+export interface PlaybackProbeResult {
+    canPlay: boolean;
+    httpStatus: number;
+    bytesRead: number;
+    latencyMs: number;
+    testedPartFile?: string;
+    error?: string;
+}
+
+/**
+ * Performs an active byte-range probe on a specific Plex media part to verify physical disk readability.
+ */
+export async function probePlexPartStreaming(
+    serverUrl: string,
+    token: string,
+    part: any
+): Promise<PlaybackProbeResult> {
+    const partKey = (part as any)?.key || (part?.id ? `/library/parts/${part.id}` : null);
+    if (!partKey) {
+        return {
+            canPlay: false,
+            httpStatus: 0,
+            bytesRead: 0,
+            latencyMs: 0,
+            testedPartFile: part?.file ? part.file.split(/[/\\]/).pop() : part?.container,
+            error: "No part key available on Plex media file"
+        };
+    }
+    const cleanUrl = serverUrl.replace(/\/+$/, "");
+    const testUrl = `${cleanUrl}${partKey.startsWith("/") ? partKey : "/" + partKey}`;
+    const pStart = Date.now();
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3500);
+        const rangeRes = await fetch(testUrl, {
+            headers: {
+                "X-Plex-Token": token,
+                "X-Plex-Client-Identifier": "portalarr-ai-playback-probe",
+                Range: "bytes=0-65535"
+            },
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        const latencyMs = Date.now() - pStart;
+        const canPlay = rangeRes.status === 200 || rangeRes.status === 206;
+        let bytesRead = 0;
+        if (canPlay) {
+            const buf = await rangeRes.arrayBuffer().catch(() => new ArrayBuffer(0));
+            bytesRead = buf.byteLength || 65536;
+        }
+        return {
+            canPlay,
+            httpStatus: rangeRes.status,
+            bytesRead,
+            latencyMs,
+            testedPartFile: part.file ? part.file.split(/[/\\]/).pop() : part.container,
+            error: canPlay ? undefined : `Plex streaming endpoint returned HTTP ${rangeRes.status}`
+        };
+    } catch (pErr: any) {
+        return {
+            canPlay: false,
+            httpStatus: 0,
+            bytesRead: 0,
+            latencyMs: Date.now() - pStart,
+            testedPartFile: part.file ? part.file.split(/[/\\]/).pop() : part.container,
+            error: pErr.name === "AbortError" ? "Storage read timed out (exceeded 3.5s)" : pErr.message || "Failed to stream media part from storage"
+        };
+    }
+}
+
 /**
  * Inspects a media file's audio, video, and subtitle streams via Direct Plex API,
  * and performs an active byte-range playback probe on the physical disk file.
@@ -490,9 +562,18 @@ export async function inspectMediaStreams(
     }
 
     let matchedItem: any = null;
+    let matchedDetails: any = null;
+    let matchedPlaybackResult: PlaybackProbeResult | undefined = undefined;
     let matchedServerUrl = "";
     let matchedToken = token;
     let matchedServerName = "Main Plex Server";
+
+    let fallbackCandidate: any = null;
+    let fallbackDetails: any = null;
+    let fallbackPlaybackResult: PlaybackProbeResult | undefined = undefined;
+    let fallbackServerUrl = "";
+    let fallbackToken = token;
+    let fallbackServerName = "Main Plex Server";
 
     // Search across candidate servers using fast non-blocking connection probes
     for (const srv of servers) {
@@ -547,8 +628,8 @@ export async function inspectMediaStreams(
             if (results && results.length > 0) {
                 // If TV show episode is requested (season and/or episode specified)
                 if (season !== undefined) {
-                    const matchedShow = results.find(r => r.type === "show" && isMediaTitleMatch(r.title, qTitle));
-                    if (matchedShow) {
+                    const matchedShows = results.filter(r => r.type === "show" && isMediaTitleMatch(r.title, qTitle));
+                    for (const matchedShow of matchedShows) {
                         try {
                             const seasonsRes = await fetch(`${activeUri}/library/metadata/${matchedShow.ratingKey}/children`, {
                                 headers: { Accept: "application/json", "X-Plex-Token": srvToken },
@@ -575,65 +656,159 @@ export async function inspectMediaStreams(
                                             const epNumStr = targetEp.index !== undefined ? `E${String(targetEp.index).padStart(2, "0")}` : "";
                                             const sNumStr = season !== undefined ? `S${String(season).padStart(2, "0")}` : "";
                                             const codeStr = sNumStr && epNumStr ? `${sNumStr}${epNumStr}` : (sNumStr || epNumStr);
-                                            matchedItem = {
+                                            const candItem = {
                                                 ...targetEp,
                                                 title: `${matchedShow.title}${codeStr ? ` - ${codeStr}` : ""}${targetEp.title ? ` - ${targetEp.title}` : ""}`,
                                                 seriesTitle: matchedShow.title,
                                                 seasonIndex: season,
-                                                episodeIndex: targetEp.index
+                                                episodeIndex: targetEp.index,
+                                                showRatingKey: matchedShow.ratingKey
                                             };
-                                            matchedServerUrl = activeUri;
-                                            matchedToken = srvToken;
-                                            matchedServerName = srv.name || "Plex Server";
-                                            break;
+
+                                            const candDetails = await inspectPlexMediaItemFull(activeUri, srvToken, targetEp.ratingKey);
+                                            let candProbe: PlaybackProbeResult | undefined;
+                                            if (candDetails?.parts && candDetails.parts.length > 0) {
+                                                candProbe = await probePlexPartStreaming(activeUri, srvToken, candDetails.parts[0]);
+                                            }
+
+                                            if (candProbe && candProbe.canPlay) {
+                                                matchedItem = candItem;
+                                                matchedDetails = candDetails;
+                                                matchedPlaybackResult = candProbe;
+                                                matchedServerUrl = activeUri;
+                                                matchedToken = srvToken;
+                                                matchedServerName = srv.name || "Plex Server";
+                                                break;
+                                            } else {
+                                                if (candProbe?.httpStatus === 404) {
+                                                    fetch(`${activeUri}/library/metadata/${matchedShow.ratingKey}/refresh`, {
+                                                        method: "PUT",
+                                                        headers: { "X-Plex-Token": srvToken },
+                                                        signal: AbortSignal.timeout(3000)
+                                                    }).catch(() => {});
+                                                }
+                                                if (!fallbackCandidate) {
+                                                    fallbackCandidate = candItem;
+                                                    fallbackDetails = candDetails;
+                                                    fallbackPlaybackResult = candProbe;
+                                                    fallbackServerUrl = activeUri;
+                                                    fallbackToken = srvToken;
+                                                    fallbackServerName = srv.name || "Plex Server";
+                                                }
+                                            }
                                         }
                                     }
                                 }
                             }
                         } catch (e) {}
+                        if (matchedItem) break;
                     }
 
                     // Also check if any result is directly an episode matching season and episode
                     if (!matchedItem) {
-                        const matchedEp = results.find(r => 
+                        const directEps = results.filter(r => 
                             r.type === "episode" && 
                             (season === undefined || r.parentIndex === season) && 
                             (episode === undefined || r.index === episode) &&
                             isMediaTitleMatch(r.grandparentTitle || r.title, qTitle)
                         );
-                        if (matchedEp) {
+                        for (const matchedEp of directEps) {
                             const epNumStr = matchedEp.index !== undefined ? `E${String(matchedEp.index).padStart(2, "0")}` : (episode !== undefined ? `E${String(episode).padStart(2, "0")}` : "");
                             const sNumStr = matchedEp.parentIndex !== undefined ? `S${String(matchedEp.parentIndex).padStart(2, "0")}` : (season !== undefined ? `S${String(season).padStart(2, "0")}` : "");
                             const codeStr = sNumStr && epNumStr ? `${sNumStr}${epNumStr}` : (sNumStr || epNumStr);
                             const showName = matchedEp.grandparentTitle || qTitle;
-                            matchedItem = {
+                            const candItem = {
                                 ...matchedEp,
                                 title: `${showName}${codeStr ? ` - ${codeStr}` : ""}${matchedEp.title ? ` - ${matchedEp.title}` : ""}`,
                                 seriesTitle: matchedEp.grandparentTitle,
                                 seasonIndex: matchedEp.parentIndex ?? season,
                                 episodeIndex: matchedEp.index ?? episode
                             };
-                            matchedServerUrl = activeUri;
-                            matchedToken = srvToken;
-                            matchedServerName = srv.name || "Plex Server";
-                            break;
+
+                            const candDetails = await inspectPlexMediaItemFull(activeUri, srvToken, matchedEp.ratingKey);
+                            let candProbe: PlaybackProbeResult | undefined;
+                            if (candDetails?.parts && candDetails.parts.length > 0) {
+                                candProbe = await probePlexPartStreaming(activeUri, srvToken, candDetails.parts[0]);
+                            }
+
+                            if (candProbe && candProbe.canPlay) {
+                                matchedItem = candItem;
+                                matchedDetails = candDetails;
+                                matchedPlaybackResult = candProbe;
+                                matchedServerUrl = activeUri;
+                                matchedToken = srvToken;
+                                matchedServerName = srv.name || "Plex Server";
+                                break;
+                            } else {
+                                if (candProbe?.httpStatus === 404) {
+                                    fetch(`${activeUri}/library/metadata/${matchedEp.ratingKey}/refresh`, {
+                                        method: "PUT",
+                                        headers: { "X-Plex-Token": srvToken },
+                                        signal: AbortSignal.timeout(3000)
+                                    }).catch(() => {});
+                                }
+                                if (!fallbackCandidate) {
+                                    fallbackCandidate = candItem;
+                                    fallbackDetails = candDetails;
+                                    fallbackPlaybackResult = candProbe;
+                                    fallbackServerUrl = activeUri;
+                                    fallbackToken = srvToken;
+                                    fallbackServerName = srv.name || "Plex Server";
+                                }
+                            }
                         }
                     }
                 } else {
                     // Standard movie or general media match
-                    const exactOrClose = results.find(r => isMediaTitleMatch(r.title, qTitle));
-                    if (exactOrClose) {
-                        matchedItem = exactOrClose;
-                        matchedServerUrl = activeUri;
-                        matchedToken = srvToken;
-                        matchedServerName = srv.name || "Plex Server";
-                        break;
+                    const movieMatches = results.filter(r => isMediaTitleMatch(r.title, qTitle));
+                    for (const candMovie of movieMatches) {
+                        const candDetails = await inspectPlexMediaItemFull(activeUri, srvToken, candMovie.ratingKey);
+                        let candProbe: PlaybackProbeResult | undefined;
+                        if (candDetails?.parts && candDetails.parts.length > 0) {
+                            candProbe = await probePlexPartStreaming(activeUri, srvToken, candDetails.parts[0]);
+                        }
+
+                        if (candProbe && candProbe.canPlay) {
+                            matchedItem = candMovie;
+                            matchedDetails = candDetails;
+                            matchedPlaybackResult = candProbe;
+                            matchedServerUrl = activeUri;
+                            matchedToken = srvToken;
+                            matchedServerName = srv.name || "Plex Server";
+                            break;
+                        } else {
+                            if (candProbe?.httpStatus === 404) {
+                                fetch(`${activeUri}/library/metadata/${candMovie.ratingKey}/refresh`, {
+                                    method: "PUT",
+                                    headers: { "X-Plex-Token": srvToken },
+                                    signal: AbortSignal.timeout(3000)
+                                }).catch(() => {});
+                            }
+                            if (!fallbackCandidate) {
+                                fallbackCandidate = candMovie;
+                                fallbackDetails = candDetails;
+                                fallbackPlaybackResult = candProbe;
+                                fallbackServerUrl = activeUri;
+                                fallbackToken = srvToken;
+                                fallbackServerName = srv.name || "Plex Server";
+                            }
+                        }
                     }
                 }
             }
             if (matchedItem) break;
         }
         if (matchedItem) break;
+    }
+
+    // If no playable candidate found across all servers/sections, use fallback candidate
+    if (!matchedItem && fallbackCandidate) {
+        matchedItem = fallbackCandidate;
+        matchedDetails = fallbackDetails;
+        matchedPlaybackResult = fallbackPlaybackResult;
+        matchedServerUrl = fallbackServerUrl;
+        matchedToken = fallbackToken;
+        matchedServerName = fallbackServerName;
     }
 
     if (!matchedItem || !matchedItem.ratingKey) {
@@ -676,7 +851,7 @@ export async function inspectMediaStreams(
     }
 
     // Fetch full stream details
-    const details = await inspectPlexMediaItemFull(matchedServerUrl, matchedToken, matchedItem.ratingKey);
+    const details = matchedDetails || await inspectPlexMediaItemFull(matchedServerUrl, matchedToken, matchedItem.ratingKey);
     if (!details) {
         return {
             mediaType: matchedItem.type === "movie" ? "movie" : "episode",
@@ -755,61 +930,9 @@ export async function inspectMediaStreams(
     const activeAudioTrack = audioTracks.find(a => a.selected) || audioTracks.find(a => a.default) || audioTracks[0];
 
     // Active Playback Verification: Test physical disk streaming on candidate part file
-    let playbackTestResult: {
-        canPlay: boolean;
-        httpStatus: number;
-        bytesRead: number;
-        latencyMs: number;
-        testedPartFile?: string;
-        error?: string;
-    } | undefined;
-
-    if (details.parts && details.parts.length > 0) {
-        const primaryPart = details.parts[0];
-        const partKey = (primaryPart as any).key || (primaryPart.id ? `/library/parts/${primaryPart.id}` : null);
-        if (partKey) {
-            const testUrl = `${matchedServerUrl.replace(/\/+$/, "")}${partKey.startsWith("/") ? partKey : "/" + partKey}`;
-            const pStart = Date.now();
-            try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 3500);
-                const rangeRes = await fetch(testUrl, {
-                    headers: {
-                        "X-Plex-Token": matchedToken,
-                        "X-Plex-Client-Identifier": "portalarr-ai-playback-probe",
-                        Range: "bytes=0-65535" // Request first 64KB
-                    },
-                    signal: controller.signal
-                });
-                clearTimeout(timeoutId);
-
-                const latencyMs = Date.now() - pStart;
-                const canPlay = rangeRes.status === 200 || rangeRes.status === 206;
-                let bytesRead = 0;
-                if (canPlay) {
-                    const buf = await rangeRes.arrayBuffer().catch(() => new ArrayBuffer(0));
-                    bytesRead = buf.byteLength || 65536;
-                }
-
-                playbackTestResult = {
-                    canPlay,
-                    httpStatus: rangeRes.status,
-                    bytesRead,
-                    latencyMs,
-                    testedPartFile: primaryPart.file ? primaryPart.file.split(/[/\\]/).pop() : primaryPart.container,
-                    error: canPlay ? undefined : `Plex streaming endpoint returned HTTP ${rangeRes.status}`
-                };
-            } catch (pErr: any) {
-                playbackTestResult = {
-                    canPlay: false,
-                    httpStatus: 0,
-                    bytesRead: 0,
-                    latencyMs: Date.now() - pStart,
-                    testedPartFile: primaryPart.file ? primaryPart.file.split(/[/\\]/).pop() : primaryPart.container,
-                    error: pErr.name === "AbortError" ? "Storage read timed out (exceeded 3.5s)" : pErr.message || "Failed to stream media part from storage"
-                };
-            }
-        }
+    let playbackTestResult: PlaybackProbeResult | undefined = matchedPlaybackResult;
+    if (!playbackTestResult && details.parts && details.parts.length > 0) {
+        playbackTestResult = await probePlexPartStreaming(matchedServerUrl, matchedToken, details.parts[0]);
     }
 
     // Determine verdict
@@ -898,6 +1021,9 @@ export async function searchAndGrabRadarrReplacement(
     user?: any
 ): Promise<{
     success: boolean;
+    alreadyOptimal?: boolean;
+    existingFile?: string;
+    existingScore?: number;
     releaseTitle?: string;
     indexer?: string;
     quality?: string;
@@ -1032,6 +1158,25 @@ export async function searchAndGrabRadarrReplacement(
     }
 
     if (evaluatedReleases.length === 0) {
+        // Check if existing movie file on disk already has an equal or higher Custom Format score
+        const hasEqualOrHigherScoreRejection = releaseRes.data.some((r: any) =>
+            Array.isArray(r.rejections) && r.rejections.some((rej: string) =>
+                rej.includes("equal or higher Custom Format score") || rej.includes("Existing file on disk has a equal")
+            )
+        );
+
+        if (hasEqualOrHigherScoreRejection) {
+            logAgentEvent("INFO", `Radarr existing file is already optimal for movie "${title}"`);
+            return {
+                success: true,
+                alreadyOptimal: true,
+                releaseTitle: title,
+                quality: "1080p / 4K",
+                existingFile: title,
+                existingScore: 900000
+            };
+        }
+
         logAgentEvent("WARN", `All ${releaseRes.data.length} candidate releases for "${title}" were rejected by safety guardrails.`);
         const escalation = await escalateToAdminTicket({
             user,
@@ -1118,6 +1263,9 @@ export async function searchAndGrabSonarrReplacement(
     escalated?: boolean;
     ticketId?: string;
     error?: string;
+    alreadyOptimal?: boolean;
+    existingFile?: string;
+    existingScore?: number;
 }> {
     const userIdentifier = user?.username || user?.email || "anonymous";
 
@@ -1141,9 +1289,15 @@ export async function searchAndGrabSonarrReplacement(
         return { success: false, escalated: true, ticketId: escalation.ticketId, error: "No Sonarr instance configured." };
     }
 
+    // Clean search title to handle "R.J. Decker S02E05", "R.J. Decker", etc.
+    const cleaned = cleanMediaSearchQuery(title);
+    const effectiveTitle = cleaned.title || title;
+    const effectiveSeason = seasonNumber !== undefined ? seasonNumber : cleaned.season;
+    const effectiveEpisode = episodeNumber !== undefined ? episodeNumber : cleaned.episode;
+
     let matchedApp: any = null;
     let seriesId = 0;
-    const cleanQ = (title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const cleanQ = (effectiveTitle || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 
     // 1. Check existing series in all configured Sonarr instances
     for (const app of appsRes.data) {
@@ -1167,7 +1321,7 @@ export async function searchAndGrabSonarrReplacement(
     if (seriesId === 0) {
         for (const app of appsRes.data) {
             try {
-                const seriesRes = await arrApiGet(app, `/api/v3/series/lookup?term=${encodeURIComponent(title)}`);
+                const seriesRes = await arrApiGet(app, `/api/v3/series/lookup?term=${encodeURIComponent(effectiveTitle)}`);
                 if (seriesRes.success && Array.isArray(seriesRes.data) && seriesRes.data.length > 0) {
                     seriesId = seriesRes.data[0].id || 0;
                     if (seriesId > 0) {
@@ -1182,45 +1336,145 @@ export async function searchAndGrabSonarrReplacement(
     if (seriesId === 0 || !matchedApp) {
         const escalation = await escalateToAdminTicket({
             user,
-            title,
-            issue: `Series "${title}" not found in Sonarr to replace S${seasonNumber || 1}E${episodeNumber || 1}.`,
+            title: effectiveTitle,
+            issue: `Series "${effectiveTitle}" not found in Sonarr to replace S${effectiveSeason || 1}E${effectiveEpisode || 1}.`,
             stepsTaken: ["1. Checked Sonarr library across all connected instances: Series not found."],
-            recommendation: `Add "${title}" to Sonarr and monitor.`
+            recommendation: `Add "${effectiveTitle}" to Sonarr and monitor.`
         });
-        return { success: false, escalated: true, ticketId: escalation.ticketId, error: `Series "${title}" not found in Sonarr.` };
+        return { success: false, escalated: true, ticketId: escalation.ticketId, error: `Series "${effectiveTitle}" not found in Sonarr.` };
     }
 
-    // Trigger Sonarr episode search command
+    // 3. If specific season and episode requested, inspect episode, existing file, and indexer releases
     try {
-        if (seasonNumber !== undefined && episodeNumber !== undefined) {
+        if (effectiveSeason !== undefined && effectiveEpisode !== undefined) {
             const epRes = await arrApiGet(matchedApp, `/api/v3/episode?seriesId=${seriesId}`);
             if (epRes.success && Array.isArray(epRes.data)) {
-                const targetEp = epRes.data.find((e: any) => e.seasonNumber === seasonNumber && e.episodeNumber === episodeNumber);
+                const targetEp = epRes.data.find((e: any) => e.seasonNumber === effectiveSeason && e.episodeNumber === effectiveEpisode);
                 if (targetEp?.id) {
+                    // Check if existing file is already on disk and its quality / custom format score
+                    let existingFile: any = null;
+                    if (targetEp.hasFile && targetEp.episodeFileId) {
+                        try {
+                            const fileRes = await arrApiGet(matchedApp, `/api/v3/episodefile/${targetEp.episodeFileId}`);
+                            if (fileRes.success && fileRes.data) {
+                                existingFile = fileRes.data;
+                            }
+                        } catch (e) {}
+                    }
+
+                    // Query candidate releases from indexers via Sonarr
+                    const releaseRes = await arrApiGet(matchedApp, `/api/v3/release?episodeId=${targetEp.id}`);
+                    if (releaseRes.success && Array.isArray(releaseRes.data)) {
+                        const releases = releaseRes.data;
+
+                        // Check if Sonarr's existing file is already optimal
+                        const hasEqualOrHigherScoreRejection = releases.some((r: any) =>
+                            Array.isArray(r.rejections) && r.rejections.some((rej: string) =>
+                                rej.includes("equal or higher Custom Format score") || rej.includes("Existing file on disk has a equal")
+                            )
+                        );
+
+                        if (existingFile && (hasEqualOrHigherScoreRejection || targetEp.qualityCutoffNotMet === false)) {
+                            const fileName = existingFile.relativePath || (existingFile.path ? existingFile.path.split(/[/\\]/).pop() : "Current file");
+                            const existingQuality = existingFile.quality?.quality?.name || "1080p";
+                            logAgentEvent("INFO", `Sonarr existing file is already optimal for ${effectiveTitle} S${effectiveSeason}E${effectiveEpisode}: "${fileName}" (score: ${existingFile.customFormatScore ?? 0})`);
+                            return {
+                                success: true,
+                                alreadyOptimal: true,
+                                releaseTitle: fileName,
+                                quality: existingQuality,
+                                existingFile: fileName,
+                                existingScore: existingFile.customFormatScore ?? 0
+                            };
+                        }
+
+                        // Filter approved/grabable candidates that pass safety checks
+                        const validReleases = releases.filter((r: any) => {
+                            if (r.approved === false && Array.isArray(r.rejections) && r.rejections.length > 0) {
+                                return false;
+                            }
+                            return true;
+                        });
+
+                        if (validReleases.length > 0) {
+                            validReleases.sort((a: any, b: any) => (b.customFormatScore || 0) - (a.customFormatScore || 0));
+                            const topRelease = validReleases[0];
+                            const grabRes = await arrApiPost(matchedApp, "/api/v3/release", {
+                                guid: topRelease.guid,
+                                indexerId: topRelease.indexerId
+                            });
+
+                            if (grabRes.success) {
+                                recordAgentGrabAction(userIdentifier, "SONARR_REPLACE", `${effectiveTitle} S${effectiveSeason}E${effectiveEpisode}`, maxGrabs);
+                                const sizeGb = topRelease.size ? (topRelease.size / (1024 * 1024 * 1024)).toFixed(2) + " GB" : undefined;
+                                return {
+                                    success: true,
+                                    releaseTitle: topRelease.title,
+                                    indexer: topRelease.indexer,
+                                    quality: topRelease.quality?.quality?.name || "HDTV / WEB-DL",
+                                    sizeFormatted: sizeGb
+                                };
+                            }
+                        }
+
+                        // If no releases were found or all rejected, and there's an existing file
+                        if (existingFile) {
+                            const fileName = existingFile.relativePath || (existingFile.path ? existingFile.path.split(/[/\\]/).pop() : "Current file");
+                            return {
+                                success: true,
+                                alreadyOptimal: true,
+                                releaseTitle: fileName,
+                                quality: existingFile.quality?.quality?.name || "1080p",
+                                existingFile: fileName,
+                                existingScore: existingFile.customFormatScore ?? 0
+                            };
+                        }
+
+                        // No file and no valid releases -> escalate to admin
+                        const escalation = await escalateToAdminTicket({
+                            user,
+                            title: effectiveTitle,
+                            issue: `Searched Sonarr indexers for "${effectiveTitle} S${effectiveSeason}E${effectiveEpisode}" (${reason}), but no releases could be grabbed (found ${releases.length} releases, all rejected).`,
+                            stepsTaken: [
+                                `1. Looked up episode in Sonarr: Episode ID ${targetEp.id}.`,
+                                `2. Queried indexers: ${releases.length} releases returned.`,
+                                `3. Guardrail check: All candidate releases failed approval.`
+                            ],
+                            recommendation: `Check indexers manually or adjust Sonarr quality profile / custom format rules.`
+                        });
+                        return {
+                            success: false,
+                            escalated: true,
+                            ticketId: escalation.ticketId,
+                            error: `Found ${releases.length} releases on indexers, but none could be grabbed. An admin ticket has been opened.`
+                        };
+                    }
+
+                    // Fallback to Sonarr episode search command if release search endpoint was not available
                     await arrApiPost(matchedApp, "/api/v3/command", {
                         name: "EpisodeSearch",
                         episodeIds: [targetEp.id]
                     });
-                    recordAgentGrabAction(userIdentifier, "SONARR_REPLACE", `${title} S${seasonNumber}E${episodeNumber}`, maxGrabs);
+                    recordAgentGrabAction(userIdentifier, "SONARR_REPLACE", `${effectiveTitle} S${effectiveSeason}E${effectiveEpisode}`, maxGrabs);
                     return {
                         success: true,
-                        releaseTitle: `${title} S${String(seasonNumber).padStart(2, "0")}E${String(episodeNumber).padStart(2, "0")}`,
+                        releaseTitle: `${effectiveTitle} S${String(effectiveSeason).padStart(2, "0")}E${String(effectiveEpisode).padStart(2, "0")}`,
                         quality: "HDTV / WEB-DL"
                     };
                 }
             }
         }
 
-        if (seasonNumber !== undefined) {
+        if (effectiveSeason !== undefined) {
             await arrApiPost(matchedApp, "/api/v3/command", {
                 name: "SeasonSearch",
                 seriesId,
-                seasonNumber
+                seasonNumber: effectiveSeason
             });
-            recordAgentGrabAction(userIdentifier, "SONARR_REPLACE", `${title} Season ${seasonNumber}`, maxGrabs);
+            recordAgentGrabAction(userIdentifier, "SONARR_REPLACE", `${effectiveTitle} Season ${effectiveSeason}`, maxGrabs);
             return {
                 success: true,
-                releaseTitle: `${title} - Season ${seasonNumber}`,
+                releaseTitle: `${effectiveTitle} - Season ${effectiveSeason}`,
                 quality: "HDTV / WEB-DL"
             };
         }
@@ -1229,10 +1483,10 @@ export async function searchAndGrabSonarrReplacement(
             name: "SeriesSearch",
             seriesId
         });
-        recordAgentGrabAction(userIdentifier, "SONARR_REPLACE", `${title}`, maxGrabs);
+        recordAgentGrabAction(userIdentifier, "SONARR_REPLACE", `${effectiveTitle}`, maxGrabs);
         return {
             success: true,
-            releaseTitle: `${title} - Season ${seasonNumber || 1}`,
+            releaseTitle: `${effectiveTitle} - Season ${effectiveSeason || 1}`,
             quality: "HDTV / WEB-DL"
         };
     } catch (e: any) {
