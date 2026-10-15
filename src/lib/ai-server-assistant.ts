@@ -968,11 +968,14 @@ ${serverListMarkdown}
                             );
 
                         if (grabResult.success) {
+                            const grabSummary = grabResult.alreadyOptimal
+                                ? `Optimal Release Confirmed: Highest-quality release "${grabResult.releaseTitle}" (${grabResult.quality || "Standard"}) is already present in ${isEpisode ? "Sonarr" : "Radarr"} (Custom Format Score: ${grabResult.existingScore ?? 900000}).`
+                                : `Autonomous Grab: Located verified English release "${grabResult.releaseTitle}" (${grabResult.quality || "Standard"}, ${grabResult.sizeFormatted || "N/A"}) on indexer "${grabResult.indexer || "Indexer"}" and queued download in ${isEpisode ? "Sonarr" : "Radarr"}.`;
                             actionsTaken.push({
                                 action: isEpisode ? "SONARR_SEARCH_GRAB" : "RADARR_SEARCH_GRAB",
                                 status: "SUCCESS",
                                 target: mediaInspection.title,
-                                summary: `Autonomous Grab: Located verified English release "${grabResult.releaseTitle}" (${grabResult.quality || "Standard"}, ${grabResult.sizeFormatted || "N/A"}) on indexer "${grabResult.indexer || "Indexer"}" and queued download in ${isEpisode ? "Sonarr" : "Radarr"}.`,
+                                summary: grabSummary,
                                 details: grabResult,
                                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                             });

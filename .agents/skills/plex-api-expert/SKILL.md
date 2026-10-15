@@ -103,6 +103,10 @@ See detailed runbook: [tags-collections-and-hubs.md](./references/tags-collectio
 17. **Local Machine Identifier URI Matching & Library URI Fallback (`LPE: only library URIs are allowed right now`)**:
     - **Plex Collection Single-Item URI Constraint**: Adding items to collections via `PUT /library/collections/{id}/items?uri=...` requires the URI to point to the local server's internal database (`server://{machineIdentifier}/com.plexapp.plugins.library/library/metadata/{ratingKey}`). If `{machineIdentifier}` does not match the receiving server, or if a cross-server URI is sent, PMS rejects it with `400 Bad Request` and logs `LPE: only library URIs are allowed right now. Failed to generate a query from uri server://...`.
     - **Strict Candidate Isolation**: In multi-server environments, `resolveWorkingPlexServerConnection` strictly purges candidate URLs returning mismatched `machineIdentifier` values so candidate lists never leak cross-server URLs. `syncPlexCollection` resolves `machineIdentifier` per candidate base URL (`baseMachineIdMap`), retries with `library:///item/%2Flibrary%2Fmetadata/{ratingKey}` upon HTTP 400 rejection, and falls back to item metadata tagging (`collection[0].tag.tag=...`) to ensure 100% item retention without PMS log errors.
+18. **Multi-Library Candidate Probing & Self-Healing Stale Metadata Refreshes (`inspectMediaStreams`)**:
+    - When inspecting media across libraries (e.g. 4K TV vs Standard TV sections) or multiple Plex Media Servers, never select the first search match naively. Stale or deleted files in one library can cause false 404 errors even when a playable file exists in another library.
+    - Actively probe candidate items via byte-range requests (`probePlexPartStreaming` requesting `Range: bytes=0-65535`). If a candidate returns `HTTP 200` or `HTTP 206`, select it as the active stream.
+    - If a candidate returns `HTTP 404`, trigger a non-blocking background metadata refresh (`PUT /library/metadata/{ratingKey}/refresh`) so Plex prunes the stale reference automatically, and continue searching remaining candidate items.
 
 
 
