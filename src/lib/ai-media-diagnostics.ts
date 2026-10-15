@@ -27,6 +27,8 @@ import { getEnabledArrInstancesInternal, arrApiGet, arrApiPost } from "@/app/arr
 export interface MediaSearchContext {
     lastTitle?: string;
     lastYear?: number;
+    lastSeason?: number;
+    lastEpisode?: number;
     lastServer?: string;
     lastWasPlaybackTest?: boolean;
 }
@@ -34,6 +36,8 @@ export interface MediaSearchContext {
 export interface CleanedMediaQuery {
     title: string;
     year?: number;
+    season?: number;
+    episode?: number;
     targetServer?: string;
     rawCleaned: string;
     isPlaybackTest?: boolean;
@@ -55,6 +59,35 @@ export function cleanMediaSearchQuery(rawQuery: string, context?: MediaSearchCon
 
     // Detect if this is a playback test / verification query
     let isPlaybackTest = /\b(test|verify|check|make sure|see if|can play|does play|will play|playable|runs?|plays?|working)\b/i.test(rawQuery) || Boolean(hasCorrectionPrefix && context?.lastWasPlaybackTest);
+
+    // 0.5 Extract Season and Episode if present e.g. "Season 2 Episode 5", "S02E05", "s2 ep 5", "Season 2", "Episode 5"
+    let extractedSeason: number | undefined;
+    let extractedEpisode: number | undefined;
+
+    const seCombinedMatch = clean.match(/\b[sS](\d{1,2})\s*[eE](\d{1,3})\b/);
+    if (seCombinedMatch) {
+        extractedSeason = parseInt(seCombinedMatch[1], 10);
+        extractedEpisode = parseInt(seCombinedMatch[2], 10);
+        clean = clean.replace(seCombinedMatch[0], " ");
+    } else {
+        const fullSeasonEpMatch = clean.match(/\b(?:season|s)\s*(\d{1,2})\s*[, -]?\s*(?:episode|ep|e)\s*(\d{1,3})\b/i);
+        if (fullSeasonEpMatch) {
+            extractedSeason = parseInt(fullSeasonEpMatch[1], 10);
+            extractedEpisode = parseInt(fullSeasonEpMatch[2], 10);
+            clean = clean.replace(fullSeasonEpMatch[0], " ");
+        } else {
+            const seasonOnlyMatch = clean.match(/\b(?:season|s)\s*(\d{1,2})\b/i);
+            if (seasonOnlyMatch) {
+                extractedSeason = parseInt(seasonOnlyMatch[1], 10);
+                clean = clean.replace(seasonOnlyMatch[0], " ");
+            }
+            const episodeOnlyMatch = clean.match(/\b(?:episode|ep|e)\s*(\d{1,3})\b/i);
+            if (episodeOnlyMatch) {
+                extractedEpisode = parseInt(episodeOnlyMatch[1], 10);
+                clean = clean.replace(episodeOnlyMatch[0], " ");
+            }
+        }
+    }
 
     // 1. Extract year if present in parentheses e.g. (1993) or (2020)
     let extractedYear: number | undefined;
@@ -205,6 +238,12 @@ export function cleanMediaSearchQuery(rawQuery: string, context?: MediaSearchCon
             if (!extractedYear && context.lastYear) {
                 extractedYear = context.lastYear;
             }
+            if (extractedSeason === undefined && context.lastSeason !== undefined) {
+                extractedSeason = context.lastSeason;
+            }
+            if (extractedEpisode === undefined && context.lastEpisode !== undefined) {
+                extractedEpisode = context.lastEpisode;
+            }
             isPlaybackTest = true;
         }
 
@@ -234,11 +273,72 @@ export function cleanMediaSearchQuery(rawQuery: string, context?: MediaSearchCon
     return {
         title: finalTitle,
         year: extractedYear,
+        season: extractedSeason,
+        episode: extractedEpisode,
         targetServer,
         rawCleaned: clean,
         isPlaybackTest,
         isPronoun: isPronounOrVerb
     };
+}
+
+/**
+ * Generates common title variations to maximize matching against Plex, Sonarr, and TMDb:
+ * - Handling acronyms / initials with and without dots (e.g. "Rj Decker" <-> "R.J. Decker" <-> "RJ Decker")
+ * - Adding and removing leading "The "
+ * - Stripping internal punctuation (colons, hyphens, apostrophes)
+ */
+export function getFuzzyTitleVariants(title: string): string[] {
+    const variants = new Set<string>();
+    const trimmed = (title || "").trim();
+    if (!trimmed) return [];
+
+    variants.add(trimmed);
+
+    // Initial dots e.g. "Rj Decker" -> "R.J. Decker"
+    const dottedInitials = trimmed.replace(/\b([A-Za-z])([A-Za-z])\b/g, (_match, p1, p2) => {
+        return `${p1.toUpperCase()}.${p2.toUpperCase()}.`;
+    });
+    if (dottedInitials !== trimmed) {
+        variants.add(dottedInitials);
+    }
+
+    // Strip dots from initials e.g. "R.J. Decker" -> "RJ Decker" and "Rj Decker"
+    const noDots = trimmed.replace(/([A-Za-z])\.([A-Za-z])\./g, "$1$2");
+    if (noDots !== trimmed) {
+        variants.add(noDots);
+        variants.add(noDots.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" "));
+    }
+
+    // Add or remove leading "The "
+    if (/^The\s+/i.test(trimmed)) {
+        variants.add(trimmed.replace(/^The\s+/i, "").trim());
+    } else {
+        variants.add("The " + trimmed);
+    }
+
+    // Clean punctuation
+    const cleanPunct = trimmed.replace(/['".,:\-_/\\()]/g, " ").replace(/\s+/g, " ").trim();
+    if (cleanPunct !== trimmed) {
+        variants.add(cleanPunct);
+    }
+
+    return Array.from(variants).filter(v => v.length > 0);
+}
+
+/**
+ * Robust title matching comparing alphanumeric tokens, ignoring punctuation, case, and leading "The".
+ */
+export function isMediaTitleMatch(candidate: string, query: string): boolean {
+    const a = (candidate || "").toLowerCase().replace(/[^a-z0-9]/g, "").trim();
+    const b = (query || "").toLowerCase().replace(/[^a-z0-9]/g, "").trim();
+    if (!a || !b) return false;
+    if (a === b) return true;
+    const aNoThe = a.replace(/^the/, "");
+    const bNoThe = b.replace(/^the/, "");
+    if (aNoThe === bNoThe) return true;
+    if (a.length >= 4 && b.length >= 4 && (a.includes(b) || b.includes(a))) return true;
+    return false;
 }
 
 /**
@@ -249,16 +349,22 @@ export async function inspectMediaStreams(
     rawQuery: string,
     user?: any,
     targetServerName?: string,
-    targetYear?: number
+    targetYear?: number,
+    targetSeason?: number,
+    targetEpisode?: number
 ): Promise<MediaStreamInspection> {
     const cleaned = cleanMediaSearchQuery(rawQuery);
     const searchTitle = cleaned.title || rawQuery;
     const year = targetYear || cleaned.year;
+    const season = targetSeason !== undefined ? targetSeason : cleaned.season;
+    const episode = targetEpisode !== undefined ? targetEpisode : cleaned.episode;
     const serverPref = targetServerName || cleaned.targetServer;
 
     logAgentEvent("INFO", `Inspecting media streams for title "${searchTitle}"`, { 
         user: user?.username, 
         year,
+        season,
+        episode,
         targetServer: serverPref 
     });
 
@@ -284,7 +390,7 @@ export async function inspectMediaStreams(
 
     if (!token) {
         return {
-            mediaType: "unknown",
+            mediaType: season !== undefined || episode !== undefined ? "episode" : "unknown",
             title: searchTitle,
             year: year ? String(year) : undefined,
             files: [],
@@ -297,6 +403,60 @@ export async function inspectMediaStreams(
             diagnosisSummary: "Plex Server token is not configured. Cannot inspect container streams."
         };
     }
+
+    // 1. Resolve candidate title variations (initials with dots, stripped dots, punctuation variants)
+    const titlesToTrySet = new Set<string>();
+    for (const v of getFuzzyTitleVariants(searchTitle)) {
+        titlesToTrySet.add(v);
+    }
+
+    // 1.5 TMDb TV & Movie canonical title lookup
+    try {
+        const { searchTmdbTv, searchTmdbMovie } = await import("@/lib/curation/tmdb");
+        if (season !== undefined || episode !== undefined) {
+            const tvRes = await searchTmdbTv(searchTitle, year);
+            if (tvRes && tvRes.length > 0 && tvRes[0].title) {
+                for (const v of getFuzzyTitleVariants(tvRes[0].title)) titlesToTrySet.add(v);
+            }
+        } else {
+            const [tvRes, movieRes] = await Promise.allSettled([
+                searchTmdbTv(searchTitle, year),
+                searchTmdbMovie(searchTitle, year)
+            ]);
+            if (tvRes.status === "fulfilled" && tvRes.value?.[0]?.title) {
+                for (const v of getFuzzyTitleVariants(tvRes.value[0].title)) titlesToTrySet.add(v);
+            }
+            if (movieRes.status === "fulfilled" && movieRes.value?.[0]?.title) {
+                for (const v of getFuzzyTitleVariants(movieRes.value[0].title)) titlesToTrySet.add(v);
+            }
+        }
+    } catch (e) {}
+
+    // 1.8 Check connected Sonarr instances for exact monitored series title
+    try {
+        const { getEnabledArrInstancesInternal, arrApiGet } = await import("@/app/arr-actions");
+        if (season !== undefined || episode !== undefined) {
+            const sonarrApps = await getEnabledArrInstancesInternal("sonarr");
+            if (sonarrApps.success && Array.isArray(sonarrApps.data)) {
+                const cleanQueryAlnum = searchTitle.toLowerCase().replace(/[^a-z0-9]/g, "");
+                for (const app of sonarrApps.data) {
+                    const seriesRes = await arrApiGet(app, "/api/v3/series");
+                    if (seriesRes.success && Array.isArray(seriesRes.data)) {
+                        const matched = seriesRes.data.find((s: any) => {
+                            const sClean = (s.cleanTitle || s.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+                            return sClean === cleanQueryAlnum || sClean.includes(cleanQueryAlnum) || cleanQueryAlnum.includes(sClean);
+                        });
+                        if (matched && matched.title) {
+                            for (const v of getFuzzyTitleVariants(matched.title)) titlesToTrySet.add(v);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    } catch (e) {}
+
+    const titlesToTry = Array.from(titlesToTrySet);
 
     // Locate active Plex Media Servers
     let servers: any[] = [];
@@ -377,53 +537,131 @@ export async function inspectMediaStreams(
             continue;
         }
 
-        // 2. Query Plex on the verified active connection
-        // Try exact searchTitle, and if not found try variants (without 'The ' or with 'The ')
-        const titlesToTry: string[] = [searchTitle];
-        if (/^The\s+/i.test(searchTitle)) {
-            titlesToTry.push(searchTitle.replace(/^The\s+/i, ""));
-        } else {
-            titlesToTry.push("The " + searchTitle);
-        }
-
-        let results: PlexMediaStreamInfo[] = [];
+        // 2. Query Plex on the verified active connection across candidate title variations
         for (const qTitle of titlesToTry) {
+            let results: PlexMediaStreamInfo[] = [];
             try {
-                results = await searchPlexLibraryItems(activeUri, srvToken, qTitle, undefined, 10);
-                if (results && results.length > 0) break;
+                results = await searchPlexLibraryItems(activeUri, srvToken, qTitle, undefined, 25);
             } catch (e) {}
-        }
 
-        if (results && results.length > 0) {
-            // Find closest match by title
-            const sLower = searchTitle.toLowerCase().trim();
-            const sClean = sLower.replace(/^the\s+/i, "").trim();
+            if (results && results.length > 0) {
+                // If TV show episode is requested (season and/or episode specified)
+                if (season !== undefined) {
+                    const matchedShow = results.find(r => r.type === "show" && isMediaTitleMatch(r.title, qTitle));
+                    if (matchedShow) {
+                        try {
+                            const seasonsRes = await fetch(`${activeUri}/library/metadata/${matchedShow.ratingKey}/children`, {
+                                headers: { Accept: "application/json", "X-Plex-Token": srvToken },
+                                signal: AbortSignal.timeout(4000),
+                                cache: "no-store"
+                            });
+                            if (seasonsRes.ok) {
+                                const seasonsData = await seasonsRes.json();
+                                const seasonsList = seasonsData.MediaContainer?.Metadata || [];
+                                const targetSeason = seasonsList.find((sn: any) => sn.index === season);
+                                if (targetSeason) {
+                                    const epRes = await fetch(`${activeUri}/library/metadata/${targetSeason.ratingKey}/children`, {
+                                        headers: { Accept: "application/json", "X-Plex-Token": srvToken },
+                                        signal: AbortSignal.timeout(4000),
+                                        cache: "no-store"
+                                    });
+                                    if (epRes.ok) {
+                                        const epData = await epRes.json();
+                                        const epList = epData.MediaContainer?.Metadata || [];
+                                        const targetEp = episode !== undefined
+                                            ? epList.find((e: any) => e.index === episode)
+                                            : epList[0];
+                                        if (targetEp) {
+                                            const epNumStr = targetEp.index !== undefined ? `E${String(targetEp.index).padStart(2, "0")}` : "";
+                                            const sNumStr = season !== undefined ? `S${String(season).padStart(2, "0")}` : "";
+                                            const codeStr = sNumStr && epNumStr ? `${sNumStr}${epNumStr}` : (sNumStr || epNumStr);
+                                            matchedItem = {
+                                                ...targetEp,
+                                                title: `${matchedShow.title}${codeStr ? ` - ${codeStr}` : ""}${targetEp.title ? ` - ${targetEp.title}` : ""}`,
+                                                seriesTitle: matchedShow.title,
+                                                seasonIndex: season,
+                                                episodeIndex: targetEp.index
+                                            };
+                                            matchedServerUrl = activeUri;
+                                            matchedToken = srvToken;
+                                            matchedServerName = srv.name || "Plex Server";
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (e) {}
+                    }
 
-            const exactOrClose = results.find(r => {
-                const rLower = (r.title || "").toLowerCase().trim();
-                const rClean = rLower.replace(/^the\s+/i, "").trim();
-                if (!rClean || !sClean) return false;
-                if (rLower === sLower || rClean === sClean) return true;
-                if (sClean.length >= 3 && rClean.startsWith(sClean)) return true;
-                if (rClean.length >= 4 && sClean.startsWith(rClean)) return true;
-                if (sClean.length >= 4 && rClean.includes(sClean)) return true;
-                return false;
-            });
-
-            if (exactOrClose) {
-                matchedItem = exactOrClose;
-                matchedServerUrl = activeUri;
-                matchedToken = srvToken;
-                matchedServerName = srv.name || "Plex Server";
-                break;
+                    // Also check if any result is directly an episode matching season and episode
+                    if (!matchedItem) {
+                        const matchedEp = results.find(r => 
+                            r.type === "episode" && 
+                            (season === undefined || r.parentIndex === season) && 
+                            (episode === undefined || r.index === episode) &&
+                            isMediaTitleMatch(r.grandparentTitle || r.title, qTitle)
+                        );
+                        if (matchedEp) {
+                            const epNumStr = matchedEp.index !== undefined ? `E${String(matchedEp.index).padStart(2, "0")}` : (episode !== undefined ? `E${String(episode).padStart(2, "0")}` : "");
+                            const sNumStr = matchedEp.parentIndex !== undefined ? `S${String(matchedEp.parentIndex).padStart(2, "0")}` : (season !== undefined ? `S${String(season).padStart(2, "0")}` : "");
+                            const codeStr = sNumStr && epNumStr ? `${sNumStr}${epNumStr}` : (sNumStr || epNumStr);
+                            const showName = matchedEp.grandparentTitle || qTitle;
+                            matchedItem = {
+                                ...matchedEp,
+                                title: `${showName}${codeStr ? ` - ${codeStr}` : ""}${matchedEp.title ? ` - ${matchedEp.title}` : ""}`,
+                                seriesTitle: matchedEp.grandparentTitle,
+                                seasonIndex: matchedEp.parentIndex ?? season,
+                                episodeIndex: matchedEp.index ?? episode
+                            };
+                            matchedServerUrl = activeUri;
+                            matchedToken = srvToken;
+                            matchedServerName = srv.name || "Plex Server";
+                            break;
+                        }
+                    }
+                } else {
+                    // Standard movie or general media match
+                    const exactOrClose = results.find(r => isMediaTitleMatch(r.title, qTitle));
+                    if (exactOrClose) {
+                        matchedItem = exactOrClose;
+                        matchedServerUrl = activeUri;
+                        matchedToken = srvToken;
+                        matchedServerName = srv.name || "Plex Server";
+                        break;
+                    }
+                }
             }
+            if (matchedItem) break;
         }
+        if (matchedItem) break;
     }
 
     if (!matchedItem || !matchedItem.ratingKey) {
         logAgentEvent("WARN", `Media item "${searchTitle}" was not found in Plex library.`);
+        let sonarrContext = "";
+        try {
+            const { getEnabledArrInstancesInternal, arrApiGet } = await import("@/app/arr-actions");
+            const sonarrApps = await getEnabledArrInstancesInternal("sonarr");
+            if (sonarrApps.success && Array.isArray(sonarrApps.data)) {
+                const cleanQ = searchTitle.toLowerCase().replace(/[^a-z0-9]/g, "");
+                for (const app of sonarrApps.data) {
+                    const sRes = await arrApiGet(app, "/api/v3/series");
+                    if (sRes.success && Array.isArray(sRes.data)) {
+                        const foundSeries = sRes.data.find((s: any) => {
+                            const sClean = (s.cleanTitle || s.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+                            return sClean === cleanQ || sClean.includes(cleanQ) || cleanQ.includes(sClean);
+                        });
+                        if (foundSeries) {
+                            sonarrContext = ` (Tracked in Sonarr as "${foundSeries.title}" [${foundSeries.status}])`;
+                            break;
+                        }
+                    }
+                }
+            }
+        } catch (e) {}
+
         return {
-            mediaType: "unknown",
+            mediaType: season !== undefined || episode !== undefined ? "episode" : "unknown",
             title: searchTitle,
             year: year ? String(year) : undefined,
             files: [],
@@ -433,7 +671,7 @@ export async function inspectMediaStreams(
             hasSpanishAudio: false,
             hasEnglishSubtitles: false,
             verdict: "NOT_IN_LIBRARY",
-            diagnosisSummary: `Media item "${searchTitle}" could not be located in your Plex media library on ${matchedServerName}.`
+            diagnosisSummary: `Media item "${searchTitle}"${season !== undefined ? ` (Season ${season}${episode !== undefined ? `, Episode ${episode}` : ""})` : ""}${sonarrContext} could not be located in your Plex media library on ${matchedServerName}.`
         };
     }
 
@@ -629,6 +867,9 @@ export async function inspectMediaStreams(
     return {
         mediaType: matchedItem.type === "movie" ? "movie" : "episode",
         title: matchedItem.title,
+        showTitle: matchedItem.seriesTitle || matchedItem.grandparentTitle,
+        season: matchedItem.seasonIndex ?? matchedItem.parentIndex ?? season,
+        episode: matchedItem.episodeIndex ?? matchedItem.index ?? episode,
         year: matchedItem.year ? String(matchedItem.year) : undefined,
         ratingKey: matchedItem.ratingKey,
         serverName: matchedServerName,
@@ -900,23 +1141,50 @@ export async function searchAndGrabSonarrReplacement(
         return { success: false, escalated: true, ticketId: escalation.ticketId, error: "No Sonarr instance configured." };
     }
 
-    const app = appsRes.data[0];
-
-    // Find series
+    let matchedApp: any = null;
     let seriesId = 0;
-    try {
-        const seriesRes = await arrApiGet(app, `/api/v3/series/lookup?term=${encodeURIComponent(title)}`);
-        if (seriesRes.success && Array.isArray(seriesRes.data) && seriesRes.data.length > 0) {
-            seriesId = seriesRes.data[0].id || 0;
-        }
-    } catch (e) {}
+    const cleanQ = (title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 
+    // 1. Check existing series in all configured Sonarr instances
+    for (const app of appsRes.data) {
+        try {
+            const seriesRes = await arrApiGet(app, "/api/v3/series");
+            if (seriesRes.success && Array.isArray(seriesRes.data)) {
+                const matched = seriesRes.data.find((s: any) => {
+                    const sClean = (s.cleanTitle || s.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+                    return sClean === cleanQ || sClean.includes(cleanQ) || cleanQ.includes(sClean);
+                });
+                if (matched?.id) {
+                    matchedApp = app;
+                    seriesId = matched.id;
+                    break;
+                }
+            }
+        } catch (e) {}
+    }
+
+    // 2. Fallback: series lookup
     if (seriesId === 0) {
+        for (const app of appsRes.data) {
+            try {
+                const seriesRes = await arrApiGet(app, `/api/v3/series/lookup?term=${encodeURIComponent(title)}`);
+                if (seriesRes.success && Array.isArray(seriesRes.data) && seriesRes.data.length > 0) {
+                    seriesId = seriesRes.data[0].id || 0;
+                    if (seriesId > 0) {
+                        matchedApp = app;
+                        break;
+                    }
+                }
+            } catch (e) {}
+        }
+    }
+
+    if (seriesId === 0 || !matchedApp) {
         const escalation = await escalateToAdminTicket({
             user,
             title,
             issue: `Series "${title}" not found in Sonarr to replace S${seasonNumber || 1}E${episodeNumber || 1}.`,
-            stepsTaken: ["1. Checked Sonarr library: Series not found."],
+            stepsTaken: ["1. Checked Sonarr library across all connected instances: Series not found."],
             recommendation: `Add "${title}" to Sonarr and monitor.`
         });
         return { success: false, escalated: true, ticketId: escalation.ticketId, error: `Series "${title}" not found in Sonarr.` };
@@ -924,11 +1192,44 @@ export async function searchAndGrabSonarrReplacement(
 
     // Trigger Sonarr episode search command
     try {
-        await arrApiPost(app, "/api/v3/command", {
+        if (seasonNumber !== undefined && episodeNumber !== undefined) {
+            const epRes = await arrApiGet(matchedApp, `/api/v3/episode?seriesId=${seriesId}`);
+            if (epRes.success && Array.isArray(epRes.data)) {
+                const targetEp = epRes.data.find((e: any) => e.seasonNumber === seasonNumber && e.episodeNumber === episodeNumber);
+                if (targetEp?.id) {
+                    await arrApiPost(matchedApp, "/api/v3/command", {
+                        name: "EpisodeSearch",
+                        episodeIds: [targetEp.id]
+                    });
+                    recordAgentGrabAction(userIdentifier, "SONARR_REPLACE", `${title} S${seasonNumber}E${episodeNumber}`, maxGrabs);
+                    return {
+                        success: true,
+                        releaseTitle: `${title} S${String(seasonNumber).padStart(2, "0")}E${String(episodeNumber).padStart(2, "0")}`,
+                        quality: "HDTV / WEB-DL"
+                    };
+                }
+            }
+        }
+
+        if (seasonNumber !== undefined) {
+            await arrApiPost(matchedApp, "/api/v3/command", {
+                name: "SeasonSearch",
+                seriesId,
+                seasonNumber
+            });
+            recordAgentGrabAction(userIdentifier, "SONARR_REPLACE", `${title} Season ${seasonNumber}`, maxGrabs);
+            return {
+                success: true,
+                releaseTitle: `${title} - Season ${seasonNumber}`,
+                quality: "HDTV / WEB-DL"
+            };
+        }
+
+        await arrApiPost(matchedApp, "/api/v3/command", {
             name: "SeriesSearch",
             seriesId
         });
-        recordAgentGrabAction(userIdentifier, "SONARR_REPLACE", `${title} S${seasonNumber || 1}E${episodeNumber || 1}`, maxGrabs);
+        recordAgentGrabAction(userIdentifier, "SONARR_REPLACE", `${title}`, maxGrabs);
         return {
             success: true,
             releaseTitle: `${title} - Season ${seasonNumber || 1}`,

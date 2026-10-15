@@ -73,6 +73,12 @@ export interface PlexMediaStreamInfo {
     guardRailBlockReason?: string;
     serverGuardRailActive?: boolean;
     isPlaceholder?: boolean;
+    parentIndex?: number;
+    index?: number;
+    grandparentTitle?: string;
+    seriesTitle?: string;
+    seasonIndex?: number;
+    episodeIndex?: number;
 }
 
 /**

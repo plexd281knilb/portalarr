@@ -57,7 +57,9 @@ export const GEMINI_TOOL_DECLARATIONS = [
         parameters: {
             type: "OBJECT",
             properties: {
-                title: { type: "STRING", description: "Title of the movie or TV show to inspect" },
+                title: { type: "STRING", description: "Canonical title of the movie or TV show to inspect (e.g. 'R.J. Decker', 'The Sandlot'). For TV shows, provide the series title only; do not include season or episode numbers in this string." },
+                season: { type: "INTEGER", description: "Season number (e.g. 1, 2) if inspecting a TV series episode" },
+                episode: { type: "INTEGER", description: "Episode number (e.g. 5) if inspecting a TV series episode" },
                 year: { type: "INTEGER", description: "Release year of the title if known" },
                 target_server: { type: "STRING", description: "Specific Plex server to inspect if known" }
             },
@@ -72,6 +74,8 @@ export const GEMINI_TOOL_DECLARATIONS = [
             properties: {
                 title: { type: "STRING", description: "Title of the media to replace" },
                 year: { type: "INTEGER", description: "Release year if known" },
+                season: { type: "INTEGER", description: "Season number if TV show" },
+                episode: { type: "INTEGER", description: "Episode number if TV show" },
                 media_type: { type: "STRING", description: "movie or tv" },
                 issue: { type: "STRING", description: "Reason for replacement (e.g. missing English audio, corrupt file)" }
             },
@@ -279,7 +283,14 @@ export async function executeAiAssistantTool(
         // --- 4. INSPECT MEDIA CONTAINER ---
         case "inspect_media_container": {
             try {
-                const insp = await inspectMediaStreams(args.title, ctx.user, args.target_server, args.year);
+                const insp = await inspectMediaStreams(
+                    args.title, 
+                    ctx.user, 
+                    args.target_server, 
+                    args.year, 
+                    args.season, 
+                    args.episode
+                );
                 ctx.mediaInspectionHolder.current = insp;
 
                 const summary = `Inspected Plex container for "${insp.title}": Found ${insp.audioTracks.length} audio tracks (${insp.audioTracks.map(t => t.displayTitle).join(", ")}). Verdict: ${insp.verdict}.`;
@@ -294,18 +305,29 @@ export async function executeAiAssistantTool(
 
                 // Auto-grab if English audio is missing and in autonomous mode
                 if (insp.verdict === "MISSING_LANGUAGE_TRACK" && ctx.autonomyLevel === "autonomous") {
-                    const grabResult = await searchAndGrabRadarrReplacement(
-                        insp.title,
-                        insp.year ? parseInt(insp.year, 10) : undefined,
-                        "Missing English audio track / Spanish only release",
-                        ctx.user
-                    );
+                    const isTv = args.season !== undefined || args.episode !== undefined || insp.mediaType === "episode";
+                    const targetSeason = args.season ?? insp.season;
+                    const targetEpisode = args.episode ?? insp.episode;
+                    const grabResult = isTv
+                        ? await searchAndGrabSonarrReplacement(
+                            insp.showTitle || insp.title,
+                            targetSeason,
+                            targetEpisode,
+                            "Missing English audio track / Spanish only release",
+                            ctx.user
+                        )
+                        : await searchAndGrabRadarrReplacement(
+                            insp.title,
+                            insp.year ? parseInt(insp.year, 10) : undefined,
+                            "Missing English audio track / Spanish only release",
+                            ctx.user
+                        );
                     if (grabResult.success) {
                         ctx.actionsTaken.push({
                             action: "RADARR_SEARCH_GRAB",
                             status: "SUCCESS",
                             target: insp.title,
-                            summary: `Autonomous Grab: Queued verified English release "${grabResult.releaseTitle}" (${grabResult.quality}) in Radarr.`,
+                            summary: `Autonomous Grab: Queued verified English release "${grabResult.releaseTitle}" (${grabResult.quality}) in ${isTv ? "Sonarr" : "Radarr"}.`,
                             details: grabResult,
                             timestamp
                         });
@@ -331,9 +353,15 @@ export async function executeAiAssistantTool(
         // --- 5. SEARCH AND REPLACE MEDIA ---
         case "search_and_replace_media": {
             try {
-                const isTv = args.media_type === "tv";
+                const isTv = args.media_type === "tv" || args.season !== undefined || args.episode !== undefined;
                 const grabResult = isTv 
-                    ? await searchAndGrabSonarrReplacement(args.title, args.year, args.issue || "Media defect replacement", ctx.user)
+                    ? await searchAndGrabSonarrReplacement(
+                        args.title, 
+                        args.season, 
+                        args.episode, 
+                        args.issue || "Media defect replacement", 
+                        ctx.user
+                    )
                     : await searchAndGrabRadarrReplacement(args.title, args.year, args.issue || "Media defect replacement", ctx.user);
 
                 if (grabResult.success) {

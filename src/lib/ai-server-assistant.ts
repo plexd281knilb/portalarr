@@ -927,7 +927,7 @@ ${serverListMarkdown}
 
         if (resolvedTitle && resolvedTitle.length > 1) {
             try {
-                mediaInspection = await inspectMediaStreams(resolvedTitle, user, resolvedServer, candidateYear);
+                mediaInspection = await inspectMediaStreams(resolvedTitle, user, resolvedServer, candidateYear, cleanedMedia.season, cleanedMedia.episode);
 
                 const playbackSummary = mediaInspection.playbackTest
                     ? mediaInspection.playbackTest.canPlay
@@ -947,19 +947,32 @@ ${serverListMarkdown}
                 // If English audio is truly missing, handle based on autonomy level
                 if (mediaInspection.verdict === "MISSING_LANGUAGE_TRACK") {
                     if (autonomyLevel === "autonomous") {
-                        const grabResult = await searchAndGrabRadarrReplacement(
-                            mediaInspection.title, 
-                            candidateYear || (mediaInspection.year ? parseInt(mediaInspection.year, 10) : undefined),
-                            "Missing English audio track / Spanish only file",
-                            user
-                        );
+                        const isEpisode = mediaInspection.mediaType === "episode" || cleanedMedia.season !== undefined;
+                        const targetSeason = cleanedMedia.season ?? mediaInspection.season ?? 1;
+                        const targetEpisode = cleanedMedia.episode ?? mediaInspection.episode ?? 1;
+                        const seriesOrShowTitle = mediaInspection.showTitle || mediaInspection.title;
+
+                        const grabResult = isEpisode
+                            ? await searchAndGrabSonarrReplacement(
+                                seriesOrShowTitle,
+                                targetSeason,
+                                targetEpisode,
+                                "Missing English audio track / Spanish only file",
+                                user
+                            )
+                            : await searchAndGrabRadarrReplacement(
+                                mediaInspection.title, 
+                                candidateYear || (mediaInspection.year ? parseInt(mediaInspection.year, 10) : undefined),
+                                "Missing English audio track / Spanish only file",
+                                user
+                            );
 
                         if (grabResult.success) {
                             actionsTaken.push({
-                                action: "RADARR_SEARCH_GRAB",
+                                action: isEpisode ? "SONARR_SEARCH_GRAB" : "RADARR_SEARCH_GRAB",
                                 status: "SUCCESS",
                                 target: mediaInspection.title,
-                                summary: `Autonomous Grab: Located verified English release "${grabResult.releaseTitle}" (${grabResult.quality}, ${grabResult.sizeFormatted}) on indexer "${grabResult.indexer}" and queued download in Radarr.`,
+                                summary: `Autonomous Grab: Located verified English release "${grabResult.releaseTitle}" (${grabResult.quality || "Standard"}, ${grabResult.sizeFormatted || "N/A"}) on indexer "${grabResult.indexer || "Indexer"}" and queued download in ${isEpisode ? "Sonarr" : "Radarr"}.`,
                                 details: grabResult,
                                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                             });
@@ -1112,13 +1125,17 @@ SERVER ADMINISTRATOR CAPABILITIES & HOMELAB MISSION CONTROL:
 - Whenever an administrator asks about host hardware, Docker containers, container restarts, or password sharing, CALL THE RELEVANT FUNCTION TOOL immediately to obtain real-time ground truth.
 ` : `
 USER PERMISSIONS:
-- Standard user. Homelab infrastructure tools, Docker fleet management, and sharing audits are restricted to administrators.
+- Standard user. Homelab infrastructure tools, Docker fleet management, and sharing audits are restricted to administrators. If the user asks about Docker containers, host CPU/RAM hardware, or server infrastructure management, state clearly: "Access Restricted: Homelab infrastructure tools and Docker fleet management are restricted to server administrators."
 - Focus on playback troubleshooting, audio/subtitle settings, and media discovery.
 `}
 
 FUNCTION CALLING INSTRUCTIONS:
 - You have access to tools to execute actions or retrieve live server telemetry.
 - When the user asks to inspect a media file, test playback, terminate a stream, check server or cluster status, check Docker containers, or inspect host hardware, ALWAYS call the corresponding function tool.
+- MEDIA & TV EPISODE SEARCH RULES:
+  * For TV show episodes (e.g. "Rj Decker Season 2 Episode 5" or "Breaking Bad S02E05"), provide the canonical series name as "title" (e.g. "R.J. Decker" or "Breaking Bad"), the season number as "season" (e.g. 2), and the episode number as "episode" (e.g. 5) when invoking "inspect_media_container" or "search_and_replace_media".
+  * Strip season and episode markers from the "title" parameter.
+  * If a series name has abbreviations or initials (e.g. "RJ Decker", "Agents of SHIELD", "MASH"), normalize to the canonical title (e.g. "R.J. Decker", "Marvel's Agents of S.H.I.E.L.D.", "M*A*S*H").
 - After receiving the function response, present the information clearly with Markdown formatting, bullet points, and actionable next steps.
 
 ${actionsTaken.length > 0 ? `

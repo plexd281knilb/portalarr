@@ -86,6 +86,9 @@ export interface MediaFilePart {
 export interface MediaStreamInspection {
     mediaType: "movie" | "episode" | "book" | "unknown";
     title: string;
+    showTitle?: string;
+    season?: number;
+    episode?: number;
     year?: string;
     ratingKey?: string;
     serverName?: string;
