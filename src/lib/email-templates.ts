@@ -246,6 +246,20 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         ]
     },
     {
+        id: "kindle_delivery",
+        name: "Send-to-Kindle Book File Delivery",
+        description: "Dispatches the physical ebook file (.epub) directly to the user's @kindle.com address for wireless Whispernet sync.",
+        triggerEvent: "Triggered whenever a user or admin clicks 'Send to Kindle' in the Reader or Book details modal, attaching the book file to an SMTP message.",
+        category: "KINDLE",
+        defaultSubject: "Deliver Book: {title}",
+        defaultBody: `<p>Delivering your ebook "<strong>{title}</strong>" to your Kindle device.</p>`,
+        variables: [
+            { key: "{title}", description: "Title of the book being delivered", sampleValue: "Mistborn" },
+            { key: "{username}", description: "Username of the recipient", sampleValue: "alex_reader" },
+            { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
+        ]
+    },
+    {
         id: "kindle_failed",
         name: "Send-to-Kindle Delivery Failure Guide",
         description: "Sent to the user's personal email when delivery of an ebook to their Kindle email fails.",
@@ -1131,6 +1145,20 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{amountDue}", description: "Net amount due after referral credits", sampleValue: "$165.00" },
             { key: "{monthlyAlternativeText}", description: "Delayed monthly payment terms", sampleValue: "$15/month starting February 1, 2027" },
             { key: "{referralNoticeDetails}", description: "Detailed referral credit explanation", sampleValue: "You earned 1 free month for referring @alex_cinephile! Your next annual payment is discounted by $15.00 ($165.00 total) or your monthly billing is delayed until February 1, 2027." },
+            { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
+        ]
+    },
+    {
+        id: "broadcast",
+        name: "Server Announcement & Broadcast Email",
+        description: "Sent to all active members or filtered user groups when an administrator dispatches an announcement broadcast.",
+        triggerEvent: "Triggered when an administrator dispatches a server-wide announcement or broadcast notification in Email Management.",
+        category: "BROADCAST",
+        defaultSubject: "📢 Server Announcement: {subject}",
+        defaultBody: `<h2>Server Announcement 📢</h2><p>{message}</p>`,
+        variables: [
+            { key: "{subject}", description: "Announcement topic", sampleValue: "Scheduled Maintenance" },
+            { key: "{message}", description: "Main broadcast text", sampleValue: "Server upgrades are scheduled for tonight." },
             { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
         ]
     }

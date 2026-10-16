@@ -65,6 +65,7 @@ import {
     stopTautulliBackfill 
 } from "@/lib/telemetry/tautulli-backfill";
 import { getUserCache, setUserCache, clearUserCache } from "@/lib/prewarm";
+import { notifyAdminsOnPendingApproval } from "@/lib/admin-approvals";
 
 if (typeof process !== "undefined" && process.env) {
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
@@ -3002,6 +3003,7 @@ export async function revokePlexAccessForUserInternal(
                     }
                 });
                 logger.addLog("INFO", "APPROVAL", `Plex access revocation for "${user.username}" staged in Admin Approval Queue (ID: ${approval.id}).`);
+                notifyAdminsOnPendingApproval(approval).catch(e => console.warn("[APPROVAL-NOTIFY-ERROR]:", e?.message || e));
                 return { success: true, staged: true, approvalId: approval.id, message: "Plex access revocation staged for admin approval." };
             }
             return { success: true, staged: true, approvalId: existing.id, message: "Plex access revocation already staged for admin approval." };
@@ -3282,7 +3284,7 @@ export async function expireDueTrialsAndSubscriptionsInternal() {
                         }
                     });
                     if (!existing) {
-                        await prisma.adminApproval.create({
+                        const approval = await prisma.adminApproval.create({
                             data: {
                                 type: "PLEX_ACCESS_REVOKE",
                                 status: "PENDING",
@@ -3299,6 +3301,7 @@ export async function expireDueTrialsAndSubscriptionsInternal() {
                             }
                         });
                         logger.addLog("INFO", "APPROVAL", `Staged Plex access revocation for expired user "${u.username}" in Admin Approval Queue.`);
+                        notifyAdminsOnPendingApproval(approval).catch(e => console.warn("[APPROVAL-NOTIFY-ERROR]:", e?.message || e));
                         await notifyAdminUserRoleOrAccessChange({
                             username: u.username,
                             email: u.email,
@@ -4324,6 +4327,7 @@ export async function updateUserPlexLibraries(
         });
 
         logger.addLog("INFO", "APPROVAL", `Plex access change for "${user.username}" staged for admin approval (ID: ${approval.id}).`);
+        notifyAdminsOnPendingApproval(approval).catch(e => console.warn("[APPROVAL-NOTIFY-ERROR]:", e?.message || e));
         return { 
             success: true, 
             staged: true, 
@@ -4358,7 +4362,26 @@ export async function sendOrQueueEmail(options: {
             return { success: true, sent: false, queued: false };
         }
 
-        const requireApproval = (settings?.requireApprovalForEmails ?? true) && !options.bypassApproval;
+        // Evaluate whether this email requires approval based on global setting and granular email approval policy
+        let requireApproval = false;
+        if (!options.bypassApproval) {
+            const globalEmailApproval = settings?.requireApprovalForEmails ?? true;
+            if (globalEmailApproval) {
+                let policy: Record<string, boolean> = {};
+                try {
+                    if (settings?.emailApprovalPolicy) {
+                        policy = JSON.parse(settings.emailApprovalPolicy);
+                    }
+                } catch {}
+
+                // If explicit policy setting configured for this templateId, use it; otherwise default to true (require approval)
+                if (options.templateId && policy[options.templateId] !== undefined) {
+                    requireApproval = Boolean(policy[options.templateId]);
+                } else {
+                    requireApproval = true;
+                }
+            }
+        }
 
         if (requireApproval) {
             const attachmentNote = options.attachments && options.attachments.length > 0 ? ` [${options.attachments.length} attachment(s)]` : "";
@@ -4384,6 +4407,7 @@ export async function sendOrQueueEmail(options: {
             });
             logger.addLog("INFO", "APPROVAL", `Email "${options.subject}" to ${recipientStr} queued for admin approval (ID: ${approval.id}).`);
             logger.addLog("INFO", "EMAIL", `Email "${options.subject}" to ${recipientStr} staged in Admin Approval Queue (ID: ${approval.id}).`);
+            notifyAdminsOnPendingApproval(approval).catch(e => console.warn("[APPROVAL-NOTIFY-ERROR]:", e?.message || e));
             return { success: true, queued: true, approvalId: approval.id };
         }
 
@@ -4707,16 +4731,31 @@ export async function getApprovalSettingsAction() {
         await verifyAdmin();
         await ensureSchemaColumns();
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        let emailApprovalPolicy: Record<string, boolean> = {};
+        if (settings?.emailApprovalPolicy) {
+            try {
+                emailApprovalPolicy = JSON.parse(settings.emailApprovalPolicy);
+            } catch {}
+        }
+
         return {
             success: true,
             requireApprovalForPlexChanges: settings?.requireApprovalForPlexChanges ?? true,
-            requireApprovalForEmails: settings?.requireApprovalForEmails ?? true
+            requireApprovalForEmails: settings?.requireApprovalForEmails ?? true,
+            emailApprovalPolicy,
+            notifyAdminOnPendingApproval: settings?.notifyAdminOnPendingApproval ?? true,
+            adminApprovalDiscordNotify: settings?.adminApprovalDiscordNotify ?? true,
+            adminApprovalEmailNotify: settings?.adminApprovalEmailNotify ?? true,
         };
     } catch (e: any) {
         return {
             success: false,
             requireApprovalForPlexChanges: true,
-            requireApprovalForEmails: true
+            requireApprovalForEmails: true,
+            emailApprovalPolicy: {},
+            notifyAdminOnPendingApproval: true,
+            adminApprovalDiscordNotify: true,
+            adminApprovalEmailNotify: true,
         };
     }
 }
@@ -4724,6 +4763,10 @@ export async function getApprovalSettingsAction() {
 export async function saveApprovalSettingsAction(data: {
     requireApprovalForPlexChanges?: boolean;
     requireApprovalForEmails?: boolean;
+    emailApprovalPolicy?: Record<string, boolean>;
+    notifyAdminOnPendingApproval?: boolean;
+    adminApprovalDiscordNotify?: boolean;
+    adminApprovalEmailNotify?: boolean;
 }) {
     try {
         await verifyAdmin();
@@ -4735,6 +4778,18 @@ export async function saveApprovalSettingsAction(data: {
         }
         if (typeof data.requireApprovalForEmails === "boolean") {
             updateData.requireApprovalForEmails = data.requireApprovalForEmails;
+        }
+        if (data.emailApprovalPolicy !== undefined) {
+            updateData.emailApprovalPolicy = JSON.stringify(data.emailApprovalPolicy);
+        }
+        if (typeof data.notifyAdminOnPendingApproval === "boolean") {
+            updateData.notifyAdminOnPendingApproval = data.notifyAdminOnPendingApproval;
+        }
+        if (typeof data.adminApprovalDiscordNotify === "boolean") {
+            updateData.adminApprovalDiscordNotify = data.adminApprovalDiscordNotify;
+        }
+        if (typeof data.adminApprovalEmailNotify === "boolean") {
+            updateData.adminApprovalEmailNotify = data.adminApprovalEmailNotify;
         }
 
         await prisma.settings.update({
@@ -5016,6 +5071,7 @@ export async function setUserTrialOrSubscription(
                                 }
                             });
                             logger.addLog("INFO", "APPROVAL", `Plex access sync for "${user.username}" staged in Admin Approval Queue (ID: ${approval.id}).`);
+                            notifyAdminsOnPendingApproval(approval).catch(e => console.warn("[APPROVAL-NOTIFY-ERROR]:", e?.message || e));
                         }
                     } else {
                         await syncUserPlexShareInternal(adminToken, user, rawKeys, servers, shares);
@@ -6171,6 +6227,7 @@ export async function registerTrialUserFromInvite(data: {
                         }
                     });
                     logger.addLog("INFO", "APPROVAL", `New trial registration Plex invite for "${newUser.username}" staged in Admin Approval Queue (ID: ${approval.id}).`);
+                    notifyAdminsOnPendingApproval(approval).catch(e => console.warn("[APPROVAL-NOTIFY-ERROR]:", e?.message || e));
                 } else {
                     const adminToken = decryptData(settings.mainPlexToken);
                     const servers = await getPlexServers(adminToken);
@@ -6976,6 +7033,7 @@ export async function updateUserSelectedPlexLibrariesAction(selectedKeys: string
                         }
                     });
                     logger.addLog("INFO", "APPROVAL", `Plex library preference update for "${dbUser.username}" staged in Admin Approval Queue (ID: ${approval.id}).`);
+                    notifyAdminsOnPendingApproval(approval).catch(e => console.warn("[APPROVAL-NOTIFY-ERROR]:", e?.message || e));
                 }
                 revalidatePath("/settings/profile");
                 return {
@@ -7162,6 +7220,7 @@ export async function createOrUpdateSubAccountAction(payload: {
                                 }
                             });
                             logger.addLog("INFO", "APPROVAL", `Sub-account Plex access for "${updated.username}" staged in Admin Approval Queue (ID: ${approval.id}).`);
+                            notifyAdminsOnPendingApproval(approval).catch(e => console.warn("[APPROVAL-NOTIFY-ERROR]:", e?.message || e));
                         }
                     } else {
                         await syncUserPlexShareInternal(adminToken, updated, targetKeys);
@@ -7275,6 +7334,7 @@ export async function createOrUpdateSubAccountAction(payload: {
                                 }
                             });
                             logger.addLog("INFO", "APPROVAL", `New sub-account Plex access for "${newSub.username}" staged in Admin Approval Queue (ID: ${approval.id}).`);
+                            notifyAdminsOnPendingApproval(approval).catch(e => console.warn("[APPROVAL-NOTIFY-ERROR]:", e?.message || e));
                         }
                     } else {
                         await syncUserPlexShareInternal(adminToken, newSub, targetKeys);

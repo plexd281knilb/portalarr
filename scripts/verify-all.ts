@@ -8983,6 +8983,110 @@ async function runTestSuite() {
         }
     });
 
+    // 111. Action Approval Gates: Granular Outgoing Email Approval Policy & Admin Notification Routing
+    await assertTest("Test 111: Action Approval Gates: Granular Email Policies & Admin Notifications", async () => {
+        const { ensureSchemaColumns } = await import("../src/lib/prisma");
+        await ensureSchemaColumns();
+        const { notifyAdminsOnPendingApproval } = await import("../src/lib/admin-approvals");
+
+        // 1. Settings persistence: save and retrieve approval policy and notifications
+        const initialSettings = await prisma.settings.findFirst({ where: { id: "global" } });
+        const testPolicy = {
+            "kindle_delivery": false, // auto-send
+            "kindle_success": false,  // auto-send
+            "user_approval": true     // requires admin approval
+        };
+
+        await prisma.settings.upsert({
+            where: { id: "global" },
+            create: {
+                id: "global",
+                requireApprovalForEmails: true,
+                requireApprovalForPlexChanges: true,
+                emailApprovalPolicy: JSON.stringify(testPolicy),
+                notifyAdminOnPendingApproval: true,
+                adminApprovalDiscordNotify: true,
+                adminApprovalEmailNotify: true
+            },
+            update: {
+                requireApprovalForEmails: true,
+                requireApprovalForPlexChanges: true,
+                emailApprovalPolicy: JSON.stringify(testPolicy),
+                notifyAdminOnPendingApproval: true,
+                adminApprovalDiscordNotify: true,
+                adminApprovalEmailNotify: true
+            }
+        });
+
+        const updatedSettings = await prisma.settings.findFirst({ where: { id: "global" } });
+        if (!updatedSettings?.emailApprovalPolicy) {
+            throw new Error("emailApprovalPolicy failed to persist in settings");
+        }
+        const parsedPolicy = JSON.parse(updatedSettings.emailApprovalPolicy);
+        if (parsedPolicy.kindle_delivery !== false || parsedPolicy.user_approval !== true) {
+            throw new Error(`Parsed emailApprovalPolicy mismatch: ${JSON.stringify(parsedPolicy)}`);
+        }
+        if (updatedSettings.notifyAdminOnPendingApproval !== true || updatedSettings.adminApprovalDiscordNotify !== true || updatedSettings.adminApprovalEmailNotify !== true) {
+            throw new Error("Admin approval notification flags failed to persist");
+        }
+
+        // 2. Test sendOrQueueEmail logic
+        // Case A: templateId "kindle_delivery" has policy === false -> should bypass queue and return queued: false
+        const { sendOrQueueEmail } = await import("../src/app/actions");
+        const kindleResult = await sendOrQueueEmail({
+            templateId: "kindle_delivery",
+            to: "test_kindle_user@kindle.com",
+            subject: "Your Book Delivery",
+            html: "<p>Test EPUB</p>"
+        });
+        if (kindleResult.queued === true) {
+            throw new Error("Expected kindle_delivery to bypass approval queue when policy[kindle_delivery] === false");
+        }
+
+        // Case B: templateId "user_approval" has policy === true -> should queue in AdminApproval
+        const userApprovalResult = await sendOrQueueEmail({
+            templateId: "user_approval",
+            to: "new_approved_user@example.com",
+            subject: "Your Account is Approved",
+            html: "<p>Welcome!</p>"
+        });
+        if (userApprovalResult.queued !== true || !userApprovalResult.approvalId) {
+            throw new Error("Expected user_approval to be staged in AdminApproval queue when policy[user_approval] === true");
+        }
+
+        // Verify the approval item was created in Prisma
+        const approvalRecord = await prisma.adminApproval.findUnique({
+            where: { id: userApprovalResult.approvalId }
+        });
+        if (!approvalRecord || approvalRecord.status !== "PENDING" || approvalRecord.type !== "EMAIL") {
+            throw new Error(`Staged approval record invalid: ${JSON.stringify(approvalRecord)}`);
+        }
+
+        // 3. Test notifyAdminsOnPendingApproval dispatcher
+        const notifyResult = await notifyAdminsOnPendingApproval(approvalRecord);
+        if (typeof notifyResult?.adminsNotified !== "number") {
+            throw new Error(`notifyAdminsOnPendingApproval returned unexpected result: ${JSON.stringify(notifyResult)}`);
+        }
+
+        // Clean up staged test approval
+        await prisma.adminApproval.delete({ where: { id: userApprovalResult.approvalId } });
+
+        // Restore initial settings if existed
+        if (initialSettings) {
+            await prisma.settings.update({
+                where: { id: "global" },
+                data: {
+                    requireApprovalForEmails: initialSettings.requireApprovalForEmails,
+                    requireApprovalForPlexChanges: initialSettings.requireApprovalForPlexChanges,
+                    emailApprovalPolicy: initialSettings.emailApprovalPolicy,
+                    notifyAdminOnPendingApproval: initialSettings.notifyAdminOnPendingApproval,
+                    adminApprovalDiscordNotify: initialSettings.adminApprovalDiscordNotify,
+                    adminApprovalEmailNotify: initialSettings.adminApprovalEmailNotify
+                }
+            });
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

@@ -183,7 +183,17 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 ### 9. Admin Approval Gates & Governance (`/settings/access`)
 - **Strict Dual-Gate Governance**: Two independent switches in Access Settings govern automated system mutations:
   - `requireApprovalForPlexChanges` (default `true`): When enabled, NO modifications to live Plex library shares (new trial invites, user preference updates, manual library expansions, or trial/subscription expirations) are applied immediately to Plex servers. Instead, all proposed modifications are staged as `PENDING` records in the `AdminApproval` queue (`PLEX_ACCESS_GRANT` or `PLEX_ACCESS_REVOKE`).
-  - `requireApprovalForEmails` (default `true`): When enabled, NO automated user-facing emails (account approvals, password resets, trial welcome, full membership activations, payment receipts, media availability notifications, support ticket updates, mass broadcasts) are dispatched via SMTP. Instead, they are held in `AdminApproval` (`EMAIL`) until explicitly approved.
+  - `requireApprovalForEmails` (default `true`): When enabled globally, automated user-facing emails are held in `AdminApproval` (`EMAIL`) until explicitly approved, unless configured to auto-dispatch under the Granular Email Approval Policy.
+- **Granular Outgoing Email Approval Policy (`emailApprovalPolicy`)**:
+  - Provides template-by-template governance over every email type in the system.
+  - Individual switches allow administrators to require approval or permit immediate automatic dispatch via SMTP (e.g. unchecking `kindle_delivery` allows Send-to-Kindle book deliveries to transmit immediately without admin bottlenecking).
+  - Quick action presets: `⚡ Auto-Send Kindle Only` (sets Kindle templates to auto-send while retaining approval on account/subscription emails), `Require All`, and `Auto-Send All`.
+  - Filter by search and category pills (`All`, `Kindle`, `Requests`, `Auth`, `Trials`, `Payments`, `Support`, `Broadcast`).
+- **Admin Pending Approval Notifications & Alerts**:
+  - `notifyAdminOnPendingApproval` (default `true`): Automatically notifies administrators whenever an action (Plex access change or staged email) enters the Action Approval Queue requiring review.
+  - Multi-channel notification delivery:
+    - **Discord Bot / Webhook Alerts (`adminApprovalDiscordNotify`)**: Posts rich amber embeds (`0xF59E0B`) to `#system-status`, request channel, or webhook with action type, target entity, queue status, and direct link.
+    - **Admin Review Emails (`adminApprovalEmailNotify`)**: Dispatches branded HTML alert emails via SMTP to all `ADMIN` and `SUPER_USER` accounts with 1-click review buttons (`bypassApproval: true`).
 - **Admin Alert Immunity**: Direct alerts sent to administrators (e.g. `admin_payment_received`, new user account requests, AI bot escalation tickets) pass `bypassApproval: true` so administrators receive timely system alerts without self-blocking their own notification channels.
 - **Interactive Review Queue**: Accessible on `/settings/access`, offering instant status filters (`PENDING`, `APPROVED`, `REJECTED`, `ALL`), type filters (`EMAIL`, `PLEX_ACCESS_GRANT`, `PLEX_ACCESS_REVOKE`), batch approvals (`Approve All`), batch rejections (`Reject All`), payload inspection modals, and custom rejection reason tracking.
 
@@ -624,11 +634,16 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 ---
 
 ### 28. Action Approval Gates & Governance (Strict Staging & Manual Review)
-- **Email Dispatch Gating (`requireApprovalForEmails`)**:
+- **Email Dispatch Gating & Granular Policy (`requireApprovalForEmails` & `emailApprovalPolicy`)**:
   - 100% of outgoing emails across the entire codebase route through `sendOrQueueEmail` in `src/app/actions.ts`.
-  - When `requireApprovalForEmails` is `true` (default), outgoing emails (user approvals, trial reminders, subscription notices, request alerts, Kindle deliveries, support ticket escalations, etc.) are strictly staged in the `AdminApproval` table with `type: "EMAIL"` and status `"PENDING"`.
+  - When `requireApprovalForEmails` is `true` (default), outgoing emails are staged in `AdminApproval` (`type: "EMAIL"`, `status: "PENDING"`) unless their specific `templateId` is configured with `emailApprovalPolicy[templateId] === false`.
+  - Individual template toggling enables granular operational automation: unchecking "Require Approval" for `kindle_delivery`, `kindle_success`, or `kindle_failed` allows books to be sent instantly to Kindle readers via SMTP while keeping account and payment emails securely staged for manual review.
+  - Quick action presets: `⚡ Auto-Send Kindle Only`, `Require All`, `Auto-Send All`.
   - Staged emails preserve recipient, subject, rendered HTML, templateId, and file attachments in `payload`.
-  - Emails are ONLY dispatched via SMTP when an administrator explicitly approves the item in the Action Approval Queue (`approveAdminApprovalAction`) or when the toggle is turned OFF (`requireApprovalForEmails === false`).
+  - Emails are dispatched via SMTP when approved in the queue (`approveAdminApprovalAction`) or when configured to auto-dispatch.
+- **Admin Real-Time Approval Notifications (`notifyAdminOnPendingApproval`)**:
+  - Whenever an action or staged email enters the queue, Portalarr automatically alerts administrators via configured channels (`adminApprovalDiscordNotify` Discord embeds and `adminApprovalEmailNotify` SMTP emails).
+  - Admin notification emails pass `bypassApproval: true` to prevent infinite recursion into the approval queue.
 - **Live Plex Modification Gating (`requireApprovalForPlexChanges`)**:
   - All operations that grant, sync, modify, or revoke Plex server shares (`revokePlexAccessForUserInternal`, `updateUserPlexLibraries`, `setUserTrialOrSubscription`, `createOrUpdateSubAccountAction`, `registerUserWithInviteAction`, `updateUserSelectedPlexLibrariesAction`) respect `requireApprovalForPlexChanges`.
   - When active (`true`), modifications are strictly staged in `AdminApproval` (`PLEX_ACCESS_GRANT` or `PLEX_ACCESS_REVOKE`). PMS friends and library share updates are withheld until an administrator explicitly reviews and approves the staged change.
