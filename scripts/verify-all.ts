@@ -8567,11 +8567,51 @@ async function runTestSuite() {
         if (plexTelemetry.transcodeSpeed !== "2.8x" || !plexTelemetry.transcodeThrottled) {
             throw new Error(`Expected 2.8x throttled transcode, got ${plexTelemetry.transcodeSpeed}`);
         }
+        if (!plexTelemetry.transcodeSpeedHealthy) {
+            throw new Error("Expected throttled transcode to be healthy");
+        }
         if (!plexTelemetry.transcodeBufferAheadFormatted || !plexTelemetry.transcodeBufferAheadFormatted.includes("2m")) {
             throw new Error(`Expected ~2m buffer ahead, got ${plexTelemetry.transcodeBufferAheadFormatted}`);
         }
         if (plexTelemetry.connectionMode !== "lan" || !plexTelemetry.connectionLabel.includes("Direct LAN")) {
             throw new Error(`Expected Direct LAN connection mode, got ${plexTelemetry.connectionLabel}`);
+        }
+
+        // 4b. Validate 0.0x throttled transcode is marked as 100% healthy (power saving, not slow error)
+        const mockThrottledZeroSpeedSession = {
+            duration: 7200000,
+            viewOffset: 1800000,
+            TranscodeSession: {
+                videoDecision: "transcode",
+                speed: 0.0,
+                throttled: true,
+                maxOffsetAvailable: 1920
+            }
+        };
+        const zeroSpeedTelemetry = extractStreamTelemetry(mockThrottledZeroSpeedSession);
+        if (zeroSpeedTelemetry.transcodeSpeed !== "0.0x") {
+            throw new Error(`Expected 0.0x speed, got ${zeroSpeedTelemetry.transcodeSpeed}`);
+        }
+        if (!zeroSpeedTelemetry.transcodeThrottled) {
+            throw new Error("Expected transcodeThrottled to be true for 0.0x session");
+        }
+        if (!zeroSpeedTelemetry.transcodeSpeedHealthy) {
+            throw new Error("Expected 0.0x throttled transcode to be healthy (not slow red error)");
+        }
+
+        // 4c. Validate unthrottled slow transcode (< 1.0x) is flagged as slow / buffering risk
+        const mockSlowTranscodeSession = {
+            duration: 7200000,
+            viewOffset: 1800000,
+            TranscodeSession: {
+                videoDecision: "transcode",
+                speed: 0.6,
+                throttled: false
+            }
+        };
+        const slowTelemetry = extractStreamTelemetry(mockSlowTranscodeSession);
+        if (slowTelemetry.transcodeSpeedHealthy !== false) {
+            throw new Error("Expected unthrottled 0.6x transcode to be flagged as unhealthy/slow");
         }
 
         // 5. Extract telemetry from Tautulli session (seconds-based duration/view_offset, remote WAN)

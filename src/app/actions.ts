@@ -19486,6 +19486,7 @@ export async function getUserPlexHubData(options?: { skipCache?: boolean }) {
                             transcodeHwDecoding: s.transcode_hw_decoding === 1 || s.transcode_hw_decoding === true,
                             transcodeHwEncoding: s.transcode_hw_encoding === 1 || s.transcode_hw_encoding === true,
                             transcodeSpeed: s.transcode_speed || "1.0",
+                            transcodeThrottled: Boolean(s.transcode_throttled === 1 || s.transcode_throttled === true || s.transcode_throttled === "1"),
                             diagnosis
                         });
                     }

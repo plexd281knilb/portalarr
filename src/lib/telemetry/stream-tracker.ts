@@ -521,13 +521,6 @@ export function extractStreamTelemetry(s: any) {
         subtitleStream?.burn === true
     );
 
-    // Transcode Speed & Times
-    const rawSpeed = ts?.speed !== undefined ? ts.speed : s.transcode_speed;
-    const speedNum = rawSpeed !== undefined && rawSpeed !== null && !isNaN(Number(rawSpeed)) ? Number(rawSpeed) : null;
-    const transcodeSpeed = speedNum !== null ? `${speedNum.toFixed(1)}x` : null;
-    const transcodeSpeedHealthy = speedNum !== null ? speedNum >= 1.0 : true;
-    const transcodeThrottled = Boolean(ts?.throttled || s.transcode_throttled);
-
     // Transcode Buffer Progress & Buffer Ahead
     const transcodeProgress = ts?.progress !== undefined && ts?.progress !== null && !isNaN(Number(ts.progress))
         ? Math.round(Number(ts.progress))
@@ -549,6 +542,27 @@ export function extractStreamTelemetry(s: any) {
             }
         }
     }
+
+    // Transcode Speed & Throttle Evaluation
+    const rawSpeed = ts?.speed !== undefined ? ts.speed : s.transcode_speed;
+    const speedNum = rawSpeed !== undefined && rawSpeed !== null && !isNaN(Number(rawSpeed)) ? Number(rawSpeed) : null;
+    const transcodeSpeed = speedNum !== null ? `${speedNum.toFixed(1)}x` : null;
+
+    // Check throttled flag from Plex (ts.throttled) or Tautulli (s.transcode_throttled)
+    const isThrottledVal = (val: any) => val === true || val === 1 || val === "1" || val === "true";
+    let transcodeThrottled = isThrottledVal(ts?.throttled) || isThrottledVal(s.transcode_throttled);
+
+    // If Plex has transcode buffer lead time ahead (>= 10s) and speed drops below 1.0x (e.g. 0.0x), Plex has throttled transcode to save power
+    if (!transcodeThrottled && transcodeBufferAheadSec !== null && transcodeBufferAheadSec >= 10 && speedNum !== null && speedNum < 1.0) {
+        transcodeThrottled = true;
+    }
+
+    // Transcode speed health:
+    // If throttled, Plex intentionally puts transcode process to sleep to save power -> 100% HEALTHY (NOT an error!).
+    // If not throttled, >= 1.0x is healthy.
+    const transcodeSpeedHealthy = transcodeThrottled
+        ? true
+        : (speedNum !== null ? speedNum >= 1.0 : true);
 
     // Hardware Acceleration & Power Metrics
     const hwInfo = resolveHwTranscodeInfo({

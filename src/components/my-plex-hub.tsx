@@ -523,8 +523,8 @@ export default function MyPlexHub() {
                                             : "None (Direct Play)"}
                                     </div>
                                     <div className="text-[10px] text-muted-foreground font-mono">
-                                        Speed: {selectedStreamForDiagnosis.videoDecision === "transcode" ? `${selectedStreamForDiagnosis.transcodeSpeed}x` : "1.0x (Raw)"}
-                                        {selectedStreamForDiagnosis.transcodeThrottled ? " (Throttled)" : ""}
+                                        Speed: {selectedStreamForDiagnosis.videoDecision === "transcode" ? `${selectedStreamForDiagnosis.transcodeSpeed || "1.0"}x` : "1.0x (Raw)"}
+                                        {selectedStreamForDiagnosis.transcodeThrottled ? " (Throttled • Buffer Ahead)" : ""}
                                     </div>
                                 </div>
                             </div>
