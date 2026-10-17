@@ -4798,6 +4798,7 @@ export async function saveApprovalSettingsAction(data: {
         });
 
         revalidatePath("/settings/access");
+        revalidatePath("/settings");
         return { success: true, message: "Approval workflow settings saved successfully!" };
     } catch (e: any) {
         return { success: false, error: e.message || "Failed to update approval settings" };

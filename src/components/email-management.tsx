@@ -10,8 +10,11 @@ import {
     sendBroadcastEmailAction,
     sendTestBroadcastEmailAction,
     getEmailNotificationSettings,
-    saveEmailNotificationSettingsAction
+    saveEmailNotificationSettingsAction,
+    getApprovalSettingsAction,
+    saveApprovalSettingsAction
 } from "@/app/actions";
+import Link from "next/link";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,7 +32,8 @@ import {
     Search, Users, Sparkles, RotateCcw, 
     Loader2, Shield, Key, BookOpen, LifeBuoy, UserCheck, 
     Bell, BellOff, CheckSquare, Square, 
-    Code, Eye, Check, Zap, DollarSign, CalendarClock
+    Code, Eye, Check, Zap, DollarSign, CalendarClock,
+    FolderCheck, AlertTriangle, SlidersHorizontal
 } from "lucide-react";
 import { triggerSubscriptionRenewalCheckAction } from "@/app/payment-actions";
 
@@ -129,6 +133,17 @@ export default function EmailManagement() {
     const [runningRenewalCheck, setRunningRenewalCheck] = useState(false);
     const [renewalCheckResult, setRenewalCheckResult] = useState<string | null>(null);
 
+    // Approval governance state
+    const [approvalSettings, setApprovalSettings] = useState<{
+        requireApprovalForEmails: boolean;
+        emailApprovalPolicy: Record<string, boolean>;
+    }>({
+        requireApprovalForEmails: true,
+        emailApprovalPolicy: {}
+    });
+    const [savingApprovalPolicy, setSavingApprovalPolicy] = useState(false);
+    const [approvalPolicyMsg, setApprovalPolicyMsg] = useState("");
+
     const handleRunRenewalSweep = async () => {
         setRunningRenewalCheck(true);
         setRenewalCheckResult(null);
@@ -149,10 +164,11 @@ export default function EmailManagement() {
     const loadData = async () => {
         setLoading(true);
         try {
-            const [uRes, tRes, sRes] = await Promise.all([
+            const [uRes, tRes, sRes, aRes] = await Promise.all([
                 getBroadcastUsersAction(),
                 getEmailTemplatesAction(),
-                getEmailNotificationSettings()
+                getEmailNotificationSettings(),
+                getApprovalSettingsAction()
             ]);
 
             if (uRes.success && uRes.users) {
@@ -176,6 +192,13 @@ export default function EmailManagement() {
 
             if (sRes.success && sRes.settings) {
                 setEmailSettings(sRes.settings);
+            }
+
+            if (aRes && aRes.success) {
+                setApprovalSettings({
+                    requireApprovalForEmails: aRes.requireApprovalForEmails ?? true,
+                    emailApprovalPolicy: aRes.emailApprovalPolicy || {}
+                });
             }
         } catch (e) {
             console.error("Failed to load email management data:", e);
@@ -529,6 +552,127 @@ export default function EmailManagement() {
         } finally {
             setSavingEmailSettings(false);
         }
+    };
+
+    // Approval Governance Handlers
+    const handleToggleTemplateApproval = async (templateId: string, required: boolean) => {
+        setSavingApprovalPolicy(true);
+        try {
+            const updatedPolicy = {
+                ...(approvalSettings.emailApprovalPolicy || {}),
+                [templateId]: required
+            };
+            setApprovalSettings(prev => ({
+                ...prev,
+                emailApprovalPolicy: updatedPolicy
+            }));
+            const res = await saveApprovalSettingsAction({ emailApprovalPolicy: updatedPolicy });
+            if (res.success) {
+                setApprovalPolicyMsg(required ? `Staged: ${templateId} now requires approval.` : `Auto-Send: ${templateId} will send via SMTP.`);
+                setTimeout(() => setApprovalPolicyMsg(""), 3000);
+            }
+        } catch (e: any) {
+            console.error("Failed to toggle template approval:", e);
+        } finally {
+            setSavingApprovalPolicy(false);
+        }
+    };
+
+    const handleToggleCategoryApproval = async (templateIds: string[], required: boolean) => {
+        setSavingApprovalPolicy(true);
+        try {
+            const updatedPolicy = {
+                ...(approvalSettings.emailApprovalPolicy || {})
+            };
+            for (const id of templateIds) {
+                updatedPolicy[id] = required;
+            }
+            setApprovalSettings(prev => ({
+                ...prev,
+                emailApprovalPolicy: updatedPolicy
+            }));
+            const res = await saveApprovalSettingsAction({ emailApprovalPolicy: updatedPolicy });
+            if (res.success) {
+                setApprovalPolicyMsg(required ? "Approval required for this notification." : "Auto-send enabled via SMTP.");
+                setTimeout(() => setApprovalPolicyMsg(""), 3000);
+            }
+        } catch (e: any) {
+            console.error("Failed to toggle category approval:", e);
+        } finally {
+            setSavingApprovalPolicy(false);
+        }
+    };
+
+    const handleToggleMasterApproval = async (required: boolean) => {
+        setSavingApprovalPolicy(true);
+        try {
+            setApprovalSettings(prev => ({
+                ...prev,
+                requireApprovalForEmails: required
+            }));
+            const res = await saveApprovalSettingsAction({ requireApprovalForEmails: required });
+            if (res.success) {
+                setApprovalPolicyMsg(required ? "Approval gate enabled for outgoing emails." : "Approval gate bypassed (all auto-send).");
+                setTimeout(() => setApprovalPolicyMsg(""), 3000);
+            }
+        } catch (e: any) {
+            console.error("Failed to toggle master approval:", e);
+        } finally {
+            setSavingApprovalPolicy(false);
+        }
+    };
+
+    const handleApplyKindlePreset = async () => {
+        setSavingApprovalPolicy(true);
+        try {
+            const updatedPolicy = {
+                ...(approvalSettings.emailApprovalPolicy || {}),
+                "kindle_delivery": false,
+                "kindle_success": false,
+                "kindle_failed": false
+            };
+            setApprovalSettings(prev => ({
+                ...prev,
+                emailApprovalPolicy: updatedPolicy
+            }));
+            const res = await saveApprovalSettingsAction({ emailApprovalPolicy: updatedPolicy });
+            if (res.success) {
+                setApprovalPolicyMsg("Kindle deliveries set to auto-send via SMTP!");
+                setTimeout(() => setApprovalPolicyMsg(""), 3000);
+            }
+        } catch (e: any) {
+            console.error("Failed to apply Kindle preset:", e);
+        } finally {
+            setSavingApprovalPolicy(false);
+        }
+    };
+
+    const handleSetAllApprovals = async (required: boolean) => {
+        setSavingApprovalPolicy(true);
+        try {
+            const updatedPolicy: Record<string, boolean> = {};
+            for (const t of templates) {
+                updatedPolicy[t.id] = required;
+            }
+            setApprovalSettings(prev => ({
+                ...prev,
+                emailApprovalPolicy: updatedPolicy
+            }));
+            const res = await saveApprovalSettingsAction({ emailApprovalPolicy: updatedPolicy });
+            if (res.success) {
+                setApprovalPolicyMsg(required ? "All templates now require admin approval." : "All templates set to auto-send via SMTP.");
+                setTimeout(() => setApprovalPolicyMsg(""), 3000);
+            }
+        } catch (e: any) {
+            console.error("Failed to set all approvals:", e);
+        } finally {
+            setSavingApprovalPolicy(false);
+        }
+    };
+
+    const isCategoryApprovalRequired = (templateIds: string[]) => {
+        if (!approvalSettings.requireApprovalForEmails) return false;
+        return templateIds.some(id => approvalSettings.emailApprovalPolicy?.[id] !== false);
     };
 
     if (loading) {
@@ -1214,6 +1358,45 @@ export default function EmailManagement() {
                                             </div>
                                         </div>
                                     )}
+
+                                    {/* INDIVIDUAL TEMPLATE APPROVAL GATE CONTROL */}
+                                    <div className="mt-2.5 p-3 rounded-xl bg-[#141d18]/90 border border-emerald-500/30 flex flex-wrap items-center justify-between gap-3 text-xs shadow-sm">
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0">
+                                                <FolderCheck className="h-4 w-4" />
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-bold text-foreground text-xs">Action Approval Gate:</span>
+                                                    {approvalSettings.requireApprovalForEmails && (approvalSettings.emailApprovalPolicy?.[currentTemplate.id] !== false) ? (
+                                                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30 font-medium">
+                                                            🔒 Requires Approval (Staged)
+                                                        </Badge>
+                                                    ) : (
+                                                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-medium">
+                                                            ⚡ Auto-Send via SMTP
+                                                        </Badge>
+                                                    )}
+                                                </div>
+                                                <p className="text-[11px] text-muted-foreground mt-0.5">
+                                                    {approvalSettings.emailApprovalPolicy?.[currentTemplate.id] !== false
+                                                        ? "Staged in the Action Approval Queue for administrator authorization before dispatch."
+                                                        : "Direct delivery: Sends immediately through your configured SMTP server with zero manual review."}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2 ml-auto">
+                                            <Label htmlFor={`template-gate-switch-${currentTemplate.id}`} className="text-[11px] font-medium text-muted-foreground cursor-pointer select-none">
+                                                {approvalSettings.emailApprovalPolicy?.[currentTemplate.id] !== false ? "Hold for Approval" : "Send Immediately"}
+                                            </Label>
+                                            <Switch
+                                                id={`template-gate-switch-${currentTemplate.id}`}
+                                                checked={approvalSettings.emailApprovalPolicy?.[currentTemplate.id] !== false}
+                                                onCheckedChange={(checked) => handleToggleTemplateApproval(currentTemplate.id, checked)}
+                                                disabled={savingApprovalPolicy || !approvalSettings.requireApprovalForEmails}
+                                            />
+                                        </div>
+                                    </div>
                                 </CardHeader>
 
                                 <CardContent className="space-y-4">
@@ -1446,209 +1629,640 @@ export default function EmailManagement() {
                             </div>
                         )}
 
+                        {/* APPROVAL GOVERNANCE BANNER */}
+                        <div className="p-4 rounded-xl border border-emerald-500/30 bg-[#141d18]/90 backdrop-blur-sm space-y-3 shadow-md">
+                            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                                <div className="flex items-start gap-3">
+                                    <div className="p-2 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0 mt-0.5 lg:mt-0">
+                                        <FolderCheck className="h-4.5 w-4.5" />
+                                    </div>
+                                    <div className="space-y-0.5">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <span className="text-xs font-bold text-foreground">Action Approval Gates & Queue Governance</span>
+                                            <Badge variant="outline" className={`text-[10px] font-semibold ${approvalSettings.requireApprovalForEmails ? "bg-amber-500/10 text-amber-400 border-amber-500/30" : "bg-muted/50 text-muted-foreground border-border/40"}`}>
+                                                {approvalSettings.requireApprovalForEmails ? "🔒 Approval Gate Active" : "⚡ Gate Bypassed (All Auto-Send)"}
+                                            </Badge>
+                                            {approvalPolicyMsg && (
+                                                <span className="text-xs text-emerald-400 font-medium flex items-center gap-1 animate-in fade-in">
+                                                    <CheckCircle2 className="h-3.5 w-3.5" /> {approvalPolicyMsg}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <p className="text-[11px] text-muted-foreground leading-relaxed">
+                                            Control which notifications are held in the Action Approval Queue for manual authorization vs. sent immediately via SMTP. You can toggle approval gating for each category below.
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                                    <div className="flex items-center gap-1.5 mr-1 bg-muted/40 p-1 px-2.5 rounded-lg border border-border/40">
+                                        <Label htmlFor="master-approval-toggle" className="text-[11px] font-semibold cursor-pointer select-none">
+                                            Master Gate:
+                                        </Label>
+                                        <Switch
+                                            id="master-approval-toggle"
+                                            checked={approvalSettings.requireApprovalForEmails}
+                                            onCheckedChange={handleToggleMasterApproval}
+                                            disabled={savingApprovalPolicy}
+                                            className="scale-90"
+                                        />
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={handleApplyKindlePreset}
+                                        disabled={savingApprovalPolicy}
+                                        className="h-7 text-[11px] font-semibold border-amber-500/40 text-amber-300 hover:bg-amber-500/10 gap-1"
+                                    >
+                                        <Zap className="h-3 w-3 text-amber-400" />
+                                        ⚡ Auto-Send Kindle Only
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => handleSetAllApprovals(true)}
+                                        disabled={savingApprovalPolicy}
+                                        className="h-7 text-[11px] font-semibold border-border/50 text-muted-foreground hover:text-foreground"
+                                    >
+                                        Stage All
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => handleSetAllApprovals(false)}
+                                        disabled={savingApprovalPolicy}
+                                        className="h-7 text-[11px] font-semibold border-border/50 text-muted-foreground hover:text-foreground"
+                                    >
+                                        Auto-Send All
+                                    </Button>
+                                    <Link href="/settings/access?tab=approvals">
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-7 text-[11px] font-semibold border-primary/40 text-primary hover:bg-primary/10 gap-1"
+                                        >
+                                            <FolderCheck className="h-3 w-3" />
+                                            Approval Queue
+                                        </Button>
+                                    </Link>
+                                </div>
+                            </div>
+                        </div>
+
                         <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 ${!emailSettings.emailNotificationsEnabled ? "opacity-50 pointer-events-none" : ""}`}>
                             {/* 1. User Account Approvals */}
-                            <div className="flex items-start justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all">
-                                <div className="space-y-1 pr-3">
-                                    <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
-                                        <UserCheck className="h-4 w-4 text-emerald-400" /> User Account Approvals
+                            <div className="flex flex-col justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all gap-2.5">
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="space-y-1 pr-1">
+                                        <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                            <UserCheck className="h-4 w-4 text-emerald-400" /> User Account Approvals
+                                        </div>
+                                        <p className="text-[11px] text-muted-foreground leading-tight">
+                                            Email users a welcome notification when their account request is approved by an admin.
+                                        </p>
                                     </div>
-                                    <p className="text-[11px] text-muted-foreground leading-tight">
-                                        Email users a welcome notification when their account request is approved by an admin.
-                                    </p>
+                                    <Switch
+                                        checked={emailSettings.notifyUserApproval}
+                                        onCheckedChange={(val) => handleToggleEmailSetting("notifyUserApproval", val)}
+                                        disabled={!emailSettings.emailNotificationsEnabled}
+                                    />
                                 </div>
-                                <Switch
-                                    checked={emailSettings.notifyUserApproval}
-                                    onCheckedChange={(val) => handleToggleEmailSetting("notifyUserApproval", val)}
-                                    disabled={!emailSettings.emailNotificationsEnabled}
-                                />
+                                <div className="pt-2 border-t border-border/20 flex items-center justify-between gap-2 text-[10px]">
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                        <FolderCheck className="h-3 w-3 text-emerald-400 shrink-0" />
+                                        <span className="text-muted-foreground font-medium">Approval Gate:</span>
+                                        {isCategoryApprovalRequired(["user_approval"]) ? (
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">
+                                                🔒 Staged
+                                            </Badge>
+                                        ) : (
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                                                ⚡ Auto-Send
+                                            </Badge>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                        <Label htmlFor="gate-user_approval" className="text-[10px] text-muted-foreground cursor-pointer select-none">
+                                            {isCategoryApprovalRequired(["user_approval"]) ? "Require Review" : "Auto-Send"}
+                                        </Label>
+                                        <Switch
+                                            id="gate-user_approval"
+                                            checked={isCategoryApprovalRequired(["user_approval"])}
+                                            onCheckedChange={(val) => handleToggleCategoryApproval(["user_approval"], val)}
+                                            disabled={savingApprovalPolicy || !approvalSettings.requireApprovalForEmails}
+                                            className="scale-75"
+                                        />
+                                    </div>
+                                </div>
                             </div>
 
                             {/* 2. Admin New Registration Alerts */}
-                            <div className="flex items-start justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all">
-                                <div className="space-y-1 pr-3">
-                                    <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
-                                        <Shield className="h-4 w-4 text-blue-400" /> New User Requests
+                            <div className="flex flex-col justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all gap-2.5">
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="space-y-1 pr-1">
+                                        <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                            <Shield className="h-4 w-4 text-blue-400" /> New User Requests
+                                        </div>
+                                        <p className="text-[11px] text-muted-foreground leading-tight">
+                                            Send alert emails to server administrators whenever a new user registers a pending account.
+                                        </p>
                                     </div>
-                                    <p className="text-[11px] text-muted-foreground leading-tight">
-                                        Send alert emails to server administrators whenever a new user registers a pending account.
-                                    </p>
+                                    <Switch
+                                        checked={emailSettings.notifyAdminNewUserRequest}
+                                        onCheckedChange={(val) => handleToggleEmailSetting("notifyAdminNewUserRequest", val)}
+                                        disabled={!emailSettings.emailNotificationsEnabled}
+                                    />
                                 </div>
-                                <Switch
-                                    checked={emailSettings.notifyAdminNewUserRequest}
-                                    onCheckedChange={(val) => handleToggleEmailSetting("notifyAdminNewUserRequest", val)}
-                                    disabled={!emailSettings.emailNotificationsEnabled}
-                                />
+                                <div className="pt-2 border-t border-border/20 flex items-center justify-between gap-2 text-[10px]">
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                        <FolderCheck className="h-3 w-3 text-emerald-400 shrink-0" />
+                                        <span className="text-muted-foreground font-medium">Approval Gate:</span>
+                                        {isCategoryApprovalRequired(["admin_new_user"]) ? (
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">
+                                                🔒 Staged
+                                            </Badge>
+                                        ) : (
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                                                ⚡ Auto-Send
+                                            </Badge>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                        <Label htmlFor="gate-admin_new_user" className="text-[10px] text-muted-foreground cursor-pointer select-none">
+                                            {isCategoryApprovalRequired(["admin_new_user"]) ? "Require Review" : "Auto-Send"}
+                                        </Label>
+                                        <Switch
+                                            id="gate-admin_new_user"
+                                            checked={isCategoryApprovalRequired(["admin_new_user"])}
+                                            onCheckedChange={(val) => handleToggleCategoryApproval(["admin_new_user"], val)}
+                                            disabled={savingApprovalPolicy || !approvalSettings.requireApprovalForEmails}
+                                            className="scale-75"
+                                        />
+                                    </div>
+                                </div>
                             </div>
 
                             {/* 3. Password Resets */}
-                            <div className="flex items-start justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all">
-                                <div className="space-y-1 pr-3">
-                                    <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
-                                        <Key className="h-4 w-4 text-amber-400" /> Password Resets
+                            <div className="flex flex-col justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all gap-2.5">
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="space-y-1 pr-1">
+                                        <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                            <Key className="h-4 w-4 text-amber-400" /> Password Resets
+                                        </div>
+                                        <p className="text-[11px] text-muted-foreground leading-tight">
+                                            Send temporary password emails for user forgot-password and admin reset actions.
+                                        </p>
                                     </div>
-                                    <p className="text-[11px] text-muted-foreground leading-tight">
-                                        Send temporary password emails for user forgot-password and admin reset actions.
-                                    </p>
+                                    <Switch
+                                        checked={emailSettings.notifyPasswordReset}
+                                        onCheckedChange={(val) => handleToggleEmailSetting("notifyPasswordReset", val)}
+                                        disabled={!emailSettings.emailNotificationsEnabled}
+                                    />
                                 </div>
-                                <Switch
-                                    checked={emailSettings.notifyPasswordReset}
-                                    onCheckedChange={(val) => handleToggleEmailSetting("notifyPasswordReset", val)}
-                                    disabled={!emailSettings.emailNotificationsEnabled}
-                                />
+                                <div className="pt-2 border-t border-border/20 flex items-center justify-between gap-2 text-[10px]">
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                        <FolderCheck className="h-3 w-3 text-emerald-400 shrink-0" />
+                                        <span className="text-muted-foreground font-medium">Approval Gate:</span>
+                                        {isCategoryApprovalRequired(["password_reset"]) ? (
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">
+                                                🔒 Staged
+                                            </Badge>
+                                        ) : (
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                                                ⚡ Auto-Send
+                                            </Badge>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                        <Label htmlFor="gate-password_reset" className="text-[10px] text-muted-foreground cursor-pointer select-none">
+                                            {isCategoryApprovalRequired(["password_reset"]) ? "Require Review" : "Auto-Send"}
+                                        </Label>
+                                        <Switch
+                                            id="gate-password_reset"
+                                            checked={isCategoryApprovalRequired(["password_reset"])}
+                                            onCheckedChange={(val) => handleToggleCategoryApproval(["password_reset"], val)}
+                                            disabled={savingApprovalPolicy || !approvalSettings.requireApprovalForEmails}
+                                            className="scale-75"
+                                        />
+                                    </div>
+                                </div>
                             </div>
 
                             {/* 4. Media & Book Requests */}
-                            <div className="flex items-start justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all">
-                                <div className="space-y-1 pr-3">
-                                    <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
-                                        <BookOpen className="h-4 w-4 text-indigo-400" /> Media & Book Requests
+                            <div className="flex flex-col justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all gap-2.5">
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="space-y-1 pr-1">
+                                        <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                            <BookOpen className="h-4 w-4 text-indigo-400" /> Media & Book Requests
+                                        </div>
+                                        <p className="text-[11px] text-muted-foreground leading-tight">
+                                            Notify users when requested books/audiobooks are ready, failed, or require admin attention.
+                                        </p>
                                     </div>
-                                    <p className="text-[11px] text-muted-foreground leading-tight">
-                                        Notify users when requested books/audiobooks are ready, failed, or require admin attention.
-                                    </p>
+                                    <Switch
+                                        checked={emailSettings.notifyMediaRequests}
+                                        onCheckedChange={(val) => handleToggleEmailSetting("notifyMediaRequests", val)}
+                                        disabled={!emailSettings.emailNotificationsEnabled}
+                                    />
                                 </div>
-                                <Switch
-                                    checked={emailSettings.notifyMediaRequests}
-                                    onCheckedChange={(val) => handleToggleEmailSetting("notifyMediaRequests", val)}
-                                    disabled={!emailSettings.emailNotificationsEnabled}
-                                />
+                                <div className="pt-2 border-t border-border/20 flex items-center justify-between gap-2 text-[10px]">
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                        <FolderCheck className="h-3 w-3 text-emerald-400 shrink-0" />
+                                        <span className="text-muted-foreground font-medium">Approval Gate:</span>
+                                        {isCategoryApprovalRequired(["media_ready", "media_request_admin", "seerr_request_new_admin", "seerr_request_auto_approved", "seerr_request_approved", "seerr_request_declined", "seerr_request_available", "seerr_request_failed"]) ? (
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">
+                                                🔒 Staged
+                                            </Badge>
+                                        ) : (
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                                                ⚡ Auto-Send
+                                            </Badge>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                        <Label htmlFor="gate-media_requests" className="text-[10px] text-muted-foreground cursor-pointer select-none">
+                                            {isCategoryApprovalRequired(["media_ready", "media_request_admin", "seerr_request_new_admin", "seerr_request_auto_approved", "seerr_request_approved", "seerr_request_declined", "seerr_request_available", "seerr_request_failed"]) ? "Require Review" : "Auto-Send"}
+                                        </Label>
+                                        <Switch
+                                            id="gate-media_requests"
+                                            checked={isCategoryApprovalRequired(["media_ready", "media_request_admin", "seerr_request_new_admin", "seerr_request_auto_approved", "seerr_request_approved", "seerr_request_declined", "seerr_request_available", "seerr_request_failed"])}
+                                            onCheckedChange={(val) => handleToggleCategoryApproval(["media_ready", "media_request_admin", "seerr_request_new_admin", "seerr_request_auto_approved", "seerr_request_approved", "seerr_request_declined", "seerr_request_available", "seerr_request_failed"], val)}
+                                            disabled={savingApprovalPolicy || !approvalSettings.requireApprovalForEmails}
+                                            className="scale-75"
+                                        />
+                                    </div>
+                                </div>
                             </div>
 
                             {/* 5. Support Tickets */}
-                            <div className="flex items-start justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all">
-                                <div className="space-y-1 pr-3">
-                                    <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
-                                        <LifeBuoy className="h-4 w-4 text-cyan-400" /> Support Tickets
+                            <div className="flex flex-col justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all gap-2.5">
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="space-y-1 pr-1">
+                                        <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                            <LifeBuoy className="h-4 w-4 text-cyan-400" /> Support Tickets
+                                        </div>
+                                        <p className="text-[11px] text-muted-foreground leading-tight">
+                                            Dispatch email notifications for submitted tickets, automated error reports, and admin status updates.
+                                        </p>
                                     </div>
-                                    <p className="text-[11px] text-muted-foreground leading-tight">
-                                        Dispatch email notifications for submitted tickets, automated error reports, and admin status updates.
-                                    </p>
+                                    <Switch
+                                        checked={emailSettings.notifySupportTickets}
+                                        onCheckedChange={(val) => handleToggleEmailSetting("notifySupportTickets", val)}
+                                        disabled={!emailSettings.emailNotificationsEnabled}
+                                    />
                                 </div>
-                                <Switch
-                                    checked={emailSettings.notifySupportTickets}
-                                    onCheckedChange={(val) => handleToggleEmailSetting("notifySupportTickets", val)}
-                                    disabled={!emailSettings.emailNotificationsEnabled}
-                                />
+                                <div className="pt-2 border-t border-border/20 flex items-center justify-between gap-2 text-[10px]">
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                        <FolderCheck className="h-3 w-3 text-emerald-400 shrink-0" />
+                                        <span className="text-muted-foreground font-medium">Approval Gate:</span>
+                                        {isCategoryApprovalRequired(["ticket_update", "ticket_error_alert"]) ? (
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">
+                                                🔒 Staged
+                                            </Badge>
+                                        ) : (
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                                                ⚡ Auto-Send
+                                            </Badge>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                        <Label htmlFor="gate-support_tickets" className="text-[10px] text-muted-foreground cursor-pointer select-none">
+                                            {isCategoryApprovalRequired(["ticket_update", "ticket_error_alert"]) ? "Require Review" : "Auto-Send"}
+                                        </Label>
+                                        <Switch
+                                            id="gate-support_tickets"
+                                            checked={isCategoryApprovalRequired(["ticket_update", "ticket_error_alert"])}
+                                            onCheckedChange={(val) => handleToggleCategoryApproval(["ticket_update", "ticket_error_alert"], val)}
+                                            disabled={savingApprovalPolicy || !approvalSettings.requireApprovalForEmails}
+                                            className="scale-75"
+                                        />
+                                    </div>
+                                </div>
                             </div>
 
                             {/* 6. Send-to-Kindle Deliveries */}
-                            <div className="flex items-start justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all">
-                                <div className="space-y-1 pr-3">
-                                    <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
-                                        <Send className="h-4 w-4 text-amber-500" /> Send-to-Kindle Deliveries
+                            <div className="flex flex-col justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all gap-2.5">
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="space-y-1 pr-1">
+                                        <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                            <Send className="h-4 w-4 text-amber-500" /> Send-to-Kindle Deliveries
+                                        </div>
+                                        <p className="text-[11px] text-muted-foreground leading-tight">
+                                            Allow users and automatic download grabbers to deliver ebook attachments directly to Kindle devices.
+                                        </p>
                                     </div>
-                                    <p className="text-[11px] text-muted-foreground leading-tight">
-                                        Allow users and automatic download grabbers to deliver ebook attachments directly to Kindle devices.
-                                    </p>
+                                    <Switch
+                                        checked={emailSettings.notifySendToKindle}
+                                        onCheckedChange={(val) => handleToggleEmailSetting("notifySendToKindle", val)}
+                                        disabled={!emailSettings.emailNotificationsEnabled}
+                                    />
                                 </div>
-                                <Switch
-                                    checked={emailSettings.notifySendToKindle}
-                                    onCheckedChange={(val) => handleToggleEmailSetting("notifySendToKindle", val)}
-                                    disabled={!emailSettings.emailNotificationsEnabled}
-                                />
+                                <div className="pt-2 border-t border-border/20 flex items-center justify-between gap-2 text-[10px]">
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                        <FolderCheck className="h-3 w-3 text-emerald-400 shrink-0" />
+                                        <span className="text-muted-foreground font-medium">Approval Gate:</span>
+                                        {isCategoryApprovalRequired(["kindle_delivery", "kindle_success", "kindle_failed"]) ? (
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">
+                                                🔒 Staged
+                                            </Badge>
+                                        ) : (
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                                                ⚡ Auto-Send
+                                            </Badge>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                        <Label htmlFor="gate-kindle_deliveries" className="text-[10px] text-muted-foreground cursor-pointer select-none">
+                                            {isCategoryApprovalRequired(["kindle_delivery", "kindle_success", "kindle_failed"]) ? "Require Review" : "Auto-Send"}
+                                        </Label>
+                                        <Switch
+                                            id="gate-kindle_deliveries"
+                                            checked={isCategoryApprovalRequired(["kindle_delivery", "kindle_success", "kindle_failed"])}
+                                            onCheckedChange={(val) => handleToggleCategoryApproval(["kindle_delivery", "kindle_success", "kindle_failed"], val)}
+                                            disabled={savingApprovalPolicy || !approvalSettings.requireApprovalForEmails}
+                                            className="scale-75"
+                                        />
+                                    </div>
+                                </div>
                             </div>
 
                             {/* 7. Free Trial Welcome */}
-                            <div className="flex items-start justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all">
-                                <div className="space-y-1 pr-3">
-                                    <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
-                                        <Sparkles className="h-4 w-4 text-emerald-400" /> Free Trial Welcome
+                            <div className="flex flex-col justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all gap-2.5">
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="space-y-1 pr-1">
+                                        <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                            <Sparkles className="h-4 w-4 text-emerald-400" /> Free Trial Welcome
+                                        </div>
+                                        <p className="text-[11px] text-muted-foreground leading-tight">
+                                            Email users an onboarding welcome and trial details upon free trial activation.
+                                        </p>
                                     </div>
-                                    <p className="text-[11px] text-muted-foreground leading-tight">
-                                        Email users an onboarding welcome and trial details upon free trial activation.
-                                    </p>
+                                    <Switch
+                                        checked={emailSettings.notifyTrialWelcome}
+                                        onCheckedChange={(val) => handleToggleEmailSetting("notifyTrialWelcome", val)}
+                                        disabled={!emailSettings.emailNotificationsEnabled}
+                                    />
                                 </div>
-                                <Switch
-                                    checked={emailSettings.notifyTrialWelcome}
-                                    onCheckedChange={(val) => handleToggleEmailSetting("notifyTrialWelcome", val)}
-                                    disabled={!emailSettings.emailNotificationsEnabled}
-                                />
+                                <div className="pt-2 border-t border-border/20 flex items-center justify-between gap-2 text-[10px]">
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                        <FolderCheck className="h-3 w-3 text-emerald-400 shrink-0" />
+                                        <span className="text-muted-foreground font-medium">Approval Gate:</span>
+                                        {isCategoryApprovalRequired(["trial_welcome"]) ? (
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">
+                                                🔒 Staged
+                                            </Badge>
+                                        ) : (
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                                                ⚡ Auto-Send
+                                            </Badge>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                        <Label htmlFor="gate-trial_welcome" className="text-[10px] text-muted-foreground cursor-pointer select-none">
+                                            {isCategoryApprovalRequired(["trial_welcome"]) ? "Require Review" : "Auto-Send"}
+                                        </Label>
+                                        <Switch
+                                            id="gate-trial_welcome"
+                                            checked={isCategoryApprovalRequired(["trial_welcome"])}
+                                            onCheckedChange={(val) => handleToggleCategoryApproval(["trial_welcome"], val)}
+                                            disabled={savingApprovalPolicy || !approvalSettings.requireApprovalForEmails}
+                                            className="scale-75"
+                                        />
+                                    </div>
+                                </div>
                             </div>
 
                             {/* 8. Trial & Subscription Expiration Reminders */}
-                            <div className="flex items-start justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all">
-                                <div className="space-y-1 pr-3">
-                                    <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
-                                        <Bell className="h-4 w-4 text-amber-400" /> Expiration Reminders
+                            <div className="flex flex-col justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all gap-2.5">
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="space-y-1 pr-1">
+                                        <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                            <Bell className="h-4 w-4 text-amber-400" /> Expiration Reminders
+                                        </div>
+                                        <p className="text-[11px] text-muted-foreground leading-tight">
+                                            Send advance renewal reminders 3 days before a trial or ongoing subscription expires.
+                                        </p>
                                     </div>
-                                    <p className="text-[11px] text-muted-foreground leading-tight">
-                                        Send advance renewal reminders 3 days before a trial or ongoing subscription expires.
-                                    </p>
+                                    <Switch
+                                        checked={emailSettings.notifyTrialExpiring}
+                                        onCheckedChange={(val) => handleToggleEmailSetting("notifyTrialExpiring", val)}
+                                        disabled={!emailSettings.emailNotificationsEnabled}
+                                    />
                                 </div>
-                                <Switch
-                                    checked={emailSettings.notifyTrialExpiring}
-                                    onCheckedChange={(val) => handleToggleEmailSetting("notifyTrialExpiring", val)}
-                                    disabled={!emailSettings.emailNotificationsEnabled}
-                                />
+                                <div className="pt-2 border-t border-border/20 flex items-center justify-between gap-2 text-[10px]">
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                        <FolderCheck className="h-3 w-3 text-emerald-400 shrink-0" />
+                                        <span className="text-muted-foreground font-medium">Approval Gate:</span>
+                                        {isCategoryApprovalRequired(["trial_expiring_soon"]) ? (
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">
+                                                🔒 Staged
+                                            </Badge>
+                                        ) : (
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                                                ⚡ Auto-Send
+                                            </Badge>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                        <Label htmlFor="gate-trial_expiring_soon" className="text-[10px] text-muted-foreground cursor-pointer select-none">
+                                            {isCategoryApprovalRequired(["trial_expiring_soon"]) ? "Require Review" : "Auto-Send"}
+                                        </Label>
+                                        <Switch
+                                            id="gate-trial_expiring_soon"
+                                            checked={isCategoryApprovalRequired(["trial_expiring_soon"])}
+                                            onCheckedChange={(val) => handleToggleCategoryApproval(["trial_expiring_soon"], val)}
+                                            disabled={savingApprovalPolicy || !approvalSettings.requireApprovalForEmails}
+                                            className="scale-75"
+                                        />
+                                    </div>
+                                </div>
                             </div>
 
                             {/* 9. Account Access Paused / Expired Notices */}
-                            <div className="flex items-start justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all">
-                                <div className="space-y-1 pr-3">
-                                    <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
-                                        <BellOff className="h-4 w-4 text-red-400" /> Access Expired Notices
+                            <div className="flex flex-col justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all gap-2.5">
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="space-y-1 pr-1">
+                                        <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                            <BellOff className="h-4 w-4 text-red-400" /> Access Expired Notices
+                                        </div>
+                                        <p className="text-[11px] text-muted-foreground leading-tight">
+                                            Notify users when their trial or subscription period has concluded and access is paused.
+                                        </p>
                                     </div>
-                                    <p className="text-[11px] text-muted-foreground leading-tight">
-                                        Notify users when their trial or subscription period has concluded and access is paused.
-                                    </p>
+                                    <Switch
+                                        checked={emailSettings.notifyTrialExpired}
+                                        onCheckedChange={(val) => handleToggleEmailSetting("notifyTrialExpired", val)}
+                                        disabled={!emailSettings.emailNotificationsEnabled}
+                                    />
                                 </div>
-                                <Switch
-                                    checked={emailSettings.notifyTrialExpired}
-                                    onCheckedChange={(val) => handleToggleEmailSetting("notifyTrialExpired", val)}
-                                    disabled={!emailSettings.emailNotificationsEnabled}
-                                />
+                                <div className="pt-2 border-t border-border/20 flex items-center justify-between gap-2 text-[10px]">
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                        <FolderCheck className="h-3 w-3 text-emerald-400 shrink-0" />
+                                        <span className="text-muted-foreground font-medium">Approval Gate:</span>
+                                        {isCategoryApprovalRequired(["trial_expired", "admin_user_access_revoked"]) ? (
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">
+                                                🔒 Staged
+                                            </Badge>
+                                        ) : (
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                                                ⚡ Auto-Send
+                                            </Badge>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                        <Label htmlFor="gate-trial_expired" className="text-[10px] text-muted-foreground cursor-pointer select-none">
+                                            {isCategoryApprovalRequired(["trial_expired", "admin_user_access_revoked"]) ? "Require Review" : "Auto-Send"}
+                                        </Label>
+                                        <Switch
+                                            id="gate-trial_expired"
+                                            checked={isCategoryApprovalRequired(["trial_expired", "admin_user_access_revoked"])}
+                                            onCheckedChange={(val) => handleToggleCategoryApproval(["trial_expired", "admin_user_access_revoked"], val)}
+                                            disabled={savingApprovalPolicy || !approvalSettings.requireApprovalForEmails}
+                                            className="scale-75"
+                                        />
+                                    </div>
+                                </div>
                             </div>
 
                             {/* 10. Payment Receipts & Full Membership Activation */}
-                            <div className="flex items-start justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all">
-                                <div className="space-y-1 pr-3">
-                                    <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
-                                        <DollarSign className="h-4 w-4 text-emerald-400" /> Payment Receipts & Full Membership Activations
+                            <div className="flex flex-col justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all gap-2.5">
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="space-y-1 pr-1">
+                                        <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                            <DollarSign className="h-4 w-4 text-emerald-400" /> Payment Receipts & Full Membership Activations
+                                        </div>
+                                        <p className="text-[11px] text-muted-foreground leading-tight">
+                                            Send automated confirmation receipts when an incoming payment is received (Venmo, PayPal, Cash App, Zelle) and when Full Membership is activated.
+                                        </p>
                                     </div>
-                                    <p className="text-[11px] text-muted-foreground leading-tight">
-                                        Send automated confirmation receipts when an incoming payment is received (Venmo, PayPal, Cash App, Zelle) and when Full Membership is activated.
-                                    </p>
+                                    <Switch
+                                        checked={emailSettings.notifySubscriptionActive}
+                                        onCheckedChange={(val) => handleToggleEmailSetting("notifySubscriptionActive", val)}
+                                        disabled={!emailSettings.emailNotificationsEnabled}
+                                    />
                                 </div>
-                                <Switch
-                                    checked={emailSettings.notifySubscriptionActive}
-                                    onCheckedChange={(val) => handleToggleEmailSetting("notifySubscriptionActive", val)}
-                                    disabled={!emailSettings.emailNotificationsEnabled}
-                                />
+                                <div className="pt-2 border-t border-border/20 flex items-center justify-between gap-2 text-[10px]">
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                        <FolderCheck className="h-3 w-3 text-emerald-400 shrink-0" />
+                                        <span className="text-muted-foreground font-medium">Approval Gate:</span>
+                                        {isCategoryApprovalRequired(["subscription_activated", "payment_received", "payment_underpayment", "admin_payment_received"]) ? (
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">
+                                                🔒 Staged
+                                            </Badge>
+                                        ) : (
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                                                ⚡ Auto-Send
+                                            </Badge>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                        <Label htmlFor="gate-subscription_active" className="text-[10px] text-muted-foreground cursor-pointer select-none">
+                                            {isCategoryApprovalRequired(["subscription_activated", "payment_received", "payment_underpayment", "admin_payment_received"]) ? "Require Review" : "Auto-Send"}
+                                        </Label>
+                                        <Switch
+                                            id="gate-subscription_active"
+                                            checked={isCategoryApprovalRequired(["subscription_activated", "payment_received", "payment_underpayment", "admin_payment_received"])}
+                                            onCheckedChange={(val) => handleToggleCategoryApproval(["subscription_activated", "payment_received", "payment_underpayment", "admin_payment_received"], val)}
+                                            disabled={savingApprovalPolicy || !approvalSettings.requireApprovalForEmails}
+                                            className="scale-75"
+                                        />
+                                    </div>
+                                </div>
                             </div>
 
                             {/* 11. Referral Reward Credited */}
-                            <div className="flex items-start justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all">
-                                <div className="space-y-1 pr-3">
-                                    <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
-                                        <Users className="h-4 w-4 text-cyan-400" /> Referral Reward Alerts
+                            <div className="flex flex-col justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all gap-2.5">
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="space-y-1 pr-1">
+                                        <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                            <Users className="h-4 w-4 text-cyan-400" /> Referral Reward Alerts
+                                        </div>
+                                        <p className="text-[11px] text-muted-foreground leading-tight">
+                                            Notify members when a friend joins via their referral code and grants them +1 free month credit.
+                                        </p>
                                     </div>
-                                    <p className="text-[11px] text-muted-foreground leading-tight">
-                                        Notify members when a friend joins via their referral code and grants them +1 free month credit.
-                                    </p>
+                                    <Switch
+                                        checked={emailSettings.notifyReferralReward}
+                                        onCheckedChange={(val) => handleToggleEmailSetting("notifyReferralReward", val)}
+                                        disabled={!emailSettings.emailNotificationsEnabled}
+                                    />
                                 </div>
-                                <Switch
-                                    checked={emailSettings.notifyReferralReward}
-                                    onCheckedChange={(val) => handleToggleEmailSetting("notifyReferralReward", val)}
-                                    disabled={!emailSettings.emailNotificationsEnabled}
-                                />
+                                <div className="pt-2 border-t border-border/20 flex items-center justify-between gap-2 text-[10px]">
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                        <FolderCheck className="h-3 w-3 text-emerald-400 shrink-0" />
+                                        <span className="text-muted-foreground font-medium">Approval Gate:</span>
+                                        {isCategoryApprovalRequired(["referral_reward_credited"]) ? (
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">
+                                                🔒 Staged
+                                            </Badge>
+                                        ) : (
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                                                ⚡ Auto-Send
+                                            </Badge>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                        <Label htmlFor="gate-referral_reward" className="text-[10px] text-muted-foreground cursor-pointer select-none">
+                                            {isCategoryApprovalRequired(["referral_reward_credited"]) ? "Require Review" : "Auto-Send"}
+                                        </Label>
+                                        <Switch
+                                            id="gate-referral_reward"
+                                            checked={isCategoryApprovalRequired(["referral_reward_credited"])}
+                                            onCheckedChange={(val) => handleToggleCategoryApproval(["referral_reward_credited"], val)}
+                                            disabled={savingApprovalPolicy || !approvalSettings.requireApprovalForEmails}
+                                            className="scale-75"
+                                        />
+                                    </div>
+                                </div>
                             </div>
 
                             {/* 12. Advance Subscription Renewal Reminders */}
-                            <div className="flex items-start justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all">
-                                <div className="space-y-1 pr-3">
-                                    <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
-                                        <CalendarClock className="h-4 w-4 text-amber-500" /> Advance Renewal Reminders
+                            <div className="flex flex-col justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all gap-2.5">
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="space-y-1 pr-1">
+                                        <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                            <CalendarClock className="h-4 w-4 text-amber-500" /> Advance Renewal Reminders
+                                        </div>
+                                        <p className="text-[11px] text-muted-foreground leading-tight">
+                                            Send multi-stage advance renewal warnings before annual ($180/yr at 30d, 14d, 7d, 3d, 1d) or monthly ($15/mo at 3d, 1d) subscriptions expire, including transparent payment memos and discounted balances.
+                                        </p>
                                     </div>
-                                    <p className="text-[11px] text-muted-foreground leading-tight">
-                                        Send multi-stage advance renewal warnings before annual ($180/yr at 30d, 14d, 7d, 3d, 1d) or monthly ($15/mo at 3d, 1d) subscriptions expire, including transparent payment memos and discounted balances.
-                                    </p>
+                                    <Switch
+                                        checked={emailSettings.notifySubscriptionRenewal}
+                                        onCheckedChange={(val) => handleToggleEmailSetting("notifySubscriptionRenewal", val)}
+                                        disabled={!emailSettings.emailNotificationsEnabled}
+                                    />
                                 </div>
-                                <Switch
-                                    checked={emailSettings.notifySubscriptionRenewal}
-                                    onCheckedChange={(val) => handleToggleEmailSetting("notifySubscriptionRenewal", val)}
-                                    disabled={!emailSettings.emailNotificationsEnabled}
-                                />
+                                <div className="pt-2 border-t border-border/20 flex items-center justify-between gap-2 text-[10px]">
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                        <FolderCheck className="h-3 w-3 text-emerald-400 shrink-0" />
+                                        <span className="text-muted-foreground font-medium">Approval Gate:</span>
+                                        {isCategoryApprovalRequired(["subscription_renewal_reminder_yearly", "subscription_renewal_reminder_monthly", "subscription_renewal_reminder"]) ? (
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">
+                                                🔒 Staged
+                                            </Badge>
+                                        ) : (
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                                                ⚡ Auto-Send
+                                            </Badge>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                        <Label htmlFor="gate-subscription_renewal" className="text-[10px] text-muted-foreground cursor-pointer select-none">
+                                            {isCategoryApprovalRequired(["subscription_renewal_reminder_yearly", "subscription_renewal_reminder_monthly", "subscription_renewal_reminder"]) ? "Require Review" : "Auto-Send"}
+                                        </Label>
+                                        <Switch
+                                            id="gate-subscription_renewal"
+                                            checked={isCategoryApprovalRequired(["subscription_renewal_reminder_yearly", "subscription_renewal_reminder_monthly", "subscription_renewal_reminder"])}
+                                            onCheckedChange={(val) => handleToggleCategoryApproval(["subscription_renewal_reminder_yearly", "subscription_renewal_reminder_monthly", "subscription_renewal_reminder"], val)}
+                                            disabled={savingApprovalPolicy || !approvalSettings.requireApprovalForEmails}
+                                            className="scale-75"
+                                        />
+                                    </div>
+                                </div>
                             </div>
                         </div>
 

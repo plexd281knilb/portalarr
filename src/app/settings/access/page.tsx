@@ -4314,16 +4314,23 @@ export default function AccessSettingsPage() {
                             </div>
 
                             {/* GRANULAR EMAIL APPROVAL POLICIES */}
-                            {approvalSettings.requireApprovalForEmails && (
-                                <div className="p-4 rounded-xl border border-emerald-500/30 bg-emerald-950/10 space-y-4">
-                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-emerald-500/20">
-                                        <div>
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-xs font-bold text-foreground">Granular Outgoing Email Approval Policy</span>
-                                                <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-medium">
-                                                    Individual Controls
-                                                </Badge>
-                                            </div>
+                            <div className="p-4 rounded-xl border border-emerald-500/30 bg-emerald-950/10 space-y-4">
+                                {!approvalSettings.requireApprovalForEmails && (
+                                    <div className="bg-amber-950/30 border border-amber-500/40 rounded-lg p-3 text-xs text-amber-300 flex items-center gap-2">
+                                        <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" />
+                                        <span>
+                                            <strong>Master Outgoing Gate Disabled:</strong> The master toggle above is currently OFF. All emails will auto-send via SMTP until the master toggle is enabled. You can configure individual policies below in advance.
+                                        </span>
+                                    </div>
+                                )}
+                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-emerald-500/20">
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs font-bold text-foreground">Granular Outgoing Email Approval Policy</span>
+                                            <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-medium">
+                                                Individual Controls
+                                            </Badge>
+                                        </div>
                                             <p className="text-[11px] text-muted-foreground mt-0.5">
                                                 Control every type of email automatically going out via SMTP vs. requiring approval. Uncheck any template (such as Send to Kindle) to let it send immediately without admin approval.
                                             </p>
@@ -4478,7 +4485,6 @@ export default function AccessSettingsPage() {
                                         </div>
                                     )}
                                 </div>
-                            )}
 
                             {/* ADMIN APPROVAL NOTIFICATIONS */}
                             <div className="p-4 rounded-xl border border-border/40 bg-muted/10 space-y-3">

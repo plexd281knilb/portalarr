@@ -177,6 +177,11 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 - **Single Authoritative Email Hub**: Outgoing email dispatches and notification master switches are strictly consolidated inside `<EmailManagement />` on Tab 3 (`/settings?tab=emails`), eliminating obsolete duplicate cards in Tab 1 ("General & Setup"). The General SMTP card provides a direct 1-click navigation button to the Email Hub.
 - **Exact Trigger Event Documentation**: Every email template definition includes an explicit, user-facing `triggerEvent` field. The UI displays this with a `Zap` icon in both the template selection sidebar and a prominent callout card in the template editor header.
 - **Automated Payment Receipts & Upgrade Notifications**: Incoming payments verified via automated IMAP scraping or manual attribution dispatch the `payment_received` receipt to the user and `admin_payment_received` alert to admins. Upgrades from trial or pending to full membership automatically dispatch `subscription_activated` detailing all unlocked perks.
+- **Bidirectional Approval Gate Integration in Dispatch Controls (`subTab === "notifications"`)**:
+  - **Governance Summary Banner**: Positioned right above the category grid, rendering the master gate toggle (`requireApprovalForEmails`), status badge (`🔒 Approval Gate Active` vs `⚡ Gate Bypassed`), 1-click presets (`⚡ Auto-Send Kindle Only`, `Stage All`, `Auto-Send All`), and a jump button directly to `/settings/access?tab=approvals`.
+  - **Per-Category Approval Gate Toggles**: Every one of the 12 notification category cards features a dedicated bottom row with `FolderCheck` icon, status badge (`🔒 Staged` vs `⚡ Auto-Send`), and an inline toggle switch to control whether that notification type is held for admin review or auto-sent via SMTP.
+- **Inline Template Approval Control (`subTab === "templates"`)**:
+  - Directly inside the template customization editor header, an **Action Approval Gate** card allows administrators to inspect and toggle the staging requirement for the currently selected template without having to switch tabs.
 
 ---
 
@@ -186,6 +191,7 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
   - `requireApprovalForEmails` (default `true`): When enabled globally, automated user-facing emails are held in `AdminApproval` (`EMAIL`) until explicitly approved, unless configured to auto-dispatch under the Granular Email Approval Policy.
 - **Granular Outgoing Email Approval Policy (`emailApprovalPolicy`)**:
   - Provides template-by-template governance over every email type in the system.
+  - Unconditionally accessible on `/settings/access` under the Approval Queue tab (displaying an amber informational banner if the master gate is currently inactive).
   - Individual switches allow administrators to require approval or permit immediate automatic dispatch via SMTP (e.g. unchecking `kindle_delivery` allows Send-to-Kindle book deliveries to transmit immediately without admin bottlenecking).
   - Quick action presets: `⚡ Auto-Send Kindle Only` (sets Kindle templates to auto-send while retaining approval on account/subscription emails), `Require All`, and `Auto-Send All`.
   - Filter by search and category pills (`All`, `Kindle`, `Requests`, `Auth`, `Trials`, `Payments`, `Support`, `Broadcast`).
