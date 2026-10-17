@@ -8614,6 +8614,94 @@ async function runTestSuite() {
             throw new Error("Expected unthrottled 0.6x transcode to be flagged as unhealthy/slow");
         }
 
+        // 4d. Validate multi-edition Plex session (e.g. 4K master on disk, but active stream is 1080p HEVC downconverting to 720p H264)
+        const mockMultiEditionTranscodeSession = {
+            title: "Harry Potter and the Chamber of Secrets",
+            duration: 9653056,
+            viewOffset: 3030000,
+            Media: [
+                {
+                    id: "408983",
+                    videoResolution: "4k",
+                    height: 1600,
+                    width: 3840,
+                    videoCodec: "hevc",
+                    Part: [{ file: "/4k_Movies/Harry Potter.mkv" }]
+                },
+                {
+                    id: "439152",
+                    selected: true,
+                    videoResolution: "720p",
+                    height: 532,
+                    width: 1276,
+                    videoCodec: "h264",
+                    Part: [
+                        {
+                            selected: true,
+                            decision: "transcode",
+                            Stream: [
+                                {
+                                    streamType: 1,
+                                    codec: "h264",
+                                    colorTrc: "bt709",
+                                    displayTitle: "1080p (HEVC Main)",
+                                    height: 532,
+                                    width: 1276,
+                                    decision: "transcode"
+                                },
+                                {
+                                    streamType: 2,
+                                    codec: "aac",
+                                    channels: 2,
+                                    displayTitle: "English (EAC3 5.1)",
+                                    decision: "transcode",
+                                    selected: true
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ],
+            TranscodeSession: {
+                sourceVideoCodec: "hevc",
+                sourceAudioCodec: "eac3",
+                videoDecision: "transcode",
+                audioDecision: "transcode",
+                videoCodec: "h264",
+                audioCodec: "aac",
+                audioChannels: 2,
+                speed: 0,
+                throttled: true,
+                maxOffsetAvailable: 3729
+            }
+        };
+
+        const multiEditionTelemetry = extractStreamTelemetry(mockMultiEditionTranscodeSession);
+        if (multiEditionTelemetry.sourceResolution !== "1080p") {
+            throw new Error(`Expected sourceResolution '1080p' from displayTitle, got '${multiEditionTelemetry.sourceResolution}'`);
+        }
+        if (multiEditionTelemetry.streamResolution !== "720p") {
+            throw new Error(`Expected streamResolution '720p', got '${multiEditionTelemetry.streamResolution}'`);
+        }
+        if (!multiEditionTelemetry.isDownscaling) {
+            throw new Error("Expected isDownscaling to be true for 1080p -> 720p transcode");
+        }
+        if (multiEditionTelemetry.videoCodec !== "HEVC" || multiEditionTelemetry.streamVideoCodec !== "H264") {
+            throw new Error(`Codec mismatch: ${multiEditionTelemetry.videoCodec} -> ${multiEditionTelemetry.streamVideoCodec}`);
+        }
+        if (multiEditionTelemetry.sourceAudioCodec !== "EAC3" || multiEditionTelemetry.sourceAudioChannels !== "5.1") {
+            throw new Error(`Source audio mismatch: ${multiEditionTelemetry.sourceAudioCodec} ${multiEditionTelemetry.sourceAudioChannels}`);
+        }
+        if (multiEditionTelemetry.streamAudioCodec !== "AAC" || multiEditionTelemetry.streamAudioChannels !== "Stereo") {
+            throw new Error(`Stream audio mismatch: ${multiEditionTelemetry.streamAudioCodec} ${multiEditionTelemetry.streamAudioChannels}`);
+        }
+        if (multiEditionTelemetry.hdrFormat !== null || multiEditionTelemetry.isToneMapping) {
+            throw new Error("Expected SDR bt709 stream to not be flagged as HDR or Tone Mapping");
+        }
+        if (!multiEditionTelemetry.transcodeSpeedHealthy || !multiEditionTelemetry.transcodeThrottled) {
+            throw new Error("Expected throttled 0.0x transcode to be healthy");
+        }
+
         // 5. Extract telemetry from Tautulli session (seconds-based duration/view_offset, remote WAN)
         const mockTautulliSession = {
             duration: 3600, // 1 hour in seconds

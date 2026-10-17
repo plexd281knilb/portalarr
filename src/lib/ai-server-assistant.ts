@@ -28,6 +28,7 @@ import {
     executeAiAssistantTool, 
     ToolExecutionContext 
 } from "@/lib/ai-assistant-tools";
+import { resolveResolution } from "@/lib/telemetry/stream-tracker";
 
 function cleanUrl(url: string): string {
     if (!url) return "";
@@ -381,7 +382,18 @@ export async function getUserDiagnosticSnapshot(user: any): Promise<UserDiagnost
                                     const player = s.Player?.title || s.Player?.product || s.Player?.device || "Plex Client";
                                     recentDevicesSet.add(player);
 
-                                    const part = s.Media?.[0]?.Part?.[0];
+                                    const mediaList = Array.isArray(s.Media) ? s.Media : (s.Media ? [s.Media] : []);
+                                    const mediaObj = mediaList.find((m: any) => 
+                                        m.selected === true || m.selected === 1 || m.selected === "1" ||
+                                        m.Part?.some((p: any) => p.selected === true || p.selected === 1 || p.selected === "1" || (p.Stream && p.Stream.length > 0))
+                                    ) || mediaList[0] || {};
+                                    const part = mediaObj?.Part?.[0];
+                                    const videoStream = part?.Stream?.find((st: any) => st.streamType === 1 || st.streamType === "1" || st.codec_type === "video");
+                                    const srcRes = resolveResolution(videoStream?.displayTitle || mediaObj?.videoResolution, mediaObj?.height, mediaObj?.width) || "1080p";
+                                    const targetRes = s.TranscodeSession 
+                                        ? (resolveResolution(s.TranscodeSession.videoResolution || s.TranscodeSession.targetVideoResolution || mediaObj?.videoResolution, s.TranscodeSession.height || mediaObj?.height, s.TranscodeSession.width || mediaObj?.width) || srcRes)
+                                        : srcRes;
+
                                     const transDecision = s.TranscodeSession 
                                         ? (s.TranscodeSession.videoDecision === "copy" ? "direct stream" : "transcode")
                                         : "direct play";
@@ -396,11 +408,11 @@ export async function getUserDiagnosticSnapshot(user: any): Promise<UserDiagnost
                                         platform: s.Player?.platform || player,
                                         deviceType: s.Player?.device || player,
                                         ipAddress: s.Player?.address,
-                                        videoResolution: s.Media?.[0]?.videoResolution || "1080p",
-                                        sourceResolution: s.Media?.[0]?.videoResolution || "1080p",
-                                        videoCodec: s.Media?.[0]?.videoCodec,
-                                        audioCodec: s.Media?.[0]?.audioCodec,
-                                        streamBitrate: s.Media?.[0]?.bitrate ? Number(s.Media?.[0]?.bitrate) : undefined,
+                                        videoResolution: targetRes,
+                                        sourceResolution: srcRes,
+                                        videoCodec: (s.TranscodeSession?.sourceVideoCodec || mediaObj?.videoCodec || videoStream?.codec || "H264").toUpperCase(),
+                                        audioCodec: (s.TranscodeSession?.sourceAudioCodec || mediaObj?.audioCodec || "AAC").toUpperCase(),
+                                        streamBitrate: s.TranscodeSession?.bitrate ? Number(s.TranscodeSession.bitrate) : (mediaObj?.bitrate ? Number(mediaObj.bitrate) : undefined),
                                         transcodeDecision: transDecision as any,
                                         transcodeSpeed: s.TranscodeSession?.speed ? String(s.TranscodeSession.speed) : undefined,
                                         transcodeThrottled: Boolean(s.TranscodeSession?.throttled === 1 || s.TranscodeSession?.throttled === true || s.TranscodeSession?.throttled === "1"),

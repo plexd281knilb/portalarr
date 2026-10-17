@@ -15689,7 +15689,12 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
                             const playerState = String(s.Player?.state || s.state || "").toLowerCase().trim();
                             if (playerState === "stopped") continue;
 
-                            const isTranscode = s.TranscodeSession || (s.Media && s.Media[0]?.Part && s.Media[0]?.Part[0]?.decision === "transcode");
+                            const mediaList = Array.isArray(s.Media) ? s.Media : (s.Media ? [s.Media] : []);
+                            const mediaObj = mediaList.find((m: any) => 
+                                m.selected === true || m.selected === 1 || m.selected === "1" ||
+                                m.Part?.some((p: any) => p.selected === true || p.selected === 1 || p.selected === "1" || (p.Stream && p.Stream.length > 0))
+                            ) || mediaList[0] || {};
+                            const isTranscode = Boolean(s.TranscodeSession || (mediaObj?.Part && mediaObj.Part[0]?.decision === "transcode"));
                             const userTitle = s.User?.title || s.User?.username || s.User?.name || s.username || "Plex User";
                             const isEpisode = s.type === "episode" || !!s.grandparentTitle;
                             const seasonNum = s.parentIndex ? Number(s.parentIndex) : undefined;
@@ -15721,7 +15726,7 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
                             }
                             seenSessionFingerprints.add(fingerprint);
                             
-                            const bitrate = s.Media && s.Media[0]?.bitrate ? Number(s.Media[0].bitrate) : (s.Session?.bandwidth ? Number(s.Session.bandwidth) : 0);
+                            const bitrate = mediaObj?.bitrate ? Number(mediaObj.bitrate) : (s.Session?.bandwidth ? Number(s.Session.bandwidth) : 0);
                             const sessionItem: any = {
                                 instanceId: `plex_${srv.serverId}`,
                                 serverName: srv.serverName,
@@ -15748,8 +15753,8 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
                                 location: (s.Session?.location || (isPrivateOrLocalIp(s.Player?.address) ? "lan" : "wan")),
                                 videoDecision: isTranscode ? (s.TranscodeSession?.videoDecision === "copy" ? "direct stream" : "transcode") : "direct play",
                                 audioDecision: s.TranscodeSession?.audioDecision || "direct play",
-                                videoCodec: (s.Media && s.Media[0]?.videoCodec || "H264").toUpperCase(),
-                                audioCodec: (s.Media && s.Media[0]?.audioCodec || "AAC").toUpperCase(),
+                                videoCodec: (s.TranscodeSession?.sourceVideoCodec || mediaObj?.videoCodec || "H264").toUpperCase(),
+                                audioCodec: (s.TranscodeSession?.sourceAudioCodec || mediaObj?.audioCodec || "AAC").toUpperCase(),
                                 streamBitrate: bitrate,
                                 transcodeHwRequested: !!(s.TranscodeSession?.transcodeHwRequested || s.TranscodeSession?.hwRequested),
                                 transcodeHwDecoding: s.TranscodeSession?.transcodeHwDecodingTitle || s.TranscodeSession?.transcodeHwDecoding || s.TranscodeSession?.videoDecoder || "",
@@ -18953,27 +18958,36 @@ export async function analyzeStreamHealth(s: any): Promise<StreamDiagnosis> {
 
     if (isPlexNative || s.TranscodeSession) {
         player = s.Player?.title || s.Player?.device || s.Player?.platform || player;
+        const mediaList = Array.isArray(s.Media) ? s.Media : (s.Media ? [s.Media] : []);
+        const mediaObj = mediaList.find((m: any) => 
+            m.selected === true || m.selected === 1 || m.selected === "1" ||
+            m.Part?.some((p: any) => p.selected === true || p.selected === 1 || p.selected === "1" || (p.Stream && p.Stream.length > 0))
+        ) || mediaList[0] || {};
+        const partObj = (mediaObj.Part && mediaObj.Part[0]) || {};
+        const streamsList: any[] = Array.isArray(partObj.Stream) ? partObj.Stream : (Array.isArray(s.Stream) ? s.Stream : []);
+        const videoStream = streamsList.find((st: any) => st.streamType === 1 || st.streamType === "1" || st.codec_type === "video") || {};
+
         const ts = s.TranscodeSession;
         if (ts) {
             videoDecision = (ts.videoDecision || (ts.transcodeHwRequested ? "transcode" : "") || "transcode").toLowerCase();
             audioDecision = (ts.audioDecision || "transcode").toLowerCase();
             subDecision = (ts.subtitleDecision || "").toLowerCase();
             subCodec = (ts.subtitleCodec || "").toLowerCase();
-            streamBitrate = Number(ts.bitrate || s.Media?.[0]?.bitrate || 0);
-            const resolvedTsRes = resolveResolution(ts.videoResolution || ts.targetVideoResolution, ts.height, ts.width);
-            streamRes = (resolvedTsRes || ts.videoResolution || s.Media?.[0]?.videoResolution || "").toLowerCase();
-            sourceRes = (resolveResolution(s.Media?.[0]?.videoResolution, s.Media?.[0]?.height, s.Media?.[0]?.width) || streamRes).toLowerCase();
-            videoCodec = ts.videoCodec || s.Media?.[0]?.videoCodec || "";
-            audioCodec = ts.sourceAudioCodec || s.Media?.[0]?.audioCodec || "";
+            streamBitrate = Number(ts.bitrate || mediaObj?.bitrate || 0);
+            const resolvedTsRes = resolveResolution(ts.videoResolution || ts.targetVideoResolution || mediaObj.videoResolution, ts.height || mediaObj.height, ts.width || mediaObj.width);
+            streamRes = (resolvedTsRes || ts.videoResolution || mediaObj?.videoResolution || "").toLowerCase();
+            sourceRes = (resolveResolution(videoStream.displayTitle || mediaObj?.videoResolution, mediaObj?.height, mediaObj?.width) || streamRes).toLowerCase();
+            videoCodec = ts.videoCodec || mediaObj?.videoCodec || "";
+            audioCodec = ts.sourceAudioCodec || mediaObj?.audioCodec || "";
             streamAudioCodec = ts.audioCodec || "";
         } else {
             videoDecision = "direct play";
             audioDecision = "direct play";
-            sourceRes = (s.Media?.[0]?.videoResolution || "1080p").toLowerCase();
+            sourceRes = (resolveResolution(videoStream.displayTitle || mediaObj?.videoResolution, mediaObj?.height, mediaObj?.width) || "1080p").toLowerCase();
             streamRes = sourceRes;
-            streamBitrate = Number(s.Media?.[0]?.bitrate || 0);
-            videoCodec = s.Media?.[0]?.videoCodec || "";
-            audioCodec = s.Media?.[0]?.audioCodec || "";
+            streamBitrate = Number(mediaObj?.bitrate || 0);
+            videoCodec = mediaObj?.videoCodec || "";
+            audioCodec = mediaObj?.audioCodec || "";
         }
     }
 
@@ -19278,6 +19292,15 @@ export async function getUserPlexHubData(options?: { skipCache?: boolean }) {
                         const offsetMs = Number(s.viewOffset || 0);
                         const progressPercent = durMs > 0 ? Math.round((offsetMs / durMs) * 100) : 0;
 
+                        const mediaList = Array.isArray(s.Media) ? s.Media : (s.Media ? [s.Media] : []);
+                        const mediaObj = mediaList.find((m: any) => 
+                            m.selected === true || m.selected === 1 || m.selected === "1" ||
+                            m.Part?.some((p: any) => p.selected === true || p.selected === 1 || p.selected === "1" || (p.Stream && p.Stream.length > 0))
+                        ) || mediaList[0] || {};
+                        const partObj = (mediaObj.Part && mediaObj.Part[0]) || {};
+                        const streamsList: any[] = Array.isArray(partObj.Stream) ? partObj.Stream : (Array.isArray(s.Stream) ? s.Stream : []);
+                        const videoStream = streamsList.find((st: any) => st.streamType === 1 || st.streamType === "1" || st.codec_type === "video") || {};
+
                         activeStreams.push({
                             instanceId: srvId,
                             instanceName: srv.serverName,
@@ -19301,12 +19324,12 @@ export async function getUserPlexHubData(options?: { skipCache?: boolean }) {
                             audioDecision: s.TranscodeSession ? (s.TranscodeSession.audioDecision || "transcode") : "direct play",
                             transcodeDecision: s.TranscodeSession ? (s.TranscodeSession.videoDecision === "transcode" ? "transcode" : "direct stream") : "direct play",
                             streamVideoResolution: s.TranscodeSession 
-                                ? (resolveResolution(s.TranscodeSession.videoResolution || s.TranscodeSession.targetVideoResolution, s.TranscodeSession.height, s.TranscodeSession.width) || "720p")
-                                : (resolveResolution(s.Media?.[0]?.videoResolution, s.Media?.[0]?.height, s.Media?.[0]?.width) || "1080p"),
-                            sourceVideoResolution: resolveResolution(s.Media?.[0]?.videoResolution, s.Media?.[0]?.height, s.Media?.[0]?.width) || "1080p",
-                            streamBitrateMbps: s.TranscodeSession?.bitrate ? (Number(s.TranscodeSession.bitrate) / 1000).toFixed(1) : (s.Media?.[0]?.bitrate ? (Number(s.Media[0].bitrate) / 1000).toFixed(1) : "0"),
-                            videoCodec: s.TranscodeSession?.videoCodec || s.Media?.[0]?.videoCodec || "",
-                            audioCodec: s.TranscodeSession?.sourceAudioCodec || s.Media?.[0]?.audioCodec || "",
+                                ? (resolveResolution(s.TranscodeSession.videoResolution || s.TranscodeSession.targetVideoResolution || mediaObj.videoResolution, s.TranscodeSession.height || mediaObj.height, s.TranscodeSession.width || mediaObj.width) || "720p")
+                                : (resolveResolution(videoStream.displayTitle || mediaObj?.videoResolution, mediaObj?.height, mediaObj?.width) || "1080p"),
+                            sourceVideoResolution: resolveResolution(videoStream.displayTitle || mediaObj?.videoResolution, mediaObj?.height, mediaObj?.width) || "1080p",
+                            streamBitrateMbps: s.TranscodeSession?.bitrate ? (Number(s.TranscodeSession.bitrate) / 1000).toFixed(1) : (mediaObj?.bitrate ? (Number(mediaObj.bitrate) / 1000).toFixed(1) : "0"),
+                            videoCodec: s.TranscodeSession?.sourceVideoCodec || mediaObj?.videoCodec || "",
+                            audioCodec: s.TranscodeSession?.sourceAudioCodec || mediaObj?.audioCodec || "",
                             streamAudioCodec: s.TranscodeSession?.audioCodec || "",
                             qualityProfile: "",
                             bandwidthMbps: s.TranscodeSession?.bitrate ? (Number(s.TranscodeSession.bitrate) / 1000).toFixed(1) : "0",

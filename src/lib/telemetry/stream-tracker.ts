@@ -239,6 +239,11 @@ export function formatEtaTimestamp(etaMs?: number | null): string {
  */
 export function formatAudioChannels(channels?: number | string | null): string {
     if (!channels) return "";
+    const s = String(channels).trim().toLowerCase();
+    if (s === "7.1" || s === "8" || s === "8ch") return "7.1";
+    if (s === "5.1" || s === "6" || s === "6ch") return "5.1";
+    if (s === "2" || s === "2ch" || s === "stereo") return "Stereo";
+    if (s === "1" || s === "1ch" || s === "mono") return "Mono";
     const c = Number(channels);
     if (isNaN(c) || c <= 0) return "";
     if (c >= 8) return "7.1";
@@ -254,11 +259,15 @@ export function formatAudioChannels(channels?: number | string | null): string {
 export function formatResolution(res?: string | null): string {
     if (!res) return "";
     const r = String(res).toLowerCase().trim();
-    if (r === "4k" || r === "2160" || r === "2160p" || r === "uhd") return "4K UHD";
-    if (r === "1080" || r === "1080p") return "1080p";
-    if (r === "720" || r === "720p") return "720p";
-    if (r === "576" || r === "576p") return "576p";
-    if (r === "480" || r === "480p" || r === "sd") return "480p";
+    const match = r.match(/\b(4k|2160p?|uhd|1080p?|720p?|576p?|480p?|sd)\b/i);
+    if (match) {
+        const token = match[1].toLowerCase();
+        if (token === "4k" || token === "2160" || token === "2160p" || token === "uhd") return "4K UHD";
+        if (token === "1080" || token === "1080p") return "1080p";
+        if (token === "720" || token === "720p") return "720p";
+        if (token === "576" || token === "576p") return "576p";
+        if (token === "480" || token === "480p" || token === "sd") return "480p";
+    }
     return String(res).toUpperCase();
 }
 
@@ -273,18 +282,24 @@ export function resolveResolution(
     width?: number | string | null
 ): string {
     const raw = String(rawRes || "").toLowerCase().trim();
-    if (raw === "4k" || raw === "2160" || raw === "2160p" || raw === "uhd") return "4K UHD";
-    if (raw === "1080" || raw === "1080p") return "1080p";
-    if (raw === "720" || raw === "720p") return "720p";
-    if (raw === "576" || raw === "576p") return "576p";
-    if (raw === "480" || raw === "480p" || raw === "sd") return "480p";
+    if (raw) {
+        const match = raw.match(/\b(4k|2160p?|uhd|1080p?|720p?|576p?|480p?|sd)\b/i);
+        if (match) {
+            const token = match[1].toLowerCase();
+            if (token === "4k" || token === "2160" || token === "2160p" || token === "uhd") return "4K UHD";
+            if (token === "1080" || token === "1080p") return "1080p";
+            if (token === "720" || token === "720p") return "720p";
+            if (token === "576" || token === "576p") return "576p";
+            if (token === "480" || token === "480p" || token === "sd") return "480p";
+        }
+    }
 
     const h = height !== undefined && height !== null && !isNaN(Number(height)) ? Number(height) : 0;
     const w = width !== undefined && width !== null && !isNaN(Number(width)) ? Number(width) : 0;
 
     if (w >= 3200 || h >= 1800) return "4K UHD";
-    if (w >= 1600 || h >= 900) return "1080p";
-    if (w >= 1000 || h >= 650) return "720p";
+    if (w >= 1600 || h >= 800) return "1080p"; // 1080p cinemascope (e.g. 1920x800)
+    if (w >= 1000 || h >= 500) return "720p"; // 720p cinemascope (e.g. 1280x532)
     if (w >= 600 || h >= 400) return "480p";
     if (h > 0) return `${h}p`;
 
@@ -408,12 +423,12 @@ export function resolveHwTranscodeInfo(params: {
  * Detects dynamic range & HDR formats from video stream metadata
  */
 export function detectHdrFormat(videoStream?: any, media?: any): string | null {
+    if (videoStream?.colorTrc === "bt709") return null;
     const dovi = Boolean(
         videoStream?.doviProfile || 
         videoStream?.doviTitle || 
         videoStream?.doviPresent || 
-        media?.videoProfile?.toLowerCase().includes("dovi") || 
-        media?.videoProfile?.toLowerCase().includes("dv")
+        (videoStream?.colorTrc !== "bt709" && (media?.videoProfile?.toLowerCase().includes("dovi") || media?.videoProfile?.toLowerCase().includes("dv")))
     );
     if (dovi) return "Dolby Vision";
     const trc = String(videoStream?.colorTrc || media?.colorTrc || "").toLowerCase();
@@ -445,8 +460,14 @@ export function extractStreamTelemetry(s: any) {
     const remainingMs = Math.max(0, durMs - viewMs);
     const etaMs = remainingMs > 0 && durMs > 0 ? (Date.now() + remainingMs) : null;
 
-    // Media & Video specs
-    const mediaObj = (s.Media && s.Media[0]) || s.media || {};
+    // Media & Video specs:
+    // When Plex is transcoding or playing a multi-edition movie, Plex sets selected: true on the active Media item
+    // or on Part[0].selected, and populates the active Stream list inside Part[0].
+    const mediaList = Array.isArray(s.Media) ? s.Media : (s.Media ? [s.Media] : []);
+    const mediaObj = mediaList.find((m: any) => 
+        m.selected === true || m.selected === 1 || m.selected === "1" ||
+        m.Part?.some((p: any) => p.selected === true || p.selected === 1 || p.selected === "1" || (p.Stream && p.Stream.length > 0))
+    ) || mediaList[0] || s.media || {};
     const partObj = (mediaObj.Part && mediaObj.Part[0]) || {};
     const streamsList: any[] = Array.isArray(partObj.Stream) ? partObj.Stream : (Array.isArray(s.Stream) ? s.Stream : []);
 
@@ -454,22 +475,29 @@ export function extractStreamTelemetry(s: any) {
     const audioStream = streamsList.find((st: any) => (st.streamType === 2 || st.streamType === "2" || st.codec_type === "audio") && (st.selected || st.selected === 1 || st.selected === "1")) || streamsList.find((st: any) => st.streamType === 2 || st.streamType === "2") || {};
     const subtitleStream = streamsList.find((st: any) => (st.streamType === 3 || st.streamType === "3" || st.codec_type === "subtitle") && (st.selected || st.selected === 1 || st.selected === "1"));
 
-    // Source Resolution
-    const rawSrcRes = mediaObj.videoResolution || s.video_resolution || s.videoResolution || videoStream.videoResolution || "";
-    const srcHeight = mediaObj.height || s.height || videoStream.height;
-    const srcWidth = mediaObj.width || s.width || videoStream.width;
-    const sourceResolution = resolveResolution(rawSrcRes, srcHeight, srcWidth) || formatResolution(rawSrcRes) || "1080p";
-
     // Video Decision: is it transcoding video?
-    const rawVideoDecision = (s.videoDecision || s.video_decision || s.TranscodeSession?.videoDecision || "").toLowerCase();
+    const rawVideoDecision = (s.videoDecision || s.video_decision || s.TranscodeSession?.videoDecision || videoStream.decision || "").toLowerCase();
     const isVideoTranscode = rawVideoDecision === "transcode" || 
         (!rawVideoDecision && Boolean(s.TranscodeSession && s.TranscodeSession?.videoDecision !== "copy"));
 
+    // Source Resolution:
+    // When videoStream.displayTitle or extendedDisplayTitle is present (e.g. "1080p (HEVC Main)"),
+    // this is Plex's canonical source stream indicator displayed on the official Plex dashboard!
+    const displayTitleRes = videoStream.displayTitle || videoStream.extendedDisplayTitle || "";
+    const titleRes = resolveResolution(displayTitleRes);
+    const rawSrcRes = titleRes 
+        ? displayTitleRes 
+        : (mediaObj.videoResolution || s.video_resolution || s.videoResolution || videoStream.videoResolution || "");
+    const srcHeight = (titleRes ? videoStream.height : undefined) || mediaObj.height || s.height || videoStream.height;
+    const srcWidth = (titleRes ? videoStream.width : undefined) || mediaObj.width || s.width || videoStream.width;
+
+    const sourceResolution = titleRes || resolveResolution(rawSrcRes, srcHeight, srcWidth) || formatResolution(rawSrcRes) || "1080p";
+
     // Target Stream Resolution (What is it converting to?)
     const ts = s.TranscodeSession;
-    const transcodeHeight = ts?.height || s.transcode_height || s.stream_height;
-    const transcodeWidth = ts?.width || s.transcode_width || s.stream_width;
-    const rawTargetRes = ts?.videoResolution || ts?.targetVideoResolution || s.stream_video_resolution;
+    const transcodeHeight = ts?.height || s.transcode_height || s.stream_height || (isVideoTranscode && mediaObj.height && mediaObj.height !== srcHeight ? mediaObj.height : undefined);
+    const transcodeWidth = ts?.width || s.transcode_width || s.stream_width || (isVideoTranscode && mediaObj.width && mediaObj.width !== srcWidth ? mediaObj.width : undefined);
+    const rawTargetRes = ts?.videoResolution || ts?.targetVideoResolution || s.stream_video_resolution || (isVideoTranscode && mediaObj.videoResolution && mediaObj.videoResolution !== sourceResolution ? mediaObj.videoResolution : undefined);
 
     let streamResolution = sourceResolution;
     if (isVideoTranscode) {
@@ -488,7 +516,7 @@ export function extractStreamTelemetry(s: any) {
     }
 
     // HDR & Tone Mapping
-    const hdrFormat = detectHdrFormat(videoStream, mediaObj) || (s.video_dynamic_range || (mediaObj.videoProfile?.includes("dovi") ? "Dolby Vision" : null));
+    const hdrFormat = detectHdrFormat(videoStream, mediaObj) || (s.video_dynamic_range || null);
     const isToneMapping = Boolean(
         (hdrFormat && isVideoTranscode) || 
         ts?.transcodeHwToneMapping || 
@@ -497,16 +525,17 @@ export function extractStreamTelemetry(s: any) {
     );
 
     // Video Codecs
-    const videoCodec = (s.videoCodec || s.video_codec || mediaObj.videoCodec || videoStream.codec || "H264").toUpperCase();
-    const streamVideoCodec = (ts?.videoCodec || s.stream_video_codec || videoCodec).toUpperCase();
+    const videoCodec = (ts?.sourceVideoCodec || s.videoCodec || s.video_codec || mediaObj.videoCodec || videoStream.codec || "H264").toUpperCase();
+    const streamVideoCodec = (ts?.videoCodec || (isVideoTranscode ? (videoStream.codec || ts?.videoCodec) : null) || s.stream_video_codec || videoCodec).toUpperCase();
 
     // Audio Codecs & Channels
-    const sourceAudioCodec = (audioStream.codec || mediaObj.audioCodec || s.audio_codec || s.audioCodec || "AAC").toUpperCase();
-    const rawSrcChannels = audioStream.channels || mediaObj.audioChannels || s.audio_channels || s.audioChannels;
+    const titleChannelMatch = String(audioStream.displayTitle || audioStream.extendedDisplayTitle || "").match(/\b(7\.1|5\.1|stereo|mono)\b/i);
+    const sourceAudioCodec = (ts?.sourceAudioCodec || audioStream.codec || mediaObj.audioCodec || s.audio_codec || s.audioCodec || "AAC").toUpperCase();
+    const rawSrcChannels = titleChannelMatch ? titleChannelMatch[1] : (audioStream.channels || mediaObj.audioChannels || s.audio_channels || s.audioChannels);
     const sourceAudioChannels = formatAudioChannels(rawSrcChannels);
 
     const streamAudioCodec = (ts?.audioCodec || s.stream_audio_codec || sourceAudioCodec).toUpperCase();
-    const rawStreamChannels = ts?.audioChannels || s.stream_audio_channels || rawSrcChannels;
+    const rawStreamChannels = ts?.audioChannels || s.stream_audio_channels || audioStream.channels || rawSrcChannels;
     const streamAudioChannels = formatAudioChannels(rawStreamChannels);
 
     // Subtitles
