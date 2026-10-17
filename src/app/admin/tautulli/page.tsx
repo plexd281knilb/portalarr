@@ -699,27 +699,66 @@ export default function StreamIntelligencePage() {
                                                     <span className={`px-2 py-0.5 rounded font-bold ${isTranscode ? "bg-amber-500/20 text-amber-300 border border-amber-500/40" : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"}`}>
                                                         {isTranscode ? "Transcode" : "Direct Play"}
                                                     </span>
-                                                    {session.transcodeHwRequested && (
-                                                        <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30 text-[9px] font-mono">
-                                                            NVENC HW
-                                                        </Badge>
-                                                    )}
-                                                    {isTranscode && session.transcodeSpeed && (
-                                                        <Badge variant="outline" className="text-[9px] font-mono bg-amber-500/10 text-amber-300 border-amber-500/30">
-                                                            ⚡ {session.transcodeSpeed} {session.transcodeThrottled ? "(Throttled)" : ""}
-                                                        </Badge>
-                                                    )}
+
+                                                    {/* Resolution Conversion & Downscaling Badge */}
                                                     {session.sourceResolution && (
-                                                        <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[9px] bg-slate-800 text-slate-200 border border-slate-700">
+                                                        <span className={`px-2 py-0.5 rounded font-mono font-bold text-[9px] border ${
+                                                            session.sourceResolution !== session.streamResolution && session.streamResolution
+                                                                ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                                                                : "bg-slate-800 text-slate-200 border-slate-700"
+                                                        }`}>
                                                             {session.sourceResolution !== session.streamResolution && session.streamResolution 
-                                                                ? `${session.sourceResolution} ➔ ${session.streamResolution}` 
+                                                                ? `📉 ${session.sourceResolution} ➔ ${session.streamResolution}` 
                                                                 : (session.streamResolution || session.sourceResolution)}
                                                         </span>
                                                     )}
+
+                                                    {/* HDR & Tone Mapping */}
                                                     {session.hdrFormat && (
-                                                        <Badge className="text-[9px] font-bold bg-amber-500/20 text-amber-300 border-amber-500/30 font-mono">
-                                                            ✨ {session.hdrFormat}
+                                                        <Badge className="text-[9px] font-bold bg-amber-500/20 text-amber-300 border-amber-500/30 font-mono flex items-center gap-1">
+                                                            ✨ {session.hdrFormat} {session.isToneMapping ? "➔ SDR Tone Mapped" : ""}
                                                         </Badge>
+                                                    )}
+
+                                                    {/* Hardware Acceleration & Power Badges */}
+                                                    {isTranscode && (
+                                                        session.isHw || session.transcodeHwRequested || session.transcodeHwEncoding ? (
+                                                            <Badge className="bg-cyan-500/20 text-cyan-300 border-cyan-500/30 text-[9px] font-mono flex items-center gap-1" title={session.hwPowerBadge || "GPU Hardware Accelerated (Low CPU / Low Power)"}>
+                                                                <Zap className="h-2.5 w-2.5 text-cyan-400" />
+                                                                {session.hwEngine || "GPU HW"}{session.transcodeHwDecoding ? ` (${session.transcodeHwDecoding} ➔ ${session.transcodeHwEncoding || session.hwEngine || "NVENC"})` : ""} • Low Power
+                                                            </Badge>
+                                                        ) : (
+                                                            <Badge className="bg-rose-500/20 text-rose-300 border-rose-500/40 text-[9px] font-mono flex items-center gap-1" title="Software transcoding running on CPU cores (High CPU load & power)">
+                                                                <Flame className="h-2.5 w-2.5 text-rose-400" />
+                                                                CPU Software • High Power
+                                                            </Badge>
+                                                        )
+                                                    )}
+
+                                                    {/* Transcode Speed & Real-time Playback Health */}
+                                                    {isTranscode && session.transcodeSpeed && (
+                                                        <Badge variant="outline" className={`text-[9px] font-mono flex items-center gap-1 ${
+                                                            session.transcodeSpeedHealthy !== false
+                                                                ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
+                                                                : "bg-rose-500/15 text-rose-300 border-rose-500/40 animate-pulse"
+                                                        }`} title={session.transcodeSpeedHealthy !== false ? "Transcode speed is faster than real-time playback" : "Transcode speed is slower than real-time playback (buffering risk!)"}>
+                                                            <Clock className="h-2.5 w-2.5" />
+                                                            ⚡ {session.transcodeSpeed} speed {session.transcodeSpeedHealthy !== false ? "(Real-Time OK)" : "(Slow)"}
+                                                        </Badge>
+                                                    )}
+
+                                                    {/* Throttle / Power Saving State */}
+                                                    {isTranscode && session.transcodeThrottled && (
+                                                        <Badge variant="outline" className="text-[9px] font-mono bg-slate-800 text-slate-300 border-slate-700 flex items-center gap-1" title="Plex transcoder has paused because the buffer is ahead. Server CPU/GPU is at 0% idle power saving!">
+                                                            💤 Throttled (Buffer Ahead • Power Saving)
+                                                        </Badge>
+                                                    )}
+
+                                                    {/* Buffer Ahead (if available) */}
+                                                    {isTranscode && session.transcodeBufferAheadFormatted && (
+                                                        <span className="text-[9px] font-mono text-cyan-400/90 font-medium">
+                                                            ({session.transcodeBufferAheadFormatted})
+                                                        </span>
                                                     )}
                                                 </div>
 

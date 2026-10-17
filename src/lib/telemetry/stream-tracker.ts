@@ -257,8 +257,151 @@ export function formatResolution(res?: string | null): string {
     if (r === "4k" || r === "2160" || r === "2160p" || r === "uhd") return "4K UHD";
     if (r === "1080" || r === "1080p") return "1080p";
     if (r === "720" || r === "720p") return "720p";
+    if (r === "576" || r === "576p") return "576p";
     if (r === "480" || r === "480p" || r === "sd") return "480p";
     return String(res).toUpperCase();
+}
+
+/**
+ * Resolves video resolution from raw strings, pixel height, and pixel width.
+ * Essential for Plex Media Server TranscodeSession which frequently supplies height/width
+ * without an explicit videoResolution attribute.
+ */
+export function resolveResolution(
+    rawRes?: string | null,
+    height?: number | string | null,
+    width?: number | string | null
+): string {
+    const raw = String(rawRes || "").toLowerCase().trim();
+    if (raw === "4k" || raw === "2160" || raw === "2160p" || raw === "uhd") return "4K UHD";
+    if (raw === "1080" || raw === "1080p") return "1080p";
+    if (raw === "720" || raw === "720p") return "720p";
+    if (raw === "576" || raw === "576p") return "576p";
+    if (raw === "480" || raw === "480p" || raw === "sd") return "480p";
+
+    const h = height !== undefined && height !== null && !isNaN(Number(height)) ? Number(height) : 0;
+    const w = width !== undefined && width !== null && !isNaN(Number(width)) ? Number(width) : 0;
+
+    if (w >= 3200 || h >= 1800) return "4K UHD";
+    if (w >= 1600 || h >= 900) return "1080p";
+    if (w >= 1000 || h >= 650) return "720p";
+    if (w >= 600 || h >= 400) return "480p";
+    if (h > 0) return `${h}p`;
+
+    if (raw) return formatResolution(raw);
+    return "";
+}
+
+/**
+ * Evaluates hardware acceleration decoding, encoding, engine brand, and power efficiency
+ */
+export function resolveHwTranscodeInfo(params: {
+    transcodeHwRequested?: boolean;
+    hwRequested?: boolean;
+    transcodeHwDecoding?: string;
+    transcodeHwEncoding?: string;
+    transcodeHwDecodingTitle?: string;
+    transcodeHwEncodingTitle?: string;
+    transcodeHwFullPipeline?: boolean;
+    videoDecoder?: string;
+    videoEncoder?: string;
+    isVideoTranscode: boolean;
+}) {
+    if (!params.isVideoTranscode) {
+        return {
+            isHw: false,
+            transcodeHwRequested: false,
+            transcodeHwDecoding: "",
+            transcodeHwEncoding: "",
+            transcodeHwFullPipeline: false,
+            hwEngine: "",
+            hwEngineLabel: "Direct Play",
+            hwPowerBadge: "🟢 Direct Play (Zero Transcode Power)",
+            efficiency: "idle" as const
+        };
+    }
+
+    const isRequested = Boolean(
+        params.transcodeHwRequested || 
+        params.hwRequested || 
+        params.transcodeHwDecoding || 
+        params.transcodeHwEncoding || 
+        params.videoDecoder || 
+        params.videoEncoder
+    );
+
+    const rawDec = String(
+        params.transcodeHwDecodingTitle || 
+        params.transcodeHwDecoding || 
+        params.videoDecoder || 
+        ""
+    ).trim();
+
+    const rawEnc = String(
+        params.transcodeHwEncodingTitle || 
+        params.transcodeHwEncoding || 
+        params.videoEncoder || 
+        ""
+    ).trim();
+
+    const decLower = rawDec.toLowerCase();
+    const encLower = rawEnc.toLowerCase();
+
+    // Determine engine brand
+    let engine = "NVENC";
+    if (decLower.includes("qsv") || encLower.includes("qsv") || decLower.includes("quicksync") || encLower.includes("quicksync") || decLower.includes("intel") || encLower.includes("intel")) {
+        engine = "Intel QuickSync";
+    } else if (decLower.includes("vaapi") || encLower.includes("vaapi")) {
+        engine = "VAAPI";
+    } else if (decLower.includes("videotoolbox") || encLower.includes("videotoolbox") || decLower.includes("apple") || encLower.includes("apple")) {
+        engine = "Apple VideoToolbox";
+    } else if (decLower.includes("amf") || encLower.includes("amf") || decLower.includes("amd") || encLower.includes("amd")) {
+        engine = "AMD AMF";
+    } else if (decLower.includes("cuda") || encLower.includes("cuda") || decLower.includes("nvenc") || encLower.includes("nvenc") || decLower.includes("nvidia") || encLower.includes("nvidia")) {
+        engine = "Nvidia NVENC";
+    } else if (isRequested) {
+        engine = "GPU Hardware";
+    } else {
+        return {
+            isHw: false,
+            transcodeHwRequested: false,
+            transcodeHwDecoding: "",
+            transcodeHwEncoding: "",
+            transcodeHwFullPipeline: false,
+            hwEngine: "CPU",
+            hwEngineLabel: "CPU Software Transcode",
+            hwPowerBadge: "🔥 High CPU Load / Power Consumption",
+            efficiency: "cpu_heavy" as const
+        };
+    }
+
+    const hasHwDec = Boolean(rawDec && rawDec !== "0" && decLower !== "cpu" && !decLower.includes("sw"));
+    const hasHwEnc = Boolean(rawEnc && rawEnc !== "0" && encLower !== "cpu" && !encLower.includes("sw"));
+    const isFullPipeline = Boolean(params.transcodeHwFullPipeline || (hasHwDec && hasHwEnc));
+
+    const cleanDec = hasHwDec ? (rawDec.length < 15 ? rawDec.toUpperCase() : engine) : "CPU";
+    const cleanEnc = hasHwEnc ? (rawEnc.length < 15 ? rawEnc.toUpperCase() : engine) : "CPU";
+
+    let label = `${engine} HW Accel`;
+    if (isFullPipeline) {
+        label = `${engine} Full HW Pipeline`;
+    } else if (hasHwEnc && !hasHwDec) {
+        label = `${engine} HW Encode (CPU Decode)`;
+    } else if (hasHwDec && !hasHwEnc) {
+        label = `${engine} HW Decode (CPU Encode)`;
+    }
+
+    return {
+        isHw: true,
+        transcodeHwRequested: true,
+        transcodeHwDecoding: cleanDec,
+        transcodeHwEncoding: cleanEnc,
+        transcodeHwFullPipeline: isFullPipeline,
+        hwEngine: engine,
+        hwEngineLabel: label,
+        hwPowerBadge: `🟢 ${engine} HW (Low CPU • Power Efficient)`,
+        efficiency: isFullPipeline ? ("hw_high" as const) : ("hw_hybrid" as const)
+    };
 }
 
 /**
@@ -268,7 +411,7 @@ export function detectHdrFormat(videoStream?: any, media?: any): string | null {
     const dovi = Boolean(
         videoStream?.doviProfile || 
         videoStream?.doviTitle || 
-        videoStream?.doviPresent ||
+        videoStream?.doviPresent || 
         media?.videoProfile?.toLowerCase().includes("dovi") || 
         media?.videoProfile?.toLowerCase().includes("dv")
     );
@@ -311,27 +454,59 @@ export function extractStreamTelemetry(s: any) {
     const audioStream = streamsList.find((st: any) => (st.streamType === 2 || st.streamType === "2" || st.codec_type === "audio") && (st.selected || st.selected === 1 || st.selected === "1")) || streamsList.find((st: any) => st.streamType === 2 || st.streamType === "2") || {};
     const subtitleStream = streamsList.find((st: any) => (st.streamType === 3 || st.streamType === "3" || st.codec_type === "subtitle") && (st.selected || st.selected === 1 || st.selected === "1"));
 
-    // Source vs Transcode Resolution
+    // Source Resolution
     const rawSrcRes = mediaObj.videoResolution || s.video_resolution || s.videoResolution || videoStream.videoResolution || "";
-    const sourceResolution = formatResolution(rawSrcRes);
+    const srcHeight = mediaObj.height || s.height || videoStream.height;
+    const srcWidth = mediaObj.width || s.width || videoStream.width;
+    const sourceResolution = resolveResolution(rawSrcRes, srcHeight, srcWidth) || formatResolution(rawSrcRes) || "1080p";
 
-    const rawStreamRes = s.TranscodeSession?.videoResolution || s.stream_video_resolution || rawSrcRes;
-    const streamResolution = formatResolution(rawStreamRes);
+    // Video Decision: is it transcoding video?
+    const rawVideoDecision = (s.videoDecision || s.video_decision || s.TranscodeSession?.videoDecision || "").toLowerCase();
+    const isVideoTranscode = rawVideoDecision === "transcode" || 
+        (!rawVideoDecision && Boolean(s.TranscodeSession && s.TranscodeSession?.videoDecision !== "copy"));
 
-    // HDR Format
+    // Target Stream Resolution (What is it converting to?)
+    const ts = s.TranscodeSession;
+    const transcodeHeight = ts?.height || s.transcode_height || s.stream_height;
+    const transcodeWidth = ts?.width || s.transcode_width || s.stream_width;
+    const rawTargetRes = ts?.videoResolution || ts?.targetVideoResolution || s.stream_video_resolution;
+
+    let streamResolution = sourceResolution;
+    if (isVideoTranscode) {
+        const resolvedTarget = resolveResolution(rawTargetRes, transcodeHeight, transcodeWidth);
+        if (resolvedTarget) {
+            streamResolution = resolvedTarget;
+        } else {
+            // Stream bitrate downscaling fallback estimation
+            const br = Number(s.streamBitrate || s.stream_bitrate || s.bitrate || (mediaObj.bitrate ? Number(mediaObj.bitrate) : 0));
+            if (br > 0 && br <= 4500 && (sourceResolution === "4K UHD" || sourceResolution === "1080p")) {
+                streamResolution = "720p";
+            } else if (br > 4500 && br <= 12000 && sourceResolution === "4K UHD") {
+                streamResolution = "1080p";
+            }
+        }
+    }
+
+    // HDR & Tone Mapping
     const hdrFormat = detectHdrFormat(videoStream, mediaObj) || (s.video_dynamic_range || (mediaObj.videoProfile?.includes("dovi") ? "Dolby Vision" : null));
+    const isToneMapping = Boolean(
+        (hdrFormat && isVideoTranscode) || 
+        ts?.transcodeHwToneMapping || 
+        ts?.toneMapping || 
+        s.transcode_hw_tone_mapping
+    );
 
     // Video Codecs
     const videoCodec = (s.videoCodec || s.video_codec || mediaObj.videoCodec || videoStream.codec || "H264").toUpperCase();
-    const streamVideoCodec = (s.TranscodeSession?.videoCodec || s.stream_video_codec || videoCodec).toUpperCase();
+    const streamVideoCodec = (ts?.videoCodec || s.stream_video_codec || videoCodec).toUpperCase();
 
     // Audio Codecs & Channels
     const sourceAudioCodec = (audioStream.codec || mediaObj.audioCodec || s.audio_codec || s.audioCodec || "AAC").toUpperCase();
     const rawSrcChannels = audioStream.channels || mediaObj.audioChannels || s.audio_channels || s.audioChannels;
     const sourceAudioChannels = formatAudioChannels(rawSrcChannels);
 
-    const streamAudioCodec = (s.TranscodeSession?.audioCodec || s.stream_audio_codec || sourceAudioCodec).toUpperCase();
-    const rawStreamChannels = s.TranscodeSession?.audioChannels || s.stream_audio_channels || rawSrcChannels;
+    const streamAudioCodec = (ts?.audioCodec || s.stream_audio_codec || sourceAudioCodec).toUpperCase();
+    const rawStreamChannels = ts?.audioChannels || s.stream_audio_channels || rawSrcChannels;
     const streamAudioChannels = formatAudioChannels(rawStreamChannels);
 
     // Subtitles
@@ -339,18 +514,55 @@ export function extractStreamTelemetry(s: any) {
     const subtitleLanguage = subtitleStream?.language || subtitleStream?.languageCode || s.subtitle_language || null;
     const subtitleCodec = (subtitleStream?.codec || s.subtitle_codec || "").toUpperCase();
     const isSubtitleBurnIn = Boolean(
-        s.TranscodeSession?.subtitleDecision === "burn" || 
+        ts?.subtitleDecision === "burn" || 
         s.subtitle_decision === "burn" || 
         subtitleStream?.burn === 1 ||
         subtitleStream?.burn === "1" ||
         subtitleStream?.burn === true
     );
 
-    // Transcode Details
-    const transcodeSpeed = s.TranscodeSession?.speed 
-        ? `${Number(s.TranscodeSession.speed).toFixed(1)}x` 
-        : (s.transcode_speed ? `${Number(s.transcode_speed).toFixed(1)}x` : null);
-    const transcodeThrottled = Boolean(s.TranscodeSession?.throttled || s.transcode_throttled);
+    // Transcode Speed & Times
+    const rawSpeed = ts?.speed !== undefined ? ts.speed : s.transcode_speed;
+    const speedNum = rawSpeed !== undefined && rawSpeed !== null && !isNaN(Number(rawSpeed)) ? Number(rawSpeed) : null;
+    const transcodeSpeed = speedNum !== null ? `${speedNum.toFixed(1)}x` : null;
+    const transcodeSpeedHealthy = speedNum !== null ? speedNum >= 1.0 : true;
+    const transcodeThrottled = Boolean(ts?.throttled || s.transcode_throttled);
+
+    // Transcode Buffer Progress & Buffer Ahead
+    const transcodeProgress = ts?.progress !== undefined && ts?.progress !== null && !isNaN(Number(ts.progress))
+        ? Math.round(Number(ts.progress))
+        : (s.transcode_progress !== undefined ? Math.round(Number(s.transcode_progress)) : null);
+
+    let transcodeBufferAheadSec: number | null = null;
+    let transcodeBufferAheadFormatted: string | null = null;
+    if (ts?.maxOffsetAvailable !== undefined && viewMs > 0) {
+        const viewSec = Math.round(viewMs / 1000);
+        const maxOffsetSec = Math.round(Number(ts.maxOffsetAvailable));
+        if (maxOffsetSec > viewSec) {
+            transcodeBufferAheadSec = maxOffsetSec - viewSec;
+            if (transcodeBufferAheadSec >= 60) {
+                const m = Math.floor(transcodeBufferAheadSec / 60);
+                const sec = transcodeBufferAheadSec % 60;
+                transcodeBufferAheadFormatted = `+${m}m ${String(sec).padStart(2, "0")}s buffer`;
+            } else {
+                transcodeBufferAheadFormatted = `+${transcodeBufferAheadSec}s buffer`;
+            }
+        }
+    }
+
+    // Hardware Acceleration & Power Metrics
+    const hwInfo = resolveHwTranscodeInfo({
+        transcodeHwRequested: !!(ts?.transcodeHwRequested || s.transcode_hw_requested),
+        hwRequested: !!(ts?.hwRequested),
+        transcodeHwDecoding: ts?.transcodeHwDecoding || s.transcode_hw_decoding,
+        transcodeHwEncoding: ts?.transcodeHwEncoding || s.transcode_hw_encoding,
+        transcodeHwDecodingTitle: ts?.transcodeHwDecodingTitle || s.transcode_hw_decoding_title,
+        transcodeHwEncodingTitle: ts?.transcodeHwEncodingTitle || s.transcode_hw_encoding_title,
+        transcodeHwFullPipeline: !!(ts?.transcodeHwFullPipeline || s.transcode_hw_full_pipeline),
+        videoDecoder: ts?.videoDecoder,
+        videoEncoder: ts?.videoEncoder,
+        isVideoTranscode
+    });
 
     // Network / Tunneling
     const isRelayed = Boolean(s.Player?.relayed || s.relayed === 1 || s.relayed === "1" || s.relayed === true);
@@ -378,7 +590,9 @@ export function extractStreamTelemetry(s: any) {
         etaTime: etaMs ? formatEtaTimestamp(etaMs) : null,
         sourceResolution,
         streamResolution,
+        isDownscaling: isVideoTranscode && sourceResolution !== streamResolution,
         hdrFormat,
+        isToneMapping,
         videoCodec,
         streamVideoCodec,
         sourceAudioCodec,
@@ -390,7 +604,21 @@ export function extractStreamTelemetry(s: any) {
         subtitleCodec,
         isSubtitleBurnIn,
         transcodeSpeed,
+        transcodeSpeedNum: speedNum,
+        transcodeSpeedHealthy,
         transcodeThrottled,
+        transcodeProgress,
+        transcodeBufferAheadSec,
+        transcodeBufferAheadFormatted,
+        isHw: hwInfo.isHw,
+        transcodeHwRequested: hwInfo.transcodeHwRequested,
+        transcodeHwDecoding: hwInfo.transcodeHwDecoding,
+        transcodeHwEncoding: hwInfo.transcodeHwEncoding,
+        transcodeHwFullPipeline: hwInfo.transcodeHwFullPipeline,
+        hwEngine: hwInfo.hwEngine,
+        hwEngineLabel: hwInfo.hwEngineLabel,
+        hwPowerBadge: hwInfo.hwPowerBadge,
+        hwEfficiency: hwInfo.efficiency,
         isRelayed,
         isSecure,
         isLocal,

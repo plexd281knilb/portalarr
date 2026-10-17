@@ -755,15 +755,19 @@ export default function AdminDetailedStreams() {
                                                     {stream.player} {stream.device ? `• ${stream.device}` : ""}
                                                 </span>
                                                 {stream.sourceResolution && (
-                                                    <span className="px-1.5 py-0.2 rounded font-mono font-bold text-[9px] bg-white/[0.06] text-foreground border border-white/10">
+                                                    <span className={`px-1.5 py-0.5 rounded font-mono font-bold text-[9px] border ${
+                                                        stream.sourceResolution !== stream.streamResolution && stream.streamResolution
+                                                            ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                                                            : "bg-white/[0.06] text-foreground border-white/10"
+                                                    }`}>
                                                         {stream.sourceResolution !== stream.streamResolution && stream.streamResolution 
-                                                            ? `${stream.sourceResolution} ➔ ${stream.streamResolution}` 
+                                                            ? `📉 ${stream.sourceResolution} ➔ ${stream.streamResolution}` 
                                                             : (stream.streamResolution || stream.sourceResolution)}
                                                     </span>
                                                 )}
                                                 {stream.hdrFormat && (
                                                     <Badge className="text-[9px] font-bold bg-amber-500/20 text-amber-300 border-amber-500/30 font-mono py-0">
-                                                        ✨ {stream.hdrFormat}
+                                                        ✨ {stream.hdrFormat} {stream.isToneMapping ? "➔ SDR Tone Mapped" : ""}
                                                     </Badge>
                                                 )}
                                                 <span>•</span>
@@ -801,13 +805,22 @@ export default function AdminDetailedStreams() {
                                                         : "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
                                                 }`}
                                             >
-                                                {isTranscoding ? "TRANSCODE" : "DIRECT PLAY"} ({stream.videoCodec !== stream.streamVideoCodec && stream.streamVideoCodec ? `${stream.videoCodec} ➔ ${stream.streamVideoCodec}` : (stream.videoCodec || "RAW")})
+                                                {isTranscoding ? (
+                                                    stream.sourceResolution !== stream.streamResolution && stream.streamResolution
+                                                        ? `DOWNCONVERT (${stream.sourceResolution} ➔ ${stream.streamResolution})`
+                                                        : "TRANSCODE"
+                                                ) : "DIRECT PLAY"} ({stream.videoCodec !== stream.streamVideoCodec && stream.streamVideoCodec ? `${stream.videoCodec} ➔ ${stream.streamVideoCodec}` : (stream.videoCodec || "RAW")})
                                             </Badge>
                                         </div>
 
                                         {isTranscoding && stream.transcodeSpeed && (
-                                            <Badge variant="outline" className="text-[9px] font-mono bg-amber-500/10 text-amber-300 border-amber-500/30">
-                                                ⚡ {stream.transcodeSpeed} {stream.transcodeThrottled ? "(Throttled)" : ""}
+                                            <Badge variant="outline" className={`text-[9px] font-mono flex items-center gap-1 ${
+                                                stream.transcodeSpeedHealthy !== false
+                                                    ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
+                                                    : "bg-rose-500/15 text-rose-300 border-rose-500/40 animate-pulse"
+                                            }`} title={stream.transcodeSpeedHealthy !== false ? "Transcode speed is faster than real-time playback" : "Transcode speed is slower than real-time playback (buffering risk!)"}>
+                                                <Clock className="h-2.5 w-2.5" />
+                                                ⚡ {stream.transcodeSpeed} speed {stream.transcodeThrottled ? "(Throttled • Power Saving)" : stream.transcodeSpeedHealthy !== false ? "(Real-Time OK)" : "(Slow)"}
                                             </Badge>
                                         )}
 
@@ -837,11 +850,24 @@ export default function AdminDetailedStreams() {
                                             </div>
                                         )}
 
-                                        {isHw && (
-                                            <Badge variant="outline" className="text-[9px] bg-cyan-500/20 text-cyan-300 border-cyan-500/40 gap-1 font-mono">
-                                                <Zap className="h-2.5 w-2.5" />
-                                                HW: {stream.transcodeHwDecoding ? `${stream.transcodeHwDecoding} -> ` : ""}{stream.transcodeHwEncoding || "NVENC"}
-                                            </Badge>
+                                        {isTranscoding && (
+                                            isHw || stream.transcodeHwRequested || stream.transcodeHwEncoding ? (
+                                                <Badge variant="outline" className="text-[9px] bg-cyan-500/20 text-cyan-300 border-cyan-500/40 gap-1 font-mono flex items-center" title={stream.hwPowerBadge || "GPU Hardware Accelerated (Low CPU / Low Power)"}>
+                                                    <Zap className="h-2.5 w-2.5" />
+                                                    {stream.hwEngine || "GPU HW"}: {stream.transcodeHwDecoding ? `${stream.transcodeHwDecoding} ➔ ` : ""}{stream.transcodeHwEncoding || "NVENC"} (Low Power)
+                                                </Badge>
+                                            ) : (
+                                                <Badge variant="outline" className="text-[9px] bg-rose-500/20 text-rose-300 border-rose-500/40 gap-1 font-mono flex items-center" title="Software transcoding running on CPU cores (High CPU load & power)">
+                                                    <Flame className="h-2.5 w-2.5 text-rose-400" />
+                                                    CPU Software (High Power)
+                                                </Badge>
+                                            )
+                                        )}
+
+                                        {isTranscoding && stream.transcodeBufferAheadFormatted && (
+                                            <span className="text-[9px] font-mono text-cyan-400/90 font-medium">
+                                                Buffer: {stream.transcodeBufferAheadFormatted}
+                                            </span>
                                         )}
 
                                         <Button
