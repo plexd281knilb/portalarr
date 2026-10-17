@@ -795,6 +795,56 @@ async function runTestSuite() {
         if (!serverQuery || !serverQuery.success || !serverQuery.answer) {
             throw new Error(`Expected server status response, got: ${JSON.stringify(serverQuery)}`);
         }
+
+        // 6. Personalized book recommendations based on user's previous requests
+        const { getUserReadingAndRequestProfile, getPersonalizedBookRecommendations } = await import("../src/lib/ai-book-recommendations");
+        const recTestUser = { id: `user_rec_${Date.now()}`, username: `user_rec_${Date.now()}`, email: `user_rec_${Date.now()}@example.com`, role: "USER" };
+        await prisma.user.create({
+            data: {
+                id: recTestUser.id,
+                username: recTestUser.username,
+                email: recTestUser.email,
+                password: "test_password_hash",
+                role: "USER"
+            }
+        });
+        const testBookReq = await prisma.mediaRequest.create({
+            data: {
+                title: "Dune",
+                mediaType: "book",
+                bookAuthor: "Frank Herbert",
+                bookSeries: "Dune",
+                requestedByUsername: recTestUser.username,
+                requestedByUserId: recTestUser.id,
+                status: "APPROVED"
+            }
+        });
+
+        try {
+            const profile = await getUserReadingAndRequestProfile(recTestUser);
+            if (!profile.favoriteAuthors.includes("Frank Herbert")) {
+                throw new Error(`Expected favoriteAuthors to include 'Frank Herbert', got: ${JSON.stringify(profile.favoriteAuthors)}`);
+            }
+
+            const recs = await getPersonalizedBookRecommendations({
+                user: recTestUser,
+                profile,
+                limit: 3
+            });
+            if (recs.recommendations.length === 0) {
+                throw new Error("Expected personalized book recommendations to return at least 1 book");
+            }
+
+            const askRec = await askAiServerMaster("can you recommend some books based on my requests?", [], recTestUser);
+            const hasRecMention = askRec.answer?.toLowerCase().includes("recommend");
+            const hasRecAction = askRec.actionsTaken?.some((a: any) => a.action === "BOOK_RECOMMENDATION");
+            if (!askRec.success || !askRec.answer || (!hasRecMention && !hasRecAction)) {
+                throw new Error(`Expected personalized recommendations response, got: ${JSON.stringify(askRec)}`);
+            }
+        } finally {
+            await prisma.mediaRequest.delete({ where: { id: testBookReq.id } }).catch(() => {});
+            await prisma.user.delete({ where: { id: recTestUser.id } }).catch(() => {});
+        }
     });
 
     // =========================================================================

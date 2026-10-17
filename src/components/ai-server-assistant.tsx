@@ -61,7 +61,8 @@ import {
     ExternalLink,
     ChevronRight,
     Clock,
-    Flame
+    Flame,
+    BookOpen
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -302,6 +303,12 @@ export function AiServerAssistant() {
             label: "Remote 1080p/4K Settings", 
             category: "Quality",
             query: "What are the recommended Plex settings for my device to avoid the 720p 2Mbps limit?" 
+        },
+        { 
+            icon: "📚",
+            label: "Book Recommendations", 
+            category: "Discovery",
+            query: "Can you recommend some books or audiobooks based on what I've requested and read previously?" 
         }
     ];
 
@@ -359,6 +366,7 @@ export function AiServerAssistant() {
                                 { icon: "💬", label: "Subtitle Stutter", query: "Why do subtitles cause video buffering and how do I fix subtitle burn-in?" },
                                 { icon: "📺", label: "Unlock 4K & 1080p", query: "What are the recommended Plex settings for my device to avoid the 720p 2Mbps limit?" },
                                 { icon: "🎬", label: "Missing Movie/Show", query: "I cannot find a movie or episode in my library. How do I request it or check download status?" },
+                                { icon: "📚", label: "Book Recommendations", query: "Can you recommend some books or audiobooks based on what I've requested and read previously?" },
                                 { icon: "🟢", label: "Is Server Working?", query: "Is Plex working right now? Test actual file playback and disk access for each server." }
                             ].map((chip, idx) => (
                                 <button
@@ -383,7 +391,7 @@ export function AiServerAssistant() {
                         <Input
                             value={quickQuestion}
                             onChange={(e) => setQuickQuestion(e.target.value)}
-                            placeholder="Type your question or issue (e.g. why is my stream buffering, or dialogue too quiet?)..."
+                            placeholder="Ask for book recommendations, describe buffering, or request fixes (e.g. recommend books like Dune)..."
                             className="h-11 text-xs sm:text-sm bg-black/40 border-purple-500/30 focus-visible:border-purple-400 focus-visible:ring-purple-500/30 pl-4 pr-32 rounded-xl"
                         />
                         <Button
@@ -758,6 +766,8 @@ export function AiServerAssistant() {
                                                                         ? "bg-purple-950/40 border-purple-500/40 text-purple-200" 
                                                                         : act.action === "ESCALATE_ADMIN_TICKET"
                                                                         ? "bg-amber-950/40 border-amber-500/40 text-amber-200"
+                                                                        : act.action === "BOOK_RECOMMENDATION"
+                                                                        ? "bg-pink-950/40 border-pink-500/40 text-pink-200"
                                                                         : "bg-cyan-950/30 border-cyan-500/30 text-cyan-200"
                                                                 }`}
                                                             >
@@ -765,6 +775,8 @@ export function AiServerAssistant() {
                                                                     <Download className="h-4 w-4 text-purple-400 shrink-0 mt-0.5" />
                                                                 ) : act.action === "ESCALATE_ADMIN_TICKET" ? (
                                                                     <LifeBuoy className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+                                                                ) : act.action === "BOOK_RECOMMENDATION" ? (
+                                                                    <BookOpen className="h-4 w-4 text-pink-400 shrink-0 mt-0.5" />
                                                                 ) : (
                                                                     <Film className="h-4 w-4 text-cyan-400 shrink-0 mt-0.5" />
                                                                 )}
@@ -1027,7 +1039,7 @@ export function AiServerAssistant() {
                                     <Input
                                         value={inputQuestion}
                                         onChange={(e) => setInputQuestion(e.target.value)}
-                                        placeholder="Ask a question, describe buffering, or ask to fix audio tracks..."
+                                        placeholder="Ask for book recommendations, describe buffering, or request fixes (e.g. recommend books like Dune)..."
                                         className="h-10 text-xs bg-slate-950 border-slate-800 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 rounded-xl"
                                         disabled={loading}
                                     />

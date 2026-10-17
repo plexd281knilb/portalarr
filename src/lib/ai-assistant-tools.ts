@@ -8,6 +8,7 @@ import {
     searchAndGrabSonarrReplacement, 
     redownloadBookWithDiagnostics 
 } from "@/lib/ai-media-diagnostics";
+import { getPersonalizedBookRecommendations } from "@/lib/ai-book-recommendations";
 import { listDockerContainers, restartDockerContainer } from "@/lib/monitoring/docker-client";
 import { analyzeActiveSessionsForSharing } from "@/lib/telemetry/stream-tracker";
 import { 
@@ -91,6 +92,19 @@ export const GEMINI_TOOL_DECLARATIONS = [
                 title: { type: "STRING", description: "Title of the book or audiobook" }
             },
             required: ["title"]
+        }
+    },
+    {
+        name: "recommend_books_and_media",
+        description: "Search the server's book/audiobook library and recommend titles tailored to the user's taste, past requests, or specified author, genre, or reference book. Cross-references available server books on disk (which can be read or sent to Kindle immediately) and unacquired books ready to request.",
+        parameters: {
+            type: "OBJECT",
+            properties: {
+                reference_title: { type: "STRING", description: "Optional title of a book or movie the user liked (e.g. 'Project Hail Mary', 'Dune', 'The Way of Kings')" },
+                author: { type: "STRING", description: "Optional author name to find similar books for (e.g. 'Brandon Sanderson', 'Frank Herbert', 'Andy Weir')" },
+                genre: { type: "STRING", description: "Optional genre or theme (e.g. 'Sci-Fi', 'Fantasy', 'Mystery', 'Thriller', 'Non-fiction')" },
+                media_type: { type: "STRING", description: "Optional format filter: 'ebook', 'audiobook', or 'all'" }
+            }
         }
     },
     {
@@ -419,6 +433,35 @@ export async function executeAiAssistantTool(
                 }
             } catch (bErr: any) {
                 return { success: false, result: { error: bErr.message }, summary: `Error: ${bErr.message}` };
+            }
+        }
+
+        // --- 6.5. PERSONALIZED BOOK & MEDIA RECOMMENDATIONS ---
+        case "recommend_books_and_media": {
+            try {
+                const recResult = await getPersonalizedBookRecommendations({
+                    user: ctx.user,
+                    profile: ctx.snapshot.readingProfile,
+                    referenceTitle: args.reference_title,
+                    author: args.author,
+                    genre: args.genre,
+                    mediaType: args.media_type,
+                    limit: 5
+                });
+
+                const summary = recResult.summary;
+                ctx.actionsTaken.push({
+                    action: "BOOK_RECOMMENDATION",
+                    status: "SUCCESS",
+                    target: args.reference_title || args.author || args.genre || "Personalized Reading Profile",
+                    summary,
+                    details: recResult,
+                    timestamp
+                });
+
+                return { success: true, result: recResult, summary };
+            } catch (err: any) {
+                return { success: false, result: { error: err.message }, summary: `Failed to generate recommendations: ${err.message}` };
             }
         }
 
