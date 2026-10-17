@@ -939,8 +939,13 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 ### 38. AI Server Assistant Mission Control & Universal Floating Launcher (`AiServerAssistant` & `FloatingAiLauncher`)
 - **Prominent User Mission Control Placement**:
   - Positioned prominently on the main dashboard (position #2 on user/trial/super-user views, and directly accessible in Admin Mission Control) for all accounts (Admins, Full Accounts, Super Users, and Trial Users).
-  - Styled with glowing purple/cyan linear gradient borders (`from-purple-500/20 via-primary/10 to-transparent`), a pulse status badge (`24/7 AI Diagnostic Engine Active`), and 6 instant 1-click quick-chips (`⚡ Buffering`, `🔊 Quiet Dialogue`, `💬 Subtitles`, `📺 Unlock 4K/1080p`, `🎬 Missing Media`, `🟢 Server Health`).
+  - Styled with glowing purple/cyan linear gradient borders (`from-purple-500/20 via-primary/10 to-transparent`), a pulse status badge (`24/7 AI Diagnostic Engine Active`), and instant 1-click quick-chips (`⚡ Buffering`, `🔊 Quiet Dialogue`, `💬 Subtitles`, `📺 Unlock 4K/1080p`, `🎬 Missing Media`, `🟢 Server Health`, and `📚 Book Recommendations`).
   - Automatically loads the user's active streaming session telemetry into the diagnostic prompt for zero-click context awareness.
+- **Personalized Book & Media Recommendations Engine (`ai-book-recommendations.ts` & `recommend_books_and_media`)**:
+  - Aggregates user taste from previous `MediaRequest` and `BookRequest` records, Kindle deliveries (`KindleDeliveryLog`), and content preferences (`UserContentPreference`).
+  - Detects favorite authors, universe affinities across 8 major genres, and cross-references existing disk catalog (`Book`) vs unacquired comparable works.
+  - Generates actionable recommendation cards distinguishing between server-available books (`inLibrary: true`, linking directly to `/library` for Read Now or 1-Click Send-to-Kindle) and unacquired recommendations (`inLibrary: false`, linking to `/requests` for 1-Click Auto-Grab).
+  - Supported across both LLM tool calling (Gemini `recommend_books_and_media`, OpenAI tools) and the zero-dependency heuristic engine fallback (`resolvePlexMasterHeuristic`).
 - **Universal Floating Launcher & Event Bus**:
   - Rendered globally via `<FloatingAiLauncher />` in `LayoutWrapper` at `fixed bottom-4 right-4 z-40` for all authenticated members.
   - Supports programmatic triggers via `openAiAssistant(initialQuery?: string)` custom DOM events (`window.dispatchEvent(new CustomEvent("open-ai-assistant", ...))`) and query params (`?openAssistant=true`).

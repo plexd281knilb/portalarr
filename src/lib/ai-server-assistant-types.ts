@@ -114,8 +114,45 @@ export interface MediaStreamInspection {
     };
 }
 
+export interface BookRecommendationItem {
+    title: string;
+    author: string;
+    series?: string;
+    genre?: string;
+    inLibrary: boolean;
+    mediaType: "ebook" | "audiobook";
+    matchReason: string;
+    actionUrl: string;
+    actionLabel: string;
+    coverUrl?: string;
+}
+
+export interface UserReadingProfile {
+    kindleEmail?: string;
+    enabledAddons: string[];
+    requestedBooks: Array<{
+        title: string;
+        author?: string;
+        series?: string;
+        mediaType: string;
+        status: string;
+        createdAt?: string;
+    }>;
+    favoriteAuthors: string[];
+    favoriteSeries: string[];
+    recentKindleDeliveries: Array<{
+        bookTitle: string;
+        author?: string;
+        date: string;
+    }>;
+    excludedContent?: string;
+    requestedBooksCount: number;
+    requestedBooksSummary: string;
+    recentKindleDeliveriesSummary: string;
+}
+
 export interface AgentActionReport {
-    action: "INSPECT_MEDIA" | "RADARR_SEARCH_GRAB" | "SONARR_SEARCH_GRAB" | "REDOWNLOAD_BOOK" | "ESCALATE_ADMIN_TICKET" | "STREAM_PATTERN_DIAGNOSTIC";
+    action: "INSPECT_MEDIA" | "RADARR_SEARCH_GRAB" | "SONARR_SEARCH_GRAB" | "REDOWNLOAD_BOOK" | "ESCALATE_ADMIN_TICKET" | "STREAM_PATTERN_DIAGNOSTIC" | "BOOK_RECOMMENDATION";
     status: "SUCCESS" | "FAILED" | "SKIPPED" | "ESCALATED";
     target: string;
     summary: string;
@@ -162,6 +199,7 @@ export interface UserDiagnosticSnapshot {
         label?: string;
         accountType: string;
     }>;
+    readingProfile?: UserReadingProfile;
     generatedAt: string;
 }
 

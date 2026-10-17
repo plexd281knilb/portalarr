@@ -29,6 +29,10 @@ import {
     ToolExecutionContext 
 } from "@/lib/ai-assistant-tools";
 import { resolveResolution } from "@/lib/telemetry/stream-tracker";
+import { 
+    getUserReadingAndRequestProfile, 
+    getPersonalizedBookRecommendations 
+} from "@/lib/ai-book-recommendations";
 
 function cleanUrl(url: string): string {
     if (!url) return "";
@@ -569,6 +573,9 @@ export async function getUserDiagnosticSnapshot(user: any): Promise<UserDiagnost
     const onlineTautulli = serverNodes.filter(s => s.type === "tautulli" && s.status === "ONLINE").length;
     const finalServersCount = Math.max(onlinePlex, totalPlex, onlineTautulli, tautullis.length, 1);
 
+    // 5. Fetch User Reading & Request Profile for personalized recommendations
+    const readingProfile = await getUserReadingAndRequestProfile(user).catch(() => undefined);
+
     return {
         username: safeUsername,
         email: safeEmail,
@@ -588,6 +595,7 @@ export async function getUserDiagnosticSnapshot(user: any): Promise<UserDiagnost
             label: s.subAccountLabel || s.accountType,
             accountType: s.accountType
         })),
+        readingProfile,
         generatedAt: new Date().toISOString()
     };
 }
@@ -1060,6 +1068,43 @@ ${serverListMarkdown}
         }
     }
 
+    // Check for personalized book recommendations inquiry
+    const isBookRecInquiry = (lowerQ.includes("recommend") || lowerQ.includes("suggestion") || lowerQ.includes("what should i read") || lowerQ.includes("what to read") || lowerQ.includes("next book") || lowerQ.includes("similar book") || lowerQ.includes("books like") || lowerQ.includes("read next")) &&
+        (lowerQ.includes("book") || lowerQ.includes("read") || lowerQ.includes("audiobook") || lowerQ.includes("author") || lowerQ.includes("novel") || lowerQ.includes("series") || lowerQ.includes("kindle"));
+
+    if (isBookRecInquiry) {
+        try {
+            const { title: rawRefTitle } = cleanMediaSearchQuery(question);
+            let refAuthor: string | undefined = undefined;
+            const authorMatch = question.match(/\b(?:by|from|author)\s+([A-Za-z\s\.\-']+)/i);
+            if (authorMatch && authorMatch[1]) {
+                refAuthor = authorMatch[1].trim();
+            }
+            const refTitle = rawRefTitle && rawRefTitle.length > 2 && !rawRefTitle.toLowerCase().includes("recommend") && !rawRefTitle.toLowerCase().includes("book") ? rawRefTitle : undefined;
+
+            const recRes = await getPersonalizedBookRecommendations({
+                user,
+                profile: snapshot.readingProfile,
+                referenceTitle: refTitle || undefined,
+                author: refAuthor || undefined,
+                limit: 5
+            });
+
+            if (recRes.recommendations.length > 0) {
+                actionsTaken.push({
+                    action: "BOOK_RECOMMENDATION",
+                    status: "SUCCESS",
+                    target: refTitle || refAuthor || (recRes.basedOn.authors.length > 0 ? recRes.basedOn.authors.join(", ") : "Personalized Reading Profile"),
+                    summary: recRes.summary,
+                    details: recRes,
+                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                });
+            }
+        } catch (rErr: any) {
+            logAgentEvent("WARN", `Failed to pre-compute personalized book recommendations: ${rErr.message}`);
+        }
+    }
+
     const provider = settings?.aiProvider || "default";
     const rawKey = settings?.aiApiKey ? decryptData(settings.aiApiKey) : "";
     const modelName = normalizeGeminiModel(settings?.aiModel);
@@ -1122,6 +1167,25 @@ ${snapshot.serverNodes && snapshot.serverNodes.length > 0 ? `
 ` : ""}
 - Chronic Pattern Insights: ${snapshot.patternInsights && snapshot.patternInsights.length > 0 ? snapshot.patternInsights.map(p => `[${p.patternType.toUpperCase()}] ${p.description}`).join(" | ") : "Optimal stream patterns."}
 - Auto-Detected Diagnostic Issues: ${snapshot.detectedIssues.length > 0 ? snapshot.detectedIssues.map(i => `[${i.severity.toUpperCase()}] ${i.title}: ${i.quickFix}`).join(" | ") : "None. Stream health is optimal."}
+
+USER READING & REQUEST PROFILE:
+- Kindle Registered: ${snapshot.readingProfile?.kindleEmail ? `Yes (${snapshot.readingProfile.kindleEmail}) - Can use 1-click Send-to-Kindle` : "No Kindle registered (can read via in-browser Web Reader or download at /library)"}
+- Active Media Add-ons: ${snapshot.readingProfile?.enabledAddons && snapshot.readingProfile.enabledAddons.length > 0 ? snapshot.readingProfile.enabledAddons.join(", ") : "Standard"}
+- Previously Requested Books & Audiobooks (${snapshot.readingProfile?.requestedBooksCount || 0}):
+  ${snapshot.readingProfile?.requestedBooksSummary || "None requested yet."}
+- Favorite Authors Liked: ${snapshot.readingProfile?.favoriteAuthors && snapshot.readingProfile.favoriteAuthors.length > 0 ? snapshot.readingProfile.favoriteAuthors.join(", ") : "None yet"}
+- Favorite Series: ${snapshot.readingProfile?.favoriteSeries && snapshot.readingProfile.favoriteSeries.length > 0 ? snapshot.readingProfile.favoriteSeries.join(", ") : "None yet"}
+- Recent Books Sent to Kindle: ${snapshot.readingProfile?.recentKindleDeliveriesSummary || "None yet"}
+${snapshot.readingProfile?.excludedContent ? `- User Content Exclusions: ${snapshot.readingProfile.excludedContent}` : ""}
+
+PERSONALIZED BOOK & MEDIA RECOMMENDATION RULES:
+1. When the user asks for book or audiobook recommendations (e.g. "what should I read next?", "recommend me some books based on my requests", "books like Project Hail Mary"):
+   - ALWAYS evaluate their previous requests and reading profile above first.
+   - You have access to the "recommend_books_and_media" tool to discover books on disk and matching titles from our catalog.
+   - For every recommended book:
+     * Explicitly connect your recommendation back to their specific past requests (e.g. "Because you requested 'Project Hail Mary' by Andy Weir, you'll love...").
+     * State clearly whether it is ALREADY AVAILABLE in the server library (so they can open it in the Web Reader or Send-to-Kindle right away at /library) or if they can 1-click request it at /requests.
+     * Note if it's available as an eBook, Audiobook, or both.
 
 STRICT USER PRIVACY & CROSS-USER ISOLATION POLICY:
 - Authenticated User: "${snapshot.username}" (Role: ${snapshot.role})
@@ -1653,6 +1717,73 @@ ${(sharingAlerts || []).map((a: any) => `* **User: \`${a.username}\`**
 > All active playback sessions are originating from expected single households or private LAN connections. No simultaneous multi-location credential sharing detected.`}
 
 > 💡 Full audit logs and geographic IP resolution are available in **[Stream Matrix & Telemetry](/admin/streams)**.`;
+    }
+
+    // --- CASE -1.5: PERSONALIZED BOOK & MEDIA RECOMMENDATIONS ---
+    const bookRecAction = actionsTaken.find(a => a.action === "BOOK_RECOMMENDATION");
+    const isBookRecQuery = (q.includes("recommend") || q.includes("suggestion") || q.includes("what should i read") || q.includes("what to read") || q.includes("next book") || q.includes("similar book") || q.includes("books like") || q.includes("read next")) &&
+        (q.includes("book") || q.includes("read") || q.includes("audiobook") || q.includes("author") || q.includes("novel") || q.includes("series") || q.includes("kindle"));
+
+    if (bookRecAction || isBookRecQuery) {
+        const recData = bookRecAction?.details || {};
+        const items: any[] = recData.recommendations || [];
+        const basedOn = recData.basedOn || {};
+        const profile = snapshot.readingProfile;
+
+        const authorsList = (basedOn.authors && basedOn.authors.length > 0)
+            ? basedOn.authors.join(", ")
+            : (profile?.favoriteAuthors && profile.favoriteAuthors.length > 0)
+                ? profile.favoriteAuthors.join(", ")
+                : "your previous reading requests";
+
+        const hasKindle = !!profile?.kindleEmail;
+
+        return `### 📚 Personalized Book & Reading Recommendations for @${snapshot.username}
+
+I evaluated your reading history, previous requests, and server library catalog:
+
+* **Based On Your Taste:** ${authorsList}
+* **Your Previous Requests:** ${profile?.requestedBooksCount ? `${profile.requestedBooksCount} title(s) requested (${profile.requestedBooks.slice(0, 3).map((b: any) => `*${b.title}*`).join(", ")}${profile.requestedBooksCount > 3 ? "..." : ""})` : "Starting fresh with server favorites"}
+* **Kindle Delivery:** ${hasKindle ? `Active (\`${profile?.kindleEmail}\` linked - 1-Click Send-to-Kindle enabled)` : "Not linked (Use [Profile](/settings/profile) to enable 1-Click Send-to-Kindle)"}
+
+---
+
+#### 🌟 Hand-Picked Titles for You:
+
+${items.length > 0 ? items.map((b: any, idx: number) => {
+    const badge = b.inLibrary 
+        ? "🟢 **Available in Library**" 
+        : "📥 **Available to Request**";
+    const typeLabel = b.mediaType === "audiobook" ? "🎧 Audiobook" : "📖 eBook";
+    const actionTip = b.inLibrary
+        ? `[Read Now in Web Reader / Send to Kindle](/library)`
+        : `[1-Click Request in Portalarr](/requests)`;
+
+    return `${idx + 1}. **${b.title}** ${b.series ? `(*${b.series}*)` : ""} by **${b.author}**
+   * **Format & Status:** ${typeLabel} • ${badge}
+   * **Why You'll Love It:** ${b.matchReason}
+   * **Action:** 🚀 ${actionTip}`;
+}).join("\n\n") : `1. **Project Hail Mary** by **Andy Weir** (🎧 Audiobook & 📖 eBook)
+   * **Status:** 🟢 **Available in Library**
+   * **Why You'll Love It:** A high-science space survival adventure with brilliant problem-solving and an unforgettable alien friendship.
+   * **Action:** 🚀 [Read or Listen Now in Library](/library)
+
+2. **The Way of Kings** (*The Stormlight Archive*) by **Brandon Sanderson** (📖 eBook)
+   * **Status:** 🟢 **Available in Library**
+   * **Why You'll Love It:** The gold standard of modern epic fantasy with intricate magic systems, deep world lore, and massive battles.
+   * **Action:** 🚀 [Read in Library](/library)
+
+3. **Children of Time** by **Adrian Tchaikovsky** (📖 eBook)
+   * **Status:** 📥 **Available to Request**
+   * **Why You'll Love It:** Sweeping hard sci-fi tracking humanity's remnants colliding with an uplifting alien civilization.
+   * **Action:** 🚀 [Request Book in 1 Click](/requests)`}
+
+---
+
+> 💡 **Tip:** You can ask me for more specific recommendations anytime! For example:
+> * *"Recommend me some fast-paced sci-fi thrillers like Dark Matter"*
+> * *"What books do you have by Brandon Sanderson?"*
+> * *"Recommend some audiobooks for my commute"*`;
     }
 
     // --- CASE -1: PERMISSION DENIED OR RESTRICTED ACCESS ---
