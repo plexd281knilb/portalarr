@@ -9243,6 +9243,147 @@ async function runTestSuite() {
         }
     });
 
+    await assertTest("Test 112: Stream Intelligence: Date Range Parsing, SQLite Aggregation & User Telemetry Verification", async () => {
+        const { parseDateRange, getUserStreamProfiles, getUserDetailedTelemetry } = await import("../src/lib/telemetry/stream-tracker");
+
+        // 1. Validate parseDateRange boundaries
+        const rAll = parseDateRange("all");
+        if (rAll.startDate !== undefined || rAll.endDate !== undefined) {
+            throw new Error(`Expected all-time range to have undefined boundaries, got: ${JSON.stringify(rAll)}`);
+        }
+
+        const now = Date.now();
+        const r30 = parseDateRange("30d");
+        if (!r30.startDate || Math.abs(now - 30 * 86400000 - r30.startDate.getTime()) > 5000) {
+            throw new Error(`30d range start boundary mismatch: ${r30.startDate}`);
+        }
+
+        const r60 = parseDateRange("60d");
+        if (!r60.startDate || Math.abs(now - 60 * 86400000 - r60.startDate.getTime()) > 5000) {
+            throw new Error(`60d range start boundary mismatch: ${r60.startDate}`);
+        }
+
+        const r90 = parseDateRange("90d");
+        if (!r90.startDate || Math.abs(now - 90 * 86400000 - r90.startDate.getTime()) > 5000) {
+            throw new Error(`90d range start boundary mismatch: ${r90.startDate}`);
+        }
+
+        const rCustom = parseDateRange("custom", "2026-05-01", "2026-05-15");
+        if (!rCustom.startDate || !rCustom.endDate) {
+            throw new Error(`Expected valid start/end for custom range: ${JSON.stringify(rCustom)}`);
+        }
+        if (rCustom.startDate.getHours() !== 0 || rCustom.startDate.getMinutes() !== 0) {
+            throw new Error(`Custom start date should begin at 00:00:00: ${rCustom.startDate.toISOString()}`);
+        }
+        if (rCustom.endDate.getHours() !== 23 || rCustom.endDate.getMinutes() !== 59) {
+            throw new Error(`Custom end date should end at 23:59:59: ${rCustom.endDate.toISOString()}`);
+        }
+
+        // 2. Insert chronological test history for dedicated user
+        const testUser = `test_date_user_${Date.now()}`;
+        const dayMs = 86400000;
+        await prisma.watchHistory.createMany({
+            data: [
+                {
+                    user: testUser,
+                    title: "Movie Recent",
+                    mediaType: "movie",
+                    ratingKey: "test_rk_recent",
+                    serverName: "MainPlexServer",
+                    durationMs: 7200000,
+                    progressPercent: 95,
+                    videoDecision: "direct play",
+                    player: "Apple TV",
+                    ipAddress: "192.168.1.150",
+                    watchedAt: new Date(now - 10 * dayMs) // 10 days ago (30d)
+                },
+                {
+                    user: testUser,
+                    title: "Movie Month Ago",
+                    mediaType: "movie",
+                    ratingKey: "test_rk_m1",
+                    serverName: "MainPlexServer",
+                    durationMs: 7200000,
+                    progressPercent: 90,
+                    videoDecision: "transcode",
+                    player: "Roku",
+                    ipAddress: "192.168.1.151",
+                    watchedAt: new Date(now - 45 * dayMs) // 45 days ago (60d)
+                },
+                {
+                    user: testUser,
+                    title: "Movie Two Months Ago",
+                    mediaType: "movie",
+                    ratingKey: "test_rk_m2",
+                    serverName: "MainPlexServer",
+                    durationMs: 7200000,
+                    progressPercent: 90,
+                    videoDecision: "transcode",
+                    player: "Fire TV",
+                    ipAddress: "192.168.1.152",
+                    watchedAt: new Date(now - 75 * dayMs) // 75 days ago (90d)
+                },
+                {
+                    user: testUser,
+                    title: "Movie Four Months Ago",
+                    mediaType: "movie",
+                    ratingKey: "test_rk_m4",
+                    serverName: "MainPlexServer",
+                    durationMs: 7200000,
+                    progressPercent: 90,
+                    videoDecision: "direct play",
+                    player: "Web",
+                    ipAddress: "192.168.1.153",
+                    watchedAt: new Date(now - 120 * dayMs) // 120 days ago (all)
+                }
+            ]
+        });
+
+        try {
+            // 3. Test getUserStreamProfiles across ranges
+            const profiles30 = await getUserStreamProfiles({ range: "30d" });
+            const u30 = profiles30.find(u => u.user === testUser);
+            if (!u30 || u30.totalPlays !== 1) {
+                throw new Error(`Expected 1 play for 30d range, got ${u30?.totalPlays}`);
+            }
+
+            const profiles60 = await getUserStreamProfiles({ range: "60d" });
+            const u60 = profiles60.find(u => u.user === testUser);
+            if (!u60 || u60.totalPlays !== 2) {
+                throw new Error(`Expected 2 plays for 60d range, got ${u60?.totalPlays}`);
+            }
+
+            const profiles90 = await getUserStreamProfiles({ range: "90d" });
+            const u90 = profiles90.find(u => u.user === testUser);
+            if (!u90 || u90.totalPlays !== 3) {
+                throw new Error(`Expected 3 plays for 90d range, got ${u90?.totalPlays}`);
+            }
+
+            const profilesAll = await getUserStreamProfiles({ range: "all" });
+            const uAll = profilesAll.find(u => u.user === testUser);
+            if (!uAll || uAll.totalPlays !== 4) {
+                throw new Error(`Expected 4 plays for all-time range, got ${uAll?.totalPlays}`);
+            }
+
+            // 4. Test getUserDetailedTelemetry across ranges
+            const d30 = await getUserDetailedTelemetry(testUser, { startDate: r30.startDate });
+            if (d30.totalPlays !== 1) {
+                throw new Error(`Expected 1 totalPlays in user modal for 30d, got ${d30.totalPlays}`);
+            }
+
+            const dAll = await getUserDetailedTelemetry(testUser);
+            if (dAll.totalPlays !== 4) {
+                throw new Error(`Expected 4 totalPlays in user modal for all time, got ${dAll.totalPlays}`);
+            }
+            if (dAll.directPlayCount !== 2 || dAll.transcodeCount !== 2) {
+                throw new Error(`Direct play / transcode count mismatch: ${dAll.directPlayCount} / ${dAll.transcodeCount}`);
+            }
+        } finally {
+            // Cleanup test history
+            await prisma.watchHistory.deleteMany({ where: { user: testUser } });
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

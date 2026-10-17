@@ -988,6 +988,40 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 
 ---
 
+### 42. Stream Intelligence Time Range Filtering, Aggregation Engine & User Directory Sorting
+- **Single-Source-of-Truth Time Range Selector Bar**:
+  - Positioned prominently above Metric Summary Cards with responsive layout (`flex-col md:flex-row`).
+  - Supports preset filter pills: `All Time`, `Last 30 Days` (`30d`), `Last 60 Days` (`60d`), `Last 90 Days` (`90d`), and `Custom Range...` (`custom`).
+  - When `Custom Range...` is active, displays native start date and end date inputs (`type="date"`) with timezone-safe start-of-day (`00:00:00.000`) and end-of-day (`23:59:59.999`) clamping, paired with an "Apply" button.
+  - Active time range badge updates on Metric Summary Cards (Direct Play Rate and Hours Streamed) so administrators always have unambiguous visual context of the active time window.
+- **Full Database SQLite SQL Aggregations (Zero Truncation)**:
+  - Metric summary cards, user directory metrics, and library analytics must NEVER truncate records using arbitrary `take: 2000` or `take: 3000` limits.
+  - Aggregations are calculated dynamically in SQLite via `COUNT(*)`, `SUM(durationMs)`, `SUM(directPlay)`, `SUM(transcode)`, and `SUM(sharingAlerts)`, completing in $< 500$ms even on databases with $> 28,000$ historical sessions.
+- **User Directory Multi-Metric Sorting**:
+  - Administrators can sort users on-the-fly via a dedicated sort dropdown:
+    - **Most Plays** (`plays_desc`, default)
+    - **Most Watch Hours** (`hours_desc`)
+    - **Highest Transcode %** (`transcode_desc`)
+    - **Most Sharing Alerts** (`alerts_desc`)
+    - **Alphabetical (A-Z)** (`name_asc`)
+  - Backed by zero-latency client-side `useMemo` sorting and server-side ordering.
+- **User Telemetry Modal Range Toggling**:
+  - When inspecting a user in the User Telemetry modal, administrators can toggle between the active page date range (e.g. `Last 30 Days`) and `All Time` right in the modal header to instantly compare recent streaming habits against all-time totals.
+  - All numbers formatted with `toLocaleString()` for professional presentation.
+
+---
+
+### 43. Member Roadmap & Feature Announcements: User-Facing Beta Framing vs Admin Concealment
+- **User-Facing Roadmap Rule**:
+  - The public member Roadmap (`roadmap.md`, `getRoadmapText()`) is viewed by all authenticated members across DomsHomeLab.
+  - **Strict Admin Feature Concealment**: Never include internal administrative tools, security heuristics, or surveillance engines in the member-facing Roadmap (e.g. cluster Tautulli telemetry, concurrent multi-IP monitoring, household fraud heuristics, Docker fleet management).
+  - **Active Beta Notice**: Frame all newly released platform capabilities with an active beta notice inviting members to test features and report feedback or issues directly to Dominic / the administrator.
+  - **Core Member Focus Areas**:
+    - **What's New**: Unified 1-click media requests (movies, TV, ebooks, audiobooks), AI Server Assistant support bot, in-browser Kindle reader, 1-click Send-to-Kindle, floating audiobook player, Live Streams Doctor & Transcode diagnostics, personalized invite links, family sub-profiles (Kids & Living Room TV), custom library selection, and Radarr/Sonarr power user tools.
+    - **Coming Soon**: 4K HDR badges, "Leaving Soon" collections and countdown ribbons, smart hubs and custom media tagging, member referral rewards, 1-click subtitle search, personal year-in-review, and real-time server status indicators.
+
+---
+
 As the Portalarr frontend evolves or new design decisions are finalized:
 1. **Adding a New UI Rule**: Add the rule to the relevant section above or under `references/`.
 2. **Tweaking Component Defaults**: Update the corresponding reference file in `references/`.
