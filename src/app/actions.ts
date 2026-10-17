@@ -47,6 +47,7 @@ import {
     getUserStreamProfiles,
     getUserDetailedTelemetry,
     getStreamIntelligenceAnalytics,
+    parseDateRange,
     isPrivateOrLocalIp,
     normalizeIp,
     isSameSubnetOrIp,
@@ -16041,17 +16042,34 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
  */
 export async function getStreamIntelligenceDataAction(options?: {
     serverFilter?: string;
+    range?: "all" | "30d" | "60d" | "90d" | "custom";
+    startDate?: string;
+    endDate?: string;
     view?: string;
     search?: string;
     page?: number;
+    userSort?: string;
 }) {
     await verifyAdmin();
+    const dateRange = parseDateRange(options?.range, options?.startDate, options?.endDate);
+
     const [streamsRes, userProfiles, analytics, historyRes, settings, tautulliInstances, plexServers] = await Promise.all([
         getAdminDetailedStreamsAction(true),
-        getUserStreamProfiles(),
-        getStreamIntelligenceAnalytics(),
+        getUserStreamProfiles({
+            startDate: dateRange.startDate,
+            endDate: dateRange.endDate,
+            serverFilter: options?.serverFilter
+        }),
+        getStreamIntelligenceAnalytics({
+            startDate: dateRange.startDate,
+            endDate: dateRange.endDate,
+            serverFilter: options?.serverFilter
+        }),
         getWatchHistory({
             search: options?.search,
+            serverFilter: options?.serverFilter,
+            startDate: dateRange.startDate,
+            endDate: dateRange.endDate,
             page: options?.page || 1,
             limit: 50
         }),
@@ -16141,7 +16159,10 @@ export async function getStreamIntelligenceDataAction(options?: {
             isDefault: p.isDefault
         })),
         useBuiltInStreamMonitor: settings?.nativeStreamMonitoringEnabled !== false,
-        tautulliBackfillLastRun: settings?.tautulliBackfillLastRun
+        tautulliBackfillLastRun: settings?.tautulliBackfillLastRun,
+        activeRange: options?.range || "all",
+        rangeStartDate: dateRange.startDate ? dateRange.startDate.toISOString() : null,
+        rangeEndDate: dateRange.endDate ? dateRange.endDate.toISOString() : null
     };
 }
 
@@ -16220,9 +16241,10 @@ export async function getWatchHistoryAction(options?: WatchHistoryQueryOptions) 
 /**
  * Server Action: Retrieve detailed telemetry, all devices, all IPs, and full watch history for a user
  */
-export async function getUserDetailedTelemetryAction(username: string) {
+export async function getUserDetailedTelemetryAction(username: string, options?: { range?: "all" | "30d" | "60d" | "90d" | "custom"; startDate?: string; endDate?: string }) {
     await verifyAdmin();
-    return await getUserDetailedTelemetry(username);
+    const dateRange = parseDateRange(options?.range, options?.startDate, options?.endDate);
+    return await getUserDetailedTelemetry(username, { startDate: dateRange.startDate, endDate: dateRange.endDate });
 }
 
 /**

@@ -68,6 +68,91 @@ export interface WatchHistoryQueryOptions {
     search?: string;
     page?: number;
     limit?: number;
+    startDate?: Date;
+    endDate?: Date;
+    serverFilter?: string;
+}
+
+/**
+ * Converts named date range keywords or custom ISO dates into concrete Date boundaries
+ */
+export function parseDateRange(range?: string, startDateStr?: string, endDateStr?: string): { startDate?: Date; endDate?: Date } {
+    const now = new Date();
+    if (range === "30d") {
+        return { startDate: new Date(now.getTime() - 30 * 86400000), endDate: now };
+    }
+    if (range === "60d") {
+        return { startDate: new Date(now.getTime() - 60 * 86400000), endDate: now };
+    }
+    if (range === "90d") {
+        return { startDate: new Date(now.getTime() - 90 * 86400000), endDate: now };
+    }
+    if (range === "custom") {
+        let sDate: Date | undefined;
+        let eDate: Date | undefined;
+        if (startDateStr) {
+            const parts = startDateStr.split("-").map(Number);
+            if (parts.length === 3) {
+                sDate = new Date(parts[0], parts[1] - 1, parts[2], 0, 0, 0, 0);
+            } else {
+                sDate = new Date(startDateStr);
+            }
+            if (isNaN(sDate.getTime())) sDate = undefined;
+        }
+        if (endDateStr) {
+            const parts = endDateStr.split("-").map(Number);
+            if (parts.length === 3) {
+                eDate = new Date(parts[0], parts[1] - 1, parts[2], 23, 59, 59, 999);
+            } else {
+                eDate = new Date(endDateStr);
+            }
+            if (isNaN(eDate.getTime())) eDate = undefined;
+        }
+        return { startDate: sDate, endDate: eDate };
+    }
+    return {};
+}
+
+/**
+ * Builds parameterized SQL conditions for querying WatchHistory across date and server filters
+ */
+export function buildWatchHistoryConditions(options?: {
+    startDate?: Date;
+    endDate?: Date;
+    serverFilter?: string;
+    user?: string;
+    range?: "all" | "30d" | "60d" | "90d" | "custom";
+}) {
+    const clauses: string[] = [];
+    const params: any[] = [];
+
+    let sDate = options?.startDate;
+    let eDate = options?.endDate;
+    if (options?.range && (!sDate && !eDate)) {
+        const parsed = parseDateRange(options.range);
+        sDate = parsed.startDate;
+        eDate = parsed.endDate;
+    }
+
+    if (sDate) {
+        clauses.push("watchedAt >= ?");
+        params.push(sDate);
+    }
+    if (eDate) {
+        clauses.push("watchedAt <= ?");
+        params.push(eDate);
+    }
+    if (options?.serverFilter) {
+        clauses.push("(LOWER(serverName) = LOWER(?) OR serverId = ?)");
+        params.push(options.serverFilter, options.serverFilter);
+    }
+    if (options?.user) {
+        clauses.push("LOWER(user) = LOWER(?)");
+        params.push(options.user.toLowerCase().trim());
+    }
+
+    const whereClause = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
+    return { whereClause, params, clauses };
 }
 
 /**
@@ -1247,6 +1332,22 @@ export async function getWatchHistory(options?: WatchHistoryQueryOptions) {
     if (options?.isSharingAlert !== undefined) {
         where.isSharingAlert = options.isSharingAlert;
     }
+    if (options?.startDate || options?.endDate) {
+        where.watchedAt = {};
+        if (options.startDate) where.watchedAt.gte = options.startDate;
+        if (options.endDate) where.watchedAt.lte = options.endDate;
+    }
+    if (options?.serverFilter) {
+        where.AND = [
+            ...(where.AND || []),
+            {
+                OR: [
+                    { serverName: options.serverFilter },
+                    { serverId: options.serverFilter }
+                ]
+            }
+        ];
+    }
     if (options?.search) {
         const q = options.search.trim();
         where.OR = [
@@ -1350,95 +1451,148 @@ export async function getConnectionSecurityInsights() {
 }
 
 /**
- * Aggregates all watch history into per-user telemetry profiles across all servers
+ * Aggregates all watch history into per-user telemetry profiles across all servers,
+ * supporting date ranges (30d/60d/90d/custom) and server filters with full SQLite aggregations.
  */
-export async function getUserStreamProfiles() {
+export async function getUserStreamProfiles(options?: {
+    startDate?: Date;
+    endDate?: Date;
+    serverFilter?: string;
+    range?: "all" | "30d" | "60d" | "90d" | "custom";
+}) {
     try {
-        const records = await prisma.watchHistory.findMany({
-            orderBy: { watchedAt: "desc" },
-            take: 2000
-        });
+        const { whereClause, params } = buildWatchHistoryConditions(options);
 
-        const userMap = new Map<string, {
-            user: string;
-            totalPlays: number;
-            completedCount: number;
-            totalWatchSeconds: number;
-            directPlayCount: number;
-            transcodeCount: number;
-            servers: Set<string>;
-            platforms: Set<string>;
-            devices: Set<string>;
-            ips: Set<string>;
-            lastWatchedTitle: string;
-            lastWatchedAt: Date;
-            lastPlatform: string;
-            lastIp: string;
-            sharingAlerts: number;
-            records: any[];
-        }>();
+        // 1. Group by aggregation for exact counts and watch times across all rows
+        const stats: any[] = await prisma.$queryRawUnsafe(`
+            SELECT 
+                user, 
+                COUNT(*) as totalPlays, 
+                SUM(CASE WHEN completed = 1 THEN 1 ELSE 0 END) as completedCount, 
+                SUM(durationMs) as totalDurationMs, 
+                SUM(CASE WHEN LOWER(videoDecision) IN ('direct play', 'direct_play', 'copy', 'direct stream', 'directstream') THEN 1 ELSE 0 END) as directPlayCount, 
+                SUM(CASE WHEN LOWER(videoDecision) = 'transcode' THEN 1 ELSE 0 END) as transcodeCount, 
+                SUM(CASE WHEN isSharingAlert = 1 THEN 1 ELSE 0 END) as sharingAlerts, 
+                MAX(watchedAt) as lastWatchedAt 
+            FROM WatchHistory 
+            ${whereClause}
+            GROUP BY user 
+            ORDER BY totalPlays DESC
+        `, ...params);
 
-        for (const r of records) {
-            const uKey = r.user.toLowerCase().trim();
-            if (!userMap.has(uKey)) {
-                userMap.set(uKey, {
-                    user: r.user,
-                    totalPlays: 0,
-                    completedCount: 0,
-                    totalWatchSeconds: 0,
-                    directPlayCount: 0,
-                    transcodeCount: 0,
-                    servers: new Set(),
-                    platforms: new Set(),
-                    devices: new Set(),
-                    ips: new Set(),
-                    lastWatchedTitle: r.grandparentTitle ? `${r.grandparentTitle} - ${r.title}` : r.title,
-                    lastWatchedAt: r.watchedAt,
-                    lastPlatform: r.platform || r.player || "Unknown",
-                    lastIp: r.ipAddress || "",
-                    sharingAlerts: 0,
-                    records: []
-                });
+        if (!stats || stats.length === 0) return [];
+
+        // 2. Query distinct device/platform/server/ip per user
+        const distinctMeta: any[] = await prisma.$queryRawUnsafe(`
+            SELECT DISTINCT user, serverName, platform, device, player, ipAddress
+            FROM WatchHistory
+            ${whereClause}
+        `, ...params);
+
+        // 3. Most recent record per user for last watched title & platform
+        const latestPerUser: any[] = await prisma.$queryRawUnsafe(`
+            SELECT w.user, w.title, w.grandparentTitle, w.platform, w.player, w.ipAddress, w.watchedAt
+            FROM WatchHistory w
+            INNER JOIN (
+                SELECT user, MAX(watchedAt) as maxWatchedAt
+                FROM WatchHistory
+                ${whereClause}
+                GROUP BY user
+            ) latest ON w.user = latest.user AND w.watchedAt = latest.maxWatchedAt
+        `, ...params);
+
+        // Group distinct meta by user
+        const metaByUser = new Map<string, { servers: Set<string>; platforms: Set<string>; devices: Set<string>; ips: Set<string> }>();
+        for (const m of distinctMeta) {
+            const u = String(m.user || "").toLowerCase().trim();
+            if (!metaByUser.has(u)) {
+                metaByUser.set(u, { servers: new Set(), platforms: new Set(), devices: new Set(), ips: new Set() });
             }
-
-            const profile = userMap.get(uKey)!;
-            profile.totalPlays++;
-            profile.records.push(r);
-            if (r.completed) profile.completedCount++;
-            profile.totalWatchSeconds += Math.round((r.durationMs || 0) / 1000);
-            if (r.videoDecision === "direct play") profile.directPlayCount++;
-            if (r.videoDecision === "transcode") profile.transcodeCount++;
-            if (r.serverName) profile.servers.add(r.serverName);
-            if (r.platform) profile.platforms.add(r.platform);
-            if (r.device || r.player) profile.devices.add(r.device || r.player || "Client");
-            if (r.ipAddress) profile.ips.add(r.ipAddress);
-            if (r.isSharingAlert) profile.sharingAlerts++;
+            const entry = metaByUser.get(u)!;
+            if (m.serverName) entry.servers.add(m.serverName);
+            if (m.platform) entry.platforms.add(m.platform);
+            if (m.device || m.player) entry.devices.add(m.device || m.player);
+            if (m.ipAddress) entry.ips.add(m.ipAddress);
         }
 
-        const profiles = Array.from(userMap.values()).map(p => {
-            const total = p.directPlayCount + p.transcodeCount;
-            const transcodeRate = total > 0 ? Math.round((p.transcodeCount / total) * 100) : 0;
-            const { sharingAssessment } = analyzeUserAccountSharing(p.records);
+        const latestByUser = new Map<string, any>();
+        for (const l of latestPerUser) {
+            latestByUser.set(String(l.user || "").toLowerCase().trim(), l);
+        }
+
+        // Recent records for sharing assessment (take up to 1000 recent)
+        const recentWhere: any = {};
+        if (options?.startDate || options?.endDate) {
+            recentWhere.watchedAt = {};
+            if (options.startDate) recentWhere.watchedAt.gte = options.startDate;
+            if (options.endDate) recentWhere.watchedAt.lte = options.endDate;
+        }
+        if (options?.serverFilter) {
+            recentWhere.AND = [
+                {
+                    OR: [
+                        { serverName: options.serverFilter },
+                        { serverId: options.serverFilter }
+                    ]
+                }
+            ];
+        }
+
+        const recentRecords = await prisma.watchHistory.findMany({
+            where: recentWhere,
+            orderBy: { watchedAt: "desc" },
+            take: 1000
+        });
+        const recentByUser = new Map<string, any[]>();
+        for (const r of recentRecords) {
+            const u = String(r.user || "").toLowerCase().trim();
+            if (!recentByUser.has(u)) recentByUser.set(u, []);
+            recentByUser.get(u)!.push(r);
+        }
+
+        const profiles = stats.map((s: any) => {
+            const uKey = String(s.user || "").toLowerCase().trim();
+            const meta = metaByUser.get(uKey) || { servers: new Set(), platforms: new Set(), devices: new Set(), ips: new Set() };
+            const latest = latestByUser.get(uKey);
+            const userRecs = recentByUser.get(uKey) || [];
+
+            const totalPlays = Number(s.totalPlays || 0);
+            const completedCount = Number(s.completedCount || 0);
+            const directPlayCount = Number(s.directPlayCount || 0);
+            const transcodeCount = Number(s.transcodeCount || 0);
+            const totalDurationMs = Number(s.totalDurationMs || 0);
+            const totalDurationSeconds = Math.round(totalDurationMs / 1000);
+            const totalPlayback = directPlayCount + transcodeCount;
+            const transcodeRate = totalPlayback > 0 ? Math.round((transcodeCount / totalPlayback) * 100) : 0;
+
+            const { sharingAssessment } = analyzeUserAccountSharing(userRecs);
+
+            const lastTitle = latest 
+                ? (latest.grandparentTitle ? `${latest.grandparentTitle} - ${latest.title}` : latest.title)
+                : "Unknown";
+
+            const lastWatchedDate = latest?.watchedAt ? new Date(latest.watchedAt) : (s.lastWatchedAt ? new Date(s.lastWatchedAt) : new Date());
+
             return {
-                user: p.user,
-                totalPlays: p.totalPlays,
-                completedCount: p.completedCount,
-                totalWatchHours: Number((p.totalWatchSeconds / 3600).toFixed(1)),
-                directPlayCount: p.directPlayCount,
-                transcodeCount: p.transcodeCount,
+                user: String(s.user || "Unknown"),
+                totalPlays,
+                completedCount,
+                totalWatchHours: Number((totalDurationSeconds / 3600).toFixed(1)),
+                directPlayCount,
+                transcodeCount,
                 transcodeRate,
-                servers: Array.from(p.servers),
-                platforms: Array.from(p.platforms),
-                devices: Array.from(p.devices),
-                ips: Array.from(p.ips),
-                devicesCount: p.devices.size,
-                ipsCount: p.ips.size,
-                lastWatchedTitle: p.lastWatchedTitle,
-                lastWatchedAt: p.lastWatchedAt,
-                lastPlatform: p.lastPlatform,
-                lastIp: p.lastIp,
-                sharingAlerts: p.sharingAlerts,
-                frequentTranscoder: transcodeRate >= 50 && p.totalPlays >= 2,
+                servers: Array.from(meta.servers),
+                platforms: Array.from(meta.platforms),
+                devices: Array.from(meta.devices),
+                ips: Array.from(meta.ips),
+                devicesCount: meta.devices.size,
+                ipsCount: meta.ips.size,
+                lastWatchedTitle: lastTitle,
+                lastWatchedAt: lastWatchedDate,
+                lastPlatform: latest?.platform || latest?.player || "Plex Client",
+                lastIp: latest?.ipAddress || "",
+                sharingAlerts: Number(s.sharingAlerts || 0),
+                frequentTranscoder: transcodeRate >= 50 && totalPlays >= 2,
                 sharingAssessment
             };
         });
@@ -1455,7 +1609,11 @@ export async function getUserStreamProfiles() {
  * Detailed telemetry profile for a specific user:
  * Includes full aggregated devices, all used IP addresses, and chronological playback history.
  */
-export async function getUserDetailedTelemetry(username: string) {
+export async function getUserDetailedTelemetry(username: string, options?: {
+    startDate?: Date;
+    endDate?: Date;
+    range?: "all" | "30d" | "60d" | "90d" | "custom";
+}) {
     try {
         const cleanUser = username?.trim() || "";
         if (!cleanUser) {
@@ -1474,27 +1632,41 @@ export async function getUserDetailedTelemetry(username: string) {
             };
         }
 
-        // Query watch history for this user
-        const records = await prisma.watchHistory.findMany({
+        let sDate = options?.startDate;
+        let eDate = options?.endDate;
+        if (options?.range && (!sDate && !eDate)) {
+            const parsed = parseDateRange(options.range);
+            sDate = parsed.startDate;
+            eDate = parsed.endDate;
+        }
+
+        const dateFilter: any = {};
+        if (sDate || eDate) {
+            dateFilter.watchedAt = {};
+            if (sDate) dateFilter.watchedAt.gte = sDate;
+            if (eDate) dateFilter.watchedAt.lte = eDate;
+        }
+
+        // Query watch history for this user without arbitrary truncation
+        let userRecords = await prisma.watchHistory.findMany({
             where: {
                 user: {
                     equals: cleanUser
-                }
+                },
+                ...dateFilter
             },
-            orderBy: { watchedAt: "desc" },
-            take: 2000
+            orderBy: { watchedAt: "desc" }
         });
 
-        let userRecords = records;
         if (userRecords.length === 0) {
             userRecords = await prisma.watchHistory.findMany({
                 where: {
                     user: {
                         contains: cleanUser
-                    }
+                    },
+                    ...dateFilter
                 },
-                orderBy: { watchedAt: "desc" },
-                take: 2000
+                orderBy: { watchedAt: "desc" }
             });
         }
 
@@ -1533,8 +1705,11 @@ export async function getUserDetailedTelemetry(username: string) {
         for (const r of userRecords) {
             totalWatchSeconds += Math.round((r.durationMs || 0) / 1000);
             if (r.completed) completedCount++;
-            if (r.videoDecision === "direct play") directPlayCount++;
-            if (r.videoDecision === "transcode") transcodeCount++;
+            const vDec = String(r.videoDecision || "").toLowerCase().trim();
+            const isDirect = vDec === "direct play" || vDec === "direct_play" || vDec === "copy" || vDec === "direct stream" || vDec === "directstream";
+            const isTrans = vDec === "transcode" || vDec.includes("transcode");
+            if (isDirect) directPlayCount++;
+            if (isTrans) transcodeCount++;
             if (r.isSharingAlert) sharingAlerts++;
 
             // Device aggregation
@@ -1559,8 +1734,8 @@ export async function getUserDetailedTelemetry(username: string) {
             }
             const dev = deviceMap.get(devKey)!;
             dev.playCount++;
-            if (r.videoDecision === "direct play") dev.directPlayCount++;
-            if (r.videoDecision === "transcode") dev.transcodeCount++;
+            if (isDirect) dev.directPlayCount++;
+            if (isTrans) dev.transcodeCount++;
             if (r.watchedAt > dev.lastSeen) dev.lastSeen = r.watchedAt;
             if (r.watchedAt < dev.firstSeen) dev.firstSeen = r.watchedAt;
             if (r.serverName) dev.servers.add(r.serverName);
@@ -1587,11 +1762,13 @@ export async function getUserDetailedTelemetry(username: string) {
             if (r.watchedAt < ipEntry.firstSeen) ipEntry.firstSeen = r.watchedAt;
             ipEntry.devices.add(devName);
 
-            // Formatted history row
-            formattedHistory.push({
-                ...r,
-                thumb: formatWatchHistoryThumb(r)
-            });
+            // Formatted history row (return up to 1000 items for modal table rendering)
+            if (formattedHistory.length < 1000) {
+                formattedHistory.push({
+                    ...r,
+                    thumb: formatWatchHistoryThumb(r)
+                });
+            }
         }
 
         const totalPlayback = directPlayCount + transcodeCount;
@@ -1660,122 +1837,109 @@ export async function getUserDetailedTelemetry(username: string) {
 }
 
 /**
- * Returns multi-server cluster statistics and top content leaderboards
+ * Returns multi-server cluster statistics and top content leaderboards,
+ * supporting date ranges (30d/60d/90d/custom) and server filters with full SQLite aggregations.
  */
-export async function getStreamIntelligenceAnalytics() {
+export async function getStreamIntelligenceAnalytics(options?: {
+    startDate?: Date;
+    endDate?: Date;
+    serverFilter?: string;
+}) {
     try {
-        const [totalSessions, allHistory, completedCount] = await Promise.all([
-            prisma.watchHistory.count(),
-            prisma.watchHistory.findMany({
-                select: {
-                    title: true,
-                    grandparentTitle: true,
-                    mediaType: true,
-                    durationMs: true,
-                    videoDecision: true,
-                    serverName: true,
-                    thumb: true,
-                    ratingKey: true,
-                    serverId: true,
-                    year: true
-                },
-                take: 3000
-            }),
-            prisma.watchHistory.count({ where: { completed: true } })
-        ]);
+        const { whereClause, params, clauses } = buildWatchHistoryConditions(options);
 
-        let totalDurationSeconds = 0;
-        let directPlayCount = 0;
-        let transcodeCount = 0;
+        // 1. Cluster overall aggregates
+        const statsRows: any[] = await prisma.$queryRawUnsafe(`
+            SELECT 
+                COUNT(*) as totalSessions,
+                SUM(CASE WHEN completed = 1 THEN 1 ELSE 0 END) as completedCount,
+                SUM(durationMs) as totalDurationMs,
+                SUM(CASE WHEN LOWER(videoDecision) IN ('direct play', 'direct_play', 'copy', 'direct stream', 'directstream') THEN 1 ELSE 0 END) as directPlayCount,
+                SUM(CASE WHEN LOWER(videoDecision) = 'transcode' THEN 1 ELSE 0 END) as transcodeCount,
+                SUM(CASE WHEN mediaType = 'movie' THEN 1 ELSE 0 END) as moviesCount,
+                SUM(CASE WHEN mediaType = 'episode' THEN 1 ELSE 0 END) as episodesCount
+            FROM WatchHistory
+            ${whereClause}
+        `, ...params);
 
-        const moviePlays = new Map<string, number>();
-        const showPlays = new Map<string, number>();
-        const serverPlays = new Map<string, number>();
-        const movieMeta = new Map<string, { thumb?: string | null; ratingKey?: string | null; serverId?: string | null; serverName?: string; year?: number | null }>();
-        const showMeta = new Map<string, { thumb?: string | null; ratingKey?: string | null; serverId?: string | null; serverName?: string; year?: number | null }>();
-        let moviesCount = 0;
-        let episodesCount = 0;
+        // 2. Top Movies
+        const movieWhere = clauses.length > 0
+            ? `WHERE (${clauses.join(" AND ")}) AND (mediaType = 'movie' OR grandparentTitle IS NULL OR grandparentTitle = '')`
+            : `WHERE mediaType = 'movie' OR grandparentTitle IS NULL OR grandparentTitle = ''`;
 
-        for (const h of allHistory) {
-            totalDurationSeconds += Math.round((h.durationMs || 0) / 1000);
-            if (h.videoDecision === "direct play") directPlayCount++;
-            if (h.videoDecision === "transcode") transcodeCount++;
+        const topMoviesRows: any[] = await prisma.$queryRawUnsafe(`
+            SELECT title, year, serverId, serverName, ratingKey, thumb, COUNT(*) as plays
+            FROM WatchHistory
+            ${movieWhere}
+            GROUP BY title
+            ORDER BY plays DESC
+            LIMIT 10
+        `, ...params);
 
-            if (h.serverName) {
-                serverPlays.set(h.serverName, (serverPlays.get(h.serverName) || 0) + 1);
-            }
+        // 3. Top Shows
+        const showWhere = clauses.length > 0
+            ? `WHERE (${clauses.join(" AND ")}) AND (mediaType = 'episode' OR (grandparentTitle IS NOT NULL AND grandparentTitle != ''))`
+            : `WHERE mediaType = 'episode' OR (grandparentTitle IS NOT NULL AND grandparentTitle != '')`;
 
-            if (h.mediaType === "movie" || !h.grandparentTitle) {
-                moviesCount++;
-                const key = h.title;
-                moviePlays.set(key, (moviePlays.get(key) || 0) + 1);
-                if (!movieMeta.has(key) || (!movieMeta.get(key)?.thumb && h.thumb)) {
-                    movieMeta.set(key, { thumb: h.thumb, ratingKey: h.ratingKey, serverId: h.serverId, serverName: h.serverName, year: h.year });
-                }
-            } else {
-                episodesCount++;
-                const key = h.grandparentTitle || h.title;
-                showPlays.set(key, (showPlays.get(key) || 0) + 1);
-                if (!showMeta.has(key) || (!showMeta.get(key)?.thumb && h.thumb)) {
-                    showMeta.set(key, { thumb: h.thumb, ratingKey: h.ratingKey, serverId: h.serverId, serverName: h.serverName, year: h.year });
-                }
-            }
-        }
+        const topShowsRows: any[] = await prisma.$queryRawUnsafe(`
+            SELECT 
+                COALESCE(NULLIF(grandparentTitle, ''), title) as title, 
+                serverId, serverName, ratingKey, thumb, COUNT(*) as plays
+            FROM WatchHistory
+            ${showWhere}
+            GROUP BY COALESCE(NULLIF(grandparentTitle, ''), title)
+            ORDER BY plays DESC
+            LIMIT 10
+        `, ...params);
 
+        // 4. Plays by Server
+        const serverWhere = clauses.length > 0
+            ? `WHERE (${clauses.join(" AND ")}) AND (serverName IS NOT NULL AND serverName != '')`
+            : `WHERE serverName IS NOT NULL AND serverName != ''`;
+
+        const serverPlaysRows: any[] = await prisma.$queryRawUnsafe(`
+            SELECT serverName as server, COUNT(*) as plays
+            FROM WatchHistory
+            ${serverWhere}
+            GROUP BY serverName
+            ORDER BY plays DESC
+        `, ...params);
+
+        const stats = statsRows[0] || {};
+        const totalSessions = Number(stats.totalSessions || 0);
+        const completedCount = Number(stats.completedCount || 0);
+        const totalDurationMs = Number(stats.totalDurationMs || 0);
+        const totalDurationSeconds = Math.round(totalDurationMs / 1000);
+        const directPlayCount = Number(stats.directPlayCount || 0);
+        const transcodeCount = Number(stats.transcodeCount || 0);
+        const moviesCount = Number(stats.moviesCount || 0);
+        const episodesCount = Number(stats.episodesCount || 0);
         const totalPlayback = directPlayCount + transcodeCount;
         const directPlayRatio = totalPlayback > 0 ? Math.round((directPlayCount / totalPlayback) * 100) : 100;
 
-        const topMovies = Array.from(moviePlays.entries())
-            .map(([title, plays]) => {
-                const meta = movieMeta.get(title);
-                const thumb = formatWatchHistoryThumb({
-                    thumb: meta?.thumb,
-                    ratingKey: meta?.ratingKey,
-                    serverId: meta?.serverId,
-                    serverName: meta?.serverName,
-                    title,
-                    year: meta?.year,
-                    mediaType: "movie"
-                }) || `/api/media/image?title=${encodeURIComponent(title)}&type=movie`;
-                return {
-                    title,
-                    plays,
-                    year: meta?.year,
-                    thumb
-                };
-            })
-            .sort((a, b) => b.plays - a.plays)
-            .slice(0, 10);
+        const topMovies = topMoviesRows.map((m: any) => ({
+            title: m.title,
+            plays: Number(m.plays || 0),
+            year: m.year,
+            thumb: formatWatchHistoryThumb(m) || `/api/media/image?title=${encodeURIComponent(m.title)}&type=movie`
+        }));
 
-        const topShows = Array.from(showPlays.entries())
-            .map(([title, plays]) => {
-                const meta = showMeta.get(title);
-                const thumb = formatWatchHistoryThumb({
-                    thumb: meta?.thumb,
-                    ratingKey: meta?.ratingKey,
-                    serverId: meta?.serverId,
-                    serverName: meta?.serverName,
-                    title,
-                    year: meta?.year,
-                    mediaType: "show"
-                }) || `/api/media/image?title=${encodeURIComponent(title)}&type=show`;
-                return {
-                    title,
-                    plays,
-                    year: meta?.year,
-                    thumb
-                };
-            })
-            .sort((a, b) => b.plays - a.plays)
-            .slice(0, 10);
+        const topShows = topShowsRows.map((s: any) => ({
+            title: s.title,
+            plays: Number(s.plays || 0),
+            year: s.year,
+            thumb: formatWatchHistoryThumb({ ...s, mediaType: "show" }) || `/api/media/image?title=${encodeURIComponent(s.title)}&type=show`
+        }));
 
-        const playsByServer = Array.from(serverPlays.entries())
-            .map(([server, plays]) => ({ server, plays }))
-            .sort((a, b) => b.plays - a.plays);
+        const playsByServer = serverPlaysRows.map((s: any) => ({
+            server: s.server,
+            plays: Number(s.plays || 0)
+        }));
 
         return {
             totalSessions,
             completedCount,
+            completedPlays: completedCount,
             totalWatchHours: Number((totalDurationSeconds / 3600).toFixed(1)),
             totalHoursStreamed: Number((totalDurationSeconds / 3600).toFixed(1)),
             directPlayCount,
@@ -1793,6 +1957,7 @@ export async function getStreamIntelligenceAnalytics() {
         return {
             totalSessions: 0,
             completedCount: 0,
+            completedPlays: 0,
             totalWatchHours: 0,
             totalHoursStreamed: 0,
             directPlayCount: 0,

@@ -33,7 +33,7 @@ import {
     ShieldAlert, History, Users, Search, Trash2, Clock, Globe,
     Radio, AlertTriangle, Copy, Check, Download, ExternalLink,
     Stethoscope, Info, ChevronRight, Smartphone, Laptop,
-    Home, Compass, ShieldCheck, ArrowUpDown, Volume2
+    Home, Compass, ShieldCheck, ArrowUpDown, Volume2, Calendar
 } from "lucide-react";
 
 export default function StreamIntelligencePage() {
@@ -81,6 +81,31 @@ export default function StreamIntelligencePage() {
     const [userDirectorySearch, setUserDirectorySearch] = useState<string>("");
     const [userSharingFilter, setUserSharingFilter] = useState<string>("all");
 
+    // Date range filtering state ("all", "30d", "60d", "90d", "custom")
+    const [dateRange, setDateRange] = useState<"all" | "30d" | "60d" | "90d" | "custom">("all");
+    const [customStartDate, setCustomStartDate] = useState<string>("");
+    const [customEndDate, setCustomEndDate] = useState<string>("");
+    const [appliedCustomDates, setAppliedCustomDates] = useState<{ start: string; end: string } | null>(null);
+
+    // User directory sorting state
+    const [userSort, setUserSort] = useState<string>("plays_desc");
+
+    // User modal range toggle ("active" follows current page range filter, "all" inspects all time)
+    const [userModalViewRange, setUserModalViewRange] = useState<"active" | "all">("active");
+
+    const getRangeLabel = () => {
+        if (dateRange === "30d") return "Last 30 Days";
+        if (dateRange === "60d") return "Last 60 Days";
+        if (dateRange === "90d") return "Last 90 Days";
+        if (dateRange === "custom") {
+            if (appliedCustomDates) {
+                return `${appliedCustomDates.start} to ${appliedCustomDates.end}`;
+            }
+            return "Custom Range";
+        }
+        return "All Time";
+    };
+
     // Backfill state
     const [backfillLimit, setBackfillLimit] = useState<number>(500);
     const [isBackfilling, setIsBackfilling] = useState(false);
@@ -90,21 +115,39 @@ export default function StreamIntelligencePage() {
     // Takeover toggle transition
     const [isPending, startTransition] = useTransition();
 
-    const handleOpenUserModal = async (username: string) => {
+    const handleOpenUserModal = async (username: string, overrideRangeMode?: "active" | "all") => {
         if (!username) return;
         setSelectedUser(username);
         setLoadingUserDetails(true);
         setUserModalTab("history");
         setUserHistorySearch("");
         setUserHistoryFilter("all");
+        const rangeMode = overrideRangeMode || userModalViewRange;
         try {
-            const res = await getUserDetailedTelemetryAction(username);
+            const isCustom = rangeMode === "active" && dateRange === "custom" && appliedCustomDates;
+            const res = await getUserDetailedTelemetryAction(username, {
+                range: rangeMode === "active" ? dateRange : "all",
+                startDate: isCustom ? appliedCustomDates?.start : undefined,
+                endDate: isCustom ? appliedCustomDates?.end : undefined,
+            });
             setUserDetails(res);
         } catch (err) {
             console.error("Failed loading user telemetry details:", err);
         } finally {
             setLoadingUserDetails(false);
         }
+    };
+
+    const handleToggleUserModalRange = (mode: "active" | "all") => {
+        setUserModalViewRange(mode);
+        if (selectedUser) {
+            handleOpenUserModal(selectedUser, mode);
+        }
+    };
+
+    const handleApplyCustomDates = () => {
+        if (!customStartDate || !customEndDate) return;
+        setAppliedCustomDates({ start: customStartDate, end: customEndDate });
     };
 
     const getDeviceIcon = (platform?: string, device?: string, player?: string) => {
@@ -124,9 +167,14 @@ export default function StreamIntelligencePage() {
     const loadData = async (isManual = false) => {
         if (isManual) setRefreshing(true);
         try {
+            const isCustom = dateRange === "custom" && appliedCustomDates;
             const res = await getStreamIntelligenceDataAction({
                 search: historySearch || undefined,
-                serverFilter: serverFilter || undefined
+                serverFilter: serverFilter || undefined,
+                range: dateRange,
+                startDate: isCustom ? appliedCustomDates?.start : undefined,
+                endDate: isCustom ? appliedCustomDates?.end : undefined,
+                userSort
             });
             if (res.success) {
                 setData(res);
@@ -140,12 +188,16 @@ export default function StreamIntelligencePage() {
     };
 
     useEffect(() => {
-        loadData();
-        const interval = setInterval(() => {
+        if (dateRange !== "custom" || appliedCustomDates) {
             loadData();
+        }
+        const interval = setInterval(() => {
+            if (dateRange !== "custom" || appliedCustomDates) {
+                loadData();
+            }
         }, 5000);
         return () => clearInterval(interval);
-    }, [historySearch, serverFilter]);
+    }, [historySearch, serverFilter, dateRange, appliedCustomDates, userSort]);
 
     const handleKillStream = async (session: any) => {
         if (!confirm(`Are you sure you want to stop the stream of "${session.title}" for user "${session.user}"?`)) return;
@@ -330,6 +382,24 @@ export default function StreamIntelligencePage() {
         transcoding: userProfiles.filter((u: any) => u.frequentTranscoder).length,
     };
 
+    const sortedUserProfiles = useMemo(() => {
+        const list = [...filteredUserProfiles];
+        list.sort((a: any, b: any) => {
+            if (userSort === "hours_desc") {
+                return (b.totalWatchHours || 0) - (a.totalWatchHours || 0);
+            } else if (userSort === "transcode_desc") {
+                return (b.transcodeRate || 0) - (a.transcodeRate || 0);
+            } else if (userSort === "alerts_desc") {
+                return (b.sharingAlerts || 0) - (a.sharingAlerts || 0);
+            } else if (userSort === "name_asc") {
+                return (a.user || "").localeCompare(b.user || "");
+            }
+            // Default: plays_desc
+            return (b.totalPlays || 0) - (a.totalPlays || 0);
+        });
+        return list;
+    }, [filteredUserProfiles, userSort]);
+
     const analytics = data?.analytics || {};
     const historyItems = (data?.history?.items || []).filter((h: any) => {
         if (historyFilter === "movies") return h.mediaType === "movie";
@@ -415,6 +485,126 @@ export default function StreamIntelligencePage() {
                 </div>
             </div>
 
+            {/* --- TIME RANGE SELECTOR BAR --- */}
+            <div className="p-3 sm:p-4 rounded-2xl bg-slate-900/80 border border-slate-800 backdrop-blur-md shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5 shrink-0 mr-1">
+                        <Calendar className="h-4 w-4 text-cyan-400" />
+                        Time Range:
+                    </span>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                        <Button
+                            size="sm"
+                            variant={dateRange === "all" ? "secondary" : "outline"}
+                            onClick={() => setDateRange("all")}
+                            className={`h-7 px-3 text-xs rounded-full transition-all ${
+                                dateRange === "all"
+                                    ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40 font-bold shadow-sm"
+                                    : "border-slate-800 text-muted-foreground hover:text-white"
+                            }`}
+                        >
+                            All Time
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant={dateRange === "30d" ? "secondary" : "outline"}
+                            onClick={() => setDateRange("30d")}
+                            className={`h-7 px-3 text-xs rounded-full transition-all ${
+                                dateRange === "30d"
+                                    ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40 font-bold shadow-sm"
+                                    : "border-slate-800 text-muted-foreground hover:text-white"
+                            }`}
+                        >
+                            Last 30 Days
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant={dateRange === "60d" ? "secondary" : "outline"}
+                            onClick={() => setDateRange("60d")}
+                            className={`h-7 px-3 text-xs rounded-full transition-all ${
+                                dateRange === "60d"
+                                    ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40 font-bold shadow-sm"
+                                    : "border-slate-800 text-muted-foreground hover:text-white"
+                            }`}
+                        >
+                            Last 60 Days
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant={dateRange === "90d" ? "secondary" : "outline"}
+                            onClick={() => setDateRange("90d")}
+                            className={`h-7 px-3 text-xs rounded-full transition-all ${
+                                dateRange === "90d"
+                                    ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40 font-bold shadow-sm"
+                                    : "border-slate-800 text-muted-foreground hover:text-white"
+                            }`}
+                        >
+                            Last 90 Days
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant={dateRange === "custom" ? "secondary" : "outline"}
+                            onClick={() => {
+                                setDateRange("custom");
+                                if (!customStartDate) {
+                                    const d = new Date();
+                                    d.setDate(d.getDate() - 30);
+                                    setCustomStartDate(d.toISOString().slice(0, 10));
+                                }
+                                if (!customEndDate) {
+                                    setCustomEndDate(new Date().toISOString().slice(0, 10));
+                                }
+                            }}
+                            className={`h-7 px-3 text-xs rounded-full transition-all ${
+                                dateRange === "custom"
+                                    ? "bg-purple-500/20 text-purple-300 border-purple-500/40 font-bold shadow-sm"
+                                    : "border-slate-800 text-muted-foreground hover:text-white"
+                            }`}
+                        >
+                            Custom Range...
+                        </Button>
+                    </div>
+                </div>
+
+                {/* Custom Date Pickers or Range Description */}
+                {dateRange === "custom" ? (
+                    <div className="flex flex-wrap items-center gap-2 pt-2 md:pt-0 border-t md:border-t-0 border-slate-800/80">
+                        <span className="text-[11px] text-muted-foreground">From:</span>
+                        <input
+                            type="date"
+                            value={customStartDate}
+                            onChange={(e) => setCustomStartDate(e.target.value)}
+                            className="h-7 px-2.5 text-xs bg-slate-950 border border-slate-800 rounded-lg text-white font-mono focus:outline-none focus:border-cyan-500/50"
+                        />
+                        <span className="text-[11px] text-muted-foreground">To:</span>
+                        <input
+                            type="date"
+                            value={customEndDate}
+                            onChange={(e) => setCustomEndDate(e.target.value)}
+                            className="h-7 px-2.5 text-xs bg-slate-950 border border-slate-800 rounded-lg text-white font-mono focus:outline-none focus:border-cyan-500/50"
+                        />
+                        <Button
+                            size="sm"
+                            onClick={handleApplyCustomDates}
+                            disabled={!customStartDate || !customEndDate}
+                            className="h-7 px-3 text-xs bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold shadow-sm"
+                        >
+                            Apply
+                        </Button>
+                    </div>
+                ) : (
+                    <div className="text-[11px] text-muted-foreground flex items-center gap-1.5 md:ml-auto">
+                        <Clock className="h-3.5 w-3.5 text-cyan-400" />
+                        <span>
+                            {dateRange === "all" && "Complete all-time historical data"}
+                            {dateRange === "30d" && "Playback activity from the last 30 days"}
+                            {dateRange === "60d" && "Playback activity from the last 60 days"}
+                            {dateRange === "90d" && "Playback activity from the last 90 days"}
+                        </span>
+                    </div>
+                )}
+            </div>
+
             {/* --- METRIC SUMMARY CARDS --- */}
             <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3.5">
                 <Card className="bg-slate-900/80 border-slate-800 backdrop-blur-md">
@@ -433,9 +623,16 @@ export default function StreamIntelligencePage() {
                 <Card className="bg-slate-900/80 border-slate-800 backdrop-blur-md">
                     <CardContent className="p-4 flex items-center justify-between">
                         <div>
-                            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Direct Play Rate</p>
+                            <div className="flex items-center gap-1.5">
+                                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Direct Play Rate</p>
+                                {dateRange !== "all" && (
+                                    <Badge variant="outline" className="text-[9px] py-0 px-1 bg-emerald-500/10 text-emerald-300 border-emerald-500/30 font-medium">
+                                        {getRangeLabel()}
+                                    </Badge>
+                                )}
+                            </div>
                             <h3 className="text-2xl font-black text-emerald-400 mt-0.5">{analytics.directPlayRatio ?? 100}%</h3>
-                            <p className="text-[10px] text-muted-foreground mt-0.5">{analytics.directPlayCount || 0} Direct / {analytics.transcodeCount || 0} Transcode</p>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">{analytics.directPlayCount?.toLocaleString() || 0} Direct / {analytics.transcodeCount?.toLocaleString() || 0} Transcode</p>
                         </div>
                         <div className="h-10 w-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
                             <Zap className="h-5 w-5" />
@@ -446,9 +643,16 @@ export default function StreamIntelligencePage() {
                 <Card className="bg-slate-900/80 border-slate-800 backdrop-blur-md">
                     <CardContent className="p-4 flex items-center justify-between">
                         <div>
-                            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Hours Streamed</p>
-                            <h3 className="text-2xl font-black text-purple-400 mt-0.5">{analytics.totalWatchHours || 0} hrs</h3>
-                            <p className="text-[10px] text-muted-foreground mt-0.5">{analytics.totalSessions || 0} total sessions logged</p>
+                            <div className="flex items-center gap-1.5">
+                                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Hours Streamed</p>
+                                {dateRange !== "all" && (
+                                    <Badge variant="outline" className="text-[9px] py-0 px-1 bg-purple-500/10 text-purple-300 border-purple-500/30 font-medium">
+                                        {getRangeLabel()}
+                                    </Badge>
+                                )}
+                            </div>
+                            <h3 className="text-2xl font-black text-purple-400 mt-0.5">{analytics.totalWatchHours?.toLocaleString() || 0} hrs</h3>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">{analytics.totalSessions?.toLocaleString() || 0} total sessions logged</p>
                         </div>
                         <div className="h-10 w-10 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400">
                             <Clock className="h-5 w-5" />
@@ -1006,14 +1210,32 @@ export default function StreamIntelligencePage() {
                                         All members ranked by activity, streaming hours, Direct Play ratio, and smart multi-household sharing detection.
                                     </CardDescription>
                                 </div>
-                                <div className="relative w-full sm:w-64">
-                                    <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-                                    <Input
-                                        placeholder="Search user, device, IP..."
-                                        value={userDirectorySearch}
-                                        onChange={(e) => setUserDirectorySearch(e.target.value)}
-                                        className="h-8 pl-8 text-xs bg-slate-950 border-slate-800 rounded-lg text-white"
-                                    />
+                                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1 shrink-0">
+                                            <ArrowUpDown className="h-3.5 w-3.5 text-cyan-400" /> Sort:
+                                        </span>
+                                        <select
+                                            value={userSort}
+                                            onChange={(e) => setUserSort(e.target.value)}
+                                            className="h-8 px-2.5 text-xs bg-slate-950 border border-slate-800 rounded-lg text-white font-medium focus:outline-none focus:border-cyan-500/50"
+                                        >
+                                            <option value="plays_desc">Most Plays</option>
+                                            <option value="hours_desc">Most Watch Hours</option>
+                                            <option value="transcode_desc">Highest Transcode %</option>
+                                            <option value="alerts_desc">Most Sharing Alerts</option>
+                                            <option value="name_asc">Alphabetical (A-Z)</option>
+                                        </select>
+                                    </div>
+                                    <div className="relative w-full sm:w-60">
+                                        <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                                        <Input
+                                            placeholder="Search user, device, IP..."
+                                            value={userDirectorySearch}
+                                            onChange={(e) => setUserDirectorySearch(e.target.value)}
+                                            className="h-8 pl-8 text-xs bg-slate-950 border-slate-800 rounded-lg text-white"
+                                        />
+                                    </div>
                                 </div>
                             </div>
 
@@ -1056,13 +1278,13 @@ export default function StreamIntelligencePage() {
                             </div>
                         </CardHeader>
                         <CardContent className="p-0">
-                            {filteredUserProfiles.length === 0 ? (
+                            {sortedUserProfiles.length === 0 ? (
                                 <div className="p-12 text-center text-muted-foreground text-xs">
                                     No user stream profiles match your search or filter criteria.
                                 </div>
                             ) : (
                                 <div className="divide-y divide-slate-800/60 max-h-[600px] overflow-y-auto">
-                                    {filteredUserProfiles.map((user: any) => (
+                                    {sortedUserProfiles.map((user: any) => (
                                         <div 
                                             key={user.user} 
                                             onClick={() => handleOpenUserModal(user.user)}
@@ -1130,10 +1352,10 @@ export default function StreamIntelligencePage() {
                                             <div className="flex items-center gap-4 justify-between md:justify-end shrink-0" onClick={(e) => e.stopPropagation()}>
                                                 <div className="text-right space-y-0.5">
                                                     <div className="text-xs font-bold text-cyan-400">
-                                                        {user.totalPlays} Plays ({user.totalWatchHours} hrs)
+                                                        {user.totalPlays?.toLocaleString()} Plays ({user.totalWatchHours?.toLocaleString()} hrs)
                                                     </div>
                                                     <div className="text-[10px] text-muted-foreground">
-                                                        {user.directPlayCount} Direct Play / {user.transcodeCount} Transcode
+                                                        {user.directPlayCount?.toLocaleString()} Direct Play / {user.transcodeCount?.toLocaleString()} Transcode
                                                     </div>
                                                 </div>
 
@@ -1637,7 +1859,34 @@ export default function StreamIntelligencePage() {
                                     </div>
                                 </div>
 
-                                <div className="flex items-center gap-2">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    {dateRange !== "all" && (
+                                        <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 p-0.5 rounded-xl text-xs">
+                                            <button
+                                                type="button"
+                                                onClick={() => handleToggleUserModalRange("active")}
+                                                className={`px-2.5 py-1 rounded-lg font-bold transition-all text-xs ${
+                                                    userModalViewRange === "active"
+                                                        ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm"
+                                                        : "text-muted-foreground hover:text-white"
+                                                }`}
+                                            >
+                                                {getRangeLabel()}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleToggleUserModalRange("all")}
+                                                className={`px-2.5 py-1 rounded-lg font-bold transition-all text-xs ${
+                                                    userModalViewRange === "all"
+                                                        ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm"
+                                                        : "text-muted-foreground hover:text-white"
+                                                }`}
+                                            >
+                                                All Time
+                                            </button>
+                                        </div>
+                                    )}
+
                                     {userDetails?.transcodeRate >= 50 && (
                                         <Button
                                             size="sm"
@@ -1659,15 +1908,15 @@ export default function StreamIntelligencePage() {
                             <div className="flex flex-wrap items-center gap-2 pt-3">
                                 <Badge variant="outline" className="text-xs bg-slate-900 border-slate-800 text-slate-200 py-1 px-2.5">
                                     <Activity className="h-3.5 w-3.5 text-cyan-400 mr-1.5" />
-                                    {userDetails?.totalPlays ?? "..."} Total Plays
+                                    {userDetails?.totalPlays?.toLocaleString() ?? "..."} Total Plays {dateRange !== "all" && userModalViewRange === "active" ? `(${getRangeLabel()})` : "(All Time)"}
                                 </Badge>
                                 <Badge variant="outline" className="text-xs bg-slate-900 border-slate-800 text-slate-200 py-1 px-2.5">
                                     <Clock className="h-3.5 w-3.5 text-purple-400 mr-1.5" />
-                                    {userDetails?.totalWatchHours ?? "..."} Watch Hours
+                                    {userDetails?.totalWatchHours?.toLocaleString() ?? "..."} Watch Hours
                                 </Badge>
                                 <Badge variant="outline" className="text-xs bg-slate-900 border-slate-800 text-slate-200 py-1 px-2.5">
                                     <Zap className="h-3.5 w-3.5 text-emerald-400 mr-1.5" />
-                                    {userDetails ? `${100 - userDetails.transcodeRate}% Direct Play (${userDetails.directPlayCount} Direct / ${userDetails.transcodeCount} Transcode)` : "..."}
+                                    {userDetails ? `${100 - userDetails.transcodeRate}% Direct Play (${userDetails.directPlayCount?.toLocaleString()} Direct / ${userDetails.transcodeCount?.toLocaleString()} Transcode)` : "..."}
                                 </Badge>
                                 <Badge variant="outline" className="text-xs bg-slate-900 border-slate-800 text-slate-200 py-1 px-2.5">
                                     <Smartphone className="h-3.5 w-3.5 text-blue-400 mr-1.5" />
