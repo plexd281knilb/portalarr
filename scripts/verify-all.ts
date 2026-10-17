@@ -8450,6 +8450,8 @@ async function runTestSuite() {
             formatEtaTimestamp, 
             formatAudioChannels, 
             formatResolution, 
+            resolveResolution,
+            resolveHwTranscodeInfo,
             extractStreamTelemetry,
             isPrivateOrLocalIp,
             normalizeIp,
@@ -8480,15 +8482,22 @@ async function runTestSuite() {
         if (formatAudioChannels(2) !== "Stereo") throw new Error(`Expected Stereo, got ${formatAudioChannels(2)}`);
         if (formatAudioChannels(1) !== "Mono") throw new Error(`Expected Mono, got ${formatAudioChannels(1)}`);
 
-        // 3. Resolution Formatting
+        // 3. Resolution Formatting & Dimension Resolution
         if (formatResolution("2160") !== "4K UHD") throw new Error(`Expected 4K UHD, got ${formatResolution("2160")}`);
         if (formatResolution("1080p") !== "1080p") throw new Error(`Expected 1080p, got ${formatResolution("1080p")}`);
         if (formatResolution("720") !== "720p") throw new Error(`Expected 720p, got ${formatResolution("720")}`);
 
-        // 4. Extract telemetry from Plex active session with HDR, subtitle burn-in, and NVENC transcode speed
+        if (resolveResolution(null, 1080, 1920) !== "1080p") throw new Error(`Expected 1080p, got ${resolveResolution(null, 1080, 1920)}`);
+        if (resolveResolution(null, 800, 1920) !== "1080p") throw new Error(`Expected 1080p for cinemascope, got ${resolveResolution(null, 800, 1920)}`);
+        if (resolveResolution(null, 720, 1280) !== "720p") throw new Error(`Expected 720p, got ${resolveResolution(null, 720, 1280)}`);
+        if (resolveResolution(null, 534, 1280) !== "720p") throw new Error(`Expected 720p for cinemascope, got ${resolveResolution(null, 534, 1280)}`);
+        if (resolveResolution(null, 480, 720) !== "480p") throw new Error(`Expected 480p, got ${resolveResolution(null, 480, 720)}`);
+        if (resolveResolution(null, 2160, 3840) !== "4K UHD") throw new Error(`Expected 4K UHD, got ${resolveResolution(null, 2160, 3840)}`);
+
+        // 4. Extract telemetry from Plex active session with HDR, subtitle burn-in, NVENC HW transcode, and buffer ahead
         const mockPlexSession = {
             duration: 7200000, // 2 hours in ms
-            viewOffset: 3600000, // 1 hour in ms
+            viewOffset: 3600000, // 1 hour in ms (3600s)
             Media: [{
                 videoResolution: "2160",
                 videoCodec: "hevc",
@@ -8501,13 +8510,20 @@ async function runTestSuite() {
                 }]
             }],
             TranscodeSession: {
+                height: 1080,
+                width: 1920,
+                videoDecision: "transcode",
                 videoResolution: "1080",
                 videoCodec: "h264",
                 audioCodec: "aac",
                 audioChannels: 2,
                 speed: 2.8,
                 throttled: true,
-                subtitleDecision: "burn"
+                subtitleDecision: "burn",
+                transcodeHwRequested: true,
+                transcodeHwDecoding: "nvenc",
+                transcodeHwEncoding: "nvenc",
+                maxOffsetAvailable: 3720 // 120s ahead of viewOffset
             },
             Player: {
                 address: "192.168.1.105",
@@ -8527,8 +8543,17 @@ async function runTestSuite() {
         if (plexTelemetry.sourceResolution !== "4K UHD" || plexTelemetry.streamResolution !== "1080p") {
             throw new Error(`Unexpected resolutions: ${plexTelemetry.sourceResolution} -> ${plexTelemetry.streamResolution}`);
         }
+        if (!plexTelemetry.isDownscaling) {
+            throw new Error("Expected isDownscaling to be true for 4K UHD -> 1080p");
+        }
         if (plexTelemetry.hdrFormat !== "Dolby Vision") {
             throw new Error(`Expected Dolby Vision HDR format, got ${plexTelemetry.hdrFormat}`);
+        }
+        if (!plexTelemetry.isToneMapping) {
+            throw new Error("Expected isToneMapping to be true for HDR transcode to SDR");
+        }
+        if (!plexTelemetry.isHw || plexTelemetry.hwEngine !== "Nvidia NVENC") {
+            throw new Error(`Expected Nvidia NVENC HW accel, got isHw=${plexTelemetry.isHw}, engine=${plexTelemetry.hwEngine}`);
         }
         if (plexTelemetry.sourceAudioCodec !== "TRUEHD" || plexTelemetry.sourceAudioChannels !== "7.1") {
             throw new Error(`Expected TRUEHD 7.1, got ${plexTelemetry.sourceAudioCodec} ${plexTelemetry.sourceAudioChannels}`);
@@ -8541,6 +8566,9 @@ async function runTestSuite() {
         }
         if (plexTelemetry.transcodeSpeed !== "2.8x" || !plexTelemetry.transcodeThrottled) {
             throw new Error(`Expected 2.8x throttled transcode, got ${plexTelemetry.transcodeSpeed}`);
+        }
+        if (!plexTelemetry.transcodeBufferAheadFormatted || !plexTelemetry.transcodeBufferAheadFormatted.includes("2m")) {
+            throw new Error(`Expected ~2m buffer ahead, got ${plexTelemetry.transcodeBufferAheadFormatted}`);
         }
         if (plexTelemetry.connectionMode !== "lan" || !plexTelemetry.connectionLabel.includes("Direct LAN")) {
             throw new Error(`Expected Direct LAN connection mode, got ${plexTelemetry.connectionLabel}`);

@@ -488,8 +488,10 @@ export default function MyPlexHub() {
                                     <div className="font-bold text-foreground capitalize">
                                         {selectedStreamForDiagnosis.videoDecision}
                                     </div>
-                                    <div className="text-[10px] text-muted-foreground">
-                                        {selectedStreamForDiagnosis.streamVideoResolution}
+                                    <div className="text-[10px] text-muted-foreground font-mono">
+                                        {selectedStreamForDiagnosis.sourceVideoResolution && selectedStreamForDiagnosis.streamVideoResolution && selectedStreamForDiagnosis.sourceVideoResolution !== selectedStreamForDiagnosis.streamVideoResolution
+                                            ? `📉 ${selectedStreamForDiagnosis.sourceVideoResolution} ➔ ${selectedStreamForDiagnosis.streamVideoResolution}`
+                                            : (selectedStreamForDiagnosis.streamVideoResolution || selectedStreamForDiagnosis.sourceVideoResolution || "1080p")}
                                     </div>
                                 </div>
 
@@ -514,14 +516,15 @@ export default function MyPlexHub() {
                                 </div>
 
                                 <div className="p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.05] space-y-0.5">
-                                    <div className="text-[10px] text-muted-foreground uppercase font-semibold">Hardware Accel</div>
+                                    <div className="text-[10px] text-muted-foreground uppercase font-semibold">Hardware Accel & Power</div>
                                     <div className="font-bold text-foreground">
                                         {selectedStreamForDiagnosis.videoDecision === "transcode"
-                                            ? (selectedStreamForDiagnosis.transcodeHwEncoding ? "Active (NVENC)" : "None (Software)")
+                                            ? (selectedStreamForDiagnosis.transcodeHwEncoding || selectedStreamForDiagnosis.transcodeHwDecoding ? "GPU Accel (Low Power)" : "CPU (Software • High Power)")
                                             : "None (Direct Play)"}
                                     </div>
-                                    <div className="text-[10px] text-muted-foreground">
+                                    <div className="text-[10px] text-muted-foreground font-mono">
                                         Speed: {selectedStreamForDiagnosis.videoDecision === "transcode" ? `${selectedStreamForDiagnosis.transcodeSpeed}x` : "1.0x (Raw)"}
+                                        {selectedStreamForDiagnosis.transcodeThrottled ? " (Throttled)" : ""}
                                     </div>
                                 </div>
                             </div>

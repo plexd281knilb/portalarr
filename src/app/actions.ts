@@ -53,6 +53,7 @@ import {
     isMobileRoamingDevice,
     isFixedHomeDevice,
     extractStreamTelemetry,
+    resolveResolution,
     formatDurationMs,
     formatEtaTimestamp,
     type WatchHistoryQueryOptions 
@@ -15745,14 +15746,14 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
                                 device: s.Player?.platform || s.Player?.device || "",
                                 ipAddress: s.Player?.address || "",
                                 location: (s.Session?.location || (isPrivateOrLocalIp(s.Player?.address) ? "lan" : "wan")),
-                                videoDecision: isTranscode ? "transcode" : "direct play",
+                                videoDecision: isTranscode ? (s.TranscodeSession?.videoDecision === "copy" ? "direct stream" : "transcode") : "direct play",
                                 audioDecision: s.TranscodeSession?.audioDecision || "direct play",
                                 videoCodec: (s.Media && s.Media[0]?.videoCodec || "H264").toUpperCase(),
                                 audioCodec: (s.Media && s.Media[0]?.audioCodec || "AAC").toUpperCase(),
                                 streamBitrate: bitrate,
-                                transcodeHwRequested: !!s.TranscodeSession?.hwRequested,
-                                transcodeHwDecoding: s.TranscodeSession?.videoDecoder || "",
-                                transcodeHwEncoding: s.TranscodeSession?.videoEncoder || "",
+                                transcodeHwRequested: !!(s.TranscodeSession?.transcodeHwRequested || s.TranscodeSession?.hwRequested),
+                                transcodeHwDecoding: s.TranscodeSession?.transcodeHwDecodingTitle || s.TranscodeSession?.transcodeHwDecoding || s.TranscodeSession?.videoDecoder || "",
+                                transcodeHwEncoding: s.TranscodeSession?.transcodeHwEncodingTitle || s.TranscodeSession?.transcodeHwEncoding || s.TranscodeSession?.videoEncoder || "",
                                 progressPercent: s.viewOffset && s.duration ? Math.round((Number(s.viewOffset) / Number(s.duration)) * 100) : 0,
                                 state: s.Player?.state || "playing"
                             };
@@ -18959,8 +18960,9 @@ export async function analyzeStreamHealth(s: any): Promise<StreamDiagnosis> {
             subDecision = (ts.subtitleDecision || "").toLowerCase();
             subCodec = (ts.subtitleCodec || "").toLowerCase();
             streamBitrate = Number(ts.bitrate || s.Media?.[0]?.bitrate || 0);
-            streamRes = (ts.videoResolution || s.Media?.[0]?.videoResolution || "").toLowerCase();
-            sourceRes = (s.Media?.[0]?.videoResolution || streamRes).toLowerCase();
+            const resolvedTsRes = resolveResolution(ts.videoResolution || ts.targetVideoResolution, ts.height, ts.width);
+            streamRes = (resolvedTsRes || ts.videoResolution || s.Media?.[0]?.videoResolution || "").toLowerCase();
+            sourceRes = (resolveResolution(s.Media?.[0]?.videoResolution, s.Media?.[0]?.height, s.Media?.[0]?.width) || streamRes).toLowerCase();
             videoCodec = ts.videoCodec || s.Media?.[0]?.videoCodec || "";
             audioCodec = ts.sourceAudioCodec || s.Media?.[0]?.audioCodec || "";
             streamAudioCodec = ts.audioCodec || "";
@@ -19298,17 +19300,20 @@ export async function getUserPlexHubData(options?: { skipCache?: boolean }) {
                             videoDecision: s.TranscodeSession ? (s.TranscodeSession.videoDecision || "transcode") : "direct play",
                             audioDecision: s.TranscodeSession ? (s.TranscodeSession.audioDecision || "transcode") : "direct play",
                             transcodeDecision: s.TranscodeSession ? (s.TranscodeSession.videoDecision === "transcode" ? "transcode" : "direct stream") : "direct play",
-                            streamVideoResolution: s.TranscodeSession?.videoResolution || s.Media?.[0]?.videoResolution || "1080p",
-                            sourceVideoResolution: s.Media?.[0]?.videoResolution || "1080p",
+                            streamVideoResolution: s.TranscodeSession 
+                                ? (resolveResolution(s.TranscodeSession.videoResolution || s.TranscodeSession.targetVideoResolution, s.TranscodeSession.height, s.TranscodeSession.width) || "720p")
+                                : (resolveResolution(s.Media?.[0]?.videoResolution, s.Media?.[0]?.height, s.Media?.[0]?.width) || "1080p"),
+                            sourceVideoResolution: resolveResolution(s.Media?.[0]?.videoResolution, s.Media?.[0]?.height, s.Media?.[0]?.width) || "1080p",
                             streamBitrateMbps: s.TranscodeSession?.bitrate ? (Number(s.TranscodeSession.bitrate) / 1000).toFixed(1) : (s.Media?.[0]?.bitrate ? (Number(s.Media[0].bitrate) / 1000).toFixed(1) : "0"),
                             videoCodec: s.TranscodeSession?.videoCodec || s.Media?.[0]?.videoCodec || "",
                             audioCodec: s.TranscodeSession?.sourceAudioCodec || s.Media?.[0]?.audioCodec || "",
                             streamAudioCodec: s.TranscodeSession?.audioCodec || "",
                             qualityProfile: "",
                             bandwidthMbps: s.TranscodeSession?.bitrate ? (Number(s.TranscodeSession.bitrate) / 1000).toFixed(1) : "0",
-                            transcodeHwDecoding: Boolean(s.TranscodeSession?.transcodeHwRequested),
-                            transcodeHwEncoding: Boolean(s.TranscodeSession?.transcodeHwRequested),
+                            transcodeHwDecoding: Boolean(s.TranscodeSession?.transcodeHwRequested || s.TranscodeSession?.transcodeHwDecoding),
+                            transcodeHwEncoding: Boolean(s.TranscodeSession?.transcodeHwRequested || s.TranscodeSession?.transcodeHwEncoding),
                             transcodeSpeed: String(s.TranscodeSession?.speed || "1.0"),
+                            transcodeThrottled: Boolean(s.TranscodeSession?.throttled),
                             diagnosis
                         });
                     }

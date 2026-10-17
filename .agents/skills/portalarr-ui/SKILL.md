@@ -967,6 +967,23 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 
 ---
 
+### 41. Live Activity Transcode Telemetry, Resolution Downscaling & Power/Buffer Cockpit
+- **Target Resolution Resolution (`resolveResolution`)**:
+  - In Plex Media Server `/status/sessions`, `TranscodeSession` supplies target dimensions via `height` (e.g. 1080, 720, 480) and `width` (e.g. 1920, 1280) rather than a string `videoResolution` attribute.
+  - `resolveResolution` evaluates both pixel dimensions (including cinemascope aspect ratios like 1920x800 for 1080p, 1280x534 for 720p) and standard string formats (`4k`, `1080`, `720`, `480`), ensuring downscaled streams accurately reflect their target resolution instead of falling back to source resolution.
+- **Visual Downscaling & HDR Tone-Mapping Indicators**:
+  - **Resolution Conversion**: When downscaling (`sourceResolution !== streamResolution`), render an amber glowing badge: `📉 4K UHD ➔ 1080p` or `📉 4K UHD ➔ 720p`.
+  - **HDR Tone-Mapping**: When an HDR or Dolby Vision stream is transcoded down to SDR, render `✨ HDR10 ➔ SDR Tone Mapped` or `✨ Dolby Vision ➔ SDR Tone Mapped`.
+- **Hardware Acceleration & Power Consumption Badges**:
+  - **GPU Hardware Accelerated (`isHw`)**: Renders cyan badge with `<Zap className="h-2.5 w-2.5" />`: `{hwEngine} ({dec} ➔ {enc}) • Low Power` (e.g. `Nvidia NVENC (nvenc ➔ nvenc) • Low Power` or `Intel QuickSync • Low Power`).
+  - **CPU Software Transcode**: Renders rose badge with `<Flame className="h-2.5 w-2.5" />`: `CPU Software • High Power` (signaling heavy CPU core saturation).
+- **Transcode Speed, Throttle & Buffer Ahead Metrics**:
+  - **Speed Multiplier**: Renders emerald badge `⚡ 2.8x speed (Real-Time OK)` when speed $\ge 1.0x$, or pulsing rose badge `⚡ 0.8x speed (Slow / Buffer Risk)` when $< 1.0x$.
+  - **Throttle Power Saving State**: Renders muted slate badge `💤 Throttled (Buffer Ahead • Power Saving)` when Plex has paused the transcoder because the buffer is satisfied, signaling 0% idle CPU/GPU transcode power.
+  - **Buffer Ahead Duration**: Displays buffer lead time calculated from `maxOffsetAvailable - viewOffset` (e.g. `(+2m 00s buffer ahead)`).
+
+---
+
 As the Portalarr frontend evolves or new design decisions are finalized:
 1. **Adding a New UI Rule**: Add the rule to the relevant section above or under `references/`.
 2. **Tweaking Component Defaults**: Update the corresponding reference file in `references/`.
