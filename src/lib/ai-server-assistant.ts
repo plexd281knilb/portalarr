@@ -235,6 +235,7 @@ export async function getUserDiagnosticSnapshot(user: any): Promise<UserDiagnost
                             streamBitrate: Number(s.stream_bitrate || s.bitrate || 0),
                             transcodeDecision: ["direct play", "direct stream", "transcode", "copy"].includes(transDecision) ? transDecision : "transcode",
                             transcodeSpeed: s.transcode_speed ? String(s.transcode_speed) : undefined,
+                            transcodeThrottled: Boolean(s.transcode_throttled === 1 || s.transcode_throttled === true || s.transcode_throttled === "1"),
                             transcodeHwRequested: !!(s.transcode_hw_decoding || s.transcode_hw_encoding),
                             transcodeReason: s.transcode_hw_decoding_title || s.transcode_reason || s.stream_container_decision,
                             subtitleDecision: s.subtitle_decision,
@@ -402,6 +403,7 @@ export async function getUserDiagnosticSnapshot(user: any): Promise<UserDiagnost
                                         streamBitrate: s.Media?.[0]?.bitrate ? Number(s.Media?.[0]?.bitrate) : undefined,
                                         transcodeDecision: transDecision as any,
                                         transcodeSpeed: s.TranscodeSession?.speed ? String(s.TranscodeSession.speed) : undefined,
+                                        transcodeThrottled: Boolean(s.TranscodeSession?.throttled === 1 || s.TranscodeSession?.throttled === true || s.TranscodeSession?.throttled === "1"),
                                         transcodeHwRequested: !!s.TranscodeSession?.transcodeHwRequested,
                                         transcodeReason: s.TranscodeSession?.transcodeHwDecodingTitle || s.TranscodeSession?.videoDecision,
                                         subtitleDecision: part?.Stream?.find((st: any) => st.streamType === 3 && st.selected)?.decision,
@@ -509,8 +511,8 @@ export async function getUserDiagnosticSnapshot(user: any): Promise<UserDiagnost
             });
         }
 
-        // Issue D: Slow Transcode Speed
-        if (primary.transcodeSpeed && Number(primary.transcodeSpeed) < 1.0 && isTranscoding) {
+        // Issue D: Slow Transcode Speed (Ignore when intentionally throttled with buffer ahead)
+        if (primary.transcodeSpeed && Number(primary.transcodeSpeed) < 1.0 && isTranscoding && !primary.transcodeThrottled) {
             detectedIssues.push({
                 id: "slow-transcode",
                 type: "slow_transcode",

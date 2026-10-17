@@ -813,14 +813,20 @@ export default function AdminDetailedStreams() {
                                             </Badge>
                                         </div>
 
-                                        {isTranscoding && stream.transcodeSpeed && (
+                                        {isTranscoding && (stream.transcodeSpeed || stream.transcodeThrottled) && (
                                             <Badge variant="outline" className={`text-[9px] font-mono flex items-center gap-1 ${
-                                                stream.transcodeSpeedHealthy !== false
+                                                stream.transcodeThrottled || stream.transcodeSpeedHealthy !== false
                                                     ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
                                                     : "bg-rose-500/15 text-rose-300 border-rose-500/40 animate-pulse"
-                                            }`} title={stream.transcodeSpeedHealthy !== false ? "Transcode speed is faster than real-time playback" : "Transcode speed is slower than real-time playback (buffering risk!)"}>
+                                            }`} title={
+                                                stream.transcodeThrottled
+                                                    ? "Plex transcoder is throttled because the buffer is ahead. Server CPU/GPU is at idle power saving."
+                                                    : stream.transcodeSpeedHealthy !== false
+                                                        ? "Transcode speed is faster than real-time playback"
+                                                        : "Transcode speed is slower than real-time playback (buffering risk!)"
+                                            }>
                                                 <Clock className="h-2.5 w-2.5" />
-                                                ⚡ {stream.transcodeSpeed} speed {stream.transcodeThrottled ? "(Throttled • Power Saving)" : stream.transcodeSpeedHealthy !== false ? "(Real-Time OK)" : "(Slow)"}
+                                                ⚡ {stream.transcodeSpeed || "0.0x"} speed {stream.transcodeThrottled ? "(Throttled • Power Saving)" : stream.transcodeSpeedHealthy !== false ? "(Real-Time OK)" : "(Slow)"}
                                             </Badge>
                                         )}
 

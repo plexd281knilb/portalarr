@@ -978,8 +978,8 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
   - **GPU Hardware Accelerated (`isHw`)**: Renders cyan badge with `<Zap className="h-2.5 w-2.5" />`: `{hwEngine} ({dec} ➔ {enc}) • Low Power` (e.g. `Nvidia NVENC (nvenc ➔ nvenc) • Low Power` or `Intel QuickSync • Low Power`).
   - **CPU Software Transcode**: Renders rose badge with `<Flame className="h-2.5 w-2.5" />`: `CPU Software • High Power` (signaling heavy CPU core saturation).
 - **Transcode Speed, Throttle & Buffer Ahead Metrics**:
-  - **Speed Multiplier**: Renders emerald badge `⚡ 2.8x speed (Real-Time OK)` when speed $\ge 1.0x$, or pulsing rose badge `⚡ 0.8x speed (Slow / Buffer Risk)` when $< 1.0x$.
-  - **Throttle Power Saving State**: Renders muted slate badge `💤 Throttled (Buffer Ahead • Power Saving)` when Plex has paused the transcoder because the buffer is satisfied, signaling 0% idle CPU/GPU transcode power.
+  - **Speed Multiplier**: Renders emerald badge `⚡ 2.8x speed (Real-Time OK)` when speed $\ge 1.0x$, or pulsing rose badge `⚡ 0.8x speed (Slow)` when $< 1.0x$ and unthrottled.
+  - **Throttle Power Saving State (0.0x Speed is Healthy)**: When Plex pauses the transcoder because playback buffer is satisfied, Plex sets `throttled: true` and speed drops to `0.0x`. This is 100% HEALTHY (CPU/GPU at 0% idle power saving, never a red error!). Renders healthy emerald badge `⚡ 0.0x speed (Throttled • Power Saving)`.
   - **Buffer Ahead Duration**: Displays buffer lead time calculated from `maxOffsetAvailable - viewOffset` (e.g. `(+2m 00s buffer ahead)`).
 
 ---

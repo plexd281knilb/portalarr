@@ -16,6 +16,8 @@ export interface StreamTelemetry {
     streamBitrate?: number;
     transcodeDecision: "direct play" | "direct stream" | "transcode" | "copy" | "unknown";
     transcodeSpeed?: string;
+    transcodeThrottled?: boolean;
+    transcodeSpeedHealthy?: boolean;
     transcodeHwRequested?: boolean;
     transcodeReason?: string;
     subtitleDecision?: string;

@@ -736,21 +736,20 @@ export default function StreamIntelligencePage() {
                                                     )}
 
                                                     {/* Transcode Speed & Real-time Playback Health */}
-                                                    {isTranscode && session.transcodeSpeed && (
+                                                    {isTranscode && (session.transcodeSpeed || session.transcodeThrottled) && (
                                                         <Badge variant="outline" className={`text-[9px] font-mono flex items-center gap-1 ${
-                                                            session.transcodeSpeedHealthy !== false
+                                                            session.transcodeThrottled || session.transcodeSpeedHealthy !== false
                                                                 ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
                                                                 : "bg-rose-500/15 text-rose-300 border-rose-500/40 animate-pulse"
-                                                        }`} title={session.transcodeSpeedHealthy !== false ? "Transcode speed is faster than real-time playback" : "Transcode speed is slower than real-time playback (buffering risk!)"}>
+                                                        }`} title={
+                                                            session.transcodeThrottled
+                                                                ? "Plex transcoder is throttled because the buffer is ahead. Server CPU/GPU is at idle power saving!"
+                                                                : session.transcodeSpeedHealthy !== false
+                                                                    ? "Transcode speed is faster than real-time playback"
+                                                                    : "Transcode speed is slower than real-time playback (buffering risk!)"
+                                                        }>
                                                             <Clock className="h-2.5 w-2.5" />
-                                                            ⚡ {session.transcodeSpeed} speed {session.transcodeSpeedHealthy !== false ? "(Real-Time OK)" : "(Slow)"}
-                                                        </Badge>
-                                                    )}
-
-                                                    {/* Throttle / Power Saving State */}
-                                                    {isTranscode && session.transcodeThrottled && (
-                                                        <Badge variant="outline" className="text-[9px] font-mono bg-slate-800 text-slate-300 border-slate-700 flex items-center gap-1" title="Plex transcoder has paused because the buffer is ahead. Server CPU/GPU is at 0% idle power saving!">
-                                                            💤 Throttled (Buffer Ahead • Power Saving)
+                                                            ⚡ {session.transcodeSpeed || "0.0x"} speed {session.transcodeThrottled ? "(Throttled • Power Saving)" : session.transcodeSpeedHealthy !== false ? "(Real-Time OK)" : "(Slow)"}
                                                         </Badge>
                                                     )}
 
