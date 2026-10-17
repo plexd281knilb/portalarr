@@ -9384,6 +9384,108 @@ async function runTestSuite() {
         }
     });
 
+    await assertTest("Test 113: Audio-Only Transcode Doctor Fix Suppression & Dedicated Audiobooks Add-on Plex Library Sharing Access", async () => {
+        const { diagnoseStreamSettings } = await import("../src/lib/telemetry/device-diagnostics");
+        const { getDefaultAddonsCatalogAction, syncAudiobooksPlexLibraryAccessForUser } = await import("../src/app/actions");
+        const defaultCatalog = await getDefaultAddonsCatalogAction();
+
+        // 1. Verify Audio-Only Transcoding Doctor Fix Suppression
+        const audioOnlyDiag = diagnoseStreamSettings({
+            platform: "Apple TV",
+            player: "Plex for tvOS",
+            videoDecision: "direct play",
+            audioDecision: "transcode",
+            streamBitrate: 8500
+        });
+
+        if (audioOnlyDiag.hasIssue !== false) {
+            throw new Error(`Expected audioOnlyDiag.hasIssue to be false, got ${audioOnlyDiag.hasIssue}`);
+        }
+        if (audioOnlyDiag.stepByStepGuide.length !== 0) {
+            throw new Error(`Expected audioOnlyDiag.stepByStepGuide to be empty, got ${JSON.stringify(audioOnlyDiag.stepByStepGuide)}`);
+        }
+        if (audioOnlyDiag.severity !== "info") {
+            throw new Error(`Expected audioOnlyDiag.severity to be info, got ${audioOnlyDiag.severity}`);
+        }
+
+        // Verify Video Transcoding on Roku STILL generates diagnostic steps
+        const rokuVideoDiag = diagnoseStreamSettings({
+            platform: "Roku",
+            player: "Plex for Roku",
+            videoDecision: "transcode",
+            audioDecision: "transcode",
+            streamBitrate: 2000
+        });
+        if (rokuVideoDiag.hasIssue !== true || rokuVideoDiag.stepByStepGuide.length === 0) {
+            throw new Error(`Expected Roku video transcode to flag issue with step-by-step guide`);
+        }
+
+        // 2. Verify Add-ons Catalog separation
+        const ebooksAddon = defaultCatalog.find((a: any) => a.id === "ebooks");
+        if (!ebooksAddon || ebooksAddon.icon !== "book" || ebooksAddon.isFree !== true) {
+            throw new Error(`Expected ebooks add-on in catalog, got: ${JSON.stringify(ebooksAddon)}`);
+        }
+
+        const audiobooksAddon = defaultCatalog.find((a: any) => a.id === "audiobooks");
+        if (!audiobooksAddon || audiobooksAddon.icon !== "headphones" || audiobooksAddon.isFree !== true) {
+            throw new Error(`Expected audiobooks add-on in catalog, got: ${JSON.stringify(audiobooksAddon)}`);
+        }
+
+        const legacyCombined = defaultCatalog.find((a: any) => a.id === "books_audiobooks");
+        if (legacyCombined) {
+            throw new Error(`Legacy books_audiobooks should be split and not present in DEFAULT_ADDONS_CATALOG`);
+        }
+
+        // 3. Verify Audiobooks Library Sync
+        const testUser = await prisma.user.create({
+            data: {
+                username: `aud_sync_usr_${Date.now()}`,
+                email: `aud_sync_usr_${Date.now()}@test.local`,
+                password: "mock_password_hash_123",
+                role: "USER",
+                status: "APPROVED",
+                selectedPlexLibrarySectionIds: "10,20",
+                plexLibrarySectionIds: "10,20"
+            }
+        });
+
+        const testAudioLib = await prisma.library.create({
+            data: {
+                name: `Audiobooks Test Lib ${Date.now()}`,
+                path: "/mock/audiobooks",
+                mediaType: "audiobook",
+                allowedUsers: "admin"
+            }
+        });
+
+        try {
+            // Enable audiobooks access
+            const enableRes = await syncAudiobooksPlexLibraryAccessForUser(testUser.id, true);
+            if (!enableRes.success) {
+                throw new Error(`syncAudiobooksPlexLibraryAccessForUser(true) failed: ${enableRes.error}`);
+            }
+
+            const updatedLibAfterEnable = await prisma.library.findUnique({ where: { id: testAudioLib.id } });
+            if (!updatedLibAfterEnable?.allowedUsers?.includes(testUser.username)) {
+                throw new Error(`Expected audio library allowedUsers to include ${testUser.username}, got: ${updatedLibAfterEnable?.allowedUsers}`);
+            }
+
+            // Disable audiobooks access
+            const disableRes = await syncAudiobooksPlexLibraryAccessForUser(testUser.id, false);
+            if (!disableRes.success) {
+                throw new Error(`syncAudiobooksPlexLibraryAccessForUser(false) failed: ${disableRes.error}`);
+            }
+
+            const updatedLibAfterDisable = await prisma.library.findUnique({ where: { id: testAudioLib.id } });
+            if (updatedLibAfterDisable?.allowedUsers?.includes(testUser.username)) {
+                throw new Error(`Expected audio library allowedUsers to NOT include ${testUser.username}, got: ${updatedLibAfterDisable?.allowedUsers}`);
+            }
+        } finally {
+            await prisma.library.delete({ where: { id: testAudioLib.id } }).catch(() => {});
+            await prisma.user.delete({ where: { id: testUser.id } }).catch(() => {});
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

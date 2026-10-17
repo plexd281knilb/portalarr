@@ -129,21 +129,17 @@ export function diagnoseStreamSettings(session: any): DeviceDiagnosis {
     }
 
     // 5. Audio-Only Transcoding (Passthrough Incompatible)
+    // Audio transcoding uses virtually 0% CPU and zero GPU power, and users should not be instructed to fix it.
     if (isAudioTranscoding && !isTranscoding) {
         return {
-            hasIssue: true,
-            issueType: "audio_incompatible",
-            title: "Audio Format Transcoding (Video Direct Plays)",
-            description: "The video is Direct Playing smoothly, but the surround sound track (TrueHD or DTS-HD MA) is transcoding to AAC/Opus for your device.",
+            hasIssue: false,
+            title: "Optimal Direct Play (Direct Stream Audio)",
+            description: "Video is Direct Playing at 100% native quality. Lightweight audio conversion uses negligible server power.",
             severity: "info",
             deviceCategory: deviceCat,
-            quickFix: "Switch to the standard 5.1 AC3 / EAC3 audio track in the player menu, or enable HDMI audio passthrough.",
-            stepByStepGuide: [
-                "In the player playback controls, click the Audio Stream selector.",
-                "Select 'Dolby Digital 5.1 (AC3)' or 'Stereo' if available instead of TrueHD 7.1.",
-                "If connected to an AVR soundbar, go to Plex Settings → Audio and turn ON 'HDMI Passthrough'."
-            ],
-            copyableNotice: `Hey @${user}! The video for "${rawTitle}" is Direct Playing perfectly, but the high-end 7.1 audio track is transcoding. In the playback audio menu, select the standard 5.1 (AC3) track if you don't have a 7.1 home theater receiver!`
+            quickFix: "No action required.",
+            stepByStepGuide: [],
+            copyableNotice: ""
         };
     }
 
