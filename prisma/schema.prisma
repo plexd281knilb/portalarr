@@ -69,9 +69,13 @@ model Settings {
   membershipTiersEnabled Boolean @default(true)
   autoSuspendExpiredAccounts Boolean @default(false) // Safety switch - OFF by default
 
-  // Admin Approval Gates (Requires admin manual approval before Plex changes or emails occur)
+  // Admin Approval Gates & Governance (Requires admin manual approval before Plex changes or emails occur)
   requireApprovalForPlexChanges Boolean @default(true) // Require manual admin review before Plex library access is granted/revoked
   requireApprovalForEmails      Boolean @default(true) // Require manual admin review before outgoing emails are dispatched
+  emailApprovalPolicy           String? // JSON map of templateId -> boolean (false = auto-dispatch via SMTP, true = staged in queue)
+  notifyAdminOnPendingApproval  Boolean @default(true) // Notify admins when actions or emails are staged for approval
+  adminApprovalDiscordNotify    Boolean @default(true) // Send Discord alert when approval is needed
+  adminApprovalEmailNotify      Boolean @default(true) // Send email to admins when approval is needed
 
   // Email Notification Controls (All Automated Emails OFF by default until explicitly enabled)
   emailNotificationsEnabled   Boolean   @default(false)

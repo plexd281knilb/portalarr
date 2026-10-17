@@ -40,7 +40,8 @@ import {
     creditUserReferralAction,
     unlinkUserReferralAction,
     sendSubscriptionRenewalReminderAction,
-    getUserRenewalSummaryAction
+    getUserRenewalSummaryAction,
+    getEmailTemplatesAction
 } from "@/app/actions";
 import { changeUserPassword, impersonateUserAction } from "@/app/auth-actions";
 import { calculateProratedBilling } from "@/lib/prorated-billing";
@@ -59,7 +60,7 @@ import {
     Clock, Play, RefreshCw, Loader2, KeyRound, Search, CheckCheck, Send, Edit2,
     Layers, Timer, Gift, Trophy, DollarSign, CreditCard, Sparkles, AlertTriangle,
     FolderCheck, ShieldAlert, Check, Users, ArrowUpRight, Copy, Calculator, Calendar, Monitor, Server, PauseCircle, SlidersHorizontal,
-    Eye, Music, BookOpen, Tv, Baby, X, CalendarClock, Zap, BellRing, Gamepad2
+    Eye, Music, BookOpen, Tv, Baby, X, CalendarClock, Zap, BellRing, Gamepad2, Filter
 } from "lucide-react";
 import { DiscordMemberManagerModal } from "@/components/discord-member-manager-modal";
 import {
@@ -291,13 +292,24 @@ export default function AccessSettingsPage() {
     const [loadingApprovals, setLoadingApprovals] = useState(false);
     const [approvalFilterStatus, setApprovalFilterStatus] = useState<"ALL" | "PENDING" | "APPROVED" | "REJECTED">("PENDING");
     const [approvalFilterType, setApprovalFilterType] = useState<"ALL" | "EMAIL" | "PLEX_ACCESS_GRANT" | "PLEX_ACCESS_REVOKE">("ALL");
-    const [approvalSettings, setApprovalSettings] = useState({ requireApprovalForPlexChanges: true, requireApprovalForEmails: true });
+    const [approvalSettings, setApprovalSettings] = useState({ 
+        requireApprovalForPlexChanges: true, 
+        requireApprovalForEmails: true,
+        emailApprovalPolicy: {} as Record<string, boolean>,
+        notifyAdminOnPendingApproval: true,
+        adminApprovalDiscordNotify: true,
+        adminApprovalEmailNotify: true
+    });
     const [savingApprovalSettings, setSavingApprovalSettings] = useState(false);
     const [processingApprovalId, setProcessingApprovalId] = useState<string | null>(null);
     const [emailPreviewApproval, setEmailPreviewApproval] = useState<any | null>(null);
     const [approvalSuccessMsg, setApprovalSuccessMsg] = useState("");
     const [approvalErrMsg, setApprovalErrMsg] = useState("");
     const [selectedApprovalIds, setSelectedApprovalIds] = useState<string[]>([]);
+    const [emailTemplatesList, setEmailTemplatesList] = useState<any[]>([]);
+    const [loadingEmailTemplates, setLoadingEmailTemplates] = useState(false);
+    const [emailTemplateSearch, setEmailTemplateSearch] = useState("");
+    const [emailTemplateCategory, setEmailTemplateCategory] = useState<string>("ALL");
 
     const loadApprovalCounts = async () => {
         try {
@@ -307,6 +319,22 @@ export default function AccessSettingsPage() {
             }
         } catch (e) {
             console.error("loadApprovalCounts error:", e);
+        }
+    };
+
+    const loadEmailTemplates = async () => {
+        setLoadingEmailTemplates(true);
+        try {
+            const res = await getEmailTemplatesAction();
+            if (res && res.success && res.templates) {
+                setEmailTemplatesList(res.templates);
+            } else {
+                setEmailTemplatesList([]);
+            }
+        } catch (e) {
+            console.error("loadEmailTemplates error:", e);
+        } finally {
+            setLoadingEmailTemplates(false);
         }
     };
 
@@ -331,8 +359,12 @@ export default function AccessSettingsPage() {
             const settingsRes = await getApprovalSettingsAction();
             if (settingsRes && settingsRes.success) {
                 setApprovalSettings({
-                    requireApprovalForPlexChanges: settingsRes.requireApprovalForPlexChanges,
-                    requireApprovalForEmails: settingsRes.requireApprovalForEmails
+                    requireApprovalForPlexChanges: settingsRes.requireApprovalForPlexChanges ?? true,
+                    requireApprovalForEmails: settingsRes.requireApprovalForEmails ?? true,
+                    emailApprovalPolicy: settingsRes.emailApprovalPolicy || {},
+                    notifyAdminOnPendingApproval: settingsRes.notifyAdminOnPendingApproval ?? true,
+                    adminApprovalDiscordNotify: settingsRes.adminApprovalDiscordNotify ?? true,
+                    adminApprovalEmailNotify: settingsRes.adminApprovalEmailNotify ?? true
                 });
             }
         } catch (e: any) {
@@ -420,7 +452,10 @@ export default function AccessSettingsPage() {
         }
     };
 
-    const handleToggleApprovalSetting = async (key: "requireApprovalForPlexChanges" | "requireApprovalForEmails", value: boolean) => {
+    const handleToggleApprovalSetting = async (
+        key: "requireApprovalForPlexChanges" | "requireApprovalForEmails" | "notifyAdminOnPendingApproval" | "adminApprovalDiscordNotify" | "adminApprovalEmailNotify",
+        value: boolean
+    ) => {
         setSavingApprovalSettings(true);
         try {
             const updated = { ...approvalSettings, [key]: value };
@@ -428,11 +463,100 @@ export default function AccessSettingsPage() {
             const res = await saveApprovalSettingsAction(updated);
             if (res.success) {
                 setApprovalSuccessMsg(res.message || "Settings updated.");
+                setTimeout(() => setApprovalSuccessMsg(""), 3500);
             } else {
                 setApprovalErrMsg(res.error || "Failed to update settings.");
             }
         } catch (e: any) {
             setApprovalErrMsg(e.message || "Failed to update settings.");
+        } finally {
+            setSavingApprovalSettings(false);
+        }
+    };
+
+    const handleToggleEmailTemplateApproval = async (templateId: string, required: boolean) => {
+        setSavingApprovalSettings(true);
+        try {
+            const updatedPolicy = {
+                ...(approvalSettings.emailApprovalPolicy || {}),
+                [templateId]: required
+            };
+            const updated = {
+                ...approvalSettings,
+                emailApprovalPolicy: updatedPolicy
+            };
+            setApprovalSettings(updated);
+            const res = await saveApprovalSettingsAction(updated);
+            if (res.success) {
+                setApprovalSuccessMsg(
+                    required 
+                        ? `Admin approval is now required for ${templateId}.` 
+                        : `${templateId} will now auto-send via SMTP without admin approval.`
+                );
+                setTimeout(() => setApprovalSuccessMsg(""), 3500);
+            } else {
+                setApprovalErrMsg(res.error || "Failed to update email policy.");
+            }
+        } catch (e: any) {
+            setApprovalErrMsg(e.message || "Failed to update email policy.");
+        } finally {
+            setSavingApprovalSettings(false);
+        }
+    };
+
+    const handleApplyKindleAutoSendPreset = async () => {
+        setSavingApprovalSettings(true);
+        try {
+            const updatedPolicy = {
+                ...(approvalSettings.emailApprovalPolicy || {}),
+                "kindle_delivery": false,
+                "kindle_success": false,
+                "kindle_failed": false
+            };
+            const updated = {
+                ...approvalSettings,
+                emailApprovalPolicy: updatedPolicy
+            };
+            setApprovalSettings(updated);
+            const res = await saveApprovalSettingsAction(updated);
+            if (res.success) {
+                setApprovalSuccessMsg("Kindle book deliveries set to auto-send via SMTP without approval!");
+                setTimeout(() => setApprovalSuccessMsg(""), 3500);
+            } else {
+                setApprovalErrMsg(res.error || "Failed to update email policy.");
+            }
+        } catch (e: any) {
+            setApprovalErrMsg(e.message || "Failed to update email policy.");
+        } finally {
+            setSavingApprovalSettings(false);
+        }
+    };
+
+    const handleSetAllEmailApprovals = async (required: boolean) => {
+        setSavingApprovalSettings(true);
+        try {
+            const updatedPolicy: Record<string, boolean> = {};
+            for (const t of emailTemplatesList) {
+                updatedPolicy[t.id] = required;
+            }
+            const updated = {
+                ...approvalSettings,
+                emailApprovalPolicy: updatedPolicy
+            };
+            setApprovalSettings(updated);
+            const res = await saveApprovalSettingsAction(updated);
+            if (res.success) {
+                setApprovalSuccessMsg(
+                    required 
+                        ? "All outgoing emails now require admin approval." 
+                        : "All outgoing emails will auto-send via SMTP without approval."
+                );
+                setTimeout(() => setApprovalSuccessMsg(""), 3500);
+            } else {
+                setApprovalErrMsg(res.error || "Failed to update email policies.");
+            }
+        } catch (e: any) {
+            setApprovalErrMsg(e.message || "Failed to update email policies.");
         } finally {
             setSavingApprovalSettings(false);
         }
@@ -683,6 +807,7 @@ export default function AccessSettingsPage() {
     useEffect(() => {
         if (activeTab === "approvals") {
             loadApprovals();
+            loadEmailTemplates();
         }
     }, [activeTab, approvalFilterStatus, approvalFilterType]);
 
@@ -4186,6 +4311,236 @@ export default function AccessSettingsPage() {
                                     onCheckedChange={(checked) => handleToggleApprovalSetting("requireApprovalForEmails", checked)}
                                     disabled={savingApprovalSettings}
                                 />
+                            </div>
+
+                            {/* GRANULAR EMAIL APPROVAL POLICIES */}
+                            <div className="p-4 rounded-xl border border-emerald-500/30 bg-emerald-950/10 space-y-4">
+                                {!approvalSettings.requireApprovalForEmails && (
+                                    <div className="bg-amber-950/30 border border-amber-500/40 rounded-lg p-3 text-xs text-amber-300 flex items-center gap-2">
+                                        <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" />
+                                        <span>
+                                            <strong>Master Outgoing Gate Disabled:</strong> The master toggle above is currently OFF. All emails will auto-send via SMTP until the master toggle is enabled. You can configure individual policies below in advance.
+                                        </span>
+                                    </div>
+                                )}
+                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-emerald-500/20">
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs font-bold text-foreground">Granular Outgoing Email Approval Policy</span>
+                                            <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-medium">
+                                                Individual Controls
+                                            </Badge>
+                                        </div>
+                                            <p className="text-[11px] text-muted-foreground mt-0.5">
+                                                Control every type of email automatically going out via SMTP vs. requiring approval. Uncheck any template (such as Send to Kindle) to let it send immediately without admin approval.
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={handleApplyKindleAutoSendPreset}
+                                                disabled={savingApprovalSettings}
+                                                className="h-7 text-[11px] font-semibold border-amber-500/40 text-amber-300 hover:bg-amber-500/10 gap-1.5"
+                                            >
+                                                <Zap className="h-3 w-3 text-amber-400" />
+                                                ⚡ Auto-Send Kindle Only
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => handleSetAllEmailApprovals(true)}
+                                                disabled={savingApprovalSettings}
+                                                className="h-7 text-[11px] font-semibold border-border/50 text-muted-foreground hover:text-foreground"
+                                            >
+                                                Require All
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => handleSetAllEmailApprovals(false)}
+                                                disabled={savingApprovalSettings}
+                                                className="h-7 text-[11px] font-semibold border-border/50 text-muted-foreground hover:text-foreground"
+                                            >
+                                                Auto-Send All
+                                            </Button>
+                                        </div>
+                                    </div>
+
+                                    {/* SEARCH & CATEGORY FILTER */}
+                                    <div className="flex flex-col sm:flex-row items-center gap-2">
+                                        <div className="relative w-full sm:w-64">
+                                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                                            <Input
+                                                type="text"
+                                                placeholder="Search email templates..."
+                                                value={emailTemplateSearch}
+                                                onChange={(e) => setEmailTemplateSearch(e.target.value)}
+                                                className="h-8 pl-8 text-xs bg-background/60"
+                                            />
+                                        </div>
+                                        <div className="flex items-center gap-1 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
+                                            {["ALL", "KINDLE", "REQUESTS", "AUTH", "TRIALS", "PAYMENTS", "SUPPORT", "BROADCAST"].map((cat) => (
+                                                <Button
+                                                    key={cat}
+                                                    type="button"
+                                                    size="sm"
+                                                    variant={emailTemplateCategory === cat ? "default" : "ghost"}
+                                                    onClick={() => setEmailTemplateCategory(cat)}
+                                                    className="h-7 px-2 text-[10px] font-semibold shrink-0"
+                                                >
+                                                    {cat === "ALL" ? "All" : cat.charAt(0) + cat.slice(1).toLowerCase()}
+                                                </Button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* TEMPLATES GRID */}
+                                    {loadingEmailTemplates ? (
+                                        <div className="flex items-center justify-center p-6 text-xs text-muted-foreground gap-2">
+                                            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                                            Loading email templates...
+                                        </div>
+                                    ) : (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-[380px] overflow-y-auto pr-1">
+                                            {emailTemplatesList
+                                                .filter(t => {
+                                                    if (emailTemplateCategory !== "ALL" && t.category !== emailTemplateCategory) {
+                                                        return false;
+                                                    }
+                                                    if (emailTemplateSearch.trim()) {
+                                                        const q = emailTemplateSearch.toLowerCase();
+                                                        return (
+                                                            t.name?.toLowerCase().includes(q) ||
+                                                            t.description?.toLowerCase().includes(q) ||
+                                                            t.subject?.toLowerCase().includes(q) ||
+                                                            t.id?.toLowerCase().includes(q)
+                                                        );
+                                                    }
+                                                    return true;
+                                                })
+                                                .map((template) => {
+                                                    const isRequired = approvalSettings.emailApprovalPolicy?.[template.id] !== false;
+                                                    return (
+                                                        <div
+                                                            key={template.id}
+                                                            className={`p-3 rounded-lg border transition-all flex items-start justify-between gap-3 ${
+                                                                isRequired
+                                                                    ? "bg-[#181822]/90 border-amber-500/30 hover:border-amber-500/50"
+                                                                    : "bg-[#142018]/90 border-emerald-500/30 hover:border-emerald-500/50"
+                                                            }`}
+                                                        >
+                                                            <div className="space-y-1 min-w-0 flex-1">
+                                                                <div className="flex items-center gap-1.5 flex-wrap">
+                                                                    <span className="text-xs font-semibold text-foreground truncate">
+                                                                        {template.name}
+                                                                    </span>
+                                                                    <Badge
+                                                                        variant="outline"
+                                                                        className={`text-[9px] px-1.5 py-0 font-medium ${
+                                                                            template.category === "KINDLE"
+                                                                                ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                                                                                : template.category === "REQUESTS"
+                                                                                ? "bg-purple-500/10 text-purple-400 border-purple-500/30"
+                                                                                : "bg-muted/50 text-muted-foreground border-border/40"
+                                                                        }`}
+                                                                    >
+                                                                        {template.category}
+                                                                    </Badge>
+                                                                    {isRequired ? (
+                                                                        <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30 font-medium">
+                                                                            🔒 Requires Approval
+                                                                        </Badge>
+                                                                    ) : (
+                                                                        <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-medium">
+                                                                            ⚡ Auto-Send (SMTP)
+                                                                        </Badge>
+                                                                    )}
+                                                                </div>
+                                                                <p className="text-[11px] text-muted-foreground line-clamp-2">
+                                                                    {template.description}
+                                                                </p>
+                                                                {template.subject && (
+                                                                    <p className="text-[10px] text-muted-foreground/80 italic truncate">
+                                                                        Subject: {template.subject}
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                            <div className="flex flex-col items-end gap-1 shrink-0 pt-0.5">
+                                                                <Switch
+                                                                    checked={isRequired}
+                                                                    onCheckedChange={(checked) => handleToggleEmailTemplateApproval(template.id, checked)}
+                                                                    disabled={savingApprovalSettings}
+                                                                />
+                                                                <span className="text-[9px] font-medium text-muted-foreground">
+                                                                    {isRequired ? "Staged" : "Auto"}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                        </div>
+                                    )}
+                                </div>
+
+                            {/* ADMIN APPROVAL NOTIFICATIONS */}
+                            <div className="p-4 rounded-xl border border-border/40 bg-muted/10 space-y-3">
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                    <div className="space-y-0.5">
+                                        <Label className="text-xs font-semibold text-foreground flex items-center gap-2">
+                                            <BellRing className="h-3.5 w-3.5 text-primary" />
+                                            Admin Notifications for Pending Approvals
+                                        </Label>
+                                        <p className="text-[11px] text-muted-foreground">
+                                            Automatically alert administrators when an action (Plex library access changes or staged emails) enters the Action Approval Queue requiring review.
+                                        </p>
+                                    </div>
+                                    <Switch
+                                        checked={approvalSettings.notifyAdminOnPendingApproval}
+                                        onCheckedChange={(checked) => handleToggleApprovalSetting("notifyAdminOnPendingApproval", checked)}
+                                        disabled={savingApprovalSettings}
+                                    />
+                                </div>
+
+                                {approvalSettings.notifyAdminOnPendingApproval && (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-border/30">
+                                        <div className="flex items-center justify-between p-3 rounded-lg bg-background/50 border border-border/40">
+                                            <div className="space-y-0.5 pr-2">
+                                                <div className="text-xs font-medium text-foreground flex items-center gap-1.5">
+                                                    <span>🤖</span> Discord Alerts
+                                                </div>
+                                                <p className="text-[10px] text-muted-foreground">
+                                                    Post rich embeds to your configured Discord status/request channel or webhook.
+                                                </p>
+                                            </div>
+                                            <Switch
+                                                checked={approvalSettings.adminApprovalDiscordNotify}
+                                                onCheckedChange={(checked) => handleToggleApprovalSetting("adminApprovalDiscordNotify", checked)}
+                                                disabled={savingApprovalSettings}
+                                            />
+                                        </div>
+
+                                        <div className="flex items-center justify-between p-3 rounded-lg bg-background/50 border border-border/40">
+                                            <div className="space-y-0.5 pr-2">
+                                                <div className="text-xs font-medium text-foreground flex items-center gap-1.5">
+                                                    <Mail className="h-3 w-3 text-emerald-400" />
+                                                    Admin Email Alerts
+                                                </div>
+                                                <p className="text-[10px] text-muted-foreground">
+                                                    Dispatch email alerts via SMTP to all Administrator and Super User accounts.
+                                                </p>
+                                            </div>
+                                            <Switch
+                                                checked={approvalSettings.adminApprovalEmailNotify}
+                                                onCheckedChange={(checked) => handleToggleApprovalSetting("adminApprovalEmailNotify", checked)}
+                                                disabled={savingApprovalSettings}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </CardContent>
                     </Card>
