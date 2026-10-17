@@ -219,8 +219,10 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
   - Secondary profiles (Living Room TV with severe nudity filtering, Kids account with PG ratings ceiling) are exclusive full member perks.
   - Trial users see clean perk preview blocks and "Unlocks with Full Membership" actions linking to subscription options.
 - **Account Add-Ons & Features**:
-  - Optional add-ons (Books & Audiobooks, extra profile slots) display "Unlocks with Full Membership" buttons for trial users.
-  - Backend actions (`toggleFreeAddonAction`, `createOrUpdateSubAccountAction`) strictly enforce full membership status.
+  - Separated optional free add-ons: **E-Books & Reading Access** (`ebooks`, `icon: "book"`, unlocks Kindle delivery and browser reader) and **Audiobooks Plex Library Access** (`audiobooks`, `icon: "headphones"`, unlocks narrated audiobook streaming directly through Plex and updates live Plex sharing permissions).
+  - Dedicated **Audiobooks Plex Library Access Card** (`#audiobooks-library`, `purple-500/30`) in Account Profile (`/settings/profile`) allowing users to opt into or out of the Audiobooks library section with automated PMS share syncing (`syncAudiobooksPlexLibraryAccessForUser`).
+  - Optional add-ons display "Unlocks with Full Membership" buttons for trial users.
+  - Backend actions (`toggleFreeAddonAction`, `updateUserAudiobooksLibraryAccessAction`, `createOrUpdateSubAccountAction`) strictly enforce full membership status.
 
 ---
 
@@ -840,7 +842,7 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
     - *Roku Auto-Adjust 720p 4Mbps Cap*: Detects default "Auto Adjust Quality" setting forcing server transcoding.
     - *Default Remote Quality Cap (2-4 Mbps)*: Detects Apple TV, Fire TV, Android TV, and Smart TVs running factory default 720p caps.
     - *Web Browser HEVC/4K Codec Incompatibility*: Prompts users to download the native Plex Desktop App for direct playback.
-    - *Subtitle Burn-in & Audio Transcodes*: Detects image-based subtitle burning (PGS/VOBSUB) and passthrough audio downmixing.
+    - *Subtitle Burn-in & Audio Conversion Suppression*: Detects image-based subtitle burning (PGS/VOBSUB) requiring server transcoding. For audio-only conversions (e.g. TrueHD or DTS to stereo/EAC3 with Direct Play video), suppresses doctor fix warnings (`hasIssue: false`, zero troubleshooting steps) since lightweight audio downmixing consumes negligible server resources (~0% CPU, 0% GPU) and is standard for TV/stereo speakers.
     - *Actionable Guidance*: Provides interactive step-by-step fix guides and 1-click copyable user notices ready to send via Discord or email.
   - **Sidebar Navigation**: Positioned under "Administration" (`Activity` icon, cyan/emerald accents) visible exclusively to administrators.
 

@@ -6769,7 +6769,8 @@ export async function getUserAllowedPlexLibrariesAction() {
                 selectedPlexLibrarySectionIds: true,
                 accountType: true,
                 membershipTier: true,
-                parentUserId: true
+                parentUserId: true,
+                enabledAddons: true
             }
         });
         if (!dbUser) return { success: false, error: "User not found", allowedKeys: [], selectedKeys: [], servers: [] };
@@ -6823,6 +6824,24 @@ export async function getUserAllowedPlexLibrariesAction() {
                     uniqueKey: `${s.serverId}:${sec.id}`
                 }))
             }));
+        }
+
+        let userAddons: string[] = [];
+        if (dbUser.enabledAddons) {
+            try {
+                userAddons = JSON.parse(dbUser.enabledAddons);
+            } catch (_) {}
+        }
+        const hasAudiobooksAddon = userAddons.includes("audiobooks") || userAddons.includes("books_audiobooks");
+
+        if (dbUser.role !== "ADMIN" && !hasAudiobooksAddon) {
+            allServersWithSections = allServersWithSections.map(s => ({
+                ...s,
+                sections: (s.sections || []).filter((sec: any) => {
+                    const secTitle = (sec.title || "").toLowerCase();
+                    return !secTitle.includes("audiobook") && !secTitle.includes("audio book");
+                })
+            })).filter(s => s.sections.length > 0);
         }
 
         if (dbUser.status === "TRIAL" && dbUser.role !== "ADMIN") {
@@ -6956,6 +6975,24 @@ export async function updateUserSelectedPlexLibrariesAction(selectedKeys: string
                     }))
                 }));
             } catch (_) {}
+        }
+
+        let userAddons: string[] = [];
+        if (dbUser.enabledAddons) {
+            try {
+                userAddons = JSON.parse(dbUser.enabledAddons);
+            } catch (_) {}
+        }
+        const hasAudiobooksAddon = userAddons.includes("audiobooks") || userAddons.includes("books_audiobooks");
+
+        if (dbUser.role !== "ADMIN" && !hasAudiobooksAddon) {
+            allServersWithSections = allServersWithSections.map(s => ({
+                ...s,
+                sections: (s.sections || []).filter((sec: any) => {
+                    const secTitle = (sec.title || "").toLowerCase();
+                    return !secTitle.includes("audiobook") && !secTitle.includes("audio book");
+                })
+            })).filter(s => s.sections.length > 0);
         }
 
         if (dbUser.status === "TRIAL" && dbUser.role !== "ADMIN") {
@@ -7410,14 +7447,24 @@ const DEFAULT_ADDONS_CATALOG = [
         tag: "Audio"
     },
     {
-        id: "books_audiobooks",
-        name: "Books & Audiobooks Access",
-        description: "Full library access for Ebooks, comics, and Audiobooks with instant Send-to-Kindle delivery and in-browser audio player.",
+        id: "ebooks",
+        name: "E-Books & Reading Access",
+        description: "Full library access for Ebooks, comics, and graphic novels with instant Send-to-Kindle delivery and in-browser Kindle Paperwhite reader.",
         price: 0,
         isFree: true,
         isAvailable: true,
         icon: "book",
         tag: "Reading"
+    },
+    {
+        id: "audiobooks",
+        name: "Audiobooks Plex Library Access",
+        description: "Stream complete audiobooks directly through Plex, Plexamp, and mobile apps with chapter tracking. Grants access to the Audiobooks Plex library.",
+        price: 0,
+        isFree: true,
+        isAvailable: true,
+        icon: "headphones",
+        tag: "Audiobooks"
     },
     {
         id: "extra_kid_profile",
@@ -7450,6 +7497,10 @@ const DEFAULT_ADDONS_CATALOG = [
         tag: "Requests"
     }
 ];
+
+export async function getDefaultAddonsCatalogAction() {
+    return DEFAULT_ADDONS_CATALOG;
+}
 
 /**
  * Fetches the add-on catalog and the current user's active add-ons.
@@ -7490,6 +7541,10 @@ export async function getAvailableAddonsAction() {
         if (dbUser?.enabledAddons) {
             try {
                 userEnabledAddons = JSON.parse(dbUser.enabledAddons);
+                if (userEnabledAddons.includes("books_audiobooks")) {
+                    if (!userEnabledAddons.includes("ebooks")) userEnabledAddons.push("ebooks");
+                    if (!userEnabledAddons.includes("audiobooks")) userEnabledAddons.push("audiobooks");
+                }
             } catch (_) {
                 userEnabledAddons = [];
             }
@@ -7575,6 +7630,20 @@ export async function toggleFreeAddonAction(addonId: string, enabled: boolean) {
             data: { enabledAddons: JSON.stringify(enabledList) }
         });
 
+        // Live Audiobooks Plex Library Sync
+        if (addonId === "audiobooks") {
+            try {
+                await syncAudiobooksPlexLibraryAccessForUser(user.id, enabled);
+            } catch (aErr: any) {
+                console.warn("[AUDIOBOOKS-ADDON-SYNC-WARN]:", aErr?.message || aErr);
+            }
+        } else if (addonId === "ebooks" && enabled && (!dbUser.kindleEmail || dbUser.kindleEmail.trim() === "")) {
+            await prisma.user.update({
+                where: { id: user.id },
+                data: { kindleEmail: "DIRECT_DOWNLOAD" }
+            });
+        }
+
         revalidatePath("/settings/profile");
         return {
             success: true,
@@ -7617,6 +7686,20 @@ export async function toggleUserAddonAdminAction(userId: string, addonId: string
             where: { id: userId },
             data: { enabledAddons: JSON.stringify(enabledList) }
         });
+
+        // Live Audiobooks Plex Library Sync
+        if (addonId === "audiobooks") {
+            try {
+                await syncAudiobooksPlexLibraryAccessForUser(userId, enabled);
+            } catch (aErr: any) {
+                console.warn("[AUDIOBOOKS-ADMIN-ADDON-SYNC-WARN]:", aErr?.message || aErr);
+            }
+        } else if (addonId === "ebooks" && enabled && (!dbUser.kindleEmail || dbUser.kindleEmail.trim() === "")) {
+            await prisma.user.update({
+                where: { id: userId },
+                data: { kindleEmail: "DIRECT_DOWNLOAD" }
+            });
+        }
 
         revalidatePath("/settings/access");
         revalidatePath("/settings/profile");
@@ -9282,6 +9365,241 @@ export async function updateUserKidsLibraryAccessAction(enable: boolean) {
         };
     } catch (e: any) {
         return { success: false, error: e.message || "Failed to update kids library access" };
+    }
+}
+
+/**
+ * Synchronizes live Plex library access and local library permissions for Audiobooks.
+ * Grants or revokes access to any Plex sections matching Audiobooks.
+ */
+export async function syncAudiobooksPlexLibraryAccessForUser(userId: string, enable: boolean) {
+    const dbUser = await prisma.user.findUnique({ where: { id: userId } });
+    if (!dbUser) return { success: false, error: "User not found" };
+
+    const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+    let adminToken = "";
+    if (settings?.mainPlexToken) {
+        adminToken = decryptData(settings.mainPlexToken);
+    }
+    if (!adminToken) {
+        adminToken = process.env.PLEX_TOKEN || process.env.MAIN_PLEX_TOKEN || "";
+    }
+
+    let currentSelected = (dbUser.selectedPlexLibrarySectionIds || "").split(",").map(s => s.trim()).filter(Boolean);
+    let currentAllowed = (dbUser.plexLibrarySectionIds || "").split(",").map(s => s.trim()).filter(Boolean);
+
+    const discoveredAudiobookKeys: string[] = [];
+    if (adminToken) {
+        try {
+            const srvSections = await getPlexServerLibrarySections(adminToken, settings?.mainPlexUrl || undefined);
+            for (const srv of srvSections) {
+                for (const sec of srv.sections || []) {
+                    const titleLower = (sec.title || "").toLowerCase();
+                    const isAudiobook = titleLower.includes("audiobook") || titleLower.includes("audio book") || (sec.type === "music" && titleLower.includes("audio"));
+                    if (isAudiobook) {
+                        discoveredAudiobookKeys.push(`${srv.serverId}:${sec.id}`);
+                        discoveredAudiobookKeys.push(String(sec.id));
+                    }
+                }
+            }
+        } catch (err: any) {
+            console.warn("[AUDIOBOOKS-LIB-PROBE-WARN]:", err?.message || err);
+        }
+    }
+
+    if (enable) {
+        for (const key of discoveredAudiobookKeys) {
+            if (!currentSelected.includes(key)) currentSelected.push(key);
+            if (currentAllowed.length > 0 && !currentAllowed.includes(key)) currentAllowed.push(key);
+        }
+    } else {
+        currentSelected = currentSelected.filter(k => !discoveredAudiobookKeys.includes(k));
+        currentAllowed = currentAllowed.filter(k => !discoveredAudiobookKeys.includes(k));
+    }
+
+    const updatedSelectedStr = Array.from(new Set(currentSelected)).join(",");
+    const updatedAllowedStr = currentAllowed.length > 0 ? Array.from(new Set(currentAllowed)).join(",") : dbUser.plexLibrarySectionIds;
+
+    const updatedUser = await prisma.user.update({
+        where: { id: dbUser.id },
+        data: {
+            selectedPlexLibrarySectionIds: updatedSelectedStr,
+            plexLibrarySectionIds: updatedAllowedStr
+        }
+    });
+
+    if (adminToken && discoveredAudiobookKeys.length > 0) {
+        try {
+            await syncUserPlexShareInternal(adminToken, updatedUser, currentSelected);
+            logger.addLog("INFO", "PLEX", `Synced live Audiobooks library access on Plex for "${dbUser.username}": ${enable ? "GRANTED" : "REVOKED"}`);
+        } catch (pErr: any) {
+            console.warn("[AUDIOBOOKS-PLEX-SYNC-WARN]:", pErr?.message || pErr);
+        }
+    }
+
+    // Also update any Portalarr local libraries with mediaType === "audiobook"
+    try {
+        const allLocalLibs = await prisma.library.findMany();
+        const audioLocalLibs = allLocalLibs.filter(l => l.mediaType === "audiobook" || l.name.toLowerCase().includes("audiobook"));
+        for (const lib of audioLocalLibs) {
+            let currentUsers: string[] = [];
+            const raw = (lib.allowedUsers || "").trim();
+            if (raw === "*") {
+                currentUsers = ["admin"];
+            } else if (raw.length > 0) {
+                currentUsers = raw.split(",").map(u => u.trim()).filter(Boolean);
+            }
+            const safeUserLower = dbUser.username.toLowerCase();
+            const userEmail = (dbUser.email || "").toLowerCase();
+            if (enable) {
+                const exists = currentUsers.some(u => u.toLowerCase() === safeUserLower || (userEmail && u.toLowerCase() === userEmail));
+                if (!exists) currentUsers.push(dbUser.username);
+            } else {
+                currentUsers = currentUsers.filter(u => u.toLowerCase() !== safeUserLower && (!userEmail || u.toLowerCase() !== userEmail));
+                if (currentUsers.length === 0) currentUsers = ["admin"];
+            }
+            await prisma.library.update({
+                where: { id: lib.id },
+                data: { allowedUsers: currentUsers.join(", ") }
+            });
+        }
+    } catch (_) {}
+
+    return { success: true };
+}
+
+export async function getUserAudiobooksLibraryAccessAction() {
+    try {
+        const session: any = await verifyUser();
+        const dbUser = await prisma.user.findUnique({
+            where: { id: session.id },
+            select: { id: true, username: true, email: true, enabledAddons: true, selectedPlexLibrarySectionIds: true, plexLibrarySectionIds: true, status: true, role: true }
+        });
+        if (!dbUser) return { success: false, error: "User not found", hasAudiobooksAccess: false, audiobookLibraries: [] };
+
+        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+        let adminToken = "";
+        if (settings?.mainPlexToken) {
+            adminToken = decryptData(settings.mainPlexToken);
+        }
+        if (!adminToken) {
+            adminToken = process.env.PLEX_TOKEN || process.env.MAIN_PLEX_TOKEN || "";
+        }
+
+        let userAddons: string[] = [];
+        if (dbUser.enabledAddons) {
+            try {
+                userAddons = JSON.parse(dbUser.enabledAddons);
+            } catch (_) {}
+        }
+        const hasAddon = userAddons.includes("audiobooks") || userAddons.includes("books_audiobooks");
+
+        let audiobookPlexLibs: any[] = [];
+        if (adminToken) {
+            try {
+                const srvSections = await getPlexServerLibrarySections(adminToken, settings?.mainPlexUrl || undefined);
+                for (const srv of srvSections) {
+                    for (const sec of srv.sections || []) {
+                        const titleLower = (sec.title || "").toLowerCase();
+                        const isAudiobook = titleLower.includes("audiobook") || titleLower.includes("audio book") || (sec.type === "music" && titleLower.includes("audio"));
+                        if (isAudiobook) {
+                            const uKey = `${srv.serverId}:${sec.id}`;
+                            const isSelected = (dbUser.selectedPlexLibrarySectionIds || "").split(",").map(s => s.trim()).includes(uKey) ||
+                                              (dbUser.selectedPlexLibrarySectionIds || "").split(",").map(s => s.trim()).includes(String(sec.id));
+                            audiobookPlexLibs.push({
+                                serverId: srv.serverId,
+                                serverName: srv.serverName,
+                                sectionId: sec.id,
+                                title: sec.title,
+                                uniqueKey: uKey,
+                                isAllowed: hasAddon || isSelected
+                            });
+                        }
+                    }
+                }
+            } catch (err) {
+                console.warn("[AUDIOBOOKS-LIB-PROBE-WARN]:", err);
+            }
+        }
+
+        // Also check local libraries
+        try {
+            const localLibs = await prisma.library.findMany();
+            const audioLocal = localLibs.filter(l => l.mediaType === "audiobook" || l.name.toLowerCase().includes("audiobook"));
+            for (const al of audioLocal) {
+                const rawAllowed = (al.allowedUsers || "").trim();
+                const allowed = rawAllowed.split(",").map(u => u.trim().toLowerCase()).filter(Boolean);
+                const isAllowed = rawAllowed === "*" || allowed.includes("*") || (dbUser.username && allowed.includes(dbUser.username.toLowerCase()));
+                if (!audiobookPlexLibs.some(l => l.title.toLowerCase() === al.name.toLowerCase())) {
+                    audiobookPlexLibs.push({
+                        serverId: "local",
+                        serverName: "Local Library",
+                        sectionId: al.id,
+                        title: al.name,
+                        uniqueKey: al.id,
+                        isAllowed: hasAddon || isAllowed
+                    });
+                }
+            }
+        } catch (_) {}
+
+        const hasAccess = hasAddon || (audiobookPlexLibs.length > 0 && audiobookPlexLibs.some(l => l.isAllowed));
+
+        return {
+            success: true,
+            hasAudiobooksAccess: hasAccess,
+            audiobookLibraries: audiobookPlexLibs
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to get audiobooks library status", hasAudiobooksAccess: false, audiobookLibraries: [] };
+    }
+}
+
+export async function updateUserAudiobooksLibraryAccessAction(enable: boolean) {
+    try {
+        const session: any = await verifyUser();
+        const dbUser = await prisma.user.findUnique({
+            where: { id: session.id }
+        });
+        if (!dbUser) return { success: false, error: "User not found" };
+
+        if ((dbUser.status === "TRIAL" || dbUser.membershipTier === "TRIAL") && dbUser.status !== "APPROVED" && dbUser.role !== "ADMIN") {
+            return { success: false, error: "Audiobooks library access unlocks upon upgrading to full membership." };
+        }
+
+        let userAddons: string[] = [];
+        if (dbUser.enabledAddons) {
+            try {
+                userAddons = JSON.parse(dbUser.enabledAddons);
+            } catch (_) {}
+        }
+        if (enable) {
+            if (!userAddons.includes("audiobooks")) userAddons.push("audiobooks");
+        } else {
+            userAddons = userAddons.filter(id => id !== "audiobooks" && id !== "books_audiobooks");
+        }
+
+        await prisma.user.update({
+            where: { id: dbUser.id },
+            data: { enabledAddons: JSON.stringify(userAddons) }
+        });
+
+        await syncAudiobooksPlexLibraryAccessForUser(dbUser.id, enable);
+
+        revalidatePath("/settings/profile");
+        revalidatePath("/library");
+        revalidatePath("/discover");
+
+        return {
+            success: true,
+            enabled: enable,
+            message: enable 
+                ? "Audiobooks library added to your Plex account! Access has been granted." 
+                : "Audiobooks library removed from your Plex account.",
+            enabledAddons: userAddons
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to update audiobooks access" };
     }
 }
 
@@ -19070,16 +19388,13 @@ export async function analyzeStreamHealth(s: any): Promise<StreamDiagnosis> {
     // 4. Audio-Only Transcode (Video is Direct Play / Copy)
     if (audioDecision === "transcode" || audioDecision === "copy") {
         return {
-            status: "audio_transcode",
+            status: "optimal",
             badgeText: "Direct Stream",
-            badgeColor: "blue",
-            title: "Direct Stream (Audio Transcoding)",
-            explanation: `Video is Direct Playing at 100% native studio quality! Only the audio track (${audioCodec?.toUpperCase() || "TrueHD/DTS"}) is being converted to ${streamAudioCodec?.toUpperCase() || "AAC"} so your sound system/TV speakers can output sound.`,
-            recommendation: "Playback is running efficiently with zero video loss. No action needed unless you have a dedicated surround receiver.",
-            steps: [
-                "1. Your video stream is running at 100% full original quality",
-                "2. If you have an AV receiver with surround sound support, enable 'Audio Passthrough (HDMI)' in Plex Settings"
-            ]
+            badgeColor: "emerald",
+            title: "Optimal Direct Stream",
+            explanation: `Video is Direct Playing at 100% native studio quality! Audio (${audioCodec?.toUpperCase() || "Audio"}) is converting to ${streamAudioCodec?.toUpperCase() || "AAC"} using negligible server power (0% GPU, <1% CPU). No adjustments required.`,
+            recommendation: "Playback is running at peak efficiency with zero video compression.",
+            steps: []
         };
     }
 

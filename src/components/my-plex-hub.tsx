@@ -530,18 +530,20 @@ export default function MyPlexHub() {
                             </div>
 
                             {/* Step-by-Step Fix Recommendation */}
-                            <div className="space-y-2 pt-1">
-                                <h4 className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
-                                    <Sparkles className="h-3.5 w-3.5 text-primary" /> Step-by-Step Device Optimization:
-                                </h4>
-                                <div className="space-y-1.5">
-                                    {selectedStreamForDiagnosis.diagnosis.steps.map((step: string, sIdx: number) => (
-                                        <div key={sIdx} className="p-2.5 rounded-lg bg-muted/20 border border-border/40 text-xs text-muted-foreground/95">
-                                            {step}
-                                        </div>
-                                    ))}
+                            {selectedStreamForDiagnosis.diagnosis.steps && selectedStreamForDiagnosis.diagnosis.steps.length > 0 && (
+                                <div className="space-y-2 pt-1">
+                                    <h4 className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
+                                        <Sparkles className="h-3.5 w-3.5 text-primary" /> Step-by-Step Device Optimization:
+                                    </h4>
+                                    <div className="space-y-1.5">
+                                        {selectedStreamForDiagnosis.diagnosis.steps.map((step: string, sIdx: number) => (
+                                            <div key={sIdx} className="p-2.5 rounded-lg bg-muted/20 border border-border/40 text-xs text-muted-foreground/95">
+                                                {step}
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
-                            </div>
+                            )}
                         </div>
 
                         <DialogFooter className="border-t border-border/40 pt-3">

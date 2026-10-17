@@ -20,7 +20,9 @@ import {
     getAvailableAddonsAction,
     toggleFreeAddonAction,
     getUserKidsLibraryAccessAction,
-    updateUserKidsLibraryAccessAction
+    updateUserKidsLibraryAccessAction,
+    getUserAudiobooksLibraryAccessAction,
+    updateUserAudiobooksLibraryAccessAction
 } from "@/app/actions";
 import { recheckUserAccessAndPaymentAction } from "@/app/payment-actions";
 import { 
@@ -43,7 +45,7 @@ import {
     MailCheck, Zap, BookOpen, Gift, Copy, Check, Timer, DollarSign, Users, Sparkles, ExternalLink,
     CreditCard, Calendar, AlertCircle, Trash2, RefreshCw, Bell, Shield, Crown, Tv, Film,
     Flame, MessageSquare, Send, CheckCheck, Sliders, Volume2, Lock, Baby, Monitor, FolderCheck,
-    CheckSquare, Square, Plus, Edit2, AlertTriangle, Music, Eye, EyeOff, Gamepad2, Link as LinkIcon
+    CheckSquare, Square, Plus, Edit2, AlertTriangle, Music, Eye, EyeOff, Gamepad2, Link as LinkIcon, Headphones
 } from "lucide-react";
 import ServerSpeedTest from "@/components/server-speed-test";
 import FeatureGuideModal from "@/components/feature-guide-modal";
@@ -170,6 +172,13 @@ export default function UserProfilePage() {
     const [savingKidsAccess, setSavingKidsAccess] = useState(false);
     const [kidsAccessMsg, setKidsAccessMsg] = useState("");
     const [kidsAccessErr, setKidsAccessErr] = useState("");
+
+    // Audiobooks Library Access State
+    const [hasAudiobooksAccess, setHasAudiobooksAccess] = useState(false);
+    const [audiobookLibraries, setAudiobookLibraries] = useState<any[]>([]);
+    const [savingAudiobooksAccess, setSavingAudiobooksAccess] = useState(false);
+    const [audiobooksAccessMsg, setAudiobooksAccessMsg] = useState("");
+    const [audiobooksAccessErr, setAudiobooksAccessErr] = useState("");
 
     // Discord Integration State
     const [discordInput, setDiscordInput] = useState("");
@@ -380,12 +389,13 @@ export default function UserProfilePage() {
             if (res.success) {
                 if (res.user) setUser(res.user);
                 setStatusSyncMsg(res.message || "Payment status and access verification complete!");
-                const [ref, libRes, subRes, addRes, kidsLibRes] = await Promise.all([
+                const [ref, libRes, subRes, addRes, kidsLibRes, audioLibRes] = await Promise.all([
                     getUserReferralInfo(),
                     getUserAllowedPlexLibrariesAction(),
                     getUserSubAccountsAction(),
                     getAvailableAddonsAction(),
-                    getUserKidsLibraryAccessAction()
+                    getUserKidsLibraryAccessAction(),
+                    getUserAudiobooksLibraryAccessAction()
                 ]);
                 if (ref?.success) setReferralInfo(ref);
                 if (libRes?.success) {
@@ -407,6 +417,10 @@ export default function UserProfilePage() {
                 if (kidsLibRes?.success) {
                     setHasKidsAccess(Boolean(kidsLibRes.hasKidsAccess));
                     setKidsLibraries(kidsLibRes.kidsLibraries || []);
+                }
+                if (audioLibRes?.success) {
+                    setHasAudiobooksAccess(Boolean(audioLibRes.hasAudiobooksAccess));
+                    setAudiobookLibraries(audioLibRes.audiobookLibraries || []);
                 }
                 setTimeout(() => setStatusSyncMsg(""), 6000);
             } else {
@@ -513,6 +527,13 @@ export default function UserProfilePage() {
                 if (kidsLibRes?.success) {
                     setHasKidsAccess(Boolean(kidsLibRes.hasKidsAccess));
                     setKidsLibraries(kidsLibRes.kidsLibraries || []);
+                }
+
+                // Load Audiobooks Library Access Status
+                const audioLibRes = await getUserAudiobooksLibraryAccessAction();
+                if (audioLibRes?.success) {
+                    setHasAudiobooksAccess(Boolean(audioLibRes.hasAudiobooksAccess));
+                    setAudiobookLibraries(audioLibRes.audiobookLibraries || []);
                 }
 
                 initialProfileRef.current = {
@@ -723,6 +744,21 @@ export default function UserProfilePage() {
             if (res.success) {
                 setUserEnabledAddons(res.enabledAddons || []);
                 setAddonMsg(res.message || "Add-on preference updated!");
+                if (addonId === "audiobooks") {
+                    const [audioLibRes, libRes] = await Promise.all([
+                        getUserAudiobooksLibraryAccessAction(),
+                        getUserAllowedPlexLibrariesAction()
+                    ]);
+                    if (audioLibRes?.success) {
+                        setHasAudiobooksAccess(Boolean(audioLibRes.hasAudiobooksAccess));
+                        setAudiobookLibraries(audioLibRes.audiobookLibraries || []);
+                    }
+                    if (libRes?.success) {
+                        setAllowedLibraries(libRes.allowedKeys || []);
+                        setSelectedLibraries(libRes.selectedKeys || []);
+                        setServerLibraries(libRes.servers || []);
+                    }
+                }
                 const subRes = await getUserSubAccountsAction();
                 if (subRes?.success && subRes.limits) {
                     setSubLimits(subRes.limits);
@@ -813,6 +849,43 @@ export default function UserProfilePage() {
             setKidsAccessErr(e.message || "Error updating kids library access");
         } finally {
             setSavingKidsAccess(false);
+        }
+    };
+
+    const handleToggleAudiobooksLibraryAccess = async (enable: boolean) => {
+        setSavingAudiobooksAccess(true);
+        setAudiobooksAccessMsg("");
+        setAudiobooksAccessErr("");
+        try {
+            const res = await updateUserAudiobooksLibraryAccessAction(enable);
+            if (res.success) {
+                setHasAudiobooksAccess(enable);
+                setAudiobooksAccessMsg(res.message || "Audiobooks library access updated successfully.");
+                setTimeout(() => setAudiobooksAccessMsg(""), 5000);
+                const [updated, addRes, libRes] = await Promise.all([
+                    getUserAudiobooksLibraryAccessAction(),
+                    getAvailableAddonsAction(),
+                    getUserAllowedPlexLibrariesAction()
+                ]);
+                if (updated?.success) {
+                    setHasAudiobooksAccess(Boolean(updated.hasAudiobooksAccess));
+                    setAudiobookLibraries(updated.audiobookLibraries || []);
+                }
+                if (addRes?.success) {
+                    setUserEnabledAddons(addRes.userEnabledAddons || []);
+                }
+                if (libRes?.success) {
+                    setAllowedLibraries(libRes.allowedKeys || []);
+                    setSelectedLibraries(libRes.selectedKeys || []);
+                    setServerLibraries(libRes.servers || []);
+                }
+            } else {
+                setAudiobooksAccessErr(res.error || "Failed to update audiobooks library access.");
+            }
+        } catch (e: any) {
+            setAudiobooksAccessErr(e.message || "Error updating audiobooks library access");
+        } finally {
+            setSavingAudiobooksAccess(false);
         }
     };
 
@@ -1967,6 +2040,8 @@ export default function UserProfilePage() {
                                                         <Music className="h-4 w-4 text-emerald-400 shrink-0" />
                                                     ) : addon.icon === "book" ? (
                                                         <BookOpen className="h-4 w-4 text-amber-400 shrink-0" />
+                                                    ) : addon.icon === "headphones" ? (
+                                                        <Headphones className="h-4 w-4 text-purple-400 shrink-0" />
                                                     ) : addon.icon === "baby" ? (
                                                         <Baby className="h-4 w-4 text-purple-400 shrink-0" />
                                                     ) : addon.icon === "monitor" ? (
@@ -2879,6 +2954,107 @@ export default function UserProfilePage() {
                                                 <span>{kl.name}</span>
                                                 <Badge variant="outline" className={`text-[9px] px-1 py-0 h-3.5 border-0 ${kl.isAllowed ? "text-emerald-400" : "text-muted-foreground"}`}>
                                                     {kl.isAllowed ? "Access Granted" : "Not In List"}
+                                                </Badge>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
+            {/* AUDIOBOOKS PLEX LIBRARY ACCESS CARD */}
+            <Card id="audiobooks-library" className="border-purple-500/30 bg-[#121218]/80 backdrop-blur-md relative overflow-hidden shadow-sm scroll-mt-6">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/5 rounded-full blur-3xl -z-10 pointer-events-none" />
+                <CardHeader className="pb-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                            <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
+                                <Headphones className="h-5 w-5 text-purple-400" /> Audiobooks Plex Library Access
+                            </CardTitle>
+                            <CardDescription className="text-xs">
+                                Opt in to stream narrated audiobooks, series collections, and spoken word media directly in Plex.
+                            </CardDescription>
+                        </div>
+                        {isTrial ? (
+                            <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-xs font-semibold w-fit flex items-center gap-1">
+                                <Lock className="h-3.5 w-3.5" /> Full Member Perk
+                            </Badge>
+                        ) : hasAudiobooksAccess ? (
+                            <Badge variant="outline" className="bg-purple-500/15 text-purple-400 border-purple-500/30 text-xs font-semibold w-fit flex items-center gap-1">
+                                <CheckCircle2 className="h-3.5 w-3.5" /> Plex Library Granted
+                            </Badge>
+                        ) : (
+                            <Badge variant="outline" className="bg-muted text-muted-foreground border-border text-xs font-semibold w-fit flex items-center gap-1">
+                                Not Granted
+                            </Badge>
+                        )}
+                    </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    {audiobooksAccessMsg && (
+                        <div className="text-xs text-purple-400 bg-purple-950/40 border border-purple-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
+                            <CheckCircle2 className="h-4 w-4 shrink-0" />
+                            <span>{audiobooksAccessMsg}</span>
+                        </div>
+                    )}
+                    {audiobooksAccessErr && (
+                        <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
+                            <XCircle className="h-4 w-4 shrink-0" />
+                            <span>{audiobooksAccessErr}</span>
+                        </div>
+                    )}
+
+                    {isTrial ? (
+                        <div className="p-3.5 rounded-xl bg-amber-500/5 border border-amber-500/20 text-xs text-amber-300 space-y-1">
+                            <p className="font-semibold flex items-center gap-1.5 text-amber-400">
+                                <Lock className="h-3.5 w-3.5" /> Available with Membership Upgrade
+                            </p>
+                            <p className="text-[11px] text-muted-foreground">
+                                Dedicated Audiobook Plex libraries are reserved for active full members. Upgrade your account to enable full narrated audiobook streaming across all your devices.
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between p-3.5 rounded-xl bg-white/[0.02] border border-border/50 gap-4">
+                                <div className="space-y-0.5">
+                                    <Label htmlFor="audiobooksLibraryToggle" className="text-xs font-semibold text-foreground cursor-pointer flex items-center gap-1.5">
+                                        <span>Grant Audiobooks Plex Library Access</span>
+                                        {savingAudiobooksAccess && <Loader2 className="h-3 w-3 animate-spin text-purple-400" />}
+                                    </Label>
+                                    <p className="text-[11px] text-muted-foreground">
+                                        When enabled, the server automatically updates your Plex account sharing permissions to grant access to the Audiobooks library section. Disabling will remove the Audiobooks library from your Plex dashboard.
+                                    </p>
+                                </div>
+                                <Switch
+                                    id="audiobooksLibraryToggle"
+                                    checked={hasAudiobooksAccess}
+                                    disabled={savingAudiobooksAccess}
+                                    onCheckedChange={handleToggleAudiobooksLibraryAccess}
+                                />
+                            </div>
+
+                            {audiobookLibraries.length > 0 && (
+                                <div className="p-3 rounded-lg bg-background/50 border border-border/40 space-y-1.5">
+                                    <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
+                                        Detected Audiobook Libraries
+                                    </span>
+                                    <div className="flex flex-wrap gap-2">
+                                        {audiobookLibraries.map((al: any) => (
+                                            <div
+                                                key={al.id}
+                                                className={`text-xs px-2.5 py-1 rounded-md border flex items-center gap-1.5 font-mono ${
+                                                    al.isAllowed || hasAudiobooksAccess
+                                                        ? "bg-purple-950/30 border-purple-500/30 text-purple-400" 
+                                                        : "bg-muted/20 border-border text-muted-foreground"
+                                                }`}
+                                            >
+                                                <Headphones className="h-3 w-3" />
+                                                <span>{al.name}</span>
+                                                <Badge variant="outline" className={`text-[9px] px-1 py-0 h-3.5 border-0 ${al.isAllowed || hasAudiobooksAccess ? "text-purple-400" : "text-muted-foreground"}`}>
+                                                    {al.isAllowed || hasAudiobooksAccess ? "Access Granted" : "Not In List"}
                                                 </Badge>
                                             </div>
                                         ))}
