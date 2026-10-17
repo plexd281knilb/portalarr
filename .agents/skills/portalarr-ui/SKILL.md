@@ -977,6 +977,10 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 - **Hardware Acceleration & Power Consumption Badges**:
   - **GPU Hardware Accelerated (`isHw`)**: Renders cyan badge with `<Zap className="h-2.5 w-2.5" />`: `{hwEngine} ({dec} ➔ {enc}) • Low Power` (e.g. `Nvidia NVENC (nvenc ➔ nvenc) • Low Power` or `Intel QuickSync • Low Power`).
   - **CPU Software Transcode**: Renders rose badge with `<Flame className="h-2.5 w-2.5" />`: `CPU Software • High Power` (signaling heavy CPU core saturation).
+- **Multi-Edition & Transcode Media Selection**:
+  - When a movie or episode has multiple files on disk (e.g. a 4K UHD file and a 1080p file), Plex creates a dedicated transcode `Media` entry with `selected: true` and active streams under `Part[0].Stream`.
+  - Never naively read `s.Media[0]`. Always find the media marked `selected: true` or with `Part[0].selected`.
+  - The active video stream's `displayTitle` (e.g. `"1080p (HEVC Main)"` or `"4K HDR10+ (HEVC Main 10)"`) is Plex's canonical indicator of the actual source resolution and codec, preventing false 4K reporting when a 1080p edition is played.
 - **Transcode Speed, Throttle & Buffer Ahead Metrics**:
   - **Speed Multiplier**: Renders emerald badge `⚡ 2.8x speed (Real-Time OK)` when speed $\ge 1.0x$, or pulsing rose badge `⚡ 0.8x speed (Slow)` when $< 1.0x$ and unthrottled.
   - **Throttle Power Saving State (0.0x Speed is Healthy)**: When Plex pauses the transcoder because playback buffer is satisfied, Plex sets `throttled: true` and speed drops to `0.0x`. This is 100% HEALTHY (CPU/GPU at 0% idle power saving, never a red error!). Renders healthy emerald badge `⚡ 0.0x speed (Throttled • Power Saving)`.
