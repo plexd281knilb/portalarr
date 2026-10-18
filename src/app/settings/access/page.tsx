@@ -3828,7 +3828,12 @@ export default function AccessSettingsPage() {
                                                                 size="sm"
                                                                 className="h-6 px-2 text-[11px] text-muted-foreground hover:text-foreground"
                                                                 onClick={() => {
-                                                                    const srvKeys = srvSections.map((sec: any) => `${srv.serverId}:${sec.id}`);
+                                                                    const srvKeys = srvSections
+                                                                        .filter((sec: any) => {
+                                                                            const tLower = (sec.title || "").toLowerCase();
+                                                                            return !tLower.includes("audiobook") && !tLower.includes("audio book");
+                                                                        })
+                                                                        .map((sec: any) => `${srv.serverId}:${sec.id}`);
                                                                     const srvRawIds = srvSections.map((sec: any) => String(sec.id));
                                                                     setDefaultSelectedKeys(prev => {
                                                                         const otherKeys = prev.filter(k => !k.startsWith(`${srv.serverId}:`) && !srvRawIds.includes(k));
@@ -3844,6 +3849,7 @@ export default function AccessSettingsPage() {
                                                             {srvSections.map((sec: any) => {
                                                                 const uniqueKey = `${srv.serverId}:${sec.id}`;
                                                                 const isChecked = isDefaultSelected(srv.serverId, sec.id, sec.key);
+                                                                const isAudiobookSec = (sec.title || "").toLowerCase().includes("audiobook") || (sec.title || "").toLowerCase().includes("audio book");
                                                                 return (
                                                                     <label 
                                                                         key={uniqueKey} 
@@ -3862,7 +3868,13 @@ export default function AccessSettingsPage() {
                                                                             className="rounded border-border text-primary focus:ring-primary h-3.5 w-3.5 shrink-0 pointer-events-none"
                                                                         />
                                                                         <span className="truncate">{sec.title}</span>
-                                                                        <span className="text-[9px] text-muted-foreground uppercase shrink-0">({sec.type})</span>
+                                                                        {isAudiobookSec ? (
+                                                                            <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5 border-purple-500/30 text-purple-400 bg-purple-950/20 shrink-0">
+                                                                                Opt-in Add-on
+                                                                            </Badge>
+                                                                        ) : (
+                                                                            <span className="text-[9px] text-muted-foreground uppercase shrink-0">({sec.type})</span>
+                                                                        )}
                                                                     </label>
                                                                 );
                                                             })}
@@ -3926,7 +3938,12 @@ export default function AccessSettingsPage() {
                                                                 size="sm"
                                                                 className="h-6 px-2 text-[11px] text-muted-foreground hover:text-foreground"
                                                                 onClick={() => {
-                                                                    const srvKeys = srvSections.map((sec: any) => `${srv.serverId}:${sec.id}`);
+                                                                    const srvKeys = srvSections
+                                                                        .filter((sec: any) => {
+                                                                            const tLower = (sec.title || "").toLowerCase();
+                                                                            return !tLower.includes("audiobook") && !tLower.includes("audio book");
+                                                                        })
+                                                                        .map((sec: any) => `${srv.serverId}:${sec.id}`);
                                                                     const srvRawIds = srvSections.map((sec: any) => String(sec.id));
                                                                     setDefaultTrialSelectedKeys(prev => {
                                                                         const otherKeys = prev.filter(k => !k.startsWith(`${srv.serverId}:`) && !srvRawIds.includes(k));
@@ -3942,6 +3959,7 @@ export default function AccessSettingsPage() {
                                                             {srvSections.map((sec: any) => {
                                                                 const uniqueKey = `${srv.serverId}:${sec.id}`;
                                                                 const isChecked = isTrialDefaultSelected(srv.serverId, sec.id, sec.key);
+                                                                const isAudiobookSec = (sec.title || "").toLowerCase().includes("audiobook") || (sec.title || "").toLowerCase().includes("audio book");
                                                                 return (
                                                                     <label 
                                                                         key={uniqueKey} 
@@ -3960,7 +3978,13 @@ export default function AccessSettingsPage() {
                                                                             className="rounded border-border text-amber-500 focus:ring-amber-500 h-3.5 w-3.5 shrink-0 pointer-events-none"
                                                                         />
                                                                         <span className="truncate">{sec.title}</span>
-                                                                        <span className="text-[9px] text-muted-foreground uppercase shrink-0">({sec.type})</span>
+                                                                        {isAudiobookSec ? (
+                                                                            <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5 border-purple-500/30 text-purple-400 bg-purple-950/20 shrink-0">
+                                                                                Opt-in Add-on
+                                                                            </Badge>
+                                                                        ) : (
+                                                                            <span className="text-[9px] text-muted-foreground uppercase shrink-0">({sec.type})</span>
+                                                                        )}
                                                                     </label>
                                                                 );
                                                             })}
