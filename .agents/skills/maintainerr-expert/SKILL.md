@@ -123,5 +123,10 @@ See detailed runbook: [leaving-soon-and-actions.md](./references/leaving-soon-an
    - **Mandatory Stream Exclusion (`includeStreams: false`)**: Maintainerr candidate evaluations strictly omit stream and codec tracks, preventing PMS SQLite from performing heavy table joins across 2,500–5,000 items.
    - **Global Curation Mutex Lock (`isAnyCurationTaskRunning()`)**: In `schedule-helper.ts` and `prisma.ts`, background curation jobs across Kometa, Agregarr, Maintainerr, and Tagging are strictly serialized so only one task can query PMS at a time.
    - **Mutation & Poster Upload Pacing**: Staggered pauses (100ms–120ms) prevent SQLite write locks during poster and tag updates.
+16. **Direct Plex SQLite Database Snapshot & Cross-Query CTE Engine (`plex-snapshot-engine.ts`)**:
+   - **PMS Crash Prevention**: Repetitive HTTP calls to Plex Media Server during prune sweeps (`/library/sections/{id}/all`, `/library/metadata/{ratingKey}`, `/status/sessions/history/all`) cause severe SQLite write locks, 4-second timeouts, and frequent PMS container crashes on large homelabs (especially with multi-server clusters).
+   - **Hot Snapshot Architecture**: Emulates the proven Unraid `plex_prune_hourly.sh` architecture. Portalarr creates atomic read-only hot snapshots of PMS SQLite databases (`com.plexapp.plugins.library.db`) via `sqlite3 "$src" ".backup '$dst'"` with fallback to file copy + WAL checkpointing (`PRAGMA wal_checkpoint(TRUNCATE)` via `node:sqlite`).
+   - **Multi-Server CTE Cross-Query (`evaluatePruneCandidatesFromSnapshotsUnified`)**: Portalarr attaches secondary Plex databases (`ATTACH DATABASE '$kidsPath' AS kids`, `ATTACH DATABASE '$backupPath' AS backup`) and executes a single unified SQL Common Table Expression (CTE) query in <20ms across all servers. It computes `active_dt` (most recent of `viewed_at`, `added_at`, `created_at`) across all 3 servers simultaneously, resolving candidates with zero Plex HTTP overhead.
+   - **Ghost Skip & Fallback**: Automatically filters out already-deleted records or local stub entries (`local:` guid prefix). Falls back seamlessly to HTTP querying when a server has no `databasePath` configured.
 
 

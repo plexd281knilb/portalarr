@@ -1440,6 +1440,8 @@ export async function addPlexServerAction(formData: FormData) {
     }
     url = url.replace(/\/+$/, "");
 
+    const databasePath = (formData.get("databasePath") as string || "").trim() || null;
+
     if (!clientIdentifier) {
         try {
             const testRes = await testPlexServerConfigAction(url, rawToken);
@@ -1463,14 +1465,15 @@ export async function addPlexServerAction(formData: FormData) {
             token: rawToken ? encryptData(rawToken) : null,
             clientIdentifier: clientIdentifier || null,
             isDefault: shouldBeDefault,
-            monitored
+            monitored,
+            databasePath
         }
     });
 
     revalidatePath("/settings");
     revalidatePath("/curation");
     revalidatePath("/");
-    logger.addLog("SUCCESS", "PLEX", `Added Plex server: "${name}" (${url}) [Monitored: ${monitored}]`);
+    logger.addLog("SUCCESS", "PLEX", `Added Plex server: "${name}" (${url}) [Monitored: ${monitored}]${databasePath ? ' [Direct SQLite Snapshot Configured]' : ''}`);
     return { success: true, message: `Plex server "${name}" added successfully!`, server: created };
 }
 
@@ -1512,6 +1515,11 @@ export async function updatePlexServerAction(formData: FormData) {
         updateData.monitored = monitoredParam === "true" || monitoredParam === "on" || monitoredParam === "1";
     }
 
+    if (formData.has("databasePath")) {
+        const dbPath = (formData.get("databasePath") as string || "").trim();
+        updateData.databasePath = dbPath || null;
+    }
+
     if (clientIdentifier) {
         updateData.clientIdentifier = clientIdentifier;
     }
@@ -1529,8 +1537,47 @@ export async function updatePlexServerAction(formData: FormData) {
     revalidatePath("/settings");
     revalidatePath("/curation");
     revalidatePath("/");
-    logger.addLog("SUCCESS", "PLEX", `Updated Plex server: "${name}" (${url})`);
+    logger.addLog("SUCCESS", "PLEX", `Updated Plex server: "${name}" (${url})${updateData.databasePath ? ' [Direct SQLite Snapshot Configured]' : ''}`);
     return { success: true, message: `Plex server "${name}" updated successfully!` };
+}
+
+export async function testPlexDatabasePathAction(inputPath: string) {
+    await verifyAdmin();
+    const { resolvePlexDatabaseFilePath, inspectPlexDatabase } = await import("@/lib/curation/plex-snapshot-engine");
+    const resolved = resolvePlexDatabaseFilePath(inputPath);
+    if (!resolved) {
+        return {
+            success: false,
+            error: `Database file not found at "${inputPath}". Please verify the path points to "com.plexapp.plugins.library.db" or the Plex Media Server data directory.`
+        };
+    }
+
+    const inspection = inspectPlexDatabase(resolved);
+    if (!inspection.success) {
+        return {
+            success: false,
+            error: inspection.error || "Failed to inspect Plex database."
+        };
+    }
+
+    return {
+        success: true,
+        resolvedPath: resolved,
+        sizeMb: inspection.sizeMb,
+        movieCount: inspection.movieCount,
+        showCount: inspection.showCount,
+        episodeCount: inspection.episodeCount,
+        sectionCount: inspection.sectionCount,
+        sections: inspection.sections,
+        message: `Valid Plex database! Found ${inspection.sectionCount} libraries (${inspection.movieCount} movies, ${inspection.showCount} shows, ${inspection.episodeCount} episodes) • ${inspection.sizeMb} MB`
+    };
+}
+
+export async function discoverPlexDatabasePathsAction() {
+    await verifyAdmin();
+    const { discoverKnownPlexDatabasePaths } = await import("@/lib/curation/plex-snapshot-engine");
+    const paths = discoverKnownPlexDatabasePaths();
+    return { success: true, paths };
 }
 
 export async function removePlexServerAction(id: string) {

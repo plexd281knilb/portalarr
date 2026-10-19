@@ -20,6 +20,7 @@ export interface ParentalTaggingOptions {
     minSeverity?: ParentalSeverity; // "Severe", "Moderate", "Mild", "None"
     categories?: ParentalCategoryKey[]; // Which categories to tag
     dryRun?: boolean;
+    snapshotTags?: Map<string, { labels: string[]; genres: string[]; collections: string[] }>;
 }
 
 export interface CustomTagRule {

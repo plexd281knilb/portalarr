@@ -923,6 +923,198 @@ async function runTestSuite() {
         if (!match || match.username !== "kyra") throw new Error(`Expected match 'kyra', got ${match?.username}`);
     });
 
+    // =========================================================================
+    // SUITE 17: Direct Plex SQLite Snapshot & Delta-Sync Engine
+    // =========================================================================
+    await assertTest("Suite 17: Direct Plex SQLite Snapshot & Delta-Sync Engine", async () => {
+        const {
+            resolvePlexDatabaseFilePath,
+            createPlexDatabaseSnapshot,
+            inspectPlexDatabase,
+            getSnapshotLibraryTagsAudit,
+            getSnapshotLibraryMediaItems,
+            evaluatePruneCandidatesFromSnapshotsUnified
+        } = await import("../src/lib/curation/plex-snapshot-engine");
+
+        // 1. Path Resolution Checks
+        const invalidResolved = resolvePlexDatabaseFilePath("/non_existent_folder_abc_123");
+        if (invalidResolved !== null) throw new Error("Expected non-existent path to resolve to null");
+
+        // 2. Mock Test SQLite Plex Database Creation
+        // Dynamically create a small mock com.plexapp.plugins.library.db to verify snapshotting and queries
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { DatabaseSync } = require("node:sqlite");
+        const tmpDir = path.join(__dirname, "../tmp_test_plex_dbs");
+        if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+
+        const mainDbPath = path.join(tmpDir, "com.plexapp.plugins.library.db");
+        const kidsDbPath = path.join(tmpDir, "kids_com.plexapp.plugins.library.db");
+
+        try {
+            if (fs.existsSync(mainDbPath)) fs.unlinkSync(mainDbPath);
+            if (fs.existsSync(kidsDbPath)) fs.unlinkSync(kidsDbPath);
+
+            // Populate Main Plex Mock DB
+            const mainDb = new DatabaseSync(mainDbPath);
+            mainDb.exec(`
+                CREATE TABLE library_sections (id INTEGER PRIMARY KEY, name TEXT, section_type INTEGER);
+                INSERT INTO library_sections VALUES (1, 'Movies', 1), (2, 'TV Shows', 2);
+
+                CREATE TABLE metadata_items (
+                    id INTEGER PRIMARY KEY,
+                    library_section_id INTEGER,
+                    parent_id INTEGER,
+                    metadata_type INTEGER,
+                    title TEXT,
+                    year INTEGER,
+                    guid TEXT,
+                    added_at INTEGER,
+                    updated_at INTEGER,
+                    created_at INTEGER,
+                    [index] INTEGER
+                );
+                INSERT INTO metadata_items VALUES
+                    (101, 1, NULL, 1, 'Inception', 2010, 'imdb://tt1375666', 1577836800, 1577836800, 1577836800, NULL),
+                    (102, 1, NULL, 1, 'Interstellar', 2014, 'imdb://tt0816692', 1577836800, 1577836800, 1577836800, NULL),
+                    (200, 2, NULL, 2, 'Breaking Bad', 2008, 'imdb://tt0903747', 1577836800, 1577836800, 1577836800, NULL),
+                    (201, 2, 200, 3, 'Season 1', NULL, 'imdb://tt0903747:season:1', 1577836800, 1577836800, 1577836800, 1),
+                    (202, 2, 201, 4, 'Pilot', NULL, 'imdb://tt0903747:1:1', 1577836800, 1577836800, 1577836800, 1);
+
+                CREATE TABLE media_items (
+                    id INTEGER PRIMARY KEY,
+                    metadata_item_id INTEGER,
+                    size INTEGER,
+                    width INTEGER,
+                    height INTEGER,
+                    bitrate INTEGER,
+                    video_codec TEXT,
+                    audio_codec TEXT,
+                    audio_channels INTEGER
+                );
+                INSERT INTO media_items VALUES 
+                    (1, 101, 25000000000, 3840, 2160, 25000, 'hevc', 'truehd', 8),
+                    (2, 102, 10000000000, 1920, 1080, 8000, 'h264', 'eac3', 6),
+                    (3, 202, 3000000000, 1920, 1080, 5000, 'h264', 'aac', 2);
+
+                CREATE TABLE media_parts (
+                    id INTEGER PRIMARY KEY,
+                    media_item_id INTEGER,
+                    file TEXT
+                );
+                INSERT INTO media_parts VALUES
+                    (1, 1, '/movies/Inception (2010)/Inception.2010.4K.mkv'),
+                    (2, 2, '/movies/Interstellar (2014)/Interstellar.2014.1080p.mkv'),
+                    (3, 3, '/tv/Breaking Bad/Season 01/S01E01.mkv');
+
+                CREATE TABLE tags (id INTEGER PRIMARY KEY, tag TEXT, tag_type INTEGER);
+                INSERT INTO tags VALUES (1, 'IMDb:Violence:Severe', 11), (2, 'Sci-Fi', 1), (3, 'Leaving Soon', 2);
+
+                CREATE TABLE taggings (id INTEGER PRIMARY KEY, metadata_item_id INTEGER, tag_id INTEGER);
+                INSERT INTO taggings VALUES (1, 101, 1), (2, 101, 2), (3, 102, 3);
+
+                CREATE TABLE metadata_item_views (
+                    id INTEGER PRIMARY KEY,
+                    guid TEXT,
+                    metadata_type INTEGER,
+                    viewed_at INTEGER,
+                    account_id INTEGER
+                );
+                INSERT INTO metadata_item_views VALUES (1, 'imdb://tt1375666', 1, 1600000000, 1);
+            `);
+            mainDb.close();
+
+            // Populate Kids Plex Mock DB
+            const kidsDb = new DatabaseSync(kidsDbPath);
+            kidsDb.exec(`
+                CREATE TABLE library_sections (id INTEGER PRIMARY KEY, name TEXT, section_type INTEGER);
+                INSERT INTO library_sections VALUES (1, 'Kids Movies', 1);
+
+                CREATE TABLE metadata_items (
+                    id INTEGER PRIMARY KEY,
+                    library_section_id INTEGER,
+                    parent_id INTEGER,
+                    metadata_type INTEGER,
+                    title TEXT,
+                    guid TEXT,
+                    added_at INTEGER,
+                    updated_at INTEGER,
+                    created_at INTEGER,
+                    [index] INTEGER
+                );
+                INSERT INTO metadata_items VALUES (301, 1, NULL, 1, 'Finding Nemo', 'imdb://tt0266543', 1577836800, 1577836800, 1577836800, NULL);
+
+                CREATE TABLE media_items (id INTEGER PRIMARY KEY, metadata_item_id INTEGER, size INTEGER, video_codec TEXT);
+                INSERT INTO media_items VALUES (1, 301, 5000000000, 'h264');
+
+                CREATE TABLE media_parts (id INTEGER PRIMARY KEY, media_item_id INTEGER, file TEXT);
+                INSERT INTO media_parts VALUES (1, 1, '/kid_movies/Finding Nemo/Finding Nemo.mkv');
+
+                CREATE TABLE metadata_item_views (id INTEGER PRIMARY KEY, guid TEXT, viewed_at INTEGER);
+                INSERT INTO metadata_item_views VALUES (1, 'imdb://tt0816692', 1700000000);
+            `);
+            kidsDb.close();
+
+            // 3. Test resolvePlexDatabaseFilePath on real created DB
+            const resolved = resolvePlexDatabaseFilePath(mainDbPath);
+            if (!resolved) throw new Error("Failed to resolve newly created mock Plex DB path");
+
+            // 4. Test createPlexDatabaseSnapshot
+            const snap = await createPlexDatabaseSnapshot(mainDbPath, "test_main_server", { force: true, label: "Test Main Server" });
+            if (!snap.success || !snap.snapshotPath) throw new Error(`Snapshot creation failed: ${snap.error}`);
+            if (!fs.existsSync(snap.snapshotPath)) throw new Error("Snapshot file was not found on disk");
+
+            // 5. Test inspectPlexDatabase
+            const inspection = inspectPlexDatabase(snap.snapshotPath);
+            if (!inspection.success) throw new Error(`Inspection failed: ${inspection.error}`);
+            if (inspection.movieCount !== 2) throw new Error(`Expected 2 movies, got ${inspection.movieCount}`);
+            if (inspection.showCount !== 1) throw new Error(`Expected 1 show, got ${inspection.showCount}`);
+            if (inspection.sectionCount !== 2) throw new Error(`Expected 2 sections, got ${inspection.sectionCount}`);
+
+            // 6. Test getSnapshotLibraryTagsAudit
+            const tagsAudit = getSnapshotLibraryTagsAudit(snap.snapshotPath, 1);
+            const inceptionTags = tagsAudit.get("101");
+            if (!inceptionTags) throw new Error("Expected tags for ratingKey 101");
+            if (!inceptionTags.labels.includes("IMDb:Violence:Severe")) throw new Error("Missing label IMDb:Violence:Severe");
+            if (!inceptionTags.genres.includes("Sci-Fi")) throw new Error("Missing genre Sci-Fi");
+
+            // 7. Test getSnapshotLibraryMediaItems
+            const mediaItems = getSnapshotLibraryMediaItems(snap.snapshotPath, 1, { limit: 10 });
+            if (mediaItems.length !== 2) throw new Error(`Expected 2 media items, got ${mediaItems.length}`);
+            const inception = mediaItems.find(m => m.ratingKey === "101");
+            if (!inception) throw new Error("Inception not found in snapshot media items");
+            if (inception.detectedBadges.resolution !== "4K") throw new Error(`Expected 4K badge, got ${inception.detectedBadges.resolution}`);
+
+            // 8. Test Unified Cross-Server Snapshot Evaluation
+            const unifiedResult = await evaluatePruneCandidatesFromSnapshotsUnified(
+                { serverId: "main_srv", serverName: "Main Server", databasePath: mainDbPath },
+                [{ serverId: "kids_srv", serverName: "Kids Server", databasePath: kidsDbPath }],
+                { unwatchedMinAgeDays: 30, watchedMinAgeDays: 30, maxCandidates: 10 }
+            );
+
+            if (unifiedResult.evaluatedCount < 2) throw new Error(`Expected >=2 evaluated units, got ${unifiedResult.evaluatedCount}`);
+
+            // 9. Test Prisma PlexServer databasePath persistence
+            const testPlexServer = await prisma.plexServer.create({
+                data: {
+                    name: "Snapshot Test Server",
+                    url: "http://127.0.0.1:32400",
+                    isDefault: false,
+                    monitored: true,
+                    databasePath: mainDbPath
+                }
+            });
+            if (testPlexServer.databasePath !== mainDbPath) throw new Error("databasePath was not saved to PlexServer model");
+
+            await prisma.plexServer.delete({ where: { id: testPlexServer.id } });
+        } finally {
+            try {
+                if (fs.existsSync(mainDbPath)) fs.unlinkSync(mainDbPath);
+                if (fs.existsSync(kidsDbPath)) fs.unlinkSync(kidsDbPath);
+                if (fs.existsSync(tmpDir)) fs.rmSync(tmpDir, { recursive: true, force: true });
+            } catch (e) {}
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

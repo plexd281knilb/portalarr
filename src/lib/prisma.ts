@@ -529,6 +529,8 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["paymentLastScanAt", `ALTER TABLE "Settings" ADD COLUMN "paymentLastScanAt" DATETIME;`],
                 ["paymentLastScanResult", `ALTER TABLE "Settings" ADD COLUMN "paymentLastScanResult" TEXT;`],
                 ["dismissedHubs", `ALTER TABLE "Settings" ADD COLUMN "dismissedHubs" TEXT;`],
+                ["plexSnapshotEnabled", `ALTER TABLE "Settings" ADD COLUMN "plexSnapshotEnabled" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["plexSnapshotDir", `ALTER TABLE "Settings" ADD COLUMN "plexSnapshotDir" TEXT DEFAULT '/tmp/portalarr_snapshots';`],
                 ["overlayIncrementalEnabled", `ALTER TABLE "Settings" ADD COLUMN "overlayIncrementalEnabled" BOOLEAN NOT NULL DEFAULT 1;`],
                 ["overlayIncrementalSchedule", `ALTER TABLE "Settings" ADD COLUMN "overlayIncrementalSchedule" TEXT DEFAULT 'every_hour';`],
                 ["overlayIncrementalBatchSize", `ALTER TABLE "Settings" ADD COLUMN "overlayIncrementalBatchSize" INTEGER DEFAULT 200;`],
@@ -905,6 +907,9 @@ export async function ensureSchemaColumns(): Promise<void> {
             const plexServerCols = plexServerInfo.map((c: any) => c.name);
             if (!plexServerCols.includes("monitored")) {
                 await prisma.$executeRawUnsafe(`ALTER TABLE "PlexServer" ADD COLUMN "monitored" BOOLEAN NOT NULL DEFAULT 1;`);
+            }
+            if (!plexServerCols.includes("databasePath")) {
+                await prisma.$executeRawUnsafe(`ALTER TABLE "PlexServer" ADD COLUMN "databasePath" TEXT;`);
             }
         } catch (e: any) {
             console.error("[DB-SCHEMA-AUTOFIX] Auxiliary tables check error:", e.message || e);
