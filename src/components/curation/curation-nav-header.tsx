@@ -85,7 +85,7 @@ export function CurationNavHeader({
                     </p>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap w-full sm:w-auto">
                     <FeatureGuideModal guideId="curation-studio" triggerText="Curation Guide" />
                     <Badge variant="outline" className="bg-slate-900/80 border-slate-800 text-slate-300 px-3 py-2 text-xs font-semibold flex items-center gap-2 shrink-0">
                         <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />

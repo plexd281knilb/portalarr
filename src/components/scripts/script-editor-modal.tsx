@@ -118,13 +118,13 @@ export function ScriptEditorModal({
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
             <DialogContent className="max-w-4xl w-[95vw] max-h-[92vh] flex flex-col bg-[#0d0e14] border-zinc-800 p-0 overflow-hidden shadow-2xl">
                 {/* Header */}
-                <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800 bg-zinc-950/70">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 sm:px-5 py-3 sm:py-4 border-b border-zinc-800 bg-zinc-950/70">
                     <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+                        <div className="p-2 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 shrink-0">
                             <FileCode className="h-5 w-5" />
                         </div>
-                        <div>
-                            <DialogTitle className="text-base font-semibold text-zinc-100 flex items-center gap-2">
+                        <div className="min-w-0">
+                            <DialogTitle className="text-base font-semibold text-zinc-100 flex items-center gap-2 flex-wrap">
                                 <span>{script ? "Edit Script" : "Create New Script"}</span>
                                 {script && (
                                     <Badge variant="outline" className="text-[10px] font-mono bg-zinc-900 border-zinc-700 text-zinc-300">
@@ -138,13 +138,13 @@ export function ScriptEditorModal({
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 self-start sm:self-auto w-full sm:w-auto justify-end">
                         <Button 
                             variant="default" 
                             size="sm" 
                             onClick={handleSave}
                             disabled={saving}
-                            className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
+                            className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium flex-1 sm:flex-initial"
                         >
                             {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Save className="h-3.5 w-3.5 mr-1.5" />}
                             {saving ? "Saving..." : "Save Script"}
@@ -306,16 +306,16 @@ export function ScriptEditorModal({
                 </div>
 
                 {/* Footer */}
-                <div className="flex items-center justify-between px-5 py-3 border-t border-zinc-800 bg-zinc-950/80">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 px-4 sm:px-5 py-3 border-t border-zinc-800 bg-zinc-950/80">
                     <span className="text-[11px] text-zinc-500">
                         Saved scripts are stored persistently in <code className="text-zinc-400">data/scripts/</code>
                     </span>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 justify-end">
                         <Button 
                             variant="ghost" 
                             size="sm" 
                             onClick={onClose}
-                            className="h-8 text-xs text-zinc-400 hover:text-zinc-200"
+                            className="h-8 text-xs text-zinc-400 hover:text-zinc-200 flex-1 sm:flex-initial"
                         >
                             Cancel
                         </Button>
@@ -324,7 +324,7 @@ export function ScriptEditorModal({
                             size="sm" 
                             onClick={handleSave}
                             disabled={saving}
-                            className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
+                            className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium flex-1 sm:flex-initial"
                         >
                             {saving ? "Saving..." : "Save Script"}
                         </Button>

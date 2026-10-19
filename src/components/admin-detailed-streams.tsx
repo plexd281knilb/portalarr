@@ -219,7 +219,7 @@ export default function AdminDetailedStreams() {
                         </CardDescription>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 w-full sm:w-auto">
                         <Button
                             asChild
                             variant="outline"
@@ -228,7 +228,8 @@ export default function AdminDetailedStreams() {
                         >
                             <Link href="/admin/tautulli">
                                 <Activity className="h-3.5 w-3.5" />
-                                <span>Stream Intelligence Hub</span>
+                                <span className="hidden sm:inline">Stream Intelligence Hub</span>
+                                <span className="sm:hidden">Intelligence</span>
                             </Link>
                         </Button>
                         <Button
@@ -241,7 +242,8 @@ export default function AdminDetailedStreams() {
                             className="h-8 px-2.5 text-xs gap-1.5 border-border/60 hover:bg-white/[0.04]"
                         >
                             <History className="h-3.5 w-3.5 text-primary" />
-                            <span>Watch History & Audit</span>
+                            <span className="hidden sm:inline">Watch History & Audit</span>
+                            <span className="sm:hidden">History</span>
                         </Button>
                         <Button
                             variant="outline"
@@ -271,7 +273,10 @@ export default function AdminDetailedStreams() {
                     </div>
 
                     <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-0.5">
-                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Direct Play / Transcode</span>
+                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                            <span className="hidden sm:inline">Direct Play / Transcode</span>
+                            <span className="sm:hidden">DP / Transcode</span>
+                        </span>
                         <div className="text-lg font-black text-foreground">
                             <span className="text-emerald-400">{directPlayCount}</span> / <span className="text-amber-400">{transcodeCount}</span>
                         </div>
@@ -664,10 +669,10 @@ export default function AdminDetailedStreams() {
                                                         {stream.householdBadge.label}
                                                     </Badge>
                                                 )}
-                                                <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                                                <Badge variant="outline" className="text-[10px] text-muted-foreground max-w-[130px] sm:max-w-none truncate">
                                                     🖥️ {stream.serverName}
                                                 </Badge>
-                                                <span className="text-[10px] font-mono text-muted-foreground/80">
+                                                <span className="text-[10px] font-mono text-muted-foreground/80 max-w-[130px] sm:max-w-none truncate">
                                                     {stream.connectionLabel || (stream.ipAddress ? `(${stream.ipAddress})` : "")}
                                                 </span>
                                                 {/* MULTI-IP SHARING ALERT BADGE */}
@@ -794,12 +799,12 @@ export default function AdminDetailedStreams() {
                                     </div>
 
                                     {/* Middle/Right: Transcode Specs, Audio & Subtitles */}
-                                    <div className="flex flex-wrap md:flex-col items-start md:items-end gap-1.5 text-xs shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-border/30 w-full md:w-auto">
-                                        <div className="flex items-center gap-1.5">
-                                            <span className="text-[10px] text-muted-foreground">Video:</span>
+                                    <div className="flex flex-wrap md:flex-col items-start md:items-end gap-1.5 text-xs shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-border/30 w-full md:w-auto min-w-0">
+                                        <div className="flex items-center gap-1.5 max-w-full">
+                                            <span className="text-[10px] text-muted-foreground shrink-0">Video:</span>
                                             <Badge 
                                                 variant="outline" 
-                                                className={`text-[10px] font-semibold ${
+                                                className={`text-[10px] font-semibold max-w-full break-all sm:break-normal ${
                                                     isTranscoding 
                                                         ? "bg-amber-500/15 text-amber-300 border-amber-500/40 font-bold" 
                                                         : "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
@@ -830,11 +835,11 @@ export default function AdminDetailedStreams() {
                                             </Badge>
                                         )}
 
-                                        <div className="flex items-center gap-1.5">
-                                            <span className="text-[10px] text-muted-foreground">Audio:</span>
+                                        <div className="flex items-center gap-1.5 max-w-full">
+                                            <span className="text-[10px] text-muted-foreground shrink-0">Audio:</span>
                                             <Badge 
                                                 variant="outline" 
-                                                className={`text-[10px] font-semibold ${
+                                                className={`text-[10px] font-semibold max-w-full break-all sm:break-normal ${
                                                     isAudioTranscoding 
                                                         ? "bg-sky-500/10 text-sky-300 border-sky-500/20" 
                                                         : "bg-cyan-500/15 text-cyan-400 border-cyan-500/30"
@@ -881,7 +886,7 @@ export default function AdminDetailedStreams() {
                                             size="sm"
                                             disabled={killingSessionKey === stream.sessionKey}
                                             onClick={() => handleKill(stream.instanceId, stream.sessionKey)}
-                                            className="h-7 px-2 text-[11px] text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 gap-1 mt-1 cursor-pointer"
+                                            className="h-7 px-2 text-[11px] text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 gap-1 mt-1 cursor-pointer w-full md:w-auto justify-center"
                                         >
                                             {killingSessionKey === stream.sessionKey ? (
                                                 <Loader2 className="h-3 w-3 animate-spin" />
@@ -902,7 +907,7 @@ export default function AdminDetailedStreams() {
             <Dialog open={showHistory} onOpenChange={setShowHistory}>
                 <DialogContent className="w-[95vw] sm:w-[92vw] md:w-[90vw] max-w-4xl sm:max-w-4xl max-h-[85vh] flex flex-col p-0 overflow-hidden bg-[#121218] border-border/60">
                     <DialogHeader className="p-5 pb-3 border-b border-border/40">
-                        <div className="flex items-center justify-between gap-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                             <div className="space-y-1">
                                 <DialogTitle className="text-lg font-bold flex items-center gap-2">
                                     <History className="h-5 w-5 text-primary" />

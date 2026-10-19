@@ -139,7 +139,7 @@ export default function MyPlexHub() {
                     </p>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-border/30">
                     <FeatureGuideModal guideId="stream-diagnostics" triggerText="Diagnostics Guide" />
                     <ServerSpeedTest />
                     <PlexSetupGuides />
@@ -297,7 +297,7 @@ export default function MyPlexHub() {
                     })}
                 </div>
             ) : (
-                <div className="p-4 rounded-xl bg-[#121218]/60 border border-border/40 flex items-center justify-between gap-3">
+                <div className="p-3.5 sm:p-4 rounded-xl bg-[#121218]/60 border border-border/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
                         <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0">
                             <Tv className="h-5 w-5" />
@@ -307,7 +307,7 @@ export default function MyPlexHub() {
                             <div className="text-[11px] text-muted-foreground">Your devices are ready. Launch Plex on any TV or phone to start watching.</div>
                         </div>
                     </div>
-                    <Button asChild size="sm" variant="outline" className="text-xs gap-1.5 font-semibold shrink-0">
+                    <Button asChild size="sm" variant="outline" className="text-xs gap-1.5 font-semibold w-full sm:w-auto shrink-0 justify-center">
                         <a href="https://app.plex.tv" target="_blank" rel="noopener noreferrer">
                             Open Plex <ExternalLink className="h-3 w-3" />
                         </a>

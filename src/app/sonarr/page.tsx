@@ -673,10 +673,10 @@ export default function SonarrPage() {
           </p>
         </div>
         {instances.length > 1 && (
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium">Instance:</span>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <span className="text-sm font-medium shrink-0">Instance:</span>
             <Select value={selectedAppId} onValueChange={setSelectedAppId}>
-              <SelectTrigger className="w-48 bg-background">
+              <SelectTrigger className="w-full sm:w-48 bg-background">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -1639,7 +1639,7 @@ export default function SonarrPage() {
           setDeleteSeriesDialog((prev) => ({ ...prev, open }))
         }
       >
-        <DialogContent className="sm:max-w-md bg-[#121218] border-border/60">
+        <DialogContent className="sm:max-w-md w-[95vw] bg-[#121218] border-border/60">
           <DialogHeader>
             <DialogTitle className="text-red-400 font-bold flex items-center gap-2">
               <Trash2 className="h-5 w-5 text-red-400" /> Delete Series

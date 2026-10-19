@@ -61,20 +61,20 @@ export default function ActiveDownloads() {
 
     return (
         <Card className="w-full border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm hover:shadow-md transition-all duration-200 animate-in fade-in duration-700">
-            <CardHeader className="pb-3">
-                <div className="flex justify-between items-center">
+            <CardHeader className="p-4 sm:p-6 pb-2 sm:pb-3">
+                <div className="flex justify-between items-center gap-2">
                     <div>
-                        <CardTitle className="flex items-center gap-2 text-lg font-bold">
+                        <CardTitle className="flex items-center gap-2 text-base sm:text-lg font-bold">
                             <Download className="h-5 w-5 text-primary"/> Active Downloads
                         </CardTitle>
-                        <CardDescription>Real-time torrent and Usenet download queue.</CardDescription>
+                        <CardDescription className="text-xs">Real-time torrent and Usenet download queue.</CardDescription>
                     </div>
-                    <Badge variant={allQueueItems.length > 0 ? "default" : "secondary"} className="text-xs px-2.5 py-0.5">
+                    <Badge variant={allQueueItems.length > 0 ? "default" : "secondary"} className="text-xs px-2.5 py-0.5 shrink-0">
                         {allQueueItems.length} in Queue
                     </Badge>
                 </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-3 sm:p-6 pt-0 sm:pt-0">
                 {allQueueItems.length === 0 ? (
                     <div className="text-center text-muted-foreground text-sm italic py-8 border border-dashed border-border/50 rounded-xl bg-muted/10">
                         No active downloads at the moment. All queues are idle.
@@ -92,12 +92,12 @@ export default function ActiveDownloads() {
                             const speed = item.speed || "";
                             
                             return (
-                                <div key={idx} className="p-3 rounded-xl bg-muted/20 border border-border/40 hover:bg-muted/30 transition-all duration-200 space-y-2">
-                                    <div className="flex justify-between items-start gap-3">
-                                        <div className="font-semibold text-sm truncate flex-1 min-w-0" title={title}>
+                                <div key={idx} className="p-2.5 sm:p-3 rounded-xl bg-muted/20 border border-border/40 hover:bg-muted/30 transition-all duration-200 space-y-2">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between items-start gap-1 sm:gap-3">
+                                        <div className="font-semibold text-xs sm:text-sm truncate w-full sm:flex-1 min-w-0" title={title}>
                                             {title}
                                         </div>
-                                        <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0 font-mono">
+                                        <div className="flex items-center gap-2 text-[11px] sm:text-xs text-muted-foreground shrink-0 font-mono">
                                             {speed && (
                                                 <span className="text-emerald-400 font-semibold">{speed}</span>
                                             )}

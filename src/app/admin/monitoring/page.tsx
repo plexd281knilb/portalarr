@@ -478,28 +478,31 @@ export default function AdminFleetMonitoringPage() {
                     {/* TAB 1: SYSTEMS */}
                     <TabsTrigger
                         value="systems"
-                        className="text-xs font-bold py-2 px-4 rounded-lg transition-all gap-2 text-sky-400/80 hover:text-sky-300 data-[state=active]:text-sky-400 data-[state=active]:bg-sky-500/15 data-[state=active]:border data-[state=active]:border-sky-500/40 data-[state=active]:shadow-sm"
+                        className="text-[11px] sm:text-xs font-bold py-2 px-2 sm:px-4 rounded-lg transition-all gap-1.5 sm:gap-2 text-sky-400/80 hover:text-sky-300 data-[state=active]:text-sky-400 data-[state=active]:bg-sky-500/15 data-[state=active]:border data-[state=active]:border-sky-500/40 data-[state=active]:shadow-sm"
                     >
-                        <Server className="h-4 w-4 text-sky-400" />
-                        <span>Systems & Services ({services.length})</span>
+                        <Server className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-sky-400 shrink-0" />
+                        <span className="hidden sm:inline">Systems & Services ({services.length})</span>
+                        <span className="sm:hidden">Systems ({services.length})</span>
                     </TabsTrigger>
 
                     {/* TAB 2: DOCKER CONTAINERS */}
                     <TabsTrigger
                         value="containers"
-                        className="text-xs font-bold py-2 px-4 rounded-lg transition-all gap-2 text-emerald-400/80 hover:text-emerald-300 data-[state=active]:text-emerald-400 data-[state=active]:bg-emerald-500/15 data-[state=active]:border data-[state=active]:border-emerald-500/40 data-[state=active]:shadow-sm"
+                        className="text-[11px] sm:text-xs font-bold py-2 px-2 sm:px-4 rounded-lg transition-all gap-1.5 sm:gap-2 text-emerald-400/80 hover:text-emerald-300 data-[state=active]:text-emerald-400 data-[state=active]:bg-emerald-500/15 data-[state=active]:border data-[state=active]:border-emerald-500/40 data-[state=active]:shadow-sm"
                     >
-                        <Cpu className="h-4 w-4 text-emerald-400" />
-                        <span>Docker Fleet ({fleetSummary.totalContainers})</span>
+                        <Cpu className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-400 shrink-0" />
+                        <span className="hidden sm:inline">Docker Fleet ({fleetSummary.totalContainers})</span>
+                        <span className="sm:hidden">Fleet ({fleetSummary.totalContainers})</span>
                     </TabsTrigger>
 
                     {/* TAB 3: INCIDENTS & ALERTS */}
                     <TabsTrigger
                         value="incidents"
-                        className="text-xs font-bold py-2 px-4 rounded-lg transition-all gap-2 text-amber-400/80 hover:text-amber-300 data-[state=active]:text-amber-400 data-[state=active]:bg-amber-500/15 data-[state=active]:border data-[state=active]:border-amber-500/40 data-[state=active]:shadow-sm"
+                        className="text-[11px] sm:text-xs font-bold py-2 px-2 sm:px-4 rounded-lg transition-all gap-1.5 sm:gap-2 text-amber-400/80 hover:text-amber-300 data-[state=active]:text-amber-400 data-[state=active]:bg-amber-500/15 data-[state=active]:border data-[state=active]:border-amber-500/40 data-[state=active]:shadow-sm"
                     >
-                        <Bell className="h-4 w-4 text-amber-400" />
-                        <span>Outages & Alerts {activeIncidentsCount > 0 ? `(${activeIncidentsCount})` : ""}</span>
+                        <Bell className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-400 shrink-0" />
+                        <span className="hidden sm:inline">Outages & Alerts {activeIncidentsCount > 0 ? `(${activeIncidentsCount})` : ""}</span>
+                        <span className="sm:hidden">Outages {activeIncidentsCount > 0 ? `(${activeIncidentsCount})` : ""}</span>
                     </TabsTrigger>
                 </TabsList>
 
@@ -572,12 +575,12 @@ export default function AdminFleetMonitoringPage() {
                                     </button>
                                 </div>
 
-                                <div className="flex items-center gap-2">
+                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full md:w-auto">
                                     <select
                                         value={systemCategoryFilter}
                                         onChange={(e) => setSystemCategoryFilter(e.target.value)}
                                         aria-label="Filter by category"
-                                        className="bg-black/40 border border-white/10 rounded-lg text-xs text-foreground px-2 py-1.5 h-8 focus:outline-hidden focus:border-primary/50"
+                                        className="bg-black/40 border border-white/10 rounded-lg text-xs text-foreground px-2 py-1.5 h-8 focus:outline-hidden focus:border-primary/50 w-full sm:w-auto truncate"
                                     >
                                         <option value="ALL">All Categories</option>
                                         <option value="plex">Plex Media Servers (Live Telemetry)</option>
@@ -587,13 +590,13 @@ export default function AdminFleetMonitoringPage() {
                                         <option value="downloaders">Download Clients</option>
                                     </select>
 
-                                    <div className="relative flex-1 sm:w-44">
+                                    <div className="relative w-full sm:w-44">
                                         <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                                         <Input
                                             placeholder="Search systems..."
                                             value={systemSearch}
                                             onChange={(e) => setSystemSearch(e.target.value)}
-                                            className="h-8 pl-8 pr-2.5 text-xs bg-black/40 border-white/10"
+                                            className="h-8 pl-8 pr-2.5 text-xs bg-black/40 border-white/10 w-full"
                                         />
                                     </div>
                                 </div>
@@ -784,12 +787,12 @@ export default function AdminFleetMonitoringPage() {
                                     )}
                                 </div>
 
-                                <div className="flex items-center gap-2">
-                                    <div className="flex items-center bg-black/40 border border-white/10 rounded-lg p-0.5 h-8 shrink-0">
+                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full md:w-auto">
+                                    <div className="flex items-center justify-center bg-black/40 border border-white/10 rounded-lg p-0.5 h-8 shrink-0">
                                         <button
                                             onClick={() => setContainerSort("name_asc")}
                                             title="Sort A-Z"
-                                            className={`px-2 py-1 text-[11px] font-semibold rounded-md transition-all cursor-pointer ${
+                                            className={`px-2 py-1 text-[11px] font-semibold rounded-md transition-all cursor-pointer flex-1 sm:flex-none text-center ${
                                                 containerSort === "name_asc" 
                                                     ? "bg-white/15 text-foreground shadow-xs" 
                                                     : "text-muted-foreground hover:text-foreground"
@@ -800,7 +803,7 @@ export default function AdminFleetMonitoringPage() {
                                         <button
                                             onClick={() => setContainerSort("cpu_desc")}
                                             title="Sort by Highest CPU load"
-                                            className={`px-2 py-1 text-[11px] font-semibold rounded-md transition-all cursor-pointer ${
+                                            className={`px-2 py-1 text-[11px] font-semibold rounded-md transition-all cursor-pointer flex-1 sm:flex-none text-center ${
                                                 containerSort === "cpu_desc" 
                                                     ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-xs" 
                                                     : "text-muted-foreground hover:text-amber-400"
@@ -811,7 +814,7 @@ export default function AdminFleetMonitoringPage() {
                                         <button
                                             onClick={() => setContainerSort("mem_desc")}
                                             title="Sort by Highest RAM usage"
-                                            className={`px-2 py-1 text-[11px] font-semibold rounded-md transition-all cursor-pointer ${
+                                            className={`px-2 py-1 text-[11px] font-semibold rounded-md transition-all cursor-pointer flex-1 sm:flex-none text-center ${
                                                 containerSort === "mem_desc" 
                                                     ? "bg-sky-500/20 text-sky-300 border border-sky-500/40 shadow-xs" 
                                                     : "text-muted-foreground hover:text-sky-400"
@@ -821,13 +824,13 @@ export default function AdminFleetMonitoringPage() {
                                         </button>
                                     </div>
 
-                                    <div className="relative flex-1 sm:w-56">
+                                    <div className="relative w-full sm:w-56">
                                         <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                                         <Input
                                             placeholder="Search container or image..."
                                             value={containerSearch}
                                             onChange={(e) => setContainerSearch(e.target.value)}
-                                            className="h-8 pl-8 pr-2.5 text-xs bg-black/40 border-white/10"
+                                            className="h-8 pl-8 pr-2.5 text-xs bg-black/40 border-white/10 w-full"
                                         />
                                     </div>
                                 </div>
@@ -1113,7 +1116,7 @@ export default function AdminFleetMonitoringPage() {
 
                         {/* RIGHT COLUMN: INCIDENT HISTORY LOG */}
                         <Card className="border border-white/[0.08] bg-[#121218]/90 backdrop-blur-xl shadow-xl rounded-2xl lg:col-span-2">
-                            <CardHeader className="p-4 sm:p-5 border-b border-white/[0.06] flex flex-row items-center justify-between gap-3">
+                            <CardHeader className="p-4 sm:p-5 border-b border-white/[0.06] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                                 <div>
                                     <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
                                         <AlertTriangle className="h-4 w-4 text-rose-400" />

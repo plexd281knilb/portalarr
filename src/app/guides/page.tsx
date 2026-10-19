@@ -258,10 +258,8 @@ function GuidesContent() {
     }
 
     return (
-        <div className="min-h-screen bg-background flex flex-col animate-in fade-in duration-300">
-            <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto w-full space-y-8 pb-16">
-                
-                {/* TOP NAVIGATION & ACTIONS */}
+        <div className="flex-1 max-w-6xl mx-auto w-full space-y-6 sm:space-y-8 pb-16 min-w-0 animate-in fade-in duration-300">
+            {/* TOP NAVIGATION & ACTIONS */}
                 <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
                     <Button asChild variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground">
                         <Link href="/">
@@ -714,8 +712,6 @@ function GuidesContent() {
                         </div>
                     </div>
                 </Card>
-
-            </main>
         </div>
     );
 }
@@ -860,21 +856,19 @@ function FeatureTopicRenderer({ topicId }: { topicId: FeatureGuideId }) {
 
 function GuidesLoadingSkeleton() {
     return (
-        <div className="min-h-screen bg-background flex flex-col animate-in fade-in duration-300">
-            <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto w-full space-y-6">
-                <div className="space-y-3">
-                    <Skeleton className="h-8 w-40" />
-                    <Skeleton className="h-10 w-96" />
-                    <Skeleton className="h-5 w-2/3" />
-                </div>
-                <Skeleton className="h-14 w-full rounded-2xl" />
-                <Skeleton className="h-28 w-full rounded-2xl" />
-                <Skeleton className="h-12 w-full rounded-xl" />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Skeleton className="h-48 w-full rounded-2xl" />
-                    <Skeleton className="h-48 w-full rounded-2xl" />
-                </div>
-            </main>
+        <div className="flex-1 max-w-6xl mx-auto w-full space-y-6 pb-16 min-w-0">
+            <div className="space-y-3">
+                <Skeleton className="h-8 w-40" />
+                <Skeleton className="h-10 w-96" />
+                <Skeleton className="h-5 w-2/3" />
+            </div>
+            <Skeleton className="h-14 w-full rounded-2xl" />
+            <Skeleton className="h-28 w-full rounded-2xl" />
+            <Skeleton className="h-12 w-full rounded-xl" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Skeleton className="h-48 w-full rounded-2xl" />
+                <Skeleton className="h-48 w-full rounded-2xl" />
+            </div>
         </div>
     );
 }

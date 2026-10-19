@@ -183,7 +183,7 @@ export default function AdminScriptsPage() {
     };
 
     return (
-        <div className="container max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+        <div className="w-full max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[2200px] mx-auto space-y-4 sm:space-y-6 min-w-0">
             {/* Notification Banner */}
             {bannerMessage && (
                 <div className="p-3 bg-zinc-900 border border-emerald-500/30 text-emerald-300 rounded-lg text-xs font-medium flex items-center justify-between shadow-lg animate-in fade-in duration-200">
@@ -206,11 +206,11 @@ export default function AdminScriptsPage() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="space-y-1">
                     <div className="flex items-center gap-2.5">
-                        <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                        <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shrink-0">
                             <Terminal className="h-6 w-6" />
                         </div>
                         <div>
-                            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
+                            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground flex items-center gap-2 flex-wrap">
                                 <span>User Scripts & Automation</span>
                                 <Badge variant="outline" className="text-xs bg-emerald-500/10 text-emerald-300 border-emerald-500/30">
                                     Admin Mission Control
@@ -223,13 +223,13 @@ export default function AdminScriptsPage() {
                     </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 w-full sm:w-auto">
                     <Button
                         variant="outline"
                         size="sm"
                         onClick={() => loadScripts(true)}
                         disabled={refreshing}
-                        className="h-9 border-zinc-700 bg-zinc-900/60 hover:bg-zinc-800 text-xs text-zinc-200"
+                        className="h-9 border-zinc-700 bg-zinc-900/60 hover:bg-zinc-800 text-xs text-zinc-200 flex-1 sm:flex-initial"
                     >
                         <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${refreshing ? "animate-spin" : ""}`} />
                         Refresh
@@ -239,7 +239,7 @@ export default function AdminScriptsPage() {
                         variant="default"
                         size="sm"
                         onClick={handleCreateScript}
-                        className="h-9 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium"
+                        className="h-9 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium flex-1 sm:flex-initial"
                     >
                         <Plus className="h-4 w-4 mr-1.5" />
                         New Script
@@ -419,28 +419,28 @@ export default function AdminScriptsPage() {
                                     </div>
 
                                     {/* Action buttons */}
-                                    <div className="flex items-center justify-between gap-2 pt-1 border-t border-zinc-800/60">
-                                        <div className="flex items-center gap-1.5">
+                                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-zinc-800/60">
+                                        <div className="flex items-center gap-1.5 flex-1 min-w-[200px]">
                                             <Button
                                                 variant="default"
                                                 size="sm"
                                                 onClick={() => handleRunInteractive(script)}
-                                                className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
+                                                className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium flex-1 sm:flex-initial"
                                                 title="Run script interactively with live streaming terminal output"
                                             >
-                                                <Play className="h-3.5 w-3.5 mr-1 fill-white" />
-                                                Run Script
+                                                <Play className="h-3.5 w-3.5 mr-1 fill-white shrink-0" />
+                                                <span>Run Script</span>
                                             </Button>
 
                                             <Button
                                                 variant="outline"
                                                 size="sm"
                                                 onClick={() => handleRunBackground(script)}
-                                                className="h-8 text-xs border-zinc-700 bg-zinc-900/60 hover:bg-zinc-800 text-zinc-300"
+                                                className="h-8 text-xs border-zinc-700 bg-zinc-900/60 hover:bg-zinc-800 text-zinc-300 flex-1 sm:flex-initial"
                                                 title="Run silently in background"
                                             >
-                                                <Zap className="h-3.5 w-3.5 mr-1 text-amber-400" />
-                                                Background
+                                                <Zap className="h-3.5 w-3.5 mr-1 text-amber-400 shrink-0" />
+                                                <span>Background</span>
                                             </Button>
                                         </div>
 
@@ -449,7 +449,7 @@ export default function AdminScriptsPage() {
                                                 variant="ghost"
                                                 size="sm"
                                                 onClick={() => handleViewHistory(script)}
-                                                className="h-8 text-xs text-zinc-400 hover:text-zinc-200"
+                                                className="h-8 text-xs text-zinc-400 hover:text-zinc-200 px-2 sm:px-2.5"
                                                 title="View previous execution runs and logs"
                                             >
                                                 <History className="h-3.5 w-3.5 mr-1" />
@@ -460,7 +460,7 @@ export default function AdminScriptsPage() {
                                                 variant="ghost"
                                                 size="sm"
                                                 onClick={() => handleEditScript(script)}
-                                                className="h-8 text-xs text-zinc-400 hover:text-zinc-200"
+                                                className="h-8 text-xs text-zinc-400 hover:text-zinc-200 px-2 sm:px-2.5"
                                                 title="Edit script code and settings"
                                             >
                                                 <Edit3 className="h-3.5 w-3.5 mr-1" />
@@ -471,7 +471,7 @@ export default function AdminScriptsPage() {
                                                 variant="ghost"
                                                 size="sm"
                                                 onClick={() => handleDeleteScript(script)}
-                                                className="h-8 text-xs text-zinc-400 hover:text-rose-400"
+                                                className="h-8 text-xs text-zinc-400 hover:text-rose-400 px-2"
                                                 title="Delete script"
                                             >
                                                 <Trash2 className="h-3.5 w-3.5" />

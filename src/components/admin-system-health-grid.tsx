@@ -156,25 +156,27 @@ export default function AdminSystemHealthGrid() {
                     </div>
 
                     {/* TOP ACTION BUTTONS */}
-                    <div className="flex items-center gap-2 self-start md:self-auto shrink-0">
-                        <Link href="/admin/monitoring">
+                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 self-start md:self-auto w-full md:w-auto">
+                        <Link href="/admin/monitoring" className="flex-1 sm:flex-initial">
                             <Button 
                                 variant="outline" 
                                 size="sm" 
-                                className="h-8 px-2.5 text-xs gap-1.5 border-sky-500/30 text-sky-400 hover:bg-sky-500/10 hover:text-sky-300"
+                                className="h-8 px-2 sm:px-2.5 text-xs gap-1.5 border-sky-500/30 text-sky-400 hover:bg-sky-500/10 hover:text-sky-300 w-full sm:w-auto justify-center"
                             >
-                                <Layers className="h-3.5 w-3.5 text-sky-400" />
-                                <span>Docker Fleet & Uptime</span>
+                                <Layers className="h-3.5 w-3.5 text-sky-400 shrink-0" />
+                                <span className="hidden sm:inline">Docker Fleet &amp; Uptime</span>
+                                <span className="sm:hidden">Fleet</span>
                             </Button>
                         </Link>
-                        <Link href="/settings?tab=monitoring">
+                        <Link href="/settings?tab=monitoring" className="flex-1 sm:flex-initial">
                             <Button 
                                 variant="outline" 
                                 size="sm" 
-                                className="h-8 px-2.5 text-xs gap-1.5 border-border/60 hover:bg-white/[0.04]"
+                                className="h-8 px-2 sm:px-2.5 text-xs gap-1.5 border-border/60 hover:bg-white/[0.04] w-full sm:w-auto justify-center"
                             >
-                                <Settings className="h-3.5 w-3.5 text-muted-foreground" />
-                                <span>Manage Apps</span>
+                                <Settings className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                <span className="hidden sm:inline">Manage Apps</span>
+                                <span className="sm:hidden">Apps</span>
                             </Button>
                         </Link>
                         <Button
@@ -182,21 +184,22 @@ export default function AdminSystemHealthGrid() {
                             size="sm"
                             onClick={handlePrewarmAll}
                             disabled={prewarming || refreshing}
-                            className="h-8 px-2.5 text-xs gap-1.5 border-amber-500/30 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300"
+                            className="h-8 px-2 sm:px-2.5 text-xs gap-1.5 border-amber-500/30 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300 flex-1 sm:flex-initial justify-center"
                             title="Prewarm Discovery carousels, Plex availability indices, system stats, and Docker fleet in RAM"
                         >
-                            <Zap className={`h-3.5 w-3.5 ${prewarming ? "animate-spin text-amber-300" : "text-amber-400"}`} />
-                            <span>{prewarming ? "Warming..." : prewarmSuccessMessage ? prewarmSuccessMessage : "Prewarm Caches"}</span>
+                            <Zap className={`h-3.5 w-3.5 shrink-0 ${prewarming ? "animate-spin text-amber-300" : "text-amber-400"}`} />
+                            <span className="hidden sm:inline">{prewarming ? "Warming..." : prewarmSuccessMessage ? prewarmSuccessMessage : "Prewarm Caches"}</span>
+                            <span className="sm:hidden">{prewarming ? "Warming..." : "Prewarm"}</span>
                         </Button>
                         <Button
                             variant="outline"
                             size="sm"
                             onClick={() => loadStatus(true)}
                             disabled={refreshing}
-                            className="h-8 px-2.5 text-xs gap-1.5 border-border/60 hover:bg-white/[0.04]"
+                            className="h-8 px-2 sm:px-2.5 text-xs gap-1.5 border-border/60 hover:bg-white/[0.04] shrink-0"
                         >
-                            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin text-primary" : ""}`} />
-                            <span>Refresh</span>
+                            <RefreshCw className={`h-3.5 w-3.5 shrink-0 ${refreshing ? "animate-spin text-primary" : ""}`} />
+                            <span className="hidden sm:inline">Refresh</span>
                         </Button>
                     </div>
                 </div>
@@ -292,28 +295,28 @@ export default function AdminSystemHealthGrid() {
                     </div>
 
                     {/* SEARCH & CATEGORY SELECT */}
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full md:w-auto">
                         <select
                             value={categoryFilter}
                             onChange={(e) => setCategoryFilter(e.target.value)}
                             aria-label="Filter by category"
-                            className="bg-black/40 border border-white/10 rounded-lg text-xs text-foreground px-2 py-1.5 h-8 focus:outline-hidden focus:border-primary/50"
+                            className="bg-black/40 border border-white/10 rounded-lg text-xs text-foreground px-2 py-1.5 h-8 focus:outline-hidden focus:border-primary/50 w-full sm:w-auto"
                         >
                             <option value="ALL">All Categories</option>
                             <option value="plex">Plex Media Servers (Live Telemetry)</option>
                             <option value="glances">Host Hardware (Glances)</option>
                             <option value="tautulli">Historical Archive (Tautulli)</option>
-                            <option value="apps">Servarr & Request Apps</option>
+                            <option value="apps">Servarr &amp; Request Apps</option>
                             <option value="downloaders">Download Clients</option>
                         </select>
 
-                        <div className="relative flex-1 sm:w-48">
+                        <div className="relative w-full sm:w-48">
                             <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                             <Input
                                 placeholder="Search services..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="h-8 pl-8 pr-2.5 text-xs bg-black/40 border-white/10 focus-visible:ring-0 focus-visible:border-primary/50"
+                                className="h-8 pl-8 pr-2.5 text-xs bg-black/40 border-white/10 focus-visible:ring-0 focus-visible:border-primary/50 w-full"
                             />
                         </div>
                     </div>
@@ -321,7 +324,7 @@ export default function AdminSystemHealthGrid() {
             </CardHeader>
 
             {/* CARD CONTENT: GRID OF SERVICES */}
-            <CardContent className="p-4 sm:p-6">
+            <CardContent className="p-3 sm:p-6">
                 {loading && services.length === 0 ? (
                     <div className="flex items-center justify-center py-12 gap-2 text-xs text-muted-foreground">
                         <RefreshCw className="h-4 w-4 animate-spin text-primary" />
@@ -443,7 +446,7 @@ export default function AdminSystemHealthGrid() {
 
                                     {/* EXTRA HARDWARE / STREAM TELEMETRY IF AVAILABLE */}
                                     {srv.metrics && (srv.metrics.cpu !== undefined || srv.metrics.streamCount !== undefined) && (
-                                        <div className="text-[10px] bg-black/30 p-1.5 rounded-lg border border-white/[0.04] flex items-center justify-between text-muted-foreground">
+                                        <div className="text-[10px] bg-black/30 p-1.5 rounded-lg border border-white/[0.04] flex flex-wrap items-center justify-between gap-1 text-muted-foreground">
                                             {srv.metrics.cpu !== undefined && (
                                                 <span className="flex items-center gap-1 font-mono">
                                                     <Cpu className="h-3 w-3 text-emerald-400" />

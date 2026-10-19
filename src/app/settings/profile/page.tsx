@@ -1204,7 +1204,7 @@ export default function UserProfilePage() {
         : (paymentConfig?.monthlyPrice ?? 17.50);
 
     return (
-        <div className="space-y-4 sm:space-y-6 max-w-5xl 2xl:max-w-6xl 3xl:max-w-7xl mx-auto p-3 sm:p-6 w-full min-w-0 animate-in fade-in duration-500">
+        <div className="space-y-4 sm:space-y-6 max-w-5xl 2xl:max-w-6xl 3xl:max-w-7xl mx-auto w-full min-w-0 animate-in fade-in duration-500">
             <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4 min-w-0">
                 <div className="space-y-1 min-w-0 flex-1 max-w-2xl">
                     <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight flex items-center gap-2">

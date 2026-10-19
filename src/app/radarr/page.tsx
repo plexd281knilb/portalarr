@@ -569,10 +569,10 @@ export default function RadarrPage() {
           </p>
         </div>
         {instances.length > 1 && (
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium">Instance:</span>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <span className="text-sm font-medium shrink-0">Instance:</span>
             <Select value={selectedAppId} onValueChange={setSelectedAppId}>
-              <SelectTrigger className="w-48 bg-background">
+              <SelectTrigger className="w-full sm:w-48 bg-background">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -1381,7 +1381,7 @@ export default function RadarrPage() {
           setDeleteMovieDialog((prev) => ({ ...prev, open }))
         }
       >
-        <DialogContent className="max-w-md bg-[#121218] border-border/60 text-foreground">
+        <DialogContent className="max-w-md w-[95vw] bg-[#121218] border-border/60 text-foreground">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold text-red-400 flex items-center gap-2">
               <Trash2 className="h-5 w-5" /> Delete Movie from Radarr
