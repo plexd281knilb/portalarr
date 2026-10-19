@@ -172,7 +172,7 @@ export default function TicketsPage() {
     const completedCount = tickets.filter(t => t.status === "Completed").length;
 
     return (
-        <div className="flex-1 space-y-4 sm:space-y-6 p-3 sm:p-6 lg:p-8 pt-4 sm:pt-6 max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[2200px] 4xl:max-w-[2560px] mx-auto w-full min-w-0 animate-in fade-in duration-500">
+        <div className="flex-1 space-y-4 sm:space-y-6 max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[2200px] 4xl:max-w-[2560px] mx-auto w-full min-w-0 animate-in fade-in duration-500">
             {/* TOP HEADER */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2">
                 <div>
@@ -334,21 +334,21 @@ export default function TicketsPage() {
                         {filteredTickets.map((ticket) => (
                             <Card key={ticket.id} className="overflow-hidden border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm hover:shadow-md transition-all duration-200 rounded-2xl">
                                 <CardHeader className="bg-muted/20 pb-4 border-b border-border/40">
-                                    <div className="flex justify-between items-start w-full gap-4">
+                                    <div className="flex flex-col sm:flex-row justify-between sm:items-start w-full gap-3 sm:gap-4">
                                         <div className="space-y-1 min-w-0">
                                             <div className="flex flex-wrap items-center gap-2">
                                                 <CardTitle className="text-base sm:text-lg font-bold truncate text-foreground">
                                                     {ticket.name}
                                                 </CardTitle>
-                                                <Badge variant="secondary" className="font-mono text-[10px] px-2 py-0.5 h-5 bg-muted/40 border border-border/40">
-                                                    <Mail className="h-3 w-3 mr-1 text-primary"/> {ticket.email}
+                                                <Badge variant="secondary" className="font-mono text-[10px] px-2 py-0.5 h-5 bg-muted/40 border border-border/40 truncate max-w-full">
+                                                    <Mail className="h-3 w-3 mr-1 text-primary shrink-0"/> <span className="truncate">{ticket.email}</span>
                                                 </Badge>
                                             </div>
                                             <CardDescription className="text-xs">
                                                 Submitted {formatDistanceToNow(new Date(ticket.createdAt))} ago
                                             </CardDescription>
                                         </div>
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
                                             {getStatusBadge(ticket.status)}
                                             <Button 
                                                 variant="ghost" 
@@ -405,8 +405,8 @@ export default function TicketsPage() {
                                                 This response will be saved and automatically emailed to the member.
                                             </p>
                                         </div>
-                                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pt-1">
-                                            <div className="flex items-center gap-2">
+                                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-1">
+                                            <div className="flex items-center gap-2 justify-between sm:justify-start">
                                                 <Label className="text-xs font-semibold whitespace-nowrap">Set Status:</Label>
                                                 <Select name="status" defaultValue={ticket.status}>
                                                     <SelectTrigger className="w-[160px] h-9 bg-background/80 border-border/60 text-xs font-semibold">
@@ -419,7 +419,7 @@ export default function TicketsPage() {
                                                     </SelectContent>
                                                 </Select>
                                             </div>
-                                            <Button type="submit" className="gap-2 h-9 font-semibold transition-all duration-200 hover:ring-2 hover:ring-primary/50 hover:shadow-md active:scale-98" size="sm">
+                                            <Button type="submit" className="gap-2 h-9 font-semibold transition-all duration-200 hover:ring-2 hover:ring-primary/50 hover:shadow-md active:scale-98 w-full sm:w-auto" size="sm">
                                                 <Send className="h-4 w-4" /> Save & Notify Member
                                             </Button>
                                         </div>
@@ -459,9 +459,9 @@ export default function TicketsPage() {
                             {tickets.map((ticket) => (
                                 <Card key={ticket.id} className="overflow-hidden border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm rounded-2xl">
                                     <CardHeader className="bg-muted/20 pb-4 border-b border-border/40">
-                                        <div className="flex justify-between items-start gap-4">
+                                        <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
                                             <div className="space-y-1">
-                                                <div className="flex items-center gap-2">
+                                                <div className="flex items-center gap-2 flex-wrap">
                                                     <CardTitle className="text-base font-bold text-foreground">
                                                         Support Request
                                                     </CardTitle>
@@ -508,7 +508,7 @@ export default function TicketsPage() {
 
             {/* CREATE TICKET MODAL */}
             <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-                <DialogContent className="sm:max-w-md bg-[#121218] border border-border/60 shadow-2xl text-foreground">
+                <DialogContent className="sm:max-w-md w-[95vw] bg-[#121218] border border-border/60 shadow-2xl text-foreground">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2 text-base font-bold text-foreground">
                             <LifeBuoy className="h-5 w-5 text-amber-400" />
@@ -597,7 +597,7 @@ export default function TicketsPage() {
 
             {/* PERMANENT DELETE CONFIRMATION DIALOG */}
             <Dialog open={!!ticketToDelete} onOpenChange={(open) => !open && setTicketToDelete(null)}>
-                <DialogContent className="sm:max-w-md bg-[#121218] border-border/60 text-foreground">
+                <DialogContent className="sm:max-w-md w-[95vw] bg-[#121218] border-border/60 text-foreground">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2 text-rose-400">
                             <Trash2 className="h-5 w-5" /> Permanently Delete Ticket?

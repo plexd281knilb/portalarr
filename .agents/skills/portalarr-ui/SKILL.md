@@ -1034,6 +1034,32 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 
 ---
 
+### 44. Universal Mobile Viewport Optimization & Layout Container Architecture
+- **Single Top-Level Main Layout Wrapper (`layout-wrapper.tsx`)**:
+  - The root layout already encapsulates all page content inside:
+    ```tsx
+    <main className="flex-1 overflow-y-auto p-2.5 sm:p-4 md:p-6 lg:p-8 3xl:p-10 w-full min-w-0">
+    ```
+  - **Zero Duplicate Nested Padding Rule**: Subpages (`src/app/**/page.tsx`) must NEVER wrap themselves in redundant `min-h-screen`, `bg-background`, nested `<main>` tags, or duplicate `p-4 sm:p-6` padding. Doing so strips mobile viewports (< 640px) of 30–50px of precious horizontal space and introduces HTML accessibility violations (multiple `<main>` elements).
+  - **Standard Subpage Root Container**:
+    ```tsx
+    <div className="flex-1 max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[2200px] 4xl:max-w-[2560px] mx-auto w-full min-w-0 space-y-4 sm:space-y-6 animate-in fade-in duration-500">
+    ```
+- **Mobile Action Stacking & Responsive Controls**:
+  - Header control bars, search inputs, instance selectors, and filters must adapt cleanly on small screens:
+    - Use `flex-col sm:flex-row gap-2 sm:gap-3` on control rows.
+    - Full width on mobile: `w-full sm:w-auto` or `w-full sm:w-48`.
+    - Stackable buttons: `flex-1 sm:flex-initial justify-center` so touch targets are large and easy to tap.
+  - Multi-button card actions (such as in Admin Scripts or Arr queues) must use `flex-wrap items-center justify-between gap-2` with `flex-1 min-w-[120px]` on primary action buttons so they never truncate or overflow outside the card boundaries.
+- **Universal Mobile Modal Sizing**:
+  - All modals, sheets, and dialogs must specify `w-[95vw]` to prevent clipping on 360px–420px mobile screens:
+    ```tsx
+    <DialogContent className="w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto overflow-x-hidden p-4 sm:p-6">
+    ```
+  - Form footers in dialogs must use `flex-col-reverse sm:flex-row gap-2 sm:gap-0` with `w-full sm:w-auto` for action buttons.
+
+---
+
 As the Portalarr frontend evolves or new design decisions are finalized:
 1. **Adding a New UI Rule**: Add the rule to the relevant section above or under `references/`.
 2. **Tweaking Component Defaults**: Update the corresponding reference file in `references/`.

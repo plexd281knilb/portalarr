@@ -1219,7 +1219,7 @@ function SettingsPageContent() {
     }
 
     return (
-        <div className="space-y-6 p-3 sm:p-5 lg:p-8 max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[2200px] 4xl:max-w-[2560px] mx-auto w-full min-w-0">
+        <div className="space-y-4 sm:space-y-6 max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[2200px] 4xl:max-w-[2560px] mx-auto w-full min-w-0 animate-in fade-in duration-500">
             <div>
                 <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">System Settings</h2>
                 <p className="text-xs sm:text-sm text-muted-foreground">Configure global platform settings, integrations, access control, and monitoring apps.</p>

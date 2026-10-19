@@ -103,13 +103,13 @@ export function ScriptHistoryModal({
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
             <DialogContent className="max-w-4xl w-[95vw] max-h-[92vh] flex flex-col bg-[#0d0e14] border-zinc-800 p-0 overflow-hidden shadow-2xl">
                 {/* Header */}
-                <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800 bg-zinc-950/70">
+                <div className="flex items-center justify-between px-4 sm:px-5 py-3 sm:py-4 border-b border-zinc-800 bg-zinc-950/70">
                     <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400">
+                        <div className="p-2 rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400 shrink-0">
                             <History className="h-5 w-5" />
                         </div>
-                        <div>
-                            <DialogTitle className="text-base font-semibold text-zinc-100 flex items-center gap-2">
+                        <div className="min-w-0">
+                            <DialogTitle className="text-base font-semibold text-zinc-100 flex items-center gap-2 flex-wrap">
                                 <span>Execution History</span>
                                 <Badge variant="outline" className="text-[10px] font-mono bg-zinc-900 border-zinc-700 text-zinc-300">
                                     {script?.filename}
@@ -123,9 +123,9 @@ export function ScriptHistoryModal({
                 </div>
 
                 {/* Content Layout: Run list on left, Log viewer on right */}
-                <div className="flex-1 overflow-hidden grid grid-cols-1 md:grid-cols-3 min-h-[420px]">
+                <div className="flex-1 overflow-hidden grid grid-cols-1 md:grid-cols-3 min-h-[350px] sm:min-h-[420px]">
                     {/* Run List */}
-                    <div className="border-r border-zinc-800/80 bg-zinc-950/40 overflow-y-auto max-h-[60vh] p-3 space-y-2">
+                    <div className="border-b md:border-b-0 md:border-r border-zinc-800/80 bg-zinc-950/40 overflow-y-auto max-h-[30vh] md:max-h-[60vh] p-3 space-y-2">
                         {loading ? (
                             <div className="p-6 text-center text-xs text-zinc-500 flex items-center justify-center gap-2">
                                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -176,7 +176,7 @@ export function ScriptHistoryModal({
                     </div>
 
                     {/* Log Viewer */}
-                    <div className="col-span-2 flex flex-col bg-[#07080b] overflow-hidden">
+                    <div className="col-span-1 md:col-span-2 flex flex-col bg-[#07080b] overflow-hidden">
                         {/* Log actions header */}
                         <div className="px-4 py-2 border-b border-zinc-800/80 bg-zinc-950/70 flex items-center justify-between">
                             <div className="flex items-center gap-2">
@@ -210,7 +210,7 @@ export function ScriptHistoryModal({
                         </div>
 
                         {/* Monospace log text */}
-                        <div className="flex-1 p-4 font-mono text-xs text-zinc-300 overflow-y-auto max-h-[54vh] select-text whitespace-pre-wrap leading-relaxed">
+                        <div className="flex-1 p-3 sm:p-4 font-mono text-xs text-zinc-300 overflow-y-auto max-h-[38vh] md:max-h-[54vh] select-text whitespace-pre-wrap leading-relaxed">
                             {loadingLog ? (
                                 <div className="p-6 text-center text-xs text-zinc-500 flex items-center justify-center gap-2">
                                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -226,12 +226,12 @@ export function ScriptHistoryModal({
                 </div>
 
                 {/* Footer */}
-                <div className="flex items-center justify-end px-5 py-3 border-t border-zinc-800 bg-zinc-950/80">
+                <div className="flex items-center justify-end px-4 sm:px-5 py-3 border-t border-zinc-800 bg-zinc-950/80">
                     <Button 
                         variant="default" 
                         size="sm" 
                         onClick={onClose}
-                        className="h-8 text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-200"
+                        className="h-8 text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-200 w-full sm:w-auto"
                     >
                         Close
                     </Button>
