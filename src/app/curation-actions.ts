@@ -1743,7 +1743,9 @@ export async function syncCollectionToPlexInternal(
                                          Boolean(collection.includePlaceholders);
 
         // Fetch library media items and filter out any excluded labels, cross-media type noise, and trailer stubs
-        const rawLibraryItems = await getPlexLibraryMediaItems(urlsToTry, token, collection.sectionKey || "", 5000, undefined, true, !isPlaceholdersCollection);
+        // Only load streams (includeStreams: true) if query explicitly filters by HDR or audio codecs
+        const needsStreams = collection.sourceType === "plex_query" && Boolean(collection.sourceQuery?.includes("hdr:") || collection.sourceQuery?.includes("audio:"));
+        const rawLibraryItems = await getPlexLibraryMediaItems(urlsToTry, token, collection.sectionKey || "", 5000, undefined, needsStreams, !isPlaceholdersCollection);
 
         const libraryItems = deduplicatePlexLibraryItems(rawLibraryItems.filter(it => {
             if (isTvSection && it.type === "movie") return false;
@@ -2319,7 +2321,8 @@ export async function generateCollectionCandidateItemsPreviewAction(
                                           collectionConfig.sourceType === "radarr" ||
                                           collectionConfig.sourceType === "sonarr" ||
                                           Boolean(collectionConfig.includePlaceholders);
-        const rawLibraryItems = await getPlexLibraryMediaItems(urlsToTry, token, sectionKey || "", 5000, undefined, true, !isPlaceholdersCollection);
+        const needsStreams = collectionConfig.sourceType === "plex_query" && Boolean(collectionConfig.sourceQuery?.includes("hdr:") || collectionConfig.sourceQuery?.includes("audio:"));
+        const rawLibraryItems = await getPlexLibraryMediaItems(urlsToTry, token, sectionKey || "", 5000, undefined, needsStreams, !isPlaceholdersCollection);
 
         const libraryItems = deduplicatePlexLibraryItems(rawLibraryItems.filter(it => {
             if (isTvSection && it.type === "movie") return false;
@@ -3394,6 +3397,9 @@ export async function syncSeasonalAndScheduledCollectionsInternal(serverId?: str
                     action: `Collection Synced & Active${placeholderNotes}`
                 });
             }
+
+            // Pacing delay between collection updates to avoid PMS SQLite thread starvation
+            await new Promise(r => setTimeout(r, 75));
         }
 
         // Run hub reordering ONCE per affected section at the end of the batch
@@ -3818,6 +3824,7 @@ export async function syncLeavingSoonCollectionHubInternal(
                                 true,
                                 resolved.serverName
                             );
+                            await new Promise(r => setTimeout(r, 100));
                         }
                     } catch (itemErr: any) {
                         console.warn(`[LEAVING-SOON] Failed applying banner overlay to item ${adv.ratingKey}:`, itemErr.message);
@@ -5049,9 +5056,18 @@ export async function applyOverlaysToLibraryInternal(
             };
         }
 
-        // Fetch library media items across the whole library section, strictly excluding trailer placeholders
+        const requestedBatchSize = batchOptions?.batchSize !== undefined ? batchOptions.batchSize : 0;
+        const isUnlimitedBatch = requestedBatchSize <= 0;
+        const effectiveBatchLimit = isUnlimitedBatch ? Infinity : requestedBatchSize;
+        const mode = batchOptions?.mode || "incremental";
+
+        // Fetch library media items across the library section, strictly excluding trailer placeholders
+        // Optimization: For hourly incremental runs, fetch only recently added items (e.g. 100 items sorted by addedAt:desc)
+        // instead of pulling all 10,000 items with streams from PMS!
+        const fetchLimit = mode === "incremental" ? (isUnlimitedBatch ? 100 : Math.min(Math.max(requestedBatchSize * 2, 50), 200)) : 10000;
+        const fetchSort = mode === "incremental" ? "addedAt:desc" : undefined;
         const urlsToTry = [serverUrl, ...resolved.allCandidateUrls.filter(u => u !== serverUrl)];
-        const items = await getPlexLibraryMediaItems(urlsToTry, token, sectionKey, 10000, undefined, true, true);
+        const items = await getPlexLibraryMediaItems(urlsToTry, token, sectionKey, fetchLimit, fetchSort, true, true);
 
         // Map leaving soon flags from content advisories
         const leavingSoonAdvisories = await prisma.mediaContentAdvisory.findMany({
@@ -5074,11 +5090,6 @@ export async function applyOverlaysToLibraryInternal(
             where: { serverId }
         }).catch(() => []);
         const backupMap = new Map(existingBackups.map(b => [String(b.ratingKey), b]));
-
-        const requestedBatchSize = batchOptions?.batchSize !== undefined ? batchOptions.batchSize : 0;
-        const isUnlimitedBatch = requestedBatchSize <= 0;
-        const effectiveBatchLimit = isUnlimitedBatch ? Infinity : requestedBatchSize;
-        const mode = batchOptions?.mode || "incremental";
 
         // Categorize items
         interface CandidateItem {
@@ -5252,6 +5263,8 @@ export async function applyOverlaysToLibraryInternal(
                     newBadgedCount++;
                 }
             }
+            // Pacing delay between image processing and Plex poster upload to prevent PMS SQLite lock and CPU spikes
+            await new Promise(r => setTimeout(r, 120));
         }
 
         if (ruleId) {
@@ -6531,6 +6544,7 @@ export async function executePruneAction(
                             true,
                             serverName
                         );
+                        await new Promise(r => setTimeout(r, 100));
                     }
                 }
 
@@ -11169,7 +11183,8 @@ export async function tagAllPlaceholdersInPlexInternal(
                 const isTv = sec.type === "show" || sec.type === "tv";
 
                 // Fetch all items from the library section (do NOT exclude placeholders, as we want to find and tag them)
-                const items = await getPlexLibraryMediaItems(urlsToTry, token, secKey, 10000, undefined, true, false);
+                // Omit streams (includeStreams: false) to prevent PMS SQLite deadlocks
+                const items = await getPlexLibraryMediaItems(urlsToTry, token, secKey, 10000, undefined, false, false);
 
                 for (const item of items) {
                     const fileLower = (item.filePath || "").toLowerCase();
@@ -11299,6 +11314,8 @@ export async function tagAllPlaceholdersInPlexInternal(
                                 });
                             } catch {}
                         }
+                        // Pacing pause to let PMS SQLite write transaction commit cleanly
+                        await new Promise(r => setTimeout(r, 40));
                     }
                 }
             }
@@ -12360,8 +12377,8 @@ export async function cleanupAvailablePlaceholdersInternal(
                         const sections = await getPlexServerSections(token, srv.serverId);
                         for (const sec of sections) {
                             if (sectionKey && String(sec.key) !== String(sectionKey)) continue;
-                            if (sec.type !== "movie" && sec.type !== "show") continue;
-                            const items = await getPlexLibraryMediaItems(urlsToTry, resolved.token, String(sec.key), 5000, undefined, true, true);
+                            // Omit streams (includeStreams: false) to avoid heavy SQLite joins on PMS
+                            const items = await getPlexLibraryMediaItems(urlsToTry, resolved.token, String(sec.key), 5000, undefined, false, true);
                             for (const it of items) {
                                 if (it.isPlaceholder) continue;
                                 const fileLower = (it.filePath || "").toLowerCase();

@@ -679,7 +679,7 @@ export async function applyParentalTagsToPlexItem(
     },
     advisory: ImdbParentalAdvisory,
     options: ParentalTaggingOptions
-): Promise<{ success: boolean; appliedTags: string[]; error?: string }> {
+): Promise<{ success: boolean; appliedTags: string[]; skipped?: boolean; error?: string }> {
     const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
     const mediaType = item.type === "show" ? "show" : "movie";
     const typeId = mediaType === "show" ? 2 : 1;
@@ -734,6 +734,24 @@ export async function applyParentalTagsToPlexItem(
                 oldParentalGenres = allGenres.filter((t: string) => isParentalTag(t, prefix));
             }
 
+            // Check if tags already match exactly to skip redundant network mutations
+            const targetIsLabels = target === "labels" || target === "both";
+            const targetIsGenres = target === "genres" || target === "both";
+
+            const labelsMatch = !targetIsLabels || (
+                oldParentalLabels.length === tagsToApply.length &&
+                tagsToApply.every(t => oldParentalLabels.includes(t))
+            );
+            const genresMatch = !targetIsGenres || (
+                oldParentalGenres.length === tagsToApply.length &&
+                tagsToApply.every(t => oldParentalGenres.includes(t))
+            );
+
+            if (labelsMatch && genresMatch) {
+                // Item already has the exact target tags! Skip redundant network PUT calls to protect PMS.
+                return { success: true, appliedTags: tagsToApply, skipped: true };
+            }
+
             // 3. Formulate update parameters
             const metaParams = new URLSearchParams();
 
@@ -785,7 +803,10 @@ export async function applyParentalTagsToPlexItem(
                 headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
             });
 
-            return { success: true, appliedTags: tagsToApply };
+            // Pacing pause to let PMS SQLite write transaction commit cleanly
+            await new Promise(r => setTimeout(r, 40));
+
+            return { success: true, appliedTags: tagsToApply, skipped: false };
         } catch (e: any) {
             lastError = e;
         }
@@ -930,7 +951,7 @@ export async function applyParentalTagsToLibrary(
     logger.addLog("INFO", "CURATION", `Starting IMDb Parental Rating Tagging for library section ${sectionKey} on "${serverName}"...`);
 
     const urlsToTry = [serverUrl, ...resolved.allCandidateUrls.filter(u => u !== serverUrl)];
-    const items: PlexMediaStreamInfo[] = await getPlexLibraryMediaItems(urlsToTry, serverToken, sectionKey, 5000);
+    const items: PlexMediaStreamInfo[] = await getPlexLibraryMediaItems(urlsToTry, serverToken, sectionKey, 5000, undefined, false);
     if (items.length === 0) {
         return { success: true, totalEvaluated: 0, taggedCount: 0, skippedCount: 0, appliedTagsSummary: {} };
     }
@@ -1143,7 +1164,8 @@ export async function applyCustomTagRuleToLibrary(
 
     logger.addLog("INFO", "CURATION", `Applying custom tag "${rule.tagName}" (${rule.field}) on section ${sectionKey} on "${serverName}"...`);
 
-    const items: PlexMediaStreamInfo[] = await getPlexLibraryMediaItems(urlsToTry, serverToken, sectionKey, 5000);
+    const needsStreams = rule.filterType === "resolution" || rule.filterType === "hdr" || rule.filterType === "audio";
+    const items: PlexMediaStreamInfo[] = await getPlexLibraryMediaItems(urlsToTry, serverToken, sectionKey, 5000, undefined, needsStreams);
     let taggedCount = 0;
     let skippedCount = 0;
 
@@ -1305,6 +1327,8 @@ export async function applyCustomTagRuleToLibrary(
 
                 if (putRes.ok) {
                     taggedCount++;
+                    // Pacing pause to let PMS SQLite write transaction commit cleanly
+                    await new Promise(r => setTimeout(r, 40));
                     break;
                 }
             } catch (e) {}
@@ -1428,18 +1452,35 @@ export async function clearCustomTagFromLibrary(
     return { success: true, clearedCount };
 }
 
+const tagsAuditCache = new Map<string, { timestamp: number; data: any }>();
+const TAGS_AUDIT_CACHE_TTL = 3 * 60 * 1000; // 3 minutes
+
+export function clearPlexLibraryTagsAuditCache(): void {
+    tagsAuditCache.clear();
+}
+
 /**
  * Scans a Plex library section and returns an audit of all active Labels, Genres, and Collections with counts.
+ * Uses 3-minute in-memory caching to prevent redundant library audits on PMS.
  */
 export async function getPlexLibraryTagsAudit(
     serverId: string,
-    sectionKey: string | number
+    sectionKey: string | number,
+    forceRefresh = false
 ): Promise<{
     labels: Array<{ tag: string; count: number; isParental: boolean }>;
     genres: Array<{ tag: string; count: number; isParental: boolean }>;
     collections: Array<{ tag: string; count: number }>;
     totalItems: number;
 }> {
+    const cacheKey = `${serverId}_${sectionKey}`;
+    if (!forceRefresh) {
+        const cached = tagsAuditCache.get(cacheKey);
+        if (cached && (Date.now() - cached.timestamp < TAGS_AUDIT_CACHE_TTL)) {
+            return cached.data;
+        }
+    }
+
     try {
         const resolved = await resolveWorkingPlexServerConnection(serverId);
         if (!resolved || !resolved.serverUrl) return { labels: [], genres: [], collections: [], totalItems: 0 };
@@ -1518,12 +1559,14 @@ export async function getPlexLibraryTagsAudit(
             count
         })).sort((a, b) => b.count - a.count);
 
-        return {
+        const result = {
             labels,
             genres,
             collections,
             totalItems: items.length
         };
+        tagsAuditCache.set(cacheKey, { timestamp: Date.now(), data: result });
+        return result;
     } catch (e) {
         return { labels: [], genres: [], collections: [], totalItems: 0 };
     }
