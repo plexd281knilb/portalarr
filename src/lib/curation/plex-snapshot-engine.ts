@@ -170,30 +170,35 @@ export async function createPlexDatabaseSnapshot(
     let methodUsed = "sqlite3_cli";
 
     try {
-        // Strategy 1: Use sqlite3 CLI .backup command (Identical to plex_prune_hourly.sh)
-        // This is non-locking and ensures a coherent, checkpointed snapshot
-        await execFileAsync("sqlite3", [resolvedSource, `.backup '${destSnapshotPath.replace(/'/g, "''")}'`], { timeout: 45000 });
+        // Strategy 1: Use sqlite3 CLI .backup command with 15s busy timeout
+        // This is non-locking and ensures a coherent, checkpointed snapshot even if Plex is momentarily writing
+        await execFileAsync("sqlite3", ["-cmd", ".timeout 15000", resolvedSource, `.backup '${destSnapshotPath.replace(/'/g, "''")}'`], { timeout: 45000 });
     } catch (cliErr) {
         // Strategy 2: File copy fallback with WAL and checkpoint
         methodUsed = "node_file_copy";
         try {
             fs.copyFileSync(resolvedSource, destSnapshotPath);
             const sourceWal = `${resolvedSource}-wal`;
-            const sourceShm = `${resolvedSource}-shm`;
             const destWal = `${destSnapshotPath}-wal`;
-            const destShm = `${destSnapshotPath}-shm`;
 
             if (fs.existsSync(sourceWal)) {
                 try { fs.copyFileSync(sourceWal, destWal); } catch (e) {}
             }
-            if (fs.existsSync(sourceShm)) {
-                try { fs.copyFileSync(sourceShm, destShm); } catch (e) {}
+
+            // CRITICAL: NEVER copy the source .db-shm file!
+            // The .db-shm file contains active POSIX lock states and shared memory pointers from the running Plex process.
+            // Copying it causes "Error: stepping, database is locked (5)".
+            // SQLite automatically creates a fresh, unlocked -shm when opening the copy.
+            const destShm = `${destSnapshotPath}-shm`;
+            if (fs.existsSync(destShm)) {
+                try { fs.unlinkSync(destShm); } catch (e) {}
             }
 
             // Checkpoint the copied WAL into the destination DB so it becomes self-contained
             if (DatabaseSyncClass) {
                 try {
                     const tempDb = new DatabaseSyncClass(destSnapshotPath);
+                    try { tempDb.exec("PRAGMA busy_timeout = 10000;"); } catch (e) {}
                     tempDb.exec("PRAGMA wal_checkpoint(TRUNCATE);");
                     tempDb.close();
                     if (fs.existsSync(destWal)) {
@@ -265,6 +270,8 @@ export function inspectPlexDatabase(dbPath: string): {
         const sizeMb = Math.round((stat.size / (1024 * 1024)) * 10) / 10;
 
         db = new DatabaseSyncClass(resolved, { readOnly: true });
+        try { db.exec("PRAGMA busy_timeout = 10000;"); } catch (e) {}
+        try { db.exec("PRAGMA query_only = ON;"); } catch (e) {}
 
         const sections = db.prepare(`
             SELECT id, name, section_type 
@@ -327,6 +334,8 @@ export function getSnapshotLibraryTagsAudit(
     let db: any = null;
     try {
         db = new DatabaseSyncClass(snapshotPath, { readOnly: true });
+        try { db.exec("PRAGMA busy_timeout = 10000;"); } catch (e) {}
+        try { db.exec("PRAGMA query_only = ON;"); } catch (e) {}
 
         const secId = sectionKey !== undefined && sectionKey !== null ? Number(sectionKey) : null;
         const sql = `
@@ -390,6 +399,8 @@ export function getSnapshotLibraryMediaItems(
     let db: any = null;
     try {
         db = new DatabaseSyncClass(snapshotPath, { readOnly: true });
+        try { db.exec("PRAGMA busy_timeout = 10000;"); } catch (e) {}
+        try { db.exec("PRAGMA query_only = ON;"); } catch (e) {}
         const secId = Number(sectionKey);
         const limit = options.limit ?? 5000;
 
@@ -584,6 +595,8 @@ export async function evaluatePruneCandidatesFromSnapshotsUnified(
 
     try {
         db = new DatabaseSyncClass(primarySnap.snapshotPath, { readOnly: true });
+        try { db.exec("PRAGMA busy_timeout = 10000;"); } catch (e) {}
+        try { db.exec("PRAGMA query_only = ON;"); } catch (e) {}
 
         // Attach secondary server snapshots
         for (const sec of secondarySnaps) {
