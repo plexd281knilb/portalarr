@@ -141,9 +141,14 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 - **Mobile Phones (`< 640px`)**:
   - Container padding: `p-2.5 sm:p-4 md:p-6 lg:p-8 3xl:p-10`.
   - Poster grids: Standardize on `grid-cols-2 sm:grid-cols-3` so mobile displays show a clean 2-card grid without excessive vertical scrolling.
-  - Action toolbars: Always wrap controls with `flex-wrap gap-2 w-full sm:w-auto`, allowing search inputs and filter selects to collapse gracefully to full width on mobile (`w-full sm:w-64`).
+  - Action toolbars: Always wrap controls with `flex-wrap gap-2 w-full sm:w-auto`, allowing search inputs and filter selects to collapse gracefully to full width on mobile (`w-full sm:w-64` or `flex-col sm:flex-row`).
   - Dropdown & Select Truncation: Every select trigger must include `w-full min-w-0 truncate` to prevent long option text from breaking out of the viewport.
   - Slide-out Mobile Sidebar: Ensure drawer body has `flex-1 overflow-y-auto min-h-0` with touch-friendly tap targets (`min-h-[38px]`).
+  - **Admin Mission Control & User Switcher Stack**: Never fix impersonation selects and "Return to Admin" buttons side-by-side with fixed `w-full` or `shrink-0`. Use `flex-col sm:flex-row items-stretch sm:items-center` so controls stack neatly at 100% width on phone screens.
+  - **Telemetry Toolbars & Action Buttons**: Button bars with 3+ tools (e.g. "Stream Intelligence Hub", "Watch History & Audit", "Refresh") must use `flex-wrap gap-1.5 sm:gap-2 w-full sm:w-auto` with responsive mobile labels (`<span className="hidden sm:inline">Stream Intelligence Hub</span><span className="sm:hidden">Intelligence</span>`).
+  - **Stream Telemetry & Codec Badges**: Video and audio badges containing full transcode paths (`CONVERT (TRUEHD 7.1 ➔ EAC3 Stereo)`) must include `max-w-full break-all sm:break-normal` with `min-w-0` on parent containers to prevent wide badges from spreading cards beyond the mobile viewport.
+  - **Filter Bars with Search & Category Dropdowns**: Never place category dropdowns with lengthy labels alongside search inputs in an unconstrained flex row. Wrap with `flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full md:w-auto` and give inputs full width on mobile (`w-full sm:w-44` / `w-full sm:w-56`).
+  - **Download Queue Rows**: Stack release title above bandwidth/ETA badges on mobile (`flex-col sm:flex-row sm:items-center items-start gap-1 sm:gap-3`) to give release titles 100% width and prevent truncated unreadable filenames.
 - **720p Displays (`1280 x 720` / Compact Height Viewports)**:
   - **Vertical Height Defense**: Total browser viewport height is often under 650px. Dialogs and modals must strictly constrain height with `max-h-[85vh]` or `max-h-[88vh]` and place `overflow-y-auto` on the inner body container.
   - Sidebars: Both desktop and mobile sidebars must use `h-full min-h-0` with `flex-1 overflow-y-auto` so the footer logout button and bottom items remain accessible.

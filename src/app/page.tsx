@@ -40,7 +40,8 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { 
     ExternalLink, AlertTriangle, BookOpen, Sparkles, Compass, 
-    Tv, Film, Zap, ArrowRight, Shield, Download, LifeBuoy, Settings, Wrench
+    Tv, Film, Zap, ArrowRight, Shield, Download, LifeBuoy, Settings, Wrench,
+    Activity, Layers
 } from "lucide-react"; 
 
 export const dynamic = "force-dynamic";
@@ -130,13 +131,13 @@ export default async function UserLandingPage() {
                 </div>
             )}
 
-            <main className="flex-1 p-2.5 sm:p-5 lg:p-8 max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[2200px] 4xl:max-w-[2560px] mx-auto w-full space-y-5 sm:space-y-6 lg:space-y-8 animate-in fade-in duration-500 min-w-0">
+            <div className="flex-1 w-full max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[2200px] 4xl:max-w-[2560px] mx-auto space-y-4 sm:space-y-6 lg:space-y-8 animate-in fade-in duration-500 min-w-0">
                 
                 {/* --- DASHBOARD HEADER --- */}
-                <section className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-2 border-b border-border/40">
-                    <div className="space-y-1">
-                        <div className="flex items-center gap-2.5">
-                            <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-foreground via-foreground/90 to-muted-foreground bg-clip-text text-transparent">
+                <section className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 py-1 sm:py-2 border-b border-border/40">
+                    <div className="space-y-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <h1 className="text-lg sm:text-2xl lg:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-foreground via-foreground/90 to-muted-foreground bg-clip-text text-transparent">
                                 System Dashboard
                             </h1>
                             {isTrial ? (
@@ -501,46 +502,60 @@ export default async function UserLandingPage() {
                         </div>
 
                         {/* QUICK ACCESS ADMIN TOOL MATRIX */}
-                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 sm:gap-2.5">
                             <Link href="/discover" className="block group">
-                                <div className="p-3 rounded-xl bg-white/[0.02] border border-border/50 group-hover:border-rose-500/50 text-center space-y-1.5 transition-all">
+                                <div className="p-2.5 sm:p-3 rounded-xl bg-white/[0.02] border border-border/50 group-hover:border-rose-500/50 text-center space-y-1.5 transition-all">
                                     <Compass className="h-5 w-5 mx-auto text-rose-400" />
-                                    <span className="text-xs font-bold block text-foreground">Requests</span>
+                                    <span className="text-xs font-bold block text-foreground truncate">Requests</span>
+                                </div>
+                            </Link>
+
+                            <Link href="/admin/tautulli" className="block group">
+                                <div className="p-2.5 sm:p-3 rounded-xl bg-white/[0.02] border border-border/50 group-hover:border-cyan-500/50 text-center space-y-1.5 transition-all">
+                                    <Activity className="h-5 w-5 mx-auto text-cyan-400" />
+                                    <span className="text-xs font-bold block text-foreground truncate">Streams</span>
+                                </div>
+                            </Link>
+
+                            <Link href="/admin/monitoring" className="block group">
+                                <div className="p-2.5 sm:p-3 rounded-xl bg-white/[0.02] border border-border/50 group-hover:border-emerald-500/50 text-center space-y-1.5 transition-all">
+                                    <Layers className="h-5 w-5 mx-auto text-emerald-400" />
+                                    <span className="text-xs font-bold block text-foreground truncate">Fleet &amp; Uptime</span>
                                 </div>
                             </Link>
 
                             <Link href="/library" className="block group">
-                                <div className="p-3 rounded-xl bg-white/[0.02] border border-border/50 group-hover:border-emerald-500/50 text-center space-y-1.5 transition-all">
+                                <div className="p-2.5 sm:p-3 rounded-xl bg-white/[0.02] border border-border/50 group-hover:border-emerald-500/50 text-center space-y-1.5 transition-all">
                                     <BookOpen className="h-5 w-5 mx-auto text-emerald-400" />
-                                    <span className="text-xs font-bold block text-foreground">Book Library</span>
+                                    <span className="text-xs font-bold block text-foreground truncate">Book Library</span>
                                 </div>
                             </Link>
 
                             <Link href="/radarr" className="block group">
-                                <div className="p-3 rounded-xl bg-white/[0.02] border border-border/50 group-hover:border-amber-500/50 text-center space-y-1.5 transition-all">
+                                <div className="p-2.5 sm:p-3 rounded-xl bg-white/[0.02] border border-border/50 group-hover:border-amber-500/50 text-center space-y-1.5 transition-all">
                                     <Film className="h-5 w-5 mx-auto text-amber-400" />
-                                    <span className="text-xs font-bold block text-foreground">Radarr</span>
+                                    <span className="text-xs font-bold block text-foreground truncate">Radarr</span>
                                 </div>
                             </Link>
 
                             <Link href="/sonarr" className="block group">
-                                <div className="p-3 rounded-xl bg-white/[0.02] border border-border/50 group-hover:border-sky-500/50 text-center space-y-1.5 transition-all">
+                                <div className="p-2.5 sm:p-3 rounded-xl bg-white/[0.02] border border-border/50 group-hover:border-sky-500/50 text-center space-y-1.5 transition-all">
                                     <Tv className="h-5 w-5 mx-auto text-sky-400" />
-                                    <span className="text-xs font-bold block text-foreground">Sonarr</span>
+                                    <span className="text-xs font-bold block text-foreground truncate">Sonarr</span>
                                 </div>
                             </Link>
 
                             <Link href="/tickets" className="block group">
-                                <div className="p-3 rounded-xl bg-white/[0.02] border border-border/50 group-hover:border-rose-500/50 text-center space-y-1.5 transition-all">
+                                <div className="p-2.5 sm:p-3 rounded-xl bg-white/[0.02] border border-border/50 group-hover:border-rose-500/50 text-center space-y-1.5 transition-all">
                                     <LifeBuoy className="h-5 w-5 mx-auto text-rose-400" />
-                                    <span className="text-xs font-bold block text-foreground">Tickets</span>
+                                    <span className="text-xs font-bold block text-foreground truncate">Tickets</span>
                                 </div>
                             </Link>
 
                             <Link href="/settings" className="block group">
-                                <div className="p-3 rounded-xl bg-white/[0.02] border border-border/50 group-hover:border-purple-500/50 text-center space-y-1.5 transition-all">
+                                <div className="p-2.5 sm:p-3 rounded-xl bg-white/[0.02] border border-border/50 group-hover:border-purple-500/50 text-center space-y-1.5 transition-all">
                                     <Settings className="h-5 w-5 mx-auto text-purple-400" />
-                                    <span className="text-xs font-bold block text-foreground">Settings</span>
+                                    <span className="text-xs font-bold block text-foreground truncate">Settings</span>
                                 </div>
                             </Link>
                         </div>
@@ -571,7 +586,7 @@ export default async function UserLandingPage() {
                         </Button>
                     </div>
                 )}
-            </main>
+            </div>
         </div>
     );
 }

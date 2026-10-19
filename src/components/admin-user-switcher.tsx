@@ -95,20 +95,20 @@ export default function AdminUserSwitcher({
 
     return (
         <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 border rounded-2xl shadow-sm transition-all ${containerGradient}`}>
-            <div className="flex items-center gap-2.5">
-                <div className={`p-1.5 rounded-lg ${isImpersonating ? "bg-amber-500/20 text-amber-400" : "bg-purple-500/10 text-purple-400"}`}>
+            <div className="flex items-start sm:items-center gap-2.5 min-w-0">
+                <div className={`p-1.5 rounded-lg shrink-0 mt-0.5 sm:mt-0 ${isImpersonating ? "bg-amber-500/20 text-amber-400" : "bg-purple-500/10 text-purple-400"}`}>
                     <Eye className={`h-4 w-4 ${isImpersonating ? "animate-pulse" : ""}`} />
                 </div>
-                <div>
-                    <div className="text-xs font-bold text-foreground flex items-center gap-2">
-                        <span>
+                <div className="min-w-0 space-y-0.5">
+                    <div className="text-xs font-bold text-foreground flex flex-wrap items-center gap-1.5 sm:gap-2">
+                        <span className="truncate">
                             {isImpersonating 
                                 ? `Viewing Site as: ${currentUsername || "User"}` 
                                 : "Admin Impersonation & Dashboard Preview"}
                         </span>
                         <Badge 
                             variant="outline" 
-                            className={`text-[9px] ${
+                            className={`text-[9px] shrink-0 ${
                                 isImpersonating 
                                     ? "bg-amber-500/20 text-amber-300 border-amber-500/40 font-bold" 
                                     : "bg-purple-500/10 text-purple-300 border-purple-500/30"
@@ -117,7 +117,7 @@ export default function AdminUserSwitcher({
                             {isImpersonating ? "Preview Active" : "Admin Tool"}
                         </Badge>
                     </div>
-                    <p className="text-[11px] text-muted-foreground">
+                    <p className="text-[11px] text-muted-foreground leading-snug">
                         {isImpersonating
                             ? "Experiencing the dashboard exactly as this member sees it. Switch between accounts or exit back to Admin anytime."
                             : "Preview the dashboard exactly as a specific user sees it based on their account type (Trial, Full, or Super User)."}
@@ -125,10 +125,10 @@ export default function AdminUserSwitcher({
                 </div>
             </div>
 
-            <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
-                <div className="w-full sm:w-72 shrink-0">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto shrink-0 pt-1 sm:pt-0 border-t sm:border-t-0 border-white/[0.06]">
+                <div className="w-full sm:w-72 min-w-0">
                     <Select value={selectedUser} onValueChange={handleSelectUser} disabled={switching}>
-                        <SelectTrigger className={`h-9 text-xs bg-background/80 ${isImpersonating ? "border-amber-500/40 text-amber-200" : "border-purple-500/30"}`}>
+                        <SelectTrigger className={`h-9 text-xs bg-background/80 w-full min-w-0 ${isImpersonating ? "border-amber-500/40 text-amber-200" : "border-purple-500/30"}`}>
                             {switching ? (
                                 <span className="flex items-center gap-1.5 text-purple-300">
                                     <Loader2 className="h-3 w-3 animate-spin" /> Switching view...
@@ -191,11 +191,10 @@ export default function AdminUserSwitcher({
                         variant="outline"
                         onClick={() => handleSelectUser("admin")}
                         disabled={switching}
-                        className="h-9 px-3 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border-amber-500/40 text-xs font-bold gap-1.5 shrink-0 active:scale-95 transition-all"
+                        className="h-9 px-3 w-full sm:w-auto justify-center bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border-amber-500/40 text-xs font-bold gap-1.5 shrink-0 active:scale-95 transition-all"
                     >
                         {switching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Undo2 className="h-3.5 w-3.5" />}
-                        <span className="hidden md:inline">Return to Admin</span>
-                        <span className="md:hidden">Admin</span>
+                        <span>Return to Admin</span>
                     </Button>
                 )}
             </div>

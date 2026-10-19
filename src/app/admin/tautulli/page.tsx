@@ -974,7 +974,7 @@ export default function StreamIntelligencePage() {
 
                                             {/* Audio & Subtitle Diagnostics Row */}
                                             <div className="px-4 py-1.5 bg-slate-950/40 flex flex-wrap items-center justify-between gap-2 text-[10px] border-b border-slate-800/60 font-mono">
-                                                <div className="flex items-center gap-1.5 truncate text-slate-300">
+                                                <div className="flex items-center gap-1.5 truncate text-slate-300 min-w-0">
                                                     <Volume2 className="h-3 w-3 text-cyan-400 shrink-0" />
                                                     <span className="truncate">
                                                         {session.sourceAudioCodec || session.audioCodec || "Audio"} {session.sourceAudioChannels ? `(${session.sourceAudioChannels})` : ""}

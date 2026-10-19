@@ -392,12 +392,12 @@ export function AiServerAssistant() {
                             value={quickQuestion}
                             onChange={(e) => setQuickQuestion(e.target.value)}
                             placeholder="Ask for book recommendations, describe buffering, or request fixes (e.g. recommend books like Dune)..."
-                            className="h-11 text-xs sm:text-sm bg-black/40 border-purple-500/30 focus-visible:border-purple-400 focus-visible:ring-purple-500/30 pl-4 pr-32 rounded-xl"
+                            className="h-11 text-xs sm:text-sm bg-black/40 border-purple-500/30 focus-visible:border-purple-400 focus-visible:ring-purple-500/30 pl-3 sm:pl-4 pr-20 sm:pr-32 rounded-xl"
                         />
                         <Button
                             type="submit"
                             size="sm"
-                            className="absolute right-1.5 top-1.5 h-8 px-3.5 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 text-white font-semibold text-xs rounded-lg shadow-md cursor-pointer flex items-center gap-1.5 active:scale-95 transition-all"
+                            className="absolute right-1.5 top-1.5 h-8 px-2.5 sm:px-3.5 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 text-white font-semibold text-xs rounded-lg shadow-md cursor-pointer flex items-center gap-1.5 active:scale-95 transition-all"
                             disabled={loading}
                         >
                             {loading ? (
@@ -405,7 +405,8 @@ export function AiServerAssistant() {
                             ) : (
                                 <>
                                     <Sparkles className="h-3.5 w-3.5 text-purple-200" />
-                                    <span>Ask Assistant</span>
+                                    <span className="hidden sm:inline">Ask Assistant</span>
+                                    <span className="sm:hidden">Ask</span>
                                 </>
                             )}
                         </Button>
@@ -415,7 +416,7 @@ export function AiServerAssistant() {
                     <div className="pt-1">
                         {activeStream ? (
                             <div className="p-3 rounded-xl bg-white/[0.03] border border-border/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                                <div className="flex items-center gap-2.5 min-w-0">
+                                <div className="flex flex-wrap items-center gap-2 min-w-0">
                                     <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
                                     <div className="truncate">
                                         <span className="font-semibold text-foreground">Now Playing on {activeStream.player}:</span>{" "}
@@ -429,7 +430,7 @@ export function AiServerAssistant() {
                                         {activeStream.transcodeDecision}
                                     </Badge>
                                 </div>
-                                <div className="flex items-center gap-2 shrink-0">
+                                <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
                                     {activeStream.transcodeDecision !== "direct play" && (
                                         <Button
                                             type="button"
@@ -439,7 +440,7 @@ export function AiServerAssistant() {
                                                 setActiveTab("chat");
                                                 handleSend("Why is my current stream transcoding and how do I fix it for direct play?");
                                             }}
-                                            className="h-7 text-xs bg-amber-500 hover:bg-amber-600 text-black font-bold px-2.5 rounded-lg active:scale-95 transition-all"
+                                            className="h-7 text-xs bg-amber-500 hover:bg-amber-600 text-black font-bold px-2.5 rounded-lg active:scale-95 transition-all flex-1 sm:flex-none justify-center"
                                         >
                                             <Wrench className="h-3 w-3 mr-1" /> Fix Transcoding
                                         </Button>
@@ -449,7 +450,7 @@ export function AiServerAssistant() {
                                         variant="outline"
                                         size="sm"
                                         onClick={() => setIsOpen(true)}
-                                        className="h-7 text-xs border-purple-500/30 text-purple-300 hover:bg-purple-950/30 px-2.5 rounded-lg"
+                                        className="h-7 text-xs border-purple-500/30 text-purple-300 hover:bg-purple-950/30 px-2.5 rounded-lg flex-1 sm:flex-none justify-center"
                                     >
                                         Inspect Stream ➔
                                     </Button>
