@@ -1,0 +1,68 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "agy: Root Orchestrator (Argon High)",
+      "type": "shell",
+      "command": "agy --model gemini-4-argon-high",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "focus": true
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      }
+    },
+    {
+      "label": "agy: Parallel Worker (Flash High)",
+      "type": "shell",
+      "command": "agy --model gemini-3.8-flash-high",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "group": "workers"
+      }
+    },
+    {
+      "label": "agy: Quick Task on Flash (Print Mode)",
+      "type": "shell",
+      "command": "agy --model gemini-3.8-flash-high --print \"${input:prompt}\"",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "Portalarr: Run Integration Tests",
+      "type": "shell",
+      "command": "npm test",
+      "problemMatcher": [],
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "Portalarr: Production Build",
+      "type": "shell",
+      "command": "npm run build",
+      "problemMatcher": ["$tsc"],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    }
+  ],
+  "inputs": [
+    {
+      "id": "prompt",
+      "type": "promptString",
+      "description": "Enter the prompt for the Gemini 3.8 Flash worker"
+    }
+  ]
+}
