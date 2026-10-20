@@ -42,6 +42,20 @@ export function ScriptHistoryModal({
     const [loadingLog, setLoadingLog] = useState(false);
     const [copied, setCopied] = useState(false);
 
+    const loadLog = (run: ScriptRunRecord) => {
+        setSelectedRun(run);
+        setLoadingLog(true);
+        fetch(`/api/admin/scripts/${script?.id}?runId=${run.id}`)
+            .then(res => res.json())
+            .then(data => {
+                setRunLog(data.content || run.logSnippet || "No log content recorded.");
+            })
+            .catch(() => {
+                setRunLog(run.logSnippet || "Failed to load log.");
+            })
+            .finally(() => setLoadingLog(false));
+    };
+
     useEffect(() => {
         if (!isOpen || !script) return;
 
@@ -62,20 +76,6 @@ export function ScriptHistoryModal({
             .catch(() => {})
             .finally(() => setLoading(false));
     }, [isOpen, script]);
-
-    const loadLog = (run: ScriptRunRecord) => {
-        setSelectedRun(run);
-        setLoadingLog(true);
-        fetch(`/api/admin/scripts/${script?.id}?runId=${run.id}`)
-            .then(res => res.json())
-            .then(data => {
-                setRunLog(data.content || run.logSnippet || "No log content recorded.");
-            })
-            .catch(() => {
-                setRunLog(run.logSnippet || "Failed to load log.");
-            })
-            .finally(() => setLoadingLog(false));
-    };
 
     const handleCopy = () => {
         navigator.clipboard.writeText(runLog);

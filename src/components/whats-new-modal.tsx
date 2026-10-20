@@ -155,7 +155,7 @@ export default function WhatsNewModal({
                     className={buttonClassName || "h-8 px-3 text-xs font-semibold gap-1.5 rounded-full border-purple-500/40 bg-purple-500/10 text-purple-300 hover:bg-purple-500/20 hover:text-purple-200 hover:ring-2 hover:ring-purple-400/50 active:scale-95 transition-all shadow-sm"}
                 >
                     <Sparkles className="h-3.5 w-3.5 text-purple-400 animate-pulse" />
-                    <span>What's New</span>
+                    <span>What&apos;s New</span>
                     {hasUnseenUpdate && (
                         <span className="relative flex h-2 w-2 ml-0.5">
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
@@ -180,7 +180,7 @@ export default function WhatsNewModal({
                                 <span className="text-xs text-muted-foreground">DomsHomeLab (d281knilb)</span>
                             </div>
                             <DialogTitle className="text-xl sm:text-2xl font-extrabold tracking-tight flex items-center gap-2 text-foreground">
-                                <Sparkles className="h-5 w-5 text-purple-400" /> What's New in DomsHomeLab
+                                <Sparkles className="h-5 w-5 text-purple-400" /> What&apos;s New in DomsHomeLab
                             </DialogTitle>
                             <DialogDescription className="text-xs sm:text-sm text-muted-foreground">
                                 Discover the latest features, system improvements, and upcoming roadmap milestones.

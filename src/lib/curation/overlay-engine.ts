@@ -102,8 +102,8 @@ export interface OverlayOptions {
 }
 
 const BACKUP_DIR = path.join(process.cwd(), "data", "art_backups");
-const CUSTOM_BADGES_DIR = path.join(process.cwd(), "data", "custom_badges");
-const STOCK_KOMETA_DIR = path.join(process.cwd(), "public", "kometa_stock");
+const CUSTOM_BADGES_DIR = path.join(/*turbopackIgnore: true*/ process.cwd(), "data", "custom_badges");
+const STOCK_KOMETA_DIR = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "kometa_stock");
 
 function ensureBackupDir() {
     if (!fs.existsSync(BACKUP_DIR)) {
@@ -395,7 +395,7 @@ export function resolveStockStudioBadgePath(studio: string): string | null {
     // 2. Check movie studio standard directories
     const studioDirs = ["studio/standard", "studio/bigger"];
     for (const dir of studioDirs) {
-        const fullDir = path.join(STOCK_KOMETA_DIR, dir);
+        const fullDir = path.join(/*turbopackIgnore: true*/ STOCK_KOMETA_DIR, dir);
         if (!fs.existsSync(fullDir)) continue;
 
         const files = fs.readdirSync(fullDir);

@@ -48,7 +48,7 @@ export default function TrialDashboardView({ user, quota, billing }: TrialDashbo
                             </div>
                             <CardDescription className="text-xs">
                                 {trialEndsAt ? (
-                                    <>Your free trial expires on <strong className="text-foreground">{format(trialEndsAt, "MMMM d, yyyy")}</strong>. Here is your membership pricing when you're ready to activate.</>
+                                    <>Your free trial expires on <strong className="text-foreground">{format(trialEndsAt, "MMMM d, yyyy")}</strong>. Here is your membership pricing when you&apos;re ready to activate.</>
                                 ) : (
                                     <>Welcome to your trial! Review your membership options below.</>
                                 )}
