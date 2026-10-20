@@ -335,7 +335,7 @@ export async function syncDiscordRolesToPortalarr(discordId: string): Promise<{ 
         if (!config) return { success: false, error: "Discord bot not configured" };
 
         const user = await prisma.user.findFirst({ where: { discordId } });
-        if (!user) return { success: false, error: "No Portalarr user linked to this Discord ID" };
+        if (!user) return { success: false, error: "No DomsHomeLab user linked to this Discord ID" };
 
         const roleMap = await getDiscordRoleMap(config.botToken, config.guildId);
         const memberRes = await discordFetch<any>(`/guilds/${config.guildId}/members/${discordId}`, { method: "GET" }, config.botToken);

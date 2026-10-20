@@ -1592,7 +1592,7 @@ export default function StreamIntelligencePage() {
                                 Tautulli Historical Backfill & Standalone Control
                             </CardTitle>
                             <CardDescription className="text-xs max-w-2xl">
-                                Import past playback logs from your standalone Tautulli instances into Portalarr's native SQLite database. Once imported, all statistics, users, and watch history across all servers are permanently accessible directly within DomsHomeLab.
+                                Import past playback logs from your standalone Tautulli instances into DomsHomeLab's native SQLite database. Once imported, all statistics, users, and watch history across all servers are permanently accessible directly within DomsHomeLab.
                             </CardDescription>
                         </CardHeader>
 
@@ -1683,7 +1683,7 @@ export default function StreamIntelligencePage() {
                                     <div className="flex items-start gap-2 p-3 rounded-lg bg-indigo-950/30 border border-indigo-500/30 text-[11px] text-indigo-200">
                                         <Sparkles className="h-4 w-4 text-indigo-400 shrink-0 mt-0.5" />
                                         <span>
-                                            <strong>Complete Unlimited Mode:</strong> Portalarr will paginate through your entire Tautulli history without any record caps until all sessions are imported. Runs asynchronously in the background even if it takes a long time, with live progress tracking and cancellation support below.
+                                            <strong>Complete Unlimited Mode:</strong> DomsHomeLab will paginate through your entire Tautulli history without any record caps until all sessions are imported. Runs asynchronously in the background even if it takes a long time, with live progress tracking and cancellation support below.
                                         </span>
                                     </div>
                                 )}

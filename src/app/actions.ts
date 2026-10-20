@@ -4454,17 +4454,45 @@ export async function sendOrQueueEmail(options: {
             options.templateId === "new_site_launch" ||
             options.templateId === "manual_email";
 
+        // Identify whether this email is addressed strictly to the Administrator(s)
+        const adminUsers = await prisma.user.findMany({
+            where: { role: "ADMIN" },
+            select: { email: true }
+        });
+        const adminEmailSet = new Set<string>(
+            adminUsers.map(u => (u.email || "").trim().toLowerCase()).filter(Boolean)
+        );
+        if (settings?.smtpUser) {
+            adminEmailSet.add(settings.smtpUser.trim().toLowerCase());
+        }
+        const ADMIN_ALERT_TEMPLATES = new Set([
+            "admin_new_user",
+            "admin_user_access_revoked",
+            "media_request_admin",
+            "seerr_request_new_admin",
+            "ticket_error_alert",
+            "library_access_request"
+        ]);
+        const recipientList = (Array.isArray(options.to) ? options.to : [options.to])
+            .map(e => (e || "").trim().toLowerCase())
+            .filter(Boolean);
+        const isToAdminOnly =
+            (recipientList.length > 0 && recipientList.every(e => adminEmailSet.has(e))) ||
+            (options.templateId ? ADMIN_ALERT_TEMPLATES.has(options.templateId) : false);
+
         // If automated email notifications are globally disabled, skip automated background emails
-        // (but never silently drop explicit admin-initiated broadcasts or manual emails—stage them in the approval queue!)
-        if (settings?.emailNotificationsEnabled === false && !options.bypassApproval && !isExplicitAdminDispatch) {
+        // (but never silently drop explicit admin-initiated broadcasts/manual emails or admin-targeted alerts!)
+        if (settings?.emailNotificationsEnabled === false && !options.bypassApproval && !isExplicitAdminDispatch && !isToAdminOnly) {
             logger.addLog("INFO", "EMAIL", `Email notifications globally disabled in settings. Skipping email "${options.subject}" to ${recipientStr}`);
             console.log(`[EMAIL-GATE] Email notifications globally disabled. Skipping email: "${options.subject}"`);
             return { success: true, sent: false, queued: false };
         }
 
-        // Evaluate whether this email requires approval based on global setting and granular email approval policy
+        // Evaluate whether this email requires approval:
+        // - Emails sent TO the Admin (isToAdminOnly) are NEVER gate-checked (sent immediately to Admin).
+        // - All emails sent to regular users ARE gate-checked when requireApprovalForEmails is enabled (unless approved from the queue via bypassApproval).
         let requireApproval = false;
-        if (!options.bypassApproval) {
+        if (!options.bypassApproval && !isToAdminOnly) {
             const globalEmailApproval = settings?.requireApprovalForEmails ?? true;
             if (globalEmailApproval) {
                 let policy: Record<string, boolean> = {};
@@ -10291,8 +10319,7 @@ export async function sendRequestCompletionNotification(requestIdOrBook: any, ma
             html,
             templateId: "media_ready",
             targetUser: requester.username,
-            userId: requester.id,
-            bypassApproval: true
+            userId: requester.id
         });
         logger.addLog("INFO", "EMAIL", `Dispatched request completion email to ${requester.email} for "${title}"`);
     } catch (e: any) {

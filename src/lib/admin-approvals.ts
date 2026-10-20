@@ -75,7 +75,7 @@ export async function notifyAdminsOnPendingApproval(approval: {
                         { name: "Target User / Entity", value: `\`${targetDisplay}\``, inline: true },
                         { name: "Queue Status", value: "⏳ Pending Review", inline: true }
                     ],
-                    footer: { text: "Portalarr Governance • Click title link above to review & approve" },
+                    footer: { text: "DomsHomeLab (d281knilb) Governance • Click title link above to review & approve" },
                     timestamp: new Date().toISOString()
                 };
 

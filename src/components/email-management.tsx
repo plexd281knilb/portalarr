@@ -1486,43 +1486,64 @@ export default function EmailManagement() {
                                     )}
 
                                     {/* INDIVIDUAL TEMPLATE APPROVAL GATE CONTROL */}
-                                    <div className="mt-2.5 p-3 rounded-xl bg-[#141d18]/90 border border-emerald-500/30 flex flex-wrap items-center justify-between gap-3 text-xs shadow-sm">
-                                        <div className="flex items-center gap-2.5">
-                                            <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0">
-                                                <FolderCheck className="h-4 w-4" />
-                                            </div>
-                                            <div>
-                                                <div className="flex items-center gap-2">
-                                                    <span className="font-bold text-foreground text-xs">Action Approval Gate:</span>
-                                                    {approvalSettings.requireApprovalForEmails && (approvalSettings.emailApprovalPolicy?.[currentTemplate.id] !== false) ? (
-                                                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30 font-medium">
-                                                            🔒 Requires Approval (Staged)
-                                                        </Badge>
-                                                    ) : (
-                                                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-medium">
-                                                            ⚡ Auto-Send via SMTP
-                                                        </Badge>
-                                                    )}
+                                    {(() => {
+                                        const isAdminAlertTemplate = [
+                                            "admin_new_user",
+                                            "admin_user_access_revoked",
+                                            "media_request_admin",
+                                            "seerr_request_new_admin",
+                                            "ticket_error_alert",
+                                            "library_access_request"
+                                        ].includes(currentTemplate.id);
+
+                                        return (
+                                            <div className="mt-2.5 p-3 rounded-xl bg-[#141d18]/90 border border-emerald-500/30 flex flex-wrap items-center justify-between gap-3 text-xs shadow-sm">
+                                                <div className="flex items-center gap-2.5">
+                                                    <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0">
+                                                        <FolderCheck className="h-4 w-4" />
+                                                    </div>
+                                                    <div>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="font-bold text-foreground text-xs">Action Approval Gate:</span>
+                                                            {isAdminAlertTemplate ? (
+                                                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-medium">
+                                                                    ⚡ Admin Alert — Auto-Sent to Admin Inbox (Never Gate-Checked)
+                                                                </Badge>
+                                                            ) : approvalSettings.requireApprovalForEmails && (approvalSettings.emailApprovalPolicy?.[currentTemplate.id] !== false) ? (
+                                                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30 font-medium">
+                                                                    🔒 Requires Approval (Staged in Queue)
+                                                                </Badge>
+                                                            ) : (
+                                                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-medium">
+                                                                    ⚡ Auto-Send via SMTP
+                                                                </Badge>
+                                                            )}
+                                                        </div>
+                                                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                                                            {isAdminAlertTemplate
+                                                                ? "Emails addressed to the Administrator automatically bypass the approval queue so you receive system & user alerts immediately."
+                                                                : approvalSettings.emailApprovalPolicy?.[currentTemplate.id] !== false
+                                                                    ? "Staged in the Action Approval Queue so you can check and authorize each user email before dispatch."
+                                                                    : "Direct delivery: Sends immediately through your configured SMTP server with zero manual review."}
+                                                        </p>
+                                                    </div>
                                                 </div>
-                                                <p className="text-[11px] text-muted-foreground mt-0.5">
-                                                    {approvalSettings.emailApprovalPolicy?.[currentTemplate.id] !== false
-                                                        ? "Staged in the Action Approval Queue for administrator authorization before dispatch."
-                                                        : "Direct delivery: Sends immediately through your configured SMTP server with zero manual review."}
-                                                </p>
+                                                {!isAdminAlertTemplate && (
+                                                    <div className="flex items-center gap-2 ml-auto">
+                                                        <Label htmlFor={`template-gate-switch-${currentTemplate.id}`} className="text-[11px] font-medium text-muted-foreground cursor-pointer select-none">
+                                                            {approvalSettings.emailApprovalPolicy?.[currentTemplate.id] !== false ? "Hold for Approval" : "Send Immediately"}
+                                                        </Label>
+                                                        <Switch
+                                                            id={`template-gate-switch-${currentTemplate.id}`}
+                                                            checked={approvalSettings.emailApprovalPolicy?.[currentTemplate.id] !== false}
+                                                            onCheckedChange={(checked) => handleToggleTemplateApproval(currentTemplate.id, checked)}
+                                                            disabled={savingApprovalPolicy || !approvalSettings.requireApprovalForEmails}
+                                                        />
+                                                    </div>
+                                                )}
                                             </div>
-                                        </div>
-                                        <div className="flex items-center gap-2 ml-auto">
-                                            <Label htmlFor={`template-gate-switch-${currentTemplate.id}`} className="text-[11px] font-medium text-muted-foreground cursor-pointer select-none">
-                                                {approvalSettings.emailApprovalPolicy?.[currentTemplate.id] !== false ? "Hold for Approval" : "Send Immediately"}
-                                            </Label>
-                                            <Switch
-                                                id={`template-gate-switch-${currentTemplate.id}`}
-                                                checked={approvalSettings.emailApprovalPolicy?.[currentTemplate.id] !== false}
-                                                onCheckedChange={(checked) => handleToggleTemplateApproval(currentTemplate.id, checked)}
-                                                disabled={savingApprovalPolicy || !approvalSettings.requireApprovalForEmails}
-                                            />
-                                        </div>
-                                    </div>
+                                        );
+                                    })()}
                                 </CardHeader>
 
                                 <CardContent className="space-y-4">

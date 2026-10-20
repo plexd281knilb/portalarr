@@ -3318,7 +3318,7 @@ function SettingsPageContent() {
                                     </Badge>
                                 </div>
                                 <p className="text-[11px] text-muted-foreground leading-relaxed">
-                                    Portalarr connects directly to your Plex Media Servers to capture live playback, hardware transcoding metrics, and stream quality telemetry. External Tautulli instances are completely optional and used exclusively for importing past historical watch records.
+                                    DomsHomeLab connects directly to your Plex Media Servers to capture live playback, hardware transcoding metrics, and stream quality telemetry. External Tautulli instances are completely optional and used exclusively for importing past historical watch records.
                                 </p>
                             </div>
                         </div>
@@ -3547,7 +3547,7 @@ function SettingsPageContent() {
                                                     <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
                                                         {unconfiguredDiscovered.length > 0 && (
                                                             <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                                                                Already Configured in Portalarr ({configuredDiscovered.length})
+                                                                Already Configured in DomsHomeLab ({configuredDiscovered.length})
                                                             </div>
                                                         )}
                                                         {configuredDiscovered.map((srv, idx) => {
@@ -3598,7 +3598,7 @@ function SettingsPageContent() {
                                         <CardTitle className="flex items-center gap-2">
                                             <History className="h-5 w-5 text-purple-400"/> {editingTautulli ? "Edit Historical Archive" : "Tautulli (Historical Watch Archive)"}
                                         </CardTitle>
-                                        <CardDescription>{editingTautulli ? `Modifying ${editingTautulli.name}` : "Optional watch archive for importing historical play records into Portalarr."}</CardDescription>
+                                        <CardDescription>{editingTautulli ? `Modifying ${editingTautulli.name}` : "Optional watch archive for importing historical play records into DomsHomeLab."}</CardDescription>
                                     </div>
                                     <Badge variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/30 text-[10px] shrink-0">
                                         Optional • History Import
@@ -3611,7 +3611,7 @@ function SettingsPageContent() {
                                         {tautulli.length === 0 && (
                                             <div className="p-3 rounded-lg bg-white/[0.02] border border-dashed border-white/10 text-xs text-muted-foreground space-y-1">
                                                 <p className="font-semibold text-foreground">No Tautulli instances configured.</p>
-                                                <p className="text-[11px]">Portalarr monitors Plex streams directly. Only add Tautulli if you have past watch history you wish to backfill.</p>
+                                                <p className="text-[11px]">DomsHomeLab monitors Plex streams directly. Only add Tautulli if you have past watch history you wish to backfill.</p>
                                             </div>
                                         )}
                                         {tautulli.map(t => (

@@ -461,7 +461,7 @@ async function getSimulatedServiceContainers(): Promise<DockerContainerItem[]> {
     result.push({
         id: "c-portalarr",
         fullId: "portalarr-dashboard",
-        name: "Portalarr",
+        name: "DomsHomeLab",
         image: "ghcr.io/plexd281knilb/portalarr:latest",
         state: "running",
         status: "Up 2 days (healthy)",
@@ -595,7 +595,7 @@ export async function listDockerContainers(): Promise<{
             unhealthyCount: simContainers.filter(c => c.state === "unhealthy").length,
             restartingCount: simContainers.filter(c => c.state === "restarting").length,
             source: "Homelab Fleet Service Bridge",
-            dockerVersion: "Portalarr Container Subsystem",
+            dockerVersion: "DomsHomeLab Container Subsystem",
             serverTime
         },
         containers: simContainers

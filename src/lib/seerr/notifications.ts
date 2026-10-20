@@ -502,8 +502,7 @@ export async function sendSeerrEmailNotification(
             html,
             templateId,
             targetUser: requesterUser.username,
-            userId: requesterUser.id,
-            bypassApproval: true
+            userId: requesterUser.id
         });
 
         logger.addLog("INFO", "SEERR", `Dispatched or staged ${templateId} email for ${requesterUser.email} ("${request.title}")`);

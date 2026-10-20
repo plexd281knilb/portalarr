@@ -26,7 +26,7 @@ function generateFallbackBookSvg(title: string, author: string, isAudiobook: boo
         <text x="300" y="400" font-size="70" text-anchor="middle">${isAudiobook ? "🎧" : "📖"}</text>
         <text x="300" y="580" font-family="Georgia, serif" font-weight="bold" font-size="28" fill="#f8fafc" text-anchor="middle">${cleanTitle.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")}</text>
         <text x="300" y="640" font-family="system-ui, sans-serif" font-weight="600" font-size="18" fill="#94a3b8" text-anchor="middle">${cleanAuthor.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")}</text>
-        <text x="300" y="800" font-family="system-ui, sans-serif" font-weight="800" font-size="12" fill="${isAudiobook ? '#f59e0b' : '#818cf8'}" text-anchor="middle" letter-spacing="3">${isAudiobook ? "PORTALARR AUDIOBOOK" : "PORTALARR LIBRARY"}</text>
+        <text x="300" y="800" font-family="system-ui, sans-serif" font-weight="800" font-size="12" fill="${isAudiobook ? '#f59e0b' : '#818cf8'}" text-anchor="middle" letter-spacing="3">${isAudiobook ? "DOMSHOMELAB AUDIOBOOK" : "DOMSHOMELAB LIBRARY"}</text>
     </svg>`;
 }
 
@@ -169,7 +169,7 @@ export async function GET(req: NextRequest) {
             });
         }
 
-        const fallbackSvg = generateFallbackBookSvg("Book", "Portalarr", false);
+        const fallbackSvg = generateFallbackBookSvg("Book", "DomsHomeLab", false);
         return new NextResponse(fallbackSvg, {
             headers: {
                 "Content-Type": "image/svg+xml",
@@ -178,7 +178,7 @@ export async function GET(req: NextRequest) {
         });
     } catch (e) {
         console.error("[COVER-API] Error:", e);
-        const fallbackSvg = generateFallbackBookSvg("Book", "Portalarr", false);
+        const fallbackSvg = generateFallbackBookSvg("Book", "DomsHomeLab", false);
         return new NextResponse(fallbackSvg, {
             headers: {
                 "Content-Type": "image/svg+xml",
