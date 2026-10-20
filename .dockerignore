@@ -1,9 +1,17 @@
 node_modules
 .next
 .git
+.github
+.agents
+.vscode
 .env
+.env.*
+data
+coverage
 npm-debug.log
 README.md
+GEMINI.md
 *.db
 *.db-journal
 *.db-wal
+*.tsbuildinfo
