@@ -15,16 +15,16 @@ To guarantee 100% reliability, quality control, and consistency, the following 4
 4. **Git Version Control & Deployment Push:**
    Inspect `git status` to verify all touched and new files, stage all changes (`git add -A`), commit with a clear, descriptive message adhering to conventional commit style that ALWAYS includes the active version from `package.json` at the FRONT in brackets (e.g. `[v3.9.0-beta.1] feat(scope): descriptive message` or `[v3.9.0] fix(scope): fix bug`), and run `git push origin main`. Automatic git hook enforcement via `scripts/git-commit-msg-hook.js` is verified in `npm test` and executed by Git on every commit to guarantee version prefixing.
 
-## 🤖 Multi-Model Orchestration & Worker Topology (Argon ➔ Flash)
+## 🧠🤖 Multi-Model Orchestration & Worker Topology: "Brain" (Argon 4) ➔ "Pinky" (Flash 3.8)
 
 Portalarr leverages Antigravity's multi-agent architecture to optimize quota, parallelism, and speed:
-- **Root Orchestrator (Gemini 4 Argon / Pro)**: Serves as the primary Technical Architect, planner, and code synthesizer. Retains master conversation context, architectural oversight, and final decision-making.
-- **Worker Subagent (`flash-worker`, Gemini 3.8 Flash)**: Dedicated worker subagent invoked via `invoke_subagent` (`TypeName: "flash-worker"`, `Model: "flash"`). Handles high-throughput operations: running `npm test`, executing Next.js production builds, running lint sweeps, and performing broad repository searches.
-- **Automated Error Escalation Loop**: When `flash-worker` encounters compilation issues, TypeScript rejections, or test failures, it extracts the exact file paths, line numbers, and error traces, delivering them directly back to the Argon orchestrator via reactive messaging. Argon diagnoses the root cause, applies the fix, and prompts Flash to re-verify.
+- **"Brain" — Root Orchestrator (Gemini 4 Argon / Pro)**: Serves as the primary Technical Architect, master planner, and code synthesizer. Retains master conversation context, architectural oversight, complex billing/database logic synthesis, and final decision-making.
+- **"Pinky" — Worker Subagent (`pinky` / `flash-worker`, Gemini 3.8 Flash)**: Dedicated high-speed worker subagent invoked via `invoke_subagent` (`TypeName: "pinky"`, `Model: "flash"`). Handles high-throughput operations: running `npm test`, executing Next.js production builds, running lint sweeps, and performing broad repository audits.
+- **Automated Error Escalation Loop**: When **Pinky** encounters compilation issues, TypeScript rejections, pricing/template discrepancies, or test failures, it extracts the exact file paths, line numbers, and error traces, delivering them directly back to **Brain** via reactive messaging. **Brain** diagnoses the root cause, applies the fix, and prompts **Pinky** to re-verify.
 - **VS Code Tasks (`.vscode/tasks.json`)**:
-  - `agy: Root Orchestrator (Argon High)` (`agy --model gemini-4-argon-high`)
-  - `agy: Parallel Worker (Flash High)` (`agy --model gemini-3.8-flash-high`)
-  - `agy: Quick Task on Flash (Print Mode)` (`agy --model gemini-3.8-flash-high --print`)
+  - `agy: Brain - Root Orchestrator (Argon 4 High)` (`agy --model gemini-4-argon-high`)
+  - `agy: Pinky - Parallel Worker (Flash 3.8 High)` (`agy --model gemini-3.8-flash-high`)
+  - `agy: Ask Pinky (Flash 3.8 Print Mode)` (`agy --model gemini-3.8-flash-high --print`)
   - `Portalarr: Run Integration Tests` (`npm test`)
   - `Portalarr: Production Build` (`npm run build`)
 

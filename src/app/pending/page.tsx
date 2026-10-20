@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PaymentMethodsGrid } from "@/components/payment-methods-grid";
+import { calculateProratedBilling } from "@/lib/prorated-billing";
 import { Clock, MailCheck, LogOut, RefreshCw, ShieldAlert, AlertTriangle, CreditCard, DollarSign, Copy, Check, Calendar } from "lucide-react";
 
 export default function PendingPage() {
@@ -87,8 +88,14 @@ export default function PendingPage() {
   const isRejected = user?.status === "REJECTED";
 
   const yearlyPrice = paymentConfig?.yearlyPrice ?? 180;
-  const monthlyPrice = paymentConfig?.monthlyPrice ?? paymentConfig?.proratedBilling?.standaloneMonthlyRate ?? paymentConfig?.proratedBilling?.monthlyRate ?? (yearlyPrice > 0 ? Math.round((yearlyPrice / 12) * 100) / 100 : 15);
-  const prorated = paymentConfig?.proratedBilling;
+  const monthlyPrice = paymentConfig?.monthlyPrice ?? paymentConfig?.proratedBilling?.standaloneMonthlyRate ?? 17.50;
+  // Reactivating accounts calculate proration starting today (trialDays: 0)
+  const prorated = calculateProratedBilling({
+    startDate: new Date(),
+    trialDays: 0,
+    yearlyPrice,
+    monthlyPrice
+  });
   const yearlyAmountDue = prorated?.amountDueNow ?? yearlyPrice;
   const monthlyAmountDue = prorated?.monthlyAmountDueNow ?? monthlyPrice;
   const effectiveAmount = selectedCadence === "yearly" ? yearlyAmountDue : monthlyAmountDue;

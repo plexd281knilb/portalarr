@@ -316,13 +316,44 @@ async function runTestSuite() {
             throw new Error(`Expected amount 15.00 and cashtag $johndoe, got: ${JSON.stringify(parsedCash)}`);
         }
 
-        // 5. Payment threshold evaluation
+        // 5. Payment threshold evaluation (Full Yearly, Referral Discounted Yearly, Rest-of-Year Prorated, & Prorated Monthly)
         const threshEval = evaluatePaymentThreshold({
             user: { membershipTier: "ANNUAL" },
             payment: { amount: 180, provider: "CASHAPP" }
         });
         if (threshEval.action !== "FULL_YEARLY" || threshEval.cadence !== "YEARLY") {
             throw new Error(`Expected full yearly payment approval, got: ${JSON.stringify(threshEval)}`);
+        }
+
+        // 5b. Referral-discounted annual payment ($165 with 1 converted referral)
+        const referralEval = evaluatePaymentThreshold({
+            user: {
+                membershipTier: "STANDARD",
+                subscriptionCadence: "YEARLY",
+                referrals: [{ id: "ref_1", username: "friend1", status: "APPROVED", convertedAt: new Date() }]
+            },
+            payment: { amount: 165, provider: "VENMO", emailDate: new Date("2026-12-20T12:00:00Z") }
+        });
+        if (referralEval.action !== "FULL_YEARLY" || referralEval.targetPrice !== 165 || referralEval.newAccountCredit !== 0) {
+            throw new Error(`Expected referral-discounted FULL_YEARLY at $165, got: ${JSON.stringify(referralEval)}`);
+        }
+
+        // 5c. Rest-of-Year prorated annual payment ($40.16 on Sep 26)
+        const proratedYearlyEval = evaluatePaymentThreshold({
+            user: { status: "TRIAL", membershipTier: "TRIAL" },
+            payment: { amount: 40.16, provider: "VENMO", emailDate: new Date("2026-09-26T12:00:00Z") }
+        });
+        if (proratedYearlyEval.action !== "FULL_YEARLY" || proratedYearlyEval.cadence !== "YEARLY") {
+            throw new Error(`Expected Rest-of-Year prorated payment ($40.16) to fulfill FULL_YEARLY, got: ${JSON.stringify(proratedYearlyEval)}`);
+        }
+
+        // 5d. Prorated standalone monthly payment ($9.03 on Oct 1)
+        const proratedMonthlyEval = evaluatePaymentThreshold({
+            user: { status: "TRIAL", membershipTier: "TRIAL" },
+            payment: { amount: 9.03, provider: "CASHAPP", emailDate: new Date("2026-10-01T12:00:00Z") }
+        });
+        if (proratedMonthlyEval.action !== "FULL_MONTHLY" || proratedMonthlyEval.cadence !== "MONTHLY") {
+            throw new Error(`Expected prorated monthly payment ($9.03) to fulfill FULL_MONTHLY, got: ${JSON.stringify(proratedMonthlyEval)}`);
         }
 
         // 6. Renewal reminder parsing

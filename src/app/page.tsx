@@ -97,12 +97,13 @@ export default async function UserLandingPage() {
         } catch {}
     }
 
-    // Prorated billing calculation for trial view
+    // Prorated billing calculation for trial view (uses exact user.trialEndsAt when available)
     const billing = calculateProratedBilling({
         startDate: (user as any)?.createdAt || new Date(),
+        trialEndDate: (user as any)?.trialEndsAt || null,
         trialDays: globalSettings?.defaultTrialDays || 14,
         yearlyPrice: globalSettings?.yearlyPrice ?? 180,
-        monthlyPrice: globalSettings?.monthlyPrice ?? 15,
+        monthlyPrice: globalSettings?.monthlyPrice ?? 17.50,
         renewalMonth: globalSettings?.renewalMonth || 1,
         renewalDay: globalSettings?.renewalDay || 1
     });

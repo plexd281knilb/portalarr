@@ -45,25 +45,29 @@ const MONTH_NAMES = [
  */
 export function calculateProratedBilling(options: {
     startDate?: Date | string;
+    trialEndDate?: Date | string | null;
     trialDays?: number;
     yearlyPrice?: number;
     monthlyPrice?: number;
     renewalMonth?: number; // 1-indexed (1 = January)
     renewalDay?: number;   // 1 = 1st
 }): ProratedBillingResult {
-    const trialDays = options.trialDays && options.trialDays > 0 ? options.trialDays : 14;
+    const trialDays = typeof options.trialDays === "number" && options.trialDays >= 0 ? options.trialDays : 14;
     const yearlyRate = typeof options.yearlyPrice === "number" && options.yearlyPrice >= 0 ? options.yearlyPrice : 180;
     
     // Annual proration strictly derives the monthly base from the annual price (e.g. $180 / 12 = $15/mo)
     const annualMonthlyRate = yearlyRate > 0 ? Math.round((yearlyRate / 12) * 100) / 100 : 15;
     
-    // Standalone monthly plan rate (defaults to annualMonthlyRate if not set)
+    // Standalone monthly plan rate (defaults to $17.50 standard monthly rate if not set)
     const standaloneMonthlyRate = typeof options.monthlyPrice === "number" && options.monthlyPrice > 0 
         ? options.monthlyPrice 
-        : annualMonthlyRate;
+        : 17.50;
 
     const start = options.startDate ? new Date(options.startDate) : new Date();
-    const end = new Date(start.getTime() + trialDays * 24 * 60 * 60 * 1000);
+    const explicitEnd = options.trialEndDate ? new Date(options.trialEndDate) : null;
+    const end = explicitEnd && !isNaN(explicitEnd.getTime())
+        ? explicitEnd
+        : new Date(start.getTime() + trialDays * 24 * 60 * 60 * 1000);
 
     const endYear = end.getFullYear();
     const endMonthIdx = end.getMonth(); // 0 = Jan, 9 = Oct, 11 = Dec
@@ -100,10 +104,10 @@ export function calculateProratedBilling(options: {
     const monthlyAmountDueNow = daysRemainingInMonth > 0 ? standaloneProratedMonth : standaloneMonthlyRate;
     const monthlyAmountDueText = daysRemainingInMonth > 0 
         ? `$${standaloneProratedMonth.toFixed(2)} (${daysRemainingInMonth} days in ${trialEndMonthName})`
-        : `$${standaloneMonthlyRate}/mo`;
+        : `$${standaloneMonthlyRate.toFixed(2)}/mo`;
     const monthlyBreakdownSummary = daysRemainingInMonth > 0
-        ? `$${standaloneProratedMonth.toFixed(2)} for ${daysRemainingInMonth} days remaining in ${trialEndMonthName} ($${monthlyDailyRate.toFixed(2)}/day), then $${standaloneMonthlyRate}/month starting ${nextMonthlyRenewalDate}.`
-        : `$${standaloneMonthlyRate}/month starting ${nextMonthlyRenewalDate}.`;
+        ? `$${standaloneProratedMonth.toFixed(2)} for ${daysRemainingInMonth} days remaining in ${trialEndMonthName} ($${monthlyDailyRate.toFixed(2)}/day), then $${standaloneMonthlyRate.toFixed(2)}/month starting ${nextMonthlyRenewalDate}.`
+        : `$${standaloneMonthlyRate.toFixed(2)}/month starting ${nextMonthlyRenewalDate}.`;
 
     // Yearly plan calculation (Days remaining in current month + Remaining full months)
     let amountDueNow = 0;

@@ -1946,10 +1946,10 @@ export default function PaymentEmailManager() {
                                             type="button"
                                             variant="outline"
                                             size="sm"
-                                            onClick={() => setRecordAmount("15.00")}
+                                            onClick={() => setRecordAmount("17.50")}
                                             className="h-6 px-2 text-[10px] text-muted-foreground hover:text-foreground"
                                         >
-                                            $15 (1 Month)
+                                            $17.50 (1 Month)
                                         </Button>
                                     </div>
                                 </div>

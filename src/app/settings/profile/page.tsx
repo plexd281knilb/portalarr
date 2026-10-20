@@ -25,6 +25,7 @@ import {
     updateUserAudiobooksLibraryAccessAction
 } from "@/app/actions";
 import { recheckUserAccessAndPaymentAction } from "@/app/payment-actions";
+import { calculateProratedBilling } from "@/lib/prorated-billing";
 import { 
     linkMyDiscordAccountAction, 
     unlinkMyDiscordAccountAction, 
@@ -1202,6 +1203,22 @@ export default function UserProfilePage() {
     const effectiveMonthlyPrice = isTier2 
         ? (paymentConfig?.tier2MonthlyPrice ?? 25) 
         : (paymentConfig?.monthlyPrice ?? 17.50);
+    const activeTrialProrated = isTrial
+        ? calculateProratedBilling({
+              startDate: user?.createdAt || new Date(),
+              trialEndDate: user?.trialEndsAt || null,
+              yearlyPrice: effectiveYearlyPrice,
+              monthlyPrice: effectiveMonthlyPrice
+          })
+        : paymentConfig?.proratedBilling;
+    const userCreditBalance = Math.max(0, Number(user?.accountCredit || 0));
+    const profileCadence: "yearly" | "monthly" = user?.subscriptionCadence === "MONTHLY" ? "monthly" : "yearly";
+    const rawProfileTargetAmount = isTrial
+        ? (activeTrialProrated?.amountDueNow ?? effectiveYearlyPrice)
+        : profileCadence === "monthly"
+        ? effectiveMonthlyPrice
+        : (referralInfo?.renewalSummary?.discountedYearlyPrice ?? effectiveYearlyPrice);
+    const profileEffectiveAmountDue = Math.max(0, Math.round((rawProfileTargetAmount - userCreditBalance) * 100) / 100);
 
     return (
         <div className="space-y-4 sm:space-y-6 max-w-5xl 2xl:max-w-6xl 3xl:max-w-7xl mx-auto w-full min-w-0 animate-in fade-in duration-500">
@@ -1503,7 +1520,7 @@ export default function UserProfilePage() {
                                 Unrestricted administrator privileges with permanent lifetime access. You are exempt from all subscription plans, renewals, and expiration dates.
                             </p>
                         </div>
-                    ) : isTrial && paymentConfig?.proratedBilling ? (
+                    ) : isTrial && activeTrialProrated ? (
                         <div className="space-y-3">
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
                                 <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 space-y-1">
@@ -1513,17 +1530,17 @@ export default function UserProfilePage() {
                                 </div>
                                 <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 space-y-1">
                                     <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">1st Year Prorated</span>
-                                    <p className="font-bold text-emerald-400 text-sm">{paymentConfig.proratedBilling.amountDueText}</p>
-                                    <p className="text-[10px] text-muted-foreground">{paymentConfig.proratedBilling.remainingMonthsText}</p>
+                                    <p className="font-bold text-emerald-400 text-sm">{activeTrialProrated.amountDueText}</p>
+                                    <p className="text-[10px] text-muted-foreground">{activeTrialProrated.remainingMonthsText}</p>
                                 </div>
                                 <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 space-y-1">
                                     <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Annual Renewal</span>
                                     <p className="font-bold text-purple-300 text-sm">${effectiveYearlyPrice} / yr</p>
-                                    <p className="text-[10px] text-muted-foreground">Renews {paymentConfig.proratedBilling.nextRenewalDate}</p>
+                                    <p className="text-[10px] text-muted-foreground">Renews {activeTrialProrated.nextRenewalDate}</p>
                                 </div>
                             </div>
                             <p className="text-[11px] text-muted-foreground leading-relaxed">
-                                {paymentConfig.proratedBilling.breakdownSummary}
+                                {activeTrialProrated.breakdownSummary}
                             </p>
                         </div>
                     ) : user?.status === "APPROVED" && user?.subscriptionEndsAt ? (
@@ -1586,7 +1603,7 @@ export default function UserProfilePage() {
 
                     {/* PAYMENT HANDLES & MODAL */}
                     <div className="pt-2 border-t border-border/40">
-                        <PaymentMethodsGrid config={paymentConfig} username={user?.username} />
+                        <PaymentMethodsGrid config={paymentConfig} username={user?.username} amount={profileEffectiveAmountDue > 0 ? profileEffectiveAmountDue : undefined} cadence={profileCadence} />
                     </div>
 
                     {paymentConfig?.paymentInstructions && (

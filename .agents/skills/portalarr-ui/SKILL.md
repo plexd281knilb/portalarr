@@ -1084,6 +1084,20 @@ Portalarr features an automated, real-time versioning, branch identification, an
 
 ---
 
+### 45. Unified Payment Pricing, Prorated Billing & Referral Discount Alignment
+- **Standard Pricing Fallbacks**:
+  - **Tier 1 (Standard)**: `$180.00/year` (averaging `$15.00/mo` for annual Rest-of-Year proration and referral reward credits) and `$17.50/month` for the standalone Monthly Plan.
+  - **Tier 2 (VIP / Managed Support)**: `$240.00/year` (averaging `$20.00/mo` for annual proration and referral reward credits) and `$25.00/month` for the standalone Monthly Plan.
+  - Never fall back to `$15` for standalone monthly plan displays in `PaymentMethodsGrid`, `PaymentQrModal`, `TrialDashboardView`, `/join`, `/pending`, or `/profile`; always use `config?.monthlyPrice ?? 17.50`.
+- **Consistent Prorated Quotes & Payment Prefilling**:
+  - For active Trial accounts on `/` and `/profile`, always pass `trialEndDate: user?.trialEndsAt` to `calculateProratedBilling` so both views display identical prorated Rest-of-Year and Rest-of-Month dollar amounts.
+  - For expired/suspended accounts reactivating on `/pending`, pass `trialDays: 0` to `calculateProratedBilling` so proration begins immediately from today rather than 14 days in the future.
+  - On `/profile#billing`, pass the user's net effective amount due (accounting for trial proration, converted referral discounts, and `user.accountCredit`) into `<PaymentMethodsGrid amount={...} cadence={...} />`.
+- **Threshold Engine & Scraper Reconciliation (`evaluatePaymentThreshold`)**:
+  - Automatically honors active referral discounts (`effectiveYearlyTarget = yearlyPrice - referralDiscount`), Rest-of-Year prorated annual quotes (within `$1.00` tolerance), and first-month prorated standalone monthly quotes (within `$0.50` tolerance) as full subscription fulfillments.
+
+---
+
 As the Portalarr frontend evolves or new design decisions are finalized:
 1. **Adding a New UI Rule**: Add the rule to the relevant section above or under `references/`.
 2. **Tweaking Component Defaults**: Update the corresponding reference file in `references/`.

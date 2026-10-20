@@ -45,7 +45,7 @@ export function PaymentQrModal({
     }, [initialCadence, isOpen]);
 
     const baseYearlyAmount = config?.yearlyPrice || 180;
-    const baseMonthlyAmount = config?.monthlyPrice || 15;
+    const baseMonthlyAmount = config?.monthlyPrice || 17.50;
     const yearlyAmount = (cadence === "yearly" && initialCadence === "yearly" && customAmount) ? customAmount : baseYearlyAmount;
     const monthlyAmount = (cadence === "monthly" && initialCadence === "monthly" && customAmount) ? customAmount : baseMonthlyAmount;
     const selectedAmount = cadence === "yearly" ? yearlyAmount : monthlyAmount;

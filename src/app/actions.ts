@@ -3375,6 +3375,37 @@ export async function expireDueTrialsAndSubscriptionsInternal() {
                 await revokePlexAccessForUserInternal(u, "Your trial or subscription period has ended. Please renew your access on DomsHomeLab.");
                 logger.addLog("SUCCESS", "PLEX", `[TRIAL-EXPIRATION] Account for "${u.username}" expired; Plex library access revoked and active sessions terminated.`);
 
+                // Dispatch trial_expired notification to the user if enabled
+                if (u.email && settings?.emailNotificationsEnabled && settings?.notifyTrialExpired) {
+                    try {
+                        const { renderEmailTemplate } = await import("../lib/email-templates");
+                        const appUrl = await getAppUrl();
+                        const expRefDate = u.trialEndsAt || u.subscriptionEndsAt || now;
+                        const expirationDateFormatted = new Intl.DateTimeFormat("en-US", {
+                            month: "long",
+                            day: "numeric",
+                            year: "numeric"
+                        }).format(new Date(expRefDate));
+                        const { subject, html } = await renderEmailTemplate("trial_expired", {
+                            username: u.username,
+                            email: u.email,
+                            expirationDate: expirationDateFormatted,
+                            renewUrl: `${appUrl}/profile#billing`,
+                            appUrl
+                        });
+                        await sendOrQueueEmail({
+                            to: u.email,
+                            subject,
+                            html,
+                            templateId: "trial_expired",
+                            targetUser: u.username,
+                            userId: u.id
+                        });
+                    } catch (expEmailErr: any) {
+                        console.warn("[TRIAL-EXPIRATION] Failed to dispatch trial_expired email:", expEmailErr?.message || expEmailErr);
+                    }
+                }
+
                 // Notify administrator of user expiration and access revocation
                 await notifyAdminUserRoleOrAccessChange({
                     username: u.username,
@@ -5662,8 +5693,12 @@ export async function creditUserReferralAction(params: {
         if (extendSubscriptionExpiry && referrer.subscriptionEndsAt) {
             const monthsToAdd = (bonusMonths && bonusMonths > 0) ? bonusMonths : 1;
             const currentExp = new Date(referrer.subscriptionEndsAt);
+            const origDay = currentExp.getDate();
             const newExp = new Date(currentExp);
+            newExp.setDate(1);
             newExp.setMonth(newExp.getMonth() + monthsToAdd);
+            const maxDaysInTargetMonth = new Date(newExp.getFullYear(), newExp.getMonth() + 1, 0).getDate();
+            newExp.setDate(Math.min(origDay, maxDaysInTargetMonth));
 
             await prisma.user.update({
                 where: { id: referrerUserId },
@@ -5696,8 +5731,9 @@ export async function creditUserReferralAction(params: {
         });
 
         const settings = await prisma.settings.findUnique({ where: { id: "global" } });
-        const yearlyPrice = settings?.yearlyPrice || 180;
-        const monthlyPrice = settings?.monthlyPrice || 15;
+        const isRefTier2 = (freshReferrer || referrer)?.membershipTier === "TIER_2_VIP";
+        const yearlyPrice = isRefTier2 ? (settings?.tier2YearlyPrice || 240) : (settings?.yearlyPrice || 180);
+        const monthlyPrice = isRefTier2 ? (settings?.tier2MonthlyPrice || 25) : (settings?.monthlyPrice || 17.50);
 
         const rewardSummary = calculateUserRenewalSummary({
             user: freshReferrer || referrer,
@@ -5812,8 +5848,9 @@ export async function getUserRenewalSummaryAction(userId: string) {
         if (!user) return { success: false, error: "User not found." };
 
         const settings = await prisma.settings.findUnique({ where: { id: "global" } });
-        const yearlyPrice = settings?.yearlyPrice || 180;
-        const monthlyPrice = settings?.monthlyPrice || 15;
+        const isTier2 = user.membershipTier === "TIER_2_VIP";
+        const yearlyPrice = isTier2 ? (settings?.tier2YearlyPrice || 240) : (settings?.yearlyPrice || 180);
+        const monthlyPrice = isTier2 ? (settings?.tier2MonthlyPrice || 25) : (settings?.monthlyPrice || 17.50);
 
         const summary = calculateUserRenewalSummary({
             user,
@@ -5867,8 +5904,9 @@ export async function sendSubscriptionRenewalReminderAction(userId: string) {
         if (!user.email) return { success: false, error: `User @${user.username} has no email address configured.` };
 
         const settings = await prisma.settings.findUnique({ where: { id: "global" } });
-        const yearlyPrice = settings?.yearlyPrice || 180;
-        const monthlyPrice = settings?.monthlyPrice || 15;
+        const isTier2 = user.membershipTier === "TIER_2_VIP";
+        const yearlyPrice = isTier2 ? (settings?.tier2YearlyPrice || 240) : (settings?.yearlyPrice || 180);
+        const monthlyPrice = isTier2 ? (settings?.tier2MonthlyPrice || 25) : (settings?.monthlyPrice || 17.50);
 
         // Verify if user already paid for this cycle
         const { isUserSubscriptionPaidForCycle, parseReminderDays, DEFAULT_YEARLY_REMINDER_DAYS, DEFAULT_MONTHLY_REMINDER_DAYS } = await import("@/lib/subscription-reminders");
@@ -5899,21 +5937,32 @@ export async function sendSubscriptionRenewalReminderAction(userId: string) {
         const friendNamesStr = summary.convertedFriends.map(f => `@${f.username}`).join(", ");
 
         const referralDiscountText = summary.convertedReferralsCount > 0
-            ? `-$${summary.rewardDiscountAmount.toFixed(2)} (${summary.convertedReferralsCount} friend${summary.convertedReferralsCount > 1 ? "s" : ""} referred: ${friendNamesStr})`
+            ? `-${summary.rewardDiscountAmount.toFixed(2)} (${summary.convertedReferralsCount} friend${summary.convertedReferralsCount > 1 ? "s" : ""} referred: ${friendNamesStr})`
             : "No active referral credits";
 
         const monthlyAlternativeText = summary.delayedMonthlyStartDate
-            ? `$${monthlyPrice}/month starting ${summary.delayedMonthlyStartDate}`
-            : `$${monthlyPrice}/month starting ${renewalDateStr}`;
+            ? `${monthlyPrice.toFixed(2)}/month starting ${summary.delayedMonthlyStartDate}`
+            : `${monthlyPrice.toFixed(2)}/month starting ${renewalDateStr}`;
 
-        const { subject, html } = await renderEmailTemplate("subscription_renewal_reminder", {
+        const existingCredit = Math.max(0, Number(user.accountCredit || 0));
+        const netYearlyDue = Math.max(0, summary.discountedYearlyPrice - existingCredit);
+        const netMonthlyDue = Math.max(0, monthlyPrice - existingCredit);
+        const daysRemainingVal = user.subscriptionEndsAt
+            ? Math.max(1, Math.ceil((new Date(user.subscriptionEndsAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
+            : (isYearly ? 30 : 3);
+        const templateId = isYearly ? "subscription_renewal_reminder_yearly" : "subscription_renewal_reminder_monthly";
+
+        const { subject, html } = await renderEmailTemplate(templateId, {
             username: user.username,
+            daysRemaining: String(daysRemainingVal),
             renewalDate: renewalDateStr,
-            basePrice: `$${yearlyPrice.toFixed(2)} / year`,
+            basePrice: isYearly ? `${yearlyPrice.toFixed(2)} / year` : `${monthlyPrice.toFixed(2)} / month`,
             referralDiscountText,
-            amountDue: `$${summary.discountedYearlyPrice.toFixed(2)}`,
+            amountDue: isYearly ? `${netYearlyDue.toFixed(2)}` : `${netMonthlyDue.toFixed(2)}`,
             monthlyAlternativeText,
             referralNoticeDetails: summary.reminderNoticeText,
+            paymentMemo: user.username,
+            billingUrl: `${appUrl}/profile#billing`,
             appUrl
         });
 

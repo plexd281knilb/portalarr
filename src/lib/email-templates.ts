@@ -435,7 +435,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{email}", description: "Email address of user", sampleValue: "jordan@example.com" },
             { key: "{daysRemaining}", description: "Number of days remaining in trial", sampleValue: "3" },
             { key: "{expirationDate}", description: "Date when trial expires", sampleValue: "October 15, 2026" },
-            { key: "{renewUrl}", description: "URL to renewal or profile page", sampleValue: "https://portal.example.com/settings" },
+            { key: "{renewUrl}", description: "URL to renewal or profile page", sampleValue: "https://portal.example.com/profile#billing" },
             { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
         ]
     },
@@ -460,7 +460,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{username}", description: "Username of user", sampleValue: "jordan_reader" },
             { key: "{email}", description: "Email address of user", sampleValue: "jordan@example.com" },
             { key: "{expirationDate}", description: "Date when trial concluded", sampleValue: "October 15, 2026" },
-            { key: "{renewUrl}", description: "URL to renewal page", sampleValue: "https://portal.example.com/settings" },
+            { key: "{renewUrl}", description: "URL to renewal page", sampleValue: "https://portal.example.com/profile#billing" },
             { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
         ]
     },
@@ -983,8 +983,8 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
     {
         id: "subscription_renewal_reminder_yearly",
         name: "Annual Membership Renewal Warning (Yearly Plan)",
-        description: "Sent to members on the Annual Plan ($180/yr) at multiple milestones (30, 14, 7, 3, and 1 days remaining) so they have advance notice before their annual amount comes due.",
-        triggerEvent: "Triggered automatically at 30, 14, 7, 3, and 1 days before an annual subscription expires, detailing annual rate, referral reward discounts, monthly alternative, and payment methods.",
+        description: "Sent to members on the Annual Plan ($180/yr) at multiple milestones (60, 30, 14, 3, and 1 days remaining) so they have advance notice before their annual amount comes due.",
+        triggerEvent: "Triggered automatically at 60, 30, 14, 3, and 1 days before an annual subscription expires, detailing annual rate, referral reward discounts, monthly alternative ($17.50/mo), and payment methods.",
         category: "PAYMENTS",
         defaultSubject: "🔔 Annual Membership Renewal Notice: {daysRemaining} Days Left ({amountDue})",
         defaultBody: `<h2>Annual Membership Renewal Notice 🔔</h2>
@@ -1039,7 +1039,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{basePrice}", description: "Standard base annual price", sampleValue: "$180.00 / year" },
             { key: "{referralDiscountText}", description: "Referral discount summary", sampleValue: "-$15.00 (1 friend referred)" },
             { key: "{amountDue}", description: "Net amount due after referral credits", sampleValue: "$165.00" },
-            { key: "{monthlyAlternativeText}", description: "Delayed monthly payment terms", sampleValue: "$15/month starting February 1, 2027" },
+            { key: "{monthlyAlternativeText}", description: "Delayed monthly payment terms", sampleValue: "$17.50/month starting February 1, 2027" },
             { key: "{referralNoticeDetails}", description: "Detailed referral credit explanation", sampleValue: "You earned 1 free month for referring @alex_cinephile! Your next annual payment is discounted by $15.00 ($165.00 total)." },
             { key: "{paymentMemo}", description: "Clean payment memo tag (member username)", sampleValue: "jordan_reader" },
             { key: "{billingUrl}", description: "Link to user profile billing section", sampleValue: "https://portal.example.com/profile#billing" },
@@ -1049,8 +1049,8 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
     {
         id: "subscription_renewal_reminder_monthly",
         name: "Monthly Membership Renewal Warning (Monthly Plan)",
-        description: "Sent to members on the Monthly Plan ($15/mo) at 3 days and 1 day remaining, alerting them of their upcoming monthly payment.",
-        triggerEvent: "Triggered automatically at 3 days and 1 day before a monthly subscription renews, detailing renewal amount ($15/mo), payment memo, and payment instructions.",
+        description: "Sent to members on the Monthly Plan ($17.50/mo) at 7, 3, and 1 days remaining, alerting them of their upcoming monthly payment.",
+        triggerEvent: "Triggered automatically at 7, 3, and 1 days before a monthly subscription renews, detailing renewal amount ($17.50/mo), payment memo, and payment instructions.",
         category: "PAYMENTS",
         defaultSubject: "🔔 Monthly Membership Renewal Notice: {daysRemaining} Days Left ({amountDue})",
         defaultBody: `<h2>Monthly Membership Renewal Notice 🔔</h2>
@@ -1090,8 +1090,8 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{username}", description: "Username of user", sampleValue: "jordan_reader" },
             { key: "{daysRemaining}", description: "Days remaining until expiration", sampleValue: "3" },
             { key: "{renewalDate}", description: "Expiration or renewal date", sampleValue: "November 1, 2026" },
-            { key: "{basePrice}", description: "Standard monthly price", sampleValue: "$15.00 / month" },
-            { key: "{amountDue}", description: "Net amount due", sampleValue: "$15.00" },
+            { key: "{basePrice}", description: "Standard monthly price", sampleValue: "$17.50 / month" },
+            { key: "{amountDue}", description: "Net amount due", sampleValue: "$17.50" },
             { key: "{paymentMemo}", description: "Clean payment memo tag (member username)", sampleValue: "jordan_reader" },
             { key: "{billingUrl}", description: "Link to user profile billing section", sampleValue: "https://portal.example.com/profile#billing" },
             { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
@@ -1143,7 +1143,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{basePrice}", description: "Standard base annual price", sampleValue: "$180.00 / year" },
             { key: "{referralDiscountText}", description: "Referral discount summary", sampleValue: "-$15.00 (1 friend referred)" },
             { key: "{amountDue}", description: "Net amount due after referral credits", sampleValue: "$165.00" },
-            { key: "{monthlyAlternativeText}", description: "Delayed monthly payment terms", sampleValue: "$15/month starting February 1, 2027" },
+            { key: "{monthlyAlternativeText}", description: "Delayed monthly payment terms", sampleValue: "$17.50/month starting February 1, 2027" },
             { key: "{referralNoticeDetails}", description: "Detailed referral credit explanation", sampleValue: "You earned 1 free month for referring @alex_cinephile! Your next annual payment is discounted by $15.00 ($165.00 total) or your monthly billing is delayed until February 1, 2027." },
             { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
         ]
