@@ -21,12 +21,12 @@ export interface VersionInfo {
  * Safe to call on both client and server components.
  */
 export function getBuildTelemetry(): VersionInfo {
-    const version = process.env.NEXT_PUBLIC_PORTALARR_VERSION || packageJson.version || "3.0.0";
+    const rawVersion = process.env.NEXT_PUBLIC_PORTALARR_VERSION || packageJson.version || "3.0.0";
     
     // Resolve branch: environment variable -> fallback to version string hints
     let rawBranch = (process.env.NEXT_PUBLIC_GIT_BRANCH || process.env.GIT_BRANCH || "").trim();
     if (!rawBranch) {
-        if (version.includes("beta")) {
+        if (rawVersion.includes("beta")) {
             rawBranch = "main";
         } else if (process.env.NODE_ENV === "production") {
             rawBranch = "stable";
@@ -36,9 +36,10 @@ export function getBuildTelemetry(): VersionInfo {
     }
     const branch = rawBranch.toLowerCase();
 
-    // Determine channel
-    const isBeta = branch === "main" || branch.includes("beta") || version.includes("beta");
-    const isStable = branch === "stable" || (!version.includes("beta") && !version.includes("dev") && branch !== "main");
+    // Determine channel: when branch is explicitly "stable", it is always production and strips any -beta suffix
+    const isStable = branch === "stable" || (!rawVersion.includes("beta") && !rawVersion.includes("dev") && branch !== "main");
+    const isBeta = !isStable && (branch === "main" || branch.includes("beta") || rawVersion.includes("beta"));
+    const version = isStable ? rawVersion.replace(/-beta(\.\d+)?$/i, "") : rawVersion;
     const channel: "beta" | "stable" | "dev" = isBeta ? "beta" : isStable ? "stable" : "dev";
 
     // Git commit hash
