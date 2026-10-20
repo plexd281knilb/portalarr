@@ -1164,6 +1164,40 @@ async function runTestSuite() {
         } finally {
             process.env = originalEnv;
         }
+
+        // 4. Test Git Commit Version Prefixing Engine & Hook Enforcement
+        const { formatCommitMessageWithVersion, installGitHook } = await import("./git-commit-msg-hook");
+        
+        // Ensure hook installer runs cleanly during every verification
+        installGitHook();
+
+        // Test prepending version to unadorned commit message
+        const testMsg1 = "feat(telemetry): add branch indicator";
+        const formatted1 = formatCommitMessageWithVersion(testMsg1, "3.0.0-beta.2");
+        if (formatted1 !== "[v3.0.0-beta.2] feat(telemetry): add branch indicator") {
+            throw new Error(`Failed to prepend version at front of commit: "${formatted1}"`);
+        }
+
+        // Test relocating trailing version to the front
+        const testMsg2 = "fix(ui): adjust modal padding (v3.0.0-beta.2)";
+        const formatted2 = formatCommitMessageWithVersion(testMsg2, "3.0.0-beta.2");
+        if (formatted2 !== "[v3.0.0-beta.2] fix(ui): adjust modal padding") {
+            throw new Error(`Failed to relocate trailing version to front: "${formatted2}"`);
+        }
+
+        // Test preserving already-correctly prefixed commit message
+        const testMsg3 = "[v3.0.0-beta.2] chore(release): update package";
+        const formatted3 = formatCommitMessageWithVersion(testMsg3, "3.0.0-beta.2");
+        if (formatted3 !== "[v3.0.0-beta.2] chore(release): update package") {
+            throw new Error(`Failed to preserve existing front-prefixed version: "${formatted3}"`);
+        }
+
+        // Test leaving merge commits untouched
+        const testMsg4 = "Merge branch 'main' into stable";
+        const formatted4 = formatCommitMessageWithVersion(testMsg4, "3.0.0-beta.2");
+        if (formatted4 !== testMsg4) {
+            throw new Error(`Merge commit was altered unexpectedly: "${formatted4}"`);
+        }
     });
 
     console.log("\n==========================================================");

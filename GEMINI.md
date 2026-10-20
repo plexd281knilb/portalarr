@@ -13,7 +13,7 @@ To guarantee 100% reliability, quality control, and consistency, the following 4
 3. **Skills & Documentation Sync:**
    Review and update relevant `.agents/skills/` documents (e.g. `portalarr-ui`, `seerr-expert`, etc.) to record any new UI patterns, API contracts, formulas, or operational guidelines.
 4. **Git Version Control & Deployment Push:**
-   Inspect `git status` to verify all touched and new files, stage all changes (`git add -A`), commit with a clear, descriptive message adhering to conventional commit style that ALWAYS includes the active version from `package.json` in parentheses (e.g. `feat(scope): descriptive message (v3.0.0-beta.2)` or `fix(scope): fix bug (v3.0.0)`), and run `git push origin main`. Automatic git hook enforcement via `scripts/git-commit-msg-hook.js` guarantees version tagging on every commit.
+   Inspect `git status` to verify all touched and new files, stage all changes (`git add -A`), commit with a clear, descriptive message adhering to conventional commit style that ALWAYS includes the active version from `package.json` at the FRONT in brackets (e.g. `[v3.0.0-beta.2] feat(scope): descriptive message` or `[v3.0.0] fix(scope): fix bug`), and run `git push origin main`. Automatic git hook enforcement via `scripts/git-commit-msg-hook.js` is verified in `npm test` and executed by Git on every commit to guarantee version prefixing.
 
 ## Project Overview
 
