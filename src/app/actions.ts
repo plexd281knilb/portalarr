@@ -2026,7 +2026,14 @@ export async function sendBroadcastEmailAction(payload: {
     }
 
     const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-    if (!settings?.smtpHost || !settings?.smtpUser || !settings?.smtpPass) {
+    let broadcastRequiresApproval = settings?.requireApprovalForEmails ?? true;
+    if (broadcastRequiresApproval && settings?.emailApprovalPolicy) {
+        try {
+            const policy = JSON.parse(settings.emailApprovalPolicy);
+            if (policy["broadcast"] === false) broadcastRequiresApproval = false;
+        } catch {}
+    }
+    if (!broadcastRequiresApproval && (!settings?.smtpHost || !settings?.smtpUser || !settings?.smtpPass)) {
         return { success: false, error: "SMTP settings not configured on this server. Please configure SMTP in General & Email settings." };
     }
 
@@ -2042,6 +2049,7 @@ export async function sendBroadcastEmailAction(payload: {
     const isFullDoc = payload.isCustomHtml && (payload.body.includes("<html") || payload.body.includes("<!DOCTYPE"));
 
     let sentCount = 0;
+    let queuedCount = 0;
     let failCount = 0;
     const failures: { username: string; email: string; error: string }[] = [];
 
@@ -2085,11 +2093,16 @@ export async function sendBroadcastEmailAction(payload: {
             html: personalizedHtml,
             templateId: "broadcast",
             targetUser: user.username,
-            userId: user.id
+            userId: user.id,
+            skipAdminAlert: true
         });
 
         if (mailRes.success) {
-            sentCount++;
+            if (mailRes.queued) {
+                queuedCount++;
+            } else {
+                sentCount++;
+            }
         } else {
             failCount++;
             failures.push({
@@ -2103,13 +2116,14 @@ export async function sendBroadcastEmailAction(payload: {
     logger.addLog(
         failCount === 0 ? "SUCCESS" : "WARN",
         "EMAIL",
-        `[MASS-BROADCAST] Broadcast dispatch finished: ${sentCount} sent, ${failCount} failed. Subject: "${payload.subject}" (by ${session?.username || "admin"})`
+        `[MASS-BROADCAST] Broadcast dispatch finished: ${queuedCount} queued for approval, ${sentCount} sent immediately, ${failCount} failed. Subject: "${payload.subject}" (by ${session?.username || "admin"})`
     );
 
     return {
         success: true,
         total: users.length,
         sent: sentCount,
+        queued: queuedCount,
         failed: failCount,
         failures
     };
@@ -4429,14 +4443,20 @@ export async function sendOrQueueEmail(options: {
     targetUser?: string;
     userId?: string;
     bypassApproval?: boolean;
+    skipAdminAlert?: boolean;
     attachments?: Array<{ filename: string; path: string; contentType?: string }>;
 }): Promise<{ success: boolean; queued?: boolean; sent?: boolean; approvalId?: string; error?: string }> {
     try {
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         const recipientStr = Array.isArray(options.to) ? options.to.join(", ") : options.to;
-        
-        // If email notifications globally disabled and not bypassing approval
-        if (settings?.emailNotificationsEnabled === false && !options.bypassApproval) {
+        const isExplicitAdminDispatch =
+            options.templateId === "broadcast" ||
+            options.templateId === "new_site_launch" ||
+            options.templateId === "manual_email";
+
+        // If automated email notifications are globally disabled, skip automated background emails
+        // (but never silently drop explicit admin-initiated broadcasts or manual emails—stage them in the approval queue!)
+        if (settings?.emailNotificationsEnabled === false && !options.bypassApproval && !isExplicitAdminDispatch) {
             logger.addLog("INFO", "EMAIL", `Email notifications globally disabled in settings. Skipping email "${options.subject}" to ${recipientStr}`);
             console.log(`[EMAIL-GATE] Email notifications globally disabled. Skipping email: "${options.subject}"`);
             return { success: true, sent: false, queued: false };
@@ -4487,7 +4507,9 @@ export async function sendOrQueueEmail(options: {
             });
             logger.addLog("INFO", "APPROVAL", `Email "${options.subject}" to ${recipientStr} queued for admin approval (ID: ${approval.id}).`);
             logger.addLog("INFO", "EMAIL", `Email "${options.subject}" to ${recipientStr} staged in Admin Approval Queue (ID: ${approval.id}).`);
-            notifyAdminsOnPendingApproval(approval).catch(e => console.warn("[APPROVAL-NOTIFY-ERROR]:", e?.message || e));
+            if (!options.skipAdminAlert) {
+                notifyAdminsOnPendingApproval(approval).catch(e => console.warn("[APPROVAL-NOTIFY-ERROR]:", e?.message || e));
+            }
             return { success: true, queued: true, approvalId: approval.id };
         }
 

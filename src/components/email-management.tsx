@@ -95,6 +95,7 @@ export default function EmailManagement() {
         success: boolean;
         total: number;
         sent: number;
+        queued: number;
         failed: number;
         failures: { username: string; email: string; error: string }[];
     } | null>(null);
@@ -187,6 +188,12 @@ export default function EmailManagement() {
                     setSelectedTemplateId(initial.id);
                     setTemplateSubject(initial.subject);
                     setTemplateBody(initial.body);
+                }
+                const launchTpl = tRes.templates.find(t => t.id === "new_site_launch");
+                if (launchTpl && !broadcastSubject && !broadcastBody) {
+                    setBroadcastSubject(launchTpl.subject);
+                    setBroadcastBody(launchTpl.body);
+                    setBroadcastIsHtml(false);
                 }
             }
 
@@ -378,6 +385,7 @@ export default function EmailManagement() {
                     success: true,
                     total: res.total || selectedUserIds.length,
                     sent: res.sent || 0,
+                    queued: (res as any).queued || 0,
                     failed: res.failed || 0,
                     failures: res.failures || []
                 });
@@ -386,6 +394,7 @@ export default function EmailManagement() {
                     success: false,
                     total: selectedUserIds.length,
                     sent: 0,
+                    queued: 0,
                     failed: selectedUserIds.length,
                     failures: [{ username: "All", email: "", error: res.error || "Broadcast failed" }]
                 });
@@ -396,6 +405,7 @@ export default function EmailManagement() {
                 success: false,
                 total: selectedUserIds.length,
                 sent: 0,
+                queued: 0,
                 failed: selectedUserIds.length,
                 failures: [{ username: "Error", email: "", error: e.message || "Network error" }]
             });
@@ -414,6 +424,7 @@ export default function EmailManagement() {
         if (filter === "REQUESTS" && (cat === "REQUESTS" || cat === "MEDIA")) return true;
         if (filter === "KINDLE" && cat === "KINDLE") return true;
         if (filter === "SUPPORT" && (cat === "SUPPORT" || cat === "TICKETS" || cat === "ALERTS")) return true;
+        if (filter === "BROADCAST" && (cat === "BROADCAST" || cat === "BROADCASTS")) return true;
         return cat === filter;
     };
 
@@ -958,6 +969,85 @@ export default function EmailManagement() {
                             </CardHeader>
 
                             <CardContent className="space-y-4">
+                                {/* APPROVAL QUEUE SAFETY BANNER */}
+                                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex flex-wrap items-center justify-between gap-2 text-xs">
+                                    <div className="flex items-center gap-2">
+                                        <FolderCheck className="h-4 w-4 text-amber-400 shrink-0" />
+                                        <div>
+                                            <span className="font-bold text-amber-300">
+                                                {approvalSettings.requireApprovalForEmails && approvalSettings.emailApprovalPolicy?.["broadcast"] !== false
+                                                    ? "🛡️ Staged in Admin Approval Queue First (Safe Review Mode)"
+                                                    : "⚡ Direct SMTP Dispatch Mode"}
+                                            </span>
+                                            <p className="text-[11px] text-muted-foreground">
+                                                {approvalSettings.requireApprovalForEmails && approvalSettings.emailApprovalPolicy?.["broadcast"] !== false
+                                                    ? "Each user's personalized email will be staged in the Admin Approval Queue so you can inspect and approve them before anything is sent out."
+                                                    : "Broadcast emails will be sent immediately via SMTP without staging in the approval queue."}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <a
+                                        href="/settings/access"
+                                        className="text-[11px] font-semibold px-2.5 py-1 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30 transition-colors shrink-0"
+                                    >
+                                        Open Approval Queue &rarr;
+                                    </a>
+                                </div>
+
+                                {/* 1-CLICK BROADCAST PRESET SELECTOR */}
+                                <div className="space-y-1.5 bg-indigo-950/25 p-3 rounded-xl border border-indigo-500/30">
+                                    <div className="flex items-center justify-between text-[11px] font-semibold text-indigo-300">
+                                        <span className="flex items-center gap-1.5">
+                                            <Sparkles className="h-3.5 w-3.5 text-indigo-400" /> Quick-Load Broadcast Template Preset:
+                                        </span>
+                                        <span className="text-[10px] text-muted-foreground">Click to load into Subject &amp; Body</span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2 pt-1">
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="secondary"
+                                            className="h-7 text-xs font-bold bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 border border-indigo-500/40 gap-1.5"
+                                            onClick={() => {
+                                                const launchTpl = templates.find(t => t.id === "new_site_launch");
+                                                if (launchTpl) {
+                                                    setBroadcastSubject(launchTpl.subject);
+                                                    setBroadcastBody(launchTpl.body);
+                                                    setBroadcastIsHtml(false);
+                                                }
+                                            }}
+                                        >
+                                            🚀 New Site Launch &amp; Complete Feature Guide
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-7 text-xs bg-black/40 border-white/10 hover:bg-white/10"
+                                            onClick={() => {
+                                                setBroadcastSubject("📢 Important Update for {portalName} Members");
+                                                setBroadcastBody(`<h2 style="margin-top: 0; color: #0f172a;">Server Update 📢</h2>\n<p>Hi <strong>{username}</strong>,</p>\n<p>We wanted to share a quick update regarding <strong>{portalName}</strong>:</p>\n<ul>\n  <li>New movies, shows, and books have been added to the library.</li>\n  <li>Visit <a href="{appUrl}">{appUrl}</a> to request media, check stream quality, or send books to your Kindle.</li>\n</ul>\n<p>Happy streaming!</p>`);
+                                                setBroadcastIsHtml(false);
+                                            }}
+                                        >
+                                            📢 General Server Announcement
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-7 text-xs bg-black/40 border-white/10 hover:bg-white/10"
+                                            onClick={() => {
+                                                setBroadcastSubject("🛠️ Scheduled Server Maintenance Notice — {portalName}");
+                                                setBroadcastBody(`<h2 style="margin-top: 0; color: #0f172a;">Scheduled Maintenance 🛠️</h2>\n<p>Hi <strong>{username}</strong>,</p>\n<p><strong>{portalName}</strong> will undergo brief scheduled maintenance tonight for system updates and performance improvements. Active streams may briefly pause while services restart.</p>\n<p>You can check live server status anytime on the dashboard at <a href="{appUrl}">{appUrl}</a>.</p>`);
+                                                setBroadcastIsHtml(false);
+                                            }}
+                                        >
+                                            🛠️ Scheduled Maintenance Notice
+                                        </Button>
+                                    </div>
+                                </div>
+
                                 {testBroadcastResult && (
                                     <div className={`p-3 rounded-lg text-xs flex items-center gap-2 ${
                                         testBroadcastResult.success 
@@ -977,15 +1067,31 @@ export default function EmailManagement() {
                                     }`}>
                                         <div className="flex items-center justify-between font-bold text-sm">
                                             <span className="flex items-center gap-1.5">
-                                                <CheckCircle2 className="h-4 w-4 text-emerald-400" /> Mass Broadcast Dispatch Complete
+                                                <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                                                {broadcastSummary.queued > 0
+                                                    ? `Staged ${broadcastSummary.queued} Broadcast Email${broadcastSummary.queued === 1 ? "" : "s"} in Approval Queue!`
+                                                    : "Mass Broadcast Dispatch Complete"}
                                             </span>
                                             <Badge variant="outline" className="bg-black/40">
+                                                {broadcastSummary.queued > 0 && `${broadcastSummary.queued} Queued for Review • `}
                                                 {broadcastSummary.sent} Sent / {broadcastSummary.failed} Failed
                                             </Badge>
                                         </div>
-                                        <p className="text-[11px] text-muted-foreground">
-                                            Dispatched individual emails to {broadcastSummary.sent} recipient{broadcastSummary.sent === 1 ? "" : "s"}.
-                                        </p>
+                                        <div className="flex flex-wrap items-center justify-between gap-2">
+                                            <p className="text-[11px] text-muted-foreground">
+                                                {broadcastSummary.queued > 0
+                                                    ? `Created ${broadcastSummary.queued} individual personalized email${broadcastSummary.queued === 1 ? "" : "s"} in the Admin Approval Queue. Nothing has been sent yet—review and approve them when ready!`
+                                                    : `Dispatched individual emails to ${broadcastSummary.sent} recipient${broadcastSummary.sent === 1 ? "" : "s"}.`}
+                                            </p>
+                                            {broadcastSummary.queued > 0 && (
+                                                <a
+                                                    href="/settings/access"
+                                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 font-bold text-xs transition-colors"
+                                                >
+                                                    <FolderCheck className="h-3.5 w-3.5" /> Review &amp; Approve Emails in Access Control &rarr;
+                                                </a>
+                                            )}
+                                        </div>
                                         {broadcastSummary.failures.length > 0 && (
                                             <div className="mt-2 pt-2 border-t border-amber-800/40 space-y-1">
                                                 <span className="font-semibold text-red-400">Failed Deliveries:</span>
@@ -1157,7 +1263,9 @@ export default function EmailManagement() {
                                     className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs gap-1.5 px-4 shadow-md shadow-primary/20"
                                 >
                                     {broadcasting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Megaphone className="h-3.5 w-3.5" />}
-                                    Broadcast to {selectedUserIds.length} Selected User{selectedUserIds.length === 1 ? "" : "s"}
+                                    {approvalSettings.requireApprovalForEmails && approvalSettings.emailApprovalPolicy?.["broadcast"] !== false
+                                        ? `Stage ${selectedUserIds.length} Email${selectedUserIds.length === 1 ? "" : "s"} in Approval Queue`
+                                        : `Broadcast to ${selectedUserIds.length} Selected User${selectedUserIds.length === 1 ? "" : "s"}`}
                                 </Button>
                             </CardFooter>
                         </Card>
@@ -1170,10 +1278,15 @@ export default function EmailManagement() {
                 <DialogContent className="sm:max-w-[500px] bg-[#121218] border-border/60 text-foreground">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2 text-foreground">
-                            <Megaphone className="h-5 w-5 text-primary" /> Confirm Mass Email Broadcast
+                            <Megaphone className="h-5 w-5 text-primary" />
+                            {approvalSettings.requireApprovalForEmails && approvalSettings.emailApprovalPolicy?.["broadcast"] !== false
+                                ? "Stage Broadcast Emails for Admin Review"
+                                : "Confirm Mass Email Broadcast"}
                         </DialogTitle>
                         <DialogDescription className="text-xs text-muted-foreground">
-                            You are about to dispatch personalized emails to {selectedUserIds.length} recipient{selectedUserIds.length === 1 ? "" : "s"}.
+                            {approvalSettings.requireApprovalForEmails && approvalSettings.emailApprovalPolicy?.["broadcast"] !== false
+                                ? `You are about to generate ${selectedUserIds.length} individual, personalized email${selectedUserIds.length === 1 ? "" : "s"} and stage them in the Admin Approval Queue so you can check them before they go out.`
+                                : `You are about to dispatch personalized emails to ${selectedUserIds.length} recipient${selectedUserIds.length === 1 ? "" : "s"}.`}
                         </DialogDescription>
                     </DialogHeader>
 
@@ -1181,7 +1294,15 @@ export default function EmailManagement() {
                         <div className="bg-black/40 p-3 rounded-lg border border-border/40 space-y-1.5">
                             <div><strong>Subject:</strong> <span className="text-primary">{broadcastSubject}</span></div>
                             <div><strong>Total Recipients:</strong> <Badge variant="outline">{selectedUserIds.length} users</Badge></div>
-                            <div><strong>Delivery Method:</strong> Individual SMTP dispatches (Privacy isolated)</div>
+                            <div><strong>Delivery Method:</strong> Individual 1-to-1 personalized emails (Never CC&apos;d)</div>
+                            <div>
+                                <strong>Approval Gate:</strong>{" "}
+                                {approvalSettings.requireApprovalForEmails && approvalSettings.emailApprovalPolicy?.["broadcast"] !== false ? (
+                                    <span className="text-amber-400 font-semibold">🛡️ Staged in Admin Approval Queue (Check before sending)</span>
+                                ) : (
+                                    <span className="text-emerald-400 font-semibold">⚡ Immediate SMTP Dispatch</span>
+                                )}
+                            </div>
                         </div>
 
                         <div className="text-[11px] text-muted-foreground">
@@ -1208,7 +1329,11 @@ export default function EmailManagement() {
                             className="font-bold bg-primary text-primary-foreground gap-1.5"
                         >
                             {broadcasting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                            {broadcasting ? "Sending Broadcast..." : "Yes, Send Broadcast"}
+                            {broadcasting
+                                ? "Processing..."
+                                : approvalSettings.requireApprovalForEmails && approvalSettings.emailApprovalPolicy?.["broadcast"] !== false
+                                    ? `Stage ${selectedUserIds.length} Email${selectedUserIds.length === 1 ? "" : "s"} for Review`
+                                    : "Yes, Send Broadcast"}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -1233,6 +1358,7 @@ export default function EmailManagement() {
                             <div className="flex flex-wrap gap-1 pt-2">
                                 {[
                                     { id: "all", label: "All" },
+                                    { id: "broadcast", label: "Broadcasts" },
                                     { id: "auth", label: "Accounts" },
                                     { id: "trials", label: "Trials & Billing" },
                                     { id: "payments", label: "Payments" },
