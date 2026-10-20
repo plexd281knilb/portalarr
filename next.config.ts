@@ -1,5 +1,7 @@
 import type { NextConfig } from "next";
 import { networkInterfaces } from "os";
+import { execSync } from "child_process";
+import packageJson from "./package.json";
 
 // --- HELPER: AUTO-DETECT LOCAL IPS ---
 function getLocalIps() {
@@ -33,18 +35,46 @@ console.log("✅ Allowed Origins Auto-Detected:", allowedOrigins);
 
 const buildTimestamp = new Date().toISOString();
 
+function getGitMetadata() {
+  let branch = (process.env.GIT_BRANCH || process.env.NEXT_PUBLIC_GIT_BRANCH || "").trim();
+  let sha = (process.env.GIT_SHA || process.env.NEXT_PUBLIC_GIT_SHA || "").trim();
+  const buildNumber = (process.env.BUILD_NUMBER || process.env.NEXT_PUBLIC_BUILD_NUMBER || "").trim();
+
+  try {
+    if (!branch) {
+      branch = execSync("git rev-parse --abbrev-ref HEAD", { stdio: ["pipe", "pipe", "ignore"] }).toString().trim();
+    }
+  } catch {}
+
+  try {
+    if (!sha) {
+      sha = execSync("git rev-parse --short HEAD", { stdio: ["pipe", "pipe", "ignore"] }).toString().trim();
+    }
+  } catch {}
+
+  if (!branch) {
+    branch = packageJson.version.includes("beta") ? "main" : "stable";
+  }
+
+  return { branch, sha, buildNumber };
+}
+
+const gitMeta = getGitMetadata();
+
 const nextConfig: NextConfig = {
   output: "standalone",
   env: {
     PORTALARR_BUILD_TIMESTAMP: buildTimestamp,
-    PORTALARR_BUILD_VERSION: "3.0.0-beta.1",
+    PORTALARR_BUILD_VERSION: packageJson.version,
+    NEXT_PUBLIC_PORTALARR_VERSION: packageJson.version,
+    NEXT_PUBLIC_GIT_BRANCH: gitMeta.branch,
+    NEXT_PUBLIC_GIT_SHA: gitMeta.sha,
+    NEXT_PUBLIC_BUILD_NUMBER: gitMeta.buildNumber,
+    NEXT_PUBLIC_BUILD_TIMESTAMP: buildTimestamp,
   },
   
-  // --- THE FIX FROM YOUR CONSOLE LOGS ---
   // Tells Next.js to stop blocking your local network IP
   allowedDevOrigins: rawIps,
-
-  // ... top half of your config stays the same ...
   
   experimental: {
     cpus: 4,
@@ -53,7 +83,6 @@ const nextConfig: NextConfig = {
     },
   },
   
-  // ADD THIS CRITICAL LINE TO FIX THE DOCKER BUILD:
   turbopack: {}, 
   
   webpack: (config, context) => {

@@ -146,7 +146,7 @@ export default function DiscordSettingsPanel() {
     };
 
     const handleSyncServer = async () => {
-        if (!confirm("This will synchronize your Discord server categories, channels, permissions, and roles to match the Portalarr template. Missing channels will be created. Proceed?")) {
+        if (!confirm("This will synchronize your Discord server categories, channels, permissions, and roles to match the DomsHomeLab template. Missing channels will be created. Proceed?")) {
             return;
         }
 
@@ -237,7 +237,7 @@ export default function DiscordSettingsPanel() {
                             )}
                         </div>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                            Automate your Discord community to match Portalarr: categories, channels, pinned device setup guides, and live system status.
+                            Automate your Discord community to match DomsHomeLab: categories, channels, pinned device setup guides, and live system status.
                         </p>
                     </div>
                 </div>
@@ -300,7 +300,7 @@ export default function DiscordSettingsPanel() {
                                 Create Application & Bot
                             </div>
                             <p className="pl-7">
-                                Go to the <a href="https://discord.com/developers/applications" target="_blank" rel="noreferrer" className="text-indigo-400 underline font-medium hover:text-indigo-300 inline-flex items-center gap-1">Discord Developer Portal <ExternalLink className="h-3 w-3" /></a> → Click <strong>New Application</strong> → Name it <em>DomsHomeLab</em> or <em>Portalarr</em>.
+                                Go to the <a href="https://discord.com/developers/applications" target="_blank" rel="noreferrer" className="text-indigo-400 underline font-medium hover:text-indigo-300 inline-flex items-center gap-1">Discord Developer Portal <ExternalLink className="h-3 w-3" /></a> → Click <strong>New Application</strong> → Name it <em>DomsHomeLab</em> (<em>d281knilb</em>).
                             </p>
                         </div>
 
@@ -526,7 +526,7 @@ export default function DiscordSettingsPanel() {
                                 <Layers className="h-4 w-4 text-purple-400" /> Canonical Server Architecture & Channel Blueprint
                             </CardTitle>
                             <CardDescription className="text-xs">
-                                Portalarr automatically provisions these categories, channels, permissions, and pinned embeds to ensure consistency.
+                                DomsHomeLab automatically provisions these categories, channels, permissions, and pinned embeds to ensure consistency.
                             </CardDescription>
                         </div>
                         <Button

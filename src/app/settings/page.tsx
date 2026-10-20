@@ -7,6 +7,7 @@ import {
     getAppUsers, createAppUser, deleteAppUser, 
     getSettings, saveSettings, saveAppUrlAction, savePlexSettingsAction, clearPlexSettings, saveJobSettings, clearSmtpSettings, sendTestEmailAction, syncPlexFriendsAction, autoLinkAdminPlexTokenAction,
     getPlexServersAction, addPlexServerAction, updatePlexServerAction, removePlexServerAction, setDefaultPlexServerAction, testPlexServerConfigAction, testPlexServerConnectionAction,
+    testPlexDatabasePathAction, discoverPlexDatabasePathsAction,
     togglePlexServerMonitoringAction, getDiscoveredPlexServersAction, importDiscoveredPlexServerAction,
     getEmailNotificationSettings, saveEmailNotificationSettingsAction,
     getTautulliInstances, addTautulliInstance, removeTautulliInstance, updateTautulliInstance, toggleTautulliMonitoringAction,
@@ -35,7 +36,7 @@ import {
     AlertTriangle, PlaySquare, Activity, Sliders, Megaphone, Beaker, 
     CheckCircle2, XCircle, MailCheck, RefreshCw, Mail, FolderCheck, 
     Radio, ExternalLink, FileCode, Check, Bot, Sparkles, Key, Cpu, Eye, EyeOff, Terminal, Zap, Tv,
-    Bell, BellOff, UserCheck, BookOpen, LifeBuoy, Save, RotateCcw, Star, Globe, Compass, MessageSquare, History
+    Bell, BellOff, UserCheck, BookOpen, LifeBuoy, Save, RotateCcw, Star, Globe, Compass, MessageSquare, History, Search
 } from "lucide-react";
 import { 
     Dialog, 
@@ -175,6 +176,10 @@ function SettingsPageContent() {
     const [plexServerFormToken, setPlexServerFormToken] = useState("");
     const [plexServerFormIsDefault, setPlexServerFormIsDefault] = useState(false);
     const [plexServerFormMonitored, setPlexServerFormMonitored] = useState(true);
+    const [plexServerFormDatabasePath, setPlexServerFormDatabasePath] = useState("");
+    const [testingDatabasePath, setTestingDatabasePath] = useState(false);
+    const [databasePathTestResult, setDatabasePathTestResult] = useState<{ success: boolean; message?: string; error?: string } | null>(null);
+    const [discoveringPaths, setDiscoveringPaths] = useState(false);
     const [togglingPlexServerId, setTogglingPlexServerId] = useState<string | null>(null);
     const [togglingTautulliId, setTogglingTautulliId] = useState<string | null>(null);
     const [togglingGlancesId, setTogglingGlancesId] = useState<string | null>(null);
@@ -1935,6 +1940,15 @@ function SettingsPageContent() {
                                                                             Admin Token
                                                                         </Badge>
                                                                     )}
+                                                                    {server.databasePath ? (
+                                                                        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-300 border-emerald-500/30 text-[9px] px-1.5 py-0 flex items-center gap-1" title={server.databasePath}>
+                                                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Direct Snapshot
+                                                                        </Badge>
+                                                                    ) : (
+                                                                        <Badge variant="outline" className="bg-slate-500/10 text-slate-400 border-slate-500/30 text-[9px] px-1.5 py-0 flex items-center gap-1" title="Using standard HTTP connection">
+                                                                            <span className="w-1.5 h-1.5 rounded-full bg-slate-500" /> HTTP Mode
+                                                                        </Badge>
+                                                                    )}
                                                                 </div>
                                                                 <div className="text-xs font-mono text-muted-foreground truncate flex items-center gap-1.5">
                                                                     <code>{server.url}</code>
@@ -2004,7 +2018,9 @@ function SettingsPageContent() {
                                                                         setPlexServerFormToken(server.token || "");
                                                                         setPlexServerFormIsDefault(server.isDefault);
                                                                         setPlexServerFormMonitored(server.monitored !== false);
+                                                                        setPlexServerFormDatabasePath(server.databasePath || "");
                                                                         setPlexServerFormTestResult(null);
+                                                                        setDatabasePathTestResult(null);
                                                                     }}
                                                                     title="Edit Server"
                                                                 >
@@ -2072,7 +2088,9 @@ function SettingsPageContent() {
                                                 setPlexServerFormToken("");
                                                 setPlexServerFormIsDefault(false);
                                                 setPlexServerFormMonitored(true);
+                                                setPlexServerFormDatabasePath("");
                                                 setPlexServerFormTestResult(null);
+                                                setDatabasePathTestResult(null);
                                                 loadAllData();
                                             } else {
                                                 alert(res.error || "Failed to save Plex server.");
@@ -2160,6 +2178,102 @@ function SettingsPageContent() {
                                             <p className="text-[10px] text-muted-foreground">
                                                 If this server uses a different Plex account or token, paste its <code>X-Plex-Token</code> here. Otherwise, the dashboard will use your Global Admin Plex Token.
                                             </p>
+                                        </div>
+
+                                        {/* Direct SQLite Snapshot Database Path (Unraid / Homelab Optimization) */}
+                                        <div className="space-y-2 rounded-lg border border-border/50 bg-muted/20 p-3">
+                                            <div className="flex justify-between items-center">
+                                                <Label className="text-xs font-semibold flex items-center gap-1.5">
+                                                    <span>⚡ Direct SQLite Database Path (Optional)</span>
+                                                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30 text-[9px] px-1.5 py-0 font-normal">
+                                                        Unraid / Zero PMS Locks
+                                                    </Badge>
+                                                </Label>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-5 px-1.5 text-[9px] font-mono text-muted-foreground hover:text-emerald-400 gap-1"
+                                                    disabled={discoveringPaths}
+                                                    onClick={async () => {
+                                                        setDiscoveringPaths(true);
+                                                        const res = await discoverPlexDatabasePathsAction();
+                                                        setDiscoveringPaths(false);
+                                                        if (res.paths && res.paths.length > 0) {
+                                                            setPlexServerFormDatabasePath(res.paths[0]);
+                                                        } else {
+                                                            alert("No standard Plex database paths detected in default locations. You can paste the direct path manually.");
+                                                        }
+                                                    }}
+                                                >
+                                                    {discoveringPaths ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Search className="h-2.5 w-2.5" />}
+                                                    Auto-Detect
+                                                </Button>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <Input 
+                                                    name="databasePath" 
+                                                    placeholder="/mnt/user/appdata/plex/Library/Application Support/Plex Media Server/Plug-in Support/Databases/com.plexapp.plugins.library.db" 
+                                                    value={plexServerFormDatabasePath}
+                                                    onChange={(e) => {
+                                                        setPlexServerFormDatabasePath(e.target.value);
+                                                        setDatabasePathTestResult(null);
+                                                    }}
+                                                    className="text-xs font-mono flex-1" 
+                                                    autoComplete="off"
+                                                />
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="h-9 px-3 text-xs border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 shrink-0 gap-1"
+                                                    disabled={testingDatabasePath || !plexServerFormDatabasePath.trim()}
+                                                    onClick={async () => {
+                                                        setTestingDatabasePath(true);
+                                                        const res = await testPlexDatabasePathAction(plexServerFormDatabasePath);
+                                                        setTestingDatabasePath(false);
+                                                        setDatabasePathTestResult(res);
+                                                    }}
+                                                >
+                                                    {testingDatabasePath ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
+                                                    Test Path
+                                                </Button>
+                                            </div>
+                                            <div className="flex flex-wrap gap-1 items-center pt-0.5">
+                                                <span className="text-[10px] text-muted-foreground mr-1">Presets:</span>
+                                                {[
+                                                    { label: "Main (Unraid)", path: "/mnt/user/appdata/plex/Library/Application Support/Plex Media Server/Plug-in Support/Databases/com.plexapp.plugins.library.db" },
+                                                    { label: "Kids Server", path: "/mnt/remotes/Kid_Server_Appdata/KidsPlexServer/Library/Application Support/Plex Media Server/Plug-in Support/Databases/com.plexapp.plugins.library.db" },
+                                                    { label: "Backup Server", path: "/mnt/remotes/Kid_Server_Appdata/MainPlexBackup/Library/Application Support/Plex Media Server/Plug-in Support/Databases/com.plexapp.plugins.library.db" }
+                                                ].map((p) => (
+                                                    <Button
+                                                        key={p.label}
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="h-5 px-1.5 text-[9px] text-muted-foreground hover:text-emerald-400 border border-border/40"
+                                                        onClick={() => {
+                                                            setPlexServerFormDatabasePath(p.path);
+                                                            setDatabasePathTestResult(null);
+                                                        }}
+                                                    >
+                                                        {p.label}
+                                                    </Button>
+                                                ))}
+                                            </div>
+                                            <p className="text-[10px] text-muted-foreground leading-tight">
+                                                Direct path to <code>com.plexapp.plugins.library.db</code>. Enables atomic snapshotting and sub-second delta-syncs, eliminating Plex API lockups and server crashes during pruning and tagging.
+                                            </p>
+                                            {databasePathTestResult && (
+                                                <div className={`text-[11px] p-2 rounded-md flex items-center gap-1.5 ${
+                                                    databasePathTestResult.success 
+                                                        ? "text-emerald-400 bg-emerald-950/40 border border-emerald-500/30" 
+                                                        : "text-red-400 bg-red-950/40 border border-red-500/30"
+                                                }`}>
+                                                    {databasePathTestResult.success ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> : <XCircle className="h-3.5 w-3.5 shrink-0" />}
+                                                    <span>{databasePathTestResult.message || databasePathTestResult.error}</span>
+                                                </div>
+                                            )}
                                         </div>
 
                                         <div className="flex items-center space-x-2 pt-1">
@@ -3204,7 +3318,7 @@ function SettingsPageContent() {
                                     </Badge>
                                 </div>
                                 <p className="text-[11px] text-muted-foreground leading-relaxed">
-                                    Portalarr connects directly to your Plex Media Servers to capture live playback, hardware transcoding metrics, and stream quality telemetry. External Tautulli instances are completely optional and used exclusively for importing past historical watch records.
+                                    DomsHomeLab connects directly to your Plex Media Servers to capture live playback, hardware transcoding metrics, and stream quality telemetry. External Tautulli instances are completely optional and used exclusively for importing past historical watch records.
                                 </p>
                             </div>
                         </div>
@@ -3433,7 +3547,7 @@ function SettingsPageContent() {
                                                     <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
                                                         {unconfiguredDiscovered.length > 0 && (
                                                             <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                                                                Already Configured in Portalarr ({configuredDiscovered.length})
+                                                                Already Configured in DomsHomeLab ({configuredDiscovered.length})
                                                             </div>
                                                         )}
                                                         {configuredDiscovered.map((srv, idx) => {
@@ -3484,7 +3598,7 @@ function SettingsPageContent() {
                                         <CardTitle className="flex items-center gap-2">
                                             <History className="h-5 w-5 text-purple-400"/> {editingTautulli ? "Edit Historical Archive" : "Tautulli (Historical Watch Archive)"}
                                         </CardTitle>
-                                        <CardDescription>{editingTautulli ? `Modifying ${editingTautulli.name}` : "Optional watch archive for importing historical play records into Portalarr."}</CardDescription>
+                                        <CardDescription>{editingTautulli ? `Modifying ${editingTautulli.name}` : "Optional watch archive for importing historical play records into DomsHomeLab."}</CardDescription>
                                     </div>
                                     <Badge variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/30 text-[10px] shrink-0">
                                         Optional • History Import
@@ -3497,7 +3611,7 @@ function SettingsPageContent() {
                                         {tautulli.length === 0 && (
                                             <div className="p-3 rounded-lg bg-white/[0.02] border border-dashed border-white/10 text-xs text-muted-foreground space-y-1">
                                                 <p className="font-semibold text-foreground">No Tautulli instances configured.</p>
-                                                <p className="text-[11px]">Portalarr monitors Plex streams directly. Only add Tautulli if you have past watch history you wish to backfill.</p>
+                                                <p className="text-[11px]">DomsHomeLab monitors Plex streams directly. Only add Tautulli if you have past watch history you wish to backfill.</p>
                                             </div>
                                         )}
                                         {tautulli.map(t => (

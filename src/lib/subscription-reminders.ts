@@ -311,9 +311,12 @@ export function getNextRenewalReminderInfo(params: {
         };
     }
 
-    // Determine cadence
+    // Determine cadence (recognizes Jan 1 or Dec 31 as annual cycle boundary when subscriptionCadence is unset)
+    const isAnnualBoundaryDate =
+        (expiryDate.getMonth() === 0 && expiryDate.getDate() === 1) ||
+        (expiryDate.getMonth() === 11 && expiryDate.getDate() === 31);
     const cadenceStr = (user.subscriptionCadence || (
-        expiryDate.getMonth() === 0 && expiryDate.getDate() === 1 ? "YEARLY" : "MONTHLY"
+        isAnnualBoundaryDate ? "YEARLY" : "MONTHLY"
     )).toUpperCase();
     const isYearly = cadenceStr === "YEARLY";
     const cadence: "YEARLY" | "MONTHLY" = isYearly ? "YEARLY" : "MONTHLY";

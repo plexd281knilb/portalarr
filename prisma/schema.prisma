@@ -289,6 +289,10 @@ model Settings {
 
   // Dismissed / Ignored Plex Hubs & Collections (Blacklist from Re-import)
   dismissedHubs                    String?   // JSON array of { ratingKey, title, normalizedTitle, serverId, sectionKey, dismissedAt }
+
+  // Direct Plex SQLite Snapshot & Delta-Sync Engine
+  plexSnapshotEnabled              Boolean   @default(true) // Enable atomic SQLite snapshots to eliminate PMS locks
+  plexSnapshotDir                  String?   @default("/tmp/portalarr_snapshots") // Temp snapshot storage directory
 }
 
 model PlexServer {
@@ -299,6 +303,7 @@ model PlexServer {
   clientIdentifier String?  // Machine/client ID
   isDefault        Boolean  @default(false)
   monitored        Boolean  @default(true) // Health & Reachability Monitoring
+  databasePath     String?  // Optional local/mounted path to com.plexapp.plugins.library.db (e.g. Unraid /mnt/user/appdata/plex/...)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @default(now()) @updatedAt
 }

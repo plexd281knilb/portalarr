@@ -435,7 +435,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{email}", description: "Email address of user", sampleValue: "jordan@example.com" },
             { key: "{daysRemaining}", description: "Number of days remaining in trial", sampleValue: "3" },
             { key: "{expirationDate}", description: "Date when trial expires", sampleValue: "October 15, 2026" },
-            { key: "{renewUrl}", description: "URL to renewal or profile page", sampleValue: "https://portal.example.com/settings" },
+            { key: "{renewUrl}", description: "URL to renewal or profile page", sampleValue: "https://portal.example.com/profile#billing" },
             { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
         ]
     },
@@ -460,7 +460,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{username}", description: "Username of user", sampleValue: "jordan_reader" },
             { key: "{email}", description: "Email address of user", sampleValue: "jordan@example.com" },
             { key: "{expirationDate}", description: "Date when trial concluded", sampleValue: "October 15, 2026" },
-            { key: "{renewUrl}", description: "URL to renewal page", sampleValue: "https://portal.example.com/settings" },
+            { key: "{renewUrl}", description: "URL to renewal page", sampleValue: "https://portal.example.com/profile#billing" },
             { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
         ]
     },
@@ -983,8 +983,8 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
     {
         id: "subscription_renewal_reminder_yearly",
         name: "Annual Membership Renewal Warning (Yearly Plan)",
-        description: "Sent to members on the Annual Plan ($180/yr) at multiple milestones (30, 14, 7, 3, and 1 days remaining) so they have advance notice before their annual amount comes due.",
-        triggerEvent: "Triggered automatically at 30, 14, 7, 3, and 1 days before an annual subscription expires, detailing annual rate, referral reward discounts, monthly alternative, and payment methods.",
+        description: "Sent to members on the Annual Plan ($180/yr) at multiple milestones (60, 30, 14, 3, and 1 days remaining) so they have advance notice before their annual amount comes due.",
+        triggerEvent: "Triggered automatically at 60, 30, 14, 3, and 1 days before an annual subscription expires, detailing annual rate, referral reward discounts, monthly alternative ($17.50/mo), and payment methods.",
         category: "PAYMENTS",
         defaultSubject: "🔔 Annual Membership Renewal Notice: {daysRemaining} Days Left ({amountDue})",
         defaultBody: `<h2>Annual Membership Renewal Notice 🔔</h2>
@@ -1039,7 +1039,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{basePrice}", description: "Standard base annual price", sampleValue: "$180.00 / year" },
             { key: "{referralDiscountText}", description: "Referral discount summary", sampleValue: "-$15.00 (1 friend referred)" },
             { key: "{amountDue}", description: "Net amount due after referral credits", sampleValue: "$165.00" },
-            { key: "{monthlyAlternativeText}", description: "Delayed monthly payment terms", sampleValue: "$15/month starting February 1, 2027" },
+            { key: "{monthlyAlternativeText}", description: "Delayed monthly payment terms", sampleValue: "$17.50/month starting February 1, 2027" },
             { key: "{referralNoticeDetails}", description: "Detailed referral credit explanation", sampleValue: "You earned 1 free month for referring @alex_cinephile! Your next annual payment is discounted by $15.00 ($165.00 total)." },
             { key: "{paymentMemo}", description: "Clean payment memo tag (member username)", sampleValue: "jordan_reader" },
             { key: "{billingUrl}", description: "Link to user profile billing section", sampleValue: "https://portal.example.com/profile#billing" },
@@ -1049,8 +1049,8 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
     {
         id: "subscription_renewal_reminder_monthly",
         name: "Monthly Membership Renewal Warning (Monthly Plan)",
-        description: "Sent to members on the Monthly Plan ($15/mo) at 3 days and 1 day remaining, alerting them of their upcoming monthly payment.",
-        triggerEvent: "Triggered automatically at 3 days and 1 day before a monthly subscription renews, detailing renewal amount ($15/mo), payment memo, and payment instructions.",
+        description: "Sent to members on the Monthly Plan ($17.50/mo) at 7, 3, and 1 days remaining, alerting them of their upcoming monthly payment.",
+        triggerEvent: "Triggered automatically at 7, 3, and 1 days before a monthly subscription renews, detailing renewal amount ($17.50/mo), payment memo, and payment instructions.",
         category: "PAYMENTS",
         defaultSubject: "🔔 Monthly Membership Renewal Notice: {daysRemaining} Days Left ({amountDue})",
         defaultBody: `<h2>Monthly Membership Renewal Notice 🔔</h2>
@@ -1090,8 +1090,8 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{username}", description: "Username of user", sampleValue: "jordan_reader" },
             { key: "{daysRemaining}", description: "Days remaining until expiration", sampleValue: "3" },
             { key: "{renewalDate}", description: "Expiration or renewal date", sampleValue: "November 1, 2026" },
-            { key: "{basePrice}", description: "Standard monthly price", sampleValue: "$15.00 / month" },
-            { key: "{amountDue}", description: "Net amount due", sampleValue: "$15.00" },
+            { key: "{basePrice}", description: "Standard monthly price", sampleValue: "$17.50 / month" },
+            { key: "{amountDue}", description: "Net amount due", sampleValue: "$17.50" },
             { key: "{paymentMemo}", description: "Clean payment memo tag (member username)", sampleValue: "jordan_reader" },
             { key: "{billingUrl}", description: "Link to user profile billing section", sampleValue: "https://portal.example.com/profile#billing" },
             { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
@@ -1143,9 +1143,93 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{basePrice}", description: "Standard base annual price", sampleValue: "$180.00 / year" },
             { key: "{referralDiscountText}", description: "Referral discount summary", sampleValue: "-$15.00 (1 friend referred)" },
             { key: "{amountDue}", description: "Net amount due after referral credits", sampleValue: "$165.00" },
-            { key: "{monthlyAlternativeText}", description: "Delayed monthly payment terms", sampleValue: "$15/month starting February 1, 2027" },
+            { key: "{monthlyAlternativeText}", description: "Delayed monthly payment terms", sampleValue: "$17.50/month starting February 1, 2027" },
             { key: "{referralNoticeDetails}", description: "Detailed referral credit explanation", sampleValue: "You earned 1 free month for referring @alex_cinephile! Your next annual payment is discounted by $15.00 ($165.00 total) or your monthly billing is delayed until February 1, 2027." },
             { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
+        ]
+    },
+    {
+        id: "new_site_launch",
+        name: "🚀 New Site Launch & Complete Feature Guide",
+        description: "Comprehensive welcome broadcast introducing members to the new DomsHomeLab (d281knilb) portal, how to sign in, and every feature available.",
+        triggerEvent: "Triggered when an administrator dispatches the New Site Launch & Feature Guide broadcast in Email Management (staged in the Admin Approval Queue for review before delivery).",
+        category: "BROADCAST",
+        defaultSubject: "🚀 Welcome to the New DomsHomeLab (d281knilb) Portal — How to Log In & Everything You Can Do!",
+        defaultBody: `<h2 style="margin-top: 0; color: #0f172a;">Welcome to the New DomsHomeLab Portal, {username}! 🚀</h2>
+<p>We have officially launched our brand-new, all-in-one <strong>DomsHomeLab (d281knilb)</strong> portal! Instead of juggling multiple links or messaging whenever a movie is missing or a stream buffers, you now have a single unified command center for movies, TV shows, e-books, audiobooks, live stream diagnostics, and account management.</p>
+
+<div style="background: linear-gradient(135deg, #eef2ff 0%, #f8fafc 100%); border: 1px solid #c7d2fe; border-left: 4px solid #4f46e5; padding: 18px 20px; border-radius: 10px; margin: 22px 0;">
+    <p style="margin: 0 0 8px 0; font-size: 13px; font-weight: 800; color: #4338ca; text-transform: uppercase; letter-spacing: 0.5px;">🔑 Step 1: How to Log In &amp; Get Started</p>
+    <table style="width: 100%; border-collapse: collapse; font-size: 14px; color: #1e293b;">
+        <tr>
+            <td style="padding: 4px 0; font-weight: 700; width: 140px; color: #475569;">Portal Website:</td>
+            <td style="padding: 4px 0;"><a href="{appUrl}" style="color: #4f46e5; font-weight: 700; text-decoration: none;">{appUrl}</a></td>
+        </tr>
+        <tr>
+            <td style="padding: 4px 0; font-weight: 700; color: #475569;">Your Username:</td>
+            <td style="padding: 4px 0;"><code style="background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-weight: 700; color: #0f172a;">{username}</code></td>
+        </tr>
+        <tr>
+            <td style="padding: 4px 0; font-weight: 700; color: #475569;">How to Sign In:</td>
+            <td style="padding: 4px 0;">Click <strong>"Sign In with Plex"</strong> for instant 1-click access using your existing Plex account, or sign in with your portal username &amp; password at <a href="{loginUrl}" style="color: #4f46e5; font-weight: 600;">{loginUrl}</a>.</td>
+        </tr>
+    </table>
+</div>
+
+<h3 style="color: #0f172a; font-size: 17px; margin: 26px 0 12px 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px;">✨ Everything You Can Do on the New Site</h3>
+
+<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px;">
+    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">🎬 1. Request Any Movie or TV Show in 1 Click (<a href="{appUrl}/requests" style="color: #4f46e5; text-decoration: none;">/requests</a> &amp; <a href="{appUrl}/discover" style="color: #4f46e5; text-decoration: none;">/discover</a>)</p>
+    <p style="margin: 0; font-size: 13.5px; color: #475569;">Can't find a movie or show on Plex? Search for any title or browse trending releases, click <strong>Request</strong>, and the server will automatically grab it and add it to Plex—usually within minutes! Track live download progress right from the home dashboard.</p>
+</div>
+
+<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px;">
+    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">📺 2. My Plex Hub, Stream Quality Doctor &amp; Speed Test (<a href="{appUrl}" style="color: #4f46e5; text-decoration: none;">Home Dashboard</a>)</p>
+    <p style="margin: 0; font-size: 13.5px; color: #475569;">See your active streams, personal watch stats, and which Plex servers you have access to. Run the built-in <strong>Server Speed Test</strong> and use the <strong>Stream Quality Doctor &amp; Device Setup Guides</strong> (Apple TV, Roku, Fire TV, Samsung/LG Smart TVs) to fix default 720p quality caps and unlock smooth <strong>1080p &amp; 4K Direct Play</strong> without buffering.</p>
+</div>
+
+<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px;">
+    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">🤖 3. 24/7 AI Server Assistant &amp; Auto-Repair (<a href="{appUrl}" style="color: #4f46e5; text-decoration: none;">Home Dashboard</a>)</p>
+    <p style="margin: 0; font-size: 13.5px; color: #475569;">Having playback trouble? Use the 1-click quick chips right on the dashboard—<strong>⚡ Buffering</strong>, <strong>🔊 Quiet Dialogue</strong>, <strong>💬 Subtitles</strong>, <strong>📺 Unlock 4K/1080p</strong>, <strong>🎬 Missing Media</strong>, or <strong>📚 Book Recommendations</strong>. The AI Assistant inspects your live stream in real time and can even automatically replace a broken movie/episode file or prefill a support ticket for you.</p>
+</div>
+
+<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px;">
+    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">📚 4. E-Book &amp; Audiobook Library + 1-Click Send-to-Kindle (<a href="{appUrl}/library" style="color: #4f46e5; text-decoration: none;">/library</a>)</p>
+    <p style="margin: 0; font-size: 13.5px; color: #475569;">Browse and request e-books and audiobooks! Read directly in your browser using the <strong>Kindle Paperwhite Web Reader</strong>, listen with the <strong>Web Audiobook Player</strong> (with chapter navigation &amp; speed controls), or send any book straight to your Kindle e-reader in 1 click.</p>
+</div>
+
+<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px;">
+    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">👨‍👩‍👧‍👦 5. Household Sub-Accounts, Kids Profiles &amp; Library Customization (<a href="{appUrl}/settings/profile" style="color: #4f46e5; text-decoration: none;">/settings/profile</a>)</p>
+    <p style="margin: 0; font-size: 13.5px; color: #475569;">Choose which Plex libraries appear on your home screen (Movies, TV, Anime, 4K, Kids, Audiobooks) and create dedicated <strong>Household Sub-Accounts</strong> (such as a Kids room or Living Room TV profile) with custom content rating limits (G, PG, PG-13) and IMDb parental filters.</p>
+</div>
+
+<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px;">
+    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">⏳ 6. "Leaving Soon" Protection (<a href="{appUrl}" style="color: #4f46e5; text-decoration: none;">Home Dashboard</a>)</p>
+    <p style="margin: 0; font-size: 13.5px; color: #475569;">To keep storage healthy, older unwatched titles rotate through the <strong>Leaving Soon</strong> row before cleanup. If you see a movie or series you still plan to watch, click <strong>Keep / Protect</strong> on the portal (or start watching it) so it stays on the server!</p>
+</div>
+
+<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px;">
+    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">🎁 7. Membership, Billing &amp; Refer-a-Friend Rewards (<a href="{appUrl}/settings/profile" style="color: #4f46e5; text-decoration: none;">/settings/profile</a>)</p>
+    <p style="margin: 0; font-size: 13.5px; color: #475569;">Check your membership status and payment options anytime in your profile. Want to invite a friend? Share your personal referral link (<code style="background: #e2e8f0; padding: 1px 5px; border-radius: 4px; color: #0f172a;">{appUrl}/join?ref={username}</code>)—your friend gets a free trial, and you earn <strong>1 Free Month ($15 credit)</strong> for every friend who joins!</p>
+</div>
+
+<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 20px;">
+    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">💬 8. Support Tickets &amp; Discord Integration (<a href="{appUrl}/tickets" style="color: #4f46e5; text-decoration: none;">/tickets</a>)</p>
+    <p style="margin: 0; font-size: 13.5px; color: #475569;">Link your Discord account in your profile for instant request notifications and community roles, or open a support ticket anytime at <a href="{appUrl}/tickets" style="color: #4f46e5; text-decoration: none;">{appUrl}/tickets</a> if you ever need a hand.</p>
+</div>
+
+<div style="text-align: center; margin: 28px 0 18px 0;">
+    <a href="{loginUrl}" style="background-color: #4f46e5; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 800; font-size: 15px; display: inline-block; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);">Launch DomsHomeLab Portal &rarr;</a>
+</div>
+
+<p style="font-size: 13px; color: #64748b; text-align: center; margin-top: 16px;">Bookmark <strong><a href="{appUrl}" style="color: #4f46e5; text-decoration: none;">{appUrl}</a></strong> on your phone and computer for quick access. Happy streaming &amp; reading!</p>`,
+        variables: [
+            { key: "{username}", description: "Recipient's username", sampleValue: "alex_stream" },
+            { key: "{email}", description: "Recipient's email address", sampleValue: "alex@example.com" },
+            { key: "{kindleEmail}", description: "Recipient's Kindle delivery email", sampleValue: "alex_kindle@kindle.com" },
+            { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://home.domshomelab.com" },
+            { key: "{loginUrl}", description: "Direct login URL", sampleValue: "https://home.domshomelab.com/login" },
+            { key: "{portalName}", description: "Portal brand name", sampleValue: "DomsHomeLab" }
         ]
     },
     {
@@ -1155,11 +1239,13 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         triggerEvent: "Triggered when an administrator dispatches a server-wide announcement or broadcast notification in Email Management.",
         category: "BROADCAST",
         defaultSubject: "📢 Server Announcement: {subject}",
-        defaultBody: `<h2>Server Announcement 📢</h2><p>{message}</p>`,
+        defaultBody: `<h2>Server Announcement 📢</h2><p>Hi <strong>{username}</strong>,</p><p>{message}</p>`,
         variables: [
+            { key: "{username}", description: "Recipient's username", sampleValue: "alex_stream" },
             { key: "{subject}", description: "Announcement topic", sampleValue: "Scheduled Maintenance" },
             { key: "{message}", description: "Main broadcast text", sampleValue: "Server upgrades are scheduled for tonight." },
-            { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
+            { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" },
+            { key: "{loginUrl}", description: "Direct login URL", sampleValue: "https://portal.example.com/login" }
         ]
     }
 ];

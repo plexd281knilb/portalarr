@@ -67,10 +67,10 @@ export function calculateUserRenewalSummary(options: {
     const annualMonthlyRate = baseYearlyPrice > 0 
         ? Math.round((baseYearlyPrice / 12) * 100) / 100 
         : 15;
-    // The standalone monthly alternative rate (e.g. $17.50/mo)
+    // The standalone monthly alternative rate (defaults to $17.50/mo standard monthly rate)
     const monthlyRate = typeof options.monthlyPrice === "number" && options.monthlyPrice > 0 
         ? options.monthlyPrice 
-        : annualMonthlyRate;
+        : 17.50;
 
     const rawExpDate = user.subscriptionEndsAt ? new Date(user.subscriptionEndsAt) : null;
     const hasActiveSubscription = user.status === "APPROVED" && rawExpDate !== null;
@@ -118,7 +118,7 @@ export function calculateUserRenewalSummary(options: {
         const expDay = rawExpDate.getDate();
 
         // If expiration is e.g. Dec 31 23:59:59 or Jan 1 00:00:00, the renewal cycle is January 1st
-        const cycleStartMonth = (expMonth === 11 && expDay >= 30) ? 0 : (expDay === 1 ? expMonth : expMonth);
+        const cycleStartMonth = (expMonth === 11 && expDay >= 30) ? 0 : expMonth;
         const cycleStartYear = (expMonth === 11 && expDay >= 30) ? expYear + 1 : expYear;
 
         // Advance by convertedReferralsCount months

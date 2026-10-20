@@ -261,7 +261,7 @@ export function DiscordMemberManagerModal({
         try {
             const res = await syncAllDiscordRolesToPortalarrAction();
             if (res.success) {
-                setSuccessMsg(`Pulled roles from Discord into Portalarr for ${res.syncedCount} members!`);
+                setSuccessMsg(`Pulled roles from Discord into DomsHomeLab for ${res.syncedCount} members!`);
                 await loadMembers();
                 if (onUserUpdated) onUserUpdated();
             } else {
@@ -292,7 +292,7 @@ export function DiscordMemberManagerModal({
                                 Discord Member & Role Synchronization
                             </DialogTitle>
                             <DialogDescription className="text-xs text-muted-foreground">
-                                Bridges Discord accounts with Portalarr users when usernames differ. Automatically synchronizes server roles.
+                                Bridges Discord accounts with DomsHomeLab users when usernames differ. Automatically synchronizes server roles.
                             </DialogDescription>
                         </div>
                         <div className="flex items-center gap-2">
@@ -321,7 +321,7 @@ export function DiscordMemberManagerModal({
                             onClick={handleBatchAutoMatch}
                             disabled={actionLoading !== null || suggestedCount === 0}
                             className="h-8 px-3 text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white gap-1.5 shadow-xs cursor-pointer active:scale-95"
-                            title="Automatically pairs unlinked Discord members whose names match Portalarr accounts"
+                            title="Automatically pairs unlinked Discord members whose names match DomsHomeLab accounts"
                         >
                             {actionLoading === "auto-match" ? (
                                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -353,7 +353,7 @@ export function DiscordMemberManagerModal({
                             onClick={handleBatchPullRoles}
                             disabled={actionLoading !== null || linkedCount === 0}
                             className="h-8 px-3 text-xs font-semibold bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border-blue-500/30 gap-1.5 cursor-pointer active:scale-95"
-                            title="Pulls server roles from Discord into Portalarr accounts"
+                            title="Pulls server roles from Discord into DomsHomeLab accounts"
                         >
                             {actionLoading === "batch-pull" ? (
                                 <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-400" />
@@ -559,7 +559,7 @@ export function DiscordMemberManagerModal({
                                                     value={selectedUserToLink[m.id] || ""}
                                                     onChange={(e) => setSelectedUserToLink({ ...selectedUserToLink, [m.id]: e.target.value })}
                                                 >
-                                                    <option value="">Select Portalarr User...</option>
+                                                    <option value="">Select DomsHomeLab User...</option>
                                                     {unlinkedPortalarrUsers.map((u) => (
                                                         <option key={u.id} value={u.id}>
                                                             {u.username} {u.plexUsername ? `(${u.plexUsername})` : ""}

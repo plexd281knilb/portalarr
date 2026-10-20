@@ -70,9 +70,23 @@ const logFilePath = path.join(dataDir, 'system_logs.jsonl');
 const buildMarkerFilePath = path.join(dataDir, '.portalarr_build_id');
 
 function getCurrentBuildIdentifier(): string {
+    const ver = process.env.PORTALARR_BUILD_VERSION || process.env.NEXT_PUBLIC_PORTALARR_VERSION || '3.9.0-beta.2';
+    const branch = process.env.NEXT_PUBLIC_GIT_BRANCH || process.env.GIT_BRANCH || '';
+    const sha = process.env.NEXT_PUBLIC_GIT_SHA || process.env.GIT_SHA || '';
+    const buildNum = process.env.NEXT_PUBLIC_BUILD_NUMBER || process.env.BUILD_NUMBER || '';
+    const ts = process.env.PORTALARR_BUILD_TIMESTAMP || process.env.NEXT_PUBLIC_BUILD_TIMESTAMP || '';
+
+    if (branch || sha || buildNum) {
+        const parts = [`v${ver}`];
+        if (branch) parts.push(branch);
+        if (buildNum) parts.push(`build#${buildNum}`);
+        if (sha && sha !== 'dev') parts.push(sha.substring(0, 7));
+        return parts.join('_');
+    }
+
     // 1. Next.js statically baked build timestamp from next.config.ts
-    if (process.env.PORTALARR_BUILD_TIMESTAMP) {
-        return `v${process.env.PORTALARR_BUILD_VERSION || '3.0'}_${process.env.PORTALARR_BUILD_TIMESTAMP}`;
+    if (ts) {
+        return `v${ver}_${ts}`;
     }
 
     // 2. Custom build ID env (if injected by Docker or CI/CD)

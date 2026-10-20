@@ -1757,7 +1757,7 @@ ${items.length > 0 ? items.map((b: any, idx: number) => {
     const typeLabel = b.mediaType === "audiobook" ? "🎧 Audiobook" : "📖 eBook";
     const actionTip = b.inLibrary
         ? `[Read Now in Web Reader / Send to Kindle](/library)`
-        : `[1-Click Request in Portalarr](/requests)`;
+        : `[1-Click Request in DomsHomeLab](/requests)`;
 
     return `${idx + 1}. **${b.title}** ${b.series ? `(*${b.series}*)` : ""} by **${b.author}**
    * **Format & Status:** ${typeLabel} • ${badge}

@@ -340,3 +340,45 @@ export function isCollectionScheduleActive(collection: {
     return true;
 }
 
+/**
+ * Global Curation Mutual Exclusion Guard
+ * Guarantees that only ONE curation studio task (Kometa, Agregarr, Maintainerr, Tagging)
+ * can communicate with Plex Media Server at any given moment.
+ */
+export function isAnyCurationTaskRunning(): boolean {
+    const g = global as any;
+    return Boolean(
+        g.__PORTALARR_CURATION_TASK_RUNNING ||
+        g.__PORTALARR_OVERLAY_INC_RUNNING ||
+        g.__PORTALARR_OVERLAY_RECHECK_RUNNING ||
+        g.__PORTALARR_AGREGARR_RUNNING ||
+        g.__PORTALARR_PRUNE_RUNNING ||
+        g.__PORTALARR_TAGGING_RUNNING
+    );
+}
+
+export function getActiveCurationTaskName(): string {
+    const g = global as any;
+    return g.__PORTALARR_CURATION_TASK_RUNNING ||
+        (g.__PORTALARR_OVERLAY_INC_RUNNING ? "Kometa Incremental Overlays" : "") ||
+        (g.__PORTALARR_OVERLAY_RECHECK_RUNNING ? "Kometa Deep Library Recheck" : "") ||
+        (g.__PORTALARR_AGREGARR_RUNNING ? "Agregarr Collections Sync" : "") ||
+        (g.__PORTALARR_PRUNE_RUNNING ? "Maintainerr Prune Sync" : "") ||
+        (g.__PORTALARR_TAGGING_RUNNING ? "IMDb Parental Tagging Sync" : "") ||
+        "Unknown Curation Task";
+}
+
+export function setCurationTaskRunning(taskName: string): boolean {
+    const g = global as any;
+    if (isAnyCurationTaskRunning()) return false;
+    g.__PORTALARR_CURATION_TASK_RUNNING = taskName;
+    return true;
+}
+
+export function clearCurationTaskRunning(taskName?: string): void {
+    const g = global as any;
+    if (!taskName || g.__PORTALARR_CURATION_TASK_RUNNING === taskName) {
+        delete g.__PORTALARR_CURATION_TASK_RUNNING;
+    }
+}
+

@@ -20,6 +20,7 @@ import { getAllScripts, getScriptById, saveScript, deleteScript, getScriptRuns }
 import { executeScript, abortActiveScriptRun } from "../src/lib/scripts/script-runner";
 import { DISCORD_ROLES_BLUEPRINT, DISCORD_SERVER_BLUEPRINT } from "../src/lib/discord/discord-bot";
 import { computeExpectedDiscordRole, findBestMatch } from "../src/lib/discord/discord-role-sync";
+import { getBuildTelemetry } from "../src/lib/version";
 import fs from "fs";
 import path from "path";
 
@@ -315,13 +316,44 @@ async function runTestSuite() {
             throw new Error(`Expected amount 15.00 and cashtag $johndoe, got: ${JSON.stringify(parsedCash)}`);
         }
 
-        // 5. Payment threshold evaluation
+        // 5. Payment threshold evaluation (Full Yearly, Referral Discounted Yearly, Rest-of-Year Prorated, & Prorated Monthly)
         const threshEval = evaluatePaymentThreshold({
             user: { membershipTier: "ANNUAL" },
             payment: { amount: 180, provider: "CASHAPP" }
         });
         if (threshEval.action !== "FULL_YEARLY" || threshEval.cadence !== "YEARLY") {
             throw new Error(`Expected full yearly payment approval, got: ${JSON.stringify(threshEval)}`);
+        }
+
+        // 5b. Referral-discounted annual payment ($165 with 1 converted referral)
+        const referralEval = evaluatePaymentThreshold({
+            user: {
+                membershipTier: "STANDARD",
+                subscriptionCadence: "YEARLY",
+                referrals: [{ id: "ref_1", username: "friend1", status: "APPROVED", convertedAt: new Date() }]
+            },
+            payment: { amount: 165, provider: "VENMO", emailDate: new Date("2026-12-20T12:00:00Z") }
+        });
+        if (referralEval.action !== "FULL_YEARLY" || referralEval.targetPrice !== 165 || referralEval.newAccountCredit !== 0) {
+            throw new Error(`Expected referral-discounted FULL_YEARLY at $165, got: ${JSON.stringify(referralEval)}`);
+        }
+
+        // 5c. Rest-of-Year prorated annual payment ($40.16 on Sep 26)
+        const proratedYearlyEval = evaluatePaymentThreshold({
+            user: { status: "TRIAL", membershipTier: "TRIAL" },
+            payment: { amount: 40.16, provider: "VENMO", emailDate: new Date("2026-09-26T12:00:00Z") }
+        });
+        if (proratedYearlyEval.action !== "FULL_YEARLY" || proratedYearlyEval.cadence !== "YEARLY") {
+            throw new Error(`Expected Rest-of-Year prorated payment ($40.16) to fulfill FULL_YEARLY, got: ${JSON.stringify(proratedYearlyEval)}`);
+        }
+
+        // 5d. Prorated standalone monthly payment ($9.03 on Oct 1)
+        const proratedMonthlyEval = evaluatePaymentThreshold({
+            user: { status: "TRIAL", membershipTier: "TRIAL" },
+            payment: { amount: 9.03, provider: "CASHAPP", emailDate: new Date("2026-10-01T12:00:00Z") }
+        });
+        if (proratedMonthlyEval.action !== "FULL_MONTHLY" || proratedMonthlyEval.cadence !== "MONTHLY") {
+            throw new Error(`Expected prorated monthly payment ($9.03) to fulfill FULL_MONTHLY, got: ${JSON.stringify(proratedMonthlyEval)}`);
         }
 
         // 6. Renewal reminder parsing
@@ -921,6 +953,282 @@ async function runTestSuite() {
             [{ id: "u1", username: "kyra" }, { id: "u2", username: "john_doe" }]
         );
         if (!match || match.username !== "kyra") throw new Error(`Expected match 'kyra', got ${match?.username}`);
+    });
+
+    // =========================================================================
+    // SUITE 17: Direct Plex SQLite Snapshot & Delta-Sync Engine
+    // =========================================================================
+    await assertTest("Suite 17: Direct Plex SQLite Snapshot & Delta-Sync Engine", async () => {
+        const {
+            resolvePlexDatabaseFilePath,
+            createPlexDatabaseSnapshot,
+            inspectPlexDatabase,
+            getSnapshotLibraryTagsAudit,
+            getSnapshotLibraryMediaItems,
+            evaluatePruneCandidatesFromSnapshotsUnified
+        } = await import("../src/lib/curation/plex-snapshot-engine");
+
+        // 1. Path Resolution Checks
+        const invalidResolved = resolvePlexDatabaseFilePath("/non_existent_folder_abc_123");
+        if (invalidResolved !== null) throw new Error("Expected non-existent path to resolve to null");
+
+        // 2. Mock Test SQLite Plex Database Creation
+        // Dynamically create a small mock com.plexapp.plugins.library.db to verify snapshotting and queries
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { DatabaseSync } = require("node:sqlite");
+        const tmpDir = path.join(__dirname, "../tmp_test_plex_dbs");
+        if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+
+        const mainDbPath = path.join(tmpDir, "com.plexapp.plugins.library.db");
+        const kidsDbPath = path.join(tmpDir, "kids_com.plexapp.plugins.library.db");
+
+        try {
+            if (fs.existsSync(mainDbPath)) fs.unlinkSync(mainDbPath);
+            if (fs.existsSync(kidsDbPath)) fs.unlinkSync(kidsDbPath);
+
+            // Populate Main Plex Mock DB
+            const mainDb = new DatabaseSync(mainDbPath);
+            mainDb.exec(`
+                CREATE TABLE library_sections (id INTEGER PRIMARY KEY, name TEXT, section_type INTEGER);
+                INSERT INTO library_sections VALUES (1, 'Movies', 1), (2, 'TV Shows', 2);
+
+                CREATE TABLE metadata_items (
+                    id INTEGER PRIMARY KEY,
+                    library_section_id INTEGER,
+                    parent_id INTEGER,
+                    metadata_type INTEGER,
+                    title TEXT,
+                    year INTEGER,
+                    guid TEXT,
+                    added_at INTEGER,
+                    updated_at INTEGER,
+                    created_at INTEGER,
+                    [index] INTEGER
+                );
+                INSERT INTO metadata_items VALUES
+                    (101, 1, NULL, 1, 'Inception', 2010, 'imdb://tt1375666', 1577836800, 1577836800, 1577836800, NULL),
+                    (102, 1, NULL, 1, 'Interstellar', 2014, 'imdb://tt0816692', 1577836800, 1577836800, 1577836800, NULL),
+                    (200, 2, NULL, 2, 'Breaking Bad', 2008, 'imdb://tt0903747', 1577836800, 1577836800, 1577836800, NULL),
+                    (201, 2, 200, 3, 'Season 1', NULL, 'imdb://tt0903747:season:1', 1577836800, 1577836800, 1577836800, 1),
+                    (202, 2, 201, 4, 'Pilot', NULL, 'imdb://tt0903747:1:1', 1577836800, 1577836800, 1577836800, 1);
+
+                CREATE TABLE media_items (
+                    id INTEGER PRIMARY KEY,
+                    metadata_item_id INTEGER,
+                    size INTEGER,
+                    width INTEGER,
+                    height INTEGER,
+                    bitrate INTEGER,
+                    video_codec TEXT,
+                    audio_codec TEXT,
+                    audio_channels INTEGER
+                );
+                INSERT INTO media_items VALUES 
+                    (1, 101, 25000000000, 3840, 2160, 25000, 'hevc', 'truehd', 8),
+                    (2, 102, 10000000000, 1920, 1080, 8000, 'h264', 'eac3', 6),
+                    (3, 202, 3000000000, 1920, 1080, 5000, 'h264', 'aac', 2);
+
+                CREATE TABLE media_parts (
+                    id INTEGER PRIMARY KEY,
+                    media_item_id INTEGER,
+                    file TEXT
+                );
+                INSERT INTO media_parts VALUES
+                    (1, 1, '/movies/Inception (2010)/Inception.2010.4K.mkv'),
+                    (2, 2, '/movies/Interstellar (2014)/Interstellar.2014.1080p.mkv'),
+                    (3, 3, '/tv/Breaking Bad/Season 01/S01E01.mkv');
+
+                CREATE TABLE tags (id INTEGER PRIMARY KEY, tag TEXT, tag_type INTEGER);
+                INSERT INTO tags VALUES (1, 'IMDb:Violence:Severe', 11), (2, 'Sci-Fi', 1), (3, 'Leaving Soon', 2);
+
+                CREATE TABLE taggings (id INTEGER PRIMARY KEY, metadata_item_id INTEGER, tag_id INTEGER);
+                INSERT INTO taggings VALUES (1, 101, 1), (2, 101, 2), (3, 102, 3);
+
+                CREATE TABLE metadata_item_views (
+                    id INTEGER PRIMARY KEY,
+                    guid TEXT,
+                    metadata_type INTEGER,
+                    viewed_at INTEGER,
+                    account_id INTEGER
+                );
+                INSERT INTO metadata_item_views VALUES (1, 'imdb://tt1375666', 1, 1600000000, 1);
+            `);
+            mainDb.close();
+
+            // Populate Kids Plex Mock DB
+            const kidsDb = new DatabaseSync(kidsDbPath);
+            kidsDb.exec(`
+                CREATE TABLE library_sections (id INTEGER PRIMARY KEY, name TEXT, section_type INTEGER);
+                INSERT INTO library_sections VALUES (1, 'Kids Movies', 1);
+
+                CREATE TABLE metadata_items (
+                    id INTEGER PRIMARY KEY,
+                    library_section_id INTEGER,
+                    parent_id INTEGER,
+                    metadata_type INTEGER,
+                    title TEXT,
+                    guid TEXT,
+                    added_at INTEGER,
+                    updated_at INTEGER,
+                    created_at INTEGER,
+                    [index] INTEGER
+                );
+                INSERT INTO metadata_items VALUES (301, 1, NULL, 1, 'Finding Nemo', 'imdb://tt0266543', 1577836800, 1577836800, 1577836800, NULL);
+
+                CREATE TABLE media_items (id INTEGER PRIMARY KEY, metadata_item_id INTEGER, size INTEGER, video_codec TEXT);
+                INSERT INTO media_items VALUES (1, 301, 5000000000, 'h264');
+
+                CREATE TABLE media_parts (id INTEGER PRIMARY KEY, media_item_id INTEGER, file TEXT);
+                INSERT INTO media_parts VALUES (1, 1, '/kid_movies/Finding Nemo/Finding Nemo.mkv');
+
+                CREATE TABLE metadata_item_views (id INTEGER PRIMARY KEY, guid TEXT, viewed_at INTEGER);
+                INSERT INTO metadata_item_views VALUES (1, 'imdb://tt0816692', 1700000000);
+            `);
+            kidsDb.close();
+
+            // 3. Test resolvePlexDatabaseFilePath on real created DB
+            const resolved = resolvePlexDatabaseFilePath(mainDbPath);
+            if (!resolved) throw new Error("Failed to resolve newly created mock Plex DB path");
+
+            // 4. Test createPlexDatabaseSnapshot
+            const snap = await createPlexDatabaseSnapshot(mainDbPath, "test_main_server", { force: true, label: "Test Main Server" });
+            if (!snap.success || !snap.snapshotPath) throw new Error(`Snapshot creation failed: ${snap.error}`);
+            if (!fs.existsSync(snap.snapshotPath)) throw new Error("Snapshot file was not found on disk");
+
+            // 5. Test inspectPlexDatabase
+            const inspection = inspectPlexDatabase(snap.snapshotPath);
+            if (!inspection.success) throw new Error(`Inspection failed: ${inspection.error}`);
+            if (inspection.movieCount !== 2) throw new Error(`Expected 2 movies, got ${inspection.movieCount}`);
+            if (inspection.showCount !== 1) throw new Error(`Expected 1 show, got ${inspection.showCount}`);
+            if (inspection.sectionCount !== 2) throw new Error(`Expected 2 sections, got ${inspection.sectionCount}`);
+
+            // 6. Test getSnapshotLibraryTagsAudit
+            const tagsAudit = getSnapshotLibraryTagsAudit(snap.snapshotPath, 1);
+            const inceptionTags = tagsAudit.get("101");
+            if (!inceptionTags) throw new Error("Expected tags for ratingKey 101");
+            if (!inceptionTags.labels.includes("IMDb:Violence:Severe")) throw new Error("Missing label IMDb:Violence:Severe");
+            if (!inceptionTags.genres.includes("Sci-Fi")) throw new Error("Missing genre Sci-Fi");
+
+            // 7. Test getSnapshotLibraryMediaItems
+            const mediaItems = getSnapshotLibraryMediaItems(snap.snapshotPath, 1, { limit: 10 });
+            if (mediaItems.length !== 2) throw new Error(`Expected 2 media items, got ${mediaItems.length}`);
+            const inception = mediaItems.find(m => m.ratingKey === "101");
+            if (!inception) throw new Error("Inception not found in snapshot media items");
+            if (inception.detectedBadges.resolution !== "4K") throw new Error(`Expected 4K badge, got ${inception.detectedBadges.resolution}`);
+
+            // 8. Test Unified Cross-Server Snapshot Evaluation
+            const unifiedResult = await evaluatePruneCandidatesFromSnapshotsUnified(
+                { serverId: "main_srv", serverName: "Main Server", databasePath: mainDbPath },
+                [{ serverId: "kids_srv", serverName: "Kids Server", databasePath: kidsDbPath }],
+                { unwatchedMinAgeDays: 30, watchedMinAgeDays: 30, maxCandidates: 10 }
+            );
+
+            if (unifiedResult.evaluatedCount < 2) throw new Error(`Expected >=2 evaluated units, got ${unifiedResult.evaluatedCount}`);
+
+            // 9. Test Prisma PlexServer databasePath persistence
+            const testPlexServer = await prisma.plexServer.create({
+                data: {
+                    name: "Snapshot Test Server",
+                    url: "http://127.0.0.1:32400",
+                    isDefault: false,
+                    monitored: true,
+                    databasePath: mainDbPath
+                }
+            });
+            if (testPlexServer.databasePath !== mainDbPath) throw new Error("databasePath was not saved to PlexServer model");
+
+            await prisma.plexServer.delete({ where: { id: testPlexServer.id } });
+        } finally {
+            try {
+                if (fs.existsSync(mainDbPath)) fs.unlinkSync(mainDbPath);
+                if (fs.existsSync(kidsDbPath)) fs.unlinkSync(kidsDbPath);
+                if (fs.existsSync(tmpDir)) fs.rmSync(tmpDir, { recursive: true, force: true });
+            } catch (e) {}
+        }
+    });
+
+    // =========================================================================
+    // SUITE 18: Dynamic Branch, Version & Build Workflow Telemetry Engine
+    // =========================================================================
+    await assertTest("Suite 18: Dynamic Branch, Version & Build Telemetry Engine", async () => {
+        // 1. Test standard telemetry resolution
+        const telemetry = getBuildTelemetry();
+        if (!telemetry.version) throw new Error("Telemetry version missing");
+        if (!telemetry.branch) throw new Error("Telemetry branch missing");
+        if (!telemetry.channel) throw new Error("Telemetry channel missing");
+        if (!telemetry.displayBadge) throw new Error("Telemetry displayBadge missing");
+        if (!telemetry.fullDisplay) throw new Error("Telemetry fullDisplay missing");
+        if (!telemetry.dockerImageTag) throw new Error("Telemetry dockerImageTag missing");
+
+        // 2. Test Beta branch identification
+        const originalEnv = { ...process.env };
+        try {
+            process.env.NEXT_PUBLIC_GIT_BRANCH = "main";
+            process.env.NEXT_PUBLIC_PORTALARR_VERSION = "3.0.0-beta.2";
+            process.env.NEXT_PUBLIC_GIT_SHA = "2cf7cdfe1234567890abcdef";
+            process.env.NEXT_PUBLIC_BUILD_NUMBER = "142";
+            
+            const betaTelemetry = getBuildTelemetry();
+            if (betaTelemetry.branch !== "main") throw new Error(`Expected branch main, got ${betaTelemetry.branch}`);
+            if (betaTelemetry.isBeta !== true) throw new Error("Expected isBeta to be true for main branch");
+            if (betaTelemetry.isStable !== false) throw new Error("Expected isStable to be false for main branch");
+            if (betaTelemetry.channel !== "beta") throw new Error(`Expected channel beta, got ${betaTelemetry.channel}`);
+            if (!betaTelemetry.displayBadge.includes("BETA")) throw new Error(`Expected displayBadge to contain BETA, got ${betaTelemetry.displayBadge}`);
+            if (betaTelemetry.commitShortSha !== "2cf7cdf") throw new Error(`Expected short SHA 2cf7cdf, got ${betaTelemetry.commitShortSha}`);
+            if (betaTelemetry.buildNumber !== "142") throw new Error(`Expected buildNumber 142, got ${betaTelemetry.buildNumber}`);
+            if (!betaTelemetry.dockerImageTag.includes(":main")) throw new Error(`Expected docker tag to include :main, got ${betaTelemetry.dockerImageTag}`);
+            if (!betaTelemetry.workflowUrl) throw new Error("Expected workflowUrl to be populated when buildNumber is present");
+
+            // 3. Test Production / Stable branch identification
+            process.env.NEXT_PUBLIC_GIT_BRANCH = "stable";
+            process.env.NEXT_PUBLIC_PORTALARR_VERSION = "3.0.0";
+            delete process.env.NEXT_PUBLIC_BUILD_NUMBER;
+            delete process.env.BUILD_NUMBER;
+
+            const stableTelemetry = getBuildTelemetry();
+            if (stableTelemetry.branch !== "stable") throw new Error(`Expected branch stable, got ${stableTelemetry.branch}`);
+            if (stableTelemetry.isBeta !== false) throw new Error("Expected isBeta to be false for stable branch");
+            if (stableTelemetry.isStable !== true) throw new Error("Expected isStable to be true for stable branch");
+            if (stableTelemetry.channel !== "stable") throw new Error(`Expected channel stable, got ${stableTelemetry.channel}`);
+            if (!stableTelemetry.displayBadge.includes("PROD")) throw new Error(`Expected displayBadge to contain PROD, got ${stableTelemetry.displayBadge}`);
+            if (!stableTelemetry.dockerImageTag.includes(":stable")) throw new Error(`Expected docker tag to include :stable, got ${stableTelemetry.dockerImageTag}`);
+        } finally {
+            process.env = originalEnv;
+        }
+
+        // 4. Test Git Commit Version Prefixing Engine & Hook Enforcement
+        const { formatCommitMessageWithVersion, installGitHook } = await import("./git-commit-msg-hook");
+        
+        // Ensure hook installer runs cleanly during every verification
+        installGitHook();
+
+        // Test prepending version to unadorned commit message
+        const testMsg1 = "feat(telemetry): add branch indicator";
+        const formatted1 = formatCommitMessageWithVersion(testMsg1, "3.9.0-beta.1");
+        if (formatted1 !== "[v3.9.0-beta.1] feat(telemetry): add branch indicator") {
+            throw new Error(`Failed to prepend version at front of commit: "${formatted1}"`);
+        }
+
+        // Test relocating trailing version to the front
+        const testMsg2 = "fix(ui): adjust modal padding (v3.9.0-beta.1)";
+        const formatted2 = formatCommitMessageWithVersion(testMsg2, "3.9.0-beta.1");
+        if (formatted2 !== "[v3.9.0-beta.1] fix(ui): adjust modal padding") {
+            throw new Error(`Failed to relocate trailing version to front: "${formatted2}"`);
+        }
+
+        // Test preserving already-correctly prefixed commit message
+        const testMsg3 = "[v3.9.0-beta.1] chore(release): update package";
+        const formatted3 = formatCommitMessageWithVersion(testMsg3, "3.9.0-beta.1");
+        if (formatted3 !== "[v3.9.0-beta.1] chore(release): update package") {
+            throw new Error(`Failed to preserve existing front-prefixed version: "${formatted3}"`);
+        }
+
+        // Test leaving merge commits untouched
+        const testMsg4 = "Merge branch 'main' into stable";
+        const formatted4 = formatCommitMessageWithVersion(testMsg4, "3.9.0-beta.1");
+        if (formatted4 !== testMsg4) {
+            throw new Error(`Merge commit was altered unexpectedly: "${formatted4}"`);
+        }
     });
 
     console.log("\n==========================================================");

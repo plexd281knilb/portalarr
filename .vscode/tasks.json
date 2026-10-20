@@ -1,0 +1,68 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "agy: Brain - Root Orchestrator (Argon 4 High)",
+      "type": "shell",
+      "command": "agy --model gemini-4-argon-high",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "focus": true
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      }
+    },
+    {
+      "label": "agy: Pinky - Parallel Worker (Flash 3.8 High)",
+      "type": "shell",
+      "command": "agy --model gemini-3.8-flash-high",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "group": "workers"
+      }
+    },
+    {
+      "label": "agy: Ask Pinky (Flash 3.8 Print Mode)",
+      "type": "shell",
+      "command": "agy --model gemini-3.8-flash-high --print \"${input:prompt}\"",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "Portalarr: Run Integration Tests",
+      "type": "shell",
+      "command": "npm test",
+      "problemMatcher": [],
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "Portalarr: Production Build",
+      "type": "shell",
+      "command": "npm run build",
+      "problemMatcher": ["$tsc"],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    }
+  ],
+  "inputs": [
+    {
+      "id": "prompt",
+      "type": "promptString",
+      "description": "Enter the prompt for Pinky (Gemini 3.8 Flash worker)"
+    }
+  ]
+}

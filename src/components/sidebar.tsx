@@ -1,5 +1,6 @@
 "use client"
 
+import { BuildBadge } from "@/components/build-badge";
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname, useSearchParams } from "next/navigation"
@@ -73,13 +74,16 @@ export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
               <BookOpen className="h-4 w-4" />
             </div>
             <div>
-              <h2 className="text-base font-extrabold tracking-tight text-foreground flex items-center gap-1.5">
-                DomsHomeLab
-                <span className="text-[10px] uppercase font-bold tracking-widest px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                  v3.0-beta
-                </span>
-              </h2>
-              <p className="text-[10px] text-muted-foreground font-medium">d281knilb Media Server</p>
+              <div className="flex items-center gap-1.5">
+                <h2 className="text-base font-extrabold tracking-tight text-foreground">
+                  DomsHomeLab
+                </h2>
+                <BuildBadge variant="compact" />
+              </div>
+              <div className="flex items-center justify-between gap-1 pt-0.5">
+                <p className="text-[10px] text-muted-foreground font-medium">d281knilb Media Server</p>
+                <BuildBadge variant="subtle" className="text-[9px]" />
+              </div>
             </div>
           </div>
 
@@ -451,13 +455,16 @@ export function MobileSidebar() {
                     <BookOpen className="h-4 w-4" />
                   </div>
                   <div>
-                    <h2 className="text-base font-extrabold tracking-tight text-foreground flex items-center gap-1.5">
-                      DomsHomeLab
-                      <span className="text-[10px] uppercase font-bold tracking-widest px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                        v3.0-beta
-                      </span>
-                    </h2>
-                    <p className="text-[10px] text-muted-foreground font-medium">d281knilb Media Server</p>
+                    <div className="flex items-center gap-1.5">
+                      <h2 className="text-base font-extrabold tracking-tight text-foreground">
+                        DomsHomeLab
+                      </h2>
+                      <BuildBadge variant="compact" />
+                    </div>
+                    <div className="flex items-center justify-between gap-1 pt-0.5">
+                      <p className="text-[10px] text-muted-foreground font-medium">d281knilb Media Server</p>
+                      <BuildBadge variant="subtle" className="text-[9px]" />
+                    </div>
                   </div>
                 </div>
 

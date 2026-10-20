@@ -31,7 +31,7 @@ export function PaymentMethodsGrid({ config, username = "USER", className = "", 
 
     if (!config) return null;
 
-    const effectiveAmount = amount ?? (cadence === "monthly" ? (config?.monthlyPrice || 15) : (config?.yearlyPrice || 180));
+    const effectiveAmount = amount ?? (cadence === "monthly" ? (config?.monthlyPrice || 17.50) : (config?.yearlyPrice || 180));
 
     const providers: Array<{ key: "paypal" | "venmo" | "cashapp" | "zelle"; value?: string | null }> = [
         { key: "paypal", value: config.paymentPaypal },

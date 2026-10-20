@@ -48,7 +48,7 @@ export default function TrialDashboardView({ user, quota, billing }: TrialDashbo
                             </div>
                             <CardDescription className="text-xs">
                                 {trialEndsAt ? (
-                                    <>Your free trial expires on <strong className="text-foreground">{format(trialEndsAt, "MMMM d, yyyy")}</strong>. Here is your membership pricing when you're ready to activate.</>
+                                    <>Your free trial expires on <strong className="text-foreground">{format(trialEndsAt, "MMMM d, yyyy")}</strong>. Here is your membership pricing when you&apos;re ready to activate.</>
                                 ) : (
                                     <>Welcome to your trial! Review your membership options below.</>
                                 )}
@@ -77,15 +77,15 @@ export default function TrialDashboardView({ user, quota, billing }: TrialDashbo
                                     </Badge>
                                 </div>
                                 <div className="text-2xl font-black text-foreground pt-1">
-                                    {billing?.monthlyAmountDueText || "$15.00/mo"}
+                                    {billing?.monthlyAmountDueText || "$17.50/mo"}
                                 </div>
                                 <p className="text-xs text-muted-foreground pt-1 leading-relaxed">
-                                    {billing?.monthlyBreakdownSummary || "Prorated for remaining days in current month, then $15/month."}
+                                    {billing?.monthlyBreakdownSummary || "Prorated for remaining days in current month, then $17.50/month."}
                                 </p>
                             </div>
                             <div className="pt-2">
                                 <Button asChild size="sm" variant="outline" className="w-full text-xs font-semibold border-amber-500/30 hover:bg-amber-500/10 text-amber-300">
-                                    <Link href="/profile#payment">
+                                    <Link href="/profile#billing">
                                         View Payment Instructions
                                     </Link>
                                 </Button>
@@ -112,7 +112,7 @@ export default function TrialDashboardView({ user, quota, billing }: TrialDashbo
                             </div>
                             <div className="pt-2">
                                 <Button asChild size="sm" className="w-full text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-black">
-                                    <Link href="/profile#payment">
+                                    <Link href="/profile#billing">
                                         Activate Full Year
                                     </Link>
                                 </Button>

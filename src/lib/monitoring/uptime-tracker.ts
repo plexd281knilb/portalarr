@@ -159,7 +159,7 @@ export async function dispatchDiscordOutageNotification(
                 }
             ],
             footer: {
-                text: "Portalarr Fleet Health Subsystem"
+                text: "DomsHomeLab (d281knilb) Fleet Health Subsystem"
             },
             timestamp: new Date().toISOString()
         };
@@ -171,7 +171,7 @@ export async function dispatchDiscordOutageNotification(
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    username: "Portalarr Fleet Monitor",
+                    username: "DomsHomeLab Fleet Monitor",
                     avatar_url: "https://raw.githubusercontent.com/plexd281knilb/portalarr/main/public/favicon.ico",
                     embeds: [embed]
                 }),

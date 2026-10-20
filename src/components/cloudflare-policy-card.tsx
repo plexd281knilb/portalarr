@@ -182,7 +182,7 @@ export default function CloudflarePolicyCard() {
                                 <li><strong>Action:</strong> <code className="text-purple-300">Allow</code></li>
                                 <li><strong>Paths:</strong> Add <code className="text-purple-300">/radarr*</code> and <code className="text-purple-300">/sonarr*</code>.</li>
                                 <li><strong>Include:</strong> <code className="text-purple-300">Emails: [your-email, superuser-emails]</code></li>
-                                <li><strong>Note:</strong> If Super Users authenticate via Portalarr native login, you can include Radarr/Sonarr in Bypass; Portalarr&apos;s built-in session strictly gates them to <code className="text-purple-300">SUPER_USER</code> &amp; <code className="text-purple-300">ADMIN</code>.</li>
+                                <li><strong>Note:</strong> If Super Users authenticate via DomsHomeLab native login, you can include Radarr/Sonarr in Bypass; DomsHomeLab&apos;s built-in session strictly gates them to <code className="text-purple-300">SUPER_USER</code> &amp; <code className="text-purple-300">ADMIN</code>.</li>
                             </ul>
                         </div>
 

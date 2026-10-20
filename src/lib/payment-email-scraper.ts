@@ -559,19 +559,22 @@ export function getProratedRestOfYearAmount(paymentDate: Date, monthlyPrice: num
     const month = paymentDate.getMonth(); // 0 = Jan, 11 = Dec
     const day = paymentDate.getDate();
     
+    // Annual proration strictly derives the monthly base from the annual price (e.g. $180 / 12 = $15/mo)
+    const annualMonthlyRate = yearlyPrice > 0 ? Math.round((yearlyPrice / 12) * 100) / 100 : monthlyPrice;
+
     // Days in current payment month
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const daysRemainingInMonth = Math.max(0, daysInMonth - day);
-    const monthProration = (daysRemainingInMonth / daysInMonth) * monthlyPrice;
+    const monthProration = Math.round(((daysRemainingInMonth / daysInMonth) * annualMonthlyRate) * 100) / 100;
     
     // Full remaining months after current month in this calendar year
     const remainingFullMonths = Math.max(0, 11 - month);
-    const fullMonthsAmount = remainingFullMonths * monthlyPrice;
+    const fullMonthsAmount = Math.round(remainingFullMonths * annualMonthlyRate * 100) / 100;
     
     const calculatedProrated = Math.round((monthProration + fullMonthsAmount) * 100) / 100;
     
     // In Q4 (Oct-Dec), if full yearly price is paid, it covers remainder + full upcoming year
-    const amount = Math.min(yearlyPrice, Math.max(monthlyPrice, calculatedProrated));
+    const amount = Math.min(yearlyPrice, Math.max(annualMonthlyRate, calculatedProrated));
     return {
         amount,
         daysRemainingInMonth,
@@ -716,13 +719,27 @@ export async function matchPaymentToUser(payment: ScrapedPayment): Promise<any |
             username: true,
             name: true,
             email: true,
+            role: true,
             plexUsername: true,
             plexEmail: true,
             referralCode: true,
             status: true,
+            membershipTier: true,
+            subscriptionCadence: true,
+            accountCredit: true,
+            convertedAt: true,
+            referralBonusMonths: true,
             trialEndsAt: true,
             subscriptionEndsAt: true,
-            plexLibrarySectionIds: true
+            plexLibrarySectionIds: true,
+            referrals: {
+                select: {
+                    id: true,
+                    username: true,
+                    status: true,
+                    convertedAt: true
+                }
+            }
         }
     });
 
@@ -1047,10 +1064,11 @@ export async function applySubscriptionForPayment(user: any, payment: ScrapedPay
 
                 let yearlyOptionNote = "";
                 if (isPartialMonthly) {
+                    const avgMonthlyVal = (thresholdResult.targetYearlyPrice / 12).toFixed(2);
                     yearlyOptionNote = `
 <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-left: 4px solid #10b981; padding: 14px; border-radius: 6px; margin: 20px 0;">
     <p style="margin: 0; color: #166534; font-size: 13px;">
-        💡 <strong>Prefer the discounted Annual Plan?</strong> The annual membership is $${thresholdResult.targetYearlyPrice.toFixed(2)}/year (averaging only $15.00/mo). If you'd like to unlock a full year of access instead, you can send in the remaining <strong>$${thresholdResult.yearlyShortfall.toFixed(2)}</strong> ($${thresholdResult.targetYearlyPrice.toFixed(2)} - $${thresholdResult.totalCredit.toFixed(2)}).
+        💡 <strong>Prefer the discounted Annual Plan?</strong> The annual membership is ${thresholdResult.targetYearlyPrice.toFixed(2)}/year (averaging only ${avgMonthlyVal}/mo). If you'd like to unlock a full year of access instead, you can send in the remaining <strong>${thresholdResult.yearlyShortfall.toFixed(2)}</strong> (${thresholdResult.targetYearlyPrice.toFixed(2)} - ${thresholdResult.totalCredit.toFixed(2)}).
     </p>
 </div>`;
                 }

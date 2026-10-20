@@ -943,24 +943,50 @@ export async function getPlexServerList(
     return results;
 }
 
+const plexServerSectionsCache = new Map<string, { timestamp: number; sections: PlexLibrarySection[] }>();
+const plexServerLibrarySectionsCache = new Map<string, { timestamp: number; data: PlexServerWithSections[] }>();
+const PLEX_SECTIONS_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
+export function clearPlexSectionsCache(): void {
+    plexServerSectionsCache.clear();
+    plexServerLibrarySectionsCache.clear();
+}
+
 /**
  * Resolves library sections for ONLY a single specific Plex server.
  * Bypasses all other servers, preventing connection timeouts and slow page loads.
+ * Protected by 10-minute in-memory SWR cache to eliminate redundant Plex connection loops.
  */
 export async function getPlexServerSections(
     adminToken: string,
     targetServerIdOrName: string,
-    customPlexUrl?: string
+    customPlexUrl?: string,
+    forceRefresh = false
 ): Promise<PlexLibrarySection[]> {
     if (!adminToken || !targetServerIdOrName) return [];
 
-    const resolved = await resolveWorkingPlexServerConnection(targetServerIdOrName, adminToken, customPlexUrl);
+    const cacheKey = `${targetServerIdOrName.toLowerCase().trim()}_${customPlexUrl || "default"}`;
+    if (!forceRefresh) {
+        const cached = plexServerSectionsCache.get(cacheKey);
+        if (cached && (Date.now() - cached.timestamp < PLEX_SECTIONS_CACHE_TTL)) {
+            return cached.sections;
+        }
+    }
+
+    const setCache = (secs: PlexLibrarySection[]): PlexLibrarySection[] => {
+        if (secs && secs.length > 0) {
+            plexServerSectionsCache.set(cacheKey, { timestamp: Date.now(), sections: secs });
+        }
+        return secs;
+    };
+
+    const resolved = await resolveWorkingPlexServerConnection(targetServerIdOrName, adminToken, customPlexUrl, forceRefresh);
     if (!resolved || !resolved.serverUrl) {
         // Fallback: Check cloud servers map for sections
         const cloudMap = await getPlexCloudServersMap(adminToken).catch(() => new Map());
         const cloudSrv = cloudMap.get(targetServerIdOrName) || 
                          Array.from(cloudMap.values()).find(c => c.serverId.toLowerCase() === targetServerIdOrName.toLowerCase() || c.serverName.toLowerCase() === targetServerIdOrName.toLowerCase());
-        return cloudSrv?.sections || [];
+        return setCache(cloudSrv?.sections || []);
     }
 
     const token = resolved.token || adminToken;
@@ -1059,7 +1085,7 @@ export async function getPlexServerSections(
     // 1. First probe the verified working resolved.serverUrl directly (takes <20ms)
     const directSections = await fetchSectionsFromUrl(resolved.serverUrl);
     if (directSections && directSections.length > 0) {
-        return await enrichWithCloudIds(directSections);
+        return setCache(await enrichWithCloudIds(directSections));
     }
 
     // 2. If primary resolved URL failed, probe remaining candidate URLs concurrently in parallel
@@ -1070,7 +1096,7 @@ export async function getPlexServerSections(
         );
         for (const r of results) {
             if (r.status === "fulfilled" && r.value && r.value.length > 0) {
-                return await enrichWithCloudIds(r.value);
+                return setCache(await enrichWithCloudIds(r.value));
             }
         }
     }
@@ -1079,41 +1105,54 @@ export async function getPlexServerSections(
     const cloudMap = await getPlexCloudServersMap(adminToken).catch(() => new Map());
     const cloudSrv = cloudMap.get(targetServerIdOrName) || 
                      Array.from(cloudMap.values()).find(c => c.serverId.toLowerCase() === targetServerIdOrName.toLowerCase() || c.serverName.toLowerCase() === targetServerIdOrName.toLowerCase());
-    return cloudSrv?.sections || [];
+    return setCache(cloudSrv?.sections || []);
 }
 
 export async function getPlexServerLibrarySections(
     adminToken: string, 
     customPlexUrl?: string,
-    targetServerId?: string
+    targetServerId?: string,
+    forceRefresh = false
 ): Promise<PlexServerWithSections[]> {
     if (!adminToken) return [];
+
+    const cacheKey = `${targetServerId || "all"}_${customPlexUrl || "default"}`;
+    if (!forceRefresh) {
+        const cached = plexServerLibrarySectionsCache.get(cacheKey);
+        if (cached && (Date.now() - cached.timestamp < PLEX_SECTIONS_CACHE_TTL)) {
+            return cached.data;
+        }
+    }
 
     const serverList = await getPlexServerList(adminToken, customPlexUrl);
     if (serverList.length === 0) return [];
 
     // If targetServerId is specified, query sections ONLY for that one active server!
     if (targetServerId) {
-        const sections = await getPlexServerSections(adminToken, targetServerId, customPlexUrl);
-        return serverList.map(srv => ({
+        const sections = await getPlexServerSections(adminToken, targetServerId, customPlexUrl, forceRefresh);
+        const result = serverList.map(srv => ({
             serverId: srv.serverId,
             serverName: srv.serverName,
             serverUrl: srv.serverUrl || "",
             sections: srv.serverId === targetServerId ? sections : []
         }));
+        plexServerLibrarySectionsCache.set(cacheKey, { timestamp: Date.now(), data: result });
+        return result;
     }
 
     // Resolve sections for all servers in parallel so switching servers is instantaneous and accurate
     const sectionsResults = await Promise.allSettled(
-        serverList.map(srv => getPlexServerSections(adminToken, srv.serverId, customPlexUrl))
+        serverList.map(srv => getPlexServerSections(adminToken, srv.serverId, customPlexUrl, forceRefresh))
     );
     
-    return serverList.map((srv, idx) => ({
+    const finalResult = serverList.map((srv, idx) => ({
         serverId: srv.serverId,
         serverName: srv.serverName,
         serverUrl: srv.serverUrl || "",
         sections: sectionsResults[idx].status === "fulfilled" ? sectionsResults[idx].value : []
     }));
+    plexServerLibrarySectionsCache.set(cacheKey, { timestamp: Date.now(), data: finalResult });
+    return finalResult;
 }
 
 export interface ResolvedPlexConnection {

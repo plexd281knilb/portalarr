@@ -679,7 +679,7 @@ export async function applyParentalTagsToPlexItem(
     },
     advisory: ImdbParentalAdvisory,
     options: ParentalTaggingOptions
-): Promise<{ success: boolean; appliedTags: string[]; error?: string }> {
+): Promise<{ success: boolean; appliedTags: string[]; skipped?: boolean; error?: string }> {
     const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
     const mediaType = item.type === "show" ? "show" : "movie";
     const typeId = mediaType === "show" ? 2 : 1;
@@ -707,31 +707,80 @@ export async function applyParentalTagsToPlexItem(
         return { success: true, appliedTags: tagsToApply };
     }
 
+    const targetIsLabels = target === "labels" || target === "both";
+    const targetIsGenres = target === "genres" || target === "both";
+
+    // Fast-path: Check snapshot tags audit directly if available (0ms, 0 HTTP calls to PMS)
+    if (options.snapshotTags && options.snapshotTags.has(item.ratingKey)) {
+        const audit = options.snapshotTags.get(item.ratingKey)!;
+        const oldParentalLabels = (audit.labels || []).filter((t: string) => isParentalTag(t, prefix));
+        const oldParentalGenres = (audit.genres || []).filter((t: string) => isParentalTag(t, prefix));
+
+        const labelsMatch = !targetIsLabels || (
+            oldParentalLabels.length === tagsToApply.length &&
+            tagsToApply.every(t => oldParentalLabels.includes(t))
+        );
+        const genresMatch = !targetIsGenres || (
+            oldParentalGenres.length === tagsToApply.length &&
+            tagsToApply.every(t => oldParentalGenres.includes(t))
+        );
+
+        if (labelsMatch && genresMatch) {
+            // Item already has the exact target tags in SQLite snapshot! Skip completely!
+            return { success: true, appliedTags: tagsToApply, skipped: true };
+        }
+    }
+
     let lastError: any = null;
 
     for (const cleanBase of urlsToTry) {
         try {
-            // 2. Query current item metadata to preserve non-parental labels/genres
-            const metaRes = await fetch(`${cleanBase}/library/metadata/${encodeURIComponent(item.ratingKey)}?includeGuids=1&includeAdvanced=1&X-Plex-Token=${encodeURIComponent(token)}`, {
-                headers: { "Accept": "application/json", "X-Plex-Token": token }
-            });
-
             let existingLabels: string[] = [];
             let existingGenres: string[] = [];
             let oldParentalLabels: string[] = [];
             let oldParentalGenres: string[] = [];
 
-            if (metaRes.ok) {
-                const metaData = await metaRes.json();
-                const meta = metaData.MediaContainer?.Metadata?.[0];
-                const allLabels = (meta?.Label || []).map((l: any) => typeof l === "string" ? l : l?.tag).filter(Boolean);
-                const allGenres = (meta?.Genre || []).map((g: any) => typeof g === "string" ? g : g?.tag).filter(Boolean);
+            if (options.snapshotTags && options.snapshotTags.has(item.ratingKey)) {
+                // Read from local SQLite snapshot instead of making an HTTP GET to Plex
+                const audit = options.snapshotTags.get(item.ratingKey)!;
+                existingLabels = (audit.labels || []).filter((t: string) => !isParentalTag(t, prefix));
+                oldParentalLabels = (audit.labels || []).filter((t: string) => isParentalTag(t, prefix));
+                existingGenres = (audit.genres || []).filter((t: string) => !isParentalTag(t, prefix));
+                oldParentalGenres = (audit.genres || []).filter((t: string) => isParentalTag(t, prefix));
+            } else {
+                // 2. Query current item metadata to preserve non-parental labels/genres
+                const metaRes = await fetch(`${cleanBase}/library/metadata/${encodeURIComponent(item.ratingKey)}?includeGuids=1&includeAdvanced=1&X-Plex-Token=${encodeURIComponent(token)}`, {
+                    headers: { "Accept": "application/json", "X-Plex-Token": token }
+                });
 
-                existingLabels = allLabels.filter((t: string) => !isParentalTag(t, prefix));
-                oldParentalLabels = allLabels.filter((t: string) => isParentalTag(t, prefix));
+                if (metaRes.ok) {
+                    const metaData = await metaRes.json();
+                    const meta = metaData.MediaContainer?.Metadata?.[0];
+                    const allLabels = (meta?.Label || []).map((l: any) => typeof l === "string" ? l : l?.tag).filter(Boolean);
+                    const allGenres = (meta?.Genre || []).map((g: any) => typeof g === "string" ? g : g?.tag).filter(Boolean);
 
-                existingGenres = allGenres.filter((t: string) => !isParentalTag(t, prefix));
-                oldParentalGenres = allGenres.filter((t: string) => isParentalTag(t, prefix));
+                    existingLabels = allLabels.filter((t: string) => !isParentalTag(t, prefix));
+                    oldParentalLabels = allLabels.filter((t: string) => isParentalTag(t, prefix));
+
+                    existingGenres = allGenres.filter((t: string) => !isParentalTag(t, prefix));
+                    oldParentalGenres = allGenres.filter((t: string) => isParentalTag(t, prefix));
+                }
+            }
+
+            // Check if tags already match exactly to skip redundant network mutations
+
+            const labelsMatch = !targetIsLabels || (
+                oldParentalLabels.length === tagsToApply.length &&
+                tagsToApply.every(t => oldParentalLabels.includes(t))
+            );
+            const genresMatch = !targetIsGenres || (
+                oldParentalGenres.length === tagsToApply.length &&
+                tagsToApply.every(t => oldParentalGenres.includes(t))
+            );
+
+            if (labelsMatch && genresMatch) {
+                // Item already has the exact target tags! Skip redundant network PUT calls to protect PMS.
+                return { success: true, appliedTags: tagsToApply, skipped: true };
             }
 
             // 3. Formulate update parameters
@@ -785,7 +834,10 @@ export async function applyParentalTagsToPlexItem(
                 headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
             });
 
-            return { success: true, appliedTags: tagsToApply };
+            // Pacing pause to let PMS SQLite write transaction commit cleanly
+            await new Promise(r => setTimeout(r, 40));
+
+            return { success: true, appliedTags: tagsToApply, skipped: false };
         } catch (e: any) {
             lastError = e;
         }
@@ -930,7 +982,32 @@ export async function applyParentalTagsToLibrary(
     logger.addLog("INFO", "CURATION", `Starting IMDb Parental Rating Tagging for library section ${sectionKey} on "${serverName}"...`);
 
     const urlsToTry = [serverUrl, ...resolved.allCandidateUrls.filter(u => u !== serverUrl)];
-    const items: PlexMediaStreamInfo[] = await getPlexLibraryMediaItems(urlsToTry, serverToken, sectionKey, 5000);
+
+    let snapshotTagsAudit: Map<string, { labels: string[]; genres: string[]; collections: string[] }> | undefined = options.snapshotTags;
+    let items: PlexMediaStreamInfo[] = [];
+
+    // Check if Direct SQLite Snapshot is available to eliminate PMS HTTP load
+    try {
+        const dbServer = await prisma.plexServer.findUnique({ where: { id: resolved.serverId } }).catch(() => null);
+        if (dbServer?.databasePath) {
+            const { createPlexDatabaseSnapshot, getSnapshotLibraryMediaItems, getSnapshotLibraryTagsAudit, resolvePlexDatabaseFilePath } = await import("@/lib/curation/plex-snapshot-engine");
+            if (resolvePlexDatabaseFilePath(dbServer.databasePath)) {
+                const snap = await createPlexDatabaseSnapshot(dbServer.databasePath, dbServer.id, { label: dbServer.name });
+                if (snap.success && snap.snapshotPath) {
+                    snapshotTagsAudit = getSnapshotLibraryTagsAudit(snap.snapshotPath, sectionKey);
+                    items = getSnapshotLibraryMediaItems(snap.snapshotPath, sectionKey, { limit: 5000, includeStreams: false });
+                    logger.addLog("INFO", "PLEX", `⚡ Direct SQLite Snapshot loaded ${items.length} items and tags for library section ${sectionKey} (<10ms).`);
+                }
+            }
+        }
+    } catch (snapErr: any) {
+        logger.addLog("WARN", "PLEX", `Direct SQLite snapshot failed, falling back to HTTP: ${snapErr.message}`);
+    }
+
+    if (items.length === 0) {
+        items = await getPlexLibraryMediaItems(urlsToTry, serverToken, sectionKey, 5000, undefined, false);
+    }
+
     if (items.length === 0) {
         return { success: true, totalEvaluated: 0, taggedCount: 0, skippedCount: 0, appliedTagsSummary: {} };
     }
@@ -938,6 +1015,11 @@ export async function applyParentalTagsToLibrary(
     const appliedTagsSummary: Record<string, number> = {};
     let taggedCount = 0;
     let skippedCount = 0;
+
+    const taggingOptsWithSnapshot: ParentalTaggingOptions = {
+        ...options,
+        snapshotTags: snapshotTagsAudit
+    };
 
     // Process in batches of 25 items for fast AI resolution
     const BATCH_SIZE = 25;
@@ -986,7 +1068,7 @@ export async function applyParentalTagsToLibrary(
                 continue;
             }
 
-            const res = await applyParentalTagsToPlexItem(urlsToTry, serverToken, sectionKey, it, adv, options);
+            const res = await applyParentalTagsToPlexItem(urlsToTry, serverToken, sectionKey, it, adv, taggingOptsWithSnapshot);
             if (res.success && res.appliedTags.length > 0) {
                 taggedCount++;
                 for (const t of res.appliedTags) {
@@ -1143,7 +1225,8 @@ export async function applyCustomTagRuleToLibrary(
 
     logger.addLog("INFO", "CURATION", `Applying custom tag "${rule.tagName}" (${rule.field}) on section ${sectionKey} on "${serverName}"...`);
 
-    const items: PlexMediaStreamInfo[] = await getPlexLibraryMediaItems(urlsToTry, serverToken, sectionKey, 5000);
+    const needsStreams = rule.filterType === "resolution" || rule.filterType === "hdr" || rule.filterType === "audio";
+    const items: PlexMediaStreamInfo[] = await getPlexLibraryMediaItems(urlsToTry, serverToken, sectionKey, 5000, undefined, needsStreams);
     let taggedCount = 0;
     let skippedCount = 0;
 
@@ -1305,6 +1388,8 @@ export async function applyCustomTagRuleToLibrary(
 
                 if (putRes.ok) {
                     taggedCount++;
+                    // Pacing pause to let PMS SQLite write transaction commit cleanly
+                    await new Promise(r => setTimeout(r, 40));
                     break;
                 }
             } catch (e) {}
@@ -1428,18 +1513,35 @@ export async function clearCustomTagFromLibrary(
     return { success: true, clearedCount };
 }
 
+const tagsAuditCache = new Map<string, { timestamp: number; data: any }>();
+const TAGS_AUDIT_CACHE_TTL = 3 * 60 * 1000; // 3 minutes
+
+export function clearPlexLibraryTagsAuditCache(): void {
+    tagsAuditCache.clear();
+}
+
 /**
  * Scans a Plex library section and returns an audit of all active Labels, Genres, and Collections with counts.
+ * Uses 3-minute in-memory caching to prevent redundant library audits on PMS.
  */
 export async function getPlexLibraryTagsAudit(
     serverId: string,
-    sectionKey: string | number
+    sectionKey: string | number,
+    forceRefresh = false
 ): Promise<{
     labels: Array<{ tag: string; count: number; isParental: boolean }>;
     genres: Array<{ tag: string; count: number; isParental: boolean }>;
     collections: Array<{ tag: string; count: number }>;
     totalItems: number;
 }> {
+    const cacheKey = `${serverId}_${sectionKey}`;
+    if (!forceRefresh) {
+        const cached = tagsAuditCache.get(cacheKey);
+        if (cached && (Date.now() - cached.timestamp < TAGS_AUDIT_CACHE_TTL)) {
+            return cached.data;
+        }
+    }
+
     try {
         const resolved = await resolveWorkingPlexServerConnection(serverId);
         if (!resolved || !resolved.serverUrl) return { labels: [], genres: [], collections: [], totalItems: 0 };
@@ -1518,12 +1620,14 @@ export async function getPlexLibraryTagsAudit(
             count
         })).sort((a, b) => b.count - a.count);
 
-        return {
+        const result = {
             labels,
             genres,
             collections,
             totalItems: items.length
         };
+        tagsAuditCache.set(cacheKey, { timestamp: Date.now(), data: result });
+        return result;
     } catch (e) {
         return { labels: [], genres: [], collections: [], totalItems: 0 };
     }

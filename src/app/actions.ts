@@ -1440,6 +1440,8 @@ export async function addPlexServerAction(formData: FormData) {
     }
     url = url.replace(/\/+$/, "");
 
+    const databasePath = (formData.get("databasePath") as string || "").trim() || null;
+
     if (!clientIdentifier) {
         try {
             const testRes = await testPlexServerConfigAction(url, rawToken);
@@ -1463,14 +1465,15 @@ export async function addPlexServerAction(formData: FormData) {
             token: rawToken ? encryptData(rawToken) : null,
             clientIdentifier: clientIdentifier || null,
             isDefault: shouldBeDefault,
-            monitored
+            monitored,
+            databasePath
         }
     });
 
     revalidatePath("/settings");
     revalidatePath("/curation");
     revalidatePath("/");
-    logger.addLog("SUCCESS", "PLEX", `Added Plex server: "${name}" (${url}) [Monitored: ${monitored}]`);
+    logger.addLog("SUCCESS", "PLEX", `Added Plex server: "${name}" (${url}) [Monitored: ${monitored}]${databasePath ? ' [Direct SQLite Snapshot Configured]' : ''}`);
     return { success: true, message: `Plex server "${name}" added successfully!`, server: created };
 }
 
@@ -1512,6 +1515,11 @@ export async function updatePlexServerAction(formData: FormData) {
         updateData.monitored = monitoredParam === "true" || monitoredParam === "on" || monitoredParam === "1";
     }
 
+    if (formData.has("databasePath")) {
+        const dbPath = (formData.get("databasePath") as string || "").trim();
+        updateData.databasePath = dbPath || null;
+    }
+
     if (clientIdentifier) {
         updateData.clientIdentifier = clientIdentifier;
     }
@@ -1529,8 +1537,47 @@ export async function updatePlexServerAction(formData: FormData) {
     revalidatePath("/settings");
     revalidatePath("/curation");
     revalidatePath("/");
-    logger.addLog("SUCCESS", "PLEX", `Updated Plex server: "${name}" (${url})`);
+    logger.addLog("SUCCESS", "PLEX", `Updated Plex server: "${name}" (${url})${updateData.databasePath ? ' [Direct SQLite Snapshot Configured]' : ''}`);
     return { success: true, message: `Plex server "${name}" updated successfully!` };
+}
+
+export async function testPlexDatabasePathAction(inputPath: string) {
+    await verifyAdmin();
+    const { resolvePlexDatabaseFilePath, inspectPlexDatabase } = await import("@/lib/curation/plex-snapshot-engine");
+    const resolved = resolvePlexDatabaseFilePath(inputPath);
+    if (!resolved) {
+        return {
+            success: false,
+            error: `Database file not found at "${inputPath}". Please verify the path points to "com.plexapp.plugins.library.db" or the Plex Media Server data directory.`
+        };
+    }
+
+    const inspection = inspectPlexDatabase(resolved);
+    if (!inspection.success) {
+        return {
+            success: false,
+            error: inspection.error || "Failed to inspect Plex database."
+        };
+    }
+
+    return {
+        success: true,
+        resolvedPath: resolved,
+        sizeMb: inspection.sizeMb,
+        movieCount: inspection.movieCount,
+        showCount: inspection.showCount,
+        episodeCount: inspection.episodeCount,
+        sectionCount: inspection.sectionCount,
+        sections: inspection.sections,
+        message: `Valid Plex database! Found ${inspection.sectionCount} libraries (${inspection.movieCount} movies, ${inspection.showCount} shows, ${inspection.episodeCount} episodes) • ${inspection.sizeMb} MB`
+    };
+}
+
+export async function discoverPlexDatabasePathsAction() {
+    await verifyAdmin();
+    const { discoverKnownPlexDatabasePaths } = await import("@/lib/curation/plex-snapshot-engine");
+    const paths = discoverKnownPlexDatabasePaths();
+    return { success: true, paths };
 }
 
 export async function removePlexServerAction(id: string) {
@@ -1979,7 +2026,14 @@ export async function sendBroadcastEmailAction(payload: {
     }
 
     const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-    if (!settings?.smtpHost || !settings?.smtpUser || !settings?.smtpPass) {
+    let broadcastRequiresApproval = settings?.requireApprovalForEmails ?? true;
+    if (broadcastRequiresApproval && settings?.emailApprovalPolicy) {
+        try {
+            const policy = JSON.parse(settings.emailApprovalPolicy);
+            if (policy["broadcast"] === false) broadcastRequiresApproval = false;
+        } catch {}
+    }
+    if (!broadcastRequiresApproval && (!settings?.smtpHost || !settings?.smtpUser || !settings?.smtpPass)) {
         return { success: false, error: "SMTP settings not configured on this server. Please configure SMTP in General & Email settings." };
     }
 
@@ -1995,6 +2049,7 @@ export async function sendBroadcastEmailAction(payload: {
     const isFullDoc = payload.isCustomHtml && (payload.body.includes("<html") || payload.body.includes("<!DOCTYPE"));
 
     let sentCount = 0;
+    let queuedCount = 0;
     let failCount = 0;
     const failures: { username: string; email: string; error: string }[] = [];
 
@@ -2038,11 +2093,16 @@ export async function sendBroadcastEmailAction(payload: {
             html: personalizedHtml,
             templateId: "broadcast",
             targetUser: user.username,
-            userId: user.id
+            userId: user.id,
+            skipAdminAlert: true
         });
 
         if (mailRes.success) {
-            sentCount++;
+            if (mailRes.queued) {
+                queuedCount++;
+            } else {
+                sentCount++;
+            }
         } else {
             failCount++;
             failures.push({
@@ -2056,13 +2116,14 @@ export async function sendBroadcastEmailAction(payload: {
     logger.addLog(
         failCount === 0 ? "SUCCESS" : "WARN",
         "EMAIL",
-        `[MASS-BROADCAST] Broadcast dispatch finished: ${sentCount} sent, ${failCount} failed. Subject: "${payload.subject}" (by ${session?.username || "admin"})`
+        `[MASS-BROADCAST] Broadcast dispatch finished: ${queuedCount} queued for approval, ${sentCount} sent immediately, ${failCount} failed. Subject: "${payload.subject}" (by ${session?.username || "admin"})`
     );
 
     return {
         success: true,
         total: users.length,
         sent: sentCount,
+        queued: queuedCount,
         failed: failCount,
         failures
     };
@@ -3328,6 +3389,37 @@ export async function expireDueTrialsAndSubscriptionsInternal() {
                 await revokePlexAccessForUserInternal(u, "Your trial or subscription period has ended. Please renew your access on DomsHomeLab.");
                 logger.addLog("SUCCESS", "PLEX", `[TRIAL-EXPIRATION] Account for "${u.username}" expired; Plex library access revoked and active sessions terminated.`);
 
+                // Dispatch trial_expired notification to the user if enabled
+                if (u.email && settings?.emailNotificationsEnabled && settings?.notifyTrialExpired) {
+                    try {
+                        const { renderEmailTemplate } = await import("../lib/email-templates");
+                        const appUrl = await getAppUrl();
+                        const expRefDate = u.trialEndsAt || u.subscriptionEndsAt || now;
+                        const expirationDateFormatted = new Intl.DateTimeFormat("en-US", {
+                            month: "long",
+                            day: "numeric",
+                            year: "numeric"
+                        }).format(new Date(expRefDate));
+                        const { subject, html } = await renderEmailTemplate("trial_expired", {
+                            username: u.username,
+                            email: u.email,
+                            expirationDate: expirationDateFormatted,
+                            renewUrl: `${appUrl}/profile#billing`,
+                            appUrl
+                        });
+                        await sendOrQueueEmail({
+                            to: u.email,
+                            subject,
+                            html,
+                            templateId: "trial_expired",
+                            targetUser: u.username,
+                            userId: u.id
+                        });
+                    } catch (expEmailErr: any) {
+                        console.warn("[TRIAL-EXPIRATION] Failed to dispatch trial_expired email:", expEmailErr?.message || expEmailErr);
+                    }
+                }
+
                 // Notify administrator of user expiration and access revocation
                 await notifyAdminUserRoleOrAccessChange({
                     username: u.username,
@@ -4351,22 +4443,56 @@ export async function sendOrQueueEmail(options: {
     targetUser?: string;
     userId?: string;
     bypassApproval?: boolean;
+    skipAdminAlert?: boolean;
     attachments?: Array<{ filename: string; path: string; contentType?: string }>;
 }): Promise<{ success: boolean; queued?: boolean; sent?: boolean; approvalId?: string; error?: string }> {
     try {
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         const recipientStr = Array.isArray(options.to) ? options.to.join(", ") : options.to;
-        
-        // If email notifications globally disabled and not bypassing approval
-        if (settings?.emailNotificationsEnabled === false && !options.bypassApproval) {
+        const isExplicitAdminDispatch =
+            options.templateId === "broadcast" ||
+            options.templateId === "new_site_launch" ||
+            options.templateId === "manual_email";
+
+        // Identify whether this email is addressed strictly to the Administrator(s)
+        const adminUsers = await prisma.user.findMany({
+            where: { role: "ADMIN" },
+            select: { email: true }
+        });
+        const adminEmailSet = new Set<string>(
+            adminUsers.map(u => (u.email || "").trim().toLowerCase()).filter(Boolean)
+        );
+        if (settings?.smtpUser) {
+            adminEmailSet.add(settings.smtpUser.trim().toLowerCase());
+        }
+        const ADMIN_ALERT_TEMPLATES = new Set([
+            "admin_new_user",
+            "admin_user_access_revoked",
+            "media_request_admin",
+            "seerr_request_new_admin",
+            "ticket_error_alert",
+            "library_access_request"
+        ]);
+        const recipientList = (Array.isArray(options.to) ? options.to : [options.to])
+            .map(e => (e || "").trim().toLowerCase())
+            .filter(Boolean);
+        const isToAdminOnly =
+            (recipientList.length > 0 && recipientList.every(e => adminEmailSet.has(e))) ||
+            (options.templateId ? ADMIN_ALERT_TEMPLATES.has(options.templateId) : false);
+
+        // If automated email notifications are globally disabled, skip automated background emails
+        // (but never silently drop explicit admin-initiated broadcasts/manual emails or admin-targeted alerts!)
+        if (settings?.emailNotificationsEnabled === false && !options.bypassApproval && !isExplicitAdminDispatch && !isToAdminOnly) {
             logger.addLog("INFO", "EMAIL", `Email notifications globally disabled in settings. Skipping email "${options.subject}" to ${recipientStr}`);
             console.log(`[EMAIL-GATE] Email notifications globally disabled. Skipping email: "${options.subject}"`);
             return { success: true, sent: false, queued: false };
         }
 
-        // Evaluate whether this email requires approval based on global setting and granular email approval policy
+        // Evaluate whether this email requires approval:
+        // - Emails sent TO the Admin (isToAdminOnly) are NEVER gate-checked (sent immediately to Admin).
+        // - All emails sent to regular users ARE gate-checked when requireApprovalForEmails is enabled (unless approved from the queue via bypassApproval).
         let requireApproval = false;
-        if (!options.bypassApproval) {
+        if (!options.bypassApproval && !isToAdminOnly) {
             const globalEmailApproval = settings?.requireApprovalForEmails ?? true;
             if (globalEmailApproval) {
                 let policy: Record<string, boolean> = {};
@@ -4409,7 +4535,9 @@ export async function sendOrQueueEmail(options: {
             });
             logger.addLog("INFO", "APPROVAL", `Email "${options.subject}" to ${recipientStr} queued for admin approval (ID: ${approval.id}).`);
             logger.addLog("INFO", "EMAIL", `Email "${options.subject}" to ${recipientStr} staged in Admin Approval Queue (ID: ${approval.id}).`);
-            notifyAdminsOnPendingApproval(approval).catch(e => console.warn("[APPROVAL-NOTIFY-ERROR]:", e?.message || e));
+            if (!options.skipAdminAlert) {
+                notifyAdminsOnPendingApproval(approval).catch(e => console.warn("[APPROVAL-NOTIFY-ERROR]:", e?.message || e));
+            }
             return { success: true, queued: true, approvalId: approval.id };
         }
 
@@ -5615,8 +5743,12 @@ export async function creditUserReferralAction(params: {
         if (extendSubscriptionExpiry && referrer.subscriptionEndsAt) {
             const monthsToAdd = (bonusMonths && bonusMonths > 0) ? bonusMonths : 1;
             const currentExp = new Date(referrer.subscriptionEndsAt);
+            const origDay = currentExp.getDate();
             const newExp = new Date(currentExp);
+            newExp.setDate(1);
             newExp.setMonth(newExp.getMonth() + monthsToAdd);
+            const maxDaysInTargetMonth = new Date(newExp.getFullYear(), newExp.getMonth() + 1, 0).getDate();
+            newExp.setDate(Math.min(origDay, maxDaysInTargetMonth));
 
             await prisma.user.update({
                 where: { id: referrerUserId },
@@ -5649,8 +5781,9 @@ export async function creditUserReferralAction(params: {
         });
 
         const settings = await prisma.settings.findUnique({ where: { id: "global" } });
-        const yearlyPrice = settings?.yearlyPrice || 180;
-        const monthlyPrice = settings?.monthlyPrice || 15;
+        const isRefTier2 = (freshReferrer || referrer)?.membershipTier === "TIER_2_VIP";
+        const yearlyPrice = isRefTier2 ? (settings?.tier2YearlyPrice || 240) : (settings?.yearlyPrice || 180);
+        const monthlyPrice = isRefTier2 ? (settings?.tier2MonthlyPrice || 25) : (settings?.monthlyPrice || 17.50);
 
         const rewardSummary = calculateUserRenewalSummary({
             user: freshReferrer || referrer,
@@ -5765,8 +5898,9 @@ export async function getUserRenewalSummaryAction(userId: string) {
         if (!user) return { success: false, error: "User not found." };
 
         const settings = await prisma.settings.findUnique({ where: { id: "global" } });
-        const yearlyPrice = settings?.yearlyPrice || 180;
-        const monthlyPrice = settings?.monthlyPrice || 15;
+        const isTier2 = user.membershipTier === "TIER_2_VIP";
+        const yearlyPrice = isTier2 ? (settings?.tier2YearlyPrice || 240) : (settings?.yearlyPrice || 180);
+        const monthlyPrice = isTier2 ? (settings?.tier2MonthlyPrice || 25) : (settings?.monthlyPrice || 17.50);
 
         const summary = calculateUserRenewalSummary({
             user,
@@ -5820,8 +5954,9 @@ export async function sendSubscriptionRenewalReminderAction(userId: string) {
         if (!user.email) return { success: false, error: `User @${user.username} has no email address configured.` };
 
         const settings = await prisma.settings.findUnique({ where: { id: "global" } });
-        const yearlyPrice = settings?.yearlyPrice || 180;
-        const monthlyPrice = settings?.monthlyPrice || 15;
+        const isTier2 = user.membershipTier === "TIER_2_VIP";
+        const yearlyPrice = isTier2 ? (settings?.tier2YearlyPrice || 240) : (settings?.yearlyPrice || 180);
+        const monthlyPrice = isTier2 ? (settings?.tier2MonthlyPrice || 25) : (settings?.monthlyPrice || 17.50);
 
         // Verify if user already paid for this cycle
         const { isUserSubscriptionPaidForCycle, parseReminderDays, DEFAULT_YEARLY_REMINDER_DAYS, DEFAULT_MONTHLY_REMINDER_DAYS } = await import("@/lib/subscription-reminders");
@@ -5852,21 +5987,32 @@ export async function sendSubscriptionRenewalReminderAction(userId: string) {
         const friendNamesStr = summary.convertedFriends.map(f => `@${f.username}`).join(", ");
 
         const referralDiscountText = summary.convertedReferralsCount > 0
-            ? `-$${summary.rewardDiscountAmount.toFixed(2)} (${summary.convertedReferralsCount} friend${summary.convertedReferralsCount > 1 ? "s" : ""} referred: ${friendNamesStr})`
+            ? `-${summary.rewardDiscountAmount.toFixed(2)} (${summary.convertedReferralsCount} friend${summary.convertedReferralsCount > 1 ? "s" : ""} referred: ${friendNamesStr})`
             : "No active referral credits";
 
         const monthlyAlternativeText = summary.delayedMonthlyStartDate
-            ? `$${monthlyPrice}/month starting ${summary.delayedMonthlyStartDate}`
-            : `$${monthlyPrice}/month starting ${renewalDateStr}`;
+            ? `${monthlyPrice.toFixed(2)}/month starting ${summary.delayedMonthlyStartDate}`
+            : `${monthlyPrice.toFixed(2)}/month starting ${renewalDateStr}`;
 
-        const { subject, html } = await renderEmailTemplate("subscription_renewal_reminder", {
+        const existingCredit = Math.max(0, Number(user.accountCredit || 0));
+        const netYearlyDue = Math.max(0, summary.discountedYearlyPrice - existingCredit);
+        const netMonthlyDue = Math.max(0, monthlyPrice - existingCredit);
+        const daysRemainingVal = user.subscriptionEndsAt
+            ? Math.max(1, Math.ceil((new Date(user.subscriptionEndsAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
+            : (isYearly ? 30 : 3);
+        const templateId = isYearly ? "subscription_renewal_reminder_yearly" : "subscription_renewal_reminder_monthly";
+
+        const { subject, html } = await renderEmailTemplate(templateId, {
             username: user.username,
+            daysRemaining: String(daysRemainingVal),
             renewalDate: renewalDateStr,
-            basePrice: `$${yearlyPrice.toFixed(2)} / year`,
+            basePrice: isYearly ? `${yearlyPrice.toFixed(2)} / year` : `${monthlyPrice.toFixed(2)} / month`,
             referralDiscountText,
-            amountDue: `$${summary.discountedYearlyPrice.toFixed(2)}`,
+            amountDue: isYearly ? `${netYearlyDue.toFixed(2)}` : `${netMonthlyDue.toFixed(2)}`,
             monthlyAlternativeText,
             referralNoticeDetails: summary.reminderNoticeText,
+            paymentMemo: user.username,
+            billingUrl: `${appUrl}/profile#billing`,
             appUrl
         });
 
@@ -8464,14 +8610,19 @@ export async function deleteBetaCard(id: string) {
 // ============================================================================
 
 export async function getRoadmapText(): Promise<string> {
+    const { getBuildTelemetry } = await import("@/lib/version");
+    const activeVersion = getBuildTelemetry().version;
+    const syncVersionInRoadmap = (raw: string) =>
+        raw.replace(/Active Beta Notice \(`v[^`]+`\)/g, `Active Beta Notice (\`v${activeVersion}\`)`);
+
     try {
         const roadmapPath = path.join(process.cwd(), "roadmap.md");
         if (fs.existsSync(roadmapPath)) {
-            return fs.readFileSync(roadmapPath, "utf-8");
+            return syncVersionInRoadmap(fs.readFileSync(roadmapPath, "utf-8"));
         }
         const upperRoadmapPath = path.join(process.cwd(), "ROADMAP.md");
         if (fs.existsSync(upperRoadmapPath)) {
-            return fs.readFileSync(upperRoadmapPath, "utf-8");
+            return syncVersionInRoadmap(fs.readFileSync(upperRoadmapPath, "utf-8"));
         }
     } catch (e) {
         console.warn("Failed to read roadmap.md from disk:", e);
@@ -8479,7 +8630,9 @@ export async function getRoadmapText(): Promise<string> {
     try {
         await ensureSchemaColumns();
         const settings = await prisma.settings.findUnique({ where: { id: "global" } }).catch(() => null);
-        return settings?.roadmapText || "# 🗺️ DomsHomeLab Roadmap & Feature Announcements\n\nNo new updates at this time. Check back later!";
+        return syncVersionInRoadmap(
+            settings?.roadmapText || "# 🗺️ DomsHomeLab Roadmap & Feature Announcements\n\nNo new updates at this time. Check back later!"
+        );
     } catch (e) {
         return "# 🗺️ DomsHomeLab Roadmap & Feature Announcements\n\nNo new updates at this time. Check back later!";
     }
@@ -10173,8 +10326,7 @@ export async function sendRequestCompletionNotification(requestIdOrBook: any, ma
             html,
             templateId: "media_ready",
             targetUser: requester.username,
-            userId: requester.id,
-            bypassApproval: true
+            userId: requester.id
         });
         logger.addLog("INFO", "EMAIL", `Dispatched request completion email to ${requester.email} for "${title}"`);
     } catch (e: any) {

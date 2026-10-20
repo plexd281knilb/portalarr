@@ -96,8 +96,13 @@ Need instant help troubleshooting a playback error on your TV or streaming devic
    - The AI analyzes your active stream telemetry, client player profile, and known platform bugs to provide step-by-step resolution steps tailored to your TV model.
 3. **Automated Audio Language Replacement:**
    - If a movie or episode is missing English audio (e.g. Spanish-only release), tell the bot: *"The Sandlot only has Spanish audio"*.
-   - The AI inspects the media streams, verifies the absence of English audio, queries connected indexers (Radarr/Sonarr) for an English replacement release, and automatically grabs a verified candidate.
-4. **1-Click Ticket Escalation:**
+   - The AI inspects the media streams, verifies the absence of English audio, queries connected indexers (Radarr/Sonarr) for an English replacement release, and automatically grabs a verified candidate (or confirms if your existing file already meets the highest Custom Format score).
+4. **Personalized Book & Media Recommendations (`📚 Book Recommendations`):**
+   - Click the **`📚 Book Recommendations`** quick-chip or ask *"What books should I read next?"*.
+   - The AI analyzes your past requests, Kindle deliveries, and genre preferences to recommend tailored titles, distinguishing between books ready to read right now in `/library` and 1-click auto-grab titles in `/requests`.
+5. **Admin Homelab Command Center (Administrators Only):**
+   - Administrators see dedicated quick-chips (`🐳 Docker Fleet`, `🖥️ Host Hardware`, `🚨 Sharing Alerts`) to inspect Glances CPU/RAM metrics, check or restart Docker containers, and audit multi-IP household sharing alerts directly in chat.
+6. **1-Click Ticket Escalation:**
    - If an issue requires administrator intervention, click **Open Ticket With This Diagnosis** to submit a support ticket pre-populated with the AI's diagnostic snapshot!
 
 ---
@@ -286,14 +291,15 @@ DomsHomeLab includes a built-in media discovery and request engine directly conn
 
 ---
 
-## 🎨 12. Curation Studio Suite (Kometa, Agregarr, Maintainerr, Tagging)
+## 🎨 12. Curation Studio Suite (Kometa, Agregarr, Maintainerr, Tagging & Zero-Lock SQLite Engine)
 
 Administrators can curate Plex libraries natively without external scripts or extra docker containers via the **Curation Studio (`/curation`)**:
 
-- **✨ Kometa Overlays Studio:** Apply high-definition ribbons, 4K HDR badges, Dolby Vision/Atmos labels, audio codecs, and custom user overlays to movie and TV posters with live canvas previews.
-- **🎬 Agregarr Hubs:** Generate dynamic trending hubs, smart collections, and discovery rows linked directly with Trakt, TMDb, and IMDb charts.
-- **🧹 Maintainerr Prune:** Set disk quota rules, identify unwatched media, and safely prune media to recover storage automatically with Leaving Soon staging collections and poster countdown badges.
-- **🏷️ Parental Guide & Tagging Studio:** Tag movies, shows, and parental guide labels across Plex libraries with IMDb / Common Sense Media content advisory severity ratings (violence, sex, substance, gore) to prepare for user-level customizable shelf toggles.
+- **⚡ Direct Plex SQLite Snapshot & Delta-Sync Engine (Zero PMS Lock Architecture):** High-speed, lock-free SQLite snapshot subsystem (`plex-snapshot-engine.ts`) that creates atomic WAL snapshots of local Plex databases (`com.plexapp.plugins.library.db`) and runs multi-database queries in `<20ms` via native `node:sqlite`. Compares items against Portalarr's target state and strictly restricts HTTP mutations to genuine deltas—preventing Plex 500 errors or SQLite lockups during heavy sweeps.
+- **✨ Kometa Overlays Studio:** Apply high-definition ribbons, 4K HDR badges, Dolby Vision/Atmos labels, audio codecs, and custom user overlays to movie and TV posters with live canvas previews and hardware-accelerated SVG-to-JPEG rendering.
+- **🎬 Agregarr Hubs:** Generate dynamic trending hubs, smart collections, placeholder stubs for missing items, and discovery rows linked directly with Trakt, TMDb, MDBList, Letterboxd, MyAnimeList, and IMDb charts across multi-Plex clusters with per-endpoint `machineIdentifier` verification.
+- **🧹 Maintainerr Prune:** Set disk quota rules, identify unwatched media using a 3-tier watch status engine (local `WatchHistory` `<1ms` lookup + batch session check), and safely prune media to recover storage automatically with Leaving Soon staging collections and poster countdown badges.
+- **🏷️ Parental Guide & Tagging Studio:** Tag movies, shows, and parental guide labels across Plex libraries with IMDb / Common Sense Media content advisory severity ratings (`Violence`, `Sex/Nudity`, `Profanity`, `Alcohol/Drugs`, `Frightening`) to power user-level customizable shelf filters.
 
 ---
 
@@ -326,9 +332,26 @@ When upgrading from your free trial pass to full membership, choose the cadence 
 
 ---
 
-## 👁️ 14. Admin Tools: Impersonation & Approval Governance
+## 👁️ 14. Admin Mission Control: Monitoring, Scripts, Telemetry & Governance
 
-Administrators have powerful management and safety tools:
+Administrators have a unified suite of homelab management, observability, and safety tools:
+
+### 🐳 System & Docker Fleet Monitoring Cockpit (`/admin/monitoring`)
+- **Systems & Services Health:** Live reachability, round-trip latency (ms), 24h/7d/30d rolling uptime percentages, streak counters, and 10-probe latency sparklines across Plex Media Servers, Glances hosts, Tautulli, Servarr apps, and Downloaders.
+- **Docker Container Fleet Manager:** Multi-engine Docker integration (Unix socket, Windows named pipe, Docker CLI, Glances containers API, and TCP 2375) with multi-core CPU heat meters (`Flame` indicators & core usage estimates), RAM gauges, host filtering, and 1-click **Restart**, **Start**, and **Stop** controls.
+- **Outages & Incident Alerts:** Chronological outage log with failure causes, downtime durations, and automated Discord embeds dispatched to `#system-status`.
+
+### 📜 Homelab Shell Automation & User Scripts (`/admin/scripts`)
+- **Unraid-Style Script Engine:** Execute, schedule, and edit maintenance scripts (`bash`, `sh`, `python3`, `node`) with pre-seeded jobs (`check_all_plex_servers.sh`, `optimize_plex_databases.sh`, `backup_portalarr_db.sh`, `restart_unresponsive_containers.sh`).
+- **Live Streaming Terminal Modal:** Real-time `ReadableStream` stdout/stderr execution logs with instant abort-on-close lifecycle safety and downloadable execution history.
+
+### 📊 Stream Intelligence Hub & Multi-IP Sharing Detection (`/admin/tautulli`)
+- **Native Telemetry Takeover:** Built-in `WatchHistory` engine that tracks movies and episodes directly from your Plex cluster, plus a 100% **Complete Historical Tautulli Backfill Runner**.
+- **Concurrent Multi-IP Password Sharing Detection:** Automatically distinguishes household LAN streams from simultaneous streams across $\ge 2$ distinct public WAN IP addresses, flagging violations and logging security audits.
+- **User Connection & Device Intelligence Modal:** Click any user to inspect their full chronological watch history, client devices, direct play vs. transcode ratios, and IP locations.
+
+### 🏷️ Dynamic Branch, Version & Build Badge (`BuildBadge`)
+- **Instant Environment Identification:** Displays a glowing **BETA (`main`)** or **PROD (`stable`)** badge in the sidebar and dashboard with active version (`v3.9.0-beta.2`), short git commit SHA, and GitHub Actions build run number. Clicking opens the Build Diagnostics dialog with 1-click SHA copy and workflow links.
 
 ### 👁️ View Site As User (Impersonation)
 1. Navigate to **System Settings** → **Access Control** (`/settings/access`).

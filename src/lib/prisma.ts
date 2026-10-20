@@ -1,9 +1,21 @@
 import { PrismaClient } from "@prisma/client";
 import fs from "fs";
 import path from "path";
-import { isPlexMaintenanceWindow } from "./curation/schedule-helper";
+import { 
+    isPlexMaintenanceWindow,
+    isAnyCurationTaskRunning,
+    getActiveCurationTaskName,
+    setCurationTaskRunning,
+    clearCurationTaskRunning
+} from "./curation/schedule-helper";
 
-export { isPlexMaintenanceWindow };
+export { 
+    isPlexMaintenanceWindow,
+    isAnyCurationTaskRunning,
+    getActiveCurationTaskName,
+    setCurationTaskRunning,
+    clearCurationTaskRunning
+};
 
 if (typeof window === "undefined") {
     if (typeof process !== "undefined" && process.env) {
@@ -234,7 +246,7 @@ export async function ensureSchemaColumns(): Promise<void> {
                     "paymentInstructions" TEXT,
                     "subscriptionPrice" TEXT,
                     "yearlyPrice" REAL DEFAULT 180,
-                    "monthlyPrice" REAL DEFAULT 15,
+                    "monthlyPrice" REAL DEFAULT 17.50,
                     "renewalMonth" INTEGER DEFAULT 1,
                     "renewalDay" INTEGER DEFAULT 1,
                     "billingType" TEXT DEFAULT 'YEARLY_PRORATED',
@@ -430,7 +442,7 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["paymentInstructions", `ALTER TABLE "Settings" ADD COLUMN "paymentInstructions" TEXT;`],
                 ["subscriptionPrice", `ALTER TABLE "Settings" ADD COLUMN "subscriptionPrice" TEXT;`],
                 ["yearlyPrice", `ALTER TABLE "Settings" ADD COLUMN "yearlyPrice" REAL DEFAULT 180;`],
-                ["monthlyPrice", `ALTER TABLE "Settings" ADD COLUMN "monthlyPrice" REAL DEFAULT 15;`],
+                ["monthlyPrice", `ALTER TABLE "Settings" ADD COLUMN "monthlyPrice" REAL DEFAULT 17.50;`],
                 ["renewalMonth", `ALTER TABLE "Settings" ADD COLUMN "renewalMonth" INTEGER DEFAULT 1;`],
                 ["renewalDay", `ALTER TABLE "Settings" ADD COLUMN "renewalDay" INTEGER DEFAULT 1;`],
                 ["billingType", `ALTER TABLE "Settings" ADD COLUMN "billingType" TEXT DEFAULT 'YEARLY_PRORATED';`],
@@ -517,6 +529,8 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["paymentLastScanAt", `ALTER TABLE "Settings" ADD COLUMN "paymentLastScanAt" DATETIME;`],
                 ["paymentLastScanResult", `ALTER TABLE "Settings" ADD COLUMN "paymentLastScanResult" TEXT;`],
                 ["dismissedHubs", `ALTER TABLE "Settings" ADD COLUMN "dismissedHubs" TEXT;`],
+                ["plexSnapshotEnabled", `ALTER TABLE "Settings" ADD COLUMN "plexSnapshotEnabled" BOOLEAN NOT NULL DEFAULT 1;`],
+                ["plexSnapshotDir", `ALTER TABLE "Settings" ADD COLUMN "plexSnapshotDir" TEXT DEFAULT '/tmp/portalarr_snapshots';`],
                 ["overlayIncrementalEnabled", `ALTER TABLE "Settings" ADD COLUMN "overlayIncrementalEnabled" BOOLEAN NOT NULL DEFAULT 1;`],
                 ["overlayIncrementalSchedule", `ALTER TABLE "Settings" ADD COLUMN "overlayIncrementalSchedule" TEXT DEFAULT 'every_hour';`],
                 ["overlayIncrementalBatchSize", `ALTER TABLE "Settings" ADD COLUMN "overlayIncrementalBatchSize" INTEGER DEFAULT 200;`],
@@ -893,6 +907,9 @@ export async function ensureSchemaColumns(): Promise<void> {
             const plexServerCols = plexServerInfo.map((c: any) => c.name);
             if (!plexServerCols.includes("monitored")) {
                 await prisma.$executeRawUnsafe(`ALTER TABLE "PlexServer" ADD COLUMN "monitored" BOOLEAN NOT NULL DEFAULT 1;`);
+            }
+            if (!plexServerCols.includes("databasePath")) {
+                await prisma.$executeRawUnsafe(`ALTER TABLE "PlexServer" ADD COLUMN "databasePath" TEXT;`);
             }
         } catch (e: any) {
             console.error("[DB-SCHEMA-AUTOFIX] Auxiliary tables check error:", e.message || e);
@@ -2177,8 +2194,8 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
         }
       }
 
-      // 2. Poster Overlays Incremental Scan (Mutually exclusive with Deep Recheck)
-      if (!(global as any).__PORTALARR_OVERLAY_INC_RUNNING && !(global as any).__PORTALARR_OVERLAY_RECHECK_RUNNING) {
+      // 2. Poster Overlays Incremental Scan (Mutually exclusive with all other curation tasks)
+      if (!isAnyCurationTaskRunning()) {
         const incEnabled = settings?.overlayIncrementalEnabled ?? true;
         const incSchedule = settings?.overlayIncrementalSchedule || "every_hour";
         const lastIncRun = settings?.overlayIncrementalLastRunAt || settings?.curationLastRunAt;
@@ -2187,6 +2204,8 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
           if (settings) settings.overlayIncrementalLastRunAt = now;
           await prisma.settings.update({ where: { id: "global" }, data: { overlayIncrementalLastRunAt: now } }).catch(() => {});
           (async () => {
+            setCurationTaskRunning("Kometa Incremental Overlays");
+            (global as any).__PORTALARR_OVERLAY_INC_RUNNING = true;
             try {
               console.log(`[OVERLAY-TIMER] Triggering scheduled incremental overlay scan (${incSchedule})...`);
               const { runOverlayIncrementalSyncInternal } = await import("../app/curation-actions");
@@ -2196,13 +2215,16 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
               }
             } catch (err: any) {
               console.error("[OVERLAY-TIMER] Error in incremental overlay background runner:", err.message || err);
+            } finally {
+              (global as any).__PORTALARR_OVERLAY_INC_RUNNING = false;
+              clearCurationTaskRunning("Kometa Incremental Overlays");
             }
           })();
         }
       }
 
-      // 3. Poster Overlays Deep Library Recheck Scan (Mutually exclusive with Incremental Scan)
-      if (!(global as any).__PORTALARR_OVERLAY_RECHECK_RUNNING && !(global as any).__PORTALARR_OVERLAY_INC_RUNNING) {
+      // 3. Poster Overlays Deep Library Recheck Scan (Mutually exclusive with all other curation tasks)
+      if (!isAnyCurationTaskRunning()) {
         const recheckEnabled = settings?.overlayRecheckEnabled ?? true;
         const recheckSchedule = settings?.overlayRecheckSchedule || "daily_4am";
         const lastRecheckRun = settings?.overlayRecheckLastRunAt || settings?.curationLastRunAt;
@@ -2211,6 +2233,8 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
           if (settings) settings.overlayRecheckLastRunAt = now;
           await prisma.settings.update({ where: { id: "global" }, data: { overlayRecheckLastRunAt: now } }).catch(() => {});
           (async () => {
+            setCurationTaskRunning("Kometa Deep Library Recheck");
+            (global as any).__PORTALARR_OVERLAY_RECHECK_RUNNING = true;
             try {
               console.log(`[OVERLAY-TIMER] Triggering scheduled deep library recheck (${recheckSchedule})...`);
               const { runOverlayRecheckSyncInternal } = await import("../app/curation-actions");
@@ -2220,13 +2244,16 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
               }
             } catch (err: any) {
               console.error("[OVERLAY-TIMER] Error in deep recheck background runner:", err.message || err);
+            } finally {
+              (global as any).__PORTALARR_OVERLAY_RECHECK_RUNNING = false;
+              clearCurationTaskRunning("Kometa Deep Library Recheck");
             }
           })();
         }
       }
 
-      // 4. Agregarr Collections Sync (Independent Studio Schedule)
-      if (!(global as any).__PORTALARR_AGREGARR_RUNNING) {
+      // 4. Agregarr Collections Sync (Mutually exclusive with all other curation tasks)
+      if (!isAnyCurationTaskRunning()) {
         const agregarrEnabled = settings?.agregarrSyncEnabled ?? (settings?.curationSyncCollections ?? true);
         const agregarrSchedule = settings?.agregarrSyncSchedule || settings?.curationSyncSchedule || "every_6_hours";
         const lastAgregarrRun = settings?.agregarrLastRunAt || settings?.curationLastRunAt;
@@ -2235,6 +2262,8 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
           if (settings) settings.agregarrLastRunAt = now;
           await prisma.settings.update({ where: { id: "global" }, data: { agregarrLastRunAt: now } }).catch(() => {});
           (async () => {
+            setCurationTaskRunning("Agregarr Collections Sync");
+            (global as any).__PORTALARR_AGREGARR_RUNNING = true;
             try {
               console.log(`[AGREGARR-TIMER] Triggering scheduled collection sync (${agregarrSchedule})...`);
               const { runAgregarrSyncInternal } = await import("../app/curation-actions");
@@ -2244,13 +2273,16 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
               }
             } catch (aErr: any) {
               console.error("[AGREGARR-TIMER] Error in Agregarr background runner:", aErr.message || aErr);
+            } finally {
+              (global as any).__PORTALARR_AGREGARR_RUNNING = false;
+              clearCurationTaskRunning("Agregarr Collections Sync");
             }
           })();
         }
       }
 
-      // 5. Maintainerr / Prune Leaving Soon Sync (Independent Studio Schedule)
-      if (!(global as any).__PORTALARR_PRUNE_RUNNING) {
+      // 5. Maintainerr / Prune Leaving Soon Sync (Mutually exclusive with all other curation tasks)
+      if (!isAnyCurationTaskRunning()) {
         const pruneEnabled = settings?.pruneSyncEnabled ?? (settings?.curationSyncPruning ?? true);
         const pruneSchedule = settings?.pruneSyncSchedule || "daily_6am";
         const lastPruneRun = settings?.pruneLastRunAt || settings?.curationLastRunAt;
@@ -2259,6 +2291,8 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
           if (settings) settings.pruneLastRunAt = now;
           await prisma.settings.update({ where: { id: "global" }, data: { pruneLastRunAt: now } }).catch(() => {});
           (async () => {
+            setCurationTaskRunning("Maintainerr Prune Sync");
+            (global as any).__PORTALARR_PRUNE_RUNNING = true;
             try {
               console.log(`[MAINTAINERR-TIMER] Triggering scheduled prune sync (${pruneSchedule})...`);
               const { runMaintainerrSyncInternal } = await import("../app/curation-actions");
@@ -2268,13 +2302,16 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
               }
             } catch (pErr: any) {
               console.error("[MAINTAINERR-TIMER] Error in Maintainerr background runner:", pErr.message || pErr);
+            } finally {
+              (global as any).__PORTALARR_PRUNE_RUNNING = false;
+              clearCurationTaskRunning("Maintainerr Prune Sync");
             }
           })();
         }
       }
 
-      // 6. IMDb Parental Rating Tagging Sync (Independent Studio Schedule)
-      if (!(global as any).__PORTALARR_TAGGING_RUNNING) {
+      // 6. IMDb Parental Rating Tagging Sync (Mutually exclusive with all other curation tasks)
+      if (!isAnyCurationTaskRunning()) {
         const taggingEnabled = settings?.taggingSyncEnabled ?? (settings?.parentalTaggingEnabled ?? (settings?.curationSyncParentalTags ?? true));
         const taggingSchedule = settings?.taggingSyncSchedule || "daily_3am";
         const lastTaggingRun = settings?.taggingLastRunAt || settings?.curationLastRunAt;
@@ -2283,6 +2320,8 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
           if (settings) settings.taggingLastRunAt = now;
           await prisma.settings.update({ where: { id: "global" }, data: { taggingLastRunAt: now } }).catch(() => {});
           (async () => {
+            setCurationTaskRunning("IMDb Parental Tagging Sync");
+            (global as any).__PORTALARR_TAGGING_RUNNING = true;
             try {
               console.log(`[TAGGING-TIMER] Triggering scheduled IMDb parental tagging sync (${taggingSchedule})...`);
               const { runParentalTagsSyncInternal } = await import("../app/curation-actions");
@@ -2292,6 +2331,9 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
               }
             } catch (tErr: any) {
               console.error("[TAGGING-TIMER] Error in Tagging background runner:", tErr.message || tErr);
+            } finally {
+              (global as any).__PORTALARR_TAGGING_RUNNING = false;
+              clearCurationTaskRunning("IMDb Parental Tagging Sync");
             }
           })();
         }

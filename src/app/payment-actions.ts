@@ -620,7 +620,19 @@ export async function purgeUnmatchedPaymentTransactionsAction() {
  */
 export async function recalculateUserSubscriptionFromPayments(userId: string) {
     if (!userId) return;
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const user = await prisma.user.findUnique({
+        where: { id: userId },
+        include: {
+            referrals: {
+                select: {
+                    id: true,
+                    username: true,
+                    status: true,
+                    convertedAt: true
+                }
+            }
+        }
+    });
     if (!user) return;
     if (user.role === "ADMIN") return;
 
@@ -664,10 +676,14 @@ export async function recalculateUserSubscriptionFromPayments(userId: string) {
                 id: user.id,
                 username: user.username,
                 email: user.email,
+                status: user.status,
                 membershipTier: user.membershipTier,
                 subscriptionCadence: finalCadence,
                 accountCredit: accumulatedCredit,
-                subscriptionEndsAt: currentExpiry
+                subscriptionEndsAt: currentExpiry,
+                trialEndsAt: user.trialEndsAt,
+                referralBonusMonths: user.referralBonusMonths,
+                referrals: user.referrals
             },
             payment: {
                 amount: tx.amount,
@@ -1174,8 +1190,8 @@ export async function updateUserSubscriptionCadenceAction(userId: string, cadenc
 /**
  * Automated sweep to check active subscriptions and trials,
  * dispatching advance expiration and renewal warnings:
- * - Yearly plan: multi-stage warnings at 30, 14, 7, 3, and 1 days before expiration
- * - Monthly plan: warnings at 3 and 1 days before expiration
+ * - Yearly plan: multi-stage warnings at 60, 30, 14, 3, and 1 days before expiration
+ * - Monthly plan: warnings at 7, 3, and 1 days before expiration
  * - Trial: warning at 3 days before trial ends
  *
  * Uses cycle-based milestone deduplication to guarantee 100% idempotency (zero duplicate emails).
@@ -1254,9 +1270,12 @@ export async function sendSubscriptionRenewalRemindersInternal(): Promise<{
         const msRemaining = expiryDate.getTime() - now.getTime();
         const daysRemaining = Math.ceil(msRemaining / (24 * 60 * 60 * 1000));
 
-        // Determine plan cadence
+        // Determine plan cadence (recognizes Jan 1 or Dec 31 as annual cycle boundary when subscriptionCadence is unset)
+        const isAnnualBoundary =
+            (expiryDate.getMonth() === 0 && expiryDate.getDate() === 1) ||
+            (expiryDate.getMonth() === 11 && expiryDate.getDate() === 31);
         const cadence = (member.subscriptionCadence || (
-            expiryDate.getMonth() === 0 && expiryDate.getDate() === 1 ? "YEARLY" : "MONTHLY"
+            isAnnualBoundary ? "YEARLY" : "MONTHLY"
         )).toUpperCase();
 
         const isYearly = cadence === "YEARLY";
@@ -1302,31 +1321,36 @@ export async function sendSubscriptionRenewalRemindersInternal(): Promise<{
 
         if (dueMilestone) {
             try {
+                const isMemberTier2 = member.membershipTier === "TIER_2_VIP";
+                const memberYearlyPrice = isMemberTier2 ? (settings.tier2YearlyPrice || 240) : yearlyPrice;
+                const memberMonthlyPrice = isMemberTier2 ? (settings.tier2MonthlyPrice || 25) : monthlyPrice;
+
                 const summary = calculateUserRenewalSummary({
                     user: member,
-                    yearlyPrice,
-                    monthlyPrice
+                    yearlyPrice: memberYearlyPrice,
+                    monthlyPrice: memberMonthlyPrice
                 });
 
                 const renewalDateStr = summary.expirationDateFormatted || new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric" }).format(expiryDate);
                 const friendNamesStr = summary.convertedFriends.map(f => `@${f.username}`).join(", ");
                 const referralDiscountText = summary.convertedReferralsCount > 0
-                    ? `-$${summary.rewardDiscountAmount.toFixed(2)} (${summary.convertedReferralsCount} friend${summary.convertedReferralsCount > 1 ? "s" : ""} referred: ${friendNamesStr})`
+                    ? `-${summary.rewardDiscountAmount.toFixed(2)} (${summary.convertedReferralsCount} friend${summary.convertedReferralsCount > 1 ? "s" : ""} referred: ${friendNamesStr})`
                     : "No active referral credits";
                 const monthlyAlternativeText = summary.delayedMonthlyStartDate
-                    ? `$${monthlyPrice}/month starting ${summary.delayedMonthlyStartDate}`
-                    : `$${monthlyPrice}/month starting ${renewalDateStr}`;
+                    ? `${memberMonthlyPrice.toFixed(2)}/month starting ${summary.delayedMonthlyStartDate}`
+                    : `${memberMonthlyPrice.toFixed(2)}/month starting ${renewalDateStr}`;
 
+                const existingCredit = Math.max(0, Number(member.accountCredit || 0));
                 const templateId = isYearly ? "subscription_renewal_reminder_yearly" : "subscription_renewal_reminder_monthly";
                 const netAmountDue = isYearly 
-                    ? `$${summary.discountedYearlyPrice.toFixed(2)}` 
-                    : `$${monthlyPrice.toFixed(2)}`;
+                    ? `${Math.max(0, summary.discountedYearlyPrice - existingCredit).toFixed(2)}` 
+                    : `${Math.max(0, memberMonthlyPrice - existingCredit).toFixed(2)}`;
 
                 const { subject, html } = await renderEmailTemplate(templateId, {
                     username: member.username,
                     daysRemaining: String(daysRemaining),
                     renewalDate: renewalDateStr,
-                    basePrice: isYearly ? `$${yearlyPrice.toFixed(2)} / year` : `$${monthlyPrice.toFixed(2)} / month`,
+                    basePrice: isYearly ? `${memberYearlyPrice.toFixed(2)} / year` : `${memberMonthlyPrice.toFixed(2)} / month`,
                     referralDiscountText,
                     amountDue: netAmountDue,
                     monthlyAlternativeText,

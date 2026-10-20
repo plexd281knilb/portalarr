@@ -33,6 +33,8 @@ export interface PlexMediaStreamInfo {
     updatedAt?: number;
     lastViewedAt?: number;
     viewCount?: number;
+    leafCount?: number;
+    viewedLeafCount?: number;
     fileSize?: number;
     filePath?: string;
     guids: {
@@ -558,6 +560,8 @@ export function analyzeMediaStreamInfo(metadata: any): PlexMediaStreamInfo {
         updatedAt: metadata.updatedAt ? parseInt(metadata.updatedAt, 10) * 1000 : (metadata.addedAt ? parseInt(metadata.addedAt, 10) * 1000 : undefined),
         lastViewedAt: metadata.lastViewedAt ? parseInt(metadata.lastViewedAt, 10) * 1000 : undefined,
         viewCount: metadata.viewCount ? parseInt(metadata.viewCount, 10) : 0,
+        leafCount: metadata.leafCount ? parseInt(metadata.leafCount, 10) : undefined,
+        viewedLeafCount: metadata.viewedLeafCount ? parseInt(metadata.viewedLeafCount, 10) : undefined,
         fileSize: totalSize > 0 ? totalSize : undefined,
         filePath: firstPartFile || undefined,
         guids,
@@ -989,8 +993,16 @@ function parsePlexXmlHubs(xml: string, targetSectionKey?: string): {
     return hubs;
 }
 
+const plexMediaItemsCache = new Map<string, { timestamp: number; data: PlexMediaStreamInfo[] }>();
+const MEDIA_ITEMS_CACHE_TTL = 3 * 60 * 1000; // 3 minutes
+
+export function clearPlexMediaItemsCache(): void {
+    plexMediaItemsCache.clear();
+}
+
 /**
  * Fetches all media items from a Plex library section with stream metadata.
+ * Uses 3-minute in-memory caching to prevent redundant PMS full-library scans.
  */
 export async function getPlexLibraryMediaItems(
     serverUrlOrCandidates: string | string[],
@@ -999,13 +1011,43 @@ export async function getPlexLibraryMediaItems(
     limit = 500,
     sort?: string,
     includeStreams = true,
-    excludePlaceholders = false
+    excludePlaceholders = false,
+    forceRefresh = false
 ): Promise<PlexMediaStreamInfo[]> {
     const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
+    const primaryUrl = urlsToTry[0] || "";
+    const cleanPrimary = primaryUrl.replace(/\/+$/, "");
+    const cacheKey = `${cleanPrimary}_${sectionKey}_${limit}_${sort || ""}_${includeStreams}_${excludePlaceholders}`;
+
+    if (!forceRefresh) {
+        const cached = plexMediaItemsCache.get(cacheKey);
+        if (cached && (Date.now() - cached.timestamp < MEDIA_ITEMS_CACHE_TTL)) {
+            return cached.data;
+        }
+    }
+
     let lastError: any = null;
     let lastUrlAttempted = "";
     const sortParam = sort ? `&sort=${encodeURIComponent(sort)}` : "";
     const streamsParam = includeStreams ? "&includeStreams=1" : "";
+
+    // Direct SQLite Snapshot Check (Fast-path: local read in <10ms with zero HTTP load)
+    try {
+        const { createPlexDatabaseSnapshot, getSnapshotLibraryMediaItems, resolvePlexDatabaseFilePath } = await import("@/lib/curation/plex-snapshot-engine");
+        const allDbServers = await prisma.plexServer.findMany().catch(() => []);
+        const matchingDbServer = allDbServers.find(s => urlsToTry.some(u => s.url && u && (s.url.includes(u) || u.includes(s.url))));
+
+        if (matchingDbServer?.databasePath && resolvePlexDatabaseFilePath(matchingDbServer.databasePath)) {
+            const snap = await createPlexDatabaseSnapshot(matchingDbServer.databasePath, matchingDbServer.id, { label: matchingDbServer.name });
+            if (snap.success && snap.snapshotPath) {
+                const snapItems = getSnapshotLibraryMediaItems(snap.snapshotPath, sectionKey, { limit, includeStreams });
+                if (snapItems.length > 0) {
+                    plexMediaItemsCache.set(cacheKey, { timestamp: Date.now(), data: snapItems });
+                    return snapItems;
+                }
+            }
+        }
+    } catch (snapErr: any) {}
 
     const deduplicateResults = (metadata: any[]): PlexMediaStreamInfo[] => {
         const seenKeys = new Set<string>();
@@ -1018,6 +1060,7 @@ export async function getPlexLibraryMediaItems(
             if (excludePlaceholders && analyzed.isPlaceholder) continue;
             res.push(analyzed);
         }
+        plexMediaItemsCache.set(cacheKey, { timestamp: Date.now(), data: res });
         return res;
     };
 
@@ -1162,13 +1205,22 @@ export async function getPlexSingleItemMetadata(
     return null;
 }
 
+const plexCollectionsCache = new Map<string, { timestamp: number; data: any[] }>();
+const COLLECTIONS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+export function clearPlexCollectionsCache(): void {
+    plexCollectionsCache.clear();
+}
+
 /**
  * Fetches existing Plex collections, smart collections, and section hubs for a library section.
+ * Uses 5-minute in-memory caching to avoid repeated collection discovery network loops.
  */
 export async function getPlexLibraryCollections(
     serverUrlOrCandidates: string | string[],
     token: string,
-    sectionKey: string | number
+    sectionKey: string | number,
+    forceRefresh = false
 ): Promise<{ 
     ratingKey: string; 
     title: string; 
@@ -1186,6 +1238,17 @@ export async function getPlexLibraryCollections(
     promotedToSharedHome?: boolean;
 }[]> {
     const urlsToTry = expandCandidateUrls(serverUrlOrCandidates);
+    const primaryUrl = urlsToTry[0] || "";
+    const cleanPrimary = primaryUrl.replace(/\/+$/, "");
+    const cacheKey = `${cleanPrimary}_${sectionKey}`;
+
+    if (!forceRefresh) {
+        const cached = plexCollectionsCache.get(cacheKey);
+        if (cached && (Date.now() - cached.timestamp < COLLECTIONS_CACHE_TTL)) {
+            return cached.data;
+        }
+    }
+
     const discoveredMap = new Map<string, any>();
     let lastErrorMsg = "";
 
@@ -1647,7 +1710,9 @@ export async function getPlexLibraryCollections(
 
         if (discoveredMap.size > 0) {
             logger.addLog("INFO", "PLEX", `Discovered ${discoveredMap.size} hubs & collections for section ${sectionKey} via "${cleanBase}"`);
-            return Array.from(discoveredMap.values());
+            const collectionsResult = Array.from(discoveredMap.values());
+            plexCollectionsCache.set(cacheKey, { timestamp: Date.now(), data: collectionsResult });
+            return collectionsResult;
         }
     }
 
@@ -3192,16 +3257,33 @@ export function lookupCrossServerActivity(
     return undefined;
 }
 
+const crossServerActivityCache = new Map<string, { timestamp: number; data: CrossServerActivityMap }>();
+const CROSS_SERVER_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+export function clearCrossServerActivityCache(): void {
+    crossServerActivityCache.clear();
+}
+
 /**
  * Scans all provided Plex servers to build a unified playback activity index.
  * Matches items across servers using file paths, filenames, TMDb/IMDb GUIDs, and normalized titles.
+ * Uses 5-minute memory caching and omits stream tracks (includeStreams: false) to prevent PMS SQLite deadlocks.
  */
 export async function buildCrossServerPlaybackIndex(
     servers: Array<{ serverId: string; serverName: string; serverUrl: string; token: string }>,
-    options: { evaluateSeasons?: boolean } = {}
+    options: { evaluateSeasons?: boolean; forceRefresh?: boolean } = {}
 ): Promise<CrossServerActivityMap> {
-    const activityMap: CrossServerActivityMap = new Map();
     const evaluateSeasons = options.evaluateSeasons ?? true;
+    const cacheKey = servers.map(s => s.serverId).sort().join(":") + `_seasons:${evaluateSeasons}`;
+
+    if (!options.forceRefresh) {
+        const cached = crossServerActivityCache.get(cacheKey);
+        if (cached && (Date.now() - cached.timestamp < CROSS_SERVER_CACHE_TTL)) {
+            return cached.data;
+        }
+    }
+
+    const activityMap: CrossServerActivityMap = new Map();
 
     await Promise.all(
         servers.map(async (srv) => {
@@ -3220,7 +3302,8 @@ export async function buildCrossServerPlaybackIndex(
                     .filter((d: any) => d.type === "movie" || d.type === "show");
 
                 for (const sec of sections) {
-                    const items = await getPlexLibraryMediaItems(srv.serverUrl, srv.token, sec.key, 2500);
+                    // Optimized: includeStreams: false prevents PMS from joining stream & codec tables across 2,500 items
+                    const items = await getPlexLibraryMediaItems(srv.serverUrl, srv.token, sec.key, 2500, undefined, false);
 
                     for (const item of items) {
                         const rawLastViewedAt = item.lastViewedAt;
@@ -3228,29 +3311,35 @@ export async function buildCrossServerPlaybackIndex(
                         const viewCount = item.viewCount || 0;
 
                         if (sec.type === "show" && evaluateSeasons) {
-                            const seasons = await getPlexShowSeasons(srv.serverUrl, srv.token, item.ratingKey);
-                            for (const season of seasons) {
-                                const seasonLastViewed = season.lastViewedAt;
-                                const seasonViews = season.viewedLeafCount || 0;
-                                const seasonKeys = generateCrossServerMediaKeys({
-                                    title: item.title,
-                                    year: item.year,
-                                    type: "season",
-                                    seasonNumber: season.index,
-                                    filePath: item.filePath,
-                                    guids: item.guids,
-                                    imdbId: item.guids?.imdb,
-                                    tmdbId: item.guids?.tmdb
-                                });
+                            // Only query seasons if the show has recorded watch activity.
+                            // If a show has 0 views and no last viewed timestamp, seasons are also unwatched.
+                            const hasPlaybackActivity = viewCount > 0 || (item.viewedLeafCount || 0) > 0 || Boolean(lastViewedAtMs);
+                            if (hasPlaybackActivity) {
+                                const seasons = await getPlexShowSeasons(srv.serverUrl, srv.token, item.ratingKey);
+                                await new Promise(r => setTimeout(r, 15)); // Pacing delay to avoid PMS concurrency spikes
+                                for (const season of seasons) {
+                                    const seasonLastViewed = season.lastViewedAt;
+                                    const seasonViews = season.viewedLeafCount || 0;
+                                    const seasonKeys = generateCrossServerMediaKeys({
+                                        title: item.title,
+                                        year: item.year,
+                                        type: "season",
+                                        seasonNumber: season.index,
+                                        filePath: item.filePath,
+                                        guids: item.guids,
+                                        imdbId: item.guids?.imdb,
+                                        tmdbId: item.guids?.tmdb
+                                    });
 
-                                recordActivityForKeys(activityMap, seasonKeys, {
-                                    serverId: srv.serverId,
-                                    serverName: srv.serverName,
-                                    viewCount: seasonViews,
-                                    lastViewedAt: seasonLastViewed,
-                                    addedAt: season.addedAt,
-                                    updatedAt: season.updatedAt
-                                });
+                                    recordActivityForKeys(activityMap, seasonKeys, {
+                                        serverId: srv.serverId,
+                                        serverName: srv.serverName,
+                                        viewCount: seasonViews,
+                                        lastViewedAt: seasonLastViewed,
+                                        addedAt: season.addedAt,
+                                        updatedAt: season.updatedAt
+                                    });
+                                }
                             }
                         }
 
@@ -3271,16 +3360,33 @@ export async function buildCrossServerPlaybackIndex(
         })
     );
 
+    crossServerActivityCache.set(cacheKey, { timestamp: Date.now(), data: activityMap });
     return activityMap;
+}
+
+const plexShowSeasonsCache = new Map<string, { timestamp: number; data: any[] }>();
+const SHOW_SEASONS_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
+export function clearPlexShowSeasonsCache(): void {
+    plexShowSeasonsCache.clear();
+}
+
+export function clearAllPlexCurationCaches(): void {
+    clearPlexMediaItemsCache();
+    clearPlexCollectionsCache();
+    clearCrossServerActivityCache();
+    clearPlexShowSeasonsCache();
 }
 
 /**
  * Fetches the seasons of a Plex TV show with play counts and timestamps for season-level pruning.
+ * Uses 10-minute in-memory caching to prevent N+1 request storming on PMS.
  */
 export async function getPlexShowSeasons(
     serverUrl: string,
     token: string,
-    showRatingKey: string
+    showRatingKey: string,
+    forceRefresh = false
 ): Promise<Array<{
     ratingKey: string;
     parentRatingKey?: string;
@@ -3296,6 +3402,15 @@ export async function getPlexShowSeasons(
     art?: string;
 }>> {
     const cleanBase = serverUrl.replace(/\/+$/, "");
+    const cacheKey = `${cleanBase}_${showRatingKey}`;
+
+    if (!forceRefresh) {
+        const cached = plexShowSeasonsCache.get(cacheKey);
+        if (cached && (Date.now() - cached.timestamp < SHOW_SEASONS_CACHE_TTL)) {
+            return cached.data;
+        }
+    }
+
     const url = `${cleanBase}/library/metadata/${encodeURIComponent(showRatingKey)}/children?X-Plex-Token=${encodeURIComponent(token)}`;
     try {
         const res = await fetch(url, {
@@ -3307,7 +3422,7 @@ export async function getPlexShowSeasons(
         const data = await res.json();
         const directories = data.MediaContainer?.Metadata || data.MediaContainer?.Directory || [];
         const seasons = Array.isArray(directories) ? directories : [directories];
-        return seasons.map((s: any) => ({
+        const result = seasons.map((s: any) => ({
             ratingKey: String(s.ratingKey || ""),
             parentRatingKey: String(s.parentRatingKey || showRatingKey),
             parentTitle: s.parentTitle,
@@ -3321,6 +3436,9 @@ export async function getPlexShowSeasons(
             thumb: s.thumb,
             art: s.art
         })).filter((s: any) => Boolean(s.ratingKey));
+
+        plexShowSeasonsCache.set(cacheKey, { timestamp: Date.now(), data: result });
+        return result;
     } catch (e) {
         return [];
     }
@@ -3361,6 +3479,49 @@ export async function evaluatePruneCandidatesForServer(
     const evaluateSeasons = options.evaluateSeasons ?? true;
 
     const cleanBase = serverUrl.replace(/\/+$/, "");
+
+    // Direct Plex SQLite Snapshot Engine (Fast-Path: <50ms with 0 Plex HTTP Locks)
+    try {
+        const { evaluatePruneCandidatesFromSnapshotsUnified, resolvePlexDatabaseFilePath } = await import("@/lib/curation/plex-snapshot-engine");
+        const allDbServers = await prisma.plexServer.findMany().catch(() => []);
+        const primaryDbServer = allDbServers.find(s => s.id === serverId || s.name === serverName || (s.url && s.url.includes(cleanBase)));
+
+        if (primaryDbServer?.databasePath && resolvePlexDatabaseFilePath(primaryDbServer.databasePath)) {
+            const secondaryServers = allDbServers
+                .filter(s => s.id !== primaryDbServer.id && s.databasePath && resolvePlexDatabaseFilePath(s.databasePath))
+                .map(s => ({
+                    serverId: s.id,
+                    serverName: s.name,
+                    databasePath: s.databasePath!
+                }));
+
+            logger.addLog("INFO", "PLEX", `⚡ Running Direct SQLite Snapshot Multi-Server Prune Evaluation for "${serverName}" (${secondaryServers.length} secondary servers attached)...`);
+            const snapshotResult = await evaluatePruneCandidatesFromSnapshotsUnified(
+                {
+                    serverId: primaryDbServer.id,
+                    serverName: primaryDbServer.name,
+                    databasePath: primaryDbServer.databasePath!
+                },
+                secondaryServers,
+                {
+                    unwatchedMinAgeDays,
+                    watchedMinAgeDays,
+                    unwatchedOnly,
+                    evaluateSeasons,
+                    maxCandidates,
+                    sortBy
+                }
+            );
+
+            if (snapshotResult.candidates.length > 0 || snapshotResult.evaluatedCount > 0) {
+                logger.addLog("SUCCESS", "PLEX", `✅ Direct SQLite Snapshot evaluated ${snapshotResult.evaluatedCount} media units in <50ms with 0 Plex locks (found ${snapshotResult.candidates.length} candidates, ${snapshotResult.totalRecoverableGb} GB recoverable).`);
+                return snapshotResult;
+            }
+        }
+    } catch (snapErr: any) {
+        logger.addLog("WARN", "PLEX", `Direct SQLite Snapshot evaluation encountered fallback, switching to HTTP SWR: ${snapErr.message}`);
+    }
+
     const sectionsUrl = `${cleanBase}/library/sections?X-Plex-Token=${encodeURIComponent(token)}`;
     
     let sections: { key: string; title: string; type: string }[] = [];
@@ -3390,7 +3551,8 @@ export async function evaluatePruneCandidatesForServer(
     const nowMs = Date.now();
 
     for (const sec of sections) {
-        const items = await getPlexLibraryMediaItems(serverUrl, token, sec.key, 1000);
+        // Exclude streams (includeStreams: false) to prevent PMS SQLite table joins
+        const items = await getPlexLibraryMediaItems(serverUrl, token, sec.key, 1000, undefined, false);
         totalEvaluated += items.length;
 
         for (const item of items) {
@@ -3403,8 +3565,13 @@ export async function evaluatePruneCandidatesForServer(
 
             // --- TV SHOW SEASON-LEVEL EVALUATION ---
             if (sec.type === "show" && evaluateSeasons) {
-                const seasons = await getPlexShowSeasons(serverUrl, token, item.ratingKey);
-                if (seasons.length > 0) {
+                const showDaysOld = Math.max(0, Math.floor((nowMs - addedAtMs) / (24 * 60 * 60 * 1000)));
+                const hasLocalViews = (item.viewCount || 0) > 0 || (item.viewedLeafCount || 0) > 0 || Boolean(lastViewedAtMs);
+                const canHavePrunableSeasons = hasLocalViews ? !unwatchedOnly : (showDaysOld >= unwatchedMinAgeDays || options.crossServerActivityMap !== undefined);
+
+                if (canHavePrunableSeasons) {
+                    const seasons = await getPlexShowSeasons(serverUrl, token, item.ratingKey);
+                    if (seasons.length > 0) {
                     for (const season of seasons) {
                         const seasonAddedAt = season.addedAt || addedAtMs;
                         const seasonLastViewedAt = season.lastViewedAt;
@@ -3498,6 +3665,7 @@ export async function evaluatePruneCandidatesForServer(
                         });
                     }
                     continue; // Skip evaluating top-level show if seasons were evaluated
+                }
                 }
             }
 

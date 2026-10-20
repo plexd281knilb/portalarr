@@ -399,7 +399,7 @@ function JoinWizardContent() {
                                                 </Badge>
                                             </div>
                                             <div className="text-lg font-black text-foreground pt-1">
-                                                ${config?.monthlyPrice ?? 15} <span className="text-xs font-normal text-muted-foreground">/ month</span>
+                                                ${config?.monthlyPrice ?? 17.50} <span className="text-xs font-normal text-muted-foreground">/ month</span>
                                             </div>
                                             <p className="text-[11px] text-muted-foreground pt-0.5 leading-relaxed">
                                                 Pay-as-you-go month-to-month pass. Flexible and cancelable at any time.
@@ -793,10 +793,10 @@ function JoinWizardContent() {
                                                 </Badge>
                                             </div>
                                             <div className="text-xl font-black text-foreground pt-1">
-                                                {config?.proratedBilling?.monthlyAmountDueText || `$${config?.monthlyPrice || 15}/mo`}
+                                                {config?.proratedBilling?.monthlyAmountDueText || `${config?.monthlyPrice || 17.50}/mo`}
                                             </div>
                                             <p className="text-[11px] text-muted-foreground pt-0.5 leading-relaxed">
-                                                {config?.proratedBilling?.monthlyBreakdownSummary || "Prorated for remaining days in current month, then $15/month."}
+                                                {config?.proratedBilling?.monthlyBreakdownSummary || "Prorated for remaining days in current month, then $17.50/month."}
                                             </p>
                                         </div>
                                     </div>

@@ -385,14 +385,14 @@ export async function postDiscordTestMessageAction(
         if (!rawToken) return { success: false, error: "Failed to decrypt Discord token." };
 
         const testEmbed = {
-            title: "🎉 Portalarr Discord Bot: Connection Verified",
-            description: message || "Your Discord Bot is fully connected to Portalarr Mission Control! Automated channel syncing, guide embeds, and system telemetry are ready.",
+            title: "🎉 DomsHomeLab (d281knilb) Discord Bot: Connection Verified",
+            description: message || "Your Discord Bot is fully connected to DomsHomeLab (d281knilb) Mission Control! Automated channel syncing, guide embeds, and system telemetry are ready.",
             color: 0x10B981,
             fields: [
                 { name: "⚡ Status", value: "Online & Verified", inline: true },
                 { name: "🕒 Timestamp", value: new Date().toLocaleTimeString(), inline: true }
             ],
-            footer: { text: "Portalarr Mission Control • DomsHomeLab" }
+            footer: { text: "DomsHomeLab • d281knilb Media Server" }
         };
 
         const res = await postDiscordMessage({

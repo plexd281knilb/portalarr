@@ -26,12 +26,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Configure Docker daemon mirror
-        run: |
-          sudo mkdir -p /etc/docker
-          echo '{"registry-mirrors": ["https://mirror.gcr.io"]}' | sudo tee /etc/docker/daemon.json
-          sudo systemctl restart docker || true
-
       - name: Log in to Docker Hub (optional, prevents rate limits if credentials configured)
         if: env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''
         uses: docker/login-action@v3
@@ -73,5 +67,8 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             BASE_IMAGE=node:20-bookworm-slim
+            GIT_BRANCH=${{ github.ref_name }}
+            GIT_SHA=${{ github.sha }}
+            BUILD_NUMBER=${{ github.run_number }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

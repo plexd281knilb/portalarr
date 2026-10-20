@@ -14,7 +14,7 @@ Welcome to the comprehensive user guide for **DomsHomeLab's (d281knilb) Ebooks a
 7. [Series Tracking, Missing Books & 1-Click Auto-Grab](#7-series-tracking-missing-books--1-click-auto-grab)
 8. [Interactive Ingest & Unlinked Series Matcher](#8-interactive-ingest--unlinked-series-matcher)
 9. [Request Tracking, Release Selection & 1-Click Import](#9-request-tracking-release-selection--1-click-import)
-10. [AI Metadata Agent & Cover Artwork Engine](#10-ai-metadata-agent--cover-artwork-engine)
+10. [AI Metadata Agent, Cover Artwork Engine & Personalized Book Recommendations](#10-ai-metadata-agent-cover-artwork-engine--personalized-book-recommendations)
 11. [Frequently Asked Questions (FAQ)](#11-frequently-asked-questions-faq)
 
 ---
@@ -205,10 +205,11 @@ All active and historical media requests (Ebooks, Audiobooks, Movies, TV) are tr
 
 ---
 
-## 🤖 10. AI Metadata Agent & Cover Artwork Engine
+## 🤖 10. AI Metadata Agent, Cover Artwork Engine & Personalized Book Recommendations
 
-- **3-Tier Cover Artwork Engine:** Automatically queries iTunes HD (600x900), OpenLibrary, and Google Books. Click the **`🖼️ Fetch Cover`** button on any card to refresh missing or low-res covers.
+- **3-Tier Cover Artwork Engine & Universal SVG Proxy (`/api/cover`):** Automatically queries iTunes HD (600x900), OpenLibrary, and Google Books, backed by a dynamic SVG cover generator (`/api/cover`) so every book and audiobook renders a crisp cover without broken image icons. Click the **`🖼️ Fetch Cover`** button on any card to refresh missing or low-res covers.
 - **AI Metadata Agent:** Powered by Gemini, Claude, OpenAI, Ollama, Groq, or DeepSeek. Click **`🤖 Run AI Metadata Agent`** on any card to extract official title, author, series name, volume numbers, and high-resolution artwork from noisy file names.
+- **📚 Personalized AI Book Recommendations (`recommend_books_and_media`):** Open the **AI Server Assistant** on your dashboard or click the **`📚 Book Recommendations`** quick-chip! The AI inspects your personal `BookRequest` history, `KindleDeliveryLog` dispatches, and favorite authors/genres to recommend tailored next reads—clearly distinguishing titles already on the shelf (`✅ ON SERVER` at `/library`) from 1-click auto-grab recommendations (`📥 REQUESTABLE` at `/requests`).
 
 ---
 
