@@ -123,6 +123,13 @@ See detailed runbook: [tags-collections-and-hubs.md](./references/tags-collectio
     - **Tag Audit Delta-Sync**: `getSnapshotLibraryTagsAudit(dbPath, sectionKey)` extracts all existing tags, genres, and collections indexed by `ratingKey` in <5ms. During parental tagging sweeps (`applyParentalTagsToLibrary`), items whose target tags match the snapshot are skipped with zero HTTP GET or PUT calls. If changes are needed, target tags are updated via paced PUT requests without redundant metadata GET fetches.
     - **Direct Media Items & Stream Badges**: `getSnapshotLibraryMediaItems(dbPath, sectionKey)` queries media parts, video/audio codecs, bitrates, resolutions, and stream attributes directly from SQLite tables (`metadata_items`, `media_items`, `media_parts`, `media_streams`), completely eliminating heavy `/all?includeStreams=1` HTTP queries.
     - **Safe Multi-Server Cross-Server Views**: Using `ATTACH DATABASE`, secondary server databases are cross-queried in <20ms for watch history synchronization without hitting secondary server HTTP APIs.
+21. **Multi-Tier Leaving Soon Watch Status Engine & PMS Overload Protection (`recheckLeavingSoonWatchActivityInternal`)**:
+    - **PMS Lock Avoidance on Watch Verification**: Validating whether staged or expiring items have been watched by users typically creates severe PMS CPU and SQLite bottlenecks when looping over `/library/metadata/{ratingKey}` endpoints.
+    - **Tiered Verification Architecture**:
+      - **Tier 1 (Instant Local Cache)**: Instantaneous `<1ms` lookup against local SQLite `WatchHistory` resolving watched status with ZERO network calls to PMS.
+      - **Tier 2 (Batch History Inspection)**: Single batch query against `/status/sessions/history/all?sort=viewedAt:desc&X-Plex-Container-Start=0&X-Plex-Container-Size=500` fetching up to 500 recent sessions with episode `parentRatingKey` and series `grandparentRatingKey` mapping in 1 HTTP call.
+      - **Tier 3 (Throttled Circuit-Breaker Fallback)**: Capped at 10 items with 100ms pauses between calls, immediately aborting upon 2 consecutive errors.
+    - **In-Memory Debounce**: Protected by a 60-second per-server in-memory debounce guard (`lastWatchCheckByServer`) to suppress redundant invocations from rapid callers.
 
 
 

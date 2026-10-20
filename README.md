@@ -1,102 +1,109 @@
-# Portalarr
+# Portalarr (`DomsHomeLab`)
 
-Portalarr is a modern, self-hosted dashboard for managing your media server ecosystem. It provides a unified "mission control" interface to monitor system status, track active downloads, and manage service links, book reading, audiobooks, and support requests.
+Portalarr is a centralized, self-hosted mission control portal designed to manage a modern media server ecosystem. Built with Next.js 16 (App Router), React 19, and Prisma 6 (SQLite), it unifies Plex Media Servers, Tautulli, Glances, Docker containers, the Servarr stack (Radarr, Sonarr, Prowlarr), digital book/audiobook shelves, and member onboarding into a single high-performance platform.
 
 ![Portalarr Dashboard](public/next.svg)
 
-## 🚀 Features
+## 🚀 Core Subsystems & Features
 
-- **Native Seerr Media Request Engine (Overseerr / Jellyseerr Replacement):** Full-featured media discovery, request management, and library automation built right into Portalarr (`/discover` and `/requests`):
-  - **TMDb Discovery & Trending Carousels:** Browse trending movies, popular TV shows, upcoming releases, and personalized recommendations with instant search autocomplete.
-  - **Radarr & Sonarr Dispatch:** 1-click media requests with quota enforcement, automatic approval workflows, and instant root folder and quality profile routing.
-  - **Granular Season & Episode Request Guides:** Drill down into any TV series to inspect episode thumbnails, titles, air dates, and individual episode monitoring switches. Requests for new episodes dynamically update Sonarr via `PUT /api/v3/episode/monitor` and trigger automated `EpisodeSearch` commands.
-  - **Quality-Aware 4K UHD vs 1080p Multi-Instance Routing:** Configure separate 4K and 1080p Radarr/Sonarr instances with granular permission gates and intelligent UI toggle adaptation.
-  - **Live Discord Webhook Cards & Email Notifications:** Real-time embed cards dispatched to Discord channels with poster artwork, status colors (🟡 Pending, 🟢 Approved/Available, 🔴 Declined/Failed), and 4K tags, paired with rich HTML email notifications.
-- **Plex & Server Master AI Assistant:** Interactive AI assistant trained on media server troubleshooting, stream telemetry, and device playback bugs. Delivers step-by-step fixes for issues like Roku Auto-Adjust Quality bandwidth rejection, transcode stuttering, audio transcoding, and subtitle burn-in, with 1-click ticket escalation pre-populated with diagnostic telemetry.
-- **View Site As User (Admin Impersonation):** Administrators can switch into any user's exact perspective with 1 click from the User Directory (`/settings/access`). Enforces user-specific library shelves, watch time, active streams, and non-admin restrictions, with a persistent global warning banner and 1-click return to admin.
-- **Curation Studio Suite (Beta):** Native built-in tools replacing external containers:
-  - **Kometa Overlays Studio:** High-definition ribbons, 4K HDR badges, Dolby Vision/Atmos labels, and custom overlay canvas previews.
-  - **Agregarr Hubs:** Dynamic trending collections and discovery rows driven by Trakt, TMDb, and IMDb charts.
-  - **Maintainerr Prune:** Automated storage cleanup rules based on watch history, disk thresholds, and user requests.
-  - **Tagging Studio:** Plex media tagging for parental guide filtering and personalized shelf visibility.
-- **Personalized "My Plex Hub":** A dedicated stream and playback hub for every user with real-time active stream telemetry (video/audio codecs, transcode decisions, hardware NVENC acceleration, bitrate), **Transcode Doctor** stream diagnostics with tailored device fixes, self-service stream termination, personal watch time analytics (formatted in days and hours, movies finished, episodes watched), in-browser **Server Speed Test**, and **Plex Device Optimization Guides** (Apple TV, Roku, Fire TV, Smart TVs, Android TV, iOS, Web).
-- **Connected Servers Integration:** Unified multi-server management that deduplicates Direct Plex Media Servers and Tautulli monitors into a single clean connected servers view.
-- **Unified Dashboard:** Aggregate status from Plex, Tautulli, Glances, and your "Arr" stack.
-- **AI Metadata Agent & Smart Series Detection:** Multi-provider LLM support (Gemini, Claude, OpenAI, Groq, Ollama, DeepSeek, OpenRouter) for intelligent book metadata extraction, series identification, and automatic volume number assignment (`assignVolumeNumbersWithAI`).
-- **Volume-Ordered "Missing Books" Series Discovery & Missing Stubs:** Discovers unacquired installments in series ("Show Missing Books") sorted strictly by volume (`Vol 1`, `Vol 2`, `Vol 3`...) using iTunes, OpenLibrary, and Google Books with 1-click Auto-Grab, summary/knockoff publisher filtering, and Radarr/Sonarr-style missing stubs. Discovered missing books automatically surface in *Seerr discovery ("Missing from Your Series").
-- **Multi-Tier Torznab Search Fallback Engine:** 4+ tier fallback queries (Literal → Cleaned Punctuation → UK/Alternate Title → Category-less → Format/Audiobook suffix) to maximize indexer match rates.
-- **Deduplicated Active Downloads & Library Category Routing:** Real-time progress and queue tracking for SABnzbd, NZBGet, and qBittorrent with library-specific download categories (`books`, `audiobooks`, `kids-books`) and protected folder sweeper safeguarding requested book folders.
-- **Audiobook & Ebook Library:** Dedicated tabs for Ebooks and Audiobooks, strict `mediaType` database isolation, auto-syncing format badges (`MP3` vs `EPUB`), built-in HTML5 audio player with interactive Chapter Selector Modal, user chapter reordering & disk track renaming (`reorderAudiobookChapters`), HTTP Range streaming (`/api/books/[id]/stream`), continuous autoplay next chapter, multi-track/multi-disc folder consolidation (`Disc 01/`, `Disc 02/`), Send-to-Kindle integration, and Prowlarr category routing.
-- **3-Tier Cover Artwork & Poster Engine:** Automated 600x900 HD poster resolution (Direct PMS → Tautulli → iTunes → Open Library → Google Books) with standard 2:3 vertical poster proportions and 1-click artwork fetch buttons (`🖼️`).
-- **Interactive Release Selection & 1-Click Ingestion:** Interactive release chooser modal for indexers, manual release selection, retry search, and **`📥 Import Download`** action button for instant manual download folder ingestion.
-- **Live Auto-Refreshing Requests & Auto-Approval:** All book requests are automatically approved and instantly trigger downloads. Real-time 5-second polling updates request statuses (`Pending` / `Approved` → `Searching` → `Downloading` → `Downloaded`) and automatically syncs completed downloads to your library shelf with reverse auto-sync validation. A background job also periodically retries any requests that stall.
-- **Responsive Radarr & Sonarr Views:** Mobile-optimized, flexible wrap layouts for Movie and TV libraries featuring prominent release date labeling ("Air Date") and seamless dropdowns.
-- **Robust Settings, Unsaved Changes Guard & Diagnostic Tools:**
-  - **Unsaved Settings Protection:** Reusable `<UnsavedChangesPrompt />` component with docked floating bar, dirty state tracking against baseline snapshots, glowing amber borders, and browser navigation guards preventing accidental data loss across System Settings, Access Control, and Profile pages.
-  - **Live App Connection Testing & Management:** Test connectivity, inline edit setups, and auto-prefill default ports for Tautulli, Glances, SABnzbd, qBittorrent, Readarr, Prowlarr, Overseerr, Bazarr, etc., directly from settings.
-  - **Access Control Overhaul:** Admin/User role toggles, Send-to-Kindle email manager, admin password reset modal (`🔑`), live user search, and 1-click bulk approvals (`CheckCheck`).
-  - **Folder Path Validator & API Keys:** Inspect permissions and item counts for completed download directories, with dedicated Google Books and AI Metadata Agent configuration.
-- **Plex Friends Auto-Sync:** Automatically scans your Plex friends list and provisions approved accounts with role synchronization.
-- **30-Day Persistent Login:** Persistent JWT session cookies with sliding auto-renewal keep active users signed in seamlessly.
-- **Air-Tight Edge Security:** Every page and API endpoint is secured at the edge behind authentication with role and user status (`PENDING`/`APPROVED`/`REJECTED`) enforcement.
-- **Support & Password Recovery:** Direct support ticket submission with SMTP notifications, format-specific request email badges (`🎧 AUDIOBOOK` vs `📖 EBOOK`), plus built-in temporary password email recovery.
-- **Secure Encryption:** Sensitive API keys and service tokens are encrypted at rest using AES-256-GCM.
-- **Automated CI/CD & Docker:** GitHub Actions pipeline automatically builds and publishes `ghcr.io/plexd281knilb/portalarr:latest` with concurrency rate-limiting safeguards.
-- **Wizarr Rebuilt & Automated Membership Subscriptions:** Frictionless `/join` onboarding portal, private server invite gating requiring an active member's referral code or name/username, zero payment up front for trial passes, full membership upgrade perks (dedicated child-safe kids & living room profiles, digital book library with Kindle delivery), automated Plex server friend invites, default library access pre-assignment, Discord community server auto-join, and guided client setup wizards (Apple TV, Roku, Fire TV, Smart TV, Google TV, Mobile, Web). Native P2P payment routing (PayPal, Venmo, Cash App, Zelle), pure-TS SVG QR code generator (`PaymentQrModal`), transparent prorated rest-of-year annual billing ($15/mo base rate, $180/yr), pre-filled reconciliation memo tags (`#PORTALARR-USER-DATE`), automated IMAP payment scraping, customizable grace periods (`subscriptionGracePeriodDays`), automated access suspension upon non-payment, referral rewards ("Earn 1 Free Month per converted friend"), granular membership tiers (`STANDARD`, `PREMIUM_4K`, `VIP_ALL_ACCESS`, `FAMILY`), and self-service notification & email preference controls.
-- **Upcoming Roadmap:**
-  - **Step 1 — Autonomous AI Support Agent & Deep Server Diagnostics:** In-app first-response conversational support bot with autonomous diagnostic tools, 1-click ticket escalation with telemetry, and deep Plex/Tautulli/Arr server log ingestion.
-  - **Step 2 — Native Uptime & Service Health Monitoring Engine (Uptime Kuma / Ping Replacement):** Multi-protocol heartbeat polling (HTTP/HTTPS, TCP/UDP, SSL cert expiry), instant outage alerting (SMTP email, Discord rich embeds, Web Push), and public/admin uptime dashboards.
-  - **Step 3 — Smart Bandwidth Shaper & Transcode Governor:** Dynamic download throttling when remote streams spike, GPU load balancing, and Direct Play client coaching.
-  - **Step 4 — Native IPTV & Live TV Stream Manager (xTeVe / Threadfin Replacement):** M3U/XMLTV bouquet manager, stream failover routing, and virtual HDHomeRun tuner emulation for Plex Live TV.
-  - **Step 5 — Automated Audio/Video Cleaner & Custom Format Upgrader (TRaSH Guides Engine):** Community profile scoring, audio normalizer & compatibility injector, and non-native audio/sub stream cleanup.
-  - **Step 6 — Native Subtitle Engine & Auto-Sync (Bazarr Replacement):** Multi-provider subtitle hunting, AI audio-sync waveform alignment, and user self-service "Fix Subtitles".
+- **🧪 Dynamic Branch, Version & Build Telemetry Engine (`BuildBadge` & `src/lib/version.ts`):**
+  - Real-time environment differentiation between **Beta (`main` branch / `Domshomelab_Dev`)** and **Production (`stable` branch / `DomsHomeLab`)**.
+  - Displays live channel badges, semantic version (`v3.9.0-beta.2`), Git commit short SHA, and GitHub Actions workflow build run numbers across Desktop/Mobile sidebars and the Home Dashboard header.
+  - Interactive glassmorphic **Build Diagnostics Modal** with 1-click full SHA copy, build timestamp, Docker image target (`ghcr.io/plexd281knilb/portalarr:main` vs `:stable`), and direct GitHub Actions workflow run links.
+
+- **⚡ Direct Plex SQLite Snapshot & Delta-Sync Engine (Zero-PMS-Lock Architecture):**
+  - High-speed, lock-free SQLite WAL snapshot subsystem (`src/lib/curation/plex-snapshot-engine.ts`) utilizing native Node `node:sqlite` (`DatabaseSync`) and `ATTACH DATABASE`.
+  - Executes multi-server library audits, video/audio codec extraction, and sharing label/genre comparisons across Plex clusters (`MainPlex`, `KidsPlexServer`, `MainPlexServerBackup`) in `<20ms` with **zero Plex HTTP calls**.
+  - **Delta-Syncing**: Restricts network mutations (`PUT`/`DELETE`) strictly to items with genuine state deltas, eliminating PMS database locks and 500 error loops during curation sweeps.
+
+- **🤖 AI Server Assistant & Admin Homelab Command Center (`AiServerAssistant`):**
+  - Prominent 24/7 diagnostic and homelab command cockpit available on the main dashboard and via a global floating launcher.
+  - Native **Structured Tool Calling** (Google Gemini & OpenAI + 100% offline deterministic heuristic fallback) spanning **11 autonomous tools**:
+    - `probe_playback_health`: 4-tier synthetic playback and 64KB physical disk byte-range streaming probes.
+    - `inspect_media_container`: Multi-library audio/subtitle stream inspection and self-healing metadata refresh.
+    - `search_and_replace_media`: Automated Radarr/Sonarr replacement grabs with **Custom Format score verification** (`alreadyOptimal` protection).
+    - `recommend_books_and_media`: Personalized reading and media recommendations based on user watch/request history and taste profiles.
+    - `get_homelab_hardware_telemetry`, `get_docker_fleet_status`, `restart_docker_container`, and `get_account_sharing_alerts` (strictly restricted to Administrators).
+
+- **📡 Stream Intelligence Hub & Multi-IP Password Sharing Detection (`/admin/tautulli` & `/admin/streams`):**
+  - **Native Watch History Engine (`stream-tracker.ts`)**: Built-in SQLite watch history tracking with a **Telemetry Takeover Toggle** (`nativeStreamMonitoringEnabled`) that queries Plex directly and halts external Tautulli polling overhead.
+  - **Multi-IP Household & Password Sharing Detection**: Distinguishes local LAN/private subnets from simultaneous streams across $\ge 2$ distinct public WAN IP addresses, flagging violations with pulse alerts and security audit logs.
+  - **Complete Historical Tautulli Backfill Runner**: Paginated 500-session batch importer with 2-hour window deduplication and real-time progress bars.
+  - **Proactive Stream Quality Doctor**: Client-side main screen alert banner (`stream-quality-doctor-banner.tsx`) and device diagnostic engine detecting Roku 720p auto-adjust caps, 2–4 Mbps remote streaming caps, and browser HEVC transcoding with 30-second fix checklists.
+
+- **🐳 System & Docker Fleet Monitoring Cockpit (`/admin/monitoring`):**
+  - **Systems & Services Health**: Real-time reachability, round-trip latency sparklines, and 24h/7d/30d rolling uptime percentages across Plex, Glances, Tautulli, Servarr, and Downloaders.
+  - **Docker Container Fleet Manager**: Multi-engine connectivity (Unix socket `/var/run/docker.sock`, Windows pipe, Docker CLI, Glances API, and TCP 2375) with live CPU/RAM meters, multi-core hot load flame indicators, sorting pills (`A-Z`, `🔥 CPU`, `💾 RAM`), and 1-click **Start / Stop / Restart** container controls.
+  - **Outages & Incident Alerts**: Chronological incident logs and automated Discord rich embed outage/recovery notifications.
+
+- **💻 Homelab Shell Automation & User Scripts Subsystem (`/admin/scripts`):**
+  - Unraid-style script management cockpit with pre-seeded maintenance scripts (Plex cluster health watchdog, SQLite database vacuum/optimize, Portalarr DB backup, unresponsive container auto-restart).
+  - Live streaming terminal modal (`ScriptTerminalModal`) via HTTP `ReadableStream` stdout/stderr piping and instant abort lifecycle controls.
+
+- **🎬 Native Seerr Media Discovery & Request Engine (`/discover` & `/requests`):**
+  - **Dual-Tier Persistent Media Cache (`media-cache.ts`)**: Pairs in-memory RAM Tier 1 with disk JSON Tier 2 (`data/cache/tmdb/`) and background 30-minute Stale-While-Revalidate (SWR) pre-warming for `<5ms` page loads.
+  - **Radarr & Sonarr Multi-Instance Routing**: Quality-aware 1080p and 4K UHD dispatch, granular TV season/episode monitoring guides, and **Sticky Bulk Actions** (Mass Approve, Mass Reject, and Two-Way Cascade Anti-Resurrection Mass Delete).
+
+- **🎨 4-Studio Curation Suite (`/curation`):**
+  - **Kometa Poster Overlays Studio**: 4K HDR badges, Dolby Vision/Atmos ribbons, IMDb Top 150/250 vector corner banners, and live canvas previews.
+  - **Agregarr Smart Collections & Hubs**: Dynamic collections synced from Trakt, TMDb, MDBList, and IMDb with per-endpoint `machineIdentifier` isolation, inline quick position reordering, and Coming Soon placeholder trailers.
+  - **Maintainerr Storage Pruner**: Rule-based and Glances disk-capacity-triggered pruning, 3-tier Leaving Soon watch activity recheck engine (`<1ms` local SQLite lookup), and bulk staged media management.
+  - **Plex Parental Guide & Tagging Studio**: Automated IMDb parental severity advisories (Sex/Nudity, Violence/Gore, Profanity, Substances) and Kid-Safe / Living Room sharing label synchronization.
+
+- **📚 Unified Ebook & Audiobook Library (`/library`):**
+  - **In-Browser Kindle Paperwhite Reader & Comic Viewer**: 0ms CacheStorage reopening, Bookerly/Ember typography controls, reading time estimation, and WASM `.cbr`/`.cbz` comic streaming.
+  - **Floating HTML5 Audiobook Player**: Multi-disc/multi-track consolidation, chapter selector modal, disk track reordering, and HTTP Range streaming.
+  - **Wireless Send-to-Kindle & Bounce Scanner**: 1-click EPUB delivery (`DIRECT_DOWNLOAD` bypass supported) with automated IMAP sender inbox scanning (`scanKindleBouncesInternal`) to detect Amazon delivery rejections.
+  - **Maturity Rating & Kids Mode Isolation (`inferBookRating`)**: Deterministic age rating classification (`Kids`, `YA (12+)`, `General`, `18+ Mature`) with strict child account whitelisting and Kyra/Public library auto-approval.
+
+- **💬 Discord Bot & Server Mission Control (`/settings?tab=discord`):**
+  - Native Discord REST API v10 bot engine provisioning a 6-category / 16-channel server blueprint, automated role synchronization (`Administrator`, `Tier 2 VIP`, `Tier 1 Regular`, `Trial Pass`), pinned interactive guide embeds, and live `#system-status` telemetry.
+
+- **💳 Wizarr Rebuilt, Subscriptions & Governance (`/join` & `/settings/access`):**
+  - Invite-gated `/join` onboarding with risk-free trial passes, prorated rest-of-year annual billing ($180/yr = $15/mo base) vs standalone monthly ($17.50/mo), payment threshold & installment credit tracking (`payment-threshold-engine.ts`), multi-stage renewal reminders, **View Site As User** admin impersonation, and **Bidirectional Action Approval Gates** (`AdminApproval` queue for Plex share changes and outgoing SMTP emails).
+
+---
 
 ## 🛠️ Quick Start
 
 ### 1. Prerequisites
-- Node.js 20+
-- Docker (optional, for production)
+- Node.js 20+ (Node 22.5+ / 24 recommended for native `node:sqlite` snapshot acceleration)
+- Docker (for production container deployment)
 
-### 2. Local Setup
+### 2. Local Development & Verification
 ```bash
-# Keep codebase synchronized across development computers
+# Sync repository
 git pull origin main
 
 # Install dependencies
 npm install
 
-# Configure environment
-cp .env.example .env # Ensure DATABASE_URL and JWT_SECRET are set
+# Run the 18-suite integration verification test runner
+npm test
 
-# Setup database
-npx prisma migrate dev
+# Run production build verification
+npm run build
 
-# Run development server
+# Start development server
 npm run dev
 ```
 
-### 3. Production (Docker)
-Portalarr is designed to run seamlessly in Docker. See [GEMINI.md](./GEMINI.md) for detailed Unraid and Docker configuration notes.
+### 3. Production & Beta Docker Environments
+GitHub Actions (`.github/workflows/docker-publish.yml`) automatically builds and publishes branch-specific images with embedded Git branch, commit SHA, and workflow build number metadata:
+- **Beta (`main` branch)**: `ghcr.io/plexd281knilb/portalarr:main`
+- **Production (`stable` branch)**: `ghcr.io/plexd281knilb/portalarr:stable`
 
-```bash
-docker-compose up --build
-```
-
-### 4. Updating via Docker
-To update to the latest release while keeping your SQLite database and settings intact:
 ```bash
 docker-compose pull
 docker-compose up -d
 ```
 
-## 🔒 Security
-Portalarr takes security seriously:
-- **Global Proxy:** All page and `/api/*` traffic is intercepted and validated at the edge.
-- **JWT Sessions:** Authentication uses signed, HttpOnly JWT cookies with automatic status desync resolution.
-- **Admin Lockdown:** Sensitive settings (`/settings`, `/admin/*`) are restricted to accounts with the `ADMIN` role. Non-admin users visiting `/settings` are safely redirected to `/settings/profile`.
+---
 
-## 🤝 Contributing
-For developers looking to contribute, please refer to [GEMINI.md](./GEMINI.md) for architecture details, development conventions, and project structure.
+## 🔒 Security
+- **Global Edge Proxy (`src/proxy.ts`)**: All page and `/api/*` routes are authenticated at the edge with strict role (`ADMIN`, `SUPER_USER`, `USER`, `TRIAL`) and status (`APPROVED`, `TRIAL`, `PENDING`, `EXPIRED`) enforcement.
+- **AES-256-GCM Encryption**: All third-party tokens (Plex, SMTP, Discord, Radarr, Sonarr, AI keys) are encrypted at rest.
+- **White-Label Brand Isolation**: All external user communications, emails, and client notifications are strictly branded as `DomsHomeLab (d281knilb)`.
 
 ## 📄 License
-This project is private and for personal/internal use.
+Private repository for internal homelab use.

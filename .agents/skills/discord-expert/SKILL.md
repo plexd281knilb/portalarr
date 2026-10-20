@@ -203,3 +203,25 @@ To ensure test suites (`npm test` / `verify-all.ts`) never post messages, dispat
    - `sendSeerrEmailNotification`: Silently returns `{ success: true }` during test runs.
 3. **Auto-Download Decoupling:** `dispatchBookOrAudiobookRequest` skips background `autoDownloadBookRequest` loops in test runs to prevent async race conditions during bulk approval/decline verification.
 4. **Test Discord Guild:** When testing bot features in staging, administrators can bind dedicated test servers (e.g., Guild ID `1559231517325135892`) in Settings → Discord. Ensure the bot application is invited with Administrator permissions (`permissions=8&scope=bot%20applications.commands`).
+
+---
+
+## Automated Outage & Incident Alert Dispatching (`dispatchDiscordOutageNotification`)
+
+Portalarr's uptime and system health tracker monitors physical hosts, Plex Media Servers, Glances, Tautulli, download clients, and Servarr applications. When reaching failure thresholds or recovering, rich status embeds are automatically dispatched to Discord:
+
+- **Dual Dispatch Mechanism**:
+  1. **Custom Discord Webhooks**: Configured via `Settings.discordWebhookUrl` or `config.discordWebhookUrl`. Posts directly to any user-designated Discord channel via webhook URL.
+  2. **Native Discord Bot & #system-status Channel**: Configured via `Settings.discordBotToken` and `Settings.discordStatusChannelId`. Uses `postDiscordMessage` to transmit real-time outage alerts directly into the `#system-status` channel defined in the server blueprint.
+- **Visual Alert Embed Standards**:
+  - **Service Failure (`STARTED`)**:
+    - Color: `#EF4444` (Crimson / Red, `0xEF4444`).
+    - Title: `🚨 Service Outage Detected: {targetName}`
+    - Description: Details failure cause (e.g., connection timeout, HTTP 500 error, unreachable socket), target host, and start timestamp.
+  - **Service Recovery (`RESOLVED`)**:
+    - Color: `#10B981` (Emerald / Green, `0x10B981`).
+    - Title: `✅ Service Restored: {targetName}`
+    - Description: Summarizes total outage duration (e.g. `Downtime: 4m 12s`) and confirms healthy round-trip ping latency.
+- **Diagnostic Testing (`testDiscordOutageAlertAction`)**:
+  - Administrators can simulate an outage notification directly from the Admin Monitoring Cockpit (**Tab 3: Outages & Automated Incident Alerts**) to verify Discord webhook delivery and bot channel permissions.
+
