@@ -8610,14 +8610,19 @@ export async function deleteBetaCard(id: string) {
 // ============================================================================
 
 export async function getRoadmapText(): Promise<string> {
+    const { getBuildTelemetry } = await import("@/lib/version");
+    const activeVersion = getBuildTelemetry().version;
+    const syncVersionInRoadmap = (raw: string) =>
+        raw.replace(/Active Beta Notice \(`v[^`]+`\)/g, `Active Beta Notice (\`v${activeVersion}\`)`);
+
     try {
         const roadmapPath = path.join(process.cwd(), "roadmap.md");
         if (fs.existsSync(roadmapPath)) {
-            return fs.readFileSync(roadmapPath, "utf-8");
+            return syncVersionInRoadmap(fs.readFileSync(roadmapPath, "utf-8"));
         }
         const upperRoadmapPath = path.join(process.cwd(), "ROADMAP.md");
         if (fs.existsSync(upperRoadmapPath)) {
-            return fs.readFileSync(upperRoadmapPath, "utf-8");
+            return syncVersionInRoadmap(fs.readFileSync(upperRoadmapPath, "utf-8"));
         }
     } catch (e) {
         console.warn("Failed to read roadmap.md from disk:", e);
@@ -8625,7 +8630,9 @@ export async function getRoadmapText(): Promise<string> {
     try {
         await ensureSchemaColumns();
         const settings = await prisma.settings.findUnique({ where: { id: "global" } }).catch(() => null);
-        return settings?.roadmapText || "# 🗺️ DomsHomeLab Roadmap & Feature Announcements\n\nNo new updates at this time. Check back later!";
+        return syncVersionInRoadmap(
+            settings?.roadmapText || "# 🗺️ DomsHomeLab Roadmap & Feature Announcements\n\nNo new updates at this time. Check back later!"
+        );
     } catch (e) {
         return "# 🗺️ DomsHomeLab Roadmap & Feature Announcements\n\nNo new updates at this time. Check back later!";
     }

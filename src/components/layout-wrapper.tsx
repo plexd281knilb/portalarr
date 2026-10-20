@@ -10,6 +10,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import ImpersonationBanner from "@/components/impersonation-banner";
 import FloatingAiLauncher from "@/components/floating-ai-launcher";
+import { BuildBadge } from "@/components/build-badge";
 
 export default function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -91,10 +92,13 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
         {/* --- GLOBAL USER HEADER --- */}
         {pathname !== "/login" && !pathname.startsWith("/join") && (
           <header className="flex items-center justify-between px-3 sm:px-6 h-14 sm:h-16 border-b bg-muted/20 shrink-0">
-            <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-                <Server className="h-5 w-5 sm:h-6 sm:w-6 text-primary shrink-0" />
-                <span className="font-bold text-lg sm:text-xl tracking-tight">DomsHomeLab</span>
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+                  <Server className="h-5 w-5 sm:h-6 sm:w-6 text-primary shrink-0" />
+                  <span className="font-bold text-lg sm:text-xl tracking-tight">DomsHomeLab</span>
+              </Link>
+              <BuildBadge variant="compact" />
+            </div>
             
             <div className="flex items-center gap-1.5 sm:gap-3">
                 {isLoggedIn ? (
@@ -181,11 +185,12 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
           
           {/* Mobile Header */}
           <div className="md:hidden border-b bg-background px-3 py-2.5 sm:px-4 sm:py-3 flex items-center justify-between gap-3 shrink-0">
-             <div className="flex items-center gap-2.5 min-w-0">
+             <div className="flex items-center gap-2 min-w-0">
                 <Suspense fallback={<div className="w-9 h-9" />}>
                   <MobileSidebar />
                 </Suspense>
                 <span className="font-bold text-base sm:text-lg truncate">{getMobileTitle()}</span>
+                <BuildBadge variant="compact" />
              </div>
              <div className="flex items-center gap-1.5 shrink-0">
                 <Link href="/" className="text-xs font-bold text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 rounded bg-muted/30">

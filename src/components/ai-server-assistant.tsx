@@ -509,7 +509,7 @@ export function AiServerAssistant() {
                                         </DialogTitle>
                                         <Badge variant="outline" className="text-[10px] font-bold bg-emerald-950/40 text-emerald-300 border-emerald-500/40 flex items-center gap-1">
                                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                                            <span>Autonomous v3.1</span>
+                                            <span>Autonomous v{process.env.NEXT_PUBLIC_PORTALARR_VERSION || "3.9.0-beta.2"}</span>
                                         </Badge>
                                     </div>
                                     <DialogDescription className="text-xs text-muted-foreground truncate">
