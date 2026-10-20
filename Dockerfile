@@ -81,7 +81,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
-COPY --from=builder --chown=nextjs:nodejs /app/ROADMAP.md ./ROADMAP.md
+COPY --from=builder --chown=nextjs:nodejs /app/roadmap.md ./roadmap.md
 
 # Copy entrypoint script and ensure executable
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
