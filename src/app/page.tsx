@@ -1,3 +1,4 @@
+import { BuildBadge } from "@/components/build-badge";
 import { 
     getPublicMediaApps, 
     getRoadmapText, 
@@ -136,10 +137,11 @@ export default async function UserLandingPage() {
                 {/* --- DASHBOARD HEADER --- */}
                 <section className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 py-1 sm:py-2 border-b border-border/40">
                     <div className="space-y-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                             <h1 className="text-lg sm:text-2xl lg:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-foreground via-foreground/90 to-muted-foreground bg-clip-text text-transparent">
                                 System Dashboard
                             </h1>
+                            <BuildBadge variant="full" />
                             {isTrial ? (
                                 <Badge variant="outline" className="bg-amber-500/15 text-amber-300 border-amber-500/30 text-xs font-semibold">
                                     Free Trial

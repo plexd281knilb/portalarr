@@ -178,7 +178,31 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 
 ---
 
-### 8. Consolidated Email Management & Trigger Documentation (`/settings?tab=emails`)
+### 8. Dynamic Branch, Version & Build Telemetry (`BuildBadge` & `getBuildTelemetry`)
+
+Portalarr features an automated, real-time versioning, branch identification, and build-workflow tracking system. It enables homelab administrators to look at any dashboard and immediately differentiate **Beta preview environments (`main` branch)** from **Production release environments (`stable` branch)**:
+
+- **Telemetry Engine (`src/lib/version.ts`)**:
+  - `getBuildTelemetry()` automatically resolves: `version`, `branch` (`main` vs `stable`), `commitSha`, `commitShortSha` (first 7 characters), `buildNumber` (GitHub Actions run number), `buildTimestamp`, `channel` (`beta` | `stable` | `dev`), `isBeta`, `isStable`, `displayBadge`, `fullDisplay`, `workflowUrl`, and `dockerImageTag`.
+  - Works seamlessly on both client and server components with zero network overhead.
+  - Automatically baked at build time via `next.config.ts` (`NEXT_PUBLIC_PORTALARR_VERSION`, `NEXT_PUBLIC_GIT_BRANCH`, `NEXT_PUBLIC_GIT_SHA`, `NEXT_PUBLIC_BUILD_NUMBER`, `NEXT_PUBLIC_BUILD_TIMESTAMP`) and Dockerfile build arguments (`GIT_BRANCH`, `GIT_SHA`, `BUILD_NUMBER`).
+
+- **Interactive Build Badge (`src/components/build-badge.tsx`)**:
+  - **Compact Variant (`variant="compact"`)**:
+    - Embedded in the top of Desktop and Mobile sidebars right next to the app brand header.
+    - Beta (`main`): Glowing neon purple pill with pulsing indicator (`bg-purple-500/15 text-purple-300 border-purple-500/30`, e.g. `BETA • v3.0.0-beta.2`).
+    - Prod (`stable`): Emerald pill with steady dot (`bg-emerald-500/15 text-emerald-300 border-emerald-500/30`, e.g. `PROD • v3.0.0`).
+  - **Full Variant (`variant="full"`)**:
+    - Embedded on the home dashboard header (`src/app/page.tsx`) immediately adjacent to the `System Dashboard` title.
+    - Displays channel icon (`FlaskConical` for Beta, `ShieldCheck` for Prod), channel name, version, commit short SHA (`[2cf7cdf]`), and build run badge (`build #142`).
+  - **Subtle Variant (`variant="subtle"`)**:
+    - Minimalist monospace branch, build, and SHA breadcrumb rendered in sidebar footers or headers (`main • #142 • 2cf7cdf`).
+  - **Interactive Build Diagnostics Dialog (`Dialog`)**:
+    - Clicking any `BuildBadge` opens a glassmorphic diagnostics modal displaying: Environment Status, Active Git Branch, Full Commit SHA with 1-click clipboard copy, GitHub Actions Workflow Run number, Build Timestamp, Target Docker Image (`ghcr.io/plexd281knilb/portalarr:main` vs `:stable`), and a direct link to GitHub Actions workflow runs.
+
+---
+
+### 9. Consolidated Email Management & Trigger Documentation (`/settings?tab=emails`)
 - **Single Authoritative Email Hub**: Outgoing email dispatches and notification master switches are strictly consolidated inside `<EmailManagement />` on Tab 3 (`/settings?tab=emails`), eliminating obsolete duplicate cards in Tab 1 ("General & Setup"). The General SMTP card provides a direct 1-click navigation button to the Email Hub.
 - **Exact Trigger Event Documentation**: Every email template definition includes an explicit, user-facing `triggerEvent` field. The UI displays this with a `Zap` icon in both the template selection sidebar and a prominent callout card in the template editor header.
 - **Automated Payment Receipts & Upgrade Notifications**: Incoming payments verified via automated IMAP scraping or manual attribution dispatch the `payment_received` receipt to the user and `admin_payment_received` alert to admins. Upgrades from trial or pending to full membership automatically dispatch `subscription_activated` detailing all unlocked perks.

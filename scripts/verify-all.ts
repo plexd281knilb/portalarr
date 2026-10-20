@@ -20,6 +20,7 @@ import { getAllScripts, getScriptById, saveScript, deleteScript, getScriptRuns }
 import { executeScript, abortActiveScriptRun } from "../src/lib/scripts/script-runner";
 import { DISCORD_ROLES_BLUEPRINT, DISCORD_SERVER_BLUEPRINT } from "../src/lib/discord/discord-bot";
 import { computeExpectedDiscordRole, findBestMatch } from "../src/lib/discord/discord-role-sync";
+import { getBuildTelemetry } from "../src/lib/version";
 import fs from "fs";
 import path from "path";
 
@@ -1112,6 +1113,56 @@ async function runTestSuite() {
                 if (fs.existsSync(kidsDbPath)) fs.unlinkSync(kidsDbPath);
                 if (fs.existsSync(tmpDir)) fs.rmSync(tmpDir, { recursive: true, force: true });
             } catch (e) {}
+        }
+    });
+
+    // =========================================================================
+    // SUITE 18: Dynamic Branch, Version & Build Workflow Telemetry Engine
+    // =========================================================================
+    await assertTest("Suite 18: Dynamic Branch, Version & Build Telemetry Engine", async () => {
+        // 1. Test standard telemetry resolution
+        const telemetry = getBuildTelemetry();
+        if (!telemetry.version) throw new Error("Telemetry version missing");
+        if (!telemetry.branch) throw new Error("Telemetry branch missing");
+        if (!telemetry.channel) throw new Error("Telemetry channel missing");
+        if (!telemetry.displayBadge) throw new Error("Telemetry displayBadge missing");
+        if (!telemetry.fullDisplay) throw new Error("Telemetry fullDisplay missing");
+        if (!telemetry.dockerImageTag) throw new Error("Telemetry dockerImageTag missing");
+
+        // 2. Test Beta branch identification
+        const originalEnv = { ...process.env };
+        try {
+            process.env.NEXT_PUBLIC_GIT_BRANCH = "main";
+            process.env.NEXT_PUBLIC_PORTALARR_VERSION = "3.0.0-beta.2";
+            process.env.NEXT_PUBLIC_GIT_SHA = "2cf7cdfe1234567890abcdef";
+            process.env.NEXT_PUBLIC_BUILD_NUMBER = "142";
+            
+            const betaTelemetry = getBuildTelemetry();
+            if (betaTelemetry.branch !== "main") throw new Error(`Expected branch main, got ${betaTelemetry.branch}`);
+            if (betaTelemetry.isBeta !== true) throw new Error("Expected isBeta to be true for main branch");
+            if (betaTelemetry.isStable !== false) throw new Error("Expected isStable to be false for main branch");
+            if (betaTelemetry.channel !== "beta") throw new Error(`Expected channel beta, got ${betaTelemetry.channel}`);
+            if (!betaTelemetry.displayBadge.includes("BETA")) throw new Error(`Expected displayBadge to contain BETA, got ${betaTelemetry.displayBadge}`);
+            if (betaTelemetry.commitShortSha !== "2cf7cdf") throw new Error(`Expected short SHA 2cf7cdf, got ${betaTelemetry.commitShortSha}`);
+            if (betaTelemetry.buildNumber !== "142") throw new Error(`Expected buildNumber 142, got ${betaTelemetry.buildNumber}`);
+            if (!betaTelemetry.dockerImageTag.includes(":main")) throw new Error(`Expected docker tag to include :main, got ${betaTelemetry.dockerImageTag}`);
+            if (!betaTelemetry.workflowUrl) throw new Error("Expected workflowUrl to be populated when buildNumber is present");
+
+            // 3. Test Production / Stable branch identification
+            process.env.NEXT_PUBLIC_GIT_BRANCH = "stable";
+            process.env.NEXT_PUBLIC_PORTALARR_VERSION = "3.0.0";
+            delete process.env.NEXT_PUBLIC_BUILD_NUMBER;
+            delete process.env.BUILD_NUMBER;
+
+            const stableTelemetry = getBuildTelemetry();
+            if (stableTelemetry.branch !== "stable") throw new Error(`Expected branch stable, got ${stableTelemetry.branch}`);
+            if (stableTelemetry.isBeta !== false) throw new Error("Expected isBeta to be false for stable branch");
+            if (stableTelemetry.isStable !== true) throw new Error("Expected isStable to be true for stable branch");
+            if (stableTelemetry.channel !== "stable") throw new Error(`Expected channel stable, got ${stableTelemetry.channel}`);
+            if (!stableTelemetry.displayBadge.includes("PROD")) throw new Error(`Expected displayBadge to contain PROD, got ${stableTelemetry.displayBadge}`);
+            if (!stableTelemetry.dockerImageTag.includes(":stable")) throw new Error(`Expected docker tag to include :stable, got ${stableTelemetry.dockerImageTag}`);
+        } finally {
+            process.env = originalEnv;
         }
     });
 

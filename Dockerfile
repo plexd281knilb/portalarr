@@ -1,5 +1,8 @@
 # Base image definition - uses official node:20-bookworm-slim
 ARG BASE_IMAGE=node:20-bookworm-slim
+ARG GIT_BRANCH=main
+ARG GIT_SHA=dev
+ARG BUILD_NUMBER=local
 
 # 1. Install dependencies
 FROM ${BASE_IMAGE} AS deps
@@ -12,7 +15,18 @@ RUN npm ci
 
 # 2. Builder stage
 FROM ${BASE_IMAGE} AS builder
+ARG GIT_BRANCH=main
+ARG GIT_SHA=dev
+ARG BUILD_NUMBER=local
 WORKDIR /app
+
+# Pass build and branch metadata into Next.js static build
+ENV GIT_BRANCH=${GIT_BRANCH}
+ENV GIT_SHA=${GIT_SHA}
+ENV BUILD_NUMBER=${BUILD_NUMBER}
+ENV NEXT_PUBLIC_GIT_BRANCH=${GIT_BRANCH}
+ENV NEXT_PUBLIC_GIT_SHA=${GIT_SHA}
+ENV NEXT_PUBLIC_BUILD_NUMBER=${BUILD_NUMBER}
 
 # Copy node_modules from deps
 COPY --from=deps /app/node_modules ./node_modules
@@ -30,10 +44,19 @@ RUN npm run build
 
 # 3. Production image
 FROM ${BASE_IMAGE} AS runner
+ARG GIT_BRANCH=main
+ARG GIT_SHA=dev
+ARG BUILD_NUMBER=local
 WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV GIT_BRANCH=${GIT_BRANCH}
+ENV GIT_SHA=${GIT_SHA}
+ENV BUILD_NUMBER=${BUILD_NUMBER}
+ENV NEXT_PUBLIC_GIT_BRANCH=${GIT_BRANCH}
+ENV NEXT_PUBLIC_GIT_SHA=${GIT_SHA}
+ENV NEXT_PUBLIC_BUILD_NUMBER=${BUILD_NUMBER}
 
 # CRITICAL: Install libraries required for Prisma engines, Calibre for EPUB sanitation, Font packages for Kometa poster overlay rendering, and ffmpeg/yt-dlp for placeholder trailers
 RUN apt-get update && apt-get install -y openssl calibre bash ffmpeg curl python3 fontconfig fonts-dejavu-core fonts-liberation fonts-freefont-ttf && \

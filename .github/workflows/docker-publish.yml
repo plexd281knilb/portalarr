@@ -73,5 +73,8 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             BASE_IMAGE=node:20-bookworm-slim
+            GIT_BRANCH=${{ github.ref_name }}
+            GIT_SHA=${{ github.sha }}
+            BUILD_NUMBER=${{ github.run_number }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
