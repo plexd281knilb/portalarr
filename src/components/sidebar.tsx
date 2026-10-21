@@ -1,412 +1,51 @@
-"use client"
+"use client";
 
 import { BuildBadge } from "@/components/build-badge";
-import { useState, useEffect } from "react"
-import Link from "next/link"
-import { usePathname, useSearchParams } from "next/navigation"
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
-import { logout, getSession } from "@/app/auth-actions" 
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { logout, getSession } from "@/app/auth-actions";
 import { 
   LayoutDashboard, 
   Settings, 
-  Menu,
-  X,
-  LogOut,
-  LifeBuoy,
-  BookOpen,
-  User,
-  Terminal,
-  Film,
-  Tv,
-  Sparkles,
-  Trash2,
-  Tag,
-  Compass,
-  Inbox,
-  HelpCircle,
-  Activity,
-  Layers,
-  Bot
-} from "lucide-react"
+  Menu, 
+  X, 
+  LogOut, 
+  LifeBuoy, 
+  BookOpen, 
+  User, 
+  Terminal, 
+  Film, 
+  Tv, 
+  Sparkles, 
+  Trash2, 
+  Tag, 
+  Compass, 
+  HelpCircle, 
+  Activity, 
+  Layers, 
+  Bot,
+  ChevronDown
+} from "lucide-react";
 
-export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
-  const pathname = usePathname()
-  const searchParams = useSearchParams()
-  const currentTab = searchParams?.get("tab")
-  const isLogsActive = pathname === "/settings" && currentTab === "logs"
-  const isSettingsActive = pathname.startsWith("/settings") && pathname !== "/settings/profile" && !isLogsActive
-  const [isAdmin, setIsAdmin] = useState(false)
-  const [isSuperUser, setIsSuperUser] = useState(false)
-  const [isTrial, setIsTrial] = useState(false)
-  const [role, setRole] = useState("")
-
-  useEffect(() => {
-    getSession().then((session) => {
-      if (session) {
-        const userRole = (session.role as string) || "";
-        const userStatus = (session.status as string) || "";
-        const trial = (userStatus === "TRIAL" || userRole === "TRIAL" || (session as any).isTrial === true) && userStatus !== "APPROVED" && userRole !== "ADMIN";
-        setRole(userRole);
-        setIsAdmin(userRole === "ADMIN");
-        setIsSuperUser(userRole === "SUPER_USER" || userRole === "ADMIN");
-        setIsTrial(trial);
-      } else {
-        setIsAdmin(false);
-        setIsSuperUser(false);
-        setIsTrial(false);
-        setRole("");
-      }
-    }).catch(() => {
-      setIsAdmin(false);
-      setIsSuperUser(false);
-      setIsTrial(false);
-      setRole("");
-    });
-  }, [pathname]);
-
-  return (
-    <div className={cn("h-full border-r bg-[#101014] text-sidebar-foreground border-border/40 flex flex-col justify-between select-none min-h-0", className)}>
-      <div className="flex-1 overflow-y-auto space-y-4 py-4">
-        <div className="px-3 py-2">
-          <div className="flex items-center gap-2.5 px-3 mb-6">
-            <div className="h-8 w-8 rounded-lg bg-primary/20 border border-primary/40 flex items-center justify-center text-primary shadow-[0_0_12px_rgba(52,211,153,0.3)]">
-              <BookOpen className="h-4 w-4" />
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <h2 className="text-base font-extrabold tracking-tight text-foreground">
-                  DomsHomeLab
-                </h2>
-                <BuildBadge variant="compact" />
-              </div>
-              <div className="flex items-center justify-between gap-1 pt-0.5">
-                <p className="text-[10px] text-muted-foreground font-medium">d281knilb Media Server</p>
-                <BuildBadge variant="subtle" className="text-[9px]" />
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <Link href="/">
-              <Button
-                variant={pathname === "/" ? "secondary" : "ghost"}
-                className={cn(
-                  "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                  pathname === "/"
-                    ? "bg-primary/15 text-primary border border-primary/30 shadow-[0_0_10px_rgba(52,211,153,0.15)] ring-1 ring-primary/40 font-bold"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-muted-foreground/30"
-                )}
-              >
-                <LayoutDashboard className="mr-2 h-4 w-4 text-primary" />
-                Dashboard
-              </Button>
-            </Link>
-
-            <Link href="/discover">
-              <Button
-                variant={pathname.startsWith("/discover") || pathname.startsWith("/requests") ? "secondary" : "ghost"}
-                className={cn(
-                  "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                  pathname.startsWith("/discover") || pathname.startsWith("/requests")
-                    ? "bg-rose-500/15 text-rose-300 border border-rose-500/30 shadow-[0_0_10px_rgba(244,63,94,0.15)] ring-1 ring-rose-500/40 font-bold"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-rose-500/40"
-                )}
-              >
-                <Compass className="mr-2 h-4 w-4 text-rose-400" />
-                Media Requests
-              </Button>
-            </Link>
-
-            {!isTrial && (
-              <Link href="/library">
-                <Button
-                  variant={pathname.startsWith("/library") ? "secondary" : "ghost"}
-                  className={cn(
-                    "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                    pathname.startsWith("/library")
-                      ? "bg-primary/15 text-primary border border-primary/30 shadow-[0_0_10px_rgba(52,211,153,0.15)] ring-1 ring-primary/40 font-bold"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-primary/40"
-                  )}
-                >
-                  <BookOpen className="mr-2 h-4 w-4 text-emerald-400" />
-                  Book Library
-                </Button>
-              </Link>
-            )}
-
-            <Link href="/guides">
-              <Button
-                variant={pathname.startsWith("/guides") ? "secondary" : "ghost"}
-                className={cn(
-                  "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                  pathname.startsWith("/guides")
-                    ? "bg-sky-500/15 text-sky-300 border border-sky-500/30 shadow-[0_0_10px_rgba(56,189,248,0.2)] ring-1 ring-sky-500/40 font-bold"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-sky-400/40"
-                )}
-              >
-                <HelpCircle className="mr-2 h-4 w-4 text-sky-400" />
-                Setup Guides
-              </Button>
-            </Link>
-
-            <Link 
-              href="/?openAssistant=true"
-              onClick={() => {
-                if (typeof window !== "undefined") {
-                  window.dispatchEvent(new CustomEvent("open-ai-assistant"));
-                }
-              }}
-            >
-              <Button
-                variant="ghost"
-                className="w-full justify-between text-xs font-semibold h-9 rounded-lg transition-all duration-200 text-purple-400/90 hover:text-purple-200 hover:bg-purple-950/30 hover:ring-1 hover:ring-purple-500/40"
-              >
-                <div className="flex items-center">
-                  <Bot className="mr-2 h-4 w-4 text-purple-400" />
-                  <span>AI Assistant</span>
-                </div>
-                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                  24/7 Fixes
-                </span>
-              </Button>
-            </Link>
-
-            <Link href="/tickets">
-              <Button
-                variant={pathname.startsWith("/tickets") || pathname.startsWith("/admin/tickets") ? "secondary" : "ghost"}
-                className={cn(
-                  "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                  pathname.startsWith("/tickets") || pathname.startsWith("/admin/tickets")
-                    ? "bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-[0_0_10px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/40 font-bold"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-amber-500/40"
-                )}
-              >
-                <LifeBuoy className="mr-2 h-4 w-4 text-amber-400" />
-                Support Tickets
-              </Button>
-            </Link>
-
-            <Link href="/profile">
-              <Button
-                variant={pathname === "/profile" || pathname === "/settings/profile" ? "secondary" : "ghost"}
-                className={cn(
-                  "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                  pathname === "/profile" || pathname === "/settings/profile"
-                    ? "bg-blue-500/15 text-blue-300 border border-blue-500/30 shadow-[0_0_10px_rgba(59,130,246,0.2)] ring-1 ring-blue-500/40 font-bold"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-blue-500/40"
-                )}
-              >
-                <User className="mr-2 h-4 w-4 text-blue-400" />
-                Account Settings
-              </Button>
-            </Link>
-
-            {(isAdmin || isSuperUser) && (
-              <>
-                <div className="pt-2 pb-1 px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
-                  Media Apps
-                </div>
-                <Link href="/radarr">
-                  <Button
-                    variant={pathname.startsWith("/radarr") ? "secondary" : "ghost"}
-                    className={cn(
-                      "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                      pathname.startsWith("/radarr")
-                        ? "bg-blue-500/15 text-blue-300 border border-blue-500/30 shadow-[0_0_10px_rgba(59,130,246,0.25)] ring-1 ring-blue-500/40 font-bold"
-                        : "text-blue-400/80 hover:text-blue-300 hover:bg-blue-950/30 hover:ring-1 hover:ring-blue-500/40"
-                    )}
-                  >
-                    <Film className="mr-2 h-4 w-4 text-blue-400" />
-                    Radarr (Movies)
-                  </Button>
-                </Link>
-                <Link href="/sonarr">
-                  <Button
-                    variant={pathname.startsWith("/sonarr") ? "secondary" : "ghost"}
-                    className={cn(
-                      "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                      pathname.startsWith("/sonarr")
-                        ? "bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 shadow-[0_0_10px_rgba(6,182,212,0.25)] ring-1 ring-cyan-500/40 font-bold"
-                        : "text-cyan-400/80 hover:text-cyan-300 hover:bg-cyan-950/30 hover:ring-1 hover:ring-cyan-500/40"
-                    )}
-                  >
-                    <Tv className="mr-2 h-4 w-4 text-cyan-400" />
-                    Sonarr (TV Shows)
-                  </Button>
-                </Link>
-              </>
-            )}
-
-            {isAdmin && (
-              <>
-                <div className="pt-2 pb-1 px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
-                  Administration
-                </div>
-                <Link href="/admin/tautulli">
-                  <Button
-                    variant={pathname.startsWith("/admin/tautulli") || pathname.startsWith("/admin/streams") || pathname.startsWith("/tautulli") || pathname.startsWith("/streams") ? "secondary" : "ghost"}
-                    className={cn(
-                      "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                      pathname.startsWith("/admin/tautulli") || pathname.startsWith("/admin/streams") || pathname.startsWith("/tautulli") || pathname.startsWith("/streams")
-                        ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.25)] ring-1 ring-emerald-500/40 font-bold"
-                        : "text-emerald-400/80 hover:text-emerald-300 hover:bg-emerald-950/30 hover:ring-1 hover:ring-emerald-500/40"
-                    )}
-                  >
-                    <Activity className="mr-2 h-4 w-4 text-emerald-400" />
-                    Stream Intelligence
-                  </Button>
-                </Link>
-
-                <Link href="/admin/monitoring">
-                  <Button
-                    variant={pathname.startsWith("/admin/monitoring") ? "secondary" : "ghost"}
-                    className={cn(
-                      "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                      pathname.startsWith("/admin/monitoring")
-                        ? "bg-sky-500/15 text-sky-300 border border-sky-500/30 shadow-[0_0_10px_rgba(14,165,233,0.25)] ring-1 ring-sky-500/40 font-bold"
-                        : "text-sky-400/80 hover:text-sky-300 hover:bg-sky-950/30 hover:ring-1 hover:ring-sky-500/40"
-                    )}
-                  >
-                    <Layers className="mr-2 h-4 w-4 text-sky-400" />
-                    Fleet & Monitoring
-                  </Button>
-                </Link>
-
-                <Link href="/curation/kometa">
-                  <Button
-                    variant={pathname === "/curation" || pathname.startsWith("/curation/kometa") ? "secondary" : "ghost"}
-                    className={cn(
-                      "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                      pathname === "/curation" || pathname.startsWith("/curation/kometa")
-                        ? "bg-purple-500/15 text-purple-300 border border-purple-500/30 shadow-[0_0_10px_rgba(168,85,247,0.25)] ring-1 ring-purple-500/40 font-bold"
-                        : "text-purple-400/80 hover:text-purple-300 hover:bg-purple-950/30 hover:ring-1 hover:ring-purple-500/40"
-                    )}
-                  >
-                    <Sparkles className="mr-2 h-4 w-4 text-purple-400" />
-                    Kometa Overlays
-                  </Button>
-                </Link>
-
-                <Link href="/curation/agregarr">
-                  <Button
-                    variant={pathname.startsWith("/curation/agregarr") ? "secondary" : "ghost"}
-                    className={cn(
-                      "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                      pathname.startsWith("/curation/agregarr")
-                        ? "bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-[0_0_10px_rgba(245,158,11,0.25)] ring-1 ring-amber-500/40 font-bold"
-                        : "text-amber-400/80 hover:text-amber-300 hover:bg-amber-950/30 hover:ring-1 hover:ring-amber-500/40"
-                    )}
-                  >
-                    <Film className="mr-2 h-4 w-4 text-amber-400" />
-                    Agregarr Hubs
-                  </Button>
-                </Link>
-
-                <Link href="/curation/prune">
-                  <Button
-                    variant={pathname.startsWith("/curation/prune") ? "secondary" : "ghost"}
-                    className={cn(
-                      "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                      pathname.startsWith("/curation/prune")
-                        ? "bg-rose-500/15 text-rose-300 border border-rose-500/30 shadow-[0_0_10px_rgba(244,63,94,0.25)] ring-1 ring-rose-500/40 font-bold"
-                        : "text-rose-400/80 hover:text-rose-300 hover:bg-rose-950/30 hover:ring-1 hover:ring-rose-500/40"
-                    )}
-                  >
-                    <Trash2 className="mr-2 h-4 w-4 text-rose-400" />
-                    Maintainerr Prune
-                  </Button>
-                </Link>
-
-                <Link href="/curation/tagging">
-                  <Button
-                    variant={pathname.startsWith("/curation/tagging") ? "secondary" : "ghost"}
-                    className={cn(
-                      "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                      pathname.startsWith("/curation/tagging")
-                        ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.25)] ring-1 ring-emerald-500/40 font-bold"
-                        : "text-emerald-400/80 hover:text-emerald-300 hover:bg-emerald-950/30 hover:ring-1 hover:ring-emerald-500/40"
-                    )}
-                  >
-                    <Tag className="mr-2 h-4 w-4 text-emerald-400" />
-                    Tagging Studio
-                  </Button>
-                </Link>
-
-                <Link href="/admin/scripts">
-                  <Button
-                    variant={pathname.startsWith("/admin/scripts") ? "secondary" : "ghost"}
-                    className={cn(
-                      "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                      pathname.startsWith("/admin/scripts")
-                        ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.25)] ring-1 ring-emerald-500/40 font-bold"
-                        : "text-emerald-400/80 hover:text-emerald-300 hover:bg-emerald-950/30 hover:ring-1 hover:ring-emerald-500/40"
-                    )}
-                  >
-                    <Terminal className="mr-2 h-4 w-4 text-emerald-400" />
-                    User Scripts
-                  </Button>
-                </Link>
-
-                <Link href="/settings">
-                  <Button
-                    variant={isSettingsActive ? "secondary" : "ghost"}
-                    className={cn(
-                      "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                      isSettingsActive
-                        ? "bg-primary/15 text-primary border border-primary/30 shadow-[0_0_10px_rgba(52,211,153,0.15)] ring-1 ring-primary/40 font-bold"
-                        : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-primary/40"
-                    )}
-                  >
-                    <Settings className="mr-2 h-4 w-4 text-primary" />
-                    System Settings
-                  </Button>
-                </Link>
-
-                <Link href="/settings?tab=logs">
-                  <Button
-                    variant={isLogsActive ? "secondary" : "ghost"}
-                    className={cn(
-                      "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                      isLogsActive
-                        ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.25)] ring-1 ring-emerald-500/40 font-bold"
-                        : "text-emerald-400/80 hover:text-emerald-300 hover:bg-emerald-950/30 hover:ring-1 hover:ring-emerald-500/40"
-                    )}
-                  >
-                    <Terminal className="mr-2 h-4 w-4 text-emerald-400" />
-                    Live System Logs
-                  </Button>
-                </Link>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="px-3 py-4 space-y-1 border-t border-border/30">
-        <Button 
-            variant="ghost" 
-            className="w-full justify-start text-xs font-semibold h-9 text-red-400 hover:text-red-300 hover:bg-red-950/30 hover:ring-1 hover:ring-red-500/40 transition-all rounded-lg"
-            onClick={() => logout()}
-        >
-            <LogOut className="mr-2 h-4 w-4 text-red-400" /> Log Out
-        </Button>
-      </div>
-    </div>
-  )
+interface SidebarNavContentProps {
+  onItemClick?: () => void;
 }
 
-export function MobileSidebar() {
-  const [isOpen, setIsOpen] = useState(false);
+function SidebarNavContent({ onItemClick }: SidebarNavContentProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const currentTab = searchParams?.get("tab");
   const isLogsActive = pathname === "/settings" && currentTab === "logs";
   const isSettingsActive = pathname.startsWith("/settings") && pathname !== "/settings/profile" && !isLogsActive;
+  const isCurationActive = pathname.startsWith("/curation");
+
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSuperUser, setIsSuperUser] = useState(false);
   const [isTrial, setIsTrial] = useState(false);
-  const [role, setRole] = useState("");
+  const [curationOpen, setCurationOpen] = useState(true);
 
   useEffect(() => {
     getSession().then((session) => {
@@ -414,7 +53,6 @@ export function MobileSidebar() {
         const userRole = (session.role as string) || "";
         const userStatus = (session.status as string) || "";
         const trial = (userStatus === "TRIAL" || userRole === "TRIAL" || (session as any).isTrial === true) && userStatus !== "APPROVED" && userRole !== "ADMIN";
-        setRole(userRole);
         setIsAdmin(userRole === "ADMIN");
         setIsSuperUser(userRole === "SUPER_USER" || userRole === "ADMIN");
         setIsTrial(trial);
@@ -422,336 +60,417 @@ export function MobileSidebar() {
         setIsAdmin(false);
         setIsSuperUser(false);
         setIsTrial(false);
-        setRole("");
       }
     }).catch(() => {
       setIsAdmin(false);
       setIsSuperUser(false);
       setIsTrial(false);
-      setRole("");
     });
+  }, [pathname]);
+
+  useEffect(() => {
+    if (isCurationActive) {
+      setCurationOpen(true);
+    }
+  }, [isCurationActive]);
+
+  const navItemClass = (isActive: boolean) =>
+    cn(
+      "w-full justify-start text-xs font-medium h-9 rounded-lg transition-colors border-l-2 group select-none",
+      isActive
+        ? "bg-primary/10 text-primary font-semibold border-primary rounded-l-none pl-2.5 shadow-none"
+        : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05] border-transparent pl-2.5"
+    );
+
+  const iconClass = (isActive: boolean) =>
+    cn(
+      "mr-2.5 h-4 w-4 shrink-0 transition-colors",
+      isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
+    );
+
+  return (
+    <div>
+      {/* Brand Header */}
+      <div className="flex items-center gap-2.5 px-2.5 mb-5 select-none">
+        <div className="h-8 w-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
+          <BookOpen className="h-4 w-4" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-1.5">
+            <h2 className="text-sm font-bold tracking-tight text-foreground truncate">
+              DomsHomeLab
+            </h2>
+            <BuildBadge variant="compact" />
+          </div>
+          <p className="text-[11px] text-muted-foreground/70 truncate">d281knilb Media Server</p>
+        </div>
+      </div>
+
+      {/* Main Navigation */}
+      <div className="space-y-1">
+        <Link href="/" onClick={onItemClick}>
+          <Button variant="ghost" className={navItemClass(pathname === "/")}>
+            <LayoutDashboard className={iconClass(pathname === "/")} />
+            <span className="truncate">Dashboard</span>
+          </Button>
+        </Link>
+
+        <Link href="/discover" onClick={onItemClick}>
+          <Button
+            variant="ghost"
+            className={navItemClass(pathname.startsWith("/discover") || pathname.startsWith("/requests"))}
+          >
+            <Compass className={iconClass(pathname.startsWith("/discover") || pathname.startsWith("/requests"))} />
+            <span className="truncate">Media Requests</span>
+          </Button>
+        </Link>
+
+        {!isTrial && (
+          <Link href="/library" onClick={onItemClick}>
+            <Button variant="ghost" className={navItemClass(pathname.startsWith("/library"))}>
+              <BookOpen className={iconClass(pathname.startsWith("/library"))} />
+              <span className="truncate">Book Library</span>
+            </Button>
+          </Link>
+        )}
+
+        <Link href="/guides" onClick={onItemClick}>
+          <Button variant="ghost" className={navItemClass(pathname.startsWith("/guides"))}>
+            <HelpCircle className={iconClass(pathname.startsWith("/guides"))} />
+            <span className="truncate">Setup Guides</span>
+          </Button>
+        </Link>
+
+        <Link 
+          href="/?openAssistant=true"
+          onClick={() => {
+            onItemClick?.();
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(new CustomEvent("open-ai-assistant"));
+            }
+          }}
+        >
+          <Button
+            variant="ghost"
+            className="w-full justify-between text-xs font-medium h-9 rounded-lg transition-colors border-l-2 border-transparent pl-2.5 text-muted-foreground hover:text-foreground hover:bg-white/[0.05] group select-none"
+          >
+            <div className="flex items-center min-w-0">
+              <Bot className="mr-2.5 h-4 w-4 shrink-0 text-muted-foreground group-hover:text-foreground transition-colors" />
+              <span className="truncate">AI Assistant</span>
+            </div>
+            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-primary/10 text-primary/90 border border-primary/20 shrink-0">
+              24/7 Fixes
+            </span>
+          </Button>
+        </Link>
+
+        <Link href="/tickets" onClick={onItemClick}>
+          <Button
+            variant="ghost"
+            className={navItemClass(pathname.startsWith("/tickets") || pathname.startsWith("/admin/tickets"))}
+          >
+            <LifeBuoy className={iconClass(pathname.startsWith("/tickets") || pathname.startsWith("/admin/tickets"))} />
+            <span className="truncate">Support Tickets</span>
+          </Button>
+        </Link>
+
+        <Link href="/profile" onClick={onItemClick}>
+          <Button
+            variant="ghost"
+            className={navItemClass(pathname === "/profile" || pathname === "/settings/profile")}
+          >
+            <User className={iconClass(pathname === "/profile" || pathname === "/settings/profile")} />
+            <span className="truncate">Account Settings</span>
+          </Button>
+        </Link>
+      </div>
+
+      {/* Media Apps Section */}
+      {(isAdmin || isSuperUser) && (
+        <div className="pt-2">
+          <div className="border-t border-border/30 pt-3 pb-1 mt-2 px-2.5 text-[10px] font-semibold tracking-wider uppercase text-muted-foreground/60 select-none">
+            Media Apps
+          </div>
+          <div className="space-y-1">
+            <Link href="/radarr" onClick={onItemClick}>
+              <Button variant="ghost" className={navItemClass(pathname.startsWith("/radarr"))}>
+                <Film className={iconClass(pathname.startsWith("/radarr"))} />
+                <span className="truncate">Radarr (Movies)</span>
+              </Button>
+            </Link>
+            <Link href="/sonarr" onClick={onItemClick}>
+              <Button variant="ghost" className={navItemClass(pathname.startsWith("/sonarr"))}>
+                <Tv className={iconClass(pathname.startsWith("/sonarr"))} />
+                <span className="truncate">Sonarr (TV Shows)</span>
+              </Button>
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {/* Administration Section */}
+      {isAdmin && (
+        <div className="pt-2">
+          <div className="border-t border-border/30 pt-3 pb-1 mt-2 px-2.5 text-[10px] font-semibold tracking-wider uppercase text-muted-foreground/60 select-none">
+            Administration
+          </div>
+          <div className="space-y-1">
+            <Link href="/admin/tautulli" onClick={onItemClick}>
+              <Button
+                variant="ghost"
+                className={navItemClass(
+                  pathname.startsWith("/admin/tautulli") || 
+                  pathname.startsWith("/admin/streams") || 
+                  pathname.startsWith("/tautulli") || 
+                  pathname.startsWith("/streams")
+                )}
+              >
+                <Activity className={iconClass(
+                  pathname.startsWith("/admin/tautulli") || 
+                  pathname.startsWith("/admin/streams") || 
+                  pathname.startsWith("/tautulli") || 
+                  pathname.startsWith("/streams")
+                )} />
+                <span className="truncate">Stream Intelligence</span>
+              </Button>
+            </Link>
+
+            <Link href="/admin/monitoring" onClick={onItemClick}>
+              <Button variant="ghost" className={navItemClass(pathname.startsWith("/admin/monitoring"))}>
+                <Layers className={iconClass(pathname.startsWith("/admin/monitoring"))} />
+                <span className="truncate">Fleet & Monitoring</span>
+              </Button>
+            </Link>
+
+            <Link href="/admin/scripts" onClick={onItemClick}>
+              <Button variant="ghost" className={navItemClass(pathname.startsWith("/admin/scripts"))}>
+                <Terminal className={iconClass(pathname.startsWith("/admin/scripts"))} />
+                <span className="truncate">User Scripts</span>
+              </Button>
+            </Link>
+
+            {/* Curation Studios Group */}
+            <div className="pt-1.5">
+              <button
+                type="button"
+                onClick={() => setCurationOpen(!curationOpen)}
+                className="w-full flex items-center justify-between px-2.5 py-1.5 text-[10px] font-semibold tracking-wider uppercase text-muted-foreground/60 hover:text-foreground transition-colors group select-none rounded-md hover:bg-white/[0.03]"
+              >
+                <div className="flex items-center gap-1.5">
+                  <Sparkles className="h-3 w-3 text-muted-foreground/70 group-hover:text-primary transition-colors" />
+                  <span>Curation Studios</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-white/[0.04] text-muted-foreground/60 border border-white/[0.06]">
+                    4
+                  </span>
+                  <ChevronDown
+                    className={cn(
+                      "h-3 w-3 text-muted-foreground/60 transition-transform duration-200",
+                      !curationOpen && "-rotate-90"
+                    )}
+                  />
+                </div>
+              </button>
+
+              {curationOpen && (
+                <div className="space-y-1 pl-2.5 ml-2.5 border-l border-border/20 mt-1">
+                  <Link href="/curation/kometa" onClick={onItemClick}>
+                    <Button
+                      variant="ghost"
+                      className={cn(
+                        "w-full justify-start text-xs font-medium h-8 rounded-md transition-colors border group select-none",
+                        pathname === "/curation" || pathname.startsWith("/curation/kometa")
+                          ? "bg-primary/10 text-primary font-semibold border-primary/20 shadow-none"
+                          : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05] border-transparent"
+                      )}
+                    >
+                      <Sparkles className={cn(
+                        "mr-2 h-3.5 w-3.5 shrink-0 transition-colors",
+                        (pathname === "/curation" || pathname.startsWith("/curation/kometa")) ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
+                      )} />
+                      <span className="truncate">Kometa Overlays</span>
+                    </Button>
+                  </Link>
+
+                  <Link href="/curation/agregarr" onClick={onItemClick}>
+                    <Button
+                      variant="ghost"
+                      className={cn(
+                        "w-full justify-start text-xs font-medium h-8 rounded-md transition-colors border group select-none",
+                        pathname.startsWith("/curation/agregarr")
+                          ? "bg-primary/10 text-primary font-semibold border-primary/20 shadow-none"
+                          : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05] border-transparent"
+                      )}
+                    >
+                      <Film className={cn(
+                        "mr-2 h-3.5 w-3.5 shrink-0 transition-colors",
+                        pathname.startsWith("/curation/agregarr") ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
+                      )} />
+                      <span className="truncate">Agregarr Hubs</span>
+                    </Button>
+                  </Link>
+
+                  <Link href="/curation/prune" onClick={onItemClick}>
+                    <Button
+                      variant="ghost"
+                      className={cn(
+                        "w-full justify-start text-xs font-medium h-8 rounded-md transition-colors border group select-none",
+                        pathname.startsWith("/curation/prune")
+                          ? "bg-primary/10 text-primary font-semibold border-primary/20 shadow-none"
+                          : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05] border-transparent"
+                      )}
+                    >
+                      <Trash2 className={cn(
+                        "mr-2 h-3.5 w-3.5 shrink-0 transition-colors",
+                        pathname.startsWith("/curation/prune") ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
+                      )} />
+                      <span className="truncate">Maintainerr Prune</span>
+                    </Button>
+                  </Link>
+
+                  <Link href="/curation/tagging" onClick={onItemClick}>
+                    <Button
+                      variant="ghost"
+                      className={cn(
+                        "w-full justify-start text-xs font-medium h-8 rounded-md transition-colors border group select-none",
+                        pathname.startsWith("/curation/tagging")
+                          ? "bg-primary/10 text-primary font-semibold border-primary/20 shadow-none"
+                          : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05] border-transparent"
+                      )}
+                    >
+                      <Tag className={cn(
+                        "mr-2 h-3.5 w-3.5 shrink-0 transition-colors",
+                        pathname.startsWith("/curation/tagging") ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
+                      )} />
+                      <span className="truncate">Tagging Studio</span>
+                    </Button>
+                  </Link>
+                </div>
+              )}
+            </div>
+
+            {/* Consolidated System Settings & Logs */}
+            <div className="pt-1.5">
+              <div className="flex items-center gap-1.5">
+                <Link href="/settings" className="flex-1 min-w-0" onClick={onItemClick}>
+                  <Button
+                    variant="ghost"
+                    className={cn(
+                      "w-full justify-start text-xs font-medium h-9 rounded-lg transition-colors border-l-2 group select-none",
+                      isSettingsActive
+                        ? "bg-primary/10 text-primary font-semibold border-primary rounded-l-none pl-2.5 shadow-none"
+                        : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05] border-transparent pl-2.5"
+                    )}
+                  >
+                    <Settings className={cn(
+                      "mr-2.5 h-4 w-4 shrink-0 transition-colors",
+                      isSettingsActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
+                    )} />
+                    <span className="truncate">System Settings</span>
+                  </Button>
+                </Link>
+                <Link href="/settings?tab=logs" title="Live System Logs" onClick={onItemClick}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={cn(
+                      "h-9 px-2.5 text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5 shrink-0 group border select-none",
+                      isLogsActive
+                        ? "bg-primary/10 text-primary font-semibold border-primary/20 shadow-none"
+                        : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05] border-transparent"
+                    )}
+                  >
+                    <Terminal className={cn(
+                      "h-3.5 w-3.5 transition-colors",
+                      isLogsActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
+                    )} />
+                    <span>Logs</span>
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div className={cn("h-full border-r bg-[#101014] text-sidebar-foreground border-border/40 flex flex-col justify-between select-none min-h-0", className)}>
+      <div className="flex-1 overflow-y-auto py-4 px-3 min-h-0">
+        <SidebarNavContent />
+      </div>
+
+      <div className="px-3 py-3 border-t border-border/30 mt-auto">
+        <Button 
+          variant="ghost" 
+          className="w-full justify-start text-xs font-medium h-9 text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors rounded-lg group select-none"
+          onClick={() => logout()}
+        >
+          <LogOut className="mr-2.5 h-4 w-4 text-muted-foreground group-hover:text-red-400 transition-colors" />
+          <span>Log Out</span>
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+export function MobileSidebar() {
+  const [isOpen, setIsOpen] = useState(false);
+  const pathname = usePathname();
+
+  useEffect(() => {
+    setIsOpen(false);
   }, [pathname]);
 
   return (
     <>
-      <Button variant="ghost" size="icon" onClick={() => setIsOpen(true)} className="md:hidden hover:ring-1 hover:ring-primary/40 rounded-lg">
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => setIsOpen(true)}
+        className="md:hidden hover:bg-white/[0.05] rounded-lg text-muted-foreground hover:text-foreground"
+      >
         <Menu className="h-6 w-6" />
       </Button>
 
       {isOpen && (
         <div className="fixed inset-0 z-50 flex animate-in fade-in duration-200">
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm transition-opacity" onClick={() => setIsOpen(false)} />
+          <div
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm transition-opacity"
+            onClick={() => setIsOpen(false)}
+          />
           <div className="relative flex w-68 max-w-xs flex-1 flex-col bg-[#101014] text-sidebar-foreground pb-4 pt-5 shadow-2xl transition-all duration-300 ease-in-out border-r border-border/50">
             <div className="absolute right-0 top-0 -mr-12 pt-2">
-              <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)} className="hover:bg-white/10 rounded-full">
-                <X className="h-6 w-6 text-white" />
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsOpen(false)}
+                className="hover:bg-white/10 rounded-full text-white"
+              >
+                <X className="h-6 w-6" />
               </Button>
             </div>
 
-            <div className="flex-1 px-3 pb-4 flex flex-col justify-between min-h-0 overflow-hidden">
-              <div className="flex-1 overflow-y-auto pr-1">
-                <div className="flex items-center gap-2.5 px-3 mb-6">
-                  <div className="h-8 w-8 rounded-lg bg-primary/20 border border-primary/40 flex items-center justify-center text-primary shadow-[0_0_12px_rgba(52,211,153,0.3)]">
-                    <BookOpen className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-1.5">
-                      <h2 className="text-base font-extrabold tracking-tight text-foreground">
-                        DomsHomeLab
-                      </h2>
-                      <BuildBadge variant="compact" />
-                    </div>
-                    <div className="flex items-center justify-between gap-1 pt-0.5">
-                      <p className="text-[10px] text-muted-foreground font-medium">d281knilb Media Server</p>
-                      <BuildBadge variant="subtle" className="text-[9px]" />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Link href="/" onClick={() => setIsOpen(false)}>
-                    <Button
-                      variant={pathname === "/" ? "secondary" : "ghost"}
-                      className={cn(
-                        "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                        pathname === "/"
-                          ? "bg-primary/15 text-primary border border-primary/30 shadow-[0_0_10px_rgba(52,211,153,0.15)] ring-1 ring-primary/40 font-bold"
-                          : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-muted-foreground/30"
-                      )}
-                    >
-                      <LayoutDashboard className="mr-2 h-4 w-4 text-primary" /> Dashboard
-                    </Button>
-                  </Link>
-
-                  <Link href="/discover" onClick={() => setIsOpen(false)}>
-                    <Button
-                      variant={pathname.startsWith("/discover") || pathname.startsWith("/requests") ? "secondary" : "ghost"}
-                      className={cn(
-                        "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                        pathname.startsWith("/discover") || pathname.startsWith("/requests")
-                          ? "bg-rose-500/15 text-rose-300 border border-rose-500/30 shadow-[0_0_10px_rgba(244,63,94,0.15)] ring-1 ring-rose-500/40 font-bold"
-                          : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-rose-500/40"
-                      )}
-                    >
-                      <Compass className="mr-2 h-4 w-4 text-rose-400" /> Media Requests
-                    </Button>
-                  </Link>
-
-                  {!isTrial && (
-                    <Link href="/library" onClick={() => setIsOpen(false)}>
-                      <Button
-                        variant={pathname.startsWith("/library") ? "secondary" : "ghost"}
-                        className={cn(
-                          "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                          pathname.startsWith("/library")
-                            ? "bg-primary/15 text-primary border border-primary/30 shadow-[0_0_10px_rgba(52,211,153,0.15)] ring-1 ring-primary/40 font-bold"
-                            : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-primary/40"
-                        )}
-                      >
-                        <BookOpen className="mr-2 h-4 w-4 text-emerald-400" /> Book Library
-                      </Button>
-                    </Link>
-                  )}
-
-                  <Link href="/guides" onClick={() => setIsOpen(false)}>
-                    <Button
-                      variant={pathname.startsWith("/guides") ? "secondary" : "ghost"}
-                      className={cn(
-                        "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                        pathname.startsWith("/guides")
-                          ? "bg-sky-500/15 text-sky-300 border border-sky-500/30 shadow-[0_0_10px_rgba(56,189,248,0.2)] ring-1 ring-sky-500/40 font-bold"
-                          : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-sky-400/40"
-                      )}
-                    >
-                      <HelpCircle className="mr-2 h-4 w-4 text-sky-400" /> Setup Guides
-                    </Button>
-                  </Link>
-
-                  <Link 
-                    href="/?openAssistant=true" 
-                    onClick={() => {
-                      setIsOpen(false);
-                      if (typeof window !== "undefined") {
-                        window.dispatchEvent(new CustomEvent("open-ai-assistant"));
-                      }
-                    }}
-                  >
-                    <Button
-                      variant="ghost"
-                      className="w-full justify-between text-xs font-semibold h-9 rounded-lg transition-all duration-200 text-purple-400/90 hover:text-purple-200 hover:bg-purple-950/30 hover:ring-1 hover:ring-purple-500/40"
-                    >
-                      <div className="flex items-center">
-                        <Bot className="mr-2 h-4 w-4 text-purple-400" />
-                        <span>AI Assistant</span>
-                      </div>
-                      <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                        24/7 Fixes
-                      </span>
-                    </Button>
-                  </Link>
-                  
-                  <Link href="/tickets" onClick={() => setIsOpen(false)}>
-                    <Button
-                      variant={pathname.startsWith("/tickets") || pathname.startsWith("/admin/tickets") ? "secondary" : "ghost"}
-                      className={cn(
-                        "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                        pathname.startsWith("/tickets") || pathname.startsWith("/admin/tickets")
-                          ? "bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-[0_0_10px_rgba(245,158,11,0.2)] ring-1 ring-amber-500/40 font-bold"
-                          : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-amber-500/40"
-                      )}
-                    >
-                      <LifeBuoy className="mr-2 h-4 w-4 text-amber-400" /> Support Tickets
-                    </Button>
-                  </Link>
-
-                  <Link href="/profile" onClick={() => setIsOpen(false)}>
-                    <Button
-                      variant={pathname === "/profile" || pathname === "/settings/profile" ? "secondary" : "ghost"}
-                      className={cn(
-                        "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                        pathname === "/profile" || pathname === "/settings/profile"
-                          ? "bg-blue-500/15 text-blue-300 border border-blue-500/30 shadow-[0_0_10px_rgba(59,130,246,0.2)] ring-1 ring-blue-500/40 font-bold"
-                          : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-blue-500/40"
-                      )}
-                    >
-                      <User className="mr-2 h-4 w-4 text-blue-400" /> Account Settings
-                    </Button>
-                  </Link>
-
-                  {(isAdmin || isSuperUser) && (
-                    <>
-                      <div className="pt-2 pb-1 px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
-                        Media Apps
-                      </div>
-                      <Link href="/radarr" onClick={() => setIsOpen(false)}>
-                        <Button
-                          variant={pathname.startsWith("/radarr") ? "secondary" : "ghost"}
-                          className={cn(
-                            "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                            pathname.startsWith("/radarr")
-                              ? "bg-blue-500/15 text-blue-300 border border-blue-500/30 shadow-[0_0_10px_rgba(59,130,246,0.25)] ring-1 ring-blue-500/40 font-bold"
-                              : "text-blue-400/80 hover:text-blue-300 hover:bg-blue-950/30 hover:ring-1 hover:ring-blue-500/40"
-                          )}
-                        >
-                          <Film className="mr-2 h-4 w-4 text-blue-400" /> Radarr (Movies)
-                        </Button>
-                      </Link>
-                      <Link href="/sonarr" onClick={() => setIsOpen(false)}>
-                        <Button
-                          variant={pathname.startsWith("/sonarr") ? "secondary" : "ghost"}
-                          className={cn(
-                            "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                            pathname.startsWith("/sonarr")
-                              ? "bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 shadow-[0_0_10px_rgba(6,182,212,0.25)] ring-1 ring-cyan-500/40 font-bold"
-                              : "text-cyan-400/80 hover:text-cyan-300 hover:bg-cyan-950/30 hover:ring-1 hover:ring-cyan-500/40"
-                          )}
-                        >
-                          <Tv className="mr-2 h-4 w-4 text-cyan-400" /> Sonarr (TV Shows)
-                        </Button>
-                      </Link>
-                    </>
-                  )}
-
-                  {isAdmin && (
-                    <>
-                      <div className="pt-2 pb-1 px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
-                        Administration
-                      </div>
-                      <Link href="/admin/tautulli" onClick={() => setIsOpen(false)}>
-                        <Button
-                          variant={pathname.startsWith("/admin/tautulli") || pathname.startsWith("/admin/streams") || pathname.startsWith("/tautulli") || pathname.startsWith("/streams") ? "secondary" : "ghost"}
-                          className={cn(
-                            "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                            pathname.startsWith("/admin/tautulli") || pathname.startsWith("/admin/streams") || pathname.startsWith("/tautulli") || pathname.startsWith("/streams")
-                              ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-[0_0_10px_rgba(168,185,129,0.25)] ring-1 ring-emerald-500/40 font-bold"
-                              : "text-emerald-400/80 hover:text-emerald-300 hover:bg-emerald-950/30 hover:ring-1 hover:ring-emerald-500/40"
-                          )}
-                        >
-                          <Activity className="mr-2 h-4 w-4 text-emerald-400" /> Stream Intelligence
-                        </Button>
-                      </Link>
-                      <Link href="/admin/monitoring" onClick={() => setIsOpen(false)}>
-                        <Button
-                          variant={pathname.startsWith("/admin/monitoring") ? "secondary" : "ghost"}
-                          className={cn(
-                            "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                            pathname.startsWith("/admin/monitoring")
-                              ? "bg-sky-500/15 text-sky-300 border border-sky-500/30 shadow-[0_0_10px_rgba(14,165,233,0.25)] ring-1 ring-sky-500/40 font-bold"
-                              : "text-sky-400/80 hover:text-sky-300 hover:bg-sky-950/30 hover:ring-1 hover:ring-sky-500/40"
-                          )}
-                        >
-                          <Layers className="mr-2 h-4 w-4 text-sky-400" /> Fleet & Monitoring
-                        </Button>
-                      </Link>
-                      <Link href="/curation/kometa" onClick={() => setIsOpen(false)}>
-                        <Button
-                          variant={pathname === "/curation" || pathname.startsWith("/curation/kometa") ? "secondary" : "ghost"}
-                          className={cn(
-                            "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                            pathname === "/curation" || pathname.startsWith("/curation/kometa")
-                              ? "bg-purple-500/15 text-purple-300 border border-purple-500/30 shadow-[0_0_10px_rgba(168,85,247,0.25)] ring-1 ring-purple-500/40 font-bold"
-                              : "text-purple-400/80 hover:text-purple-300 hover:bg-purple-950/30 hover:ring-1 hover:ring-purple-500/40"
-                          )}
-                        >
-                          <Sparkles className="mr-2 h-4 w-4 text-purple-400" /> Kometa Overlays
-                        </Button>
-                      </Link>
-
-                      <Link href="/curation/agregarr" onClick={() => setIsOpen(false)}>
-                        <Button
-                          variant={pathname.startsWith("/curation/agregarr") ? "secondary" : "ghost"}
-                          className={cn(
-                            "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                            pathname.startsWith("/curation/agregarr")
-                              ? "bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-[0_0_10px_rgba(245,158,11,0.25)] ring-1 ring-amber-500/40 font-bold"
-                              : "text-amber-400/80 hover:text-amber-300 hover:bg-amber-950/30 hover:ring-1 hover:ring-amber-500/40"
-                          )}
-                        >
-                          <Film className="mr-2 h-4 w-4 text-amber-400" /> Agregarr Hubs
-                        </Button>
-                      </Link>
-
-                      <Link href="/curation/prune" onClick={() => setIsOpen(false)}>
-                        <Button
-                          variant={pathname.startsWith("/curation/prune") ? "secondary" : "ghost"}
-                          className={cn(
-                            "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                            pathname.startsWith("/curation/prune")
-                              ? "bg-rose-500/15 text-rose-300 border border-rose-500/30 shadow-[0_0_10px_rgba(244,63,94,0.25)] ring-1 ring-rose-500/40 font-bold"
-                              : "text-rose-400/80 hover:text-rose-300 hover:bg-rose-950/30 hover:ring-1 hover:ring-rose-500/40"
-                          )}
-                        >
-                          <Trash2 className="mr-2 h-4 w-4 text-rose-400" /> Maintainerr Prune
-                        </Button>
-                      </Link>
-
-                      <Link href="/curation/tagging" onClick={() => setIsOpen(false)}>
-                        <Button
-                          variant={pathname.startsWith("/curation/tagging") ? "secondary" : "ghost"}
-                          className={cn(
-                            "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                            pathname.startsWith("/curation/tagging")
-                              ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.25)] ring-1 ring-emerald-500/40 font-bold"
-                              : "text-emerald-400/80 hover:text-emerald-300 hover:bg-emerald-950/30 hover:ring-1 hover:ring-emerald-500/40"
-                          )}
-                        >
-                          <Tag className="mr-2 h-4 w-4 text-emerald-400" /> Tagging Studio
-                        </Button>
-                      </Link>
-
-                      <Link href="/admin/scripts" onClick={() => setIsOpen(false)}>
-                        <Button
-                          variant={pathname.startsWith("/admin/scripts") ? "secondary" : "ghost"}
-                          className={cn(
-                            "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                            pathname.startsWith("/admin/scripts")
-                              ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.25)] ring-1 ring-emerald-500/40 font-bold"
-                              : "text-emerald-400/80 hover:text-emerald-300 hover:bg-emerald-950/30 hover:ring-1 hover:ring-emerald-500/40"
-                          )}
-                        >
-                          <Terminal className="mr-2 h-4 w-4 text-emerald-400" /> User Scripts
-                        </Button>
-                      </Link>
-
-                      <Link href="/settings" onClick={() => setIsOpen(false)}>
-                        <Button
-                          variant={isSettingsActive ? "secondary" : "ghost"}
-                          className={cn(
-                            "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                            isSettingsActive
-                              ? "bg-primary/15 text-primary border border-primary/30 shadow-[0_0_10px_rgba(52,211,153,0.15)] ring-1 ring-primary/40 font-bold"
-                              : "text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:ring-1 hover:ring-primary/40"
-                          )}
-                        >
-                          <Settings className="mr-2 h-4 w-4 text-primary" /> System Settings
-                        </Button>
-                      </Link>
-
-                      <Link href="/settings?tab=logs" onClick={() => setIsOpen(false)}>
-                        <Button
-                          variant={isLogsActive ? "secondary" : "ghost"}
-                          className={cn(
-                            "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-200",
-                            isLogsActive
-                              ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.25)] ring-1 ring-emerald-500/40 font-bold"
-                              : "text-emerald-400/80 hover:text-emerald-300 hover:bg-emerald-950/30 hover:ring-1 hover:ring-emerald-500/40"
-                          )}
-                        >
-                          <Terminal className="mr-2 h-4 w-4 text-emerald-400" /> Live System Logs
-                        </Button>
-                      </Link>
-                    </>
-                  )}
-                </div>
+            <div className="flex-1 px-3 pb-2 flex flex-col justify-between min-h-0 overflow-hidden">
+              <div className="flex-1 overflow-y-auto pr-1 min-h-0">
+                <SidebarNavContent onItemClick={() => setIsOpen(false)} />
               </div>
 
-              <div className="mt-8 border-t border-border/30 pt-4">
+              <div className="mt-auto border-t border-border/30 pt-3">
                 <Button
                   variant="ghost"
-                  className="w-full justify-start text-xs font-semibold h-9 text-red-400 hover:text-red-300 hover:bg-red-950/30 hover:ring-1 hover:ring-red-500/40 transition-all rounded-lg"
-                  onClick={() => logout()}
+                  className="w-full justify-start text-xs font-medium h-9 text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors rounded-lg group select-none"
+                  onClick={() => {
+                    setIsOpen(false);
+                    logout();
+                  }}
                 >
-                  <LogOut className="mr-2 h-4 w-4 text-red-400" /> Log Out
+                  <LogOut className="mr-2.5 h-4 w-4 text-muted-foreground group-hover:text-red-400 transition-colors" />
+                  <span>Log Out</span>
                 </Button>
               </div>
             </div>
