@@ -143,8 +143,8 @@ See detailed runbook: [tags-collections-and-hubs.md](./references/tags-collectio
     - **Direct Plex Media Server History Scan**: Accumulates watch time (ms) and counts across all discovered PMS instances without loop-scoped cutoff bugs.
     - **Local SQLite `WatchHistory` Fallback**: If Tautulli is offline or unconfigured, queries Prisma `WatchHistory` using exact and lowercased alias arrays (avoiding SQLite `mode: "insensitive"` crashes) to accurately aggregate watch hours, movies finished, and episodes watched.
 
-23. **Mandatory 4-Step Verification & Delivery Protocol (v1.0.1+)**:
+23. **Mandatory 4-Step Verification & Delivery Protocol (Strict SemVer)**:
     - Step 1: `cmd /c "npm test"` (18+ suites, 100% pass, 0 failures).
     - Step 2: `cmd /c "npm run build"` (Next.js production build, 0 TS errors, 100% clean).
     - Step 3: Skills & Documentation Sync.
-    - Step 4: Git Version Control (`[v1.0.1]` prefix, push to `origin/main`, merge to `origin/stable`, push to `origin/stable`).
+    - Step 4: SemVer Version Increment & Git Version Control (increment `package.json` version, `[v<version>]` prefix, push to `origin/main`, merge to `origin/stable`, push to `origin/stable`).

@@ -3,7 +3,7 @@
 > **Environment**: Live Production Discord Server  
 > **Server Name**: `Plex Group`  
 > **Guild ID**: `553667067363196941`  
-> **Portalarr Target Version**: `v1.0.1`  
+> **Portalarr Target Version**: `v1.0.2`  
 > **Total Members**: 20 Active Users & Household Members  
 > **Test Staging Counterpart**: `Test Plex Server` (`1559231517325135892`)
 
