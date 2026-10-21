@@ -63,10 +63,6 @@ RUN groupadd --system --gid 1001 nodejs && \
     useradd --system --uid 1001 --gid 1001 -m nextjs && \
     mkdir -p /app/data && chown -R nextjs:nodejs /app/data
 
-# Copy entrypoint script before volatile build args
-COPY docker-entrypoint.sh /app/docker-entrypoint.sh
-RUN chmod +x /app/docker-entrypoint.sh
-
 # Inject commit-specific telemetry env vars only after all heavy layers are cached
 ARG GIT_BRANCH=main
 ARG GIT_SHA=dev
@@ -86,6 +82,10 @@ COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 COPY --from=builder --chown=nextjs:nodejs /app/roadmap.md ./roadmap.md
 
+# Copy entrypoint script AFTER standalone artifacts so it is never overwritten, and enforce 755 permissions
+COPY --chmod=755 docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod 755 /app/docker-entrypoint.sh && chown nextjs:nodejs /app/docker-entrypoint.sh
+
 USER nextjs
 
 EXPOSE 3000
@@ -94,5 +94,5 @@ ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
 # Automatically create and initialize database on new installs before running server
-ENTRYPOINT ["/app/docker-entrypoint.sh"]
+ENTRYPOINT ["/bin/sh", "/app/docker-entrypoint.sh"]
 CMD ["node", "server.js"]
