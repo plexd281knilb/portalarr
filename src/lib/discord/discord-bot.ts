@@ -1207,6 +1207,9 @@ export async function syncDiscordServerStructure(params: {
 
             channelPosition++;
             resolvedChannelMap[chBlueprint.name] = targetChannel.id;
+            if (chBlueprint.name === "server-uptime") {
+                resolvedChannelMap["system-status"] = targetChannel.id;
+            }
 
             // 4. Post Pinned Guide / Welcome Embeds if requested
             if (postPinnedEmbeds && chBlueprint.pinnedEmbedKey && targetChannel) {
@@ -1297,30 +1300,119 @@ export async function syncDiscordServerStructure(params: {
 }
 
 /**
- * Updates or posts the real-time live system status embed in the #system-status channel
+ * Resolves or auto-provisions the system status channel (#system-status or #server-uptime).
+ * First checks explicit channelId, then searches candidate channel names,
+ * and falls back to auto-creating #server-uptime in the guild if missing.
+ */
+export async function resolveOrProvisionStatusChannel(params: {
+    botToken: string;
+    guildId: string;
+    channelId?: string;
+    autoCreate?: boolean;
+}): Promise<{ channelId?: string; created?: boolean; channelName?: string; error?: string }> {
+    const { botToken, guildId, channelId, autoCreate = true } = params;
+
+    if (process.env.NODE_ENV === "test" || process.env.PORTALARR_TEST === "true" || process.env.DISABLE_DISCORD_NOTIFICATIONS === "true") {
+        return { channelId: channelId || "mock-status-ch-id", channelName: "server-uptime" };
+    }
+
+    const channelsRes = await discordFetch<DiscordChannel[]>(`/guilds/${guildId}/channels`, { method: "GET" }, botToken);
+    const guildChannels = (channelsRes.ok && Array.isArray(channelsRes.data)) ? channelsRes.data : [];
+
+    // 1. If explicit channelId was provided, verify it still exists in the guild
+    if (channelId) {
+        const found = guildChannels.find(c => c.id === channelId);
+        if (found) {
+            return { channelId: found.id, channelName: found.name };
+        }
+    }
+
+    // 2. Search guild text channels matching candidate names (system-status, server-uptime, server-status, status, uptime)
+    const candidateNames = ["system-status", "server-uptime", "server-status", "status", "uptime"];
+    for (const candidate of candidateNames) {
+        const match = guildChannels.find(c => {
+            if (c.type !== undefined && c.type !== DISCORD_CHANNEL_TYPES.GUILD_TEXT) return false;
+            const normName = (c.name || "").toLowerCase().replace(/^[^\w\d]+/, "").replace(/[^\w\d]+$/, "");
+            return normName === candidate || normName.includes(candidate);
+        });
+        if (match) {
+            return { channelId: match.id, channelName: match.name };
+        }
+    }
+
+    // 3. Auto-Create Fallback: Automatically create the channel in the guild if allowed
+    if (autoCreate) {
+        // Find category: "HELP & TICKETS" or matching "help" or "ticket"
+        const helpCategory = guildChannels.find(c =>
+            c.type === DISCORD_CHANNEL_TYPES.GUILD_CATEGORY &&
+            (c.name.toLowerCase().includes("help") || c.name.toLowerCase().includes("ticket"))
+        );
+
+        const permissionOverwrites = [
+            {
+                id: guildId, // @everyone role ID is the guildId
+                type: 0,
+                allow: (DISCORD_PERMISSIONS.VIEW_CHANNEL | DISCORD_PERMISSIONS.READ_MESSAGE_HISTORY).toString(),
+                deny: (DISCORD_PERMISSIONS.SEND_MESSAGES | DISCORD_PERMISSIONS.ADD_REACTIONS).toString()
+            }
+        ];
+
+        const createRes = await discordFetch<DiscordChannel>(`/guilds/${guildId}/channels`, {
+            method: "POST",
+            body: JSON.stringify({
+                name: "server-uptime",
+                type: DISCORD_CHANNEL_TYPES.GUILD_TEXT,
+                parent_id: helpCategory ? helpCategory.id : undefined,
+                topic: "Real-time infrastructure health, Plex reachability, host telemetry, and service links.",
+                permission_overwrites: permissionOverwrites
+            })
+        }, botToken);
+
+        if (createRes.ok && createRes.data?.id) {
+            logger.addLog("INFO", "DISCORD", `Auto-provisioned #server-uptime status channel (${createRes.data.id}) in guild ${guildId}`);
+            return { channelId: createRes.data.id, channelName: createRes.data.name, created: true };
+        }
+
+        return {
+            error: `Could not find or auto-create a status channel (#system-status / #server-uptime): ${createRes.error || "Permission denied or failed API call"}`
+        };
+    }
+
+    return {
+        error: "Could not find a #system-status or #server-uptime channel in the server."
+    };
+}
+
+/**
+ * Updates or posts the real-time live system status embed in the #system-status or #server-uptime channel
  */
 export async function updateDiscordLiveStatus(params: {
     botToken: string;
     guildId: string;
     channelId?: string;
     systemData?: any;
-}): Promise<{ success: boolean; error?: string; messageId?: string }> {
+}): Promise<{ success: boolean; error?: string; messageId?: string; channelId?: string }> {
     const { botToken, guildId, channelId, systemData } = params;
 
-    let targetChannelId = channelId;
-
-    // If channelId not explicitly passed, find #system-status
-    if (!targetChannelId) {
-        const channelsRes = await discordFetch<DiscordChannel[]>(`/guilds/${guildId}/channels`, { method: "GET" }, botToken);
-        if (channelsRes.ok && Array.isArray(channelsRes.data)) {
-            const statusCh = channelsRes.data.find(c => c.name.toLowerCase().includes("system-status"));
-            if (statusCh) targetChannelId = statusCh.id;
-        }
+    if (process.env.NODE_ENV === "test" || process.env.PORTALARR_TEST === "true" || process.env.DISABLE_DISCORD_NOTIFICATIONS === "true") {
+        return { success: true, messageId: "mock-status-message-id", channelId: channelId || "mock-status-channel-id" };
     }
 
-    if (!targetChannelId) {
-        return { success: false, error: "Could not find a #system-status channel in the server." };
+    const channelRes = await resolveOrProvisionStatusChannel({
+        botToken,
+        guildId,
+        channelId,
+        autoCreate: true
+    });
+
+    if (!channelRes.channelId) {
+        return {
+            success: false,
+            error: channelRes.error || "Could not find or create a status channel (#system-status / #server-uptime) in the server."
+        };
     }
+
+    const targetChannelId = channelRes.channelId;
 
     // Generate current status embed
     const embed = generateDiscordEmbed("system_status", systemData);
@@ -1343,7 +1435,7 @@ export async function updateDiscordLiveStatus(params: {
         }, botToken);
 
         if (editRes.ok) {
-            return { success: true, messageId: existingMsgId };
+            return { success: true, messageId: existingMsgId, channelId: targetChannelId };
         }
     }
 
@@ -1356,10 +1448,10 @@ export async function updateDiscordLiveStatus(params: {
     if (postRes.ok && postRes.data?.id) {
         // Pin it
         await discordFetch(`/channels/${targetChannelId}/pins/${postRes.data.id}`, { method: "PUT" }, botToken).catch(() => {});
-        return { success: true, messageId: postRes.data.id };
+        return { success: true, messageId: postRes.data.id, channelId: targetChannelId };
     }
 
-    return { success: false, error: postRes.error || "Failed to post status message" };
+    return { success: false, error: postRes.error || "Failed to post status message", channelId: targetChannelId };
 }
 
 /**

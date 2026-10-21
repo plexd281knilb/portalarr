@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import { prisma } from "@/lib/prisma";
 import { decryptData } from "@/lib/encryption";
-import { postDiscordMessage } from "@/lib/discord/discord-bot";
+import { postDiscordMessage, resolveOrProvisionStatusChannel } from "@/lib/discord/discord-bot";
 import { logger } from "@/lib/logger";
 import type { 
     IncidentRecord, 
@@ -184,19 +184,37 @@ export async function dispatchDiscordOutageNotification(
             }
         }
 
-        // 2. Built-in Discord Bot to #system-status channel if available
+        // 2. Built-in Discord Bot to #server-uptime / #system-status channel if available
         const settings = await prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null);
-        if (settings?.discordBotToken && settings?.discordStatusChannelId) {
+        if (settings?.discordBotToken && (settings?.discordStatusChannelId || settings?.discordGuildId)) {
             const rawToken = decryptData(settings.discordBotToken);
             if (rawToken) {
-                const botRes = await postDiscordMessage({
-                    botToken: rawToken,
-                    channelId: settings.discordStatusChannelId,
-                    embeds: [embed]
-                });
-                if (botRes.success) {
-                    logger.addLog("INFO", "MONITORING", `Dispatched Discord bot outage alert to #system-status for ${incident.targetName}`);
-                    return true;
+                let targetChId = settings.discordStatusChannelId;
+                if (!targetChId && settings.discordGuildId) {
+                    const resolved = await resolveOrProvisionStatusChannel({
+                        botToken: rawToken,
+                        guildId: settings.discordGuildId,
+                        autoCreate: true
+                    });
+                    if (resolved.channelId) {
+                        targetChId = resolved.channelId;
+                        await prisma.settings.update({
+                            where: { id: settings.id },
+                            data: { discordStatusChannelId: targetChId }
+                        }).catch(() => {});
+                    }
+                }
+
+                if (targetChId) {
+                    const botRes = await postDiscordMessage({
+                        botToken: rawToken,
+                        channelId: targetChId,
+                        embeds: [embed]
+                    });
+                    if (botRes.success) {
+                        logger.addLog("INFO", "MONITORING", `Dispatched Discord bot outage alert to status channel (${targetChId}) for ${incident.targetName}`);
+                        return true;
+                    }
                 }
             }
         }

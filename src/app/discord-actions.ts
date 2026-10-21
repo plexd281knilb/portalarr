@@ -279,7 +279,7 @@ export async function syncDiscordServerAction(options?: {
 
         if (res.success) {
             const updatedChannelMap = res.channelMap;
-            const statusChId = updatedChannelMap["system-status"] || settings.discordStatusChannelId;
+            const statusChId = updatedChannelMap["server-uptime"] || updatedChannelMap["system-status"] || settings.discordStatusChannelId;
             const requestsChId = updatedChannelMap["media-requests"] || settings.discordRequestsChannelId;
             const announcementsChId = updatedChannelMap["announcements"] || settings.discordAnnouncementsChannelId;
 
@@ -333,7 +333,7 @@ export async function syncDiscordServerAction(options?: {
 /**
  * Updates the #system-status live embed with real-time platform telemetry
  */
-export async function updateDiscordStatusEmbedAction(): Promise<{ success: boolean; error?: string; messageId?: string }> {
+export async function updateDiscordStatusEmbedAction(): Promise<{ success: boolean; error?: string; messageId?: string; channelId?: string }> {
     try {
         await verifyAdmin();
         await ensureSchemaColumns();
@@ -350,12 +350,22 @@ export async function updateDiscordStatusEmbedAction(): Promise<{ success: boole
 
         const healthRes = await getAdminInfrastructureStatusAction();
 
-        return await updateDiscordLiveStatus({
+        const result = await updateDiscordLiveStatus({
             botToken: rawToken,
             guildId: settings.discordGuildId,
             channelId: settings.discordStatusChannelId || undefined,
             systemData: healthRes?.success ? healthRes : undefined
         });
+
+        // Persist resolved or auto-provisioned status channel ID to settings if needed
+        if (result.success && result.channelId && result.channelId !== settings.discordStatusChannelId) {
+            await prisma.settings.update({
+                where: { id: settings.id },
+                data: { discordStatusChannelId: result.channelId }
+            }).catch(e => logger.addLog("WARN", "DISCORD", `Could not persist discordStatusChannelId: ${e.message}`));
+        }
+
+        return result;
     } catch (e: any) {
         return { success: false, error: e?.message || "Failed to update Discord status embed." };
     }

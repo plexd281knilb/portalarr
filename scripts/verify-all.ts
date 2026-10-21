@@ -18,7 +18,7 @@ import { getBuiltinOscarBestPictureList } from "../src/lib/curation/oscar-best-p
 import { calculateNextRunTime, formatScheduleLabel, formatLastRunDisplay, SCHEDULE_OPTIONS } from "../src/lib/curation/schedule-helper";
 import { getAllScripts, getScriptById, saveScript, deleteScript, getScriptRuns } from "../src/lib/scripts/script-manager";
 import { executeScript, abortActiveScriptRun } from "../src/lib/scripts/script-runner";
-import { DISCORD_ROLES_BLUEPRINT, DISCORD_SERVER_BLUEPRINT } from "../src/lib/discord/discord-bot";
+import { DISCORD_ROLES_BLUEPRINT, DISCORD_SERVER_BLUEPRINT, resolveOrProvisionStatusChannel, updateDiscordLiveStatus } from "../src/lib/discord/discord-bot";
 import { computeExpectedDiscordRole, findBestMatch } from "../src/lib/discord/discord-role-sync";
 import { getBuildTelemetry } from "../src/lib/version";
 import fs from "fs";
@@ -964,6 +964,20 @@ async function runTestSuite() {
             [{ id: "u1", username: "kyra" }, { id: "u2", username: "john_doe" }]
         );
         if (!match || match.username !== "kyra") throw new Error(`Expected match 'kyra', got ${match?.username}`);
+
+        // 4. Status channel resolution & auto-provisioning
+        const statusRes = await resolveOrProvisionStatusChannel({
+            botToken: "mock-token",
+            guildId: "mock-guild",
+            channelId: "existing-ch-id"
+        });
+        if (!statusRes.channelId) throw new Error("Expected status channel resolution to succeed in test mode");
+
+        const liveRes = await updateDiscordLiveStatus({
+            botToken: "mock-token",
+            guildId: "mock-guild"
+        });
+        if (!liveRes.success || !liveRes.channelId) throw new Error("Expected updateDiscordLiveStatus to succeed in test mode");
     });
 
     // =========================================================================
