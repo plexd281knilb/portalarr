@@ -351,7 +351,7 @@ Administrators have a unified suite of homelab management, observability, and sa
 - **User Connection & Device Intelligence Modal:** Click any user to inspect their full chronological watch history, client devices, direct play vs. transcode ratios, and IP locations.
 
 ### 🏷️ Dynamic Branch, Version & Build Badge (`BuildBadge`)
-- **Instant Environment Identification:** Displays a glowing **BETA (`main`)** or **PROD (`stable`)** badge in the sidebar and dashboard with active version (`v3.9.0-beta.2`), short git commit SHA, and GitHub Actions build run number. Clicking opens the Build Diagnostics dialog with 1-click SHA copy and workflow links.
+- **Instant Environment Identification:** Displays a glowing **BETA (`main`)** or **PROD (`stable`)** badge in the sidebar and dashboard with active version (`v1.0.0-beta.1`), short git commit SHA, and GitHub Actions build run number. Clicking opens the Build Diagnostics dialog with 1-click SHA copy and workflow links.
 
 ### 👁️ View Site As User (Impersonation)
 1. Navigate to **System Settings** → **Access Control** (`/settings/access`).

@@ -799,7 +799,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange }: SeerrSettin
                             </CardDescription>
                         </div>
                         <Badge variant="outline" className="bg-rose-500/10 text-rose-300 border-rose-500/30 font-bold px-2.5 py-1">
-                            Seerr Engine v{process.env.NEXT_PUBLIC_PORTALARR_VERSION || "3.9.0-beta.2"}
+                            Seerr Engine v{process.env.NEXT_PUBLIC_PORTALARR_VERSION || "1.0.0-beta.1"}
                         </Badge>
                     </div>
                 </CardHeader>

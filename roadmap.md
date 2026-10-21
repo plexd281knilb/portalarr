@@ -1,4 +1,4 @@
-> ⚠️ **Active Beta Notice (`v3.9.0-beta.2`):** All of these new features are currently in active beta testing across DomsHomeLab! If you run into any bugs, strange behavior, or have ideas for improvements, please reach out and let Dominic know so we can fix them right away.
+> ⚠️ **Active Beta Notice (`v1.0.0-beta.1`):** All of these new features are currently in active beta testing across DomsHomeLab! If you run into any bugs, strange behavior, or have ideas for improvements, please reach out and let Dominic know so we can fix them right away.
 
 ### ✨ What's New
 

@@ -8,7 +8,7 @@ Portalarr is a centralized, self-hosted mission control portal designed to manag
 
 - **🧪 Dynamic Branch, Version & Build Telemetry Engine (`BuildBadge` & `src/lib/version.ts`):**
   - Real-time environment differentiation between **Beta (`main` branch / `Domshomelab_Dev`)** and **Production (`stable` branch / `DomsHomeLab`)**.
-  - Displays live channel badges, semantic version (`v3.9.0-beta.2`), Git commit short SHA, and GitHub Actions workflow build run numbers across Desktop/Mobile sidebars and the Home Dashboard header.
+  - Displays live channel badges, semantic version (`v1.0.0-beta.1`), Git commit short SHA, and GitHub Actions workflow build run numbers across Desktop/Mobile sidebars and the Home Dashboard header.
   - Interactive glassmorphic **Build Diagnostics Modal** with 1-click full SHA copy, build timestamp, Docker image target (`ghcr.io/plexd281knilb/portalarr:main` vs `:stable`), and direct GitHub Actions workflow run links.
 
 - **⚡ Direct Plex SQLite Snapshot & Delta-Sync Engine (Zero-PMS-Lock Architecture):**
