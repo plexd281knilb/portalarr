@@ -19,8 +19,15 @@ To guarantee 100% reliability, quality control, and consistency, the following 4
 
 Portalarr leverages Antigravity's multi-agent architecture to optimize quota, parallelism, and speed:
 - **"Brain" — Root Orchestrator (Gemini 4 Argon / Pro)**: Serves as the primary Technical Architect, master planner, and code synthesizer. Retains master conversation context, architectural oversight, complex billing/database logic synthesis, and final decision-making.
-- **"Pinky" — Worker Subagent (`pinky` / `flash-worker`, Gemini 3.8 Flash)**: Dedicated high-speed worker subagent invoked via `invoke_subagent` (`TypeName: "pinky"`, `Model: "flash"`). Handles high-throughput operations: running `npm test`, executing Next.js production builds, running lint sweeps, and performing broad repository audits.
-- **Automated Error Escalation Loop**: When **Pinky** encounters compilation issues, TypeScript rejections, pricing/template discrepancies, or test failures, it extracts the exact file paths, line numbers, and error traces, delivering them directly back to **Brain** via reactive messaging. **Brain** diagnoses the root cause, applies the fix, and prompts **Pinky** to re-verify.
+- **"Pinky" — Worker Subagent (`pinky` / `flash-worker`, Gemini 3.8 Flash)**: Dedicated high-speed worker subagent invoked via `invoke_subagent` (`TypeName: "pinky"`, `Model: "flash"`). Handles high-throughput operations: file audits, code edits, running `npm test`, executing Next.js production builds, running lint sweeps, git operations, and repository sweeps.
+
+### ⚡ Strict 90/10 "Pinky-First" Quota Preservation Protocol
+To prevent exhaustion of Gemini 4 Argon quota and ensure that 90%+ of all execution tool calls run on Gemini 3.8 Flash ("Pinky"):
+1. **Strict Zero-Tool-Loop Rule for Brain (Argon 4):** Brain MUST NOT run multi-step `read_file`, `edit_file`, `write_file`, `run_command`, or `git` loops directly in the root conversation. In Antigravity, every tool call executed by Brain re-bills the entire cumulative master conversation context against Argon 4 quota.
+2. **1-Call End-to-End Delegation to Pinky (Flash 3.8):** For every coding, debugging, branding, git, or verification request, Brain must make **at most 1 tool call** (`send_message` to an active `pinky` subagent or `invoke_subagent` with `TypeName: "pinky"`, `Model: "flash"`) delegating the entire end-to-end workflow: inspecting files, making edits, executing `cmd /c "npm test"` and `cmd /c "npm run build"`, and staging/committing/pushing to Git.
+3. **Brain's Exclusive Role:** Brain functions strictly as the high-level architect: Brain synthesizes the user's intent into a single crisp specification for Pinky, hands off execution to Pinky in a single message, and presents Pinky's final report directly to the user (achieving a maximum of 2 Argon 4 turns per user prompt instead of 10–15 costly root turns).
+4. **Automated Error Escalation Loop**: When **Pinky** encounters compilation issues, TypeScript rejections, pricing/template discrepancies, or test failures, it extracts the exact file paths, line numbers, and error traces, delivering them directly back to **Brain** via reactive messaging. **Brain** diagnoses the architectural root cause, provides the targeted fix instructions, and prompts **Pinky** to apply and verify.
+
 - **VS Code Tasks (`.vscode/tasks.json`)**:
   - `agy: Brain - Root Orchestrator (Argon 4 High)` (`agy --model gemini-4-argon-high`)
   - `agy: Pinky - Parallel Worker (Flash 3.8 High)` (`agy --model gemini-3.8-flash-high`)
