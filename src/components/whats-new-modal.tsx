@@ -178,7 +178,7 @@ export default function WhatsNewModal({
                                 <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/40 text-[10px] font-bold uppercase tracking-wider py-0.5">
                                     <Rocket className="h-3 w-3 mr-1" /> Latest Updates
                                 </Badge>
-                                <BuildBadge variant="compact" showModalOnClick={false} />
+                                <BuildBadge variant="compact" showModalOnClick={false} isAdmin={userRole === "ADMIN"} />
                                 <span className="text-xs text-muted-foreground">DomsHomeLab (d281knilb)</span>
                             </div>
                             <DialogTitle className="text-xl sm:text-2xl font-extrabold tracking-tight flex items-center gap-2 text-foreground">

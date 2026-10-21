@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { getBuildTelemetry, VersionInfo } from "@/lib/version";
+import { getSession } from "@/app/auth-actions";
 import { Badge } from "@/components/ui/badge";
 import { 
     Dialog, 
@@ -28,16 +29,33 @@ interface BuildBadgeProps {
     variant?: "compact" | "full" | "subtle";
     className?: string;
     showModalOnClick?: boolean;
+    isAdmin?: boolean;
 }
 
 export function BuildBadge({ 
     variant = "compact", 
     className = "", 
-    showModalOnClick = true 
+    showModalOnClick = true,
+    isAdmin = false
 }: BuildBadgeProps) {
     const [open, setOpen] = useState(false);
     const [copied, setCopied] = useState(false);
+    const [adminAccess, setAdminAccess] = useState<boolean>(isAdmin ?? false);
     const telemetry: VersionInfo = getBuildTelemetry();
+
+    useEffect(() => {
+        if (isAdmin !== undefined) {
+            setAdminAccess(isAdmin);
+        } else {
+            getSession()
+                .then((session) => {
+                    setAdminAccess(session?.role === "ADMIN");
+                })
+                .catch(() => {
+                    setAdminAccess(false);
+                });
+        }
+    }, [isAdmin]);
 
     const handleCopySha = () => {
         if (telemetry.commitSha) {
@@ -49,6 +67,7 @@ export function BuildBadge({
 
     const isBeta = telemetry.isBeta;
     const isStable = telemetry.isStable;
+    const canInteract = adminAccess && showModalOnClick;
 
     const formattedDate = telemetry.buildTimestamp 
         ? (() => {
@@ -66,12 +85,85 @@ export function BuildBadge({
         })()
         : "Development Build";
 
+    // Non-admin static presentation: clean indicator with zero click interactivity
+    if (!canInteract) {
+        if (variant === "compact") {
+            return (
+                <div
+                    className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md font-mono text-[10px] uppercase font-bold tracking-wider select-none cursor-default ${
+                        isBeta 
+                            ? "bg-purple-500/15 text-purple-300 border border-purple-500/30 shadow-[0_0_8px_rgba(168,85,247,0.15)]" 
+                            : isStable 
+                            ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-[0_0_8px_rgba(52,211,153,0.15)]"
+                            : "bg-amber-500/15 text-amber-300 border border-amber-500/30"
+                    } ${className}`}
+                >
+                    <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${
+                        isBeta ? "bg-purple-400 animate-pulse" : isStable ? "bg-emerald-400" : "bg-amber-400 animate-pulse"
+                    }`} />
+                    <span>{telemetry.displayBadge}</span>
+                </div>
+            );
+        }
+
+        if (variant === "full") {
+            return (
+                <div
+                    className={`inline-flex items-center gap-2 px-2.5 py-1 rounded-lg text-xs font-semibold border select-none cursor-default ${
+                        isBeta
+                            ? "bg-purple-500/10 text-purple-300 border-purple-500/30"
+                            : isStable
+                            ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
+                            : "bg-amber-500/10 text-amber-300 border-amber-500/30"
+                    } ${className}`}
+                >
+                    {isBeta ? (
+                        <FlaskConical className="h-3.5 w-3.5 text-purple-400 shrink-0 animate-pulse" />
+                    ) : isStable ? (
+                        <ShieldCheck className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                    ) : (
+                        <Workflow className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                    )}
+                    <span className="font-bold tracking-tight">
+                        {isBeta ? "BETA (main)" : isStable ? "PROD (stable)" : "DEV"}
+                    </span>
+                    <span className="opacity-40">•</span>
+                    <span className="font-mono text-[11px]">v{telemetry.version}</span>
+                    {telemetry.commitShortSha && telemetry.commitShortSha !== "dev" && telemetry.commitShortSha !== "latest" && (
+                        <>
+                            <span className="opacity-40">•</span>
+                            <span className="font-mono text-[11px] opacity-75">[{telemetry.commitShortSha}]</span>
+                        </>
+                    )}
+                    {telemetry.buildNumber && (
+                        <Badge variant="outline" className="text-[10px] h-4.5 px-1.5 font-mono bg-white/5 border-white/20">
+                            build #{telemetry.buildNumber}
+                        </Badge>
+                    )}
+                </div>
+            );
+        }
+
+        // variant === "subtle"
+        return (
+            <div 
+                className={`text-[11px] font-mono text-muted-foreground/75 flex items-center gap-1.5 select-none cursor-default ${className}`}
+            >
+                <span className={`h-1.5 w-1.5 rounded-full ${isBeta ? "bg-purple-400" : isStable ? "bg-emerald-400" : "bg-amber-400"}`} />
+                <span>{telemetry.branch}</span>
+                {telemetry.buildNumber && <span>• #{telemetry.buildNumber}</span>}
+                {telemetry.commitShortSha && <span>• {telemetry.commitShortSha}</span>}
+            </div>
+        );
+    }
+
+    // Administrator interactive presentation: full diagnostics modal access
     return (
         <>
             {variant === "compact" && (
                 <button
                     type="button"
-                    onClick={() => showModalOnClick && setOpen(true)}
+                    onClick={() => setOpen(true)}
                     className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md font-mono text-[10px] uppercase font-bold tracking-wider transition-all duration-200 cursor-pointer ${
                         isBeta 
                             ? "bg-purple-500/15 text-purple-300 border border-purple-500/30 hover:bg-purple-500/25 hover:border-purple-500/50 shadow-[0_0_8px_rgba(168,85,247,0.2)]" 
@@ -79,7 +171,7 @@ export function BuildBadge({
                             ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25 hover:border-emerald-500/50 shadow-[0_0_8px_rgba(52,211,153,0.2)]"
                             : "bg-amber-500/15 text-amber-300 border border-amber-500/30 hover:bg-amber-500/25 hover:border-amber-500/50"
                     } ${className}`}
-                    title="Click to view build & workflow details"
+                    title="Click to view build & workflow details (Admin Only)"
                 >
                     <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${
                         isBeta ? "bg-purple-400 animate-pulse" : isStable ? "bg-emerald-400" : "bg-amber-400 animate-pulse"
@@ -91,7 +183,7 @@ export function BuildBadge({
             {variant === "full" && (
                 <button
                     type="button"
-                    onClick={() => showModalOnClick && setOpen(true)}
+                    onClick={() => setOpen(true)}
                     className={`inline-flex items-center gap-2 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all duration-200 cursor-pointer ${
                         isBeta
                             ? "bg-purple-500/10 text-purple-300 border-purple-500/30 hover:bg-purple-500/20 hover:border-purple-500/50 shadow-sm"
@@ -99,7 +191,7 @@ export function BuildBadge({
                             ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20 hover:border-emerald-500/50 shadow-sm"
                             : "bg-amber-500/10 text-amber-300 border-amber-500/30 hover:bg-amber-500/20 hover:border-amber-500/50 shadow-sm"
                     } ${className}`}
-                    title="Click for full build & workflow details"
+                    title="Click for full build & workflow details (Admin Only)"
                 >
                     {isBeta ? (
                         <FlaskConical className="h-3.5 w-3.5 text-purple-400 shrink-0 animate-pulse" />
@@ -129,8 +221,9 @@ export function BuildBadge({
 
             {variant === "subtle" && (
                 <div 
-                    onClick={() => showModalOnClick && setOpen(true)}
+                    onClick={() => setOpen(true)}
                     className={`text-[11px] font-mono text-muted-foreground/75 hover:text-foreground transition-colors cursor-pointer flex items-center gap-1.5 ${className}`}
+                    title="Click to view build details (Admin Only)"
                 >
                     <span className={`h-1.5 w-1.5 rounded-full ${isBeta ? "bg-purple-400" : isStable ? "bg-emerald-400" : "bg-amber-400"}`} />
                     <span>{telemetry.branch}</span>
@@ -139,7 +232,7 @@ export function BuildBadge({
                 </div>
             )}
 
-            {/* Build & Workflow Diagnostics Modal */}
+            {/* Build & Workflow Diagnostics Modal (Admin Only) */}
             <Dialog open={open} onOpenChange={setOpen}>
                 <DialogContent className="max-w-md bg-[#101014] border-border/50 text-foreground p-6 shadow-2xl rounded-2xl">
                     <DialogHeader className="space-y-1">
@@ -201,7 +294,7 @@ export function BuildBadge({
                                         <button
                                             type="button"
                                             onClick={handleCopySha}
-                                            className="p-1 rounded hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors"
+                                            className="p-1 rounded hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                                             title="Copy full SHA"
                                         >
                                             {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
@@ -256,7 +349,7 @@ export function BuildBadge({
                         </div>
 
                         {telemetry.workflowUrl && (
-                            <Button asChild size="sm" variant="outline" className="w-full text-xs h-9 border-border/40 hover:bg-white/5">
+                            <Button asChild size="sm" variant="outline" className="w-full text-xs h-9 border-border/40 hover:bg-white/5 cursor-pointer">
                                 <a href={telemetry.workflowUrl} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-1.5">
                                     <ExternalLink className="h-3.5 w-3.5" /> View GitHub Actions Workflow Runs
                                 </a>

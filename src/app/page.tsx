@@ -142,7 +142,7 @@ export default async function UserLandingPage() {
                             <h1 className="text-lg sm:text-2xl lg:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-foreground via-foreground/90 to-muted-foreground bg-clip-text text-transparent">
                                 System Dashboard
                             </h1>
-                            <BuildBadge variant="full" />
+                            <BuildBadge variant="full" isAdmin={isAdmin} />
                             {isTrial ? (
                                 <Badge variant="outline" className="bg-amber-500/15 text-amber-300 border-amber-500/30 text-xs font-semibold">
                                     Free Trial
