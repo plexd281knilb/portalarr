@@ -28,7 +28,11 @@ import {
     MessageSquare,
     Clock,
     Bot,
-    Sparkles
+    Sparkles,
+    ExternalLink,
+    Copy,
+    Check,
+    Wrench
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
@@ -41,6 +45,29 @@ export default function TicketsPage() {
     const [ticketToDelete, setTicketToDelete] = useState<any | null>(null);
     const [deleteLoading, setDeleteLoading] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const [copiedPromptId, setCopiedPromptId] = useState<string | null>(null);
+
+    const handleCopyPrompt = async (ticketId: string, promptText: string) => {
+        try {
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(promptText);
+            } else {
+                const textArea = document.createElement("textarea");
+                textArea.value = promptText;
+                textArea.style.position = "fixed";
+                textArea.style.left = "-999999px";
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                document.execCommand("copy");
+                textArea.remove();
+            }
+            setCopiedPromptId(ticketId);
+            setTimeout(() => setCopiedPromptId(null), 2500);
+        } catch (e) {
+            console.error("Failed to copy AI prompt:", e);
+        }
+    };
 
     // Filter & Search states (Admin view)
     const [statusFilter, setStatusFilter] = useState<"ALL" | "Pending" | "Acknowledged" | "Completed">("ALL");
@@ -331,7 +358,13 @@ export default function TicketsPage() {
                             </Card>
                         )}
 
-                        {filteredTickets.map((ticket) => (
+                        {filteredTickets.map((ticket) => {
+                            const isPageFix = ticket.issue.includes("[PAGE FIX") || ticket.issue.includes("🛠️ [PAGE FIX");
+                            const matchPage = ticket.issue.match(/Reported Page:\s*([^\r\n]+)/i) || ticket.issue.match(/Target Page URL:\*\*\s*`([^`]+)`/i);
+                            const reportedPage = matchPage ? matchPage[1].trim() : null;
+                            const aiPromptMatch = ticket.issue.match(/--- READY-TO-USE ANTIGRAVITY AI PROMPT ---\s*([\s\S]+)$/i);
+                            const aiPrompt = aiPromptMatch ? aiPromptMatch[1].trim() : ticket.issue;
+                            return (
                             <Card key={ticket.id} className="overflow-hidden border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm hover:shadow-md transition-all duration-200 rounded-2xl">
                                 <CardHeader className="bg-muted/20 pb-4 border-b border-border/40">
                                     <div className="flex flex-col sm:flex-row justify-between sm:items-start w-full gap-3 sm:gap-4">
@@ -343,6 +376,12 @@ export default function TicketsPage() {
                                                 <Badge variant="secondary" className="font-mono text-[10px] px-2 py-0.5 h-5 bg-muted/40 border border-border/40 truncate max-w-full">
                                                     <Mail className="h-3 w-3 mr-1 text-primary shrink-0"/> <span className="truncate">{ticket.email}</span>
                                                 </Badge>
+                                                {isPageFix && (
+                                                    <Badge variant="outline" className="font-semibold text-[10px] px-2 py-0.5 h-5 bg-amber-500/15 text-amber-300 border-amber-500/30 gap-1">
+                                                        <Wrench className="h-2.5 w-2.5 text-amber-400" />
+                                                        <span>🛠️ Page Fix Request</span>
+                                                    </Badge>
+                                                )}
                                             </div>
                                             <CardDescription className="text-xs">
                                                 Submitted {formatDistanceToNow(new Date(ticket.createdAt))} ago
@@ -368,6 +407,41 @@ export default function TicketsPage() {
                                     </div>
                                     
                                     <div className="flex flex-wrap gap-2 pt-1">
+                                        {isPageFix && (
+                                            <>
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => handleCopyPrompt(ticket.id, aiPrompt)}
+                                                    className={`h-8 text-xs font-semibold active:scale-95 transition-all duration-200 cursor-pointer ${
+                                                        copiedPromptId === ticket.id
+                                                            ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/50 ring-2 ring-emerald-500/40"
+                                                            : "border-purple-500/40 text-purple-300 hover:bg-purple-500/10 hover:ring-2 hover:ring-purple-500/40"
+                                                    }`}
+                                                >
+                                                    {copiedPromptId === ticket.id ? (
+                                                        <>
+                                                            <Check className="h-3.5 w-3.5 mr-1.5 text-emerald-400" />
+                                                            <span>Copied Prompt for AI!</span>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Copy className="h-3.5 w-3.5 mr-1.5 text-purple-400" />
+                                                            <span>📋 Copy Prompt for AI</span>
+                                                        </>
+                                                    )}
+                                                </Button>
+
+                                                {reportedPage && (
+                                                    <Button asChild variant="outline" size="sm" className="h-8 text-xs font-semibold border-amber-500/40 text-amber-300 hover:bg-amber-500/10 hover:ring-2 hover:ring-amber-500/40 active:scale-95 transition-all duration-200">
+                                                        <Link href={reportedPage}>
+                                                            <ExternalLink className="h-3.5 w-3.5 mr-1.5 text-amber-400" /> Open Reported Page
+                                                        </Link>
+                                                    </Button>
+                                                )}
+                                            </>
+                                        )}
                                         <Button asChild variant="outline" size="sm" className="h-8 text-xs font-semibold border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 hover:ring-2 hover:ring-emerald-500/40 active:scale-95 transition-all duration-200">
                                             <Link href={`/settings/access?search=${encodeURIComponent(ticket.email)}`}>
                                                 <UserCog className="h-3.5 w-3.5 mr-1.5 text-emerald-400" /> Manage User
@@ -426,7 +500,8 @@ export default function TicketsPage() {
                                     </form>
                                 </CardContent>
                             </Card>
-                        ))}
+                        );
+                        })}
                     </div>
                 </div>
             ) : (
@@ -456,15 +531,25 @@ export default function TicketsPage() {
                         </Card>
                     ) : (
                         <div className="grid gap-4 sm:gap-6">
-                            {tickets.map((ticket) => (
+                            {tickets.map((ticket) => {
+                                const isPageFix = ticket.issue.includes("[PAGE FIX") || ticket.issue.includes("🛠️ [PAGE FIX");
+                                const matchPage = ticket.issue.match(/Reported Page:\s*([^\r\n]+)/i) || ticket.issue.match(/Target Page URL:\*\*\s*`([^`]+)`/i);
+                                const reportedPage = matchPage ? matchPage[1].trim() : null;
+                                return (
                                 <Card key={ticket.id} className="overflow-hidden border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm rounded-2xl">
                                     <CardHeader className="bg-muted/20 pb-4 border-b border-border/40">
                                         <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
                                             <div className="space-y-1">
                                                 <div className="flex items-center gap-2 flex-wrap">
                                                     <CardTitle className="text-base font-bold text-foreground">
-                                                        Support Request
+                                                        {isPageFix ? "Page Fix Suggestion" : "Support Request"}
                                                     </CardTitle>
+                                                    {isPageFix && (
+                                                        <Badge variant="outline" className="font-semibold text-[10px] px-2 py-0.5 h-5 bg-amber-500/15 text-amber-300 border-amber-500/30 gap-1">
+                                                            <Wrench className="h-2.5 w-2.5 text-amber-400" />
+                                                            <span>🛠️ Page Fix Request</span>
+                                                        </Badge>
+                                                    )}
                                                     {getStatusBadge(ticket.status)}
                                                 </div>
                                                 <CardDescription className="text-xs">
@@ -500,7 +585,8 @@ export default function TicketsPage() {
                                         )}
                                     </CardContent>
                                 </Card>
-                            ))}
+                            );
+                            })}
                         </div>
                     )}
                 </div>

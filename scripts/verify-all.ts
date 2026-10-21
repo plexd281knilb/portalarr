@@ -197,6 +197,17 @@ async function runTestSuite() {
             if (invalidCheck.valid) {
                 throw new Error("Invalid referral should not be matched");
             }
+
+            // Page Fix Suggestion & AI Telemetry Engine test
+            const { getPageFileHints } = await import("../src/app/actions");
+            const libHints = await getPageFileHints("/library");
+            if (!libHints.title.includes("Library") || !libHints.fileHints.includes("src/app/library/page.tsx")) {
+                throw new Error("getPageFileHints failed for /library");
+            }
+            const rootHints = await getPageFileHints("/");
+            if (!rootHints.fileHints.includes("src/app/page.tsx")) {
+                throw new Error("getPageFileHints failed for /");
+            }
         } finally {
             await prisma.user.deleteMany({ where: { id: { in: [adminUser.id, kidUser.id] } } });
         }
