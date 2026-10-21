@@ -94,3 +94,14 @@ See detailed runbook: [series-parsing-and-models.md](./references/series-parsing
     - When diagnosing missing tracks or corrupt episodes, inspect `/api/v3/release?episodeId={id}` and compare against `/api/v3/episodefile/{episodeFileId}`.
     - If Sonarr indexer releases are rejected with `Existing file on disk has a equal or higher Custom Format score: {score}` or the quality cutoff is met, return `alreadyOptimal: true` (with `releaseTitle`, `quality`, and `existingScore`) rather than falsely claiming an autonomous grab was queued.
     - If a superior candidate release is approved, queue download via `POST /api/v3/release { guid, indexerId }`.
+
+
+---
+
+## 🚨 Mandatory 4-Step Verification & Delivery Protocol (v1.0.1+)
+
+To guarantee 100% reliability, quality control, and consistency, the following 4-step protocol MUST be executed at the end of every task or feature change:
+1. **Full Integration Testing:** Execute `cmd /c "npm test"` to run the verification suite (`scripts/verify-all.ts`). All 18+ test suites must pass (0 failures).
+2. **Production Build Verification:** Execute `cmd /c "npm run build"`. Ensure 100% clean compilation, zero TypeScript errors, and zero Turbopack runtime errors.
+3. **Skills & Documentation Sync:** Review and update relevant `.agents/skills/` documents to record any new UI patterns, API contracts, formulas, or operational guidelines.
+4. **Git Version Control & Deployment Push:** Stage all changes (`git add -A`), commit with semantic version prefix (`[v1.0.1] feat/fix(scope): message`), push to `origin/main`, merge into `stable`, and push to `origin/stable`.

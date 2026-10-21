@@ -1,4 +1,9 @@
-> ⚠️ **Active Beta Notice (`v1.0.0-beta.1`):** All of these new features are currently in active beta testing across DomsHomeLab! If you run into any bugs, strange behavior, or have ideas for improvements, please reach out and let Dominic know so we can fix them right away.
+> 🚀 **v1.0.0 Milestone Release Achieved & v1.0.1 Active**: Portalarr has officially completed its v1.0.0 milestone and is running in production across DomsHomeLab!
+>
+> 🔧 **v1.0.1 Patch Highlights**:
+> - **My Plex Hub Watch Statistics**: Resolved watch time hours, movies finished, and episodes watched across Tautulli, Plex Media Server, and local database fallbacks.
+> - **Admin Telemetry Gating**: Restricted build diagnostic modals and commit inspection strictly to verified administrators.
+> - **Sidebar DRY Architecture**: Unified desktop and mobile navigation via `SidebarNavContent` with restored signature app colors.
 
 ### ✨ What's New
 

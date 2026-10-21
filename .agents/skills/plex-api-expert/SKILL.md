@@ -135,3 +135,16 @@ See detailed runbook: [tags-collections-and-hubs.md](./references/tags-collectio
 
 
 
+
+22. **My Plex Hub Watch Statistics & Session Resolution Architecture**:
+    - **User Identity Matching**: Expands `userAliases` to include `username`, `email`, `name`, `plexUsername`, and `plexEmail` queried from `prisma.user`, matching against active Plex sessions and Tautulli user tables.
+    - **Multi-Server Token Decryption Fallback**: Decrypts server-specific tokens in `prisma.plexServer` (`dbPlexServers`) if `settings.mainPlexToken` is unset, ensuring `getPlexOwnerUser` and friend lookups always succeed.
+    - **Tautulli User Matching & Python Falsy `0` Fix**: Implements two-pass user matching (alias match first, then admin fallback). Avoids Python `user_id = 0` falsy drops by resolving to `user=${username}` for Plex server owner accounts.
+    - **Direct Plex Media Server History Scan**: Accumulates watch time (ms) and counts across all discovered PMS instances without loop-scoped cutoff bugs.
+    - **Local SQLite `WatchHistory` Fallback**: If Tautulli is offline or unconfigured, queries Prisma `WatchHistory` using exact and lowercased alias arrays (avoiding SQLite `mode: "insensitive"` crashes) to accurately aggregate watch hours, movies finished, and episodes watched.
+
+23. **Mandatory 4-Step Verification & Delivery Protocol (v1.0.1+)**:
+    - Step 1: `cmd /c "npm test"` (18+ suites, 100% pass, 0 failures).
+    - Step 2: `cmd /c "npm run build"` (Next.js production build, 0 TS errors, 100% clean).
+    - Step 3: Skills & Documentation Sync.
+    - Step 4: Git Version Control (`[v1.0.1]` prefix, push to `origin/main`, merge to `origin/stable`, push to `origin/stable`).
