@@ -10,6 +10,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import ImpersonationBanner from "@/components/impersonation-banner";
 import FloatingAiLauncher from "@/components/floating-ai-launcher";
+import FloatingSuggestFixLauncher from "@/components/floating-suggest-fix-launcher";
 import { BuildBadge } from "@/components/build-badge";
 
 export default function LayoutWrapper({ children }: { children: React.ReactNode }) {
@@ -18,6 +19,8 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [username, setUsername] = useState("");
+  const [isTrial, setIsTrial] = useState(false);
+  const [userRole, setUserRole] = useState("USER");
 
   useEffect(() => {
     async function checkAccess() {
@@ -35,7 +38,11 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
           setIsLoggedIn(true);
           const isAdm = session.role === "ADMIN";
           setIsAdmin(isAdm);
-          setUsername((session.username as string) || "");
+          const role = (user?.role || session.role || "USER") as string;
+          setUserRole(role);
+          const isTr = (user?.status === "TRIAL" || user?.membershipTier === "TRIAL" || (session as any).isTrial === true) && user?.status !== "APPROVED" && role !== "ADMIN";
+          setIsTrial(isTr);
+          setUsername((session.username as string) || (user?.username as string) || "");
 
           // Asynchronously prewarm user data in background (debounced to once every 3 min)
           import("@/app/actions").then(m => m.prewarmUserSessionAction?.()).catch(() => {});
@@ -49,6 +56,8 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
         } else {
           setIsLoggedIn(false);
           setIsAdmin(false);
+          setIsTrial(false);
+          setUserRole("USER");
           setUsername("");
           setHasLibraryAccess(false);
         }
@@ -211,6 +220,11 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
 
       {/* Floating 24/7 AI Assistant Launcher */}
       {isLoggedIn && <FloatingAiLauncher />}
+
+      {/* Floating Suggest a Fix Launcher (Full Members Only: Admin, Super User, User; non-trial) */}
+      {isLoggedIn && !isTrial && (userRole === "ADMIN" || userRole === "SUPER_USER" || userRole === "USER") && (
+        <FloatingSuggestFixLauncher userRole={userRole} username={username} />
+      )}
     </div>
   );
 }

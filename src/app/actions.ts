@@ -8157,6 +8157,310 @@ export async function submitAutoErrorTicketAction(errorPayload: {
     }
 }
 
+export interface PageFixSuggestionPayload {
+    pageUrl: string;
+    category: string;
+    summary: string;
+    description: string;
+    stepsToReproduce?: string;
+    errorMessage?: string;
+    telemetry?: {
+        userAgent?: string;
+        screenResolution?: string;
+        viewport?: string;
+        platform?: string;
+        language?: string;
+    };
+}
+
+function getPageFileHintsInternal(pathname: string): { title: string; fileHints: string[] } {
+    const cleanPath = (pathname || "/").split("?")[0];
+    if (cleanPath === "/" || !cleanPath) {
+        return {
+            title: "Home Dashboard & Active Streams (/)",
+            fileHints: ["src/app/page.tsx", "src/components/my-plex-hub.tsx", "src/components/admin-detailed-streams.tsx"]
+        };
+    }
+    if (cleanPath.startsWith("/library")) {
+        return {
+            title: "Book & Audiobook Library (/library)",
+            fileHints: ["src/app/library/page.tsx", "src/components/book-card.tsx", "src/components/audiobook-card.tsx", "src/app/actions.ts"]
+        };
+    }
+    if (cleanPath.startsWith("/discover")) {
+        return {
+            title: "Media Discovery (/discover)",
+            fileHints: ["src/app/discover/page.tsx", "src/app/seerr-actions.ts", "src/components/seerr/discover-hub.tsx"]
+        };
+    }
+    if (cleanPath.startsWith("/requests")) {
+        return {
+            title: "Media Requests Manager (/requests)",
+            fileHints: ["src/app/requests/page.tsx", "src/components/request-manager.tsx", "src/app/seerr-actions.ts"]
+        };
+    }
+    if (cleanPath.startsWith("/radarr")) {
+        return {
+            title: "Radarr Movies (/radarr)",
+            fileHints: ["src/app/radarr/page.tsx", "src/components/radarr-movie-table.tsx"]
+        };
+    }
+    if (cleanPath.startsWith("/sonarr")) {
+        return {
+            title: "Sonarr TV Shows (/sonarr)",
+            fileHints: ["src/app/sonarr/page.tsx", "src/components/sonarr-series-table.tsx"]
+        };
+    }
+    if (cleanPath.startsWith("/profile") || cleanPath.startsWith("/settings/profile")) {
+        return {
+            title: "Account & Profile Settings (/profile)",
+            fileHints: ["src/app/profile/page.tsx", "src/app/settings/profile/page.tsx"]
+        };
+    }
+    if (cleanPath.startsWith("/guides")) {
+        return {
+            title: "Plex Device Setup Guides (/guides)",
+            fileHints: ["src/app/guides/page.tsx", "src/components/plex-setup-guides.tsx"]
+        };
+    }
+    if (cleanPath.startsWith("/tickets") || cleanPath.startsWith("/admin/tickets")) {
+        return {
+            title: "Support Tickets (/tickets)",
+            fileHints: ["src/app/tickets/page.tsx", "src/app/actions.ts"]
+        };
+    }
+    if (cleanPath.startsWith("/beta")) {
+        return {
+            title: "Beta Portal (/beta)",
+            fileHints: ["src/app/beta/page.tsx"]
+        };
+    }
+    if (cleanPath.startsWith("/admin/monitoring")) {
+        return {
+            title: "Fleet & System Monitoring (/admin/monitoring)",
+            fileHints: ["src/app/admin/monitoring/page.tsx", "src/components/admin-system-health-grid.tsx"]
+        };
+    }
+    if (cleanPath.startsWith("/admin/scripts")) {
+        return {
+            title: "User Scripts & Automation (/admin/scripts)",
+            fileHints: ["src/app/admin/scripts/page.tsx"]
+        };
+    }
+    if (cleanPath.startsWith("/admin/tautulli") || cleanPath.startsWith("/admin/streams") || cleanPath.startsWith("/tautulli") || cleanPath.startsWith("/streams")) {
+        return {
+            title: "Stream Intelligence & History (/admin/streams)",
+            fileHints: ["src/app/admin/streams/page.tsx", "src/components/admin-detailed-streams.tsx"]
+        };
+    }
+    if (cleanPath.startsWith("/curation/kometa")) {
+        return {
+            title: "Kometa Overlays Studio (/curation/kometa)",
+            fileHints: ["src/app/curation/kometa/page.tsx", "src/components/curation/kometa-studio.tsx"]
+        };
+    }
+    if (cleanPath.startsWith("/curation/agregarr")) {
+        return {
+            title: "Agregarr Hubs Studio (/curation/agregarr)",
+            fileHints: ["src/app/curation/agregarr/page.tsx", "src/components/curation/agregarr-studio.tsx"]
+        };
+    }
+    if (cleanPath.startsWith("/curation/prune")) {
+        return {
+            title: "Maintainerr Prune Studio (/curation/prune)",
+            fileHints: ["src/app/curation/prune/page.tsx", "src/components/curation/prune-studio.tsx"]
+        };
+    }
+    if (cleanPath.startsWith("/curation/tagging")) {
+        return {
+            title: "Media Tagging Studio (/curation/tagging)",
+            fileHints: ["src/app/curation/tagging/page.tsx", "src/components/curation/tagging-studio.tsx"]
+        };
+    }
+    if (cleanPath.startsWith("/curation")) {
+        return {
+            title: "Curation Studio (/curation)",
+            fileHints: ["src/app/curation/page.tsx"]
+        };
+    }
+    if (cleanPath.startsWith("/settings/access")) {
+        return {
+            title: "Access Control Directory (/settings/access)",
+            fileHints: ["src/app/settings/access/page.tsx", "src/app/actions.ts"]
+        };
+    }
+    if (cleanPath.startsWith("/settings")) {
+        return {
+            title: "System Settings (/settings)",
+            fileHints: ["src/app/settings/page.tsx", "src/components/settings/general-settings.tsx"]
+        };
+    }
+    return {
+        title: `${cleanPath} Page`,
+        fileHints: [`src/app${cleanPath.replace(/\/$/, "")}/page.tsx`]
+    };
+}
+
+export async function getPageFileHints(pathname: string) {
+    return getPageFileHintsInternal(pathname);
+}
+
+export async function submitPageFixSuggestionAction(payload: PageFixSuggestionPayload) {
+    try {
+        const user: any = await verifyUser();
+        if (!user) {
+            return { success: false, error: "Authentication required to suggest page fixes." };
+        }
+
+        const role = String(user?.role || "").toUpperCase();
+        const isTrial = (user?.status === "TRIAL" || user?.membershipTier === "TRIAL") && user?.status !== "APPROVED" && role !== "ADMIN";
+        if (isTrial || (role !== "ADMIN" && role !== "SUPER_USER" && role !== "USER")) {
+            return { success: false, error: "Page fix suggestions are reserved for full members and administrators." };
+        }
+
+        const username = user.username || "Member";
+        const email = user.email || `${username}@domshomelab.local`;
+        const pageInfo = getPageFileHintsInternal(payload.pageUrl);
+
+        const aiPrompt = [
+            `### Task: Resolve Page Issue on "${pageInfo.title}"`,
+            `**Target Page URL:** \`${payload.pageUrl}\``,
+            `**Category:** ${payload.category}`,
+            `**Summary:** ${payload.summary}`,
+            `**Reported By:** ${username} (${email}) [${role}]`,
+            `**Observed vs Expected:**`,
+            payload.description,
+            payload.stepsToReproduce ? `\n**Reproduction Steps:**\n${payload.stepsToReproduce}` : null,
+            payload.errorMessage ? `\n**Reported Error Message:**\n\`\`\`\n${payload.errorMessage}\n\`\`\`` : null,
+            `\n**Relevant Candidate Files:**`,
+            ...pageInfo.fileHints.map(f => `- \`${f}\``),
+            `\n**Action Plan for Antigravity AI:**`,
+            `1. Inspect the relevant candidate files above.`,
+            `2. Fix the underlying bug, improve the visual layout, or implement the requested enhancement.`,
+            `3. Run \`cmd /c "npm test"\` and \`cmd /c "npm run build"\` to verify 100% clean compilation and test passes.`,
+            `4. Commit with descriptive semantic message prefixing active version.`
+        ].filter(Boolean).join("\n");
+
+        const formattedIssue = [
+            `🛠️ [PAGE FIX / ISSUE SUGGESTION]`,
+            `Reported Page: ${payload.pageUrl}`,
+            `Category: ${payload.category}`,
+            `Summary: ${payload.summary}`,
+            `Reported By: ${username} (${email}) [${role}]`,
+            `Timestamp: ${new Date().toISOString()}`,
+            ``,
+            `--- DESCRIPTION & EXPECTED BEHAVIOR ---`,
+            payload.description,
+            ``,
+            payload.stepsToReproduce ? `--- STEPS TO REPRODUCE ---\n${payload.stepsToReproduce}\n` : null,
+            payload.errorMessage ? `--- ERROR MESSAGE ---\n${payload.errorMessage}\n` : null,
+            `--- CLIENT TELEMETRY ---`,
+            `- URL: ${payload.pageUrl}`,
+            `- User Agent: ${payload.telemetry?.userAgent || "Unknown"}`,
+            `- Screen Resolution: ${payload.telemetry?.screenResolution || "Unknown"}`,
+            `- Viewport: ${payload.telemetry?.viewport || "Unknown"}`,
+            `- Platform / Language: ${payload.telemetry?.platform || "Web"} / ${payload.telemetry?.language || "en"}`,
+            ``,
+            `--- READY-TO-USE ANTIGRAVITY AI PROMPT ---`,
+            aiPrompt
+        ].filter(Boolean).join("\n");
+
+        const ticket = await prisma.supportTicket.create({
+            data: {
+                name: username,
+                email: email,
+                issue: formattedIssue,
+                status: "Pending"
+            }
+        });
+
+        logger.addLog("INFO", "SYSTEM", `[PAGE-FIX] Created page fix ticket #${ticket.id.slice(0, 8)} from ${username} for ${payload.pageUrl}`);
+
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        const appUrl = await getAppUrl();
+        const ticketsUrl = `${appUrl}/admin/tickets`;
+
+        // 1. Email Notification to Admin
+        if (settings?.smtpHost && settings?.smtpUser && settings?.emailNotificationsEnabled !== false && settings?.notifySupportTickets !== false) {
+            try {
+                const { subject, html } = await renderEmailTemplate("ticket_error_alert", {
+                    name: username,
+                    email: email,
+                    pageUrl: payload.pageUrl,
+                    errorTitle: `Page Fix Suggested: ${payload.summary}`,
+                    errorMessage: `${payload.category} on ${pageInfo.title}\n\n${payload.description}`,
+                    userNoteBlock: `<div style="margin-top: 10px; padding: 10px; background-color: #f8fafc; border-left: 3px solid #6366f1;"><strong>Category:</strong> ${payload.category}<br/><strong>Page:</strong> ${payload.pageUrl}</div>`,
+                    ticketsUrl,
+                    appUrl
+                });
+
+                await sendOrQueueEmail({
+                    to: settings.smtpUser,
+                    subject: `[Page Fix] ${payload.summary}`,
+                    html,
+                    text: formattedIssue,
+                    templateId: "ticket_error_alert",
+                    targetUser: username
+                });
+            } catch (mailErr: any) {
+                console.error("[PAGE-FIX] Failed to dispatch admin email notification:", mailErr?.message || mailErr);
+            }
+        }
+
+        // 2. Discord Webhook / Bot Notification
+        try {
+            const webhookUrl = settings?.seerrDiscordWebhookUrl?.trim();
+            const botToken = settings?.discordBotToken;
+            const channelId = settings?.discordStatusChannelId || settings?.discordRequestsChannelId;
+
+            if (webhookUrl || (botToken && channelId)) {
+                const embed = {
+                    title: `🛠️ Page Fix Suggested: ${payload.summary.slice(0, 100)}`,
+                    description: payload.description.slice(0, 300) + (payload.description.length > 300 ? "..." : ""),
+                    color: 0xF59E0B,
+                    url: ticketsUrl,
+                    fields: [
+                        { name: "Reported Page", value: `\`${payload.pageUrl}\``, inline: true },
+                        { name: "Category", value: payload.category, inline: true },
+                        { name: "Member", value: `\`${username}\` (${role})`, inline: true },
+                        { name: "Ticket", value: `\`#${ticket.id.slice(0, 8)}\``, inline: true }
+                    ],
+                    footer: { text: "DomsHomeLab Support & Page Fix Engine • Review in Tickets Dashboard" },
+                    timestamp: new Date().toISOString()
+                };
+
+                if (botToken && channelId) {
+                    const { postDiscordMessage } = await import("@/lib/discord/discord-bot");
+                    await postDiscordMessage({
+                        botToken,
+                        channelId,
+                        embeds: [embed as any]
+                    }).catch(e => console.warn("[DISCORD-PAGE-FIX-BOT-ERROR]:", e?.message || e));
+                } else if (webhookUrl) {
+                    await fetch(webhookUrl, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ embeds: [embed] })
+                    }).catch(e => console.warn("[DISCORD-PAGE-FIX-WEBHOOK-ERROR]:", e?.message || e));
+                }
+            }
+        } catch (discordErr: any) {
+            console.error("[PAGE-FIX] Failed to dispatch Discord notification:", discordErr?.message || discordErr);
+        }
+
+        try {
+            revalidatePath("/");
+            revalidatePath("/tickets");
+            revalidatePath("/admin/tickets");
+        } catch (e) {}
+
+        return { success: true, ticketId: ticket.id };
+    } catch (e: any) {
+        console.error("[PAGE-FIX] Error creating page fix ticket:", e);
+        return { success: false, error: e.message || "Failed to submit page fix suggestion." };
+    }
+}
+
 export async function getActiveDownloads() {
     try {
         await ensureSchemaColumns();
