@@ -106,7 +106,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
                   <Server className="h-5 w-5 sm:h-6 sm:w-6 text-primary shrink-0" />
                   <span className="font-bold text-lg sm:text-xl tracking-tight">DomsHomeLab</span>
               </Link>
-              <BuildBadge variant="compact" />
+              <BuildBadge variant="compact" isAdmin={isAdmin} />
             </div>
             
             <div className="flex items-center gap-1.5 sm:gap-3">
@@ -199,7 +199,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
                   <MobileSidebar />
                 </Suspense>
                 <span className="font-bold text-base sm:text-lg truncate">{getMobileTitle()}</span>
-                <BuildBadge variant="compact" />
+                <BuildBadge variant="compact" isAdmin={isAdmin} />
              </div>
              <div className="flex items-center gap-1.5 shrink-0">
                 <Link href="/" className="text-xs font-bold text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 rounded bg-muted/30">
