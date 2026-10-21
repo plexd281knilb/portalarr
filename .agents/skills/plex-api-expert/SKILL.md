@@ -147,4 +147,4 @@ See detailed runbook: [tags-collections-and-hubs.md](./references/tags-collectio
     - Step 1: `cmd /c "npm test"` (18+ suites, 100% pass, 0 failures).
     - Step 2: `cmd /c "npm run build"` (Next.js production build, 0 TS errors, 100% clean).
     - Step 3: Skills & Documentation Sync.
-    - Step 4: SemVer Version Increment & Git Version Control (increment `package.json` version, `[v<version>]` prefix, push to `origin/main`, merge to `origin/stable`, push to `origin/stable`).
+    - Step 4: SemVer Version Increment & Git Version Control (increment `package.json` version, `[v<version>]` prefix, push strictly to `origin/main` (Beta). NEVER push to `stable` unless user explicitly instructs).

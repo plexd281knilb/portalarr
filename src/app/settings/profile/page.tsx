@@ -53,6 +53,7 @@ import FeatureGuideModal from "@/components/feature-guide-modal";
 import PlexSetupGuides from "@/components/plex-setup-guides";
 import SuperUserCard from "@/components/super-user-card";
 import { PaymentMethodsGrid } from "@/components/payment-methods-grid";
+import { UserMediaServersManager } from "@/components/profile/user-media-servers-manager";
 import { format, differenceInDays } from "date-fns";
 
 function safeFormatDate(dateVal: any, formatPattern: string, fallback = ""): string {
@@ -1618,163 +1619,13 @@ export default function UserProfilePage() {
                 </CardContent>
             </Card>
 
-            {/* MY SHARED PLEX LIBRARIES CARD */}
-            <Card id="libraries" className={`transition-all duration-300 bg-[#121218]/80 backdrop-blur-md relative overflow-hidden scroll-mt-6 ${isLibrariesDirty ? "border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]" : "border-cyan-500/30 shadow-sm"}`}>
-                <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/5 rounded-full blur-3xl -z-10 pointer-events-none" />
-                <CardHeader className="pb-3">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                        <div>
-                            <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
-                                <FolderCheck className="h-5 w-5 text-cyan-400" /> My Shared Plex Libraries
-                                {isLibrariesDirty && (
-                                    <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-400 border-amber-500/30 font-medium ml-2 animate-in fade-in">
-                                        ● Unsaved Changes
-                                    </Badge>
-                                )}
-                            </CardTitle>
-                            <CardDescription className="text-xs">
-                                Choose which libraries from your allowed membership access appear on your Plex home screen and apps.
-                            </CardDescription>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="bg-cyan-500/20 text-cyan-300 border-cyan-500/40 text-xs w-fit">
-                                {serverLibraries.length > 0 
-                                    ? serverLibraries.reduce((total, srv) => total + (srv.sections || []).filter((sec: any) => isSectionSelected(sec, srv)).length, 0)
-                                    : selectedLibraries.length} Libraries Selected
-                            </Badge>
-                        </div>
-                    </div>
-                </CardHeader>
-                <CardContent>
-                    <form onSubmit={handleSaveLibraries} className="space-y-4">
-                        {libMsg && (
-                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
-                                <CheckCircle2 className="h-4 w-4 shrink-0" />
-                                <span>{libMsg}</span>
-                            </div>
-                        )}
-                        {libErr && (
-                            <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
-                                <XCircle className="h-4 w-4 shrink-0" />
-                                <span>{libErr}</span>
-                            </div>
-                        )}
-
-                        {serverLibraries.length === 0 ? (
-                            <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] text-center text-xs text-muted-foreground">
-                                No Plex server libraries found. Your shared libraries will appear here once configured by the administrator.
-                            </div>
-                        ) : (
-                            <div className="space-y-4">
-                                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                                    <span className="text-xs text-muted-foreground">
-                                        Toggle individual libraries on or off to tailor your Plex home screen:
-                                    </span>
-                                    <div className="flex items-center gap-2">
-                                        <Button 
-                                            type="button" 
-                                            variant="ghost" 
-                                            size="sm" 
-                                            onClick={handleSelectAllLibraries}
-                                            className="h-7 px-2.5 text-[11px] text-cyan-300 hover:text-cyan-200 hover:bg-cyan-500/10 cursor-pointer"
-                                        >
-                                            <CheckSquare className="h-3 w-3 mr-1" /> Select All
-                                        </Button>
-                                        <Button 
-                                            type="button" 
-                                            variant="ghost" 
-                                            size="sm" 
-                                            onClick={handleDeselectAllLibraries}
-                                            className="h-7 px-2.5 text-[11px] text-muted-foreground hover:text-foreground cursor-pointer"
-                                        >
-                                            <Square className="h-3 w-3 mr-1" /> Deselect All
-                                        </Button>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-3">
-                                    {serverLibraries.map((server) => {
-                                        if (isTrial) {
-                                            const sName = (server.serverName || "").toLowerCase();
-                                            if (sName.includes("kid") || sName.includes("backup")) {
-                                                return null;
-                                            }
-                                        }
-                                        let allowedSections = (server.sections || []).filter((sec: any) => isSectionAllowed(sec, server));
-                                        if (allowedSections.length === 0 && (user?.role === "ADMIN" || (!isTrial && allowedLibraries.length === 0))) {
-                                            allowedSections = server.sections || [];
-                                        }
-                                        if (allowedSections.length === 0) return null;
-
-                                        return (
-                                            <div key={server.serverId} className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-3">
-                                                <div className="flex items-center justify-between border-b border-border/30 pb-2">
-                                                    <span className="font-bold text-xs text-foreground uppercase tracking-wider flex items-center gap-1.5">
-                                                        <Tv className="h-3.5 w-3.5 text-primary" /> {server.serverName || "Plex Server"}
-                                                    </span>
-                                                    <Badge variant="outline" className="text-[10px] text-muted-foreground">
-                                                        {allowedSections.length} Available
-                                                    </Badge>
-                                                </div>
-
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
-                                                    {allowedSections.map((sec: any) => {
-                                                        const isSelected = isSectionSelected(sec, server);
-                                                        return (
-                                                            <button
-                                                                key={sec.uniqueKey || sec.id || sec.key}
-                                                                type="button"
-                                                                onClick={() => handleToggleLibrary(sec, server)}
-                                                                className={`p-2.5 rounded-lg border text-left flex items-center justify-between gap-2 transition-all cursor-pointer ${
-                                                                    isSelected
-                                                                        ? "bg-cyan-500/10 border-cyan-500/40 text-cyan-200 shadow-xs"
-                                                                        : "bg-background/50 border-border/40 text-muted-foreground hover:border-border hover:text-foreground"
-                                                                }`}
-                                                            >
-                                                                <div className="flex items-center gap-2 min-w-0">
-                                                                    {sec.type === "movie" ? (
-                                                                        <Film className={`h-4 w-4 shrink-0 ${isSelected ? "text-cyan-400" : "text-muted-foreground"}`} />
-                                                                    ) : sec.type === "show" ? (
-                                                                        <Tv className={`h-4 w-4 shrink-0 ${isSelected ? "text-purple-400" : "text-muted-foreground"}`} />
-                                                                    ) : sec.type === "artist" || sec.type === "music" ? (
-                                                                        <Music className={`h-4 w-4 shrink-0 ${isSelected ? "text-emerald-400" : "text-muted-foreground"}`} />
-                                                                    ) : (
-                                                                        <FolderCheck className={`h-4 w-4 shrink-0 ${isSelected ? "text-amber-400" : "text-muted-foreground"}`} />
-                                                                    )}
-                                                                    <span className="text-xs font-semibold truncate">{sec.title}</span>
-                                                                </div>
-                                                                <div className={`h-4 w-4 rounded shrink-0 flex items-center justify-center border transition-all ${
-                                                                    isSelected ? "bg-cyan-500 border-cyan-400 text-slate-950" : "border-muted-foreground/40 bg-transparent"
-                                                                }`}>
-                                                                    {isSelected && <Check className="h-3 w-3 stroke-[3]" />}
-                                                                </div>
-                                                            </button>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        )}
-
-                        <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-border/30">
-                            <p className="text-[11px] text-muted-foreground italic">
-                                💡 Library changes push directly to your Plex account immediately upon saving.
-                            </p>
-                            <Button
-                                type="submit"
-                                disabled={savingLibraries}
-                                className="w-full sm:w-auto font-bold text-xs h-9 bg-cyan-600 hover:bg-cyan-500 text-white gap-2 transition-all hover:ring-2 hover:ring-cyan-400/40 active:scale-95 cursor-pointer"
-                            >
-                                {savingLibraries ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCheck className="h-4 w-4" />}
-                                Save Library Preferences
-                            </Button>
-                        </div>
-                    </form>
-                </CardContent>
-            </Card>
+            {/* MULTI-PLATFORM MEDIA SERVERS & LIBRARIES (PLEX • JELLYFIN • EMBY) */}
+            <UserMediaServersManager 
+                userRole={user?.role} 
+                userStatus={user?.status} 
+                membershipTier={user?.membershipTier} 
+                username={user?.username} 
+            />
 
             {/* HOUSEHOLD SUB-ACCOUNTS CARD */}
             <Card id="subaccounts" className="border-purple-500/30 bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden scroll-mt-6">

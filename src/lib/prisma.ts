@@ -764,7 +764,16 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["discordLinkedAt", `ALTER TABLE "User" ADD COLUMN "discordLinkedAt" DATETIME;`],
                 ["maxConcurrentStreams", `ALTER TABLE "User" ADD COLUMN "maxConcurrentStreams" INTEGER DEFAULT 3;`],
                 ["sharingAlertCount", `ALTER TABLE "User" ADD COLUMN "sharingAlertCount" INTEGER NOT NULL DEFAULT 0;`],
-                ["lastSharingAlertAt", `ALTER TABLE "User" ADD COLUMN "lastSharingAlertAt" DATETIME;`]
+                ["lastSharingAlertAt", `ALTER TABLE "User" ADD COLUMN "lastSharingAlertAt" DATETIME;`],
+                ["allowedServerKeys", `ALTER TABLE "User" ADD COLUMN "allowedServerKeys" TEXT;`],
+                ["selectedServerKeys", `ALTER TABLE "User" ADD COLUMN "selectedServerKeys" TEXT;`],
+                ["allowedMediaLibraryKeys", `ALTER TABLE "User" ADD COLUMN "allowedMediaLibraryKeys" TEXT;`],
+                ["selectedMediaLibraryKeys", `ALTER TABLE "User" ADD COLUMN "selectedMediaLibraryKeys" TEXT;`],
+                ["jellyfinUserId", `ALTER TABLE "User" ADD COLUMN "jellyfinUserId" TEXT;`],
+                ["jellyfinUsername", `ALTER TABLE "User" ADD COLUMN "jellyfinUsername" TEXT;`],
+                ["embyUserId", `ALTER TABLE "User" ADD COLUMN "embyUserId" TEXT;`],
+                ["embyUsername", `ALTER TABLE "User" ADD COLUMN "embyUsername" TEXT;`],
+                ["accountPreferences", `ALTER TABLE "User" ADD COLUMN "accountPreferences" TEXT;`]
             ];
 
             for (const [colName, ddl] of userAddCols) {
@@ -911,6 +920,36 @@ export async function ensureSchemaColumns(): Promise<void> {
             if (!plexServerCols.includes("databasePath")) {
                 await prisma.$executeRawUnsafe(`ALTER TABLE "PlexServer" ADD COLUMN "databasePath" TEXT;`);
             }
+            if (!plexServerCols.includes("allowUserSelfSelect")) {
+                await prisma.$executeRawUnsafe(`ALTER TABLE "PlexServer" ADD COLUMN "allowUserSelfSelect" BOOLEAN NOT NULL DEFAULT 1;`);
+            }
+            if (!plexServerCols.includes("allowTrialAccess")) {
+                await prisma.$executeRawUnsafe(`ALTER TABLE "PlexServer" ADD COLUMN "allowTrialAccess" BOOLEAN NOT NULL DEFAULT 0;`);
+            }
+            if (!plexServerCols.includes("allowedLibraryIds")) {
+                await prisma.$executeRawUnsafe(`ALTER TABLE "PlexServer" ADD COLUMN "allowedLibraryIds" TEXT;`);
+            }
+            if (!plexServerCols.includes("cachedLibraries")) {
+                await prisma.$executeRawUnsafe(`ALTER TABLE "PlexServer" ADD COLUMN "cachedLibraries" TEXT;`);
+            }
+
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "MediaServer" (
+                    "id" TEXT PRIMARY KEY,
+                    "name" TEXT NOT NULL,
+                    "type" TEXT NOT NULL,
+                    "url" TEXT NOT NULL,
+                    "apiKey" TEXT NOT NULL,
+                    "isActive" BOOLEAN NOT NULL DEFAULT 1,
+                    "isMonitored" BOOLEAN NOT NULL DEFAULT 1,
+                    "allowUserSelfSelect" BOOLEAN NOT NULL DEFAULT 1,
+                    "allowTrialAccess" BOOLEAN NOT NULL DEFAULT 0,
+                    "allowedLibraryIds" TEXT,
+                    "cachedLibraries" TEXT,
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            `).catch(() => {});
         } catch (e: any) {
             console.error("[DB-SCHEMA-AUTOFIX] Auxiliary tables check error:", e.message || e);
         }

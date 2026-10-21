@@ -8,11 +8,11 @@ Portalarr is a centralized, self-hosted dashboard designed to manage a media ser
 
 Portalarr adheres to strict Semantic Versioning (`MAJOR.MINOR.PATCH`):
 - **Released Baseline**: `v1.0.0` is the production milestone baseline release.
-- **Active Patch Release**: `v1.0.2` is the current active release.
+- **Active Feature Release**: `v1.1.0` is the current active release.
 - **Strict SemVer Policy**:
-  - **PATCH increments (`1.0.2` ➔ `1.0.3`)**: Bug fixes, security patches, styling polish, telemetry adjustments, and non-breaking corrections.
+  - **PATCH increments (`1.1.0` ➔ `1.1.1`)**: Bug fixes, security patches, styling polish, telemetry adjustments, and non-breaking corrections.
   - **MINOR increments (`1.0.2` ➔ `1.1.0`)**: Backwards-compatible new features, new curation studios, new third-party integrations, or major enhancements.
-  - **MAJOR increments (`1.0.2` ➔ `2.0.0`)**: Breaking architectural changes, major database redesigns, or backwards-incompatible API shifts.
+  - **MAJOR increments (`1.1.0` ➔ `2.0.0`)**: Breaking architectural changes, major database redesigns, or backwards-incompatible API shifts.
 - **Automatic Environment Branch Telemetry**:
   - **Beta Preview Environment (`main` branch)**: `BuildBadge` renders `BETA • v<version>` with a glowing, pulsing purple dot (`bg-purple-400 animate-pulse`). Targets Docker tag `ghcr.io/plexd281knilb/portalarr:main`.
   - **Production Release Environment (`stable` branch)**: `BuildBadge` renders `PROD • v<version>` with a solid emerald green dot (`bg-emerald-400`). Targets Docker tag `ghcr.io/plexd281knilb/portalarr:stable`.
@@ -61,9 +61,9 @@ To guarantee 100% reliability, quality control, and consistency, the following 4
 3. **Skills & Documentation Sync:**
    Review and update relevant `.agents/skills/` documents (e.g. `portalarr-ui`, `seerr-expert`, etc.) to record any new UI patterns, API contracts, formulas, or operational guidelines.
 4. **SemVer Version Increment & Git Deployment Push:**
-   - **MANDATORY VERSION INCREMENT**: ALWAYS increment the version in `package.json` (and `package-lock.json` / `GEMINI.md`) BEFORE staging and committing according to SemVer rules (PATCH `+1` e.g. `1.0.2` ➔ `1.0.3` for bug fixes, polish, and non-breaking corrections; MINOR `+1` e.g. `1.0.2` ➔ `1.1.0` for new features and capabilities; MAJOR `+1` for breaking changes). Never reuse an existing release version on a new task or commit!
+   - **MANDATORY VERSION INCREMENT**: ALWAYS increment the version in `package.json` (and `package-lock.json` / `GEMINI.md`) BEFORE staging and committing according to SemVer rules (PATCH `+1` e.g. `1.1.0` ➔ `1.1.1` for bug fixes, polish, and non-breaking corrections; MINOR `+1` e.g. `1.1.0` ➔ `1.2.0` for new features and capabilities; MAJOR `+1` for breaking changes). Never reuse an existing release version on a new task or commit!
    - **Staging, Verification & Push**:
-     Inspect `git status` to verify all touched and new files, stage all changes (`git add -A`), commit with a clear, descriptive message adhering to conventional commit style that ALWAYS includes the freshly incremented active version from `package.json` at the FRONT in brackets (e.g. `[v1.0.2] feat(scope): descriptive message` or `[v1.0.2] fix(scope): fix bug`), and push to `origin/main`, merge to `origin/stable`, and push to `origin/stable`. Automatic git hook enforcement via `scripts/git-commit-msg-hook.js` is verified in `npm test` and executed by Git on every commit to guarantee version prefixing.
+     Inspect `git status` to verify all touched and new files, stage all changes (`git add -A`), commit with a clear, descriptive message adhering to conventional commit style that ALWAYS includes the freshly incremented active version from `package.json` at the FRONT in brackets (e.g. `[v1.1.0] feat(scope): descriptive message` or `[v1.1.0] fix(scope): fix bug`), and push strictly to `origin/main` (Beta preview environment). **CRITICAL RULE**: NEVER merge or push to `stable` / `origin/stable` unless the user explicitly instructs to push to `stable`! Automatic git hook enforcement via `scripts/git-commit-msg-hook.js` is verified in `npm test` and executed by Git on every commit to guarantee version prefixing.
 
 ## 🧠🤖 Multi-Model Orchestration & Worker Topology: "Brain" (Argon 4) ➔ "Pinky" (Flash 3.8)
 

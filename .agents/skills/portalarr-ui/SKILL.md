@@ -31,6 +31,7 @@ Portalarr uses a **Modern Cinematic Dark Theme** powered by Tailwind CSS, Radix 
 ### 2. Multi-Tab Navigation & Active State Contrast
 - **Semantic Tab Accents**: Tabs in settings or dashboards must never rely on monochrome/desaturated `text-primary` in dark mode. Every tab must specify its distinct brand color token for its icon, hover ring/shadow, and active selection state:
   - **General & Setup**: `text-orange-400`, `hover:ring-orange-400/80`, `data-[state=active]:text-orange-400 data-[state=active]:bg-orange-500/10 data-[state=active]:border-orange-500/40`
+  - **Media Servers**: `text-blue-400`, `hover:ring-blue-400/80`, `data-[state=active]:text-blue-400 data-[state=active]:bg-blue-500/10 data-[state=active]:border-blue-500/40`
   - **Access Control**: `text-emerald-400`, `hover:ring-emerald-400/80`, `data-[state=active]:text-emerald-400 data-[state=active]:bg-emerald-500/10 data-[state=active]:border-emerald-500/40`
   - **Media Requests**: `text-rose-400`, `hover:ring-rose-400/80`, `data-[state=active]:text-rose-400 data-[state=active]:bg-rose-500/10 data-[state=active]:border-rose-500/40`
   - **Broadcast & Emails**: `text-amber-400`, `hover:ring-amber-400/80`, `data-[state=active]:text-amber-400 data-[state=active]:bg-amber-500/10 data-[state=active]:border-amber-500/40`
@@ -40,6 +41,18 @@ Portalarr uses a **Modern Cinematic Dark Theme** powered by Tailwind CSS, Radix 
   - **Live System Logs**: `text-emerald-400`, `hover:ring-emerald-400/80`, `data-[state=active]:text-emerald-400 data-[state=active]:bg-emerald-500/10 data-[state=active]:border-emerald-500/40`
 - **Zero Opacity Washes on Tab Switch**: Tab switches must be instantaneous client-side state transitions. Never wrap tab content in `opacity-50` or `isPending` transitions that dim the screen on click. For URL updates, use `router.replace(url, { scroll: false })` without `startTransition`.
 - **Slot Inactive/Disabled Card Styling**: Unconfigured or optional slots (e.g. 4K Arrs or Kids Arrs) must use dashed borders (`border border-dashed border-border/40`) with muted text rather than container-wide `opacity-75` washes which make the whole panel look faded and inactive.
+
+### 3. Multi-Platform Media Servers (Plex, Jellyfin, Emby) & Library Self-Selection
+- **Distinct Server Brand Tokens**:
+  - **Plex**: Amber badge (`bg-amber-500/10 text-amber-400 border-amber-500/30`)
+  - **Jellyfin**: Purple badge (`bg-purple-500/10 text-purple-400 border-purple-500/30`)
+  - **Emby**: Emerald green badge (`bg-emerald-500/10 text-emerald-400 border-emerald-500/30`)
+- **Admin Server Whitelisting & Library Scoping**:
+  - In Admin Settings (`AdminMediaServersPanel`), each server exposes toggles for `Allow User Self-Selection` and `Allow Trial Access`.
+  - When whitelisting specific libraries, render interactive checkbox pills for each discovered virtual folder or PMS section.
+- **User Self-Selection & Tier Capabilities**:
+  - In User Profile (`UserMediaServersManager`), render an informative Tier Capabilities Banner highlighting Full Member privileges (unlimited library selection, playback quality caps, audio/subtitle language preferences, email digests).
+  - Enforce server-side whitelist validation: any client tampering attempting to select unauthorized servers or hidden libraries is strictly filtered out before database persistence and API policy sync.
 
 ## 📐 Key Layout & Component Rules
 
@@ -1117,7 +1130,7 @@ Before completing any task, execute:
 1. `cmd /c "npm test"`: Full 18+ suite verification (`scripts/verify-all.ts`), 0 failures.
 2. `cmd /c "npm run build"`: Next.js production build, 0 TS errors, 100% clean.
 3. Skills & Documentation Sync: Update `.agents/skills/` and `.md` files with architectural learnings.
-4. SemVer Version Increment & Git Deployment Push: Increment version in `package.json` according to SemVer (PATCH `+1` for fixes/polish, MINOR `+1` for features), commit with freshly incremented `[v<version>]` prefix, push to `origin/main`, merge to `origin/stable`, push to `origin/stable`.
+4. SemVer Version Increment & Git Deployment Push: Increment version in `package.json` according to SemVer (PATCH `+1` for fixes/polish, MINOR `+1` for features), commit with freshly incremented `[v<version>]` prefix, push strictly to `origin/main` (Beta). NEVER push to `stable` unless the user explicitly instructs.
 
 ---
 

@@ -36,7 +36,7 @@ import {
     AlertTriangle, PlaySquare, Activity, Sliders, Megaphone, Beaker, 
     CheckCircle2, XCircle, MailCheck, RefreshCw, Mail, FolderCheck, 
     Radio, ExternalLink, FileCode, Check, Bot, Sparkles, Key, Cpu, Eye, EyeOff, Terminal, Zap, Tv,
-    Bell, BellOff, UserCheck, BookOpen, LifeBuoy, Save, RotateCcw, Star, Globe, Compass, MessageSquare, History, Search
+    Bell, BellOff, UserCheck, BookOpen, LifeBuoy, Save, RotateCcw, Star, Globe, Compass, MessageSquare, History, Search, Server
 } from "lucide-react";
 import { 
     Dialog, 
@@ -54,6 +54,7 @@ import EmailManagement from "@/components/email-management";
 import { SeerrSettingsPanel } from "@/components/seerr/seerr-settings-panel";
 import DiscordSettingsPanel from "@/components/discord/discord-settings-panel";
 import CloudflarePolicyCard from "@/components/cloudflare-policy-card";
+import { AdminMediaServersPanel } from "@/components/settings/admin-media-servers-panel";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
@@ -1231,7 +1232,7 @@ function SettingsPageContent() {
             </div>
 
             <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-                <TabsList className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 w-full h-auto p-1.5 bg-muted/40 border border-muted/60 rounded-xl gap-1.5 shadow-md">
+                <TabsList className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9 w-full h-auto p-1.5 bg-muted/40 border border-muted/60 rounded-xl gap-1.5 shadow-md">
                     <TabsTrigger value="general" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-orange-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(249,115,22,0.25)] hover:bg-muted/80 data-[state=active]:text-orange-400 data-[state=active]:bg-orange-500/10 data-[state=active]:border-orange-500/40 data-[state=active]:shadow-sm min-w-0">
                         <Sliders className="h-4 w-4 text-orange-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
                         <span className="truncate">General & Setup</span>
@@ -1241,6 +1242,10 @@ function SettingsPageContent() {
                                 <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
                             </span>
                         )}
+                    </TabsTrigger>
+                    <TabsTrigger value="servers" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-blue-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(59,130,246,0.25)] hover:bg-muted/80 data-[state=active]:text-blue-400 data-[state=active]:bg-blue-500/10 data-[state=active]:border-blue-500/40 data-[state=active]:shadow-sm min-w-0">
+                        <Server className="h-4 w-4 text-blue-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
+                        <span className="truncate">Media Servers</span>
                     </TabsTrigger>
                     <TabsTrigger value="access" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-emerald-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(52,211,153,0.25)] hover:bg-muted/80 data-[state=active]:text-emerald-400 data-[state=active]:bg-emerald-500/10 data-[state=active]:border-emerald-500/40 data-[state=active]:shadow-sm min-w-0">
                         <Shield className="h-4 w-4 text-emerald-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
@@ -3290,6 +3295,11 @@ function SettingsPageContent() {
                         </div>
                     </div>
 
+                </TabsContent>
+
+                {/* --- TAB: MEDIA SERVERS --- */}
+                <TabsContent value="servers" className="space-y-6">
+                    <AdminMediaServersPanel />
                 </TabsContent>
 
                 {/* --- TAB 2: ACCESS CONTROL --- */}

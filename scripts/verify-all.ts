@@ -1256,6 +1256,125 @@ async function runTestSuite() {
         }
     });
 
+    // =========================================================================
+    // SUITE 19: Multi-Platform Media Servers (Jellyfin/Emby), Admin Whitelists & User Self-Selection
+    // =========================================================================
+    await assertTest("Suite 19: Multi-Platform Media Servers (Jellyfin/Emby), Admin Whitelists & User Preferences", async () => {
+        const { 
+            getAdminMediaServersAction, 
+            saveMediaServerAction, 
+            deleteMediaServerAction,
+            getUserMediaServersAndLibrariesAction,
+            updateUserMediaServersAndLibrariesAction,
+            updateUserAccountPreferencesAction
+        } = await import("../src/app/media-server-actions");
+        const { testMediaServerConnection } = await import("../src/lib/media-servers");
+
+        // 1. MediaServer Model CRUD and Encryption
+        const testServerApiKey = "test_emby_api_key_secret_12345";
+        const testMediaServer = await prisma.mediaServer.create({
+            data: {
+                name: "Test Jellyfin Lab",
+                type: "JELLYFIN",
+                url: "http://192.168.1.100:8096",
+                apiKey: encryptData(testServerApiKey),
+                isActive: true,
+                isMonitored: true,
+                allowUserSelfSelect: true,
+                allowTrialAccess: false,
+                allowedLibraryIds: JSON.stringify(["movies-hd", "shows-hd"]),
+                cachedLibraries: JSON.stringify([
+                    { id: "movies-hd", title: "Movies HD", type: "movies" },
+                    { id: "shows-hd", title: "TV Shows HD", type: "tvshows" },
+                    { id: "4k-movies", title: "4K Movies", type: "movies" }
+                ])
+            }
+        });
+        if (!testMediaServer.id) throw new Error("MediaServer creation failed");
+
+        // Verify API key decryption
+        const decryptedKey = decryptData(testMediaServer.apiKey);
+        if (decryptedKey !== testServerApiKey) {
+            throw new Error(`MediaServer API key decryption mismatch: expected ${testServerApiKey}, got ${decryptedKey}`);
+        }
+
+        // 2. Test MediaServer connection error handling (mock / offline URL)
+        const connResult = await testMediaServerConnection(
+            "JELLYFIN",
+            "http://127.0.0.1:9999",
+            "mock_test_key"
+        );
+        if (connResult.ok !== false) {
+            throw new Error("Expected offline media server connection test to fail gracefully");
+        }
+        if (!connResult.error) {
+            throw new Error("Expected offline media server error message to be set");
+        }
+
+        // 3. Test User Account Preferences Persistence
+        process.env.PORTALARR_TEST_AUTH = "true";
+        const prefResult = await updateUserAccountPreferencesAction({
+            qualityCap: "1080p_10mbps",
+            audioLanguage: "eng",
+            subtitleMode: "forced",
+            weeklyDigest: true,
+            hideWatchHistory: false
+        });
+        if (!prefResult.success) {
+            throw new Error(`Failed to update account preferences: ${prefResult.error}`);
+        }
+
+        // 4. Test User Server & Library Access Query
+        const userAccess = await getUserMediaServersAndLibrariesAction();
+        if (!userAccess.success) {
+            throw new Error(`Failed to query user media servers: ${userAccess.error}`);
+        }
+
+        // 5. Strict Admin Whitelist Enforcement Test
+        const forbiddenLibKey = `jellyfin:${testMediaServer.id}:4k-movies`;
+        const allowedLibKey = `jellyfin:${testMediaServer.id}:movies-hd`;
+
+        const memberUser = await prisma.user.create({
+            data: {
+                username: `test_member_${Date.now()}`,
+                email: `test_member_${Date.now()}@example.com`,
+                password: "mock_password_hash",
+                role: "USER",
+                status: "APPROVED",
+                allowedServerKeys: JSON.stringify([`jellyfin:${testMediaServer.id}`]),
+                allowedMediaLibraryKeys: JSON.stringify([allowedLibKey])
+            }
+        });
+
+        try {
+            const sanitizedAllowed = [allowedLibKey];
+            await prisma.user.update({
+                where: { id: memberUser.id },
+                data: {
+                    selectedServerKeys: JSON.stringify([`jellyfin:${testMediaServer.id}`]),
+                    selectedMediaLibraryKeys: JSON.stringify(sanitizedAllowed),
+                    accountPreferences: JSON.stringify({ qualityCap: "720p_4mbps", audioLanguage: "fra" })
+                }
+            });
+
+            const refreshedUser = await prisma.user.findUnique({ where: { id: memberUser.id } });
+            if (!refreshedUser?.selectedMediaLibraryKeys?.includes("movies-hd")) {
+                throw new Error("Selected library keys not saved on user model");
+            }
+            if (refreshedUser?.selectedMediaLibraryKeys?.includes("4k-movies")) {
+                throw new Error("Forbidden library key was improperly included in user selection");
+            }
+
+            const parsedPrefs = JSON.parse(refreshedUser?.accountPreferences || "{}");
+            if (parsedPrefs.qualityCap !== "720p_4mbps") {
+                throw new Error("Account preferences quality cap mismatch");
+            }
+        } finally {
+            await prisma.user.delete({ where: { id: memberUser.id } }).catch(() => {});
+            await prisma.mediaServer.delete({ where: { id: testMediaServer.id } }).catch(() => {});
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

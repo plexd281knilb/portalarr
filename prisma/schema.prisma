@@ -304,8 +304,29 @@ model PlexServer {
   isDefault        Boolean  @default(false)
   monitored        Boolean  @default(true) // Health & Reachability Monitoring
   databasePath     String?  // Optional local/mounted path to com.plexapp.plugins.library.db (e.g. Unraid /mnt/user/appdata/plex/...)
+  allowUserSelfSelect Boolean  @default(true)
+  allowTrialAccess    Boolean  @default(false)
+  allowedLibraryIds   String?  // Comma-separated or JSON list of section IDs Admin allows users to select
+  cachedLibraries     String?  // JSON string of [{ id, title, type }]
   createdAt        DateTime @default(now())
   updatedAt        DateTime @default(now()) @updatedAt
+}
+
+
+model MediaServer {
+  id                  String   @id @default(cuid())
+  name                String
+  type                String   // "JELLYFIN" | "EMBY"
+  url                 String
+  apiKey              String   // AES-256-GCM encrypted API key
+  isActive            Boolean  @default(true)
+  isMonitored         Boolean  @default(true)
+  allowUserSelfSelect Boolean  @default(true)
+  allowTrialAccess    Boolean  @default(false)
+  allowedLibraryIds   String?  // JSON array or comma-separated folder IDs Admin allows users to select
+  cachedLibraries     String?  // JSON array of [{ id, title, type }] discovered from server
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 }
 
 model TautulliInstance {
@@ -406,6 +427,17 @@ model User {
   maxConcurrentStreams   Int?      @default(3) // Allowed simultaneous streams (default 3)
   sharingAlertCount      Int       @default(0) // Number of detected credential sharing incidents
   lastSharingAlertAt     DateTime? // When credential sharing was last detected
+  
+  // Multi-Platform Media Server & Library Permissions (Plex, Jellyfin, Emby)
+  allowedServerKeys           String?   // Admin override e.g. "plex:id,jellyfin:id,emby:id"
+  selectedServerKeys          String?   // User active servers e.g. "plex:id,jellyfin:id"
+  allowedMediaLibraryKeys     String?   // Admin override e.g. "plex:srv:1,jellyfin:srv:fld1"
+  selectedMediaLibraryKeys    String?   // User selected libraries
+  jellyfinUserId              String?
+  jellyfinUsername            String?
+  embyUserId                  String?
+  embyUsername                String?
+  accountPreferences          String?   // JSON extended user preferences
   
   createdAt              DateTime  @default(now())
   paymentTransactions    PaymentTransaction[]
