@@ -1112,12 +1112,12 @@ Portalarr features an automated, real-time versioning, branch identification, an
 
 ---
 
-### 47. Mandatory 4-Step Verification & Delivery Protocol (v1.0.1+)
+### 47. Mandatory 4-Step Verification & Delivery Protocol (Strict SemVer)
 Before completing any task, execute:
 1. `cmd /c "npm test"`: Full 18+ suite verification (`scripts/verify-all.ts`), 0 failures.
 2. `cmd /c "npm run build"`: Next.js production build, 0 TS errors, 100% clean.
 3. Skills & Documentation Sync: Update `.agents/skills/` and `.md` files with architectural learnings.
-4. Git Version Control: Commit with `[v1.0.1]` prefix, push to `origin/main`, merge to `origin/stable`, push to `origin/stable`.
+4. SemVer Version Increment & Git Deployment Push: Increment version in `package.json` according to SemVer (PATCH `+1` for fixes/polish, MINOR `+1` for features), commit with freshly incremented `[v<version>]` prefix, push to `origin/main`, merge to `origin/stable`, push to `origin/stable`.
 
 ---
 
