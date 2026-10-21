@@ -19916,22 +19916,42 @@ export async function getUserPlexHubData(options?: { skipCache?: boolean }) {
         }
 
         const isAdmin = user.role === "ADMIN";
-        const [settings, tautulli, dbPlexServers] = await Promise.all([
+        const [fullUser, settings, tautulli, dbPlexServers] = await Promise.all([
+            prisma.user.findUnique({
+                where: { id: user.id },
+                select: { id: true, username: true, email: true, name: true, plexUsername: true, plexEmail: true, role: true, parentUserId: true }
+            }).catch(() => null),
             prisma.settings.findFirst().catch(() => null),
             prisma.tautulliInstance.findMany().catch(() => []),
             prisma.plexServer.findMany().catch(() => [])
         ]);
 
         const userAliases = new Set<string>();
-    if (safeUsername) userAliases.add(safeUsername.toLowerCase().trim());
-    if (safeEmail) userAliases.add(safeEmail.toLowerCase().trim());
+        if (safeUsername) userAliases.add(safeUsername.toLowerCase().trim());
+        if (safeEmail) userAliases.add(safeEmail.toLowerCase().trim());
+        if (fullUser?.name) userAliases.add(fullUser.name.toLowerCase().trim());
+        if (fullUser?.plexUsername) userAliases.add(fullUser.plexUsername.toLowerCase().trim());
+        if (fullUser?.plexEmail) userAliases.add(fullUser.plexEmail.toLowerCase().trim());
 
-    let adminToken = "";
-    if (settings?.mainPlexToken) {
-        try {
-            adminToken = decryptData(settings.mainPlexToken);
-        } catch (e) {}
-    }
+        let adminToken = "";
+        if (settings?.mainPlexToken) {
+            try {
+                adminToken = decryptData(settings.mainPlexToken);
+            } catch (e) {}
+        }
+        if (!adminToken && dbPlexServers?.length) {
+            for (const ps of dbPlexServers) {
+                if (ps.token) {
+                    try {
+                        const dec = decryptData(ps.token);
+                        if (dec) {
+                            adminToken = dec;
+                            break;
+                        }
+                    } catch (e) {}
+                }
+            }
+        }
 
     // Expand user aliases with Plex Owner or Plex Friend identities
     if (adminToken) {
@@ -19960,15 +19980,16 @@ export async function getUserPlexHubData(options?: { skipCache?: boolean }) {
     }
 
     // Expand user aliases with linked sub-accounts (e.g. kids, living room) if caller is primary account
-    if (user?.id && !user?.parentUserId) {
+    if (user?.id && !fullUser?.parentUserId) {
         try {
             const subAccounts = await prisma.user.findMany({
                 where: { parentUserId: user.id },
-                select: { username: true, email: true, plexUsername: true, plexEmail: true, subAccountLabel: true }
+                select: { username: true, email: true, name: true, plexUsername: true, plexEmail: true, subAccountLabel: true }
             });
             for (const sub of subAccounts) {
                 if (sub.username) userAliases.add(sub.username.toLowerCase().trim());
                 if (sub.email) userAliases.add(sub.email.toLowerCase().trim());
+                if (sub.name) userAliases.add(sub.name.toLowerCase().trim());
                 if (sub.plexUsername) userAliases.add(sub.plexUsername.toLowerCase().trim());
                 if (sub.plexEmail) userAliases.add(sub.plexEmail.toLowerCase().trim());
                 if (sub.subAccountLabel) userAliases.add(sub.subAccountLabel.toLowerCase().trim());
@@ -20201,26 +20222,35 @@ export async function getUserPlexHubData(options?: { skipCache?: boolean }) {
             const usersResult = await fetchTautulliApiJson(usersUrl, controller.signal, { revalidate: 120 });
             clearTimeout(timeoutId);
 
-            if (usersResult.ok && Array.isArray(usersResult.data)) {
-                const tUsers = usersResult.data;
-                const match = tUsers.find((u: any) => {
+            if (usersResult.ok && usersResult.data) {
+                const rawUsers = usersResult.data;
+                const tUsers = Array.isArray(rawUsers) ? rawUsers : (Array.isArray(rawUsers?.data) ? rawUsers.data : []);
+                
+                // First pass: Match by alias (username, email, or friendly_name)
+                let match = tUsers.find((u: any) => {
                     const uName = (u.username || "").toLowerCase().trim();
                     const uEmail = (u.email || "").toLowerCase().trim();
                     const uFriendly = (u.friendly_name || "").toLowerCase().trim();
-                    const uId = String(u.user_id ?? "");
-
-                    if (userAliases.has(uName) || userAliases.has(uEmail) || userAliases.has(uFriendly)) {
-                        return true;
-                    }
-                    if (isAdmin && (u.is_admin === 1 || u.is_admin === "1" || uId === "0" || uName === "local")) {
-                        return true;
-                    }
-                    return false;
+                    return (uName && userAliases.has(uName)) || 
+                           (uEmail && userAliases.has(uEmail)) || 
+                           (uFriendly && userAliases.has(uFriendly));
                 });
+
+                // Second pass: If user is admin and not yet matched, find admin/owner account
+                if (!match && isAdmin) {
+                    match = tUsers.find((u: any) => {
+                        const uName = (u.username || "").toLowerCase().trim();
+                        const uId = String(u.user_id ?? "");
+                        return u.is_admin === 1 || u.is_admin === "1" || uId === "0" || uName === "local" || uName === "admin";
+                    });
+                }
 
                 if (match) {
                     tautulliMatchedUser = match;
                     tautulliUserId = match.user_id;
+                    if (match.username) userAliases.add(match.username.toLowerCase().trim());
+                    if (match.email) userAliases.add(match.email.toLowerCase().trim());
+                    if (match.friendly_name) userAliases.add(match.friendly_name.toLowerCase().trim());
                 }
             } else if (!usersResult.ok && usersResult.error) {
                 console.warn(`[TAUTULLI] Could not fetch users for Tautulli "${t.name}": ${usersResult.error}`);
@@ -20351,9 +20381,16 @@ export async function getUserPlexHubData(options?: { skipCache?: boolean }) {
         }
 
         // 2. Watch History from this Tautulli instance (STRICTLY GATED TO MATCHED USER)
-        if (tautulliUserId !== null || tautulliMatchedUser !== null) {
+        const histUserParam = (tautulliUserId !== null && tautulliUserId !== undefined && String(tautulliUserId) !== "0")
+            ? `user_id=${encodeURIComponent(String(tautulliUserId))}`
+            : (tautulliMatchedUser?.username 
+                ? `user=${encodeURIComponent(tautulliMatchedUser.username)}`
+                : (fullUser?.plexUsername 
+                    ? `user=${encodeURIComponent(fullUser.plexUsername)}`
+                    : (safeUsername ? `user=${encodeURIComponent(safeUsername)}` : "")));
+
+        if (histUserParam) {
             try {
-                const histUserParam = tautulliUserId !== null ? `user_id=${encodeURIComponent(String(tautulliUserId))}` : `user=${encodeURIComponent(tautulliMatchedUser.username)}`;
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 3500);
                 const histUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_history&${histUserParam}&length=20`;
@@ -20361,7 +20398,8 @@ export async function getUserPlexHubData(options?: { skipCache?: boolean }) {
                 clearTimeout(timeoutId);
 
                 if (histResult.ok && histResult.data) {
-                    const rows = histResult.data.data || (Array.isArray(histResult.data) ? histResult.data : []);
+                    const rawData = histResult.data;
+                    const rows = Array.isArray(rawData) ? rawData : (Array.isArray(rawData?.data) ? rawData.data : []);
                     
                     rows.forEach((r: any) => {
                         const rawThumb = r.thumb || r.parent_thumb || r.grandparent_thumb || r.art || (r.rating_key ? `/library/metadata/${r.rating_key}/thumb` : "");
@@ -20400,13 +20438,12 @@ export async function getUserPlexHubData(options?: { skipCache?: boolean }) {
 
             // 3. User Watch Time Stats & Media Breakdown from this Tautulli instance
             try {
-                const statsUserParam = tautulliUserId !== null ? `user_id=${encodeURIComponent(String(tautulliUserId))}` : `user=${encodeURIComponent(tautulliMatchedUser.username)}`;
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 4500);
 
-                const statsUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_user_watch_time_stats&${statsUserParam}`;
-                const movieHistUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_history&${statsUserParam}&media_type=movie&length=1`;
-                const epHistUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_history&${statsUserParam}&media_type=episode&length=1`;
+                const statsUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_user_watch_time_stats&${histUserParam}`;
+                const movieHistUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_history&${histUserParam}&media_type=movie&length=1`;
+                const epHistUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_history&${histUserParam}&media_type=episode&length=1`;
 
                 const [statsSettled, movieSettled, epSettled] = await Promise.allSettled([
                     fetchTautulliApiJson(statsUrl, controller.signal, { revalidate: 60 }),
@@ -20417,8 +20454,8 @@ export async function getUserPlexHubData(options?: { skipCache?: boolean }) {
 
                 if (statsSettled.status === "fulfilled" && statsSettled.value.ok && statsSettled.value.data) {
                     const rawStats = statsSettled.value.data;
-                    const data = Array.isArray(rawStats) ? rawStats : (rawStats.data || []);
-                    const allTime = data.find((d: any) => d.query_days === 0) || data[data.length - 1];
+                    const data = Array.isArray(rawStats) ? rawStats : (Array.isArray(rawStats?.data) ? rawStats.data : []);
+                    const allTime = data.find((d: any) => d.query_days === 0 || d.query_days === "0") || data[data.length - 1];
                     if (allTime) {
                         const totalSec = Number(allTime.total_time || 0);
                         watchStats.totalWatchTimeHours += Math.round(totalSec / 3600);
@@ -20430,7 +20467,7 @@ export async function getUserPlexHubData(options?: { skipCache?: boolean }) {
 
                 if (movieSettled.status === "fulfilled" && movieSettled.value.ok && movieSettled.value.data) {
                     const mData = movieSettled.value.data;
-                    const count = Number(mData.recordsFiltered ?? mData.recordsTotal ?? (Array.isArray(mData.data) ? mData.data.length : 0));
+                    const count = Number(mData.recordsFiltered ?? mData.recordsTotal ?? (Array.isArray(mData.data) ? mData.data.length : (Array.isArray(mData) ? mData.length : 0)));
                     if (count > 0) {
                         watchStats.moviesWatched += count;
                     }
@@ -20438,7 +20475,7 @@ export async function getUserPlexHubData(options?: { skipCache?: boolean }) {
 
                 if (epSettled.status === "fulfilled" && epSettled.value.ok && epSettled.value.data) {
                     const eData = epSettled.value.data;
-                    const count = Number(eData.recordsFiltered ?? eData.recordsTotal ?? (Array.isArray(eData.data) ? eData.data.length : 0));
+                    const count = Number(eData.recordsFiltered ?? eData.recordsTotal ?? (Array.isArray(eData.data) ? eData.data.length : (Array.isArray(eData) ? eData.length : 0)));
                     if (count > 0) {
                         watchStats.episodesWatched += count;
                     }
@@ -20461,6 +20498,9 @@ export async function getUserPlexHubData(options?: { skipCache?: boolean }) {
         try {
             const plexServers = await getPlexServers(adminToken);
             
+            const shouldAddPlexWatchTime = (tautulli.length === 0 || watchStats.totalWatchTimeHours === 0);
+            const shouldCountPlexHistory = (watchStats.moviesWatched === 0 && watchStats.episodesWatched === 0);
+
             await Promise.allSettled(plexServers.map(async (srv) => {
                 const token = srv.accessToken || adminToken;
                 for (const conn of srv.connections) {
@@ -20486,6 +20526,11 @@ export async function getUserPlexHubData(options?: { skipCache?: boolean }) {
                             const hRows = hJson.MediaContainer?.Metadata || [];
                             const rows = Array.isArray(hRows) ? hRows : [hRows];
                             
+                            let srvWatchTimeMs = 0;
+                            let srvMovies = 0;
+                            let srvEpisodes = 0;
+                            let srvTracks = 0;
+
                             for (const r of rows) {
                                 const rUser = (r.userName || r.user || r.title || "").toLowerCase().trim();
                                 const rEmail = (r.userEmail || r.email || "").toLowerCase().trim();
@@ -20526,19 +20571,24 @@ export async function getUserPlexHubData(options?: { skipCache?: boolean }) {
                                         ratingKey: r.ratingKey
                                     });
 
-                                    // If watch stats on this server were not provided by Tautulli, sum duration
-                                    if (tautulli.length === 0 || (watchStats.moviesWatched === 0 && watchStats.episodesWatched === 0)) {
-                                        if (tautulli.length === 0 && durMs > 0) {
-                                            watchStats.totalWatchTimeHours += Math.round(durMs / 3600000);
-                                        }
-                                        if (watchStats.moviesWatched === 0 && watchStats.episodesWatched === 0) {
-                                            if (r.type === "movie") watchStats.moviesWatched++;
-                                            else if (r.type === "episode") watchStats.episodesWatched++;
-                                            else if (r.type === "track") watchStats.musicTracksPlayed++;
-                                        }
+                                    if (durMs > 0) {
+                                        srvWatchTimeMs += durMs;
                                     }
+                                    if (r.type === "movie") srvMovies++;
+                                    else if (r.type === "episode") srvEpisodes++;
+                                    else if (r.type === "track") srvTracks++;
                                 }
                             }
+
+                            if (shouldAddPlexWatchTime && srvWatchTimeMs > 0) {
+                                watchStats.totalWatchTimeHours += Math.round(srvWatchTimeMs / 3600000);
+                            }
+                            if (shouldCountPlexHistory) {
+                                watchStats.moviesWatched += srvMovies;
+                                watchStats.episodesWatched += srvEpisodes;
+                                watchStats.musicTracksPlayed += srvTracks;
+                            }
+
                             break; // Successfully queried this server via this connection candidate!
                         }
                     } catch (e) {}
@@ -20547,6 +20597,85 @@ export async function getUserPlexHubData(options?: { skipCache?: boolean }) {
         } catch (e) {
             console.warn("[PLEX-HUB] Plex stats calculation error:", e);
         }
+    }
+
+    // --- 3b. FALLBACK: Check Local Database WatchHistory (Prisma) ---
+    try {
+        const userFilterValues = Array.from(new Set([
+            safeUsername,
+            safeUsername.toLowerCase(),
+            safeEmail,
+            safeEmail.toLowerCase(),
+            ...(fullUser?.name ? [fullUser.name, fullUser.name.toLowerCase()] : []),
+            ...(fullUser?.plexUsername ? [fullUser.plexUsername, fullUser.plexUsername.toLowerCase()] : []),
+            ...(fullUser?.plexEmail ? [fullUser.plexEmail, fullUser.plexEmail.toLowerCase()] : [])
+        ])).filter(Boolean);
+
+        const orConditions: any[] = [];
+        if (user?.id) orConditions.push({ userId: user.id });
+        if (userFilterValues.length > 0) {
+            orConditions.push({ user: { in: userFilterValues } });
+            orConditions.push({ userEmail: { in: userFilterValues } });
+        }
+
+        if (orConditions.length > 0) {
+            const dbHistory = await prisma.watchHistory.findMany({
+                where: { OR: orConditions },
+                orderBy: { watchedAt: "desc" },
+                take: 100
+            }).catch(() => []);
+
+            if (dbHistory.length > 0) {
+                // If rawWatchHistory is empty, supplement with local DB records
+                if (rawWatchHistory.length === 0) {
+                    for (const dbItem of dbHistory) {
+                        const sNum = dbItem.seasonNum ? String(dbItem.seasonNum).padStart(2, "0") : "01";
+                        const eNum = dbItem.episodeNum ? String(dbItem.episodeNum).padStart(2, "0") : "01";
+                        let displayTitle = dbItem.title || "Unknown";
+                        if (dbItem.grandparentTitle) {
+                            displayTitle = `${dbItem.grandparentTitle} - S${sNum}E${eNum}: ${dbItem.title}`;
+                        } else if (dbItem.year) {
+                            displayTitle = `${dbItem.title} (${dbItem.year})`;
+                        }
+
+                        const durMs = Number(dbItem.durationMs || dbItem.viewOffsetMs || 0);
+
+                        rawWatchHistory.push({
+                            id: `local-wh-${dbItem.id}`,
+                            instanceId: dbItem.serverId || "local-db",
+                            instanceName: dbItem.serverName || "Plex Server",
+                            title: dbItem.title,
+                            fullTitle: displayTitle,
+                            mediaType: dbItem.mediaType || "movie",
+                            thumb: dbItem.thumb || null,
+                            date: dbItem.watchedAt ? dbItem.watchedAt.toISOString() : new Date().toISOString(),
+                            durationMinutes: durMs ? Math.round(durMs / 60000) : 0,
+                            percentComplete: dbItem.progressPercent || 100,
+                            player: dbItem.player || dbItem.platform || "Plex Device",
+                            ratingKey: dbItem.ratingKey
+                        });
+                    }
+                }
+
+                // If watch time is still 0, aggregate from local DB history
+                if (watchStats.totalWatchTimeHours === 0) {
+                    const totalMs = dbHistory.reduce((acc, h) => acc + Number(h.durationMs || h.viewOffsetMs || 0), 0);
+                    if (totalMs > 0) {
+                        watchStats.totalWatchTimeHours = Math.round(totalMs / 3600000);
+                    }
+                }
+                // If movie & episode counts are still 0, aggregate from local DB history
+                if (watchStats.moviesWatched === 0 && watchStats.episodesWatched === 0) {
+                    for (const h of dbHistory) {
+                        if (h.mediaType === "movie") watchStats.moviesWatched++;
+                        else if (h.mediaType === "episode") watchStats.episodesWatched++;
+                        else if (h.mediaType === "track") watchStats.musicTracksPlayed++;
+                    }
+                }
+            }
+        }
+    } catch (e) {
+        console.warn("[PLEX-HUB] Local watchHistory fallback query error:", e);
     }
 
     // Compute decomposed days and remaining hours
