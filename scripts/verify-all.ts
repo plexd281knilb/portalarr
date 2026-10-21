@@ -1215,28 +1215,28 @@ async function runTestSuite() {
 
         // Test prepending version to unadorned commit message
         const testMsg1 = "feat(telemetry): add branch indicator";
-        const formatted1 = formatCommitMessageWithVersion(testMsg1, "3.9.0-beta.1");
-        if (formatted1 !== "[v3.9.0-beta.1] feat(telemetry): add branch indicator") {
+        const formatted1 = formatCommitMessageWithVersion(testMsg1, "1.0.0-beta.1");
+        if (formatted1 !== "[v1.0.0-beta.1] feat(telemetry): add branch indicator") {
             throw new Error(`Failed to prepend version at front of commit: "${formatted1}"`);
         }
 
         // Test relocating trailing version to the front
-        const testMsg2 = "fix(ui): adjust modal padding (v3.9.0-beta.1)";
-        const formatted2 = formatCommitMessageWithVersion(testMsg2, "3.9.0-beta.1");
-        if (formatted2 !== "[v3.9.0-beta.1] fix(ui): adjust modal padding") {
+        const testMsg2 = "fix(ui): adjust modal padding (v1.0.0-beta.1)";
+        const formatted2 = formatCommitMessageWithVersion(testMsg2, "1.0.0-beta.1");
+        if (formatted2 !== "[v1.0.0-beta.1] fix(ui): adjust modal padding") {
             throw new Error(`Failed to relocate trailing version to front: "${formatted2}"`);
         }
 
         // Test preserving already-correctly prefixed commit message
-        const testMsg3 = "[v3.9.0-beta.1] chore(release): update package";
-        const formatted3 = formatCommitMessageWithVersion(testMsg3, "3.9.0-beta.1");
-        if (formatted3 !== "[v3.9.0-beta.1] chore(release): update package") {
+        const testMsg3 = "[v1.0.0-beta.1] chore(release): update package";
+        const formatted3 = formatCommitMessageWithVersion(testMsg3, "1.0.0-beta.1");
+        if (formatted3 !== "[v1.0.0-beta.1] chore(release): update package") {
             throw new Error(`Failed to preserve existing front-prefixed version: "${formatted3}"`);
         }
 
         // Test leaving merge commits untouched
         const testMsg4 = "Merge branch 'main' into stable";
-        const formatted4 = formatCommitMessageWithVersion(testMsg4, "3.9.0-beta.1");
+        const formatted4 = formatCommitMessageWithVersion(testMsg4, "1.0.0-beta.1");
         if (formatted4 !== testMsg4) {
             throw new Error(`Merge commit was altered unexpectedly: "${formatted4}"`);
         }

@@ -190,7 +190,7 @@ Portalarr features an automated, real-time versioning, branch identification, an
 - **Interactive Build Badge (`src/components/build-badge.tsx`)**:
   - **Compact Variant (`variant="compact"`)**:
     - Embedded in the top of Desktop and Mobile sidebars right next to the app brand header.
-    - Beta (`main`): Glowing neon purple pill with pulsing indicator (`bg-purple-500/15 text-purple-300 border-purple-500/30`, e.g. `BETA • v3.9.0-beta.1`).
+    - Beta (`main`): Glowing neon purple pill with pulsing indicator (`bg-purple-500/15 text-purple-300 border-purple-500/30`, e.g. `BETA • v1.0.0-beta.1`).
     - Prod (`stable`): Emerald pill with steady dot (`bg-emerald-500/15 text-emerald-300 border-emerald-500/30`, e.g. `PROD • v3.0.0`).
   - **Full Variant (`variant="full"`)**:
     - Embedded on the home dashboard header (`src/app/page.tsx`) immediately adjacent to the `System Dashboard` title.
