@@ -42,6 +42,12 @@ Welcome to **DomsHomeLab (d281knilb)**! This comprehensive guide walks you throu
 
 ## 🎬 2. My Plex Hub, Stream Diagnostics & Speed Tests
 
+### 🏷️ Build & Environment Badges
+- **Beta Preview (`main` branch)**: Purple pulsing badge (`BETA • v1.0.1`).
+- **Production Release (`stable` branch)**: Emerald green badge (`PROD • v1.0.1`).
+- **Admin Diagnostics**: Administrators can click the badge to inspect Docker build run numbers, commit SHAs, and GitHub Actions telemetry.
+
+
 Your personalized **My Plex Hub** dashboard gives you real-time insight into your active streams, server connections, watch statistics, and playback health.
 
 ### 🔴 Real-Time Active Stream Monitoring
@@ -351,7 +357,7 @@ Administrators have a unified suite of homelab management, observability, and sa
 - **User Connection & Device Intelligence Modal:** Click any user to inspect their full chronological watch history, client devices, direct play vs. transcode ratios, and IP locations.
 
 ### 🏷️ Dynamic Branch, Version & Build Badge (`BuildBadge`)
-- **Instant Environment Identification:** Displays a glowing **BETA (`main`)** or **PROD (`stable`)** badge in the sidebar and dashboard with active version (`v1.0.0-beta.1`), short git commit SHA, and GitHub Actions build run number. Clicking opens the Build Diagnostics dialog with 1-click SHA copy and workflow links.
+- **Instant Environment Identification:** Displays a glowing **BETA (`main`)** or **PROD (`stable`)** badge in the sidebar and dashboard with active version (`v1.0.1`), short git commit SHA, and GitHub Actions build run number. Clicking opens the Build Diagnostics dialog with 1-click SHA copy and workflow links.
 
 ### 👁️ View Site As User (Impersonation)
 1. Navigate to **System Settings** → **Access Control** (`/settings/access`).

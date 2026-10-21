@@ -4,6 +4,54 @@ Portalarr is a centralized, self-hosted dashboard designed to manage a media ser
 
 ## 🚨 Mandatory Task Completion & Delivery Protocol (Strict 100% Enforcement)
 
+## 🏷️ Version Numbering & Strict SemVer Standard
+
+Portalarr adheres to strict Semantic Versioning (`MAJOR.MINOR.PATCH`):
+- **Released Baseline**: `v1.0.0` is the production milestone baseline release.
+- **Active Patch Release**: `v1.0.1` is the current active release.
+- **Strict SemVer Policy**:
+  - **PATCH increments (`1.0.1` ➔ `1.0.2`)**: Bug fixes, security patches, styling polish, telemetry adjustments, and non-breaking corrections.
+  - **MINOR increments (`1.0.1` ➔ `1.1.0`)**: Backwards-compatible new features, new curation studios, new third-party integrations, or major enhancements.
+  - **MAJOR increments (`1.0.1` ➔ `2.0.0`)**: Breaking architectural changes, major database redesigns, or backwards-incompatible API shifts.
+- **Automatic Environment Branch Telemetry**:
+  - **Beta Preview Environment (`main` branch)**: `BuildBadge` renders `BETA • v<version>` with a glowing, pulsing purple dot (`bg-purple-400 animate-pulse`). Targets Docker tag `ghcr.io/plexd281knilb/portalarr:main`.
+  - **Production Release Environment (`stable` branch)**: `BuildBadge` renders `PROD • v<version>` with a solid emerald green dot (`bg-emerald-400`). Targets Docker tag `ghcr.io/plexd281knilb/portalarr:stable`.
+  - **Automatic `-beta.x` Suffix Stripping**: When running on the `stable` branch, `src/lib/version.ts` automatically strips `-beta(\.\d+)?` from `rawVersion`, ensuring production builds display a pristine semantic version without manual package tampering.
+
+## 🛡️ Security & Privacy Gating on Build Telemetry (`BuildBadge`)
+
+To prevent reconnaissance by unauthorized users or trial accounts:
+- **Admin-Only Interactive Diagnostics**: Passing `isAdmin={isAdmin}` to `<BuildBadge />` strictly restricts the interactive glassmorphic diagnostics modal, commit SHA 1-click copying, GitHub Actions workflow run links, and technical container build metadata to verified Administrators (`isAdmin === true`).
+- **Zero DOM Mount for Non-Admins**: For regular members, family accounts, and trial users, the badge renders as a static visual indicator with `cursor-default select-none`. The `<Dialog />` modal component is completely unmounted from the DOM, preventing unauthorized inspection.
+
+## 🧭 Modern Sidebar & UI Navigation Architecture
+
+- **DRY Architecture via `SidebarNavContent`**: Navigation items, headers, AI Assistant card, and footers are centralized in `SidebarNavContent` (`src/components/sidebar.tsx`), guaranteeing 100% visual and functional parity between Desktop and Mobile sidebars.
+- **Header Lockup**: The `DomsHomeLab` title uses `whitespace-nowrap font-bold shrink-0 text-foreground` (never truncates across viewport widths), vertically stacked above the compact `BuildBadge`.
+- **Signature App Colors**: Retains vibrant, recognizable brand color tokens on icons and active states:
+  - Plex: Amber (`#f59e0b` / `text-amber-400`)
+  - Sonarr: Sky Blue (`#38bdf8` / `text-sky-400`)
+  - Radarr: Vibrant Yellow (`#eab308` / `text-yellow-400`)
+  - Tautulli: Flame Orange (`#f97316` / `text-orange-400`)
+  - Glances: Deep Purple (`#a855f7` / `text-purple-400`)
+  - Docker Fleet: Neon Cyan (`#06b6d4` / `text-cyan-400`)
+  - User Scripts: Emerald Green (`#10b981` / `text-emerald-400`)
+  - Tickets & Support: Rose (`#f43f5e` / `text-rose-400`)
+  - Curation Studios: Distinct pastel accents (Indigo, Amber, Cyan, Purple)
+- **Full-Width AI Assistant Hero Card**: Mounted prominently with balanced padding, dual-tier typography, glowing bot icon, and live pulse status badge.
+- **Grouped Curation Studios Sub-Section**: Under Administration, Kometa, Agregarr, Maintainerr, and Tagging are cleanly grouped inside an interactive Curation Studios menu.
+- **Consolidated System Settings & Inline Logs Pill**: System Settings features an inline terminal action pill jumping straight to Live System Logs.
+
+## 📊 My Plex Hub Watch Statistics Pipeline
+
+Personalized watch time and media statistics in `MyPlexHub` (`getUserPlexHubData`) follow a resilient 5-tier pipeline:
+1. **User Identity Matching**: Expands `userAliases` to include `username`, `email`, `name`, `plexUsername`, and `plexEmail` queried from `prisma.user`, matching against active Plex sessions and Tautulli user tables.
+2. **Multi-Server Token Decryption Fallback**: Decrypts server-specific tokens in `prisma.plexServer` if `settings.mainPlexToken` is unset, ensuring `getPlexOwnerUser` and friend lookups always succeed.
+3. **Tautulli User Matching & Python Falsy `0` Fix**: Implements two-pass user matching (alias match first, then admin fallback). Avoids Python `user_id = 0` falsy drops by resolving to `user=${username}` for Plex server owner accounts.
+4. **Direct Plex Media Server History Scan**: Accumulates watch time (ms) and counts across all discovered PMS instances without loop-scoped cutoff bugs.
+5. **Local SQLite `WatchHistory` Fallback**: If Tautulli is offline or unconfigured, queries Prisma `WatchHistory` using exact and lowercased alias arrays (avoiding SQLite `mode: "insensitive"` crashes) to accurately aggregate watch hours, movies finished, and episodes watched.
+
+
 To guarantee 100% reliability, quality control, and consistency, the following 4-step protocol MUST be executed at the end of every task or feature change before considering the work complete:
 
 1. **Full Integration Testing:**
@@ -13,7 +61,7 @@ To guarantee 100% reliability, quality control, and consistency, the following 4
 3. **Skills & Documentation Sync:**
    Review and update relevant `.agents/skills/` documents (e.g. `portalarr-ui`, `seerr-expert`, etc.) to record any new UI patterns, API contracts, formulas, or operational guidelines.
 4. **Git Version Control & Deployment Push:**
-   Inspect `git status` to verify all touched and new files, stage all changes (`git add -A`), commit with a clear, descriptive message adhering to conventional commit style that ALWAYS includes the active version from `package.json` at the FRONT in brackets (e.g. `[v1.0.0-beta.1] feat(scope): descriptive message` or `[v1.0.0] fix(scope): fix bug`), and run `git push origin main`. Automatic git hook enforcement via `scripts/git-commit-msg-hook.js` is verified in `npm test` and executed by Git on every commit to guarantee version prefixing.
+   Inspect `git status` to verify all touched and new files, stage all changes (`git add -A`), commit with a clear, descriptive message adhering to conventional commit style that ALWAYS includes the active version from `package.json` at the FRONT in brackets (e.g. `[v1.0.1] feat(scope): descriptive message` or `[v1.0.1] fix(scope): fix bug`), and push to `origin/main`, merge to `origin/stable`, and push to `origin/stable`. Automatic git hook enforcement via `scripts/git-commit-msg-hook.js` is verified in `npm test` and executed by Git on every commit to guarantee version prefixing.
 
 ## 🧠🤖 Multi-Model Orchestration & Worker Topology: "Brain" (Argon 4) ➔ "Pinky" (Flash 3.8)
 

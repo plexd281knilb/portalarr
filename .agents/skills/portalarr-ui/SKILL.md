@@ -1084,6 +1084,43 @@ Portalarr features an automated, real-time versioning, branch identification, an
 
 ---
 
+### 46. Sidebar & Header Navigation Architecture (`SidebarNavContent`)
+- **DRY Desktop & Mobile Parity**:
+  - The navigation structure is unified in `SidebarNavContent` (`src/components/sidebar.tsx`) to prevent code duplication between Desktop (`<aside>`) and Mobile (`<Sheet>`).
+- **Header Structure & Typography**:
+  - App title: `DomsHomeLab` formatted with `whitespace-nowrap font-bold shrink-0 text-foreground` ensuring zero truncation across mobile and desktop scaling.
+  - Vertical lockup: Compact `<BuildBadge variant="compact" isAdmin={isAdmin} />` mounted directly below the title.
+- **Admin-Only Build Telemetry Gating**:
+  - Passing `isAdmin={isAdmin}` strictly gates the interactive build modal, commit SHA copying, and workflow links to Administrators.
+  - Non-admin users see a static indicator (`cursor-default select-none`) with no modal mounted in the DOM.
+- **Vibrant Signature App Colors**:
+  - All icons and active highlights preserve recognizable brand accents:
+    - Plex: Amber (`text-amber-400`)
+    - Sonarr: Sky (`text-sky-400`)
+    - Radarr: Yellow (`text-yellow-400`)
+    - Tautulli: Flame Orange (`text-orange-400`)
+    - Glances: Purple (`text-purple-400`)
+    - Docker Fleet: Cyan (`text-cyan-400`)
+    - User Scripts: Emerald (`text-emerald-400`)
+    - Tickets: Rose (`text-rose-400`)
+- **AI Assistant Hero Card**:
+  - Full-width hero container with dual-tier typography, glowing bot icon, and live pulse status badge (`24/7 AI Diagnostic Engine Active`).
+- **Grouped Curation Studios**:
+  - Administration links group Kometa, Agregarr, Maintainerr, and Tagging under an accordion subsection.
+- **Settings & Inline Logs Pill**:
+  - Quick action pill jumping directly to `/settings?tab=logs`.
+
+---
+
+### 47. Mandatory 4-Step Verification & Delivery Protocol (v1.0.1+)
+Before completing any task, execute:
+1. `cmd /c "npm test"`: Full 18+ suite verification (`scripts/verify-all.ts`), 0 failures.
+2. `cmd /c "npm run build"`: Next.js production build, 0 TS errors, 100% clean.
+3. Skills & Documentation Sync: Update `.agents/skills/` and `.md` files with architectural learnings.
+4. Git Version Control: Commit with `[v1.0.1]` prefix, push to `origin/main`, merge to `origin/stable`, push to `origin/stable`.
+
+---
+
 ### 45. Unified Payment Pricing, Prorated Billing & Referral Discount Alignment
 - **Standard Pricing Fallbacks**:
   - **Tier 1 (Standard)**: `$180.00/year` (averaging `$15.00/mo` for annual Rest-of-Year proration and referral reward credits) and `$17.50/month` for the standalone Monthly Plan.

@@ -225,3 +225,14 @@ Portalarr's uptime and system health tracker monitors physical hosts, Plex Media
 - **Diagnostic Testing (`testDiscordOutageAlertAction`)**:
   - Administrators can simulate an outage notification directly from the Admin Monitoring Cockpit (**Tab 3: Outages & Automated Incident Alerts**) to verify Discord webhook delivery and bot channel permissions.
 
+
+
+---
+
+## 🚨 Mandatory 4-Step Verification & Delivery Protocol (v1.0.1+)
+
+To guarantee 100% reliability, quality control, and consistency, the following 4-step protocol MUST be executed at the end of every task or feature change:
+1. **Full Integration Testing:** Execute `cmd /c "npm test"` to run the verification suite (`scripts/verify-all.ts`). All 18+ test suites must pass (0 failures).
+2. **Production Build Verification:** Execute `cmd /c "npm run build"`. Ensure 100% clean compilation, zero TypeScript errors, and zero Turbopack runtime errors.
+3. **Skills & Documentation Sync:** Review and update relevant `.agents/skills/` documents to record any new UI patterns, API contracts, formulas, or operational guidelines.
+4. **Git Version Control & Deployment Push:** Stage all changes (`git add -A`), commit with semantic version prefix (`[v1.0.1] feat/fix(scope): message`), push to `origin/main`, merge into `stable`, and push to `origin/stable`.

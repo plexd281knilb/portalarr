@@ -205,3 +205,14 @@ To achieve sub-second page loads and eliminate blank-screen flashing on tab chan
       - **Explicit Sexual Acts, Tropes & Library Taxonomy**: Cunnilingus, fellatio, blowjob, handjob, anal/oral sex, deepthroat, pegging, rimming, creampie, ejaculation, squirting, cumming, moresome, threesome, gangbang, orgy, swingers, cuckold, hotwife, dub-con, non-con, consensual non-consent, somnophilia, primal play, omegaverse, knotting, breeding/praise kink, degradation, chastity, shibari, sex instruction, human sexuality, sexual behavior, BISAC `FICTION / Erotica` (`FIC005000`), `FICTION / Romance / Erotic` (`FIC027010`), `FICTION / Romance / Dark Romance` (`FIC027560`).
     - **Standardized Maturity Evaluation (`inferBookRating`)**: Evaluates all explicit sex guides, adult manuals, dark romance, and erotica strictly as `18+ Mature` with `maturityRating: "MATURE"`.
     - **Maturity Badge Streamlining**: Suppresses redundant "All Ages" badges from media cards in `BookCard`, reserving visible badges strictly for `Kids`, `YA (12+)`, and `18+ Mature`.
+
+
+---
+
+## 🚨 Mandatory 4-Step Verification & Delivery Protocol (v1.0.1+)
+
+To guarantee 100% reliability, quality control, and consistency, the following 4-step protocol MUST be executed at the end of every task or feature change:
+1. **Full Integration Testing:** Execute `cmd /c "npm test"` to run the verification suite (`scripts/verify-all.ts`). All 18+ test suites must pass (0 failures).
+2. **Production Build Verification:** Execute `cmd /c "npm run build"`. Ensure 100% clean compilation, zero TypeScript errors, and zero Turbopack runtime errors.
+3. **Skills & Documentation Sync:** Review and update relevant `.agents/skills/` documents to record any new UI patterns, API contracts, formulas, or operational guidelines.
+4. **Git Version Control & Deployment Push:** Stage all changes (`git add -A`), commit with semantic version prefix (`[v1.0.1] feat/fix(scope): message`), push to `origin/main`, merge into `stable`, and push to `origin/stable`.
