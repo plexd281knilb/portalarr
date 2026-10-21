@@ -675,6 +675,10 @@ export function generateDiscordEmbed(
                 color: 0xF59E0B, // Amber
                 fields: [
                     {
+                        name: "🚀 My Plex Hub: Direct PMS Speed Test & Stream Control",
+                        value: "Visit **My Plex Hub** on your dashboard (`https://home.domshomelab.com/profile`) to run an in-browser speed test directly against our physical Plex Media Server. Ensure you reach **25+ Mbps** for uncompressed 4K HDR Direct Play. You can also view your personal watch statistics and terminate frozen playback sessions with 1 click."
+                    },
+                    {
                         name: "📺 Apple TV 4K",
                         value: "Open Plex Settings → Video\nSet Home Streaming & Remote Streaming to Maximum\nTurn Match Content (Dynamic Range & Frame Rate) ON"
                     },
@@ -706,9 +710,13 @@ export function generateDiscordEmbed(
         case "transcode_doctor":
             return {
                 title: "🩺 Transcode Doctor: Stream Health & Buffer Diagnostics",
-                description: "Encountering buffering, stutter, or reduced resolution? Here are the 3 most common causes and how to fix them immediately.",
+                description: "Encountering buffering, stutter, or reduced resolution? Here are the most common causes and how to fix them immediately.",
                 color: 0xEF4444, // Red
                 fields: [
+                    {
+                        name: "🤖 24/7 AI Server Assistant (Instant 5-Second Diagnostics)",
+                        value: "Need immediate help? Open the **24/7 AI Server Assistant** directly on your [DomsHomeLab Dashboard](https://home.domshomelab.com)! It connects live to our physical servers and your active session to diagnose buffering, quiet dialogue, forced subtitle burn-in, 4K unlocks, and bandwidth bottlenecks in under 5 seconds."
+                    },
                     {
                         name: "🔴 Cause 1: Client Locked at 720p 2.0 Mbps (Severe Buffering)",
                         value: "**Fix:** While the video is playing, click the playback settings slider (gear icon) → **Quality** → Change from `Convert Automatically` or `720p` to **Original / Maximum**."
@@ -747,6 +755,10 @@ export function generateDiscordEmbed(
                     {
                         name: "4. Audiobooks & Mobile Listening Apps",
                         value: "• **In-Browser Web Player:** Listen right inside DomsHomeLab with the floating audio player, chapter selector, and variable speed (0.75x–2.5x).\n• **Plexamp (iOS & Android):** Best for mobile listening with audio caching and CarPlay/Android Auto.\n• **Prologue (iOS):** Premium dedicated audiobook player connecting directly to our server."
+                    },
+                    {
+                        name: "📚 AI Book Recommendations & Discovery",
+                        value: "Looking for your next read? Ask the **24/7 AI Assistant** on the web portal for personalized book and audiobook recommendations tailored directly to your reading history and preferred genres."
                     }
                 ],
                 footer: { text: "DomsHomeLab • Reading & Listening Guides" },
@@ -783,8 +795,8 @@ export function generateDiscordEmbed(
                         value: "Items staged for departure are marked with `Leaving Soon` badges and featured on the Plex Home Screen for 14 days before disk cleanup."
                     },
                     {
-                        name: "🍿 Want to Keep Something?",
-                        value: "Simply start watching the title before the countdown finishes to keep it in the library! Active playback automatically resets retention and keeps the media active."
+                        name: "🍿 Want to Keep Something? Playback Resets Retention Automatically",
+                        value: "Simply start playing the title on Plex! Watching any flagged movie or episode for even 5 minutes immediately clears the deletion flag and resets retention for 180 days. No manual administrator exemption tickets needed."
                     }
                 ],
                 footer: { text: "Maintainerr Storage Management • DomsHomeLab" },
@@ -848,15 +860,23 @@ export function generateDiscordEmbed(
         case "support_guide":
             return {
                 title: "🆘 Support & Assistance: How to Report an Issue",
-                description: "Need help with your account, stream buffering, or device setup? Leave a message in this channel and an administrator will assist you.",
+                description: "Need help with your account, stream buffering, or device setup? Leave a message in this channel or use our fast in-app diagnostic tools.",
                 color: 0xEF4444, // Red
                 fields: [
                     {
-                        name: "📋 What to Include in Your Message",
+                        name: "🛠️ 'Suggest a Fix' Instant Page Action",
+                        value: "Notice a broken link, visual glitch, missing book cover, or playback issue on the web portal? Full Members can click the floating **'Suggest a Fix'** button in the bottom-right corner of any page. It automatically captures your current route, client device, and page telemetry directly to the admin dashboard with zero back-and-forth questioning!"
+                    },
+                    {
+                        name: "🤖 24/7 AI Assistant Self-Service",
+                        value: "Before opening a ticket, try asking the **24/7 AI Server Assistant** on the web dashboard (`https://home.domshomelab.com`). It can resolve 95% of common playback, quality, and library questions instantly."
+                    },
+                    {
+                        name: "📋 Reporting Issues in this Channel",
                         value: "• **Device:** (e.g. Apple TV 4K, Roku Streaming Stick 4K, Fire TV Cube, LG OLED TV)\n• **Title & Time:** (e.g. *Dune: Part Two* around 45:00)\n• **Issue Details:** (e.g. Buffering every 10 seconds, no audio, wrong subtitles)\n• **Network:** (Home Wi-Fi, Ethernet, or Cellular)"
                     },
                     {
-                        name: "🩺 Self-Service First",
+                        name: "🩺 30-Second Fix Checklist",
                         value: "Before reporting buffering, check <#1558230275950125261> to verify your device quality is set to **Original / Maximum** instead of the 720p 2 Mbps default!"
                     }
                 ],
@@ -1168,7 +1188,7 @@ export async function syncDiscordServerStructure(params: {
 
             if (!targetChannel) {
                 // Create Channel
-                const chCreateRes = await discordFetch<DiscordChannel>(`/guilds/${cleanGuildId}/channels`, {
+                let chCreateRes = await discordFetch<DiscordChannel>(`/guilds/${cleanGuildId}/channels`, {
                     method: "POST",
                     body: JSON.stringify({
                         name: chBlueprint.name,
@@ -1179,6 +1199,21 @@ export async function syncDiscordServerStructure(params: {
                         permission_overwrites: permissionOverwrites.length > 0 ? permissionOverwrites : undefined
                     })
                 }, cleanToken);
+
+                // If creation failed for GUILD_ANNOUNCEMENT (e.g. non-community guild), retry as GUILD_TEXT
+                if (!chCreateRes.ok && chBlueprint.type === DISCORD_CHANNEL_TYPES.GUILD_ANNOUNCEMENT) {
+                    chCreateRes = await discordFetch<DiscordChannel>(`/guilds/${cleanGuildId}/channels`, {
+                        method: "POST",
+                        body: JSON.stringify({
+                            name: chBlueprint.name,
+                            type: DISCORD_CHANNEL_TYPES.GUILD_TEXT,
+                            parent_id: categoryId,
+                            topic: chBlueprint.topic,
+                            position: channelPosition,
+                            permission_overwrites: permissionOverwrites.length > 0 ? permissionOverwrites : undefined
+                        })
+                    }, cleanToken);
+                }
 
                 if (chCreateRes.ok && chCreateRes.data) {
                     targetChannel = chCreateRes.data;
