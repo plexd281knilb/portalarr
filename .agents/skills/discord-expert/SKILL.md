@@ -202,7 +202,27 @@ To ensure test suites (`npm test` / `verify-all.ts`) never post messages, dispat
    - `sendSeerrDiscordWebhook`: Silently returns `{ success: true }` without dispatching webhooks or bot messages if `PORTALARR_TEST` is set or if the request title/requester contains `"test"`.
    - `sendSeerrEmailNotification`: Silently returns `{ success: true }` during test runs.
 3. **Auto-Download Decoupling:** `dispatchBookOrAudiobookRequest` skips background `autoDownloadBookRequest` loops in test runs to prevent async race conditions during bulk approval/decline verification.
-4. **Test Discord Guild:** When testing bot features in staging, administrators can bind dedicated test servers (e.g., Guild ID `1559231517325135892`) in Settings → Discord. Ensure the bot application is invited with Administrator permissions (`permissions=8&scope=bot%20applications.commands`).
+4. **Test Discord Guild & Staging Isolation:**
+   - Dedicated test server: **Test Plex Server** (`1559231517325135892`). Full architectural map in [`DISCORD_TEST_SERVER.md`](file:///C:/Users/Dom/Documents/GitHub/portalarr/DISCORD_TEST_SERVER.md).
+   - Production server: **Plex Group** (`553667067363196941`). Full architectural map in [`DISCORD_LIVE_SERVER.md`](file:///C:/Users/Dom/Documents/GitHub/portalarr/DISCORD_LIVE_SERVER.md).
+   - Bot application must be invited with Administrator permissions (`permissions=8&scope=bot%20applications.commands`).
+   - All website parity features (24/7 AI Assistant links, "Suggest a Fix" guidance, My Plex Hub speed test, Kindle Wi-Fi sync, Leaving Soon 14-day grace period) are staged and verified on the Test Server first before safe promotion to production.
+
+---
+
+## Live Status Channel Resolution & Auto-Provisioning (`resolveOrProvisionStatusChannel`)
+
+Portalarr v1.0.1 provides resilient, multi-tiered resolution for the live platform status embed and outage alert channel:
+
+1. **Explicit Setting Check**: Verifies if `Settings.discordStatusChannelId` is set and exists in the target guild.
+2. **Candidate Channel Name Search**: If not set or invalid, searches guild text channels for candidates in priority order:
+   - `#system-status`
+   - `#server-uptime`
+   - `#server-status`
+   - `#status`
+   - `#uptime`
+3. **Auto-Provisioning Fallback**: If no candidate exists in the Discord server, automatically creates `#server-uptime` under category `HELP & TICKETS` with read-only permissions for `@everyone`.
+4. **Automatic Persistence**: Automatically saves the resolved or newly provisioned channel ID to `Settings.discordStatusChannelId` in `prisma.settings`.
 
 ---
 
@@ -212,7 +232,7 @@ Portalarr's uptime and system health tracker monitors physical hosts, Plex Media
 
 - **Dual Dispatch Mechanism**:
   1. **Custom Discord Webhooks**: Configured via `Settings.discordWebhookUrl` or `config.discordWebhookUrl`. Posts directly to any user-designated Discord channel via webhook URL.
-  2. **Native Discord Bot & #system-status Channel**: Configured via `Settings.discordBotToken` and `Settings.discordStatusChannelId`. Uses `postDiscordMessage` to transmit real-time outage alerts directly into the `#system-status` channel defined in the server blueprint.
+  2. **Native Discord Bot & Status Cockpit**: Configured via `Settings.discordBotToken` and dynamically resolved status channel ID (`#server-uptime` / `#system-status`). Uses `postDiscordMessage` to transmit real-time outage alerts directly into the status cockpit channel.
 - **Visual Alert Embed Standards**:
   - **Service Failure (`STARTED`)**:
     - Color: `#EF4444` (Crimson / Red, `0xEF4444`).

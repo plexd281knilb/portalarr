@@ -184,7 +184,10 @@ export default function DiscordSettingsPanel() {
         try {
             const res = await updateDiscordStatusEmbedAction();
             if (res.success) {
-                setBannerMsg({ type: "success", text: "Live platform status embed in #system-status updated!" });
+                setBannerMsg({ type: "success", text: "Live platform status embed in #server-uptime / #system-status updated!" });
+                if (res.channelId) {
+                    setStatusChannelId(res.channelId);
+                }
             } else {
                 setBannerMsg({ type: "error", text: res.error || "Failed to update status embed." });
             }
@@ -488,6 +491,12 @@ export default function DiscordSettingsPanel() {
                         {/* LAST SYNC STATS */}
                         <div className="p-2.5 rounded-lg bg-muted/30 border border-border/30 space-y-1.5">
                             <div className="flex items-center justify-between text-muted-foreground">
+                                <span>Status Channel:</span>
+                                <span className="font-mono text-[11px] text-foreground">
+                                    {statusChannelId ? `#server-uptime (${statusChannelId.slice(0, 6)}...${statusChannelId.slice(-4)})` : "Auto-provisioned (#server-uptime)"}
+                                </span>
+                            </div>
+                            <div className="flex items-center justify-between text-muted-foreground">
                                 <span>Last Server Sync:</span>
                                 <span className="font-medium text-foreground">
                                     {lastSyncAt ? format(new Date(lastSyncAt), "MMM d, yyyy h:mm a") : "Never Synced"}
@@ -510,7 +519,7 @@ export default function DiscordSettingsPanel() {
                                 disabled={updatingStatus || !isConfigured}
                             >
                                 {updatingStatus ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Activity className="h-3 w-3" />}
-                                {updatingStatus ? "Updating..." : "Update Live #system-status Now"}
+                                {updatingStatus ? "Updating..." : "Update Live Status Embed Now"}
                             </Button>
                         </div>
                     </CardContent>
