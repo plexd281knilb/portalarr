@@ -20,7 +20,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { 
     Server, Tv, Film, Music, Check, Plus, Trash2, RefreshCw, 
     CheckCircle2, XCircle, Loader2, Shield, FolderCheck, CheckSquare, 
-    Square, Activity, ExternalLink, Settings, Sparkles, Layers, Sliders, Pencil
+    Square, Activity, ExternalLink, Settings, Sparkles, Layers, Sliders, Pencil,
+    Eye, EyeOff, Copy
 } from "lucide-react";
 
 export function AdminMediaServersPanel() {
@@ -37,6 +38,8 @@ export function AdminMediaServersPanel() {
     const [formType, setFormType] = useState<"JELLYFIN" | "EMBY">("JELLYFIN");
     const [formUrl, setFormUrl] = useState("");
     const [formApiKey, setFormApiKey] = useState("");
+    const [showApiKey, setShowApiKey] = useState(false);
+    const [copiedKey, setCopiedKey] = useState(false);
     const [savingServer, setSavingServer] = useState(false);
     const [dialogErr, setDialogErr] = useState("");
 
@@ -74,6 +77,8 @@ export function AdminMediaServersPanel() {
         setFormType("JELLYFIN");
         setFormUrl("");
         setFormApiKey("");
+        setShowApiKey(true);
+        setCopiedKey(false);
         setDialogErr("");
         setDialogOpen(true);
     };
@@ -83,7 +88,9 @@ export function AdminMediaServersPanel() {
         setFormName(srv.name);
         setFormType(srv.type as "JELLYFIN" | "EMBY");
         setFormUrl(srv.url);
-        setFormApiKey("");
+        setFormApiKey(srv.apiKey || "");
+        setShowApiKey(false);
+        setCopiedKey(false);
         setDialogErr("");
         setDialogOpen(true);
     };
@@ -620,21 +627,57 @@ export function AdminMediaServersPanel() {
                         <div className="space-y-1.5">
                             <div className="flex items-center justify-between">
                                 <Label className="text-xs font-semibold">API Key (Administrator Token)</Label>
-                                {editingServer && (
+                                {editingServer && formApiKey ? (
+                                    <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
+                                        <Check className="h-3 w-3" /> Saved Key Loaded
+                                    </span>
+                                ) : editingServer ? (
                                     <span className="text-[10px] text-muted-foreground font-medium">
                                         (Leave blank to keep existing key)
                                     </span>
-                                )}
+                                ) : null}
                             </div>
-                            <Input
-                                type="password"
-                                placeholder={editingServer ? "•••••••••••••••• (Leave blank to keep existing)" : "Generate in Jellyfin/Emby -> Dashboard -> API Keys"}
-                                value={formApiKey}
-                                onChange={e => setFormApiKey(e.target.value)}
-                                className="h-9 text-xs font-mono"
-                            />
+                            <div className="relative">
+                                <Input
+                                    type={showApiKey ? "text" : "password"}
+                                    placeholder={editingServer ? "•••••••••••••••• (Leave blank to keep existing)" : "Generate in Jellyfin/Emby -> Dashboard -> API Keys"}
+                                    value={formApiKey}
+                                    onChange={e => setFormApiKey(e.target.value)}
+                                    className="h-9 text-xs font-mono pr-20"
+                                />
+                                <div className="absolute right-1 top-1 flex items-center gap-0.5">
+                                    {formApiKey && (
+                                        <Button
+                                            type="button"
+                                            size="icon"
+                                            variant="ghost"
+                                            onClick={() => {
+                                                if (typeof navigator !== "undefined" && navigator.clipboard) {
+                                                    navigator.clipboard.writeText(formApiKey);
+                                                    setCopiedKey(true);
+                                                    setTimeout(() => setCopiedKey(false), 2000);
+                                                }
+                                            }}
+                                            className="h-7 w-7 text-muted-foreground hover:text-foreground cursor-pointer"
+                                            title="Copy API Key"
+                                        >
+                                            {copiedKey ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                                        </Button>
+                                    )}
+                                    <Button
+                                        type="button"
+                                        size="icon"
+                                        variant="ghost"
+                                        onClick={() => setShowApiKey(!showApiKey)}
+                                        className="h-7 w-7 text-muted-foreground hover:text-foreground cursor-pointer"
+                                        title={showApiKey ? "Hide API Key" : "Show API Key"}
+                                    >
+                                        {showApiKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                    </Button>
+                                </div>
+                            </div>
                             <p className="text-[11px] text-muted-foreground">
-                                Encrypted using AES-256-GCM. Used to discover libraries and sync user account policies.
+                                Encrypted using AES-256-GCM. Used to discover libraries and sync user account policies. Click the eye icon to view or copy.
                             </p>
                         </div>
                     </div>

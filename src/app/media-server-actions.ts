@@ -79,6 +79,7 @@ export interface DiscoveredServerInfo {
     name: string;
     type: "PLEX" | "JELLYFIN" | "EMBY";
     url: string;
+    apiKey?: string;
     isActive: boolean;
     isMonitored: boolean;
     allowUserSelfSelect: boolean;
@@ -159,11 +160,17 @@ export async function getAdminMediaServersAction(): Promise<{
                 } catch (e) {}
             }
 
+            let decToken = "";
+            if (p.token) {
+                try { decToken = decryptData(p.token); } catch {}
+            }
+
             mappedPlex.push({
                 id: p.id,
                 name: p.name,
                 type: "PLEX",
                 url: p.url,
+                apiKey: decToken || undefined,
                 isActive: true,
                 isMonitored: p.monitored,
                 allowUserSelfSelect: p.allowUserSelfSelect !== false,
@@ -191,11 +198,17 @@ export async function getAdminMediaServersAction(): Promise<{
                 try { cached = JSON.parse(m.cachedLibraries); } catch {}
             }
 
+            let decKey = "";
+            if (m.apiKey) {
+                try { decKey = decryptData(m.apiKey); } catch {}
+            }
+
             return {
                 id: m.id,
                 name: m.name,
                 type: m.type.toUpperCase() as "JELLYFIN" | "EMBY",
                 url: m.url,
+                apiKey: decKey || undefined,
                 isActive: m.isActive,
                 isMonitored: m.isMonitored,
                 allowUserSelfSelect: m.allowUserSelfSelect !== false,

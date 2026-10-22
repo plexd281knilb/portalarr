@@ -26,6 +26,17 @@ function cleanBaseUrl(url: string): string {
     return clean.replace(/\/+$/, "");
 }
 
+export function getMediaServerAuthHeaders(apiKey: string): Record<string, string> {
+    const cleanKey = (apiKey || "").trim();
+    return {
+        "Accept": "application/json",
+        "X-Emby-Token": cleanKey,
+        "X-MediaBrowser-Token": cleanKey,
+        "Authorization": `MediaBrowser Token="${cleanKey}"`,
+        "X-Emby-Authorization": `MediaBrowser Client="Portalarr", Device="Portalarr Dashboard", DeviceId="portalarr-server", Version="1.3.5", Token="${cleanKey}"`
+    };
+}
+
 /**
  * Probes a Jellyfin or Emby instance via /System/Info with latency measurement.
  */
@@ -45,15 +56,28 @@ export async function testMediaServerConnection(
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-        const res = await fetch(`${cleanUrl}/System/Info`, {
+        let res = await fetch(`${cleanUrl}/System/Info`, {
             method: "GET",
-            headers: {
-                "Accept": "application/json",
-                "X-Emby-Token": apiKey
-            },
+            headers: getMediaServerAuthHeaders(apiKey),
             signal: controller.signal
         });
         clearTimeout(timer);
+
+        // Fallback: If 401 Unauthorized, try query parameter fallback (common for reverse proxies)
+        if (res.status === 401) {
+            const sep = cleanUrl.includes("?") ? "&" : "?";
+            const qController = new AbortController();
+            const qTimer = setTimeout(() => qController.abort(), 3000);
+            const qRes = await fetch(`${cleanUrl}/System/Info${sep}api_key=${encodeURIComponent(apiKey.trim())}`, {
+                method: "GET",
+                headers: getMediaServerAuthHeaders(apiKey),
+                signal: qController.signal
+            }).catch(() => null);
+            clearTimeout(qTimer);
+            if (qRes && (qRes.ok || qRes.status !== 401)) {
+                res = qRes;
+            }
+        }
 
         const latencyMs = Date.now() - start;
 
@@ -99,15 +123,24 @@ export async function fetchMediaServerLibraries(
         const timer = setTimeout(() => controller.abort(), timeoutMs);
 
         // 1. Try /Library/VirtualFolders
-        const res = await fetch(`${cleanUrl}/Library/VirtualFolders`, {
+        let res = await fetch(`${cleanUrl}/Library/VirtualFolders`, {
             method: "GET",
-            headers: {
-                "Accept": "application/json",
-                "X-Emby-Token": apiKey
-            },
+            headers: getMediaServerAuthHeaders(apiKey),
             signal: controller.signal
         });
         clearTimeout(timer);
+
+        if (res.status === 401) {
+            const sep = cleanUrl.includes("?") ? "&" : "?";
+            const qRes = await fetch(`${cleanUrl}/Library/VirtualFolders${sep}api_key=${encodeURIComponent(apiKey.trim())}`, {
+                method: "GET",
+                headers: getMediaServerAuthHeaders(apiKey),
+                signal: AbortSignal.timeout(3000)
+            }).catch(() => null);
+            if (qRes && qRes.ok) {
+                res = qRes;
+            }
+        }
 
         if (res.ok) {
             const data: any = await res.json();
@@ -123,10 +156,7 @@ export async function fetchMediaServerLibraries(
         // 2. Fallback: Query root views via /Users or /Library/MediaFolders
         const fallbackRes = await fetch(`${cleanUrl}/Library/MediaFolders`, {
             method: "GET",
-            headers: {
-                "Accept": "application/json",
-                "X-Emby-Token": apiKey
-            }
+            headers: getMediaServerAuthHeaders(apiKey)
         }).catch(() => null);
 
         if (fallbackRes && fallbackRes.ok) {
@@ -172,10 +202,7 @@ export async function syncUserMediaServerAccess(
         if (!remoteUserId) {
             const usersRes = await fetch(`${cleanUrl}/Users`, {
                 method: "GET",
-                headers: {
-                    "Accept": "application/json",
-                    "X-Emby-Token": server.apiKey
-                }
+                headers: getMediaServerAuthHeaders(server.apiKey)
             });
 
             if (usersRes.ok) {
@@ -197,9 +224,8 @@ export async function syncUserMediaServerAccess(
             const createRes = await fetch(`${cleanUrl}/Users/New`, {
                 method: "POST",
                 headers: {
-                    "Content-Type": "application/json",
-                    "Accept": "application/json",
-                    "X-Emby-Token": server.apiKey
+                    ...getMediaServerAuthHeaders(server.apiKey),
+                    "Content-Type": "application/json"
                 },
                 body: JSON.stringify({
                     Name: user.username
@@ -223,8 +249,8 @@ export async function syncUserMediaServerAccess(
         const policyRes = await fetch(`${cleanUrl}/Users/${remoteUserId}/Policy`, {
             method: "POST",
             headers: {
-                "Content-Type": "application/json",
-                "X-Emby-Token": server.apiKey
+                ...getMediaServerAuthHeaders(server.apiKey),
+                "Content-Type": "application/json"
             },
             body: JSON.stringify({
                 EnableAllFolders: false,

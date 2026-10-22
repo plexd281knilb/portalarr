@@ -1373,6 +1373,14 @@ async function runTestSuite() {
             throw new Error(`Failed to edit existing media server: ${editServerRes.error}`);
         }
 
+        // Verify getAdminMediaServersAction returns decrypted API key for admin review
+        const adminServersRes = await getAdminMediaServersAction();
+        if (!adminServersRes.success) throw new Error("Failed to fetch admin media servers");
+        const foundTestServer = adminServersRes.servers.find(s => s.id === testMediaServer.id);
+        if (!foundTestServer || foundTestServer.apiKey !== testServerApiKey) {
+            throw new Error(`Expected admin server to have decrypted apiKey ${testServerApiKey}, got ${foundTestServer?.apiKey}`);
+        }
+
         // 2. Test MediaServer connection error handling (mock / offline URL)
         const connResult = await testMediaServerConnection(
             "JELLYFIN",
