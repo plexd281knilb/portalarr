@@ -1191,8 +1191,8 @@ Portalarr features an automated, real-time versioning, branch identification, an
   - Full-width hero container with dual-tier typography, glowing bot icon, and live pulse status badge (`24/7 AI Diagnostic Engine Active`).
 - **Top-Level Curation Studios Section**:
   - Rendered as first-class, unindented `NavItem` elements with zero accordion dropdowns and pixel-perfect alignment across Desktop and Mobile sidebars.
-- **Settings & Inline Logs Pill**:
-  - Quick action pill jumping directly to `/settings?tab=logs`.
+- **System Settings & Live System Logs Navigation**:
+  - Rendered as dedicated, full-width NavItem components with Live System Logs positioned directly below System Settings jumping to /settings?tab=logs.
 
 ---
 

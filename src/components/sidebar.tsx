@@ -366,46 +366,28 @@ function SidebarNavContent({ onItemClick }: SidebarNavContentProps) {
               onClick={onItemClick}
             />
 
-            {/* Consolidated System Settings & Logs */}
-            <div className="pt-2">
-              <div className="flex items-center gap-1.5">
-                <Link href="/settings" className="flex-1 min-w-0" onClick={onItemClick}>
-                  <Button
-                    variant="ghost"
-                    className={cn(
-                      "w-full justify-start text-xs font-semibold h-9 rounded-lg transition-all duration-150 border-l-2 group select-none",
-                      isSettingsActive
-                        ? "bg-zinc-500/15 text-zinc-200 border-zinc-400 rounded-l-none pl-2.5 font-bold shadow-[0_0_10px_rgba(161,161,170,0.15)]"
-                        : "text-muted-foreground hover:text-zinc-200 hover:bg-zinc-800/30 border-transparent pl-2.5"
-                    )}
-                  >
-                    <Settings className={cn(
-                      "mr-2.5 h-4 w-4 shrink-0 transition-colors",
-                      isSettingsActive ? "text-zinc-200" : "text-zinc-400 group-hover:text-zinc-200"
-                    )} />
-                    <span className="truncate">System Settings</span>
-                  </Button>
-                </Link>
-                <Link href="/settings?tab=logs" title="Live System Logs" onClick={onItemClick}>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className={cn(
-                      "h-9 px-2.5 text-xs font-semibold rounded-lg transition-all duration-150 flex items-center gap-1.5 shrink-0 group border select-none",
-                      isLogsActive
-                        ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/40 font-bold shadow-[0_0_10px_rgba(16,185,129,0.15)]"
-                        : "text-emerald-400/80 hover:text-emerald-200 hover:bg-emerald-950/25 border-transparent"
-                    )}
-                  >
-                    <Terminal className={cn(
-                      "h-3.5 w-3.5 transition-colors",
-                      isLogsActive ? "text-emerald-300" : "text-emerald-400 group-hover:text-emerald-200"
-                    )} />
-                    <span>Logs</span>
-                  </Button>
-                </Link>
-              </div>
-            </div>
+            {/* System Settings & Live System Logs */}
+            <NavItem
+              href="/settings"
+              label="System Settings"
+              icon={Settings}
+              isActive={isSettingsActive}
+              iconColor="text-zinc-400 group-hover:text-zinc-200"
+              activeColorClass="bg-zinc-500/15 text-zinc-200 border-zinc-400 shadow-[0_0_10px_rgba(161,161,170,0.15)]"
+              inactiveHoverClass="hover:bg-zinc-800/30 hover:text-zinc-200"
+              onClick={onItemClick}
+            />
+
+            <NavItem
+              href="/settings?tab=logs"
+              label="Live System Logs"
+              icon={Terminal}
+              isActive={isLogsActive}
+              iconColor="text-emerald-400 group-hover:text-emerald-300"
+              activeColorClass="bg-emerald-500/15 text-emerald-300 border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.15)]"
+              inactiveHoverClass="hover:bg-emerald-950/25 hover:text-emerald-200"
+              onClick={onItemClick}
+            />
           </div>
         </div>
       )}
