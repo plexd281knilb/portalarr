@@ -8,9 +8,9 @@ Portalarr is a centralized, self-hosted dashboard designed to manage a media ser
 
 Portalarr adheres to strict Semantic Versioning (`MAJOR.MINOR.PATCH`):
 - **Released Baseline**: `v1.0.0` is the production milestone baseline release.
-- **Active Feature Release**: `v1.3.5` is the current active release.
+- **Active Feature Release**: `v1.3.6` is the current active release.
 - **Strict SemVer Policy**:
-  - **PATCH increments (`1.3.5` ➔ `1.3.6`)**: Bug fixes, security patches, styling polish, telemetry adjustments, and non-breaking corrections.
+  - **PATCH increments (`1.3.6` ➔ `1.3.7`)**: Bug fixes, security patches, styling polish, telemetry adjustments, and non-breaking corrections.
   - **MINOR increments (`1.1.2` ➔ `1.2.0`)**: Backwards-compatible new features, new curation studios, new third-party integrations, or major enhancements.
   - **MAJOR increments (`1.2.0` ➔ `2.0.0`)**: Breaking architectural changes, major database redesigns, or backwards-incompatible API shifts.
 - **Automatic Environment Branch Telemetry**:

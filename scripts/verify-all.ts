@@ -1224,6 +1224,20 @@ async function runTestSuite() {
             });
             if (testPlexServer.databasePath !== mainDbPath) throw new Error("databasePath was not saved to PlexServer model");
 
+            // Test updating databasePath (simulating savePlexDatabasePathAction behavior)
+            const updatedPlexServer = await prisma.plexServer.update({
+                where: { id: testPlexServer.id },
+                data: { databasePath: kidsDbPath }
+            });
+            if (updatedPlexServer.databasePath !== kidsDbPath) throw new Error("databasePath update failed");
+
+            // Test clearing databasePath
+            const clearedPlexServer = await prisma.plexServer.update({
+                where: { id: testPlexServer.id },
+                data: { databasePath: null }
+            });
+            if (clearedPlexServer.databasePath !== null) throw new Error("databasePath clear failed");
+
             await prisma.plexServer.delete({ where: { id: testPlexServer.id } });
         } finally {
             try {

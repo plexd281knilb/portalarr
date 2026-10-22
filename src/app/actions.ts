@@ -1581,6 +1581,43 @@ export async function discoverPlexDatabasePathsAction() {
     return { success: true, paths };
 }
 
+export async function savePlexDatabasePathAction(serverId: string, databasePath: string) {
+    await verifyAdmin();
+    const cleanPath = (databasePath || "").trim();
+
+    let target = null;
+    if (serverId && serverId !== "default") {
+        target = await prisma.plexServer.findUnique({ where: { id: serverId } });
+    }
+    if (!target) {
+        target = await prisma.plexServer.findFirst({ where: { isDefault: true } })
+            || await prisma.plexServer.findFirst({ orderBy: { createdAt: "asc" } });
+    }
+
+    if (!target) {
+        return { success: false, error: "No configured Plex server found. Please add a Plex server first under Plex Cluster & Nodes." };
+    }
+
+    const updated = await prisma.plexServer.update({
+        where: { id: target.id },
+        data: { databasePath: cleanPath || null }
+    });
+
+    revalidatePath("/settings");
+    revalidatePath("/curation");
+    revalidatePath("/");
+    logger.addLog("SUCCESS", "PLEX", `Saved direct SQLite database path for "${target.name}": "${cleanPath || 'Cleared'}"`);
+    return {
+        success: true,
+        message: cleanPath 
+            ? `SQLite snapshot path successfully saved to "${target.name}"!` 
+            : `SQLite snapshot path cleared for "${target.name}".`,
+        serverId: target.id,
+        serverName: target.name,
+        databasePath: updated.databasePath
+    };
+}
+
 export async function removePlexServerAction(id: string) {
     await verifyAdmin();
     const server = await prisma.plexServer.findUnique({ where: { id } });

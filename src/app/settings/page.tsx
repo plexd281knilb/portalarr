@@ -7,7 +7,7 @@ import {
     getAppUsers, createAppUser, deleteAppUser, 
     getSettings, saveSettings, saveAppUrlAction, savePlexSettingsAction, clearPlexSettings, saveJobSettings, clearSmtpSettings, sendTestEmailAction, syncPlexFriendsAction, autoLinkAdminPlexTokenAction,
     getPlexServersAction, addPlexServerAction, updatePlexServerAction, removePlexServerAction, setDefaultPlexServerAction, testPlexServerConfigAction, testPlexServerConnectionAction,
-    testPlexDatabasePathAction, discoverPlexDatabasePathsAction,
+    testPlexDatabasePathAction, discoverPlexDatabasePathsAction, savePlexDatabasePathAction,
     togglePlexServerMonitoringAction, getDiscoveredPlexServersAction, importDiscoveredPlexServerAction,
     getEmailNotificationSettings, saveEmailNotificationSettingsAction,
     getTautulliInstances, addTautulliInstance, removeTautulliInstance, updateTautulliInstance, toggleTautulliMonitoringAction,
@@ -237,6 +237,9 @@ function SettingsPageContent() {
     const [plexServerFormIsDefault, setPlexServerFormIsDefault] = useState(false);
     const [plexServerFormMonitored, setPlexServerFormMonitored] = useState(true);
     const [plexServerFormDatabasePath, setPlexServerFormDatabasePath] = useState("");
+    const [snapshotTargetServerId, setSnapshotTargetServerId] = useState<string>("");
+    const [savingDatabasePath, setSavingDatabasePath] = useState(false);
+    const [saveDatabasePathResult, setSaveDatabasePathResult] = useState<{ success: boolean; message?: string; error?: string } | null>(null);
     const [testingDatabasePath, setTestingDatabasePath] = useState(false);
     const [databasePathTestResult, setDatabasePathTestResult] = useState<{ success: boolean; message?: string; error?: string } | null>(null);
     const [discoveringPaths, setDiscoveringPaths] = useState(false);
@@ -602,6 +605,33 @@ function SettingsPageContent() {
         }
     };
 
+    const handleSaveSnapshotPath = async () => {
+        let targetId = snapshotTargetServerId;
+        if (!targetId && plexServers.length > 0) {
+            targetId = plexServers.find(s => s.isDefault)?.id || plexServers[0]?.id || "";
+            setSnapshotTargetServerId(targetId);
+        }
+        if (!targetId) {
+            setSaveDatabasePathResult({ success: false, error: "Please configure at least one Plex server under Plex Cluster & Nodes before saving a snapshot path." });
+            return;
+        }
+
+        setSavingDatabasePath(true);
+        setSaveDatabasePathResult(null);
+        try {
+            const res = await savePlexDatabasePathAction(targetId, plexServerFormDatabasePath);
+            setSaveDatabasePathResult(res);
+            if (res.success) {
+                setPlexServers(prev => prev.map(s => s.id === res.serverId ? { ...s, databasePath: res.databasePath } : s));
+                setTimeout(() => setSaveDatabasePathResult(null), 6000);
+            }
+        } catch (e: any) {
+            setSaveDatabasePathResult({ success: false, error: e.message || "Failed to save database path." });
+        } finally {
+            setSavingDatabasePath(false);
+        }
+    };
+
     const handleTogglePlexServerMonitoring = async (id: string, current: boolean) => {
         setTogglingPlexServerId(id);
         const next = !current;
@@ -950,6 +980,16 @@ function SettingsPageContent() {
             setUsers(u || []);
             setSystemSettings(s || {});
             setPlexServers(ps || []);
+            if (ps && ps.length > 0) {
+                setSnapshotTargetServerId(prev => {
+                    if (prev && ps.some((srv: any) => srv.id === prev)) return prev;
+                    const defaultSrv = ps.find((srv: any) => srv.isDefault) || ps[0];
+                    if (defaultSrv && !plexServerFormDatabasePath) {
+                        setPlexServerFormDatabasePath(defaultSrv.databasePath || "");
+                    }
+                    return defaultSrv?.id || "";
+                });
+            }
             
             const bannerTextVal = ab?.text || "";
             const bannerEnabledVal = ab?.enabled || false;
@@ -2300,9 +2340,61 @@ function SettingsPageContent() {
                                     </div>
                                 </CardHeader>
                                 <CardContent className="space-y-4">
+                                    {/* Target Server Selector & Edit Full Server Node Link */}
+                                    {plexServers.length > 0 && (
+                                        <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-lg bg-black/40 border border-border/40">
+                                            <div className="flex items-center gap-2">
+                                                <Server className="h-4 w-4 text-emerald-400" />
+                                                <Label className="text-xs font-semibold">Assign to Server:</Label>
+                                                <select
+                                                    value={snapshotTargetServerId}
+                                                    onChange={(e) => {
+                                                        const newId = e.target.value;
+                                                        setSnapshotTargetServerId(newId);
+                                                        const found = plexServers.find(s => s.id === newId);
+                                                        if (found) {
+                                                            setPlexServerFormDatabasePath(found.databasePath || "");
+                                                            setDatabasePathTestResult(null);
+                                                            setSaveDatabasePathResult(null);
+                                                        }
+                                                    }}
+                                                    className="bg-[#181824] border border-border/50 text-foreground text-xs rounded-md px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-emerald-500 font-mono"
+                                                >
+                                                    {plexServers.map(s => (
+                                                        <option key={s.id} value={s.id}>
+                                                            {s.name} {s.isDefault ? "★ (Default)" : ""} {s.databasePath ? "• [Path Set]" : "• [HTTP Only]"}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-7 px-2.5 text-xs text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 gap-1.5 font-medium"
+                                                onClick={() => {
+                                                    const s = plexServers.find(srv => srv.id === snapshotTargetServerId) || plexServers[0];
+                                                    if (s) {
+                                                        setEditingPlexServer(s);
+                                                        setPlexServerFormName(s.name);
+                                                        setPlexServerFormUrl(s.url);
+                                                        setPlexServerFormToken(s.token || "");
+                                                        setPlexServerFormIsDefault(s.isDefault);
+                                                        setPlexServerFormMonitored(s.monitored !== false);
+                                                        setPlexServerFormDatabasePath(s.databasePath || "");
+                                                    }
+                                                    setHubSubTabs(prev => ({ ...prev, servers: "plex-cluster" }));
+                                                }}
+                                                title="Switch to Plex Cluster & Nodes tab to edit full server properties"
+                                            >
+                                                <Pencil className="h-3.5 w-3.5" /> Edit Server Node
+                                            </Button>
+                                        </div>
+                                    )}
+
                                     <div className="space-y-2">
                                         <div className="flex justify-between items-center">
-                                            <Label className="text-xs font-semibold">Primary Plex SQLite Database Path</Label>
+                                            <Label className="text-xs font-semibold">Plex SQLite Database Path</Label>
                                             <Button
                                                 type="button"
                                                 variant="ghost"
@@ -2332,6 +2424,7 @@ function SettingsPageContent() {
                                                 onChange={(e) => {
                                                     setPlexServerFormDatabasePath(e.target.value);
                                                     setDatabasePathTestResult(null);
+                                                    setSaveDatabasePathResult(null);
                                                 }}
                                                 className="text-xs font-mono flex-1" 
                                                 autoComplete="off"
@@ -2352,6 +2445,17 @@ function SettingsPageContent() {
                                                 {testingDatabasePath ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
                                                 Test Snapshot
                                             </Button>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                className="h-9 px-3.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white gap-1.5 shrink-0 shadow-md active:scale-95 transition-all"
+                                                disabled={savingDatabasePath || !plexServerFormDatabasePath.trim()}
+                                                onClick={handleSaveSnapshotPath}
+                                                title="Save direct SQLite snapshot path to the selected Plex server"
+                                            >
+                                                {savingDatabasePath ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                                                Save Snapshot Path
+                                            </Button>
                                         </div>
                                         <div className="flex flex-wrap gap-1.5 items-center pt-1">
                                             <span className="text-[10px] text-muted-foreground mr-1">Presets:</span>
@@ -2370,12 +2474,38 @@ function SettingsPageContent() {
                                                     onClick={() => {
                                                         setPlexServerFormDatabasePath(p.path);
                                                         setDatabasePathTestResult(null);
+                                                        setSaveDatabasePathResult(null);
                                                     }}
                                                 >
                                                     {p.label}
                                                 </Button>
                                             ))}
                                         </div>
+
+                                        {/* Currently Saved Path on Selected Server */}
+                                        {(() => {
+                                            const targetServer = plexServers.find(s => s.id === snapshotTargetServerId) || plexServers.find(s => s.isDefault) || plexServers[0];
+                                            if (targetServer?.databasePath) {
+                                                return (
+                                                    <div className="text-[11px] text-muted-foreground flex flex-wrap items-center gap-1.5 pt-1">
+                                                        <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                                                            <CheckCircle2 className="h-3 w-3" /> Currently Saved:
+                                                        </span>
+                                                        <code className="text-foreground bg-muted/40 px-1.5 py-0.5 rounded text-[10px] font-mono break-all">
+                                                            {targetServer.databasePath}
+                                                        </code>
+                                                        <span className="text-muted-foreground">({targetServer.name})</span>
+                                                    </div>
+                                                );
+                                            }
+                                            return (
+                                                <div className="text-[11px] text-muted-foreground italic pt-1">
+                                                    No snapshot database currently saved for {targetServer?.name || "this server"}. Curation queries run over standard Plex HTTP API.
+                                                </div>
+                                            );
+                                        })()}
+
+                                        {/* Test Result Message */}
                                         {databasePathTestResult && (
                                             <div className={`text-[11px] p-2.5 rounded-lg flex items-center gap-1.5 mt-2 ${
                                                 databasePathTestResult.success 
@@ -2384,6 +2514,18 @@ function SettingsPageContent() {
                                             }`}>
                                                 {databasePathTestResult.success ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> : <XCircle className="h-3.5 w-3.5 shrink-0" />}
                                                 <span>{databasePathTestResult.message || databasePathTestResult.error}</span>
+                                            </div>
+                                        )}
+
+                                        {/* Save Result Message */}
+                                        {saveDatabasePathResult && (
+                                            <div className={`text-[11px] p-2.5 rounded-lg flex items-center gap-1.5 mt-2 ${
+                                                saveDatabasePathResult.success 
+                                                    ? "text-emerald-400 bg-emerald-950/40 border border-emerald-500/30" 
+                                                    : "text-red-400 bg-red-950/40 border border-red-500/30"
+                                            }`}>
+                                                {saveDatabasePathResult.success ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> : <XCircle className="h-3.5 w-3.5 shrink-0" />}
+                                                <span>{saveDatabasePathResult.message || saveDatabasePathResult.error}</span>
                                             </div>
                                         )}
                                     </div>
@@ -2749,6 +2891,7 @@ function SettingsPageContent() {
                                             <div className="flex flex-wrap gap-1 items-center pt-0.5">
                                                 <span className="text-[10px] text-muted-foreground mr-1">Presets:</span>
                                                 {[
+                                                    { label: "/Backup_Plex_DB", path: "/Backup_Plex_DB/com.plexapp.plugins.library.db" },
                                                     { label: "Main (Unraid)", path: "/mnt/user/appdata/plex/Library/Application Support/Plex Media Server/Plug-in Support/Databases/com.plexapp.plugins.library.db" },
                                                     { label: "Kids Server", path: "/mnt/remotes/Kid_Server_Appdata/KidsPlexServer/Library/Application Support/Plex Media Server/Plug-in Support/Databases/com.plexapp.plugins.library.db" },
                                                     { label: "Backup Server", path: "/mnt/remotes/Kid_Server_Appdata/MainPlexBackup/Library/Application Support/Plex Media Server/Plug-in Support/Databases/com.plexapp.plugins.library.db" }
