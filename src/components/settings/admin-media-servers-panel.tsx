@@ -156,11 +156,15 @@ export function AdminMediaServersPanel() {
     const handleToggleAllowedLibrary = (srvId: string, libId: string) => {
         setServers(prev => prev.map(s => {
             if (s.id !== srvId) return s;
-            const current = s.allowedLibraryIds || [];
+            const libraries = s.cachedLibraries || [];
+            const isCustom = s.allowedLibraryIds && (s.allowedLibraryIds.length > 0 || s.allowedLibraryIds.includes("__none__"));
+            const current = isCustom 
+                ? s.allowedLibraryIds!.filter(id => id !== "__none__")
+                : libraries.map(l => l.id);
             const next = current.includes(libId)
                 ? current.filter(id => id !== libId)
                 : [...current, libId];
-            return { ...s, allowedLibraryIds: next };
+            return { ...s, allowedLibraryIds: next.length === 0 ? ["__none__"] : next };
         }));
     };
 
@@ -173,18 +177,19 @@ export function AdminMediaServersPanel() {
     };
 
     const handleDeselectAllLibraries = (srvId: string) => {
-        setServers(prev => prev.map(s => s.id === srvId ? { ...s, allowedLibraryIds: [] } : s));
+        setServers(prev => prev.map(s => s.id === srvId ? { ...s, allowedLibraryIds: ["__none__"] } : s));
     };
 
     const handleSaveRules = async (srv: DiscoveredServerInfo) => {
         setSavingRulesMap(prev => ({ ...prev, [srv.id]: true }));
         try {
+            const cleanAllowed = (srv.allowedLibraryIds || []).filter(id => id !== "__none__");
             const res = await updateServerAccessRulesAction({
                 serverType: srv.type,
                 serverId: srv.id,
                 allowUserSelfSelect: srv.allowUserSelfSelect,
                 allowTrialAccess: srv.allowTrialAccess,
-                allowedLibraryIds: srv.allowedLibraryIds || []
+                allowedLibraryIds: cleanAllowed
             });
 
             if (res.success) {
@@ -407,80 +412,97 @@ export function AdminMediaServersPanel() {
 
                                     {/* Libraries Whitelist */}
                                     <div className="space-y-2">
-                                        <div className="flex flex-wrap items-center justify-between gap-2">
-                                            <div className="flex items-center gap-1.5">
-                                                <FolderCheck className="h-4 w-4 text-primary" />
-                                                <span className="text-xs font-bold text-foreground uppercase tracking-wider">
-                                                    Allowed Libraries Whitelist
-                                                </span>
-                                                <span className="text-[11px] text-muted-foreground">
-                                                    ({(srv.allowedLibraryIds || []).length} / {libraries.length} allowed)
-                                                </span>
-                                            </div>
+                                        {(() => {
+                                            const isNoneExplicit = srv.allowedLibraryIds?.includes("__none__");
+                                            const hasCustomList = srv.allowedLibraryIds && (srv.allowedLibraryIds.length > 0 || isNoneExplicit);
+                                            const allowedCount = isNoneExplicit 
+                                                ? 0 
+                                                : (hasCustomList ? srv.allowedLibraryIds!.length : libraries.length);
 
-                                            <div className="flex items-center gap-1.5">
-                                                <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => handleSelectAllLibraries(srv.id)}
-                                                    className="h-6 px-2 text-[10px] text-cyan-300 hover:text-cyan-200"
-                                                >
-                                                    <CheckSquare className="h-2.5 w-2.5 mr-1" /> Select All
-                                                </Button>
-                                                <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => handleDeselectAllLibraries(srv.id)}
-                                                    className="h-6 px-2 text-[10px] text-muted-foreground hover:text-foreground"
-                                                >
-                                                    <Square className="h-2.5 w-2.5 mr-1" /> Deselect All
-                                                </Button>
-                                            </div>
-                                        </div>
+                                            return (
+                                                <>
+                                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <FolderCheck className="h-4 w-4 text-primary" />
+                                                            <span className="text-xs font-bold text-foreground uppercase tracking-wider">
+                                                                Allowed Libraries Whitelist
+                                                            </span>
+                                                            <span className="text-[11px] text-muted-foreground">
+                                                                ({allowedCount} / {libraries.length} allowed)
+                                                            </span>
+                                                        </div>
 
-                                        {libraries.length === 0 ? (
-                                            <div className="p-3 text-xs text-muted-foreground bg-white/[0.01] border border-border/30 rounded-lg text-center">
-                                                No libraries discovered yet. Click &quot;Test Connection&quot; above to scan virtual folders from {srv.name}.
-                                            </div>
-                                        ) : (
-                                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
-                                                {libraries.map(lib => {
-                                                    const isAllowed = (srv.allowedLibraryIds || []).includes(lib.id) || (srv.allowedLibraryIds || []).length === 0;
-                                                    return (
-                                                        <button
-                                                            key={lib.id}
-                                                            type="button"
-                                                            onClick={() => handleToggleAllowedLibrary(srv.id, lib.id)}
-                                                            className={`p-2 rounded-lg border text-left flex items-center justify-between gap-1.5 transition-all cursor-pointer ${
-                                                                isAllowed
-                                                                    ? "bg-primary/10 border-primary/40 text-primary-foreground shadow-xs"
-                                                                    : "bg-background/40 border-border/40 text-muted-foreground hover:border-border hover:text-foreground opacity-60"
-                                                            }`}
-                                                        >
-                                                            <div className="flex items-center gap-1.5 min-w-0">
-                                                                {lib.type.includes("movie") ? (
-                                                                    <Film className="h-3 w-3 text-cyan-400 shrink-0" />
-                                                                ) : lib.type.includes("show") || lib.type.includes("tv") ? (
-                                                                    <Tv className="h-3 w-3 text-purple-400 shrink-0" />
-                                                                ) : lib.type.includes("music") ? (
-                                                                    <Music className="h-3 w-3 text-emerald-400 shrink-0" />
-                                                                ) : (
-                                                                    <FolderCheck className="h-3 w-3 text-amber-400 shrink-0" />
-                                                                )}
-                                                                <span className="text-xs font-medium truncate">{lib.title}</span>
-                                                            </div>
-                                                            <div className={`h-3.5 w-3.5 rounded shrink-0 flex items-center justify-center border ${
-                                                                isAllowed ? "bg-primary border-primary text-primary-foreground" : "border-muted-foreground/30"
-                                                            }`}>
-                                                                {isAllowed && <Check className="h-2.5 w-2.5 stroke-[3]" />}
-                                                            </div>
-                                                        </button>
-                                                    );
-                                                })}
-                                            </div>
-                                        )}
+                                                        <div className="flex items-center gap-1.5">
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => handleSelectAllLibraries(srv.id)}
+                                                                className="h-6 px-2 text-[10px] text-cyan-300 hover:text-cyan-200"
+                                                            >
+                                                                <CheckSquare className="h-2.5 w-2.5 mr-1" /> Select All
+                                                            </Button>
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => handleDeselectAllLibraries(srv.id)}
+                                                                className="h-6 px-2 text-[10px] text-muted-foreground hover:text-foreground"
+                                                            >
+                                                                <Square className="h-2.5 w-2.5 mr-1" /> Deselect All
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+
+                                                    {libraries.length === 0 ? (
+                                                        <div className="p-3 text-xs text-muted-foreground bg-white/[0.01] border border-border/30 rounded-lg text-center">
+                                                            No libraries discovered yet. Click &quot;Test Connection&quot; above to scan virtual folders from {srv.name}.
+                                                        </div>
+                                                    ) : (
+                                                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+                                                            {libraries.map(lib => {
+                                                                const isAllowed = isNoneExplicit 
+                                                                    ? false 
+                                                                    : (hasCustomList ? srv.allowedLibraryIds!.includes(lib.id) : true);
+
+                                                                return (
+                                                                    <button
+                                                                        key={lib.id}
+                                                                        type="button"
+                                                                        onClick={() => handleToggleAllowedLibrary(srv.id, lib.id)}
+                                                                        className={`p-2 rounded-lg border text-left flex items-center justify-between gap-1.5 transition-all cursor-pointer ${
+                                                                            isAllowed
+                                                                                ? "bg-primary/20 border-primary/60 text-white font-semibold shadow-xs"
+                                                                                : "bg-white/[0.04] border-white/10 text-slate-200 hover:text-white hover:border-white/20 hover:bg-white/[0.08]"
+                                                                        }`}
+                                                                    >
+                                                                        <div className="flex items-center gap-1.5 min-w-0">
+                                                                            {lib.type.includes("movie") ? (
+                                                                                <Film className="h-3 w-3 text-cyan-400 shrink-0" />
+                                                                            ) : lib.type.includes("show") || lib.type.includes("tv") ? (
+                                                                                <Tv className="h-3 w-3 text-purple-400 shrink-0" />
+                                                                            ) : lib.type.includes("music") ? (
+                                                                                <Music className="h-3 w-3 text-emerald-400 shrink-0" />
+                                                                            ) : (
+                                                                                <FolderCheck className="h-3 w-3 text-amber-400 shrink-0" />
+                                                                            )}
+                                                                            <span className={`text-xs truncate ${isAllowed ? "font-bold text-white" : "font-medium text-slate-200"}`}>
+                                                                                {lib.title}
+                                                                            </span>
+                                                                        </div>
+                                                                        <div className={`h-3.5 w-3.5 rounded shrink-0 flex items-center justify-center border ${
+                                                                            isAllowed ? "bg-primary border-primary text-primary-foreground" : "border-slate-500/50 bg-black/20"
+                                                                        }`}>
+                                                                            {isAllowed && <Check className="h-2.5 w-2.5 stroke-[3]" />}
+                                                                        </div>
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    )}
+                                                </>
+                                            );
+                                        })()}
                                     </div>
                                 </CardContent>
 

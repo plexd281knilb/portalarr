@@ -1754,6 +1754,23 @@ function SettingsPageContent() {
                                     </div>
                                 </CardHeader>
                                 <CardContent>
+                                    <div className="p-3 mb-4 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-between gap-3 text-xs">
+                                        <div className="flex items-center gap-2">
+                                            <Server className="h-4 w-4 text-blue-400 shrink-0" />
+                                            <span className="text-muted-foreground">
+                                                Manage <strong className="text-foreground">Emby &amp; Jellyfin</strong> servers or configure <strong className="text-foreground">User Library Whitelists</strong> in the dedicated tab.
+                                            </span>
+                                        </div>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => handleTabChange("servers")}
+                                            className="h-7 text-xs font-semibold gap-1.5 border-blue-500/40 text-blue-400 hover:bg-blue-500/15 shrink-0"
+                                        >
+                                            Media Servers Tab &rarr;
+                                        </Button>
+                                    </div>
                                     <form 
                                         key={`plex-form-${systemSettings?.mainPlexToken ? "linked" : "empty"}`} 
                                         onSubmit={async (e) => {
