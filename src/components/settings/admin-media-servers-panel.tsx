@@ -20,7 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { 
     Server, Tv, Film, Music, Check, Plus, Trash2, RefreshCw, 
     CheckCircle2, XCircle, Loader2, Shield, FolderCheck, CheckSquare, 
-    Square, Activity, ExternalLink, Settings, Sparkles, Layers, Sliders
+    Square, Activity, ExternalLink, Settings, Sparkles, Layers, Sliders, Pencil
 } from "lucide-react";
 
 export function AdminMediaServersPanel() {
@@ -73,6 +73,16 @@ export function AdminMediaServersPanel() {
         setFormName("");
         setFormType("JELLYFIN");
         setFormUrl("");
+        setFormApiKey("");
+        setDialogErr("");
+        setDialogOpen(true);
+    };
+
+    const handleOpenEdit = (srv: DiscoveredServerInfo) => {
+        setEditingServer(srv);
+        setFormName(srv.name);
+        setFormType(srv.type as "JELLYFIN" | "EMBY");
+        setFormUrl(srv.url);
         setFormApiKey("");
         setDialogErr("");
         setDialogOpen(true);
@@ -337,6 +347,18 @@ export function AdminMediaServersPanel() {
 
                                             {!isPlex && (
                                                 <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => handleOpenEdit(srv)}
+                                                    className="h-8 text-xs border-border/60 hover:bg-white/[0.04] gap-1.5 text-foreground"
+                                                >
+                                                    <Pencil className="h-3.5 w-3.5 text-purple-400" />
+                                                    <span>Edit</span>
+                                                </Button>
+                                            )}
+
+                                            {!isPlex && (
+                                                <Button
                                                     variant="ghost"
                                                     size="sm"
                                                     onClick={() => handleDeleteServer(srv.id, srv.name)}
@@ -537,10 +559,20 @@ export function AdminMediaServersPanel() {
                 <DialogContent className="sm:max-w-md bg-[#121218] border-border/60">
                     <DialogHeader>
                         <DialogTitle className="text-base font-bold text-foreground flex items-center gap-2">
-                            <Plus className="h-4 w-4 text-primary" /> Add Jellyfin / Emby Server
+                            {editingServer ? (
+                                <>
+                                    <Pencil className="h-4 w-4 text-primary" /> Edit {editingServer.type === "JELLYFIN" ? "Jellyfin" : "Emby"} Server
+                                </>
+                            ) : (
+                                <>
+                                    <Plus className="h-4 w-4 text-primary" /> Add Jellyfin / Emby Server
+                                </>
+                            )}
                         </DialogTitle>
                         <DialogDescription className="text-xs text-muted-foreground">
-                            Connect a Jellyfin or Emby server to Portalarr to enable multi-server library synchronization.
+                            {editingServer
+                                ? `Update connection URL or API key credentials for "${editingServer.name}".`
+                                : "Connect a Jellyfin or Emby server to Portalarr to enable multi-server library synchronization."}
                         </DialogDescription>
                     </DialogHeader>
 
@@ -586,10 +618,17 @@ export function AdminMediaServersPanel() {
                         </div>
 
                         <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold">API Key (Administrator Token)</Label>
+                            <div className="flex items-center justify-between">
+                                <Label className="text-xs font-semibold">API Key (Administrator Token)</Label>
+                                {editingServer && (
+                                    <span className="text-[10px] text-muted-foreground font-medium">
+                                        (Leave blank to keep existing key)
+                                    </span>
+                                )}
+                            </div>
                             <Input
                                 type="password"
-                                placeholder="Generate in Jellyfin/Emby -> Dashboard -> API Keys"
+                                placeholder={editingServer ? "•••••••••••••••• (Leave blank to keep existing)" : "Generate in Jellyfin/Emby -> Dashboard -> API Keys"}
                                 value={formApiKey}
                                 onChange={e => setFormApiKey(e.target.value)}
                                 className="h-9 text-xs font-mono"
@@ -617,7 +656,7 @@ export function AdminMediaServersPanel() {
                             className="h-8 text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5"
                         >
                             {savingServer ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                            <span>Save Server</span>
+                            <span>{editingServer ? "Update Server" : "Save Server"}</span>
                         </Button>
                     </DialogFooter>
                 </DialogContent>

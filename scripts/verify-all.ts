@@ -1361,6 +1361,18 @@ async function runTestSuite() {
             throw new Error(`MediaServer API key decryption mismatch: expected ${testServerApiKey}, got ${decryptedKey}`);
         }
 
+        // Test editing existing media server (URL & Name update while keeping existing API key)
+        const editServerRes = await saveMediaServerAction({
+            id: testMediaServer.id,
+            name: "Updated Jellyfin Node",
+            type: "JELLYFIN",
+            url: "http://127.0.0.1:9999/jellyfin",
+            apiKey: ""
+        });
+        if (!editServerRes.success || editServerRes.server?.name !== "Updated Jellyfin Node" || editServerRes.server?.url !== "http://127.0.0.1:9999/jellyfin") {
+            throw new Error(`Failed to edit existing media server: ${editServerRes.error}`);
+        }
+
         // 2. Test MediaServer connection error handling (mock / offline URL)
         const connResult = await testMediaServerConnection(
             "JELLYFIN",

@@ -78,6 +78,7 @@ Portalarr uses a **Modern Cinematic Dark Theme** powered by Tailwind CSS, Radix 
   - **Emby**: Emerald green badge (`bg-emerald-500/10 text-emerald-400 border-emerald-500/30`)
 - **Admin Server Whitelisting & Library Scoping**:
   - In Admin Settings (`AdminMediaServersPanel`), each server exposes toggles for `Allow Full Members to Self-Select` alongside clear indicators that Trial Account access is centralized in Access Control.
+  - **Server Edit & Credential Preservation**: Jellyfin and Emby server cards include a dedicated `Edit` action button opening an edit modal. Administrators can modify the server display name and connection URL (e.g. updating local IP to a public HTTPS reverse proxy domain) while keeping the API key field blank to preserve the existing AES-256-GCM encrypted token.
   - **Centralized Trial Safe Pool Governance**: Trial member library access is governed 100% centrally in `/settings/access` under Onboarding (`defaultTrialPlexLibraries` / "Trial Safe Pool / Restricted Shelf"). Per-server trial toggles are avoided to prevent fragmented or conflicting access rules.
   - When whitelisting specific libraries, render interactive checkbox pills for each discovered virtual folder or PMS section with high-contrast text and clean allowed counts.
 - **User Self-Selection & Tier Capabilities**:
