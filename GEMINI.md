@@ -8,9 +8,9 @@ Portalarr is a centralized, self-hosted dashboard designed to manage a media ser
 
 Portalarr adheres to strict Semantic Versioning (`MAJOR.MINOR.PATCH`):
 - **Released Baseline**: `v1.0.0` is the production milestone baseline release.
-- **Active Feature Release**: `v1.1.0` is the current active release.
+- **Active Feature Release**: `v1.1.1` is the current active release.
 - **Strict SemVer Policy**:
-  - **PATCH increments (`1.1.0` ➔ `1.1.1`)**: Bug fixes, security patches, styling polish, telemetry adjustments, and non-breaking corrections.
+  - **PATCH increments (`1.1.1` ➔ `1.1.2`)**: Bug fixes, security patches, styling polish, telemetry adjustments, and non-breaking corrections.
   - **MINOR increments (`1.0.2` ➔ `1.1.0`)**: Backwards-compatible new features, new curation studios, new third-party integrations, or major enhancements.
   - **MAJOR increments (`1.1.0` ➔ `2.0.0`)**: Breaking architectural changes, major database redesigns, or backwards-incompatible API shifts.
 - **Automatic Environment Branch Telemetry**:
@@ -65,23 +65,44 @@ To guarantee 100% reliability, quality control, and consistency, the following 4
    - **Staging, Verification & Push**:
      Inspect `git status` to verify all touched and new files, stage all changes (`git add -A`), commit with a clear, descriptive message adhering to conventional commit style that ALWAYS includes the freshly incremented active version from `package.json` at the FRONT in brackets (e.g. `[v1.1.0] feat(scope): descriptive message` or `[v1.1.0] fix(scope): fix bug`), and push strictly to `origin/main` (Beta preview environment). **CRITICAL RULE**: NEVER merge or push to `stable` / `origin/stable` unless the user explicitly instructs to push to `stable`! Automatic git hook enforcement via `scripts/git-commit-msg-hook.js` is verified in `npm test` and executed by Git on every commit to guarantee version prefixing.
 
-## 🧠🤖 Multi-Model Orchestration & Worker Topology: "Brain" (Argon 4) ➔ "Pinky" (Flash 3.8)
+## 🧠🤖 Multi-Tier Gemini Subagent Orchestration Architecture
 
-Portalarr leverages Antigravity's multi-agent architecture to optimize quota, parallelism, and speed:
-- **"Brain" — Root Orchestrator (Gemini 4 Argon / Pro)**: Serves as the primary Technical Architect, master planner, and code synthesizer. Retains master conversation context, architectural oversight, complex billing/database logic synthesis, and final decision-making.
-- **"Pinky" — Worker Subagent (`pinky` / `flash-worker`, Gemini 3.8 Flash)**: Dedicated high-speed worker subagent invoked via `invoke_subagent` (`TypeName: "pinky"`, `Model: "flash"`). Handles high-throughput operations: file audits, code edits, running `npm test`, executing Next.js production builds, running lint sweeps, git operations, and repository sweeps.
+Portalarr leverages a strict, multi-tiered Google Gemini subagent architecture designed to maximize execution speed, eliminate quota exhaustion, prevent SQLite lockups, and ensure 100% code correctness:
+- **Default Root Session (Gemini 3.8 Flash High)**: The primary orchestrator runs on Gemini 3.8 Flash by default. This delivers near-instant response times, handles 95%+ of daily tasks, and keeps conversational turns lightweight and cost-effective.
+- **Strict Model Standard**: **ONLY Google Gemini models** are used throughout the Portalarr ecosystem (`gemini-4-argon-high`, `gemini-3.8-flash-high`, and `gemini-3.5-flash-lite`). Third-party models are forbidden.
 
-### ⚡ Strict 90/10 "Pinky-First" Quota Preservation Protocol
-To prevent exhaustion of Gemini 4 Argon quota and ensure that 90%+ of all execution tool calls run on Gemini 3.8 Flash ("Pinky"):
-1. **Strict Zero-Tool-Loop Rule for Brain (Argon 4):** Brain MUST NOT run multi-step `read_file`, `edit_file`, `write_file`, `run_command`, or `git` loops directly in the root conversation. In Antigravity, every tool call executed by Brain re-bills the entire cumulative master conversation context against Argon 4 quota.
-2. **1-Call End-to-End Delegation to Pinky (Flash 3.8):** For every coding, debugging, branding, git, or verification request, Brain must make **at most 1 tool call** (`send_message` to an active `pinky` subagent or `invoke_subagent` with `TypeName: "pinky"`, `Model: "flash"`) delegating the entire end-to-end workflow: inspecting files, making edits, executing `cmd /c "npm test"` and `cmd /c "npm run build"`, and staging/committing/pushing to Git.
-3. **Brain's Exclusive Role:** Brain functions strictly as the high-level architect: Brain synthesizes the user's intent into a single crisp specification for Pinky, hands off execution to Pinky in a single message, and presents Pinky's final report directly to the user (achieving a maximum of 2 Argon 4 turns per user prompt instead of 10–15 costly root turns).
-4. **Automated Error Escalation Loop**: When **Pinky** encounters compilation issues, TypeScript rejections, pricing/template discrepancies, or test failures, it extracts the exact file paths, line numbers, and error traces, delivering them directly back to **Brain** via reactive messaging. **Brain** diagnoses the architectural root cause, provides the targeted fix instructions, and prompts **Pinky** to apply and verify.
+### 🏛️ The 4-Layer Subagent Hierarchy
+1. **Layer 1: Deep Architect (`deep-architect`, `Model: "pro"`)**:
+   - **Primary Model**: Gemini 4 Argon / Pro (`Model: "pro"`).
+   - **Automatic Quota Fallback**: If Gemini 4 Argon runs out of usage (HTTP 429 / resource exhausted), execution **automatically falls back to Gemini 3.8 Flash (`Model: "flash"`)** without disruption.
+   - **When to Invoke**: Called ONLY when deeply needed for high-complexity system architecture, database schema changes (`prisma/schema.prisma`), security isolation models, or difficult algorithmic puzzles.
+   - **Tools**: Read tools + subagent tools (cannot write files directly).
+2. **Layer 2: Fast Parallel Researchers (`repo-researcher`, `Model: "flash"` | `"flash_lite"`)**:
+   - **Model**: Gemini 3.8 Flash (`Model: "flash"`) or Gemini 3.5 Flash Lite (`Model: "flash_lite"`).
+   - **Concurrency**: Can launch 2–3 in parallel safely.
+   - **When to Invoke**: High-speed codebase audits, tracing imports, inspecting API contracts, and reading docs across separate directories.
+   - **Tools**: Strictly read-only (`view_file`, `search_web`, `read_url_content`).
+3. **Layer 3: Autonomous Execution Worker (`execution-worker` / `pinky`, `Model: "flash"`)**:
+   - **Model**: Gemini 3.8 Flash (`Model: "flash"`).
+   - **Concurrency**: **STRICTLY 1 WORKER AT A TIME** for active coding, tests, and builds to prevent SQLite database locks (`SQLITE_BUSY`) and Turbopack `.next/` build cache corruption.
+   - **Self-Healing Protocol**: Applies code edits, runs `cmd /c "npm test"` to diagnose and fix failures in-loop, runs `cmd /c "npm run build"`, and reports back once 100% green.
+4. **Layer 4: Quality & Route Security Verifier (`qa-verifier`, `Model: "flash_lite"` | `"flash"`)**:
+   - **Model**: Gemini 3.5 Flash Lite (`Model: "flash_lite"`) or Gemini 3.8 Flash (`Model: "flash"`).
+   - **When to Invoke**: Audits `src/proxy.ts` and `CLOUDFLARE_ADMIN_PATHS` to ensure newly added routes are protected, checks `git status` for clean trees, and verifies SemVer compliance.
+
+### ⚡ Quota Depletion & Graceful Fallback Protocol
+When calling Layer 1 (`deep-architect`) with `Model: "pro"`:
+1. **Detection**: If the API returns a rate limit (HTTP 429), quota exhaustion, or timeout error:
+2. **Immediate Fallback**: Do NOT crash or stop. Immediately invoke `deep-architect` with `Model: "flash"` (Gemini 3.8 Flash High).
+3. **Prompt Adaptation**: When falling back to Flash, provide structured scaffolding (explicit file paths, step-by-step reasoning constraints) to achieve architectural accuracy with zero downtime.
 
 - **VS Code Tasks (`.vscode/tasks.json`)**:
-  - `agy: Brain - Root Orchestrator (Argon 4 High)` (`agy --model gemini-4-argon-high`)
-  - `agy: Pinky - Parallel Worker (Flash 3.8 High)` (`agy --model gemini-3.8-flash-high`)
-  - `agy: Ask Pinky (Flash 3.8 Print Mode)` (`agy --model gemini-3.8-flash-high --print`)
+  - `agy: Root Orchestrator (Gemini 3.8 Flash High - Default)` (`agy --model gemini-3.8-flash-high`)
+  - `agy: Deep Architect (Gemini 4 Argon High - Escalation)` (`agy --model gemini-4-argon-high`)
+  - `agy: Fallback Architect (Gemini 3.8 Flash High - Quota Fallback)` (`agy --model gemini-3.8-flash-high`)
+  - `agy: Parallel Worker / Pinky (Gemini 3.8 Flash High)` (`agy --model gemini-3.8-flash-high`)
+  - `agy: Quick Task on Flash (Print Mode)` (`agy --model gemini-3.8-flash-high --print`)
+  - `agy: Light Recon & Search (Gemini 3.5 Flash Lite)` (`agy --model gemini-3.5-flash-lite --print`)
   - `Portalarr: Run Integration Tests` (`npm test`)
   - `Portalarr: Production Build` (`npm run build`)
 

@@ -1375,6 +1375,83 @@ async function runTestSuite() {
         }
     });
 
+    // =========================================================================
+    // SUITE 20: Multi-Tier Gemini Subagent Orchestration & Quota Fallback Topology
+    // =========================================================================
+    await assertTest("Suite 20: Multi-Tier Gemini Subagent Orchestration & Quota Fallback Topology", async () => {
+        const fs = await import("fs");
+        const path = await import("path");
+
+        // 1. Verify .vscode/tasks.json configuration
+        const tasksPath = path.join(process.cwd(), ".vscode", "tasks.json");
+        if (!fs.existsSync(tasksPath)) {
+            throw new Error(".vscode/tasks.json does not exist");
+        }
+        const tasksJson = JSON.parse(fs.readFileSync(tasksPath, "utf-8"));
+        const tasks: any[] = tasksJson.tasks || [];
+
+        const rootTask = tasks.find((t) => t.label?.includes("Root Orchestrator"));
+        if (!rootTask || !rootTask.command?.includes("gemini-3.8-flash-high")) {
+            throw new Error("Root Orchestrator task must target gemini-3.8-flash-high by default");
+        }
+
+        const architectTask = tasks.find((t) => t.label?.includes("Deep Architect"));
+        if (!architectTask || !architectTask.command?.includes("gemini-4-argon-high")) {
+            throw new Error("Deep Architect task must target gemini-4-argon-high for escalation");
+        }
+
+        const fallbackTask = tasks.find((t) => t.label?.includes("Fallback Architect"));
+        if (!fallbackTask || !fallbackTask.command?.includes("gemini-3.8-flash-high")) {
+            throw new Error("Fallback Architect task must target gemini-3.8-flash-high for quota fallback");
+        }
+
+        const workerTask = tasks.find((t) => t.label?.includes("Parallel Worker"));
+        if (!workerTask || !workerTask.command?.includes("gemini-3.8-flash-high")) {
+            throw new Error("Parallel Worker task must target gemini-3.8-flash-high");
+        }
+
+        const lightReconTask = tasks.find((t) => t.label?.includes("Light Recon"));
+        if (!lightReconTask || !lightReconTask.command?.includes("gemini-3.5-flash-lite")) {
+            throw new Error("Light Recon task must target gemini-3.5-flash-lite");
+        }
+
+        // Verify strictly Gemini models are used across all tasks
+        for (const t of tasks) {
+            if (t.command?.startsWith("agy")) {
+                const cmd = t.command.toLowerCase();
+                if (cmd.includes("claude") || cmd.includes("openai") || cmd.includes("gpt")) {
+                    throw new Error(`Forbidden non-Gemini model detected in task: ${t.label}`);
+                }
+                if (!cmd.includes("gemini")) {
+                    throw new Error(`Task ${t.label} must strictly use a Google Gemini model`);
+                }
+            }
+        }
+
+        // 2. Verify .agents/skills/gemini-orchestration/SKILL.md
+        const skillPath = path.join(process.cwd(), ".agents", "skills", "gemini-orchestration", "SKILL.md");
+        if (!fs.existsSync(skillPath)) {
+            throw new Error("gemini-orchestration skill does not exist");
+        }
+        const skillContent = fs.readFileSync(skillPath, "utf-8");
+        if (!skillContent.includes("Multi-Tier Gemini Subagent Orchestration Architecture")) {
+            throw new Error("Skill missing orchestration header");
+        }
+        if (!skillContent.includes("deep-architect") || !skillContent.includes("execution-worker")) {
+            throw new Error("Skill missing required subagent definitions");
+        }
+        if (!skillContent.includes("Fallback Model") || !skillContent.includes("Gemini 3.8 Flash")) {
+            throw new Error("Skill missing Argon-to-Flash fallback protocol");
+        }
+
+        // 3. Verify GEMINI.md contains the orchestration rules
+        const geminiMdPath = path.join(process.cwd(), "GEMINI.md");
+        const geminiMdContent = fs.readFileSync(geminiMdPath, "utf-8");
+        if (!geminiMdContent.includes("Multi-Tier Gemini Subagent Orchestration Architecture")) {
+            throw new Error("GEMINI.md missing Multi-Tier Gemini Subagent Orchestration section");
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");
