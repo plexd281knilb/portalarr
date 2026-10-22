@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import os from "os";
-import { execFile } from "child_process";
+import { execFile, execFileSync } from "child_process";
 import { promisify } from "util";
 import prisma from "@/lib/prisma";
 import { logger } from "@/lib/logger";
@@ -90,6 +90,10 @@ export function resolvePlexDatabaseFilePath(inputPath?: string | null): string |
  */
 export function discoverKnownPlexDatabasePaths(): string[] {
     const commonPaths = [
+        "/Backup_Plex_DB/com.plexapp.plugins.library.db",
+        "/Main_Plex_DB/com.plexapp.plugins.library.db",
+        "/Kids_Plex_DB/com.plexapp.plugins.library.db",
+        "/plex_db/com.plexapp.plugins.library.db",
         "/mnt/user/appdata/plex/Library/Application Support/Plex Media Server/Plug-in Support/Databases/com.plexapp.plugins.library.db",
         "/mnt/remotes/Kid_Server_Appdata/KidsPlexServer/Library/Application Support/Plex Media Server/Plug-in Support/Databases/com.plexapp.plugins.library.db",
         "/mnt/remotes/Kid_Server_Appdata/MainPlexBackup/Library/Application Support/Plex Media Server/Plug-in Support/Databases/com.plexapp.plugins.library.db",
@@ -208,6 +212,16 @@ export async function createPlexDatabaseSnapshot(
                         try { fs.unlinkSync(destShm); } catch (e) {}
                     }
                 } catch (chkErr) {}
+            } else {
+                try {
+                    execFileSync("sqlite3", [destSnapshotPath, "PRAGMA wal_checkpoint(TRUNCATE);"], { timeout: 15000 });
+                    if (fs.existsSync(destWal)) {
+                        try { fs.unlinkSync(destWal); } catch (e) {}
+                    }
+                    if (fs.existsSync(destShm)) {
+                        try { fs.unlinkSync(destShm); } catch (e) {}
+                    }
+                } catch (chkErr) {}
             }
         } catch (copyErr: any) {
             return {
@@ -261,7 +275,41 @@ export function inspectPlexDatabase(dbPath: string): {
     }
 
     if (!DatabaseSyncClass) {
-        return { success: false, movieCount: 0, showCount: 0, episodeCount: 0, sectionCount: 0, sections: [], sizeMb: 0, error: "node:sqlite DatabaseSync not supported in this runtime." };
+        // Fallback to sqlite3 CLI if available in the environment
+        try {
+            const stat = fs.statSync(resolved);
+            const sizeMb = Math.round((stat.size / (1024 * 1024)) * 10) / 10;
+            const rawSections = execFileSync("sqlite3", ["-json", resolved, "SELECT id, name, section_type FROM library_sections WHERE section_type IN (1, 2) ORDER BY name ASC;"], { encoding: "utf8", timeout: 15000 });
+            const sections = JSON.parse(rawSections || "[]").map((s: any) => ({
+                id: Number(s.id),
+                name: s.name,
+                type: Number(s.section_type) === 1 ? "movie" : "show"
+            }));
+
+            const rawCounts = execFileSync("sqlite3", ["-json", resolved, "SELECT SUM(CASE WHEN metadata_type = 1 THEN 1 ELSE 0 END) AS movies, SUM(CASE WHEN metadata_type = 2 THEN 1 ELSE 0 END) AS shows, SUM(CASE WHEN metadata_type = 4 THEN 1 ELSE 0 END) AS episodes FROM metadata_items;"], { encoding: "utf8", timeout: 15000 });
+            const counts = JSON.parse(rawCounts || "[]")[0] || {};
+
+            return {
+                success: true,
+                movieCount: Number(counts.movies) || 0,
+                showCount: Number(counts.shows) || 0,
+                episodeCount: Number(counts.episodes) || 0,
+                sectionCount: sections.length,
+                sections,
+                sizeMb
+            };
+        } catch {
+            return { 
+                success: false, 
+                movieCount: 0, 
+                showCount: 0, 
+                episodeCount: 0, 
+                sectionCount: 0, 
+                sections: [], 
+                sizeMb: 0, 
+                error: "node:sqlite DatabaseSync requires Node 22.5+. Upgrade your Portalarr container image to the latest release." 
+            };
+        }
     }
 
     let db: any = null;

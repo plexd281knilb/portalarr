@@ -2356,6 +2356,7 @@ function SettingsPageContent() {
                                         <div className="flex flex-wrap gap-1.5 items-center pt-1">
                                             <span className="text-[10px] text-muted-foreground mr-1">Presets:</span>
                                             {[
+                                                { label: "/Backup_Plex_DB", path: "/Backup_Plex_DB/com.plexapp.plugins.library.db" },
                                                 { label: "Main (Unraid)", path: "/mnt/user/appdata/plex/Library/Application Support/Plex Media Server/Plug-in Support/Databases/com.plexapp.plugins.library.db" },
                                                 { label: "Kids Server", path: "/mnt/remotes/Kid_Server_Appdata/KidsPlexServer/Library/Application Support/Plex Media Server/Plug-in Support/Databases/com.plexapp.plugins.library.db" },
                                                 { label: "Backup Server", path: "/mnt/remotes/Kid_Server_Appdata/MainPlexBackup/Library/Application Support/Plex Media Server/Plug-in Support/Databases/com.plexapp.plugins.library.db" }

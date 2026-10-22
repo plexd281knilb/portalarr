@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
-# Base image definition - uses official node:20-bookworm-slim
-ARG BASE_IMAGE=node:20-bookworm-slim
+# Base image definition - uses official node:22-bookworm-slim (Node 22 LTS with native node:sqlite DatabaseSync)
+ARG BASE_IMAGE=node:22-bookworm-slim
 
 # 1. Install dependencies & pre-generate Prisma Client (cached unless package.json or prisma/ changes)
 FROM ${BASE_IMAGE} AS deps
@@ -51,7 +51,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # CRITICAL: Install libraries required for Prisma engines, Calibre for EPUB sanitation, Font packages for Kometa poster overlay rendering, and ffmpeg/yt-dlp for placeholder trailers
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update && apt-get install -y openssl calibre bash ffmpeg curl python3 fontconfig fonts-dejavu-core fonts-liberation fonts-freefont-ttf && \
+    apt-get update && apt-get install -y openssl sqlite3 calibre bash ffmpeg curl python3 fontconfig fonts-dejavu-core fonts-liberation fonts-freefont-ttf && \
     curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp && \
     chmod a+rx /usr/local/bin/yt-dlp
 
