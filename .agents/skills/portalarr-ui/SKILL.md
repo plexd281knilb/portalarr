@@ -77,8 +77,9 @@ Portalarr uses a **Modern Cinematic Dark Theme** powered by Tailwind CSS, Radix 
   - **Jellyfin**: Purple badge (`bg-purple-500/10 text-purple-400 border-purple-500/30`)
   - **Emby**: Emerald green badge (`bg-emerald-500/10 text-emerald-400 border-emerald-500/30`)
 - **Admin Server Whitelisting & Library Scoping**:
-  - In Admin Settings (`AdminMediaServersPanel`), each server exposes toggles for `Allow User Self-Selection` and `Allow Trial Access`.
-  - When whitelisting specific libraries, render interactive checkbox pills for each discovered virtual folder or PMS section.
+  - In Admin Settings (`AdminMediaServersPanel`), each server exposes toggles for `Allow Full Members to Self-Select` alongside clear indicators that Trial Account access is centralized in Access Control.
+  - **Centralized Trial Safe Pool Governance**: Trial member library access is governed 100% centrally in `/settings/access` under Onboarding (`defaultTrialPlexLibraries` / "Trial Safe Pool / Restricted Shelf"). Per-server trial toggles are avoided to prevent fragmented or conflicting access rules.
+  - When whitelisting specific libraries, render interactive checkbox pills for each discovered virtual folder or PMS section with high-contrast text and clean allowed counts.
 - **User Self-Selection & Tier Capabilities**:
   - In User Profile (`UserMediaServersManager`), render an informative Tier Capabilities Banner highlighting Full Member privileges (unlimited library selection, playback quality caps, audio/subtitle language preferences, email digests).
   - Enforce server-side whitelist validation: any client tampering attempting to select unauthorized servers or hidden libraries is strictly filtered out before database persistence and API policy sync.

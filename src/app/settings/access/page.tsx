@@ -60,7 +60,7 @@ import {
     Clock, Play, RefreshCw, Loader2, KeyRound, Search, CheckCheck, Send, Edit2,
     Layers, Timer, Gift, Trophy, DollarSign, CreditCard, Sparkles, AlertTriangle,
     FolderCheck, ShieldAlert, Check, Users, ArrowUpRight, Copy, Calculator, Calendar, Monitor, Server, PauseCircle, SlidersHorizontal,
-    Eye, Music, BookOpen, Tv, Baby, X, CalendarClock, Zap, BellRing, Gamepad2, Filter
+    Eye, Music, BookOpen, Tv, Baby, X, CalendarClock, Zap, BellRing, Gamepad2, Filter, Headphones
 } from "lucide-react";
 import { DiscordMemberManagerModal } from "@/components/discord-member-manager-modal";
 import {
@@ -4130,6 +4130,10 @@ export default function AccessSettingsPage() {
                                                                     <Music className="h-4 w-4 text-emerald-400 shrink-0" />
                                                                 ) : addon.icon === "book" ? (
                                                                     <BookOpen className="h-4 w-4 text-amber-400 shrink-0" />
+                                                                ) : addon.icon === "headphones" ? (
+                                                                    <Headphones className="h-4 w-4 text-purple-400 shrink-0" />
+                                                                ) : addon.icon === "server" ? (
+                                                                    <Server className="h-4 w-4 text-sky-400 shrink-0" />
                                                                 ) : addon.icon === "baby" ? (
                                                                     <Baby className="h-4 w-4 text-purple-400 shrink-0" />
                                                                 ) : addon.icon === "monitor" ? (

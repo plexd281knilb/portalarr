@@ -217,7 +217,7 @@ export function AdminMediaServersPanel() {
                         </h2>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                        Configure Plex, Jellyfin, and Emby instances. Control strictly which servers and libraries your Full and Trial members are allowed to self-select.
+                        Configure Plex, Jellyfin, and Emby instances. Control strictly which servers and libraries your Full Members are allowed to self-select. (Trial member access is managed via the Trial Safe Pool in Access Control).
                     </p>
                 </div>
 
@@ -377,7 +377,7 @@ export function AdminMediaServersPanel() {
                                 </CardHeader>
 
                                 <CardContent className="pt-4 space-y-4">
-                                    {/* Permission Switches */}
+                                    {/* Permission Configuration & Policies */}
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl bg-white/[0.02] border border-border/40">
                                         <div className="flex items-center justify-between gap-3">
                                             <div className="space-y-0.5">
@@ -385,7 +385,7 @@ export function AdminMediaServersPanel() {
                                                     Allow Full Members to Self-Select
                                                 </Label>
                                                 <p className="text-[11px] text-muted-foreground">
-                                                    Users can choose whether this server appears on their account.
+                                                    Full members can choose whether this server appears on their account.
                                                 </p>
                                             </div>
                                             <Switch
@@ -396,17 +396,19 @@ export function AdminMediaServersPanel() {
 
                                         <div className="flex items-center justify-between gap-3 border-t sm:border-t-0 sm:border-l border-border/30 sm:pl-3 pt-2 sm:pt-0">
                                             <div className="space-y-0.5">
-                                                <Label className="text-xs font-semibold text-foreground">
-                                                    Allow Trial Members
-                                                </Label>
+                                                <div className="flex items-center gap-1.5">
+                                                    <Shield className="h-3.5 w-3.5 text-purple-400" />
+                                                    <Label className="text-xs font-semibold text-foreground">
+                                                        Trial Accounts Policy
+                                                    </Label>
+                                                </div>
                                                 <p className="text-[11px] text-muted-foreground">
-                                                    Grant access to 14-day evaluation accounts.
+                                                    Governed centrally via the <span className="text-purple-300 font-medium">Trial Safe Pool</span> in Access Control.
                                                 </p>
                                             </div>
-                                            <Switch
-                                                checked={srv.allowTrialAccess}
-                                                onCheckedChange={v => handleToggleServerRule(srv.id, "allowTrialAccess", v)}
-                                            />
+                                            <Badge variant="outline" className="text-[10px] bg-purple-500/10 text-purple-300 border-purple-500/30 shrink-0">
+                                                Access Control
+                                            </Badge>
                                         </div>
                                     </div>
 

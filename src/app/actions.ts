@@ -7644,7 +7644,7 @@ const DEFAULT_ADDONS_CATALOG = [
         description: "Set up a 2nd or 3rd dedicated Kids iPad/Tablet profile with curated safe libraries and parental restrictions.",
         price: 0,
         isFree: true,
-        isAvailable: true,
+        isAvailable: false,
         icon: "baby",
         tag: "Household"
     },
@@ -7654,7 +7654,7 @@ const DEFAULT_ADDONS_CATALOG = [
         description: "Set up a 2nd Living Room TV profile with shared family filters and nudity exclusion.",
         price: 0,
         isFree: true,
-        isAvailable: true,
+        isAvailable: false,
         icon: "monitor",
         tag: "Household"
     },
@@ -7711,9 +7711,15 @@ export async function getAvailableAddonsAction() {
                     const parsedMap = new Map(parsed.map((item: any) => [item.id, item]));
                     catalog = DEFAULT_ADDONS_CATALOG.map(def => {
                         const existing = parsedMap.get(def.id);
+                        if (def.id === "extra_kid_profile" || def.id === "extra_living_room") {
+                            // Enforce locked coming-soon status for unbuilt household sub-accounts
+                            return { ...def, isAvailable: false };
+                        }
                         return existing ? { ...def, ...existing } : def;
                     });
                     for (const item of parsed) {
+                        // Exclude deprecated legacy books_audiobooks
+                        if (item.id === "books_audiobooks") continue;
                         if (!catalog.some(c => c.id === item.id)) {
                             catalog.push(item);
                         }
@@ -7770,9 +7776,15 @@ export async function toggleFreeAddonAction(addonId: string, enabled: boolean) {
                     const parsedMap = new Map(parsed.map((item: any) => [item.id, item]));
                     catalog = DEFAULT_ADDONS_CATALOG.map(def => {
                         const existing = parsedMap.get(def.id);
+                        if (def.id === "extra_kid_profile" || def.id === "extra_living_room") {
+                            // Enforce locked coming-soon status for unbuilt household sub-accounts
+                            return { ...def, isAvailable: false };
+                        }
                         return existing ? { ...def, ...existing } : def;
                     });
                     for (const item of parsed) {
+                        // Exclude deprecated legacy books_audiobooks
+                        if (item.id === "books_audiobooks") continue;
                         if (!catalog.some(c => c.id === item.id)) {
                             catalog.push(item);
                         }
@@ -7932,9 +7944,15 @@ export async function toggleAdminAddonAvailabilityAction(addonId: string, isAvai
                     const parsedMap = new Map(parsed.map((item: any) => [item.id, item]));
                     catalog = DEFAULT_ADDONS_CATALOG.map(def => {
                         const existing = parsedMap.get(def.id);
+                        if (def.id === "extra_kid_profile" || def.id === "extra_living_room") {
+                            // Enforce locked coming-soon status for unbuilt household sub-accounts
+                            return { ...def, isAvailable: false };
+                        }
                         return existing ? { ...def, ...existing } : def;
                     });
                     for (const item of parsed) {
+                        // Exclude deprecated legacy books_audiobooks
+                        if (item.id === "books_audiobooks") continue;
                         if (!catalog.some(c => c.id === item.id)) {
                             catalog.push(item);
                         }
@@ -7943,7 +7961,7 @@ export async function toggleAdminAddonAvailabilityAction(addonId: string, isAvai
             } catch (_) {}
         }
 
-        catalog = catalog.map(a => a.id === addonId ? { ...a, isAvailable } : a);
+        catalog = catalog.filter(a => a.id !== "books_audiobooks").map(a => a.id === addonId ? { ...a, isAvailable } : a);
         const jsonStr = JSON.stringify(catalog);
 
         await prisma.settings.upsert({

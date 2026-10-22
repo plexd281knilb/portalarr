@@ -587,7 +587,6 @@ export async function getUserMediaServersAndLibrariesAction(bypassCache = false)
             const serverKey = `plex:${p.id}`;
 
             // Check server eligibility
-            if (isTrial && !p.allowTrialAccess) continue;
             if (!p.allowUserSelfSelect && user.role !== "ADMIN" && !userAllowedServerKeys?.includes(serverKey)) {
                 continue;
             }

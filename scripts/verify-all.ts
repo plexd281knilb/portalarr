@@ -246,7 +246,18 @@ async function runTestSuite() {
             throw new Error(`Expected emby_access in DEFAULT_ADDONS_CATALOG, got: ${JSON.stringify(embyAddon)}`);
         }
 
-        // 2. Live Audiobooks Library Access Sync
+        // Household sub-accounts should be locked as coming soon until implemented
+        const kidsProfileAddon = defaultCatalog.find((a: any) => a.id === "extra_kid_profile");
+        if (!kidsProfileAddon || kidsProfileAddon.isAvailable !== false) {
+            throw new Error(`Expected extra_kid_profile to be locked (isAvailable: false), got: ${JSON.stringify(kidsProfileAddon)}`);
+        }
+
+        const livingRoomProfileAddon = defaultCatalog.find((a: any) => a.id === "extra_living_room");
+        if (!livingRoomProfileAddon || livingRoomProfileAddon.isAvailable !== false) {
+            throw new Error(`Expected extra_living_room to be locked (isAvailable: false), got: ${JSON.stringify(livingRoomProfileAddon)}`);
+        }
+
+        // 2. Live Audiobooks Library Access Sync & Addons Catalog Verification
         const testUser = await prisma.user.create({
             data: {
                 username: `aud_sync_usr_${Date.now()}`,
@@ -258,6 +269,47 @@ async function runTestSuite() {
                 plexLibrarySectionIds: "10,20"
             }
         });
+
+        // Test getAvailableAddonsAction legacy filtering
+        const { getAvailableAddonsAction } = await import("../src/app/actions");
+        process.env.PORTALARR_TEST_AUTH = "true";
+        process.env.PORTALARR_TEST_USER_ID = testUser.id;
+
+        // Simulate legacy books_audiobooks in settings
+        const origSettings = await prisma.settings.findUnique({ where: { id: "global" } });
+        await prisma.settings.upsert({
+            where: { id: "global" },
+            update: {
+                availableAddons: JSON.stringify([
+                    { id: "books_audiobooks", name: "Books & Audiobooks Access", isAvailable: true, price: 0, isFree: true },
+                    { id: "extra_kid_profile", name: "Additional Kids Sub-Account", isAvailable: true, price: 0, isFree: true }
+                ])
+            },
+            create: { id: "global" }
+        });
+
+        try {
+            const availableRes = await getAvailableAddonsAction();
+            if (!availableRes.success || !availableRes.catalog) {
+                throw new Error(`getAvailableAddonsAction failed: ${availableRes.error}`);
+            }
+            const hasLegacy = availableRes.catalog.some((a: any) => a.id === "books_audiobooks");
+            if (hasLegacy) {
+                throw new Error("Legacy books_audiobooks was improperly present in getAvailableAddonsAction catalog");
+            }
+            const kidsCatalogItem = availableRes.catalog.find((a: any) => a.id === "extra_kid_profile");
+            if (kidsCatalogItem && kidsCatalogItem.isAvailable !== false) {
+                throw new Error("extra_kid_profile should be locked (isAvailable: false) in getAvailableAddonsAction");
+            }
+        } finally {
+            // Restore settings
+            await prisma.settings.upsert({
+                where: { id: "global" },
+                update: { availableAddons: origSettings?.availableAddons ?? null },
+                create: { id: "global" }
+            });
+            delete process.env.PORTALARR_TEST_USER_ID;
+        }
 
         const testAudioLib = await prisma.library.create({
             data: {
