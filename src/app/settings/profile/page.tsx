@@ -47,8 +47,9 @@ import {
     MailCheck, Zap, BookOpen, Gift, Copy, Check, Timer, DollarSign, Users, Sparkles, ExternalLink,
     CreditCard, Calendar, AlertCircle, Trash2, RefreshCw, Bell, Shield, Crown, Tv, Film,
     Flame, MessageSquare, Send, CheckCheck, Sliders, Volume2, Lock, Baby, Monitor, FolderCheck,
-    CheckSquare, Square, Plus, Edit2, AlertTriangle, Music, Eye, EyeOff, Gamepad2, Link as LinkIcon, Headphones
+    CheckSquare, Square, Plus, Edit2, AlertTriangle, Music, Eye, EyeOff, Gamepad2, Link as LinkIcon, Headphones, Server
 } from "lucide-react";
+import { MediaServerSetupGuideModal } from "@/components/profile/media-server-setup-guide-modal";
 import ServerSpeedTest from "@/components/server-speed-test";
 import FeatureGuideModal from "@/components/feature-guide-modal";
 import PlexSetupGuides from "@/components/plex-setup-guides";
@@ -166,6 +167,8 @@ export default function UserProfilePage() {
     const [addonsCatalog, setAddonsCatalog] = useState<any[]>([]);
     const [userEnabledAddons, setUserEnabledAddons] = useState<string[]>([]);
     const [togglingAddonId, setTogglingAddonId] = useState<string | null>(null);
+    const [addonGuideModalOpen, setAddonGuideModalOpen] = useState(false);
+    const [addonGuideType, setAddonGuideType] = useState<"JELLYFIN" | "EMBY">("JELLYFIN");
     const [addonMsg, setAddonMsg] = useState("");
     const [addonErr, setAddonErr] = useState("");
 
@@ -740,6 +743,10 @@ export default function UserProfilePage() {
             if (res.success) {
                 setUserEnabledAddons(res.enabledAddons || []);
                 setAddonMsg(res.message || "Add-on preference updated!");
+                if (enabled && (addonId === "jellyfin_access" || addonId === "emby_access")) {
+                    setAddonGuideType(addonId === "jellyfin_access" ? "JELLYFIN" : "EMBY");
+                    setAddonGuideModalOpen(true);
+                }
                 if (addonId === "audiobooks") {
                     const [audioLibRes, libRes] = await Promise.all([
                         getUserAudiobooksLibraryAccessAction(),
@@ -1896,7 +1903,9 @@ export default function UserProfilePage() {
                                         <div className="space-y-2">
                                             <div className="flex items-center justify-between gap-2">
                                                 <div className="flex items-center gap-2 min-w-0">
-                                                    {addon.icon === "tv" ? (
+                                                    {addon.icon === "server" ? (
+                                                        <Server className="h-4 w-4 text-purple-400 shrink-0" />
+                                                    ) : addon.icon === "tv" ? (
                                                         <Tv className="h-4 w-4 text-cyan-400 shrink-0" />
                                                     ) : addon.icon === "music" ? (
                                                         <Music className="h-4 w-4 text-emerald-400 shrink-0" />
@@ -1931,7 +1940,8 @@ export default function UserProfilePage() {
                                         </div>
 
                                         <div className="pt-2 flex items-center justify-between border-t border-border/30">
-                                            <span className="text-[11px] font-medium text-muted-foreground">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[11px] font-medium text-muted-foreground">
                                                 {isEnabled ? (
                                                     <span className="text-emerald-400 flex items-center gap-1 font-semibold">
                                                         <Check className="h-3 w-3" /> Active
@@ -1940,6 +1950,21 @@ export default function UserProfilePage() {
                                                     <span>Inactive</span>
                                                 )}
                                             </span>
+                                            {(addon.id === "jellyfin_access" || addon.id === "emby_access") && (
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => {
+                                                        setAddonGuideType(addon.id === "jellyfin_access" ? "JELLYFIN" : "EMBY");
+                                                        setAddonGuideModalOpen(true);
+                                                    }}
+                                                    className="h-6 text-[10px] px-2 font-semibold gap-1 border-purple-500/40 text-purple-300 hover:bg-purple-500/10 cursor-pointer"
+                                                >
+                                                    📖 Setup Guide
+                                                </Button>
+                                            )}
+                                            </div>
                                             {isTrial ? (
                                                 <Button
                                                     type="button"

@@ -7667,6 +7667,26 @@ const DEFAULT_ADDONS_CATALOG = [
         isAvailable: true,
         icon: "sparkles",
         tag: "Requests"
+    },
+    {
+        id: "jellyfin_access",
+        name: "Jellyfin Streaming Access",
+        description: "Connect to the high-performance Jellyfin media server using Swiftfin, official Jellyfin client apps, or web browser.",
+        price: 0,
+        isFree: true,
+        isAvailable: true,
+        icon: "server",
+        tag: "Servers"
+    },
+    {
+        id: "emby_access",
+        name: "Emby Streaming Access",
+        description: "Access the unified Emby media server with official Emby apps across Apple TV, Roku, Fire TV, and Smart TVs.",
+        price: 0,
+        isFree: true,
+        isAvailable: true,
+        icon: "server",
+        tag: "Servers"
     }
 ];
 
@@ -7775,7 +7795,14 @@ export async function toggleFreeAddonAction(addonId: string, enabled: boolean) {
         const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
         if (!dbUser) return { success: false, error: "User not found" };
 
-        if ((dbUser.status === "TRIAL" || dbUser.membershipTier === "TRIAL") && dbUser.status !== "APPROVED" && dbUser.role !== "ADMIN") {
+        const isTrialUser = (dbUser.status === "TRIAL" || dbUser.membershipTier === "TRIAL") && dbUser.role !== "ADMIN" && dbUser.role !== "SUPER_USER";
+        if (isTrialUser) {
+            if (addonId === "jellyfin_access" || addonId === "emby_access") {
+                return {
+                    success: false,
+                    error: "Jellyfin & Emby multi-platform streaming is exclusively available for Full Members. Upgrade your membership pass to unlock."
+                };
+            }
             return {
                 success: false,
                 error: "Optional add-ons unlock upon upgrading to full membership."
@@ -7816,7 +7843,9 @@ export async function toggleFreeAddonAction(addonId: string, enabled: boolean) {
             });
         }
 
-        revalidatePath("/settings/profile");
+        try {
+            revalidatePath("/settings/profile");
+        } catch (_) {}
         return {
             success: true,
             message: `${targetAddon.name} is now ${enabled ? "enabled" : "disabled"}!`,
@@ -9449,6 +9478,15 @@ export async function updateAlertBanner(formData: FormData) {
 
 async function verifyUser() {
     if (process.env.PORTALARR_TEST_AUTH === "true") {
+        if (process.env.PORTALARR_TEST_USER_ID) {
+            const specificUser = await prisma.user.findUnique({ where: { id: process.env.PORTALARR_TEST_USER_ID } });
+            if (specificUser) {
+                return {
+                    ...specificUser,
+                    userId: specificUser.id
+                };
+            }
+        }
         const existingAdmin = await prisma.user.findFirst({ where: { role: "ADMIN" } }) || await prisma.user.findFirst();
         if (existingAdmin) {
             return {
@@ -21188,6 +21226,56 @@ export async function getPlexSetupGuides() {
                 {
                     title: "3. Avoid Browser Audio Transcoding",
                     desc: "Select standard 5.1 AC3 or AAC audio tracks in browser rather than TrueHD 7.1 or DTS-HD."
+                }
+            ]
+        },
+        {
+            id: "jellyfin",
+            name: "Jellyfin Streaming",
+            icon: "Server",
+            badge: "Multi-Platform",
+            summary: "Connect to the high-performance Jellyfin media server using Swiftfin, official client apps, or web browser.",
+            steps: [
+                {
+                    title: "1. Connect to Server Address",
+                    desc: "Open your Jellyfin client app (or browser) and enter your server URL (e.g., https://jellyfin.domshomelab.com)."
+                },
+                {
+                    title: "2. Sign In with Your Portal Username",
+                    desc: "Log in using your DomsHomeLab username and account credentials."
+                },
+                {
+                    title: "3. Recommended Client Apps for Every Screen",
+                    desc: "Apple TV & iOS: Swiftfin (recommended for native Direct Play) or official Jellyfin. Roku: Jellyfin for Roku. Android TV / Fire TV: Jellyfin for Android TV."
+                },
+                {
+                    title: "4. Direct Play & Zero-Buffering Optimization",
+                    desc: "In client Settings → Playback, set Maximum Bitrate / Video Quality to 'Auto' or 'Maximum' to ensure 100% Direct Play."
+                }
+            ]
+        },
+        {
+            id: "emby",
+            name: "Emby Streaming",
+            icon: "Server",
+            badge: "Unified Server",
+            summary: "Access the unified Emby media server with official apps across Apple TV, Roku, Fire TV, and Smart TVs.",
+            steps: [
+                {
+                    title: "1. Connect to Server Address",
+                    desc: "Open the Emby app and enter your Emby server address (e.g., https://emby.domshomelab.com)."
+                },
+                {
+                    title: "2. Sign In with Your Account",
+                    desc: "Enter your username and password configured in your DomsHomeLab profile."
+                },
+                {
+                    title: "3. Client Apps for Every Screen",
+                    desc: "Download official Emby apps directly from the Apple App Store, Roku Channel Store, Amazon Appstore, or Google Play."
+                },
+                {
+                    title: "4. Maximize Streaming Quality",
+                    desc: "In Emby Settings → Playback → Quality, select 'Maximum' or 'Auto' for unthrottled studio direct play."
                 }
             ]
         }

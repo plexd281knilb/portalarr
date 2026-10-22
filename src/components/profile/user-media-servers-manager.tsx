@@ -18,8 +18,9 @@ import {
     Server, Tv, Film, Music, Check, CheckSquare, Square, 
     CheckCircle2, XCircle, Loader2, Shield, FolderCheck, 
     Sparkles, Crown, Zap, BookOpen, Compass, Settings, 
-    Sliders, Volume2, Globe, EyeOff, Bell, User, Layers
+    Sliders, Volume2, Globe, EyeOff, Bell, User, Layers, Lock
 } from "lucide-react";
+import { MediaServerSetupGuideModal } from "./media-server-setup-guide-modal";
 
 interface UserMediaServersManagerProps {
     userRole?: string;
@@ -60,6 +61,8 @@ export function UserMediaServersManager({
     const [autoSyncWatchlist, setAutoSyncWatchlist] = useState(true);
 
     const [isDirty, setIsDirty] = useState(false);
+    const [guideServer, setGuideServer] = useState<UserAvailableServer | null>(null);
+    const [guideModalOpen, setGuideModalOpen] = useState(false);
     const [isPrefsDirty, setIsPrefsDirty] = useState(false);
 
     const loadData = async () => {
@@ -100,10 +103,27 @@ export function UserMediaServersManager({
         loadData();
     }, []);
 
-    const handleToggleServer = (serverKey: string) => {
+    const handleToggleServer = (server: UserAvailableServer) => {
+        const isJellyfinOrEmby = server.serverType === "JELLYFIN" || server.serverType === "EMBY";
+        if (isTrialUser && isJellyfinOrEmby) {
+            setErr("Jellyfin & Emby multi-platform streaming is exclusively available for Full Members. Upgrade your membership pass to unlock.");
+            setTimeout(() => setErr(""), 5000);
+            return;
+        }
+
+        const isCurrentlyActive = selectedServerKeys.includes(server.serverKey) || selectedServerKeys.includes(server.serverId);
+        
+        // Auto-open setup guide modal when a Full Member toggles ON a Jellyfin or Emby server for the first time
+        if (!isCurrentlyActive && isJellyfinOrEmby) {
+            setGuideServer(server);
+            setGuideModalOpen(true);
+        }
+
         setIsDirty(true);
         setSelectedServerKeys(prev => 
-            prev.includes(serverKey) ? prev.filter(k => k !== serverKey) : [...prev, serverKey]
+            prev.includes(server.serverKey) 
+                ? prev.filter(k => k !== server.serverKey && k !== server.serverId) 
+                : [...prev, server.serverKey]
         );
     };
 
@@ -328,6 +348,20 @@ export function UserMediaServersManager({
                         </div>
                     )}
 
+                    {isTrialUser && (
+                        <div className="p-3.5 rounded-xl bg-purple-950/25 border border-purple-500/40 text-purple-200 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-sm">
+                            <div className="flex items-center gap-2.5 text-xs">
+                                <Lock className="h-4 w-4 text-purple-400 shrink-0" />
+                                <span className="leading-relaxed">
+                                    <strong>Jellyfin &amp; Emby multi-platform streaming</strong> is exclusively available for Full Members. Upgrade your membership pass to unlock.
+                                </span>
+                            </div>
+                            <Button size="sm" asChild className="h-7 text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white shrink-0 cursor-pointer">
+                                <a href="#billing">Upgrade Pass</a>
+                            </Button>
+                        </div>
+                    )}
+
                     {loading ? (
                         <div className="p-8 text-center space-y-2">
                             <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" />
@@ -389,15 +423,44 @@ export function UserMediaServersManager({
                                                 </div>
                                             </div>
 
-                                            <div className="flex items-center gap-3 self-end sm:self-auto">
+                                            <div className="flex items-center gap-2.5 self-end sm:self-auto flex-wrap">
+                                                {!isPlex && (
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() => {
+                                                            setGuideServer(server);
+                                                            setGuideModalOpen(true);
+                                                        }}
+                                                        className="h-7 text-xs font-semibold gap-1.5 border-border/60 hover:bg-white/[0.05] text-foreground cursor-pointer"
+                                                    >
+                                                        📖 Setup Guide
+                                                    </Button>
+                                                )}
+
                                                 <div className="flex items-center gap-2">
-                                                    <span className="text-xs font-semibold text-muted-foreground">
-                                                        {isServerActive ? "Enabled" : "Disabled"}
-                                                    </span>
-                                                    <Switch
-                                                        checked={isServerActive}
-                                                        onCheckedChange={() => handleToggleServer(server.serverKey)}
-                                                    />
+                                                    {isTrialUser && !isPlex ? (
+                                                        <>
+                                                            <Badge variant="outline" className="text-[10px] font-bold bg-purple-500/15 text-purple-300 border-purple-500/30">
+                                                                <Lock className="h-3 w-3 mr-1" /> Full Members Only
+                                                            </Badge>
+                                                            <Switch
+                                                                checked={false}
+                                                                disabled={true}
+                                                            />
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <span className="text-xs font-semibold text-muted-foreground">
+                                                                {isServerActive ? "Enabled" : "Disabled"}
+                                                            </span>
+                                                            <Switch
+                                                                checked={isServerActive}
+                                                                onCheckedChange={() => handleToggleServer(server)}
+                                                            />
+                                                        </>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
@@ -517,6 +580,17 @@ export function UserMediaServersManager({
                     </Button>
                 </CardFooter>
             </Card>
+
+            {guideServer && (
+                <MediaServerSetupGuideModal
+                    isOpen={guideModalOpen}
+                    onClose={() => setGuideModalOpen(false)}
+                    serverType={guideServer.serverType === "EMBY" ? "EMBY" : "JELLYFIN"}
+                    serverName={guideServer.serverName}
+                    serverUrl={guideServer.serverUrl}
+                    username={guideServer.serverType === "EMBY" ? (embyUsername || username) : (jellyfinUsername || username)}
+                />
+            )}
 
             {/* ========================================================================= */}
             {/* 3. STREAMING, PLAYBACK & ACCOUNT PREFERENCES (FULL MEMBERS) */}

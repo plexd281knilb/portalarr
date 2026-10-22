@@ -236,6 +236,16 @@ async function runTestSuite() {
             throw new Error("Legacy books_audiobooks should be split and not present in DEFAULT_ADDONS_CATALOG");
         }
 
+        const jellyfinAddon = defaultCatalog.find((a: any) => a.id === "jellyfin_access");
+        if (!jellyfinAddon || jellyfinAddon.icon !== "server" || jellyfinAddon.isFree !== true) {
+            throw new Error(`Expected jellyfin_access in DEFAULT_ADDONS_CATALOG, got: ${JSON.stringify(jellyfinAddon)}`);
+        }
+
+        const embyAddon = defaultCatalog.find((a: any) => a.id === "emby_access");
+        if (!embyAddon || embyAddon.icon !== "server" || embyAddon.isFree !== true) {
+            throw new Error(`Expected emby_access in DEFAULT_ADDONS_CATALOG, got: ${JSON.stringify(embyAddon)}`);
+        }
+
         // 2. Live Audiobooks Library Access Sync
         const testUser = await prisma.user.create({
             data: {
@@ -1268,6 +1278,7 @@ async function runTestSuite() {
             updateUserMediaServersAndLibrariesAction,
             updateUserAccountPreferencesAction
         } = await import("../src/app/media-server-actions");
+        const { getPlexSetupGuides, toggleFreeAddonAction } = await import("../src/app/actions");
         const { testMediaServerConnection } = await import("../src/lib/media-servers");
 
         // 1. MediaServer Model CRUD and Encryption
@@ -1368,6 +1379,56 @@ async function runTestSuite() {
             const parsedPrefs = JSON.parse(refreshedUser?.accountPreferences || "{}");
             if (parsedPrefs.qualityCap !== "720p_4mbps") {
                 throw new Error("Account preferences quality cap mismatch");
+            }
+
+            // 6. Step-by-Step Setup Guides Verification for Jellyfin and Emby
+            const allGuides = await getPlexSetupGuides();
+            const jellyfinGuide = allGuides.find((g: any) => g.id === "jellyfin");
+            if (!jellyfinGuide || !Array.isArray(jellyfinGuide.steps) || jellyfinGuide.steps.length < 4) {
+                throw new Error("Expected Jellyfin setup guide with at least 4 step-by-step instructions in getPlexSetupGuides");
+            }
+
+            const embyGuide = allGuides.find((g: any) => g.id === "emby");
+            if (!embyGuide || !Array.isArray(embyGuide.steps) || embyGuide.steps.length < 4) {
+                throw new Error("Expected Emby setup guide with at least 4 step-by-step instructions in getPlexSetupGuides");
+            }
+
+            // 7. Full-Member Gating & Trial Member Restriction Verification
+            const trialUser = await prisma.user.create({
+                data: {
+                    username: `test_trial_${Date.now()}`,
+                    email: `test_trial_${Date.now()}@example.com`,
+                    password: "mock_password_hash",
+                    role: "USER",
+                    status: "TRIAL",
+                    membershipTier: "TRIAL"
+                }
+            });
+
+            try {
+                // Mock test auth user header/cookie
+                process.env.PORTALARR_TEST_USER_ID = trialUser.id;
+                process.env.PORTALARR_TEST_AUTH = "true";
+
+                // Attempting to toggle Jellyfin or Emby on trial account must be rejected
+                const trialJellyfinToggle = await toggleFreeAddonAction("jellyfin_access", true);
+                if (trialJellyfinToggle.success) {
+                    throw new Error("Expected trial user toggle for jellyfin_access to be rejected");
+                }
+                if (!trialJellyfinToggle.error?.includes("exclusively available for Full Members")) {
+                    throw new Error(`Expected full member gating error message, got: ${trialJellyfinToggle.error}`);
+                }
+
+                const trialEmbyToggle = await toggleFreeAddonAction("emby_access", true);
+                if (trialEmbyToggle.success) {
+                    throw new Error("Expected trial user toggle for emby_access to be rejected");
+                }
+                if (!trialEmbyToggle.error?.includes("exclusively available for Full Members")) {
+                    throw new Error(`Expected full member gating error message, got: ${trialEmbyToggle.error}`);
+                }
+            } finally {
+                delete process.env.PORTALARR_TEST_USER_ID;
+                await prisma.user.delete({ where: { id: trialUser.id } }).catch(() => {});
             }
         } finally {
             await prisma.user.delete({ where: { id: memberUser.id } }).catch(() => {});

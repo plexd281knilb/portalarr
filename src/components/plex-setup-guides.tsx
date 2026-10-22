@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { BookOpen, Tv, Tv2, Flame, Monitor, Smartphone, Globe, CheckCircle2, Sparkles, AlertCircle, ExternalLink } from "lucide-react";
+import { BookOpen, Tv, Tv2, Flame, Monitor, Smartphone, Globe, CheckCircle2, Sparkles, AlertCircle, ExternalLink, Server } from "lucide-react";
 import { getPlexSetupGuides } from "@/app/actions";
 import Link from "next/link";
 
@@ -38,6 +38,8 @@ export default function PlexSetupGuides({ trigger }: PlexSetupGuidesProps = {}) 
             case "googletv": return <Smartphone className="h-4 w-4 text-emerald-400" />;
             case "mobile": return <Smartphone className="h-4 w-4 text-pink-400" />;
             case "web": return <Globe className="h-4 w-4 text-amber-400" />;
+            case "jellyfin": return <Server className="h-4 w-4 text-purple-400" />;
+            case "emby": return <Server className="h-4 w-4 text-emerald-400" />;
             default: return <Tv className="h-4 w-4 text-primary" />;
         }
     };

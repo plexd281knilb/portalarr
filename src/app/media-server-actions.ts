@@ -28,6 +28,12 @@ function safeRevalidate(path: string) {
 async function verifySessionUser(): Promise<any> {
     await ensureSchemaColumns();
     if (process.env.PORTALARR_TEST_AUTH === "true") {
+        if (process.env.PORTALARR_TEST_USER_ID) {
+            const specificUser = await prisma.user.findUnique({
+                where: { id: process.env.PORTALARR_TEST_USER_ID }
+            });
+            if (specificUser) return specificUser;
+        }
         const testUser = await prisma.user.findFirst({
             where: { role: "ADMIN" }
         }) || await prisma.user.findFirst();
@@ -475,7 +481,9 @@ export interface UserAvailableServer {
     serverId: string;
     serverName: string;
     serverType: "PLEX" | "JELLYFIN" | "EMBY";
+    serverUrl?: string;
     isSelected: boolean;
+    isLockedForTrial?: boolean;
     allowedLibraries: {
         libraryKey: string; // e.g. "plex:cuid:1" or "jellyfin:cuid:movies"
         id: string;
@@ -669,13 +677,15 @@ export async function getUserMediaServersAndLibrariesAction(bypassCache = false)
             const serverKey = `${serverType.toLowerCase()}:${m.id}`;
 
             // Check server eligibility
-            if (isTrial && !m.allowTrialAccess) continue;
             if (!m.allowUserSelfSelect && user.role !== "ADMIN" && !userAllowedServerKeys?.includes(serverKey)) {
                 continue;
             }
             if (userAllowedServerKeys && !userAllowedServerKeys.includes(serverKey) && user.role !== "ADMIN") {
                 continue;
             }
+
+            // Full-Member gating: trial members have Jellyfin/Emby servers locked
+            const isLockedForTrial = isTrial && user.role !== "ADMIN" && user.role !== "SUPER_USER";
 
             let rawAllowedList: string[] | null = null;
             if (m.allowedLibraryIds) {
@@ -725,16 +735,18 @@ export async function getUserMediaServersAndLibrariesAction(bypassCache = false)
                     };
                 });
 
-            const isServerSelected = selectedServerKeys.length > 0 
+            const isServerSelected = !isLockedForTrial && (selectedServerKeys.length > 0 
                 ? selectedServerKeys.includes(serverKey) || selectedServerKeys.includes(m.id)
-                : true;
+                : true);
 
             resultServers.push({
                 serverKey,
                 serverId: m.id,
                 serverName: m.name,
                 serverType,
+                serverUrl: m.url || "",
                 isSelected: isServerSelected,
+                isLockedForTrial,
                 allowedLibraries
             });
         }
@@ -791,6 +803,12 @@ export async function updateUserMediaServersAndLibrariesAction(payload: {
         const accessData = await getUserMediaServersAndLibrariesAction();
         if (!accessData.success) {
             return { success: false, error: "Failed to verify server authorization" };
+        }
+
+        // Full-Member restriction: strictly strip Jellyfin & Emby selections for trial users
+        if (accessData.isTrial && user.role !== "ADMIN" && user.role !== "SUPER_USER") {
+            payload.selectedServerKeys = payload.selectedServerKeys.filter(k => !k.startsWith("jellyfin:") && !k.startsWith("emby:"));
+            payload.selectedMediaLibraryKeys = payload.selectedMediaLibraryKeys.filter(k => !k.startsWith("jellyfin:") && !k.startsWith("emby:"));
         }
 
         const validServerKeySet = new Set(accessData.servers.map(s => s.serverKey));

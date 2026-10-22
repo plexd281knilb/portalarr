@@ -53,6 +53,18 @@ Portalarr uses a **Modern Cinematic Dark Theme** powered by Tailwind CSS, Radix 
 - **User Self-Selection & Tier Capabilities**:
   - In User Profile (`UserMediaServersManager`), render an informative Tier Capabilities Banner highlighting Full Member privileges (unlimited library selection, playback quality caps, audio/subtitle language preferences, email digests).
   - Enforce server-side whitelist validation: any client tampering attempting to select unauthorized servers or hidden libraries is strictly filtered out before database persistence and API policy sync.
+- **Strict Full-Member Gating for Jellyfin & Emby**:
+  - Emby and Jellyfin server options and add-ons (`jellyfin_access`, `emby_access`) are **strictly restricted to Full Members** (and Super Users / Admins).
+  - For Trial Members (`isTrialUser`), Jellyfin and Emby switches are locked/disabled (`checked={false} disabled={true}`) with a `Full Members Only` lock badge and a prominent locked informational banner: "Jellyfin & Emby multi-platform streaming is exclusively available for Full Members. Upgrade your membership pass to unlock."
+  - Backend enforcement in `updateUserMediaServersAndLibrariesAction` and `toggleFreeAddonAction` strictly blocks and strips Jellyfin/Emby selections for trial users.
+- **Interactive Step-by-Step Setup Guides (`MediaServerSetupGuideModal` & `PlexSetupGuides`)**:
+  - Accessible via prominent "📖 Setup Guide" buttons on each Jellyfin/Emby card in `UserMediaServersManager`, inside the Free Add-ons catalog in `profile/page.tsx`, and auto-opened whenever a Full Member toggles ON a Jellyfin or Emby server for the first time.
+  - Dedicated tabs in `PlexSetupGuides` (`getPlexSetupGuides()`) for Jellyfin and Emby with platform device icons.
+  - 4-step interactive checklist:
+    1. **Connect to Server Address**: Copyable server URL with 1-click clipboard copy and web client launch.
+    2. **Sign In with Your Account**: Copyable configured username and password instructions.
+    3. **Recommended Client Apps**: Swiftfin (Apple TV & iOS), official Jellyfin/Emby on Roku Channel Store, Fire TV, Android TV, Google TV, and web browsers.
+    4. **Direct Play Optimization**: Instructions to set Remote Quality / Bitrate to Maximum / Auto for 100% Direct Play.
 
 ### 4. Button-Led User Dashboard Architecture & Role Parity (`UserLaunchpad`)
 - **DRY Launchpad Pattern**: Replace lengthy, text-heavy vertical card stacks with the touch-friendly `UserLaunchpad` (`src/components/dashboard/user-launchpad.tsx`) positioned immediately below the dashboard header.
