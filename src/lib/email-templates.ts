@@ -1156,7 +1156,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         category: "BROADCAST",
         defaultSubject: "🚀 Welcome to the New DomsHomeLab (d281knilb) Portal — How to Log In & Everything You Can Do!",
         defaultBody: `<h2 style="margin-top: 0; color: #0f172a;">Welcome to the New DomsHomeLab Portal, {username}! 🚀</h2>
-<p>We have officially launched our brand-new, all-in-one <strong>DomsHomeLab (d281knilb)</strong> portal! Instead of juggling multiple links or messaging whenever a movie is missing or a stream buffers, you now have a single unified command center for movies, TV shows, e-books, audiobooks, live stream diagnostics, and account management.</p>
+<p style="color: #334155; font-size: 14.5px; line-height: 1.6;">We have officially launched our brand-new, all-in-one <strong>DomsHomeLab (d281knilb)</strong> portal! Instead of juggling multiple links or messaging whenever a movie is missing or a stream buffers, you now have a single unified command center for movies, TV shows, e-books, audiobooks, live stream diagnostics, and account management.</p>
 
 <div style="background: linear-gradient(135deg, #eef2ff 0%, #f8fafc 100%); border: 1px solid #c7d2fe; border-left: 4px solid #4f46e5; padding: 18px 20px; border-radius: 10px; margin: 22px 0;">
     <p style="margin: 0 0 8px 0; font-size: 13px; font-weight: 800; color: #4338ca; text-transform: uppercase; letter-spacing: 0.5px;">🔑 Step 1: How to Log In &amp; Get Started</p>
@@ -1180,42 +1180,37 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px;">
     <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">🎬 1. Request Any Movie or TV Show in 1 Click (<a href="{appUrl}/requests" style="color: #4f46e5; text-decoration: none;">/requests</a> &amp; <a href="{appUrl}/discover" style="color: #4f46e5; text-decoration: none;">/discover</a>)</p>
-    <p style="margin: 0; font-size: 13.5px; color: #475569;">Can't find a movie or show on Plex? Search for any title or browse trending releases, click <strong>Request</strong>, and the server will automatically grab it and add it to Plex—usually within minutes! Track live download progress right from the home dashboard.</p>
+    <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">Can't find a movie or show on Plex? Search for any title or browse trending releases, click <strong>Request</strong>, and track its real-time status (<strong>Searching &rarr; Downloading &rarr; Available on Plex</strong>) right on the Media Requests page. You'll receive an automated notification alert as soon as it's ready to watch!</p>
 </div>
 
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px;">
     <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">📺 2. My Plex Hub, Stream Quality Doctor &amp; Speed Test (<a href="{appUrl}" style="color: #4f46e5; text-decoration: none;">Home Dashboard</a>)</p>
-    <p style="margin: 0; font-size: 13.5px; color: #475569;">See your active streams, personal watch stats, and which Plex servers you have access to. Run the built-in <strong>Server Speed Test</strong> and use the <strong>Stream Quality Doctor &amp; Device Setup Guides</strong> (Apple TV, Roku, Fire TV, Samsung/LG Smart TVs) to fix default 720p quality caps and unlock smooth <strong>1080p &amp; 4K Direct Play</strong> without buffering.</p>
+    <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">See your active streams, personal watch stats, and which Plex servers you have access to. Run the built-in <strong>Server Speed Test</strong> and use the <strong>Stream Quality Doctor &amp; Device Setup Guides</strong> (Apple TV, Roku, Fire TV, Samsung/LG Smart TVs) to fix default 720p quality caps and unlock smooth <strong>1080p &amp; 4K Direct Play</strong> without buffering.</p>
 </div>
 
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px;">
     <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">🤖 3. 24/7 AI Server Assistant &amp; Auto-Repair (<a href="{appUrl}" style="color: #4f46e5; text-decoration: none;">Home Dashboard</a>)</p>
-    <p style="margin: 0; font-size: 13.5px; color: #475569;">Having playback trouble? Use the 1-click quick chips right on the dashboard—<strong>⚡ Buffering</strong>, <strong>🔊 Quiet Dialogue</strong>, <strong>💬 Subtitles</strong>, <strong>📺 Unlock 4K/1080p</strong>, <strong>🎬 Missing Media</strong>, or <strong>📚 Book Recommendations</strong>. The AI Assistant inspects your live stream in real time and can even automatically replace a broken movie/episode file or prefill a support ticket for you.</p>
+    <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">Having playback trouble? Use the 1-click quick chips right on the dashboard—<strong>⚡ Buffering</strong>, <strong>🔊 Quiet Dialogue</strong>, <strong>💬 Subtitles</strong>, <strong>📺 Unlock 4K/1080p</strong>, <strong>🎬 Missing Media</strong>, or <strong>📚 Book Recommendations</strong>. The AI Assistant inspects your live stream in real time and can even automatically replace a broken movie/episode file or prefill a support ticket for you.</p>
 </div>
 
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px;">
     <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">📚 4. E-Book &amp; Audiobook Library + 1-Click Send-to-Kindle (<a href="{appUrl}/library" style="color: #4f46e5; text-decoration: none;">/library</a>)</p>
-    <p style="margin: 0; font-size: 13.5px; color: #475569;">Browse and request e-books and audiobooks! Read directly in your browser using the <strong>Kindle Paperwhite Web Reader</strong>, listen with the <strong>Web Audiobook Player</strong> (with chapter navigation &amp; speed controls), or send any book straight to your Kindle e-reader in 1 click.</p>
+    <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">Browse and request e-books and audiobooks! Read directly in your browser using the <strong>Kindle Paperwhite Web Reader</strong> or send any e-book straight to your Kindle e-reader in 1 click. Audiobooks are available right inside your <strong>Plex app</strong>, companion audiobook players (<strong>Prologue</strong> on iOS, <strong>Chronicle</strong> on Android), or through the portal's built-in <strong>Web Audiobook Player</strong> with full chapter navigation and speed controls.</p>
 </div>
 
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px;">
-    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">👨‍👩‍👧‍👦 5. Household Sub-Accounts, Kids Profiles &amp; Library Customization (<a href="{appUrl}/settings/profile" style="color: #4f46e5; text-decoration: none;">/settings/profile</a>)</p>
-    <p style="margin: 0; font-size: 13.5px; color: #475569;">Choose which Plex libraries appear on your home screen (Movies, TV, Anime, 4K, Kids, Audiobooks) and create dedicated <strong>Household Sub-Accounts</strong> (such as a Kids room or Living Room TV profile) with custom content rating limits (G, PG, PG-13) and IMDb parental filters.</p>
+    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">⚙️ 5. Server &amp; Library Customization &amp; Streaming Preferences (<a href="{appUrl}/settings/profile" style="color: #4f46e5; text-decoration: none;">/settings/profile</a>)</p>
+    <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">Select which admin-whitelisted media servers and libraries you want active on your account (Plex, Jellyfin, and Emby), and customize your default streaming preferences, remote quality caps, and preferred audio and subtitle languages to match your home setup.</p>
 </div>
 
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px;">
-    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">⏳ 6. "Leaving Soon" Protection (<a href="{appUrl}" style="color: #4f46e5; text-decoration: none;">Home Dashboard</a>)</p>
-    <p style="margin: 0; font-size: 13.5px; color: #475569;">To keep storage healthy, older unwatched titles rotate through the <strong>Leaving Soon</strong> row before cleanup. If you see a movie or series you still plan to watch, click <strong>Keep / Protect</strong> on the portal (or start watching it) so it stays on the server!</p>
-</div>
-
-<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px;">
-    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">🎁 7. Membership, Billing &amp; Refer-a-Friend Rewards (<a href="{appUrl}/settings/profile" style="color: #4f46e5; text-decoration: none;">/settings/profile</a>)</p>
-    <p style="margin: 0; font-size: 13.5px; color: #475569;">Check your membership status and payment options anytime in your profile. Want to invite a friend? Share your personal referral link (<code style="background: #e2e8f0; padding: 1px 5px; border-radius: 4px; color: #0f172a;">{appUrl}/join?ref={username}</code>)—your friend gets a free trial, and you earn <strong>1 Free Month ($15 credit)</strong> for every friend who joins!</p>
+    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">💳 6. Membership Status &amp; Billing Details (<a href="{appUrl}/settings/profile" style="color: #4f46e5; text-decoration: none;">/settings/profile</a>)</p>
+    <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">Check your membership tier, active pass, renewal date, and preferred payment methods (Venmo, PayPal, Cash App, Zelle) anytime in your profile.</p>
 </div>
 
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 20px;">
-    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">💬 8. Support Tickets &amp; Discord Integration (<a href="{appUrl}/tickets" style="color: #4f46e5; text-decoration: none;">/tickets</a>)</p>
-    <p style="margin: 0; font-size: 13.5px; color: #475569;">Link your Discord account in your profile for instant request notifications and community roles, or open a support ticket anytime at <a href="{appUrl}/tickets" style="color: #4f46e5; text-decoration: none;">{appUrl}/tickets</a> if you ever need a hand.</p>
+    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">💬 7. Support Tickets &amp; Discord Integration (<a href="{appUrl}/tickets" style="color: #4f46e5; text-decoration: none;">/tickets</a>)</p>
+    <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">Link your Discord account in your profile for instant request notifications and community roles, or open a support ticket anytime at <a href="{appUrl}/tickets" style="color: #4f46e5; text-decoration: none;">{appUrl}/tickets</a> if you ever need a hand.</p>
 </div>
 
 <div style="text-align: center; margin: 28px 0 18px 0;">
