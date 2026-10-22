@@ -1136,8 +1136,8 @@ Portalarr features an automated, real-time versioning, branch identification, an
     - Tickets: Rose (`text-rose-400`)
 - **AI Assistant Hero Card**:
   - Full-width hero container with dual-tier typography, glowing bot icon, and live pulse status badge (`24/7 AI Diagnostic Engine Active`).
-- **Grouped Curation Studios**:
-  - Administration links group Kometa, Agregarr, Maintainerr, and Tagging under an accordion subsection.
+- **Top-Level Curation Studios Section**:
+  - Rendered as first-class, unindented `NavItem` elements with zero accordion dropdowns and pixel-perfect alignment across Desktop and Mobile sidebars.
 - **Settings & Inline Logs Pill**:
   - Quick action pill jumping directly to `/settings?tab=logs`.
 

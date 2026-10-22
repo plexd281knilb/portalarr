@@ -27,7 +27,6 @@ import {
   Activity, 
   Layers, 
   Bot,
-  ChevronDown
 } from "lucide-react";
 
 interface SidebarNavContentProps {
@@ -79,12 +78,10 @@ function SidebarNavContent({ onItemClick }: SidebarNavContentProps) {
   const currentTab = searchParams?.get("tab");
   const isLogsActive = pathname === "/settings" && currentTab === "logs";
   const isSettingsActive = pathname.startsWith("/settings") && pathname !== "/settings/profile" && !isLogsActive;
-  const isCurationActive = pathname.startsWith("/curation");
 
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSuperUser, setIsSuperUser] = useState(false);
   const [isTrial, setIsTrial] = useState(false);
-  const [curationOpen, setCurationOpen] = useState(true);
 
   useEffect(() => {
     getSession().then((session) => {
@@ -107,11 +104,6 @@ function SidebarNavContent({ onItemClick }: SidebarNavContentProps) {
     });
   }, [pathname]);
 
-  useEffect(() => {
-    if (isCurationActive) {
-      setCurationOpen(true);
-    }
-  }, [isCurationActive]);
 
   return (
     <div className="space-y-3">
@@ -269,6 +261,66 @@ function SidebarNavContent({ onItemClick }: SidebarNavContentProps) {
         </div>
       )}
 
+      {/* Curation Studios Section */}
+      {isAdmin && (
+        <div className="pt-1">
+          <div className="border-t border-border/30 pt-3 pb-1.5 px-2.5 flex items-center justify-between text-[10px] font-bold tracking-wider uppercase text-muted-foreground/70 select-none">
+            <div className="flex items-center gap-1.5">
+              <Sparkles className="h-3 w-3 text-purple-400" />
+              <span>Curation Studios</span>
+            </div>
+            <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-purple-500/15 text-purple-300 border border-purple-500/25">
+              4
+            </span>
+          </div>
+          <div className="space-y-1">
+            <NavItem
+              href="/curation/kometa"
+              label="Kometa Overlays"
+              icon={Sparkles}
+              isActive={pathname === "/curation" || pathname.startsWith("/curation/kometa")}
+              iconColor="text-violet-400 group-hover:text-violet-300"
+              activeColorClass="bg-violet-500/15 text-violet-300 border-violet-500 shadow-[0_0_10px_rgba(139,92,246,0.2)]"
+              inactiveHoverClass="hover:bg-violet-950/25 hover:text-violet-200"
+              onClick={onItemClick}
+            />
+
+            <NavItem
+              href="/curation/agregarr"
+              label="Agregarr Hubs"
+              icon={Film}
+              isActive={pathname.startsWith("/curation/agregarr")}
+              iconColor="text-pink-400 group-hover:text-pink-300"
+              activeColorClass="bg-pink-500/15 text-pink-300 border-pink-500 shadow-[0_0_10px_rgba(236,72,153,0.2)]"
+              inactiveHoverClass="hover:bg-pink-950/25 hover:text-pink-200"
+              onClick={onItemClick}
+            />
+
+            <NavItem
+              href="/curation/prune"
+              label="Maintainerr Prune"
+              icon={Trash2}
+              isActive={pathname.startsWith("/curation/prune")}
+              iconColor="text-rose-400 group-hover:text-rose-300"
+              activeColorClass="bg-rose-500/15 text-rose-300 border-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.2)]"
+              inactiveHoverClass="hover:bg-rose-950/25 hover:text-rose-200"
+              onClick={onItemClick}
+            />
+
+            <NavItem
+              href="/curation/tagging"
+              label="Tagging Studio"
+              icon={Tag}
+              isActive={pathname.startsWith("/curation/tagging")}
+              iconColor="text-amber-400 group-hover:text-amber-300"
+              activeColorClass="bg-amber-500/15 text-amber-300 border-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.2)]"
+              inactiveHoverClass="hover:bg-amber-950/25 hover:text-amber-200"
+              onClick={onItemClick}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Administration Section */}
       {isAdmin && (
         <div className="pt-1">
@@ -313,95 +365,6 @@ function SidebarNavContent({ onItemClick }: SidebarNavContentProps) {
               inactiveHoverClass="hover:bg-emerald-950/25 hover:text-emerald-200"
               onClick={onItemClick}
             />
-
-            {/* Curation Studios Group */}
-            <div className="pt-1.5">
-              <button
-                type="button"
-                onClick={() => setCurationOpen(!curationOpen)}
-                className="w-full flex items-center justify-between px-2.5 py-1.5 text-[10px] font-bold tracking-wider uppercase text-muted-foreground/70 hover:text-foreground transition-colors group select-none rounded-md hover:bg-white/[0.04]"
-              >
-                <div className="flex items-center gap-1.5">
-                  <Sparkles className="h-3.5 w-3.5 text-purple-400 group-hover:text-purple-300 transition-colors" />
-                  <span className="text-purple-300/90 group-hover:text-purple-200">Curation Studios</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                    4
-                  </span>
-                  <ChevronDown
-                    className={cn(
-                      "h-3 w-3 text-muted-foreground/70 transition-transform duration-200",
-                      !curationOpen && "-rotate-90"
-                    )}
-                  />
-                </div>
-              </button>
-
-              {curationOpen && (
-                <div className="space-y-1 pl-2.5 ml-2.5 border-l border-purple-500/20 mt-1">
-                  <Link href="/curation/kometa" onClick={onItemClick} className="block w-full">
-                    <Button
-                      variant="ghost"
-                      className={cn(
-                        "w-full justify-start text-xs font-semibold h-8 rounded-md transition-all duration-150 border group select-none",
-                        (pathname === "/curation" || pathname.startsWith("/curation/kometa"))
-                          ? "bg-violet-500/15 text-violet-300 border-violet-500/40 font-bold shadow-[0_0_8px_rgba(139,92,246,0.15)]"
-                          : "text-violet-400/80 hover:text-violet-200 hover:bg-violet-950/25 border-transparent"
-                      )}
-                    >
-                      <Sparkles className="mr-2 h-3.5 w-3.5 text-violet-400 group-hover:text-violet-300 shrink-0" />
-                      <span className="truncate">Kometa Overlays</span>
-                    </Button>
-                  </Link>
-
-                  <Link href="/curation/agregarr" onClick={onItemClick} className="block w-full">
-                    <Button
-                      variant="ghost"
-                      className={cn(
-                        "w-full justify-start text-xs font-semibold h-8 rounded-md transition-all duration-150 border group select-none",
-                        pathname.startsWith("/curation/agregarr")
-                          ? "bg-pink-500/15 text-pink-300 border-pink-500/40 font-bold shadow-[0_0_8px_rgba(236,72,153,0.15)]"
-                          : "text-pink-400/80 hover:text-pink-200 hover:bg-pink-950/25 border-transparent"
-                      )}
-                    >
-                      <Film className="mr-2 h-3.5 w-3.5 text-pink-400 group-hover:text-pink-300 shrink-0" />
-                      <span className="truncate">Agregarr Hubs</span>
-                    </Button>
-                  </Link>
-
-                  <Link href="/curation/prune" onClick={onItemClick} className="block w-full">
-                    <Button
-                      variant="ghost"
-                      className={cn(
-                        "w-full justify-start text-xs font-semibold h-8 rounded-md transition-all duration-150 border group select-none",
-                        pathname.startsWith("/curation/prune")
-                          ? "bg-rose-500/15 text-rose-300 border-rose-500/40 font-bold shadow-[0_0_8px_rgba(244,63,94,0.15)]"
-                          : "text-rose-400/80 hover:text-rose-200 hover:bg-rose-950/25 border-transparent"
-                      )}
-                    >
-                      <Trash2 className="mr-2 h-3.5 w-3.5 text-rose-400 group-hover:text-rose-300 shrink-0" />
-                      <span className="truncate">Maintainerr Prune</span>
-                    </Button>
-                  </Link>
-
-                  <Link href="/curation/tagging" onClick={onItemClick} className="block w-full">
-                    <Button
-                      variant="ghost"
-                      className={cn(
-                        "w-full justify-start text-xs font-semibold h-8 rounded-md transition-all duration-150 border group select-none",
-                        pathname.startsWith("/curation/tagging")
-                          ? "bg-amber-500/15 text-amber-300 border-amber-500/40 font-bold shadow-[0_0_8px_rgba(245,158,11,0.15)]"
-                          : "text-amber-400/80 hover:text-amber-200 hover:bg-amber-950/25 border-transparent"
-                      )}
-                    >
-                      <Tag className="mr-2 h-3.5 w-3.5 text-amber-400 group-hover:text-amber-300 shrink-0" />
-                      <span className="truncate">Tagging Studio</span>
-                    </Button>
-                  </Link>
-                </div>
-              )}
-            </div>
 
             {/* Consolidated System Settings & Logs */}
             <div className="pt-2">

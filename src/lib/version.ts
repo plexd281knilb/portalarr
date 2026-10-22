@@ -21,7 +21,7 @@ export interface VersionInfo {
  * Safe to call on both client and server components.
  */
 export function getBuildTelemetry(): VersionInfo {
-    const rawVersion = process.env.NEXT_PUBLIC_PORTALARR_VERSION || packageJson.version || "1.1.0";
+    const rawVersion = process.env.NEXT_PUBLIC_PORTALARR_VERSION || packageJson.version || "1.2.1";
     
     // Resolve branch: environment variable -> fallback to version string hints
     let rawBranch = (process.env.NEXT_PUBLIC_GIT_BRANCH || process.env.GIT_BRANCH || "").trim();
