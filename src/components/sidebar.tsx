@@ -76,7 +76,7 @@ function SidebarNavContent({ onItemClick }: SidebarNavContentProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const currentTab = searchParams?.get("tab");
-  const isLogsActive = pathname === "/settings" && currentTab === "logs";
+  const isLogsActive = pathname === "/settings" && (currentTab === "logs" || searchParams?.get("subtab") === "logs");
   const isSettingsActive = pathname.startsWith("/settings") && pathname !== "/settings/profile" && !isLogsActive;
 
   const [isAdmin, setIsAdmin] = useState(false);

@@ -28,7 +28,36 @@ Portalarr uses a **Modern Cinematic Dark Theme** powered by Tailwind CSS, Radix 
   - 🔴 **Crimson / Rose (`rose-400` / `rose-500`)**: Media Requests (Seerr/Overseerr engine), prune deletions, errors, stream terminations, declined requests.
   - 🟠 **Vibrant Orange (`orange-400` / `orange-500`)**: General setup, alert banners, server configuration.
 
-### 2. Multi-Tab Navigation & Active State Contrast
+### 2. Multi-Tab Navigation, 5-Hub Settings Architecture & Active State Contrast
+- **System Settings 5-Hub Architecture (`src/app/settings/page.tsx`)**:
+  Settings are consolidated into 5 high-level mission hubs, each organized with responsive sub-tab switchers, dirty-state indicators, and full backward-compatible routing:
+  1. **General & Platform (`general`)**:
+     - `platform`: Web & Automation Paths (Base URL, Webhook URL, CORS, Local Storage Paths, Public Hostname).
+     - `announcements`: Announcements & Roadmap (Feature broadcast banner, maintenance alert, roadmap cards).
+     - `logs`: Live System Logs (Real-time colored terminal log viewer, category filters, auto-refresh toggle).
+  2. **Servers & Fleet (`servers`)**:
+     - `fleet`: Server Fleet & Multi-Platform (Plex, Jellyfin, Emby server fleet, self-selection toggles, library discovery).
+     - `plex-admin`: Master Plex & Direct Snapshots (Primary PMS URL, Admin token, direct connection tester, cache flush).
+     - `plex-cluster`: Plex Cluster & Auto-Discovery (Multi-server cluster nodes, auto-discovery worker, monitored server toggles).
+     - `telemetry`: Historical Watch & Host Telemetry (Watch session tracking, sharing detection thresholds, Glances host hardware endpoints).
+  3. **Access & Members (`access`)**:
+     - Access Control, Admin Approval Gates, User Accounts, Role Assignments, and Pending Action Reviews (`<AccessSettingsPage />`).
+  4. **Integrations & Servarr (`integrations`)**:
+     - `servarr`: Servarr Stack & Downloaders (Radarr, Sonarr, Lidarr, Readarr, SABnzbd, qBittorrent connection testing and API keys).
+     - `requests`: Media Requests (Seerr / Jellyseerr / Overseerr synchronization, auto-approval rules, default request limits).
+     - `ai`: AI Agent & Curation Keys (Google Gemini API keys, OpenAI tokens, Kometa, Agregarr, Maintainerr curation webhooks).
+  5. **Communications & Alerts (`communications`)**:
+     - `smtp`: Global SMTP & Kindle Delivery (Outbound mail server, SMTP credentials, TLS/SSL, Amazon Send-to-Kindle address).
+     - `broadcast`: Broadcasts & Notification Templates (12 granular notification templates, Markdown editor, test email dispatches).
+     - `discord`: Discord Bot & Automation (Bot token, Guild ID, channel mappings for alerts/status/requests, role assignments).
+
+- **Sub-Tab Switcher Pattern & URL Synchronization**:
+  - Top hubs are switched via `<TabsList>` with active semantic brand tokens (`orange`, `blue`, `emerald`, `rose`, `indigo`).
+  - Active sub-tabs use secondary pill buttons (`variant="default"` when active with brand glow, `variant="outline"` when inactive).
+  - Dirty state tracking (`hasChanges`) highlights both the parent hub pill and the active sub-tab pill with amber warning accents (`border-amber-500/70 shadow-[0_0_15px_rgba(245,158,11,0.2)]`).
+  - Navigation guards prompt confirmation if unsaved changes exist before switching tabs or leaving the page.
+  - Deep-link and backward-compatible URL query routing: `/settings?tab=general&subtab=logs` or legacy parameters (`/settings?tab=logs`, `/settings?tab=monitoring`, `/settings?tab=beta`, `/settings?tab=emails`, `/settings?tab=discord`) automatically resolve to their respective parent hub and sub-tab.
+
 - **Semantic Tab Accents**: Tabs in settings or dashboards must never rely on monochrome/desaturated `text-primary` in dark mode. Every tab must specify its distinct brand color token for its icon, hover ring/shadow, and active selection state:
   - **General & Setup**: `text-orange-400`, `hover:ring-orange-400/80`, `data-[state=active]:text-orange-400 data-[state=active]:bg-orange-500/10 data-[state=active]:border-orange-500/40`
   - **Media Servers**: `text-blue-400`, `hover:ring-blue-400/80`, `data-[state=active]:text-blue-400 data-[state=active]:bg-blue-500/10 data-[state=active]:border-blue-500/40`

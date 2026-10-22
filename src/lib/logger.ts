@@ -70,7 +70,7 @@ const logFilePath = path.join(dataDir, 'system_logs.jsonl');
 const buildMarkerFilePath = path.join(dataDir, '.portalarr_build_id');
 
 function getCurrentBuildIdentifier(): string {
-    const ver = process.env.PORTALARR_BUILD_VERSION || process.env.NEXT_PUBLIC_PORTALARR_VERSION || '1.2.5';
+    const ver = process.env.PORTALARR_BUILD_VERSION || process.env.NEXT_PUBLIC_PORTALARR_VERSION || '1.3.0';
     const branch = process.env.NEXT_PUBLIC_GIT_BRANCH || process.env.GIT_BRANCH || '';
     const sha = process.env.NEXT_PUBLIC_GIT_SHA || process.env.GIT_SHA || '';
     const buildNum = process.env.NEXT_PUBLIC_BUILD_NUMBER || process.env.BUILD_NUMBER || '';

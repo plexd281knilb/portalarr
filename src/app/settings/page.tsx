@@ -92,22 +92,81 @@ function SettingsPageContent() {
     const pathname = usePathname();
     const searchParams = useSearchParams();
     const activeTabParam = searchParams.get("tab");
+    const activeSubTabParam = searchParams.get("subtab");
+
+    function resolveHubAndSubTab(tabParam: string | null, subTabParam: string | null): { hub: string; subTab: string } {
+        if (!tabParam) return { hub: "general", subTab: subTabParam || "platform" };
+        const t = tabParam.toLowerCase();
+        if (t === "general" || t === "platform") return { hub: "general", subTab: subTabParam || "platform" };
+        if (t === "announcements" || t === "beta" || t === "roadmap") return { hub: "general", subTab: "announcements" };
+        if (t === "logs") return { hub: "general", subTab: "logs" };
+
+        if (t === "servers" || t === "fleet") return { hub: "servers", subTab: subTabParam || "fleet" };
+        if (t === "plex" || t === "plex-admin") return { hub: "servers", subTab: "plex-admin" };
+        if (t === "plex-cluster") return { hub: "servers", subTab: "plex-cluster" };
+        if (t === "telemetry" || t === "tautulli" || t === "glances") return { hub: "servers", subTab: "telemetry" };
+
+        if (t === "access" || t === "users" || t === "referrals" || t === "onboarding" || t === "scraper" || t === "approvals") {
+            return { hub: "access", subTab: "" };
+        }
+
+        if (t === "integrations" || t === "servarr" || t === "arr" || t === "monitoring") {
+            return { hub: "integrations", subTab: subTabParam || "servarr" };
+        }
+        if (t === "requests" || t === "seerr") return { hub: "integrations", subTab: "requests" };
+        if (t === "ai" || t === "curation" || t === "googlebooks") return { hub: "integrations", subTab: "ai" };
+
+        if (t === "communications" || t === "emails" || t === "smtp") {
+            return { hub: "communications", subTab: subTabParam || "smtp" };
+        }
+        if (t === "broadcast" || t === "templates") return { hub: "communications", subTab: "broadcast" };
+        if (t === "discord") return { hub: "communications", subTab: "discord" };
+
+        return { hub: "general", subTab: "platform" };
+    }
+
+    function getDefaultSubTab(hub: string): string {
+        switch (hub) {
+            case "general": return "platform";
+            case "servers": return "fleet";
+            case "integrations": return "servarr";
+            case "communications": return "smtp";
+            default: return "";
+        }
+    }
+
     const [activeTab, setActiveTab] = useState("general");
+    const [hubSubTabs, setHubSubTabs] = useState<Record<string, string>>({
+        general: "platform",
+        servers: "fleet",
+        integrations: "servarr",
+        communications: "smtp",
+    });
 
     useEffect(() => {
         const savedTab = localStorage.getItem("settings-active-tab");
-        if (activeTabParam) {
-            setActiveTab(activeTabParam);
-        } else if (savedTab) {
-            setActiveTab(savedTab);
-            const params = new URLSearchParams(window.location.search);
-            params.set("tab", savedTab);
-            router.replace(`${pathname}?${params.toString()}`);
-        } else {
-            setActiveTab("general");
-        }
-    }, [activeTabParam, router, pathname]);
+        const resolved = resolveHubAndSubTab(activeTabParam || savedTab, activeSubTabParam);
+        setActiveTab(resolved.hub);
 
+        setHubSubTabs(prev => {
+            const next = { ...prev };
+            ["general", "servers", "integrations", "communications"].forEach(h => {
+                const savedSub = localStorage.getItem(`settings-subtab-${h}`);
+                if (savedSub) next[h] = savedSub;
+            });
+            if (resolved.subTab) {
+                next[resolved.hub] = resolved.subTab;
+            }
+            return next;
+        });
+
+        if (!activeTabParam && savedTab) {
+            const params = new URLSearchParams(window.location.search);
+            params.set("tab", resolved.hub);
+            if (resolved.subTab) params.set("subtab", resolved.subTab);
+            router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+        }
+    }, [activeTabParam, activeSubTabParam, router, pathname]);
     const [loading, setLoading] = useState(true);
     
     // Data States
@@ -355,9 +414,13 @@ function SettingsPageContent() {
     }
 
     const hasUnsavedChanges = unsavedSections.length > 0;
-    const isGeneralTabDirty = isAlertBannerDirty || isAppUrlDirty || isSmtpDirty || isPlexDirty || isAutomationDirty || isGoogleBooksDirty || isCurationDirty || isAiDirty;
-    const isBetaTabDirty = isRoadmapDirty || isBetaDirty;
+    const isGeneralHubDirty = isAlertBannerDirty || isAppUrlDirty || isAutomationDirty || isRoadmapDirty || isBetaDirty;
+    const isServersHubDirty = isPlexDirty;
+    const isIntegrationsHubDirty = isSeerrDirty || isAiDirty || isCurationDirty || isGoogleBooksDirty;
+    const isCommunicationsHubDirty = isSmtpDirty;
 
+    const isGeneralTabDirty = isGeneralHubDirty;
+    const isBetaTabDirty = isRoadmapDirty || isBetaDirty;
     // Browser-level reload/close protection
     useEffect(() => {
         const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -995,24 +1058,48 @@ function SettingsPageContent() {
     useEffect(() => { loadAllData(); }, []);
 
     useEffect(() => {
-        if (activeTab === "monitoring" && discoveredPlexServers.length === 0 && !loadingDiscoveredPlexServers) {
+        if (activeTab === "servers" && hubSubTabs.servers === "plex-cluster" && discoveredPlexServers.length === 0 && !loadingDiscoveredPlexServers) {
             handleFetchDiscoveredPlexServers();
         }
-    }, [activeTab]);
+    }, [activeTab, hubSubTabs.servers]);
+
+    const navigateToTab = (target: string) => {
+        const resolved = resolveHubAndSubTab(target, null);
+        setActiveTab(resolved.hub);
+        localStorage.setItem("settings-active-tab", resolved.hub);
+        const targetSub = resolved.subTab || hubSubTabs[resolved.hub] || getDefaultSubTab(resolved.hub);
+        if (targetSub) {
+            setHubSubTabs(prev => ({ ...prev, [resolved.hub]: targetSub }));
+            localStorage.setItem(`settings-subtab-${resolved.hub}`, targetSub);
+        }
+        const params = new URLSearchParams(searchParams.toString());
+        params.set("tab", resolved.hub);
+        if (targetSub) {
+            params.set("subtab", targetSub);
+        } else {
+            params.delete("subtab");
+        }
+        router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    };
 
     const handleTabChange = (value: string) => {
-        if (hasUnsavedChanges && value !== activeTab) {
+        const resolved = resolveHubAndSubTab(value, null);
+        if (hasUnsavedChanges && resolved.hub !== activeTab) {
             setPendingNavigation({ type: "tab", target: value });
             setLeaveModalOpen(true);
             return;
         }
-        setActiveTab(value);
-        localStorage.setItem("settings-active-tab", value);
-        const params = new URLSearchParams(searchParams.toString());
-        params.set("tab", value);
-        router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+        navigateToTab(value);
     };
 
+    const handleSubTabChange = (hub: string, newSubTab: string) => {
+        setHubSubTabs(prev => ({ ...prev, [hub]: newSubTab }));
+        localStorage.setItem(`settings-subtab-${hub}`, newSubTab);
+        const params = new URLSearchParams(searchParams.toString());
+        params.set("tab", hub);
+        params.set("subtab", newSubTab);
+        router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    };
     const handleSaveAllDirty = async () => {
         setIsSavingAll(true);
         setSaveAllSuccessMsg("");
@@ -1142,11 +1229,7 @@ function SettingsPageContent() {
         setLeaveModalOpen(false);
         if (pendingNavigation) {
             if (pendingNavigation.type === "tab") {
-                setActiveTab(pendingNavigation.target);
-                localStorage.setItem("settings-active-tab", pendingNavigation.target);
-                const params = new URLSearchParams(searchParams.toString());
-                params.set("tab", pendingNavigation.target);
-                router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+                navigateToTab(pendingNavigation.target);
             } else if (pendingNavigation.type === "url") {
                 router.push(pendingNavigation.target);
             }
@@ -1160,11 +1243,7 @@ function SettingsPageContent() {
             setLeaveModalOpen(false);
             if (pendingNavigation) {
                 if (pendingNavigation.type === "tab") {
-                    setActiveTab(pendingNavigation.target);
-                    localStorage.setItem("settings-active-tab", pendingNavigation.target);
-                    const params = new URLSearchParams(searchParams.toString());
-                    params.set("tab", pendingNavigation.target);
-                    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+                    navigateToTab(pendingNavigation.target);
                 } else if (pendingNavigation.type === "url") {
                     router.push(pendingNavigation.target);
                 }
@@ -1172,7 +1251,6 @@ function SettingsPageContent() {
             }
         }
     };
-
     const handleForm = async (e: React.FormEvent, action: Function) => {
         e.preventDefault();
         const form = e.target as HTMLFormElement;
@@ -1232,114 +1310,115 @@ function SettingsPageContent() {
             </div>
 
             <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-                <TabsList className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9 w-full h-auto p-1.5 bg-muted/40 border border-muted/60 rounded-xl gap-1.5 shadow-md">
-                    <TabsTrigger value="general" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-orange-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(249,115,22,0.25)] hover:bg-muted/80 data-[state=active]:text-orange-400 data-[state=active]:bg-orange-500/10 data-[state=active]:border-orange-500/40 data-[state=active]:shadow-sm min-w-0">
+                <TabsList className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 w-full h-auto p-1.5 bg-muted/40 border border-muted/60 rounded-xl gap-1.5 shadow-md">
+                    {/* HUB 1: GENERAL */}
+                    <TabsTrigger value="general" className="group py-2.5 px-3 flex items-center justify-center gap-2 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-orange-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(249,115,22,0.25)] hover:bg-muted/80 data-[state=active]:text-orange-400 data-[state=active]:bg-orange-500/10 data-[state=active]:border-orange-500/40 data-[state=active]:shadow-sm min-w-0">
                         <Sliders className="h-4 w-4 text-orange-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
-                        <span className="truncate">General & Setup</span>
-                        {isGeneralTabDirty && (
+                        <span className="truncate">General & Platform</span>
+                        {isGeneralHubDirty && (
                             <span className="ml-1 flex h-2 w-2 relative shrink-0">
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
                                 <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
                             </span>
                         )}
                     </TabsTrigger>
-                    <TabsTrigger value="servers" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-blue-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(59,130,246,0.25)] hover:bg-muted/80 data-[state=active]:text-blue-400 data-[state=active]:bg-blue-500/10 data-[state=active]:border-blue-500/40 data-[state=active]:shadow-sm min-w-0">
+
+                    {/* HUB 2: MEDIA SERVERS */}
+                    <TabsTrigger value="servers" className="group py-2.5 px-3 flex items-center justify-center gap-2 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-blue-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(59,130,246,0.25)] hover:bg-muted/80 data-[state=active]:text-blue-400 data-[state=active]:bg-blue-500/10 data-[state=active]:border-blue-500/40 data-[state=active]:shadow-sm min-w-0">
                         <Server className="h-4 w-4 text-blue-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
-                        <span className="truncate">Media Servers</span>
+                        <span className="truncate">Media Servers & Streaming</span>
+                        {isServersHubDirty && (
+                            <span className="ml-1 flex h-2 w-2 relative shrink-0">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                            </span>
+                        )}
                     </TabsTrigger>
-                    <TabsTrigger value="access" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-emerald-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(52,211,153,0.25)] hover:bg-muted/80 data-[state=active]:text-emerald-400 data-[state=active]:bg-emerald-500/10 data-[state=active]:border-emerald-500/40 data-[state=active]:shadow-sm min-w-0">
+
+                    {/* HUB 3: ACCESS CONTROL */}
+                    <TabsTrigger value="access" className="group py-2.5 px-3 flex items-center justify-center gap-2 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-emerald-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(52,211,153,0.25)] hover:bg-muted/80 data-[state=active]:text-emerald-400 data-[state=active]:bg-emerald-500/10 data-[state=active]:border-emerald-500/40 data-[state=active]:shadow-sm min-w-0">
                         <Shield className="h-4 w-4 text-emerald-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
-                        <span className="truncate">Access Control</span>
+                        <span className="truncate">Access Control & Members</span>
                     </TabsTrigger>
-                    <TabsTrigger value="requests" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-rose-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(244,63,94,0.25)] hover:bg-muted/80 data-[state=active]:text-rose-400 data-[state=active]:bg-rose-500/10 data-[state=active]:border-rose-500/40 data-[state=active]:shadow-sm min-w-0">
-                        <Compass className="h-4 w-4 text-rose-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
-                        <span className="truncate">Media Requests</span>
-                        {isSeerrDirty && (
+
+                    {/* HUB 4: INTEGRATIONS */}
+                    <TabsTrigger value="integrations" className="group py-2.5 px-3 flex items-center justify-center gap-2 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-rose-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(244,63,94,0.25)] hover:bg-muted/80 data-[state=active]:text-rose-400 data-[state=active]:bg-rose-500/10 data-[state=active]:border-rose-500/40 data-[state=active]:shadow-sm min-w-0">
+                        <Activity className="h-4 w-4 text-rose-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
+                        <span className="truncate">Integrations & Ecosystem</span>
+                        {isIntegrationsHubDirty && (
                             <span className="ml-1 flex h-2 w-2 relative shrink-0">
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
                                 <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
                             </span>
                         )}
                     </TabsTrigger>
-                    <TabsTrigger value="emails" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-amber-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(251,191,36,0.25)] hover:bg-muted/80 data-[state=active]:text-amber-400 data-[state=active]:bg-amber-500/10 data-[state=active]:border-amber-500/40 data-[state=active]:shadow-sm min-w-0">
-                        <Mail className="h-4 w-4 text-amber-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
-                        <span className="truncate">Broadcast & Emails</span>
-                    </TabsTrigger>
-                    <TabsTrigger value="discord" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-indigo-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(99,102,241,0.25)] hover:bg-muted/80 data-[state=active]:text-indigo-400 data-[state=active]:bg-indigo-500/10 data-[state=active]:border-indigo-500/40 data-[state=active]:shadow-sm min-w-0">
+
+                    {/* HUB 5: COMMUNICATIONS */}
+                    <TabsTrigger value="communications" className="group py-2.5 px-3 flex items-center justify-center gap-2 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-indigo-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(99,102,241,0.25)] hover:bg-muted/80 data-[state=active]:text-indigo-400 data-[state=active]:bg-indigo-500/10 data-[state=active]:border-indigo-500/40 data-[state=active]:shadow-sm min-w-0">
                         <MessageSquare className="h-4 w-4 text-indigo-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
-                        <span className="truncate">Discord Bot</span>
-                    </TabsTrigger>
-                    <TabsTrigger value="monitoring" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-sky-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(56,189,248,0.25)] hover:bg-muted/80 data-[state=active]:text-sky-400 data-[state=active]:bg-sky-500/10 data-[state=active]:border-sky-500/40 data-[state=active]:shadow-sm min-w-0">
-                        <Activity className="h-4 w-4 text-sky-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
-                        <span className="truncate">Monitoring & Apps</span>
-                    </TabsTrigger>
-                    <TabsTrigger value="beta" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-purple-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(192,132,252,0.25)] hover:bg-muted/80 data-[state=active]:text-purple-400 data-[state=active]:bg-purple-500/10 data-[state=active]:border-purple-500/40 data-[state=active]:shadow-sm min-w-0">
-                        <Beaker className="h-4 w-4 text-purple-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
-                        <span className="truncate">Beta & Announcements</span>
-                        {isBetaTabDirty && (
+                        <span className="truncate">Communications & Community</span>
+                        {isCommunicationsHubDirty && (
                             <span className="ml-1 flex h-2 w-2 relative shrink-0">
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
                                 <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
                             </span>
                         )}
-                    </TabsTrigger>
-                    <TabsTrigger value="logs" className="group py-2.5 px-2 flex items-center justify-center gap-1.5 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-emerald-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(52,211,153,0.25)] hover:bg-muted/80 data-[state=active]:text-emerald-400 data-[state=active]:bg-emerald-500/10 data-[state=active]:border-emerald-500/40 data-[state=active]:shadow-sm min-w-0">
-                        <Terminal className="h-4 w-4 text-emerald-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
-                        <span className="truncate">Live System Logs</span>
                     </TabsTrigger>
                 </TabsList>
 
-                {/* --- TAB 1: GENERAL SETUP --- */}
+                {/* ========================================================================= */}
+                {/* HUB 1: GENERAL & PLATFORM                                                 */}
+                {/* ========================================================================= */}
                 <TabsContent value="general" className="space-y-6">
-                    
-                    {/* ALERT BANNER CARD */}
-                    <Card className={`bg-[#121218]/80 backdrop-blur-md shadow-lg transition-all duration-300 ${
-                        isAlertBannerDirty 
-                            ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" 
-                            : "border-orange-500/40 shadow-orange-950/20"
-                    }`}>
-                        <CardHeader>
-                            <div className="flex justify-between items-start">
-                                <div>
-                                    <CardTitle className="flex items-center gap-2 text-orange-500">
-                                        <AlertTriangle className="h-5 w-5"/> System Alert Banner
-                                    </CardTitle>
-                                    <CardDescription>Display a warning or maintenance notification banner at the top of the main dashboard.</CardDescription>
-                                </div>
-                                {isAlertBannerDirty && (
-                                    <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
-                                        ● Unsaved Changes
-                                    </Badge>
-                                )}
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                            <form onSubmit={(e) => handleForm(e, updateAlertBanner)} className="space-y-4">
-                                <div className="flex items-center space-x-2">
-                                    <Switch 
-                                        id="banner-enabled" 
-                                        checked={bannerEnabled} 
-                                        onCheckedChange={setBannerEnabled} 
-                                    />
-                                    <Label htmlFor="banner-enabled" className="cursor-pointer font-medium">Enable Dashboard Alert Banner</Label>
-                                    <input type="hidden" name="enabled" value={bannerEnabled ? "on" : "off"} />
-                                </div>
-                                <div className="space-y-2">
-                                    <Input 
-                                        name="text" 
-                                        value={alertBannerText}
-                                        onChange={(e) => setAlertBannerText(e.target.value)}
-                                        placeholder="⚠️ **Maintenance Notice:** Server maintenance scheduled for 2:00 AM EST..." 
-                                    />
-                                </div>
-                                <Button type="submit" variant="outline" className="border-orange-500/50 hover:bg-orange-500/10 text-orange-500 font-semibold hover:ring-2 hover:ring-orange-500/40 active:scale-95 transition-all shadow-sm">
-                                    Save Alert Banner
-                                </Button>
-                            </form>
-                        </CardContent>
-                    </Card>
+                    {/* Sub-tab Pill Switcher */}
+                    <div className="flex items-center gap-1.5 p-1 bg-white/[0.03] border border-white/10 rounded-xl w-fit overflow-x-auto max-w-full mb-6">
+                        <button
+                            type="button"
+                            onClick={() => handleSubTabChange("general", "platform")}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                                hubSubTabs.general === "platform"
+                                    ? "bg-orange-500/20 text-orange-400 border border-orange-500/40 shadow-xs"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05]"
+                            }`}
+                        >
+                            <Globe className="h-3.5 w-3.5" />
+                            <span>Web & Automation Paths</span>
+                            {(isAppUrlDirty || isAutomationDirty) && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse ml-0.5" />
+                            )}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleSubTabChange("general", "announcements")}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                                hubSubTabs.general === "announcements"
+                                    ? "bg-orange-500/20 text-orange-400 border border-orange-500/40 shadow-xs"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05]"
+                            }`}
+                        >
+                            <Megaphone className="h-3.5 w-3.5" />
+                            <span>Announcements & Roadmap</span>
+                            {(isAlertBannerDirty || isRoadmapDirty || isBetaDirty) && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse ml-0.5" />
+                            )}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleSubTabChange("general", "logs")}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                                hubSubTabs.general === "logs"
+                                    ? "bg-orange-500/20 text-orange-400 border border-orange-500/40 shadow-xs"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05]"
+                            }`}
+                        >
+                            <Terminal className="h-3.5 w-3.5" />
+                            <span>Live System Logs</span>
+                        </button>
+                    </div>
 
-                    {/* PUBLIC WEB ADDRESS (CANONICAL BASE URL) CARD */}
+                    {hubSubTabs.general === "platform" && (
+                        <div className="space-y-6">
+                                                {/* PUBLIC WEB ADDRESS (CANONICAL BASE URL) CARD */}
                     <Card className={`bg-[#121218]/80 backdrop-blur-md shadow-lg transition-all duration-300 ${
                         isAppUrlDirty 
                             ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" 
@@ -1512,218 +1591,512 @@ function SettingsPageContent() {
                         </CardContent>
                     </Card>
 
-                    {/* CLOUDFLARE ACCESS & EDGE SECURITY POLICY PATHS */}
-                    <CloudflarePolicyCard />
-
-                    <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
-                        <div className="space-y-6">
-                            {/* SMTP & EMAIL INTEGRATION */}
-                            <Card className={`bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
-                                isSmtpDirty ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" : ""
+                                                        <Card className={`bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
+                                isAutomationDirty ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" : ""
                             }`}>
                                 <CardHeader>
                                     <div className="flex justify-between items-start">
                                         <div>
                                             <CardTitle className="flex items-center gap-2">
-                                                <Mail className="h-5 w-5 text-primary" /> Global SMTP & Kindle Sender
+                                                <FolderCheck className="h-5 w-5 text-primary" /> Automation & Directory Paths
                                             </CardTitle>
-                                            <CardDescription>Configure outbound SMTP server for Send-to-Kindle delivery & admin notifications.</CardDescription>
+                                            <CardDescription>Configure scan intervals and inspect completed downloads path access.</CardDescription>
                                         </div>
-                                        <div className="flex flex-wrap items-center gap-1.5">
-                                            {isSmtpDirty && (
-                                                <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
-                                                    ● Unsaved Changes
-                                                </Badge>
-                                            )}
-                                            {systemSettings?.smtpHost ? (
-                                                <Badge className="bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 text-[10px] gap-1">
-                                                    <CheckCircle2 className="h-3 w-3" /> SMTP Configured
-                                                </Badge>
-                                            ) : (
-                                                <Badge variant="outline" className="bg-red-500/10 text-red-400 border-red-500/30 text-[10px]">
-                                                    SMTP Inactive
-                                                </Badge>
-                                            )}
-                                            <Button
-                                                type="button"
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => handleTabChange("emails")}
-                                                className="text-xs h-6 px-2 gap-1 border-primary/30 text-primary hover:bg-primary/10 cursor-pointer ml-1"
-                                            >
-                                                <Bell className="h-3 w-3" /> Broadcast & Templates &rarr;
-                                            </Button>
-                                        </div>
+                                        {isAutomationDirty && (
+                                            <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
+                                                ● Unsaved Changes
+                                            </Badge>
+                                        )}
                                     </div>
                                 </CardHeader>
                                 <CardContent>
                                     <form 
-                                        key={`smtp-form-${systemSettings?.smtpHost || "new"}-${systemSettings?.smtpUser || ""}`} 
                                         onSubmit={async (e) => {
                                             e.preventDefault();
-                                            const formData = new FormData();
-                                            formData.append("smtpHost", smtpHostInput);
-                                            formData.append("smtpPort", String(smtpPortInput));
-                                            formData.append("smtpUser", smtpUserInput);
-                                            formData.append("smtpPass", smtpPassInput);
-                                            formData.append("smtpFrom", smtpFromInput);
-                                            const res = await saveSettings(formData);
+                                            const formData = new FormData(e.currentTarget);
+                                            const res = await saveJobSettings(formData);
                                             if (res.success) {
-                                                setSaveSmtpMsg("SMTP settings saved successfully!");
-                                                setTimeout(() => setSaveSmtpMsg(""), 4000);
+                                                setSaveAutomationMsg("Automation settings saved successfully!");
+                                                setTimeout(() => setSaveAutomationMsg(""), 4000);
                                                 loadAllData();
                                             }
                                         }} 
                                         className="space-y-4"
-                                        autoComplete="off"
-                                        data-1p-ignore="true"
-                                        data-lpignore="true"
                                     >
-                                        {saveSmtpMsg && (
+                                        {saveAutomationMsg && (
                                             <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
                                                 <CheckCircle2 className="h-4 w-4 shrink-0" />
-                                                <span>{saveSmtpMsg}</span>
+                                                <span>{saveAutomationMsg}</span>
                                             </div>
                                         )}
-                                        {testEmailMsg && (
-                                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
-                                                <CheckCircle2 className="h-4 w-4 shrink-0" />
-                                                <span>{testEmailMsg}</span>
-                                            </div>
-                                        )}
-                                        {testEmailErr && (
-                                            <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2">
-                                                <XCircle className="h-4 w-4 shrink-0" />
-                                                <span>{testEmailErr}</span>
-                                            </div>
-                                        )}
-
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="space-y-2">
-                                                <Label>SMTP Host</Label>
-                                                <Input 
-                                                    name="smtpHost" 
-                                                    value={smtpHostInput} 
-                                                    onChange={(e) => setSmtpHostInput(e.target.value)} 
-                                                    placeholder="smtp.gmail.com" 
-                                                    autoComplete="off" 
-                                                    data-1p-ignore="true" 
-                                                    data-lpignore="true"
-                                                />
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label>Port</Label>
-                                                <Input 
-                                                    name="smtpPort" 
-                                                    value={smtpPortInput} 
-                                                    onChange={(e) => setSmtpPortInput(e.target.value)} 
-                                                    placeholder="587" 
-                                                    autoComplete="off" 
-                                                    data-1p-ignore="true" 
-                                                    data-lpignore="true"
-                                                />
-                                            </div>
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="space-y-2">
-                                                <Label>User / Email</Label>
-                                                <Input 
-                                                    name="smtpUser" 
-                                                    value={smtpUserInput} 
-                                                    onChange={(e) => setSmtpUserInput(e.target.value)} 
-                                                    placeholder="user@gmail.com" 
-                                                    autoComplete="off" 
-                                                    data-1p-ignore="true" 
-                                                    data-lpignore="true"
-                                                />
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label>Password</Label>
-                                                <div className="relative">
-                                                    <Input 
-                                                        name="smtpPass" 
-                                                        type={showSmtpKey ? "text" : "password"} 
-                                                        value={smtpPassInput} 
-                                                        onChange={(e) => setSmtpPassInput(e.target.value)} 
-                                                        className="pr-8"
-                                                        autoComplete="new-password"
-                                                        data-1p-ignore="true"
-                                                        data-lpignore="true"
-                                                    />
-                                                    <Button
-                                                        type="button"
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="absolute right-1 top-1 h-7 w-7 text-muted-foreground hover:text-foreground"
-                                                        onClick={() => setShowSmtpKey(!showSmtpKey)}
-                                                    >
-                                                        {showSmtpKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                                                    </Button>
-                                                </div>
-                                                <p className="text-[10px] text-muted-foreground leading-tight">
-                                                    For Gmail, <a href="https://myaccount.google.com/apppasswords" target="_blank" className="text-primary hover:underline">generate an App Password</a> and use it here instead of your actual password.
-                                                </p>
-                                            </div>
-                                        </div>
                                         <div className="space-y-2">
-                                            <Label>Sender Email Address (From)</Label>
+                                            <Label>Library Auto-Scan Interval (Minutes)</Label>
                                             <Input 
-                                                name="smtpFrom" 
-                                                value={smtpFromInput} 
-                                                onChange={(e) => setSmtpFromInput(e.target.value)} 
-                                                placeholder="dom@domshomelab.com" 
-                                                autoComplete="off" 
-                                                data-1p-ignore="true" 
-                                                data-lpignore="true"
+                                                name="autoSyncInterval" 
+                                                type="number" 
+                                                value={autoSyncIntervalInput} 
+                                                onChange={(e) => setAutoSyncIntervalInput(e.target.value)} 
                                             />
-                                            <div className="text-[11px] text-muted-foreground bg-muted/30 p-2.5 rounded-lg border border-muted/50 mt-1 space-y-1">
-                                                <div className="font-semibold text-foreground flex items-center gap-1">
-                                                    <Send className="h-3 w-3 text-amber-500" /> Send-to-Kindle Requirement:
-                                                </div>
-                                                <div>Add this Sender Email to your users' <strong>Amazon Approved Personal Document E-mail List</strong> under Amazon → Manage Your Content and Devices → Preferences.</div>
-                                            </div>
                                         </div>
-
-                                        <div className="flex flex-wrap gap-2 pt-2">
-                                            <Button type="submit" className="flex-1 font-bold hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all shadow-md">
-                                                <Mail className="h-4 w-4 mr-2"/> 
-                                                Save SMTP Settings
-                                            </Button>
-
-                                            <Button 
-                                                type="button" 
-                                                variant="outline"
-                                                className="text-xs gap-1.5 border-primary/30 text-primary hover:bg-primary/10 font-semibold hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all"
-                                                onClick={handleTestSmtp}
-                                                disabled={testEmailLoading || !systemSettings?.smtpHost}
-                                                title="Send a test email to your SMTP account"
-                                            >
-                                                {testEmailLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MailCheck className="h-3.5 w-3.5" />}
-                                                Test Connection
-                                            </Button>
-                                            
-                                            {systemSettings?.smtpHost && (
+                                        <div className="space-y-3">
+                                            <div className="flex justify-between items-center">
+                                                <Label>Completed Downloads Folder Path</Label>
+                                                <div className="flex gap-1.5 flex-wrap">
+                                                    {["/downloads", "/user/downloads", "/user/Books", "/Userbooks", "/mnt/user/Books"].map((preset) => (
+                                                        <Button
+                                                            key={preset}
+                                                            type="button"
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="h-6 px-2 text-[10px] font-mono border-muted/50 text-muted-foreground hover:text-primary hover:border-primary/50 hover:ring-1 hover:ring-primary/30 active:scale-95 transition-all"
+                                                            onClick={() => {
+                                                                setInputDownloadsPath(preset);
+                                                                handleTestPermissions(preset);
+                                                            }}
+                                                        >
+                                                            {preset}
+                                                        </Button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-wrap gap-2">
+                                                <Input 
+                                                    name="downloadsPath" 
+                                                    type="text" 
+                                                    value={inputDownloadsPath}
+                                                    onChange={(e) => setInputDownloadsPath(e.target.value)}
+                                                    placeholder="/downloads"
+                                                    className="flex-1 min-w-[200px]"
+                                                />
                                                 <Button 
                                                     type="button" 
-                                                    variant="destructive" 
-                                                    className="hover:ring-2 hover:ring-red-500/40 active:scale-95 transition-all"
-                                                    onClick={async () => {
-                                                        if(confirm("Are you sure you want to wipe SMTP settings?")) {
-                                                            await clearSmtpSettings();
-                                                            loadAllData();
-                                                        }
-                                                    }}
-                                                    title="Clear Credentials"
+                                                    variant="outline" 
+                                                    className="text-xs shrink-0 font-semibold gap-1 hover:ring-2 hover:ring-primary/30 active:scale-95 transition-all"
+                                                    disabled={validatingPath}
+                                                    onClick={() => handleValidatePath(inputDownloadsPath)}
                                                 >
-                                                    <Trash2 className="h-4 w-4" />
+                                                    {validatingPath ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FolderCheck className="h-3.5 w-3.5" />}
+                                                    Check Path
                                                 </Button>
+                                                <Button 
+                                                    type="button" 
+                                                    variant="secondary" 
+                                                    className="text-xs shrink-0 font-extrabold gap-1.5 bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 hover:ring-2 hover:ring-amber-500/40 active:scale-95 transition-all shadow-sm"
+                                                    disabled={permTesting}
+                                                    onClick={() => handleTestPermissions(inputDownloadsPath)}
+                                                >
+                                                    {permTesting ? <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-400" /> : <Shield className="h-3.5 w-3.5 text-amber-400" />}
+                                                    Run Diagnostic Suite
+                                                </Button>
+                                            </div>
+                                            {pathResult && (
+                                                <div className={`text-xs p-2.5 rounded-lg border mt-2 flex items-center gap-2 ${pathResult.success ? "text-emerald-400 bg-emerald-950/40 border-emerald-800/40" : "text-red-400 bg-red-950/40 border-red-800/40"}`}>
+                                                    {pathResult.success ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <XCircle className="h-4 w-4 shrink-0" />}
+                                                    <span>{pathResult.msg || pathResult.err}</span>
+                                                </div>
+                                            )}
+
+                                            {/* FULL FOLDER PERMISSIONS DIAGNOSTIC RESULTS */}
+                                            {permResult && (
+                                                <div className={`text-xs p-4 rounded-xl border mt-3 space-y-3 ${permResult.success ? "bg-emerald-950/30 border-emerald-800/40 text-emerald-300" : "bg-red-950/30 border-red-800/40 text-slate-200"}`}>
+                                                    <div className="flex flex-wrap items-center justify-between gap-2 font-bold text-sm border-b border-muted/30 pb-2">
+                                                        <span className="flex items-center gap-2">
+                                                            {permResult.success ? <CheckCircle2 className="h-4.5 w-4.5 text-emerald-400 shrink-0" /> : <AlertTriangle className="h-4.5 w-4.5 text-red-400 shrink-0" />}
+                                                            Container Folder Diagnostic: <code className="text-amber-400 text-xs">{permResult.results?.folderPath}</code>
+                                                        </span>
+                                                        <Badge className={permResult.success ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30" : "bg-red-500/20 text-red-300 border-red-500/30"}>
+                                                            {permResult.success ? "✓ ALL PERMISSIONS PASS" : "✗ PERMISSIONS DEFICIENT"}
+                                                        </Badge>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 font-mono text-[11px]">
+                                                        <div className="flex items-center justify-between p-2 rounded bg-background/60 border border-muted/30">
+                                                            <span>📁 Path Exists:</span>
+                                                            <span className={permResult.results?.exists ? "text-emerald-400 font-bold" : "text-red-400 font-bold"}>
+                                                                {permResult.results?.exists ? "✓ PASS" : "✗ FAIL"}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex items-center justify-between p-2 rounded bg-background/60 border border-muted/30">
+                                                            <span>📖 Read Access:</span>
+                                                            <span className={permResult.results?.canRead ? "text-emerald-400 font-bold" : "text-red-400 font-bold"}>
+                                                                {permResult.results?.canRead ? "✓ PASS" : "✗ FAIL"}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex items-center justify-between p-2 rounded bg-background/60 border border-muted/30">
+                                                            <span>✏️ Write Access:</span>
+                                                            <span className={permResult.results?.canWrite ? "text-emerald-400 font-bold" : "text-red-400 font-bold"}>
+                                                                {permResult.results?.canWrite ? "✓ PASS" : "✗ FAIL"}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex items-center justify-between p-2 rounded bg-background/60 border border-muted/30">
+                                                            <span>🗑️ Delete Access:</span>
+                                                            <span className={permResult.results?.canDelete ? "text-emerald-400 font-bold" : "text-red-400 font-bold"}>
+                                                                {permResult.results?.canDelete ? "✓ PASS" : "✗ FAIL"}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+
+                                                    {permResult.results?.exists && (
+                                                        <div className="text-[11px] bg-background/40 p-2.5 rounded-lg border border-muted/30 flex flex-wrap justify-between items-center gap-2 font-mono">
+                                                            <span>
+                                                                Total Items: <strong className="text-primary">{permResult.results?.itemCount || 0}</strong>
+                                                            </span>
+                                                            <span>
+                                                                Total File Size: <strong className="text-amber-400">{((permResult.results?.totalSizeBytes || 0) / (1024 * 1024)).toFixed(1)} MB</strong>
+                                                            </span>
+                                                        </div>
+                                                    )}
+
+                                                    {permResult.results?.subfolders && permResult.results.subfolders.length > 0 && (
+                                                        <div className="space-y-1.5 pt-1">
+                                                            <div className="text-[11px] font-bold text-slate-400">Detected Subdirectories:</div>
+                                                            <div className="flex flex-wrap gap-1.5">
+                                                                {permResult.results.subfolders.map((sub: any) => (
+                                                                    <Badge key={sub.name} variant="outline" className="bg-muted/40 text-[10px] font-mono">
+                                                                        📂 {sub.name} ({sub.count} items)
+                                                                    </Badge>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {permResult.results?.error && (
+                                                        <div className="text-[11px] text-red-400 bg-red-950/50 p-2.5 rounded-lg border border-red-800/40">
+                                                            <strong>Error Details:</strong> {permResult.results.error}
+                                                        </div>
+                                                    )}
+                                                </div>
                                             )}
                                         </div>
+                                        <Button type="submit" variant="secondary" className="w-full font-semibold hover:ring-2 hover:ring-primary/30 active:scale-95 transition-all">
+                                            Save Automation Settings
+                                        </Button>
                                     </form>
                                 </CardContent>
                             </Card>
 
-                            {/* PLEX SERVER & ADMIN TOKEN INTEGRATION */}
+                            <CloudflarePolicyCard />
+                        </div>
+                    )}
+
+                    {hubSubTabs.general === "announcements" && (
+                        <div className="space-y-6">
+                                                {/* ALERT BANNER CARD */}
+                    <Card className={`bg-[#121218]/80 backdrop-blur-md shadow-lg transition-all duration-300 ${
+                        isAlertBannerDirty 
+                            ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" 
+                            : "border-orange-500/40 shadow-orange-950/20"
+                    }`}>
+                        <CardHeader>
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <CardTitle className="flex items-center gap-2 text-orange-500">
+                                        <AlertTriangle className="h-5 w-5"/> System Alert Banner
+                                    </CardTitle>
+                                    <CardDescription>Display a warning or maintenance notification banner at the top of the main dashboard.</CardDescription>
+                                </div>
+                                {isAlertBannerDirty && (
+                                    <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
+                                        ● Unsaved Changes
+                                    </Badge>
+                                )}
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                            <form onSubmit={(e) => handleForm(e, updateAlertBanner)} className="space-y-4">
+                                <div className="flex items-center space-x-2">
+                                    <Switch 
+                                        id="banner-enabled" 
+                                        checked={bannerEnabled} 
+                                        onCheckedChange={setBannerEnabled} 
+                                    />
+                                    <Label htmlFor="banner-enabled" className="cursor-pointer font-medium">Enable Dashboard Alert Banner</Label>
+                                    <input type="hidden" name="enabled" value={bannerEnabled ? "on" : "off"} />
+                                </div>
+                                <div className="space-y-2">
+                                    <Input 
+                                        name="text" 
+                                        value={alertBannerText}
+                                        onChange={(e) => setAlertBannerText(e.target.value)}
+                                        placeholder="⚠️ **Maintenance Notice:** Server maintenance scheduled for 2:00 AM EST..." 
+                                    />
+                                </div>
+                                <Button type="submit" variant="outline" className="border-orange-500/50 hover:bg-orange-500/10 text-orange-500 font-semibold hover:ring-2 hover:ring-orange-500/40 active:scale-95 transition-all shadow-sm">
+                                    Save Alert Banner
+                                </Button>
+                            </form>
+                        </CardContent>
+                    </Card>
+
+                                                {/* ROADMAP CARD EDITOR */}
+                    <Card className={`bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
+                        isRoadmapDirty ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" : ""
+                    }`}>
+                        <CardHeader>
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <CardTitle className="flex items-center gap-2">🗺️ Roadmap & Feature Announcements</CardTitle>
+                                    <CardDescription>Update the Markdown roadmap text displayed on the main dashboard.</CardDescription>
+                                </div>
+                                {isRoadmapDirty && (
+                                    <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
+                                        ● Unsaved Changes
+                                    </Badge>
+                                )}
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                            <form onSubmit={(e) => handleForm(e, updateRoadmapText)} className="space-y-4">
+                                <Tabs defaultValue="write" className="w-full">
+                                    <TabsList className="mb-2 grid w-full max-w-[200px] grid-cols-2">
+                                        <TabsTrigger value="write">Write</TabsTrigger>
+                                        <TabsTrigger value="preview">Preview</TabsTrigger>
+                                    </TabsList>
+                                    <TabsContent value="write">
+                                        <Textarea 
+                                            name="text" 
+                                            value={roadmapText} 
+                                            onChange={(e) => setRoadmapText(e.target.value)}
+                                            rows={12} 
+                                            className="font-mono text-sm leading-relaxed"
+                                            placeholder="### ✨ Recently Released..."
+                                            required
+                                        />
+                                    </TabsContent>
+                                    <TabsContent value="preview" className="border rounded-md p-5 min-h-[290px] bg-muted/10 prose prose-neutral dark:prose-invert max-w-none text-sm leading-relaxed overflow-y-auto prose-headings:font-bold prose-h3:text-base prose-h3:text-foreground prose-h3:mt-3 prose-h3:mb-2 prose-ul:my-2 prose-ul:space-y-2 prose-li:my-1 prose-hr:my-4">
+                                        <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{roadmapText || "*No content*"}</ReactMarkdown>
+                                    </TabsContent>
+                                </Tabs>
+                                <Button type="submit" className="font-semibold hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all">Save Roadmap Text</Button>
+                            </form>
+                        </CardContent>
+                    </Card>
+
+                            <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
+                                                        {/* BETA DASHBOARD INTRO EDITOR */}
+                        <Card className={`bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
+                            isBetaDirty ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" : ""
+                        }`}>
+                            <CardHeader>
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <CardTitle>Beta Dashboard Intro</CardTitle>
+                                        <CardDescription>This Markdown text appears on the main home dashboard.</CardDescription>
+                                    </div>
+                                    {isBetaDirty && (
+                                        <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
+                                            ● Unsaved Changes
+                                        </Badge>
+                                    )}
+                                </div>
+                            </CardHeader>
+                            <CardContent>
+                                <form onSubmit={(e) => handleForm(e, updateBetaDashboardText)} className="space-y-4">
+                                    <Tabs defaultValue="write" className="w-full">
+                                        <TabsList className="mb-2 grid w-full max-w-[200px] grid-cols-2">
+                                            <TabsTrigger value="write">Write</TabsTrigger>
+                                            <TabsTrigger value="preview">Preview</TabsTrigger>
+                                        </TabsList>
+                                        <TabsContent value="write">
+                                            <Textarea 
+                                                name="text" 
+                                                rows={6} 
+                                                value={betaText} 
+                                                onChange={(e) => setBetaText(e.target.value)} 
+                                                className="font-mono text-sm"
+                                                required 
+                                                placeholder="### Interested in Beta Testing?..." 
+                                            />
+                                        </TabsContent>
+                                        <TabsContent value="preview" className="border rounded-md p-4 min-h-[164px] bg-muted/10 prose prose-invert max-w-none text-sm overflow-y-auto">
+                                            <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{betaText || "*No content*"}</ReactMarkdown>
+                                        </TabsContent>
+                                    </Tabs>
+                                    <Button type="submit" className="font-semibold hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all">Save Intro Text</Button>
+                                </form>
+                            </CardContent>
+                        </Card>
+
+                                                        {/* BETA TESTING CARDS EDITOR */}
+                        <Card className="bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
+                            <CardHeader>
+                                <CardTitle>{editingBetaCard ? "Edit Beta Card" : "Beta Testing Cards"}</CardTitle>
+                                <CardDescription>Manage the interactive service cards on `/beta`.</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-6">
+                                {!editingBetaCard && (
+                                    <div className="space-y-4 max-h-[300px] overflow-y-auto">
+                                        {betaCards.map((card: any) => (
+                                            <div key={card.id} className="flex items-start justify-between border border-border/40 p-3 rounded-xl bg-[#101014]/90 backdrop-blur-md hover:border-border/80 transition-all">
+                                                <div className="space-y-1">
+                                                    <div className="font-semibold">{card.title}</div>
+                                                    <div className="text-xs text-muted-foreground line-clamp-1">{card.content}</div>
+                                                </div>
+                                                <div className="flex gap-1 shrink-0 ml-2">
+                                                    <Button type="button" variant="ghost" size="icon" className="hover:ring-1 hover:ring-blue-400/40 active:scale-95 transition-all" onClick={() => { setEditingBetaCard(card); setBetaCardContent(card.content); }}>
+                                                        <Pencil className="h-4 w-4 text-blue-500" />
+                                                    </Button>
+                                                    <Button type="button" variant="ghost" size="icon" className="hover:ring-1 hover:ring-red-500/40 active:scale-95 transition-all" onClick={() => handleDelete(card.id, deleteBetaCard)}>
+                                                        <Trash2 className="h-4 w-4 text-red-500" />
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                <form 
+                                    key={editingBetaCard ? `edit-beta-${editingBetaCard.id}` : "new-beta"}
+                                    onSubmit={(e) => {
+                                        handleForm(e, editingBetaCard ? updateBetaCard : createBetaCard);
+                                        setBetaCardContent("");
+                                    }} 
+                                    className={`space-y-4 ${!editingBetaCard && "border-t pt-4"}`}
+                                    autoComplete="off"
+                                    data-1p-ignore="true"
+                                    data-lpignore="true"
+                                >
+                                    {editingBetaCard && <input type="hidden" name="id" value={editingBetaCard.id} />}
+                                    <div className="space-y-2">
+                                        <Label>Card Title</Label>
+                                        <Input 
+                                            name="title" 
+                                            placeholder="Ex: Audiobookshelf Beta" 
+                                            defaultValue={editingBetaCard?.title} 
+                                            required 
+                                            autoComplete="off"
+                                            data-1p-ignore="true"
+                                            data-lpignore="true"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Content (Markdown)</Label>
+                                        <Tabs defaultValue="write" className="w-full">
+                                            <TabsList className="mb-2 grid w-full max-w-[200px] grid-cols-2 h-7">
+                                                <TabsTrigger value="write" className="text-xs">Write</TabsTrigger>
+                                                <TabsTrigger value="preview" className="text-xs">Preview</TabsTrigger>
+                                            </TabsList>
+                                            <TabsContent value="write">
+                                                <Textarea 
+                                                    name="content" 
+                                                    placeholder="Instructions..." 
+                                                    rows={4} 
+                                                    value={betaCardContent} 
+                                                    onChange={(e) => setBetaCardContent(e.target.value)} 
+                                                    required 
+                                                    className="font-mono text-sm"
+                                                />
+                                            </TabsContent>
+                                            <TabsContent value="preview" className="border rounded-md p-3 min-h-[104px] bg-muted/10 prose prose-invert max-w-none text-xs overflow-y-auto">
+                                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{betaCardContent || "*No content*"}</ReactMarkdown>
+                                            </TabsContent>
+                                        </Tabs>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label>Button Text</Label>
+                                            <Input 
+                                                name="buttonText" 
+                                                defaultValue={editingBetaCard?.buttonText} 
+                                                autoComplete="off"
+                                                data-1p-ignore="true"
+                                                data-lpignore="true"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>Button URL</Label>
+                                            <Input 
+                                                name="buttonUrl" 
+                                                defaultValue={editingBetaCard?.buttonUrl} 
+                                                autoComplete="off"
+                                                data-1p-ignore="true"
+                                                data-lpignore="true"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <Button type="submit" className="flex-1 font-semibold hover:ring-2 hover:ring-purple-400/40 active:scale-95 transition-all">{editingBetaCard ? "Update Beta Card" : "Add Beta Card"}</Button>
+                                        {editingBetaCard && <Button type="button" variant="outline" className="hover:ring-1 hover:ring-border active:scale-95 transition-all" onClick={() => { setEditingBetaCard(null); setBetaCardContent(""); }}><X className="h-4 w-4"/></Button>}
+                                    </div>
+                                </form>
+                            </CardContent>
+                        </Card>
+                            </div>
+                        </div>
+                    )}
+
+                    {hubSubTabs.general === "logs" && (
+                        <div className="space-y-4">
+                            <SystemLogsViewer />
+                        </div>
+                    )}
+                </TabsContent>
+
+                {/* ========================================================================= */}
+                {/* HUB 2: MEDIA SERVERS & STREAMING                                          */}
+                {/* ========================================================================= */}
+                <TabsContent value="servers" className="space-y-6">
+                    {/* Sub-tab Pill Switcher */}
+                    <div className="flex items-center gap-1.5 p-1 bg-white/[0.03] border border-white/10 rounded-xl w-fit overflow-x-auto max-w-full mb-6">
+                        <button
+                            type="button"
+                            onClick={() => handleSubTabChange("servers", "fleet")}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                                hubSubTabs.servers === "fleet"
+                                    ? "bg-blue-500/20 text-blue-400 border border-blue-500/40 shadow-xs"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05]"
+                            }`}
+                        >
+                            <Server className="h-3.5 w-3.5" />
+                            <span>Server Fleet & Multi-Platform</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleSubTabChange("servers", "plex-admin")}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                                hubSubTabs.servers === "plex-admin"
+                                    ? "bg-blue-500/20 text-blue-400 border border-blue-500/40 shadow-xs"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05]"
+                            }`}
+                        >
+                            <Tv className="h-3.5 w-3.5" />
+                            <span>Master Plex & Direct Snapshots</span>
+                            {isPlexDirty && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse ml-0.5" />
+                            )}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleSubTabChange("servers", "plex-cluster")}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                                hubSubTabs.servers === "plex-cluster"
+                                    ? "bg-blue-500/20 text-blue-400 border border-blue-500/40 shadow-xs"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05]"
+                            }`}
+                        >
+                            <Radio className="h-3.5 w-3.5" />
+                            <span>Plex Cluster & Auto-Discovery</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleSubTabChange("servers", "telemetry")}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                                hubSubTabs.servers === "telemetry"
+                                    ? "bg-blue-500/20 text-blue-400 border border-blue-500/40 shadow-xs"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05]"
+                            }`}
+                        >
+                            <History className="h-3.5 w-3.5" />
+                            <span>Historical Watch & Host Telemetry</span>
+                        </button>
+                    </div>
+
+                    {hubSubTabs.servers === "fleet" && (
+                        <AdminMediaServersPanel />
+                    )}
+
+                    {hubSubTabs.servers === "plex-admin" && (
+                        <div className="space-y-6">
+                                                        {/* PLEX SERVER & ADMIN TOKEN INTEGRATION */}
                             <Card className={`bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
                                 isPlexDirty ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" : ""
                             }`}>
@@ -1909,7 +2282,118 @@ function SettingsPageContent() {
                                 </CardContent>
                             </Card>
 
-                            {/* MULTI-PLEX SERVERS MANAGEMENT */}
+                            {/* PLEX DIRECT SQLITE DATABASE SNAPSHOTS & DELTA-SYNC */}
+                            <Card className="bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
+                                <CardHeader>
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <CardTitle className="flex items-center gap-2 text-emerald-400">
+                                                <Zap className="h-5 w-5 text-emerald-400" /> Direct SQLite Snapshots & Delta-Sync
+                                            </CardTitle>
+                                            <CardDescription>
+                                                Configure direct filesystem access to <code className="text-foreground">com.plexapp.plugins.library.db</code> for high-speed atomic snapshots, eliminating Plex Media Server API locks during pruning, library scans, and automated curation.
+                                            </CardDescription>
+                                        </div>
+                                        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-300 border-emerald-500/30 text-[10px] px-2 py-0.5 flex items-center gap-1">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Zero PMS Lockups
+                                        </Badge>
+                                    </div>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    <div className="space-y-2">
+                                        <div className="flex justify-between items-center">
+                                            <Label className="text-xs font-semibold">Primary Plex SQLite Database Path</Label>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-5 px-2 text-[10px] font-mono text-muted-foreground hover:text-emerald-400 gap-1"
+                                                disabled={discoveringPaths}
+                                                onClick={async () => {
+                                                    setDiscoveringPaths(true);
+                                                    const res = await discoverPlexDatabasePathsAction();
+                                                    setDiscoveringPaths(false);
+                                                    if (res.paths && res.paths.length > 0) {
+                                                        setPlexServerFormDatabasePath(res.paths[0]);
+                                                    } else {
+                                                        alert("No standard Plex database paths detected in default locations. You can paste the direct path manually.");
+                                                    }
+                                                }}
+                                            >
+                                                {discoveringPaths ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Search className="h-2.5 w-2.5" />}
+                                                Auto-Detect Database
+                                            </Button>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <Input 
+                                                name="masterDatabasePath" 
+                                                placeholder="/mnt/user/appdata/plex/Library/Application Support/Plex Media Server/Plug-in Support/Databases/com.plexapp.plugins.library.db" 
+                                                value={plexServerFormDatabasePath}
+                                                onChange={(e) => {
+                                                    setPlexServerFormDatabasePath(e.target.value);
+                                                    setDatabasePathTestResult(null);
+                                                }}
+                                                className="text-xs font-mono flex-1" 
+                                                autoComplete="off"
+                                            />
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="outline"
+                                                className="h-9 px-3 text-xs border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 shrink-0 gap-1 font-semibold"
+                                                disabled={testingDatabasePath || !plexServerFormDatabasePath.trim()}
+                                                onClick={async () => {
+                                                    setTestingDatabasePath(true);
+                                                    const res = await testPlexDatabasePathAction(plexServerFormDatabasePath);
+                                                    setTestingDatabasePath(false);
+                                                    setDatabasePathTestResult(res);
+                                                }}
+                                            >
+                                                {testingDatabasePath ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
+                                                Test Snapshot
+                                            </Button>
+                                        </div>
+                                        <div className="flex flex-wrap gap-1.5 items-center pt-1">
+                                            <span className="text-[10px] text-muted-foreground mr-1">Presets:</span>
+                                            {[
+                                                { label: "Main (Unraid)", path: "/mnt/user/appdata/plex/Library/Application Support/Plex Media Server/Plug-in Support/Databases/com.plexapp.plugins.library.db" },
+                                                { label: "Kids Server", path: "/mnt/remotes/Kid_Server_Appdata/KidsPlexServer/Library/Application Support/Plex Media Server/Plug-in Support/Databases/com.plexapp.plugins.library.db" },
+                                                { label: "Backup Server", path: "/mnt/remotes/Kid_Server_Appdata/MainPlexBackup/Library/Application Support/Plex Media Server/Plug-in Support/Databases/com.plexapp.plugins.library.db" }
+                                            ].map((p) => (
+                                                <Button
+                                                    key={p.label}
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-5 px-1.5 text-[9px] text-muted-foreground hover:text-emerald-400 border border-border/40"
+                                                    onClick={() => {
+                                                        setPlexServerFormDatabasePath(p.path);
+                                                        setDatabasePathTestResult(null);
+                                                    }}
+                                                >
+                                                    {p.label}
+                                                </Button>
+                                            ))}
+                                        </div>
+                                        {databasePathTestResult && (
+                                            <div className={`text-[11px] p-2.5 rounded-lg flex items-center gap-1.5 mt-2 ${
+                                                databasePathTestResult.success 
+                                                    ? "text-emerald-400 bg-emerald-950/40 border border-emerald-500/30" 
+                                                    : "text-red-400 bg-red-950/40 border border-red-500/30"
+                                            }`}>
+                                                {databasePathTestResult.success ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> : <XCircle className="h-3.5 w-3.5 shrink-0" />}
+                                                <span>{databasePathTestResult.message || databasePathTestResult.error}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </div>
+                    )}
+
+                    {hubSubTabs.servers === "plex-cluster" && (
+                        <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
+                                                        {/* MULTI-PLEX SERVERS MANAGEMENT */}
                             <Card className="bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
                                 <CardHeader>
                                     <div className="flex justify-between items-start">
@@ -2384,251 +2868,415 @@ function SettingsPageContent() {
                                     </form>
                                 </CardContent>
                             </Card>
-                        </div>
 
-                        {/* AUTOMATION & DOWNLOAD DIRECTORY VALIDATOR */}
-                        <div className="space-y-6">
-                            <Card className={`bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
-                                isAutomationDirty ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" : ""
-                            }`}>
-                                <CardHeader>
-                                    <div className="flex justify-between items-start">
-                                        <div>
-                                            <CardTitle className="flex items-center gap-2">
-                                                <FolderCheck className="h-5 w-5 text-primary" /> Automation & Directory Paths
-                                            </CardTitle>
-                                            <CardDescription>Configure scan intervals and inspect completed downloads path access.</CardDescription>
-                                        </div>
-                                        {isAutomationDirty && (
-                                            <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
-                                                ● Unsaved Changes
-                                            </Badge>
-                                        )}
+                                                    {/* PLEX MEDIA SERVERS & AUTO-DISCOVERY */}
+                        <Card className="flex flex-col bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
+                            <CardHeader>
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <CardTitle className="flex items-center gap-2">
+                                            <Tv className="h-5 w-5 text-amber-500"/> Plex Media Servers
+                                        </CardTitle>
+                                        <CardDescription>Primary direct stream monitoring source, PMS hardware telemetry, and Plex.tv account auto-discovery.</CardDescription>
                                     </div>
-                                </CardHeader>
-                                <CardContent>
-                                    <form 
-                                        onSubmit={async (e) => {
-                                            e.preventDefault();
-                                            const formData = new FormData(e.currentTarget);
-                                            const res = await saveJobSettings(formData);
-                                            if (res.success) {
-                                                setSaveAutomationMsg("Automation settings saved successfully!");
-                                                setTimeout(() => setSaveAutomationMsg(""), 4000);
-                                                loadAllData();
-                                            }
-                                        }} 
-                                        className="space-y-4"
-                                    >
-                                        {saveAutomationMsg && (
-                                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
-                                                <CheckCircle2 className="h-4 w-4 shrink-0" />
-                                                <span>{saveAutomationMsg}</span>
-                                            </div>
+                                    <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-[10px]">
+                                        {plexServers.length} {plexServers.length === 1 ? "Server" : "Servers"}
+                                    </Badge>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="space-y-4 flex-1">
+                                {plexServerActionMsg && (
+                                    <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-2.5 rounded-lg flex items-center gap-2 animate-in fade-in">
+                                        <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                                        <span>{plexServerActionMsg}</span>
+                                    </div>
+                                )}
+
+                                {/* LIST OF CONFIGURED SERVERS */}
+                                <div>
+                                    <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center justify-between">
+                                        <span>Configured Plex Servers ({plexServers.length})</span>
+                                        <span className="text-[10px] text-muted-foreground font-normal">Toggle switch to pause/resume monitoring</span>
+                                    </div>
+                                    <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                                        {plexServers.length === 0 && (
+                                            <p className="text-xs text-muted-foreground italic">No Plex servers configured. Import from discovered servers below or add one in General & Setup.</p>
                                         )}
-                                        <div className="space-y-2">
-                                            <Label>Library Auto-Scan Interval (Minutes)</Label>
-                                            <Input 
-                                                name="autoSyncInterval" 
-                                                type="number" 
-                                                value={autoSyncIntervalInput} 
-                                                onChange={(e) => setAutoSyncIntervalInput(e.target.value)} 
-                                            />
-                                        </div>
-                                        <div className="space-y-3">
-                                            <div className="flex justify-between items-center">
-                                                <Label>Completed Downloads Folder Path</Label>
-                                                <div className="flex gap-1.5 flex-wrap">
-                                                    {["/downloads", "/user/downloads", "/user/Books", "/Userbooks", "/mnt/user/Books"].map((preset) => (
-                                                        <Button
-                                                            key={preset}
-                                                            type="button"
-                                                            variant="outline"
-                                                            size="sm"
-                                                            className="h-6 px-2 text-[10px] font-mono border-muted/50 text-muted-foreground hover:text-primary hover:border-primary/50 hover:ring-1 hover:ring-primary/30 active:scale-95 transition-all"
-                                                            onClick={() => {
-                                                                setInputDownloadsPath(preset);
-                                                                handleTestPermissions(preset);
+                                        {plexServers.map(s => (
+                                            <div key={s.id} className="space-y-1.5 border border-border/40 p-2.5 rounded-xl bg-[#101014]/90 backdrop-blur-md hover:border-border/80 transition-all text-sm">
+                                                <div className="flex justify-between items-center gap-2">
+                                                    <div className="truncate space-y-0.5">
+                                                        <div className="font-semibold flex items-center gap-1.5 truncate">
+                                                            <span className="truncate">{s.name}</span>
+                                                            {s.isDefault && (
+                                                                <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[9px] gap-0.5 px-1 py-0">
+                                                                    <Star className="h-2 w-2 fill-amber-400 text-amber-400" /> Default
+                                                                </Badge>
+                                                            )}
+                                                        </div>
+                                                        <div className="text-[11px] font-mono text-muted-foreground truncate">
+                                                            <code>{s.url}</code>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                        <div className="flex items-center gap-1 bg-muted/40 px-2 py-0.5 rounded-md border border-border/40">
+                                                            <Switch 
+                                                                id={`monitored-plex-tab-${s.id}`}
+                                                                checked={s.monitored !== false}
+                                                                disabled={togglingPlexServerId === s.id}
+                                                                onCheckedChange={() => handleTogglePlexServerMonitoring(s.id, s.monitored !== false)}
+                                                            />
+                                                            <Label htmlFor={`monitored-plex-tab-${s.id}`} className="text-[10px] cursor-pointer font-medium select-none">
+                                                                {s.monitored !== false ? (
+                                                                    <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Monitored
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="text-muted-foreground flex items-center gap-1">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-slate-500" /> Paused
+                                                                    </span>
+                                                                )}
+                                                            </Label>
+                                                        </div>
+                                                        <Button 
+                                                            size="sm" 
+                                                            variant="ghost" 
+                                                            className="h-7 text-[11px] px-2 text-amber-400 hover:ring-1 hover:ring-amber-400/40 active:scale-95 transition-all"
+                                                            disabled={testingPlexServerId === s.id}
+                                                            onClick={() => handleTestPlexServer(s.id)}
+                                                        >
+                                                            {testingPlexServerId === s.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Test"}
+                                                        </Button>
+                                                        <Button 
+                                                            size="icon" 
+                                                            variant="ghost" 
+                                                            className="h-7 w-7 text-red-500 hover:ring-1 hover:ring-red-500/40 active:scale-95 transition-all" 
+                                                            onClick={async () => {
+                                                                if (confirm(`Remove Plex server "${s.name}"?`)) {
+                                                                    await removePlexServerAction(s.id);
+                                                                    setPlexServerActionMsg(`Plex server "${s.name}" removed.`);
+                                                                    setTimeout(() => setPlexServerActionMsg(""), 3000);
+                                                                    await loadAllData();
+                                                                    await handleFetchDiscoveredPlexServers();
+                                                                }
                                                             }}
                                                         >
-                                                            {preset}
+                                                            <Trash2 className="h-3.5 w-3.5"/>
                                                         </Button>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                            <div className="flex flex-wrap gap-2">
-                                                <Input 
-                                                    name="downloadsPath" 
-                                                    type="text" 
-                                                    value={inputDownloadsPath}
-                                                    onChange={(e) => setInputDownloadsPath(e.target.value)}
-                                                    placeholder="/downloads"
-                                                    className="flex-1 min-w-[200px]"
-                                                />
-                                                <Button 
-                                                    type="button" 
-                                                    variant="outline" 
-                                                    className="text-xs shrink-0 font-semibold gap-1 hover:ring-2 hover:ring-primary/30 active:scale-95 transition-all"
-                                                    disabled={validatingPath}
-                                                    onClick={() => handleValidatePath(inputDownloadsPath)}
-                                                >
-                                                    {validatingPath ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FolderCheck className="h-3.5 w-3.5" />}
-                                                    Check Path
-                                                </Button>
-                                                <Button 
-                                                    type="button" 
-                                                    variant="secondary" 
-                                                    className="text-xs shrink-0 font-extrabold gap-1.5 bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 hover:ring-2 hover:ring-amber-500/40 active:scale-95 transition-all shadow-sm"
-                                                    disabled={permTesting}
-                                                    onClick={() => handleTestPermissions(inputDownloadsPath)}
-                                                >
-                                                    {permTesting ? <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-400" /> : <Shield className="h-3.5 w-3.5 text-amber-400" />}
-                                                    Run Diagnostic Suite
-                                                </Button>
-                                            </div>
-                                            {pathResult && (
-                                                <div className={`text-xs p-2.5 rounded-lg border mt-2 flex items-center gap-2 ${pathResult.success ? "text-emerald-400 bg-emerald-950/40 border-emerald-800/40" : "text-red-400 bg-red-950/40 border-red-800/40"}`}>
-                                                    {pathResult.success ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <XCircle className="h-4 w-4 shrink-0" />}
-                                                    <span>{pathResult.msg || pathResult.err}</span>
-                                                </div>
-                                            )}
-
-                                            {/* FULL FOLDER PERMISSIONS DIAGNOSTIC RESULTS */}
-                                            {permResult && (
-                                                <div className={`text-xs p-4 rounded-xl border mt-3 space-y-3 ${permResult.success ? "bg-emerald-950/30 border-emerald-800/40 text-emerald-300" : "bg-red-950/30 border-red-800/40 text-slate-200"}`}>
-                                                    <div className="flex flex-wrap items-center justify-between gap-2 font-bold text-sm border-b border-muted/30 pb-2">
-                                                        <span className="flex items-center gap-2">
-                                                            {permResult.success ? <CheckCircle2 className="h-4.5 w-4.5 text-emerald-400 shrink-0" /> : <AlertTriangle className="h-4.5 w-4.5 text-red-400 shrink-0" />}
-                                                            Container Folder Diagnostic: <code className="text-amber-400 text-xs">{permResult.results?.folderPath}</code>
-                                                        </span>
-                                                        <Badge className={permResult.success ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30" : "bg-red-500/20 text-red-300 border-red-500/30"}>
-                                                            {permResult.success ? "✓ ALL PERMISSIONS PASS" : "✗ PERMISSIONS DEFICIENT"}
-                                                        </Badge>
                                                     </div>
-
-                                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 font-mono text-[11px]">
-                                                        <div className="flex items-center justify-between p-2 rounded bg-background/60 border border-muted/30">
-                                                            <span>📁 Path Exists:</span>
-                                                            <span className={permResult.results?.exists ? "text-emerald-400 font-bold" : "text-red-400 font-bold"}>
-                                                                {permResult.results?.exists ? "✓ PASS" : "✗ FAIL"}
-                                                            </span>
-                                                        </div>
-                                                        <div className="flex items-center justify-between p-2 rounded bg-background/60 border border-muted/30">
-                                                            <span>📖 Read Access:</span>
-                                                            <span className={permResult.results?.canRead ? "text-emerald-400 font-bold" : "text-red-400 font-bold"}>
-                                                                {permResult.results?.canRead ? "✓ PASS" : "✗ FAIL"}
-                                                            </span>
-                                                        </div>
-                                                        <div className="flex items-center justify-between p-2 rounded bg-background/60 border border-muted/30">
-                                                            <span>✏️ Write Access:</span>
-                                                            <span className={permResult.results?.canWrite ? "text-emerald-400 font-bold" : "text-red-400 font-bold"}>
-                                                                {permResult.results?.canWrite ? "✓ PASS" : "✗ FAIL"}
-                                                            </span>
-                                                        </div>
-                                                        <div className="flex items-center justify-between p-2 rounded bg-background/60 border border-muted/30">
-                                                            <span>🗑️ Delete Access:</span>
-                                                            <span className={permResult.results?.canDelete ? "text-emerald-400 font-bold" : "text-red-400 font-bold"}>
-                                                                {permResult.results?.canDelete ? "✓ PASS" : "✗ FAIL"}
-                                                            </span>
-                                                        </div>
-                                                    </div>
-
-                                                    {permResult.results?.exists && (
-                                                        <div className="text-[11px] bg-background/40 p-2.5 rounded-lg border border-muted/30 flex flex-wrap justify-between items-center gap-2 font-mono">
-                                                            <span>
-                                                                Total Items: <strong className="text-primary">{permResult.results?.itemCount || 0}</strong>
-                                                            </span>
-                                                            <span>
-                                                                Total File Size: <strong className="text-amber-400">{((permResult.results?.totalSizeBytes || 0) / (1024 * 1024)).toFixed(1)} MB</strong>
-                                                            </span>
-                                                        </div>
-                                                    )}
-
-                                                    {permResult.results?.subfolders && permResult.results.subfolders.length > 0 && (
-                                                        <div className="space-y-1.5 pt-1">
-                                                            <div className="text-[11px] font-bold text-slate-400">Detected Subdirectories:</div>
-                                                            <div className="flex flex-wrap gap-1.5">
-                                                                {permResult.results.subfolders.map((sub: any) => (
-                                                                    <Badge key={sub.name} variant="outline" className="bg-muted/40 text-[10px] font-mono">
-                                                                        📂 {sub.name} ({sub.count} items)
-                                                                    </Badge>
-                                                                ))}
-                                                            </div>
-                                                        </div>
-                                                    )}
-
-                                                    {permResult.results?.error && (
-                                                        <div className="text-[11px] text-red-400 bg-red-950/50 p-2.5 rounded-lg border border-red-800/40">
-                                                            <strong>Error Details:</strong> {permResult.results.error}
-                                                        </div>
-                                                    )}
                                                 </div>
-                                            )}
-                                        </div>
-                                        <Button type="submit" variant="secondary" className="w-full font-semibold hover:ring-2 hover:ring-primary/30 active:scale-95 transition-all">
-                                            Save Automation Settings
-                                        </Button>
-                                    </form>
-                                </CardContent>
-                            </Card>
-
-                            <Card className={`bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
-                                isGoogleBooksDirty ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" : ""
-                            }`}>
-                                <CardHeader>
-                                    <div className="flex justify-between items-start">
-                                        <div>
-                                            <CardTitle>Google Books API</CardTitle>
-                                            <CardDescription>Configure a free Google Cloud API key to bypass the 1,000 queries/day anonymous IP limit for fetching eBook covers.</CardDescription>
-                                        </div>
-                                        {isGoogleBooksDirty && (
-                                            <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
-                                                ● Unsaved Changes
-                                            </Badge>
-                                        )}
-                                    </div>
-                                </CardHeader>
-                                <CardContent>
-                                    <form 
-                                        key={`google-books-${systemSettings?.googleBooksApiKey ? "saved" : "empty"}`}
-                                        onSubmit={async (e) => {
-                                            e.preventDefault();
-                                            const formData = new FormData(e.currentTarget);
-                                            const res = await saveJobSettings(formData);
-                                            if (res.success) {
-                                                setSaveGoogleBooksMsg("Google Books settings saved successfully!");
-                                                setTimeout(() => setSaveGoogleBooksMsg(""), 4000);
-                                                loadAllData();
-                                            }
-                                        }} 
-                                        className="space-y-4"
-                                        autoComplete="off"
-                                        data-1p-ignore="true"
-                                        data-lpignore="true"
-                                    >
-                                        {saveGoogleBooksMsg && (
-                                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
-                                                <CheckCircle2 className="h-4 w-4 shrink-0" />
-                                                <span>{saveGoogleBooksMsg}</span>
-                                            </div>
-                                        )}
-                                        <div className="space-y-2">
-                                            <div className="flex justify-between items-center">
-                                                <Label>API Key</Label>
-                                                {systemSettings?.googleBooksApiKey && (
-                                                    <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
-                                                        <CheckCircle2 className="h-3 w-3" /> Saved
-                                                    </span>
+                                                {plexServerTestResults[s.id] && (
+                                                    <div className={`text-[11px] p-1.5 rounded flex items-center gap-1 ${plexServerTestResults[s.id].success ? "text-emerald-400 bg-emerald-950/40" : "text-red-400 bg-red-950/40"}`}>
+                                                        {plexServerTestResults[s.id].success ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                                                        <span className="truncate">{plexServerTestResults[s.id].msg || plexServerTestResults[s.id].err}</span>
+                                                    </div>
                                                 )}
                                             </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* PLEX.TV AUTO-DISCOVERY SECTION */}
+                                <div className="border-t border-border/40 pt-3 space-y-2.5 mt-auto">
+                                    <div className="flex justify-between items-center">
+                                        <div className="space-y-0.5">
+                                            <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                                                <Radio className="h-3 w-3 text-amber-500 animate-pulse" />
+                                                <span>Plex.tv Account Discovery</span>
+                                            </div>
+                                            <p className="text-[10px] text-muted-foreground">Scans linked Plex.tv account for unadded servers. Never marks unadded servers down.</p>
+                                        </div>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-7 text-[10px] px-2.5 font-semibold gap-1.5 border-amber-500/30 text-amber-400 hover:bg-amber-500/10 active:scale-95 transition-all"
+                                            disabled={loadingDiscoveredPlexServers}
+                                            onClick={handleFetchDiscoveredPlexServers}
+                                        >
+                                            {loadingDiscoveredPlexServers ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                                            {loadingDiscoveredPlexServers ? "Scanning..." : "Scan Plex.tv"}
+                                        </Button>
+                                    </div>
+
+                                    {discoveredPlexServersMsg && (
+                                        <p className="text-xs text-muted-foreground italic bg-muted/20 p-2 rounded-md border border-border/30">
+                                            {discoveredPlexServersMsg}
+                                        </p>
+                                    )}
+
+                                    {discoveredPlexServers.length > 0 && (() => {
+                                        const unconfiguredDiscovered = discoveredPlexServers.filter(s => !s.isConfigured);
+                                        const configuredDiscovered = discoveredPlexServers.filter(s => s.isConfigured);
+
+                                        return (
+                                            <div className="space-y-2">
+                                                {/* NEW / UNADDED SERVERS */}
+                                                {unconfiguredDiscovered.length > 0 ? (
+                                                    <div className="space-y-1.5 max-h-[180px] overflow-y-auto pr-1">
+                                                        <div className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider flex items-center gap-1">
+                                                            <span>New Servers Found on Plex.tv ({unconfiguredDiscovered.length})</span>
+                                                        </div>
+                                                        {unconfiguredDiscovered.map((srv, idx) => {
+                                                            const conn = (srv.connections || []).find((c: any) => c.local && !c.relay) || (srv.connections || [])[0];
+                                                            const connUri = conn ? conn.uri : "No connection URI";
+                                                            const isImporting = importingDiscoveredServerKey === (srv.clientIdentifier || srv.name);
+
+                                                            return (
+                                                                <div key={srv.clientIdentifier || idx} className="flex justify-between items-center p-2 rounded-lg bg-background/60 border border-amber-500/30 text-xs">
+                                                                    <div className="truncate space-y-0.5 max-w-[55%]">
+                                                                        <div className="font-medium truncate flex items-center gap-1.5">
+                                                                            <span className="truncate">{srv.name}</span>
+                                                                            <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-[9px] px-1 py-0 shrink-0">
+                                                                                New Discovery
+                                                                            </Badge>
+                                                                        </div>
+                                                                        <div className="text-[10px] font-mono text-muted-foreground truncate">
+                                                                            {connUri}
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-1 shrink-0">
+                                                                        <Button
+                                                                            type="button"
+                                                                            size="sm"
+                                                                            variant="outline"
+                                                                            className="h-6 text-[10px] px-2 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10 active:scale-95 transition-all"
+                                                                            disabled={isImporting}
+                                                                            onClick={() => handleImportDiscoveredPlexServer(srv, true)}
+                                                                        >
+                                                                            {isImporting ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : "+ Add & Monitor"}
+                                                                        </Button>
+                                                                        <Button
+                                                                            type="button"
+                                                                            size="sm"
+                                                                            variant="ghost"
+                                                                            className="h-6 text-[10px] px-1.5 text-muted-foreground hover:text-foreground active:scale-95 transition-all"
+                                                                            disabled={isImporting}
+                                                                            onClick={() => handleImportDiscoveredPlexServer(srv, false)}
+                                                                        >
+                                                                            + Add (Paused)
+                                                                        </Button>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                ) : (
+                                                    /* ALL SERVERS CONFIGURED STATE */
+                                                    <div className="flex items-center justify-between p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-xs">
+                                                        <div className="flex items-center gap-2">
+                                                            <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                                                            <span className="text-emerald-300 font-medium">All Plex account servers ({configuredDiscovered.length}) are configured & active above.</span>
+                                                        </div>
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="h-6 text-[10px] px-2 text-muted-foreground hover:text-foreground active:scale-95 transition-all shrink-0"
+                                                            onClick={() => setShowConfiguredDiscovered(prev => !prev)}
+                                                        >
+                                                            {showConfiguredDiscovered ? "Hide Details" : `Show Details (${configuredDiscovered.length})`}
+                                                        </Button>
+                                                    </div>
+                                                )}
+
+                                                {/* OPTIONAL EXPANDABLE VIEW FOR ALREADY CONFIGURED CLOUD SERVERS */}
+                                                {showConfiguredDiscovered && configuredDiscovered.length > 0 && (
+                                                    <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
+                                                        {unconfiguredDiscovered.length > 0 && (
+                                                            <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                                                                Already Configured in DomsHomeLab ({configuredDiscovered.length})
+                                                            </div>
+                                                        )}
+                                                        {configuredDiscovered.map((srv, idx) => {
+                                                            const conn = (srv.connections || []).find((c: any) => c.local && !c.relay) || (srv.connections || [])[0];
+                                                            const connUri = conn ? conn.uri : "No connection URI";
+
+                                                            return (
+                                                                <div key={srv.clientIdentifier || idx} className="flex justify-between items-center p-2 rounded-lg bg-background/40 border border-border/20 text-xs opacity-80">
+                                                                    <div className="truncate space-y-0.5 max-w-[70%]">
+                                                                        <div className="font-medium truncate flex items-center gap-1.5 text-foreground">
+                                                                            <span className="truncate">{srv.name}</span>
+                                                                            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30 text-[9px] px-1 py-0 shrink-0">
+                                                                                Configured Above
+                                                                            </Badge>
+                                                                        </div>
+                                                                        <div className="text-[10px] font-mono text-muted-foreground truncate">
+                                                                            {connUri}
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="shrink-0">
+                                                                        {srv.monitored !== false ? (
+                                                                            <span className="text-emerald-400 text-[10px] font-semibold flex items-center gap-1">
+                                                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Monitored
+                                                                            </span>
+                                                                        ) : (
+                                                                            <span className="text-muted-foreground text-[10px] flex items-center gap-1">
+                                                                                <span className="w-1.5 h-1.5 rounded-full bg-slate-500" /> Paused
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })()}
+                                </div>
+                            </CardContent>
+                        </Card>
+                        </div>
+                    )}
+
+                    {hubSubTabs.servers === "telemetry" && (
+                        <div className="space-y-6">
+                                                {/* DIRECT PLEX STREAM TELEMETRY BANNER */}
+                    <div className="p-4 rounded-xl bg-gradient-to-r from-amber-500/10 via-purple-500/5 to-sky-500/10 border border-amber-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md backdrop-blur-md">
+                        <div className="flex items-start gap-3">
+                            <div className="p-2 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30 shrink-0 mt-0.5 sm:mt-0">
+                                <Zap className="h-4 w-4" />
+                            </div>
+                            <div className="space-y-0.5">
+                                <div className="text-xs font-bold text-foreground flex items-center gap-2">
+                                    <span>Direct-Plex Stream Engine (Active)</span>
+                                    <Badge variant="outline" className="text-[9px] bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-semibold">
+                                        Native Telemetry
+                                    </Badge>
+                                </div>
+                                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                                    DomsHomeLab connects directly to your Plex Media Servers to capture live playback, hardware transcoding metrics, and stream quality telemetry. External Tautulli instances are completely optional and used exclusively for importing past historical watch records.
+                                </p>
+                            </div>
+                        </div>
+                        <Link href="/admin/tautulli">
+                            <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1.5 border-purple-500/30 text-purple-400 hover:bg-purple-500/10 shrink-0 cursor-pointer">
+                                <History className="h-3.5 w-3.5" />
+                                <span>Historical Backfill Tool</span>
+                            </Button>
+                        </Link>
+                    </div>
+
+                            <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
+                                                        {/* TAUTULLI HISTORICAL WATCH ARCHIVE */}
+                        <Card className="flex flex-col bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
+                            <CardHeader>
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <CardTitle className="flex items-center gap-2">
+                                            <History className="h-5 w-5 text-purple-400"/> {editingTautulli ? "Edit Historical Archive" : "Tautulli (Historical Watch Archive)"}
+                                        </CardTitle>
+                                        <CardDescription>{editingTautulli ? `Modifying ${editingTautulli.name}` : "Optional watch archive for importing historical play records into DomsHomeLab."}</CardDescription>
+                                    </div>
+                                    <Badge variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/30 text-[10px] shrink-0">
+                                        Optional • History Import
+                                    </Badge>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="space-y-4 flex-1">
+                                {!editingTautulli && (
+                                    <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                                        {tautulli.length === 0 && (
+                                            <div className="p-3 rounded-lg bg-white/[0.02] border border-dashed border-white/10 text-xs text-muted-foreground space-y-1">
+                                                <p className="font-semibold text-foreground">No Tautulli instances configured.</p>
+                                                <p className="text-[11px]">DomsHomeLab monitors Plex streams directly. Only add Tautulli if you have past watch history you wish to backfill.</p>
+                                            </div>
+                                        )}
+                                        {tautulli.map(t => (
+                                            <div key={t.id} className="space-y-1.5 border border-border/40 p-2.5 rounded-xl bg-[#101014]/90 backdrop-blur-md hover:border-border/80 transition-all text-sm">
+                                                <div className="flex justify-between items-center">
+                                                    <span className="truncate font-semibold">{t.name}</span>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <div className="flex items-center gap-1 bg-muted/40 px-2 py-0.5 rounded-md border border-border/40">
+                                                            <Switch 
+                                                                id={`monitored-tautulli-${t.id}`}
+                                                                checked={t.monitored !== false}
+                                                                disabled={togglingTautulliId === t.id}
+                                                                onCheckedChange={() => handleToggleTautulliMonitoring(t.id, t.monitored !== false)}
+                                                            />
+                                                            <Label htmlFor={`monitored-tautulli-${t.id}`} className="text-[10px] cursor-pointer font-medium select-none">
+                                                                {t.monitored !== false ? (
+                                                                    <span className="text-purple-400 font-semibold flex items-center gap-1">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-purple-400" /> Archive Active
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="text-muted-foreground flex items-center gap-1">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-slate-500" /> Paused
+                                                                    </span>
+                                                                )}
+                                                            </Label>
+                                                        </div>
+                                                        <Button 
+                                                            size="sm" 
+                                                            variant="ghost" 
+                                                            className="h-7 text-[11px] px-2 text-purple-400 hover:ring-1 hover:ring-purple-400/40 active:scale-95 transition-all"
+                                                            disabled={testingTautulliId === t.id}
+                                                            onClick={() => handleTestTautulli(t.id)}
+                                                        >
+                                                            {testingTautulliId === t.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Test"}
+                                                        </Button>
+                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-400 hover:ring-1 hover:ring-blue-400/40 active:scale-95 transition-all" onClick={() => setEditingTautulli(t)}>
+                                                            <Pencil className="h-3.5 w-3.5"/>
+                                                        </Button>
+                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500 hover:ring-1 hover:ring-red-500/40 active:scale-95 transition-all" onClick={() => handleDelete(t.id, removeTautulliInstance)}>
+                                                            <Trash2 className="h-3.5 w-3.5"/>
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                                {tautulliTestResults[t.id] && (
+                                                    <div className={`text-[11px] p-1.5 rounded flex items-center gap-1 ${tautulliTestResults[t.id].success ? "text-emerald-400 bg-emerald-950/40" : "text-red-400 bg-red-950/40"}`}>
+                                                        {tautulliTestResults[t.id].success ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                                                        <span className="truncate">{tautulliTestResults[t.id].msg || tautulliTestResults[t.id].err}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                <form 
+                                    key={editingTautulli ? `edit-tautulli-${editingTautulli.id}` : "new-tautulli"}
+                                    onSubmit={(e) => {
+                                        handleForm(e, editingTautulli ? updateTautulliInstance : addTautulliInstance);
+                                        if (editingTautulli) setEditingTautulli(null);
+                                        setTautulliFormTestResult(null);
+                                    }} 
+                                    className={`space-y-2 ${!editingTautulli && "border-t pt-4 mt-auto"}`}
+                                    autoComplete="off"
+                                    data-1p-ignore="true"
+                                    data-lpignore="true"
+                                 >
+                                    {editingTautulli && <input type="hidden" name="id" value={editingTautulli.id} />}
+                                    <div className="grid gap-2">
+                                        <Input 
+                                            name="name" 
+                                            placeholder="Friendly Name (e.g. Main Plex)" 
+                                            required 
+                                            className="h-9 text-sm" 
+                                            defaultValue={editingTautulli?.name} 
+                                            autoComplete="off"
+                                            data-1p-ignore="true"
+                                            data-lpignore="true"
+                                        />
+                                        <Input 
+                                            name="url" 
+                                            placeholder="URL (http://192.168.1.50:8181)" 
+                                            required 
+                                            className="h-9 text-sm font-mono" 
+                                            defaultValue={editingTautulli?.url} 
+                                            autoComplete="off"
+                                            data-1p-ignore="true"
+                                            data-lpignore="true"
+                                        />
+                                        <div>
                                             <div className="relative">
                                                 <Input 
-                                                    name="googleBooksApiKey"
-                                                    type={showGoogleBooksKey ? "text" : "password"}
-                                                    value={googleBooksKey}
-                                                    onChange={(e) => setGoogleBooksKey(e.target.value)}
-                                                    placeholder="AIzaSy..."
-                                                    className="bg-black/50 border-white/10 text-white placeholder:text-gray-500 pr-8"
+                                                    name="apiKey" 
+                                                    type={showTautulliKey ? "text" : "password"} 
+                                                    placeholder="Tautulli API Key" 
+                                                    required 
+                                                    className="h-9 text-sm font-mono pr-8" 
+                                                    defaultValue={editingTautulli?.apiKey} 
                                                     autoComplete="new-password"
                                                     data-1p-ignore="true"
                                                     data-lpignore="true"
@@ -2638,203 +3286,593 @@ function SettingsPageContent() {
                                                     variant="ghost"
                                                     size="icon"
                                                     className="absolute right-1 top-1 h-7 w-7 text-muted-foreground hover:text-foreground"
-                                                    onClick={() => setShowGoogleBooksKey(!showGoogleBooksKey)}
+                                                    onClick={() => setShowTautulliKey(!showTautulliKey)}
                                                 >
-                                                    {showGoogleBooksKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                                    {showTautulliKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                                                 </Button>
                                             </div>
-                                            <p className="text-xs text-gray-500 mt-1">
-                                                To get a key, <a href="https://console.cloud.google.com/apis/library/books.googleapis.com" target="_blank" className="text-primary hover:underline">enable the Books API</a> in Google Cloud Console and create an API Key under Credentials.
-                                                <br />
-                                                Leaving this blank will fall back to the `GOOGLE_BOOKS_API_KEY` environment variable, or anonymous IP rate limits.
-                                            </p>
+                                            <p className="text-[10px] text-muted-foreground mt-1">Found in Tautulli Settings → Web Interface → API.</p>
                                         </div>
-                                        <Button type="submit" size="sm" className="font-semibold hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all">Save Google Books Settings</Button>
-                                    </form>
-                                </CardContent>
-                            </Card>
-
-                            {/* CURATION, KOMETA & AGREGARR API KEYS CARD */}
-                            <Card className={`border-indigo-500/40 bg-[#121218]/80 backdrop-blur-md shadow-lg transition-all duration-300 ${
-                                isCurationDirty 
-                                    ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" 
-                                    : "shadow-indigo-950/20"
-                            }`}>
-                                <CardHeader>
-                                    <div className="flex justify-between items-start">
-                                        <div>
-                                            <CardTitle className="flex items-center gap-2 text-indigo-400">
-                                                <Sparkles className="h-5 w-5 text-indigo-400"/> Curation & Discovery API Keys
-                                            </CardTitle>
-                                            <CardDescription>
-                                                Configure TMDb, Trakt.tv, and IMDb / Community Ratings (MDBList) API keys for automated movie/TV collections, ratings badges, and theatrical vs digital release calendars.
-                                            </CardDescription>
+                                    </div>
+                                    <div className="flex items-center space-x-2 pt-1">
+                                        <input type="hidden" name="monitored" value="false" />
+                                        <input 
+                                            type="checkbox" 
+                                            id="tautulli-monitored" 
+                                            name="monitored" 
+                                            value="true" 
+                                            defaultChecked={editingTautulli ? editingTautulli.monitored !== false : true} 
+                                            className="h-4 w-4 rounded border-gray-300 text-purple-500 focus:ring-purple-400" 
+                                        />
+                                        <Label htmlFor="tautulli-monitored" className="text-xs font-medium cursor-pointer">
+                                            Enable reachability audits & historical sync for this instance
+                                        </Label>
+                                    </div>
+                                    {tautulliFormTestResult && (
+                                        <div className={`text-[11px] p-2 rounded-lg flex items-center gap-1.5 ${tautulliFormTestResult.success ? "text-emerald-400 bg-emerald-950/40 border border-emerald-500/30" : "text-red-400 bg-red-950/40 border border-red-500/30"}`}>
+                                            {tautulliFormTestResult.success ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> : <XCircle className="h-3.5 w-3.5 shrink-0" />}
+                                            <span className="leading-tight">{tautulliFormTestResult.msg || tautulliFormTestResult.err}</span>
                                         </div>
-                                        {isCurationDirty && (
-                                            <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
-                                                ● Unsaved Changes
-                                            </Badge>
+                                    )}
+                                    <div className="flex gap-2 mt-2">
+                                        <Button 
+                                            type="button" 
+                                            size="sm" 
+                                            variant="outline" 
+                                            className="text-xs font-semibold gap-1.5 border-primary/30 hover:border-primary hover:bg-primary/10 transition-all active:scale-95"
+                                            disabled={testingTautulliForm}
+                                            onClick={handleTestTautulliForm}
+                                        >
+                                            {testingTautulliForm ? <Loader2 className="h-3 w-3 animate-spin text-primary" /> : <Zap className="h-3 w-3 text-primary" />}
+                                            Test
+                                        </Button>
+                                        <Button type="submit" size="sm" className="flex-1 font-semibold hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all">
+                                            {editingTautulli ? "Save Changes" : "Add Historical Archive"}
+                                        </Button>
+                                        {editingTautulli && (
+                                            <Button type="button" size="sm" variant="outline" className="hover:ring-1 hover:ring-border active:scale-95 transition-all" onClick={() => { setEditingTautulli(null); setTautulliFormTestResult(null); }}>
+                                                Cancel
+                                            </Button>
                                         )}
                                     </div>
-                                </CardHeader>
-                                <CardContent>
-                                    <form 
-                                        onSubmit={async (e) => {
-                                            e.preventDefault();
-                                            const { saveCurationSettingsAction } = await import("@/app/curation-actions");
-                                            const res = await saveCurationSettingsAction({
-                                                tmdbApiKey: tmdbKey,
-                                                traktClientId: traktKey,
-                                                mdblistApiKey: mdblistKey
-                                            });
-                                            if (res.success) {
-                                                setCurationSavedMsg("Curation API keys saved successfully!");
-                                                setTimeout(() => setCurationSavedMsg(""), 4000);
-                                                loadAllData();
-                                            }
-                                        }}
-                                        className="space-y-4"
+                                </form>
+
+                                <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-between gap-3 text-xs">
+                                    <div className="space-y-0.5">
+                                        <span className="font-semibold text-purple-300 block">Looking to import past history?</span>
+                                        <span className="text-[11px] text-muted-foreground block">Run a 1-click historical backfill across all past sessions.</span>
+                                    </div>
+                                    <Link href="/admin/tautulli">
+                                        <Button size="sm" variant="outline" className="h-7 text-[10px] px-2.5 border-purple-500/30 text-purple-300 hover:bg-purple-500/20 shrink-0 cursor-pointer">
+                                            Open Backfill Tool
+                                        </Button>
+                                    </Link>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                                                        {/* GLANCES INSTANCES */}
+                        <Card className="flex flex-col bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <Activity className="h-5 w-5 text-sky-400"/> {editingGlances ? "Edit Glances" : "Glances Hardware"}
+                                </CardTitle>
+                                <CardDescription>{editingGlances ? `Modifying ${editingGlances.name}` : "CPU, Memory, and System Metrics."}</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4 flex-1">
+                                {!editingGlances && (
+                                    <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                                        {glances.length === 0 && <p className="text-xs text-muted-foreground italic">No Glances instances added.</p>}
+                                        {glances.map(g => (
+                                            <div key={g.id} className="space-y-1.5 border border-border/40 p-2.5 rounded-xl bg-[#101014]/90 backdrop-blur-md hover:border-border/80 transition-all text-sm">
+                                                <div className="flex justify-between items-center">
+                                                    <span className="truncate font-semibold">{g.name}</span>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <div className="flex items-center gap-1 bg-muted/40 px-2 py-0.5 rounded-md border border-border/40">
+                                                            <Switch 
+                                                                id={`monitored-glances-${g.id}`}
+                                                                checked={g.monitored !== false}
+                                                                disabled={togglingGlancesId === g.id}
+                                                                onCheckedChange={() => handleToggleGlancesMonitoring(g.id, g.monitored !== false)}
+                                                            />
+                                                            <Label htmlFor={`monitored-glances-${g.id}`} className="text-[10px] cursor-pointer font-medium select-none">
+                                                                {g.monitored !== false ? (
+                                                                    <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Monitored
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="text-muted-foreground flex items-center gap-1">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-slate-500" /> Paused
+                                                                    </span>
+                                                                )}
+                                                            </Label>
+                                                        </div>
+                                                        <Button 
+                                                            size="sm" 
+                                                            variant="ghost" 
+                                                            className="h-7 text-[11px] px-2 text-sky-400 hover:ring-1 hover:ring-sky-400/40 active:scale-95 transition-all"
+                                                            disabled={testingGlancesId === g.id}
+                                                            onClick={() => handleTestGlances(g.id)}
+                                                        >
+                                                            {testingGlancesId === g.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Test"}
+                                                        </Button>
+                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-400 hover:ring-1 hover:ring-blue-400/40 active:scale-95 transition-all" onClick={() => setEditingGlances(g)}>
+                                                            <Pencil className="h-3.5 w-3.5"/>
+                                                        </Button>
+                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500 hover:ring-1 hover:ring-red-500/40 active:scale-95 transition-all" onClick={() => handleDelete(g.id, removeGlancesInstance)}>
+                                                            <Trash2 className="h-3.5 w-3.5"/>
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                                {glancesTestResults[g.id] && (
+                                                    <div className={`text-[11px] p-1.5 rounded flex items-center gap-1 ${glancesTestResults[g.id].success ? "text-emerald-400 bg-emerald-950/40" : "text-red-400 bg-red-950/40"}`}>
+                                                        {glancesTestResults[g.id].success ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                                                        <span className="truncate">{glancesTestResults[g.id].msg || glancesTestResults[g.id].err}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                <form 
+                                    key={editingGlances ? `edit-glances-${editingGlances.id}` : "new-glances"}
+                                    onSubmit={(e) => {
+                                        handleForm(e, editingGlances ? updateGlancesInstance : addGlancesInstance);
+                                        if (editingGlances) setEditingGlances(null);
+                                        setGlancesFormTestResult(null);
+                                    }} 
+                                    className={`space-y-2 ${!editingGlances && "border-t pt-4 mt-auto"}`}
+                                    autoComplete="off"
+                                    data-1p-ignore="true"
+                                    data-lpignore="true"
+                                >
+                                    {editingGlances && <input type="hidden" name="id" value={editingGlances.id} />}
+                                    <div className="grid gap-2">
+                                        <Input 
+                                            name="name" 
+                                            placeholder="Server Name (e.g. Unraid)" 
+                                            required 
+                                            className="h-9 text-sm" 
+                                            defaultValue={editingGlances?.name} 
+                                            autoComplete="off"
+                                            data-1p-ignore="true"
+                                            data-lpignore="true"
+                                        />
+                                        <Input 
+                                            name="url" 
+                                            placeholder="URL (http://192.168.1.50:61208)" 
+                                            required 
+                                            className="h-9 text-sm font-mono" 
+                                            defaultValue={editingGlances?.url} 
+                                            autoComplete="off"
+                                            data-1p-ignore="true"
+                                            data-lpignore="true"
+                                        />
+                                    </div>
+                                    <div className="flex items-center space-x-2 pt-1">
+                                        <input type="hidden" name="monitored" value="false" />
+                                        <input 
+                                            type="checkbox" 
+                                            id="glances-monitored" 
+                                            name="monitored" 
+                                            value="true" 
+                                            defaultChecked={editingGlances ? editingGlances.monitored !== false : true} 
+                                            className="h-4 w-4 rounded border-gray-300 text-sky-500 focus:ring-sky-400" 
+                                        />
+                                        <Label htmlFor="glances-monitored" className="text-xs font-medium cursor-pointer">
+                                            Monitor CPU/RAM metrics and host reachability
+                                        </Label>
+                                    </div>
+                                    {glancesFormTestResult && (
+                                        <div className={`text-[11px] p-2 rounded-lg flex items-center gap-1.5 ${glancesFormTestResult.success ? "text-emerald-400 bg-emerald-950/40 border border-emerald-500/30" : "text-red-400 bg-red-950/40 border border-red-500/30"}`}>
+                                            {glancesFormTestResult.success ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> : <XCircle className="h-3.5 w-3.5 shrink-0" />}
+                                            <span className="leading-tight">{glancesFormTestResult.msg || glancesFormTestResult.err}</span>
+                                        </div>
+                                    )}
+                                    <div className="flex gap-2 mt-2">
+                                        <Button 
+                                            type="button" 
+                                            size="sm" 
+                                            variant="outline" 
+                                            className="text-xs font-semibold gap-1.5 border-sky-400/30 hover:border-sky-400 hover:bg-sky-400/10 transition-all active:scale-95 text-sky-400"
+                                            disabled={testingGlancesForm}
+                                            onClick={handleTestGlancesForm}
+                                        >
+                                            {testingGlancesForm ? <Loader2 className="h-3 w-3 animate-spin text-sky-400" /> : <Zap className="h-3 w-3 text-sky-400" />}
+                                            Test
+                                        </Button>
+                                        <Button type="submit" size="sm" className="flex-1 font-semibold hover:ring-2 hover:ring-sky-400/40 active:scale-95 transition-all">
+                                            {editingGlances ? "Save Changes" : "Add Glances Server"}
+                                        </Button>
+                                        {editingGlances && (
+                                            <Button type="button" size="sm" variant="outline" className="hover:ring-1 hover:ring-border active:scale-95 transition-all" onClick={() => { setEditingGlances(null); setGlancesFormTestResult(null); }}>
+                                                Cancel
+                                            </Button>
+                                        )}
+                                    </div>
+                                </form>
+                            </CardContent>
+                        </Card>
+                            </div>
+                        </div>
+                    )}
+                </TabsContent>
+
+                {/* ========================================================================= */}
+                {/* HUB 3: ACCESS CONTROL & MEMBERS                                           */}
+                {/* ========================================================================= */}
+                <TabsContent value="access" className="space-y-4">
+                    <AccessSettingsPage />
+                </TabsContent>
+
+                {/* ========================================================================= */}
+                {/* HUB 4: INTEGRATIONS & ECOSYSTEM                                           */}
+                {/* ========================================================================= */}
+                <TabsContent value="integrations" className="space-y-6">
+                    {/* Sub-tab Pill Switcher */}
+                    <div className="flex items-center gap-1.5 p-1 bg-white/[0.03] border border-white/10 rounded-xl w-fit overflow-x-auto max-w-full mb-6">
+                        <button
+                            type="button"
+                            onClick={() => handleSubTabChange("integrations", "servarr")}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                                hubSubTabs.integrations === "servarr"
+                                    ? "bg-rose-500/20 text-rose-400 border border-rose-500/40 shadow-xs"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05]"
+                            }`}
+                        >
+                            <FolderCheck className="h-3.5 w-3.5" />
+                            <span>Servarr Stack & Downloaders</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleSubTabChange("integrations", "requests")}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                                hubSubTabs.integrations === "requests"
+                                    ? "bg-rose-500/20 text-rose-400 border border-rose-500/40 shadow-xs"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05]"
+                            }`}
+                        >
+                            <Compass className="h-3.5 w-3.5" />
+                            <span>Media Requests (Seerr)</span>
+                            {isSeerrDirty && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse ml-0.5" />
+                            )}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleSubTabChange("integrations", "ai")}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                                hubSubTabs.integrations === "ai"
+                                    ? "bg-rose-500/20 text-rose-400 border border-rose-500/40 shadow-xs"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05]"
+                            }`}
+                        >
+                            <Bot className="h-3.5 w-3.5" />
+                            <span>AI Agent & Curation Keys</span>
+                            {(isAiDirty || isCurationDirty || isGoogleBooksDirty) && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse ml-0.5" />
+                            )}
+                        </button>
+                    </div>
+
+                    {hubSubTabs.integrations === "servarr" && (
+                        <div className="space-y-6">
+                                                    {/* MEDIA APPS & DOWNLOAD CLIENTS */}
+                        <Card className="flex flex-col bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <Shield className="h-5 w-5 text-emerald-400"/> {editingApp ? "Edit Application" : "Media Stack & Apps"}
+                                </CardTitle>
+                                <CardDescription>{editingApp ? `Modifying ${editingApp.name}` : "Connect Arr apps & download clients."}</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4 flex-1">
+                                {!editingApp && (
+                                    <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                                        {mediaApps.length === 0 && <p className="text-xs text-muted-foreground italic">No applications configured.</p>}
+                                        {mediaApps.map(app => (
+                                            <div key={app.id} className="space-y-1.5 border border-border/40 p-2.5 rounded-xl bg-[#101014]/90 backdrop-blur-md hover:border-border/80 transition-all text-sm">
+                                                <div className="flex justify-between items-center">
+                                                    <div className="truncate">
+                                                        <div className="font-semibold">{app.name}</div>
+                                                        <div className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight">{app.type}</div>
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                        <div className="flex items-center gap-1 bg-muted/40 px-2 py-0.5 rounded-md border border-border/40">
+                                                            <Switch 
+                                                                id={`monitored-app-${app.id}`}
+                                                                checked={app.monitored !== false}
+                                                                disabled={togglingMediaAppId === app.id}
+                                                                onCheckedChange={() => handleToggleMediaAppMonitoring(app.id, app.monitored !== false)}
+                                                            />
+                                                            <Label htmlFor={`monitored-app-${app.id}`} className="text-[10px] cursor-pointer font-medium select-none">
+                                                                {app.monitored !== false ? (
+                                                                    <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Monitored
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="text-muted-foreground flex items-center gap-1">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-slate-500" /> Paused
+                                                                    </span>
+                                                                )}
+                                                            </Label>
+                                                        </div>
+                                                        <Button 
+                                                            size="sm" 
+                                                            variant="ghost" 
+                                                            className="h-7 text-[11px] px-2 text-emerald-400 hover:ring-1 hover:ring-emerald-400/40 active:scale-95 transition-all"
+                                                            disabled={testingAppId === app.id}
+                                                            onClick={() => handleTestApp(app.id)}
+                                                        >
+                                                            {testingAppId === app.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Test"}
+                                                        </Button>
+                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-400 hover:ring-1 hover:ring-blue-400/40 active:scale-95 transition-all" onClick={() => { setEditingApp(app); setArrMeta(null); }}>
+                                                            <Pencil className="h-3.5 w-3.5"/>
+                                                        </Button>
+                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500 hover:ring-1 hover:ring-red-500/40 active:scale-95 transition-all" onClick={() => handleDelete(app.id, removeMediaApp)}>
+                                                            <Trash2 className="h-3.5 w-3.5"/>
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                                {appTestResults[app.id] && (
+                                                    <div className={`text-[11px] p-1.5 rounded flex items-center gap-1 ${appTestResults[app.id].success ? "text-emerald-400 bg-emerald-950/40" : "text-red-400 bg-red-950/40"}`}>
+                                                        {appTestResults[app.id].success ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                                                        <span className="truncate">{appTestResults[app.id].msg || appTestResults[app.id].err}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                <form 
+                                    key={editingApp ? `edit-app-${editingApp.id}` : `new-app-${newAppType || "default"}`}
+                                    onSubmit={(e) => {
+                                        handleForm(e, editingApp ? updateMediaApp : addMediaApp);
+                                        if (editingApp) setEditingApp(null);
+                                        setNewAppType("");
+                                        setAppFormTestResult(null);
+                                    }} 
+                                    className={`space-y-3 ${!editingApp && "border-t pt-4 mt-auto"}`}
+                                    autoComplete="off"
+                                    data-1p-ignore="true"
+                                    data-lpignore="true"
+                                >
+                                    {editingApp && <input type="hidden" name="id" value={editingApp.id} />}
+                                    <Select 
+                                        name="type" 
+                                        required 
+                                        defaultValue={editingApp?.type}
+                                        onValueChange={(v) => setNewAppType(v)}
                                     >
-                                        {curationSavedMsg && (
-                                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-2.5 rounded-lg flex items-center gap-1.5">
-                                                <CheckCircle2 className="h-3.5 w-3.5" />
-                                                <span>{curationSavedMsg}</span>
-                                            </div>
-                                        )}
-
-                                        {curationTestResult && (
-                                            <div className={`text-xs p-3 rounded-lg border space-y-1 ${curationTestResult.errors?.length === 0 ? 'bg-emerald-950/50 text-emerald-300 border-emerald-800' : 'bg-rose-950/50 text-rose-300 border-rose-800'}`}>
-                                                <div className="font-bold flex items-center gap-1.5">
-                                                    {curationTestResult.errors?.length === 0 ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
-                                                    <span>API Verification Results:</span>
-                                                </div>
-                                                <div className="text-[11px] space-y-0.5 pl-5">
-                                                    {tmdbKey && <div>• TMDb: {curationTestResult.tmdb ? "✓ Connected (200 OK)" : "✗ Failed"}</div>}
-                                                    {traktKey && <div>• Trakt: {curationTestResult.trakt ? "✓ Connected (200 OK)" : "✗ Failed"}</div>}
-                                                    {mdblistKey && <div>• IMDb / Ratings (MDBList): {curationTestResult.mdblist ? "✓ Connected (200 OK)" : "✗ Failed"}</div>}
-                                                    {curationTestResult.errors?.map((err: string, i: number) => (
-                                                        <div key={i} className="text-rose-400">• {err}</div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        <div className="space-y-3">
-                                            {/* TMDb API Key */}
-                                            <div className="space-y-1">
-                                                <div className="flex justify-between items-center text-xs">
-                                                    <Label className="font-semibold text-slate-200">The Movie Database (TMDb) API Key</Label>
-                                                    <a href="https://www.themoviedb.org/settings/api" target="_blank" className="text-[10px] text-primary hover:underline">
-                                                        Get Free Key ↗
-                                                    </a>
-                                                </div>
-                                                <div className="relative">
-                                                    <Input 
-                                                        type={showTmdbKey ? "text" : "password"}
-                                                        value={tmdbKey}
-                                                        onChange={e => setTmdbKey(e.target.value)}
-                                                        placeholder="e.g. 3a1f8c..."
-                                                        className="bg-black/50 border-white/10 text-xs pr-8"
-                                                    />
-                                                    <Button
-                                                        type="button"
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="absolute right-1 top-1 h-7 w-7 text-muted-foreground hover:text-foreground"
-                                                        onClick={() => setShowTmdbKey(!showTmdbKey)}
-                                                    >
-                                                        {showTmdbKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                                                    </Button>
-                                                </div>
-                                                <p className="text-[10px] text-slate-400">
-                                                    Powers franchise collections (MCU, Star Wars, Pixar, HBO, Netflix) and theatrical vs digital release countdowns.
-                                                </p>
-                                            </div>
-
-                                            {/* Trakt Client ID */}
-                                            <div className="space-y-1">
-                                                <div className="flex justify-between items-center text-xs">
-                                                    <Label className="font-semibold text-slate-200">Trakt.tv API Client ID</Label>
-                                                    <a href="https://trakt.tv/oauth/applications" target="_blank" className="text-[10px] text-primary hover:underline">
-                                                        Create Trakt App ↗
-                                                    </a>
-                                                </div>
-                                                <div className="relative">
-                                                    <Input 
-                                                        type={showTraktKey ? "text" : "password"}
-                                                        value={traktKey}
-                                                        onChange={e => setTraktKey(e.target.value)}
-                                                        placeholder="e.g. 9b7c6..."
-                                                        className="bg-black/50 border-white/10 text-xs pr-8"
-                                                    />
-                                                    <Button
-                                                        type="button"
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="absolute right-1 top-1 h-7 w-7 text-muted-foreground hover:text-foreground"
-                                                        onClick={() => setShowTraktKey(!showTraktKey)}
-                                                    >
-                                                        {showTraktKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                                                    </Button>
-                                                </div>
-                                                <p className="text-[10px] text-slate-400">
-                                                    Powers dynamic Trending This Week, Anticipated Movies, and custom public Trakt lists.
-                                                </p>
-                                            </div>
-
-                                            {/* MDBList API Key */}
-                                            <div className="space-y-1">
-                                                <div className="flex justify-between items-center text-xs">
-                                                    <Label className="font-semibold text-slate-200">IMDb & Community Ratings (MDBList API Key)</Label>
-                                                    <a href="https://mdblist.com/preferences/" target="_blank" className="text-[10px] text-primary hover:underline">
-                                                        Get MDBList Key ↗
-                                                    </a>
-                                                </div>
-                                                <div className="relative">
-                                                    <Input 
-                                                        type={showMdblistKey ? "text" : "password"}
-                                                        value={mdblistKey}
-                                                        onChange={e => setMdblistKey(e.target.value)}
-                                                        placeholder="e.g. key_..."
-                                                        className="bg-black/50 border-white/10 text-xs pr-8"
-                                                    />
-                                                    <Button
-                                                        type="button"
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="absolute right-1 top-1 h-7 w-7 text-muted-foreground hover:text-foreground"
-                                                        onClick={() => setShowMdblistKey(!showMdblistKey)}
-                                                    >
-                                                        {showMdblistKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                                                    </Button>
-                                                </div>
-                                                <p className="text-[10px] text-slate-400">
-                                                    Powers IMDb Top 250, Oscar Best Picture Winners, and composite IMDb/Rotten Tomatoes/Metacritic ratings badges.
-                                                </p>
-                                            </div>
+                                        <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="App Type" /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectGroup>
+                                                <SelectLabel>Downloads</SelectLabel>
+                                                <SelectItem value="sabnzbd">SABnzbd</SelectItem>
+                                                <SelectItem value="nzbget">NZBGet</SelectItem>
+                                                <SelectItem value="qbittorrent">qBittorrent</SelectItem>
+                                            </SelectGroup>
+                                            <SelectGroup>
+                                                <SelectLabel>Movies & TV</SelectLabel>
+                                                <SelectItem value="radarr">Radarr</SelectItem>
+                                                <SelectItem value="sonarr">Sonarr</SelectItem>
+                                            </SelectGroup>
+                                            <SelectGroup>
+                                                <SelectLabel>Requests</SelectLabel>
+                                                <SelectItem value="overseerr">Overseerr</SelectItem>
+                                                <SelectItem value="jellyseerr">Jellyseerr</SelectItem>
+                                                <SelectItem value="ombi">Ombi</SelectItem>
+                                            </SelectGroup>
+                                            <SelectGroup>
+                                                <SelectLabel>Utility & Indexers</SelectLabel>
+                                                <SelectItem value="prowlarr">Prowlarr</SelectItem>
+                                                <SelectItem value="readarr">Readarr</SelectItem>
+                                                <SelectItem value="bazarr">Bazarr</SelectItem>
+                                                <SelectItem value="lidarr">Lidarr</SelectItem>
+                                                <SelectItem value="maintainerr">Maintainerr</SelectItem>
+                                            </SelectGroup>
+                                        </SelectContent>
+                                    </Select>
+                                    <Input 
+                                        name="name" 
+                                        placeholder="Display Name" 
+                                        required 
+                                        className="h-9 text-sm" 
+                                        defaultValue={editingApp?.name} 
+                                        autoComplete="off"
+                                        data-1p-ignore="true"
+                                        data-lpignore="true"
+                                    />
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div className="space-y-1">
+                                            <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Internal URL</Label>
+                                            <Input 
+                                                name="url" 
+                                                placeholder={`http://192.168.1.50:${DEFAULT_PORTS[newAppType || editingApp?.type] || "8080"}`} 
+                                                required 
+                                                className="h-9 text-sm font-mono" 
+                                                defaultValue={editingApp?.url} 
+                                                autoComplete="off"
+                                                data-1p-ignore="true"
+                                                data-lpignore="true"
+                                            />
                                         </div>
-
-                                        <div className="flex items-center gap-2 pt-1">
-                                            <Button type="submit" size="sm" className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs h-8">
-                                                Save Curation Keys
-                                            </Button>
-                                            <Button 
-                                                type="button" 
-                                                variant="outline" 
-                                                size="sm" 
-                                                disabled={testingCurationKeys || (!tmdbKey && !traktKey && !mdblistKey)}
-                                                onClick={handleTestCurationKeys}
-                                                className="text-xs h-8 border-slate-700 font-semibold gap-1.5"
+                                        <div className="space-y-1">
+                                            <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">External URL</Label>
+                                            <Input 
+                                                name="externalUrl" 
+                                                placeholder="https://app.com" 
+                                                className="h-9 text-sm font-mono" 
+                                                defaultValue={editingApp?.externalUrl} 
+                                                autoComplete="off"
+                                                data-1p-ignore="true"
+                                                data-lpignore="true"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div className="relative">
+                                            <Input 
+                                                name="apiKey" 
+                                                type={showMediaAppKey ? "text" : "password"} 
+                                                placeholder="API Key / Password" 
+                                                className="h-9 text-sm font-mono pr-8" 
+                                                defaultValue={editingApp?.apiKey} 
+                                                autoComplete="new-password"
+                                                data-1p-ignore="true"
+                                                data-lpignore="true"
+                                            />
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                className="absolute right-1 top-1 h-7 w-7 text-muted-foreground hover:text-foreground"
+                                                onClick={() => setShowMediaAppKey(!showMediaAppKey)}
                                             >
-                                                {testingCurationKeys ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 text-indigo-400" />}
-                                                Test API Keys
+                                                {showMediaAppKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                                             </Button>
                                         </div>
-                                    </form>
-                                </CardContent>
-                            </Card>
+                                        <p className="text-[10px] text-muted-foreground mt-1">Found in the app's Settings → General (or Settings → Security) tab.</p>
+                                    </div>
+                                    
+                                    <div className="space-y-2 border-t pt-3 mt-3">
+                                        <div className="flex items-center space-x-2">
+                                            <input type="checkbox" id="enabledForUsers" name="enabledForUsers" value="true" defaultChecked={editingApp?.enabledForUsers} className="h-4 w-4 rounded border-gray-300" />
+                                            <Label htmlFor="enabledForUsers" className="text-sm font-medium">Enable for Super Users (Radarr/Sonarr)</Label>
+                                        </div>
+                                        <p className="text-[10px] text-muted-foreground ml-6">If enabled, this instance will appear on the Radarr/Sonarr pages for SUPER_USERs.</p>
+                                        
+                                        <div className="grid grid-cols-2 gap-2 mt-2">
+                                            <div className="space-y-1">
+                                                <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Allowed Quality Profile IDs</Label>
+                                                <Input id="allowedQualityProfileIds" name="allowedQualityProfileIds" placeholder="e.g. 1,4,7" className="h-8 text-xs" defaultValue={editingApp?.allowedQualityProfileIds || ""} />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Allowed Root Folder IDs</Label>
+                                                <Input id="allowedRootFolderIds" name="allowedRootFolderIds" placeholder="e.g. 1,2" className="h-8 text-xs" defaultValue={editingApp?.allowedRootFolderIds || ""} />
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center justify-between mt-1">
+                                            <p className="text-[10px] text-muted-foreground ml-1">Comma-separated list of IDs. Super Users will only be able to select from these.</p>
+                                            <Button type="button" variant="outline" size="sm" className="h-7 text-[10px] px-2 py-0 hover:ring-1 hover:ring-primary/40 active:scale-95 transition-all" onClick={handleFetchArrMeta} disabled={fetchingArrMeta}>
+                                                {fetchingArrMeta ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <RefreshCw className="h-3 w-3 mr-1" />}
+                                                Fetch IDs
+                                            </Button>
+                                        </div>
+                                        {arrMeta && (
+                                            <div className="space-y-3 bg-muted/30 p-2 rounded-md border mt-2">
+                                                <div>
+                                                    <p className="text-[10px] font-bold uppercase text-muted-foreground mb-1">Quality Profiles (Click to toggle)</p>
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {arrMeta.profiles.map((p: any) => (
+                                                            <Badge 
+                                                                key={p.id} 
+                                                                variant="outline" 
+                                                                className="cursor-pointer hover:bg-primary/20 text-[10px] py-0 transition-colors"
+                                                                onClick={() => {
+                                                                    const input = document.getElementById("allowedQualityProfileIds") as HTMLInputElement;
+                                                                    if (!input) return;
+                                                                    const current = input.value.split(',').map(s => s.trim()).filter(s => s);
+                                                                    const id = p.id.toString();
+                                                                    if (!current.includes(id)) input.value = current.length > 0 ? `${current.join(',')},${id}` : id;
+                                                                    else input.value = current.filter(s => s !== id).join(',');
+                                                                }}
+                                                            >
+                                                                {p.id}: {p.name}
+                                                            </Badge>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <p className="text-[10px] font-bold uppercase text-muted-foreground mb-1">Root Folders (Click to toggle)</p>
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {arrMeta.folders.map((f: any) => (
+                                                            <Badge 
+                                                                key={f.id} 
+                                                                variant="outline" 
+                                                                className="cursor-pointer hover:bg-primary/20 text-[10px] py-0 transition-colors"
+                                                                onClick={() => {
+                                                                    const input = document.getElementById("allowedRootFolderIds") as HTMLInputElement;
+                                                                    if (!input) return;
+                                                                    const current = input.value.split(',').map(s => s.trim()).filter(s => s);
+                                                                    const id = f.id.toString();
+                                                                    if (!current.includes(id)) input.value = current.length > 0 ? `${current.join(',')},${id}` : id;
+                                                                    else input.value = current.filter(s => s !== id).join(',');
+                                                                }}
+                                                            >
+                                                                {f.id}: {f.path}
+                                                            </Badge>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
 
-                            {/* AI METADATA AGENT CARD */}
+                                    <div className="flex items-center space-x-2 pt-1">
+                                        <input type="hidden" name="monitored" value="false" />
+                                        <input 
+                                            type="checkbox" 
+                                            id="app-monitored" 
+                                            name="monitored" 
+                                            value="true" 
+                                            defaultChecked={editingApp ? editingApp.monitored !== false : true} 
+                                            className="h-4 w-4 rounded border-gray-300 text-emerald-500 focus:ring-emerald-400" 
+                                        />
+                                        <Label htmlFor="app-monitored" className="text-xs font-medium cursor-pointer">
+                                            Monitor service reachability on dashboard
+                                        </Label>
+                                    </div>
+
+                                    {appFormTestResult && (
+                                        <div className={`text-[11px] p-2 rounded-lg flex items-center gap-1.5 ${appFormTestResult.success ? "text-emerald-400 bg-emerald-950/40 border border-emerald-500/30" : "text-red-400 bg-red-950/40 border border-red-500/30"}`}>
+                                            {appFormTestResult.success ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> : <XCircle className="h-3.5 w-3.5 shrink-0" />}
+                                            <span className="leading-tight">{appFormTestResult.msg || appFormTestResult.err}</span>
+                                        </div>
+                                    )}
+
+                                    <div className="flex gap-2">
+                                        <Button 
+                                            type="button" 
+                                            size="sm" 
+                                            variant="outline" 
+                                            className="h-9 text-xs font-semibold gap-1.5 border-emerald-400/30 hover:border-emerald-400 hover:bg-emerald-400/10 transition-all active:scale-95 text-emerald-400"
+                                            disabled={testingAppForm}
+                                            onClick={handleTestAppForm}
+                                        >
+                                            {testingAppForm ? <Loader2 className="h-3 w-3 animate-spin text-emerald-400" /> : <Zap className="h-3 w-3 text-emerald-400" />}
+                                            Test
+                                        </Button>
+                                        <Button type="submit" size="sm" className="flex-1 h-9 font-semibold hover:ring-2 hover:ring-emerald-400/40 active:scale-95 transition-all">
+                                            {editingApp ? "Update App" : "Add Application"}
+                                        </Button>
+                                        {editingApp && (
+                                            <Button type="button" size="sm" variant="outline" className="h-9 hover:ring-1 hover:ring-border active:scale-95 transition-all" onClick={() => { setEditingApp(null); setArrMeta(null); setNewAppType(""); setAppFormTestResult(null); }}>
+                                                <X className="h-4 w-4"/>
+                                            </Button>
+                                        )}
+                                    </div>
+                                </form>
+                            </CardContent>
+                        </Card>
+                        </div>
+                    )}
+
+                    {hubSubTabs.integrations === "requests" && (
+                        <div className="space-y-6">
+                            <SeerrSettingsPanel 
+                                onNavigateTab={handleTabChange} 
+                                onDirtyChange={(dirty, sections) => {
+                                    setIsSeerrDirty(dirty);
+                                    setSeerrDirtySections(sections);
+                                }}
+                            />
+                        </div>
+                    )}
+
+                    {hubSubTabs.integrations === "ai" && (
+                        <div className="space-y-6">
+                                                        {/* AI METADATA AGENT CARD */}
                             <Card className={`border-purple-500/40 bg-[#121218]/80 backdrop-blur-md shadow-lg transition-all duration-300 ${
                                 isAiDirty 
                                     ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" 
@@ -3309,432 +4347,245 @@ function SettingsPageContent() {
                                     </form>
                                 </CardContent>
                             </Card>
-                        </div>
-                    </div>
 
-                </TabsContent>
-
-                {/* --- TAB: MEDIA SERVERS --- */}
-                <TabsContent value="servers" className="space-y-6">
-                    <AdminMediaServersPanel />
-                </TabsContent>
-
-                {/* --- TAB 2: ACCESS CONTROL --- */}
-                <TabsContent value="access" className="space-y-4">
-                    <AccessSettingsPage />
-                </TabsContent>
-
-                {/* --- TAB 3: BROADCAST & EMAIL TEMPLATES --- */}
-                <TabsContent value="emails" className="space-y-4">
-                    <EmailManagement />
-                </TabsContent>
-
-                {/* --- TAB 4: MONITORING & APPS --- */}
-                <TabsContent value="monitoring" className="space-y-6">
-                    {/* DIRECT PLEX STREAM TELEMETRY BANNER */}
-                    <div className="p-4 rounded-xl bg-gradient-to-r from-amber-500/10 via-purple-500/5 to-sky-500/10 border border-amber-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md backdrop-blur-md">
-                        <div className="flex items-start gap-3">
-                            <div className="p-2 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30 shrink-0 mt-0.5 sm:mt-0">
-                                <Zap className="h-4 w-4" />
-                            </div>
-                            <div className="space-y-0.5">
-                                <div className="text-xs font-bold text-foreground flex items-center gap-2">
-                                    <span>Direct-Plex Stream Engine (Active)</span>
-                                    <Badge variant="outline" className="text-[9px] bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-semibold">
-                                        Native Telemetry
-                                    </Badge>
-                                </div>
-                                <p className="text-[11px] text-muted-foreground leading-relaxed">
-                                    DomsHomeLab connects directly to your Plex Media Servers to capture live playback, hardware transcoding metrics, and stream quality telemetry. External Tautulli instances are completely optional and used exclusively for importing past historical watch records.
-                                </p>
-                            </div>
-                        </div>
-                        <Link href="/admin/tautulli">
-                            <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1.5 border-purple-500/30 text-purple-400 hover:bg-purple-500/10 shrink-0 cursor-pointer">
-                                <History className="h-3.5 w-3.5" />
-                                <span>Historical Backfill Tool</span>
-                            </Button>
-                        </Link>
-                    </div>
-
-                    <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
-                        {/* PLEX MEDIA SERVERS & AUTO-DISCOVERY */}
-                        <Card className="flex flex-col bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
-                            <CardHeader>
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <CardTitle className="flex items-center gap-2">
-                                            <Tv className="h-5 w-5 text-amber-500"/> Plex Media Servers
-                                        </CardTitle>
-                                        <CardDescription>Primary direct stream monitoring source, PMS hardware telemetry, and Plex.tv account auto-discovery.</CardDescription>
-                                    </div>
-                                    <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-[10px]">
-                                        {plexServers.length} {plexServers.length === 1 ? "Server" : "Servers"}
-                                    </Badge>
-                                </div>
-                            </CardHeader>
-                            <CardContent className="space-y-4 flex-1">
-                                {plexServerActionMsg && (
-                                    <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-2.5 rounded-lg flex items-center gap-2 animate-in fade-in">
-                                        <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-                                        <span>{plexServerActionMsg}</span>
-                                    </div>
-                                )}
-
-                                {/* LIST OF CONFIGURED SERVERS */}
-                                <div>
-                                    <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center justify-between">
-                                        <span>Configured Plex Servers ({plexServers.length})</span>
-                                        <span className="text-[10px] text-muted-foreground font-normal">Toggle switch to pause/resume monitoring</span>
-                                    </div>
-                                    <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
-                                        {plexServers.length === 0 && (
-                                            <p className="text-xs text-muted-foreground italic">No Plex servers configured. Import from discovered servers below or add one in General & Setup.</p>
-                                        )}
-                                        {plexServers.map(s => (
-                                            <div key={s.id} className="space-y-1.5 border border-border/40 p-2.5 rounded-xl bg-[#101014]/90 backdrop-blur-md hover:border-border/80 transition-all text-sm">
-                                                <div className="flex justify-between items-center gap-2">
-                                                    <div className="truncate space-y-0.5">
-                                                        <div className="font-semibold flex items-center gap-1.5 truncate">
-                                                            <span className="truncate">{s.name}</span>
-                                                            {s.isDefault && (
-                                                                <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[9px] gap-0.5 px-1 py-0">
-                                                                    <Star className="h-2 w-2 fill-amber-400 text-amber-400" /> Default
-                                                                </Badge>
-                                                            )}
-                                                        </div>
-                                                        <div className="text-[11px] font-mono text-muted-foreground truncate">
-                                                            <code>{s.url}</code>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex items-center gap-1.5 shrink-0">
-                                                        <div className="flex items-center gap-1 bg-muted/40 px-2 py-0.5 rounded-md border border-border/40">
-                                                            <Switch 
-                                                                id={`monitored-plex-tab-${s.id}`}
-                                                                checked={s.monitored !== false}
-                                                                disabled={togglingPlexServerId === s.id}
-                                                                onCheckedChange={() => handleTogglePlexServerMonitoring(s.id, s.monitored !== false)}
-                                                            />
-                                                            <Label htmlFor={`monitored-plex-tab-${s.id}`} className="text-[10px] cursor-pointer font-medium select-none">
-                                                                {s.monitored !== false ? (
-                                                                    <span className="text-emerald-400 font-semibold flex items-center gap-1">
-                                                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Monitored
-                                                                    </span>
-                                                                ) : (
-                                                                    <span className="text-muted-foreground flex items-center gap-1">
-                                                                        <span className="w-1.5 h-1.5 rounded-full bg-slate-500" /> Paused
-                                                                    </span>
-                                                                )}
-                                                            </Label>
-                                                        </div>
-                                                        <Button 
-                                                            size="sm" 
-                                                            variant="ghost" 
-                                                            className="h-7 text-[11px] px-2 text-amber-400 hover:ring-1 hover:ring-amber-400/40 active:scale-95 transition-all"
-                                                            disabled={testingPlexServerId === s.id}
-                                                            onClick={() => handleTestPlexServer(s.id)}
-                                                        >
-                                                            {testingPlexServerId === s.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Test"}
-                                                        </Button>
-                                                        <Button 
-                                                            size="icon" 
-                                                            variant="ghost" 
-                                                            className="h-7 w-7 text-red-500 hover:ring-1 hover:ring-red-500/40 active:scale-95 transition-all" 
-                                                            onClick={async () => {
-                                                                if (confirm(`Remove Plex server "${s.name}"?`)) {
-                                                                    await removePlexServerAction(s.id);
-                                                                    setPlexServerActionMsg(`Plex server "${s.name}" removed.`);
-                                                                    setTimeout(() => setPlexServerActionMsg(""), 3000);
-                                                                    await loadAllData();
-                                                                    await handleFetchDiscoveredPlexServers();
-                                                                }
-                                                            }}
-                                                        >
-                                                            <Trash2 className="h-3.5 w-3.5"/>
-                                                        </Button>
-                                                    </div>
-                                                </div>
-                                                {plexServerTestResults[s.id] && (
-                                                    <div className={`text-[11px] p-1.5 rounded flex items-center gap-1 ${plexServerTestResults[s.id].success ? "text-emerald-400 bg-emerald-950/40" : "text-red-400 bg-red-950/40"}`}>
-                                                        {plexServerTestResults[s.id].success ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
-                                                        <span className="truncate">{plexServerTestResults[s.id].msg || plexServerTestResults[s.id].err}</span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {/* PLEX.TV AUTO-DISCOVERY SECTION */}
-                                <div className="border-t border-border/40 pt-3 space-y-2.5 mt-auto">
-                                    <div className="flex justify-between items-center">
-                                        <div className="space-y-0.5">
-                                            <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                                                <Radio className="h-3 w-3 text-amber-500 animate-pulse" />
-                                                <span>Plex.tv Account Discovery</span>
-                                            </div>
-                                            <p className="text-[10px] text-muted-foreground">Scans linked Plex.tv account for unadded servers. Never marks unadded servers down.</p>
-                                        </div>
-                                        <Button
-                                            type="button"
-                                            size="sm"
-                                            variant="outline"
-                                            className="h-7 text-[10px] px-2.5 font-semibold gap-1.5 border-amber-500/30 text-amber-400 hover:bg-amber-500/10 active:scale-95 transition-all"
-                                            disabled={loadingDiscoveredPlexServers}
-                                            onClick={handleFetchDiscoveredPlexServers}
-                                        >
-                                            {loadingDiscoveredPlexServers ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
-                                            {loadingDiscoveredPlexServers ? "Scanning..." : "Scan Plex.tv"}
-                                        </Button>
-                                    </div>
-
-                                    {discoveredPlexServersMsg && (
-                                        <p className="text-xs text-muted-foreground italic bg-muted/20 p-2 rounded-md border border-border/30">
-                                            {discoveredPlexServersMsg}
-                                        </p>
-                                    )}
-
-                                    {discoveredPlexServers.length > 0 && (() => {
-                                        const unconfiguredDiscovered = discoveredPlexServers.filter(s => !s.isConfigured);
-                                        const configuredDiscovered = discoveredPlexServers.filter(s => s.isConfigured);
-
-                                        return (
-                                            <div className="space-y-2">
-                                                {/* NEW / UNADDED SERVERS */}
-                                                {unconfiguredDiscovered.length > 0 ? (
-                                                    <div className="space-y-1.5 max-h-[180px] overflow-y-auto pr-1">
-                                                        <div className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider flex items-center gap-1">
-                                                            <span>New Servers Found on Plex.tv ({unconfiguredDiscovered.length})</span>
-                                                        </div>
-                                                        {unconfiguredDiscovered.map((srv, idx) => {
-                                                            const conn = (srv.connections || []).find((c: any) => c.local && !c.relay) || (srv.connections || [])[0];
-                                                            const connUri = conn ? conn.uri : "No connection URI";
-                                                            const isImporting = importingDiscoveredServerKey === (srv.clientIdentifier || srv.name);
-
-                                                            return (
-                                                                <div key={srv.clientIdentifier || idx} className="flex justify-between items-center p-2 rounded-lg bg-background/60 border border-amber-500/30 text-xs">
-                                                                    <div className="truncate space-y-0.5 max-w-[55%]">
-                                                                        <div className="font-medium truncate flex items-center gap-1.5">
-                                                                            <span className="truncate">{srv.name}</span>
-                                                                            <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-[9px] px-1 py-0 shrink-0">
-                                                                                New Discovery
-                                                                            </Badge>
-                                                                        </div>
-                                                                        <div className="text-[10px] font-mono text-muted-foreground truncate">
-                                                                            {connUri}
-                                                                        </div>
-                                                                    </div>
-                                                                    <div className="flex items-center gap-1 shrink-0">
-                                                                        <Button
-                                                                            type="button"
-                                                                            size="sm"
-                                                                            variant="outline"
-                                                                            className="h-6 text-[10px] px-2 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10 active:scale-95 transition-all"
-                                                                            disabled={isImporting}
-                                                                            onClick={() => handleImportDiscoveredPlexServer(srv, true)}
-                                                                        >
-                                                                            {isImporting ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : "+ Add & Monitor"}
-                                                                        </Button>
-                                                                        <Button
-                                                                            type="button"
-                                                                            size="sm"
-                                                                            variant="ghost"
-                                                                            className="h-6 text-[10px] px-1.5 text-muted-foreground hover:text-foreground active:scale-95 transition-all"
-                                                                            disabled={isImporting}
-                                                                            onClick={() => handleImportDiscoveredPlexServer(srv, false)}
-                                                                        >
-                                                                            + Add (Paused)
-                                                                        </Button>
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                ) : (
-                                                    /* ALL SERVERS CONFIGURED STATE */
-                                                    <div className="flex items-center justify-between p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-xs">
-                                                        <div className="flex items-center gap-2">
-                                                            <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
-                                                            <span className="text-emerald-300 font-medium">All Plex account servers ({configuredDiscovered.length}) are configured & active above.</span>
-                                                        </div>
-                                                        <Button
-                                                            type="button"
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            className="h-6 text-[10px] px-2 text-muted-foreground hover:text-foreground active:scale-95 transition-all shrink-0"
-                                                            onClick={() => setShowConfiguredDiscovered(prev => !prev)}
-                                                        >
-                                                            {showConfiguredDiscovered ? "Hide Details" : `Show Details (${configuredDiscovered.length})`}
-                                                        </Button>
-                                                    </div>
-                                                )}
-
-                                                {/* OPTIONAL EXPANDABLE VIEW FOR ALREADY CONFIGURED CLOUD SERVERS */}
-                                                {showConfiguredDiscovered && configuredDiscovered.length > 0 && (
-                                                    <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
-                                                        {unconfiguredDiscovered.length > 0 && (
-                                                            <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                                                                Already Configured in DomsHomeLab ({configuredDiscovered.length})
-                                                            </div>
-                                                        )}
-                                                        {configuredDiscovered.map((srv, idx) => {
-                                                            const conn = (srv.connections || []).find((c: any) => c.local && !c.relay) || (srv.connections || [])[0];
-                                                            const connUri = conn ? conn.uri : "No connection URI";
-
-                                                            return (
-                                                                <div key={srv.clientIdentifier || idx} className="flex justify-between items-center p-2 rounded-lg bg-background/40 border border-border/20 text-xs opacity-80">
-                                                                    <div className="truncate space-y-0.5 max-w-[70%]">
-                                                                        <div className="font-medium truncate flex items-center gap-1.5 text-foreground">
-                                                                            <span className="truncate">{srv.name}</span>
-                                                                            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30 text-[9px] px-1 py-0 shrink-0">
-                                                                                Configured Above
-                                                                            </Badge>
-                                                                        </div>
-                                                                        <div className="text-[10px] font-mono text-muted-foreground truncate">
-                                                                            {connUri}
-                                                                        </div>
-                                                                    </div>
-                                                                    <div className="shrink-0">
-                                                                        {srv.monitored !== false ? (
-                                                                            <span className="text-emerald-400 text-[10px] font-semibold flex items-center gap-1">
-                                                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Monitored
-                                                                            </span>
-                                                                        ) : (
-                                                                            <span className="text-muted-foreground text-[10px] flex items-center gap-1">
-                                                                                <span className="w-1.5 h-1.5 rounded-full bg-slate-500" /> Paused
-                                                                            </span>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        );
-                                    })()}
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        {/* TAUTULLI HISTORICAL WATCH ARCHIVE */}
-                        <Card className="flex flex-col bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
-                            <CardHeader>
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <CardTitle className="flex items-center gap-2">
-                                            <History className="h-5 w-5 text-purple-400"/> {editingTautulli ? "Edit Historical Archive" : "Tautulli (Historical Watch Archive)"}
-                                        </CardTitle>
-                                        <CardDescription>{editingTautulli ? `Modifying ${editingTautulli.name}` : "Optional watch archive for importing historical play records into DomsHomeLab."}</CardDescription>
-                                    </div>
-                                    <Badge variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/30 text-[10px] shrink-0">
-                                        Optional • History Import
-                                    </Badge>
-                                </div>
-                            </CardHeader>
-                            <CardContent className="space-y-4 flex-1">
-                                {!editingTautulli && (
-                                    <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
-                                        {tautulli.length === 0 && (
-                                            <div className="p-3 rounded-lg bg-white/[0.02] border border-dashed border-white/10 text-xs text-muted-foreground space-y-1">
-                                                <p className="font-semibold text-foreground">No Tautulli instances configured.</p>
-                                                <p className="text-[11px]">DomsHomeLab monitors Plex streams directly. Only add Tautulli if you have past watch history you wish to backfill.</p>
-                                            </div>
-                                        )}
-                                        {tautulli.map(t => (
-                                            <div key={t.id} className="space-y-1.5 border border-border/40 p-2.5 rounded-xl bg-[#101014]/90 backdrop-blur-md hover:border-border/80 transition-all text-sm">
-                                                <div className="flex justify-between items-center">
-                                                    <span className="truncate font-semibold">{t.name}</span>
-                                                    <div className="flex items-center gap-1.5">
-                                                        <div className="flex items-center gap-1 bg-muted/40 px-2 py-0.5 rounded-md border border-border/40">
-                                                            <Switch 
-                                                                id={`monitored-tautulli-${t.id}`}
-                                                                checked={t.monitored !== false}
-                                                                disabled={togglingTautulliId === t.id}
-                                                                onCheckedChange={() => handleToggleTautulliMonitoring(t.id, t.monitored !== false)}
-                                                            />
-                                                            <Label htmlFor={`monitored-tautulli-${t.id}`} className="text-[10px] cursor-pointer font-medium select-none">
-                                                                {t.monitored !== false ? (
-                                                                    <span className="text-purple-400 font-semibold flex items-center gap-1">
-                                                                        <span className="w-1.5 h-1.5 rounded-full bg-purple-400" /> Archive Active
-                                                                    </span>
-                                                                ) : (
-                                                                    <span className="text-muted-foreground flex items-center gap-1">
-                                                                        <span className="w-1.5 h-1.5 rounded-full bg-slate-500" /> Paused
-                                                                    </span>
-                                                                )}
-                                                            </Label>
-                                                        </div>
-                                                        <Button 
-                                                            size="sm" 
-                                                            variant="ghost" 
-                                                            className="h-7 text-[11px] px-2 text-purple-400 hover:ring-1 hover:ring-purple-400/40 active:scale-95 transition-all"
-                                                            disabled={testingTautulliId === t.id}
-                                                            onClick={() => handleTestTautulli(t.id)}
-                                                        >
-                                                            {testingTautulliId === t.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Test"}
-                                                        </Button>
-                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-400 hover:ring-1 hover:ring-blue-400/40 active:scale-95 transition-all" onClick={() => setEditingTautulli(t)}>
-                                                            <Pencil className="h-3.5 w-3.5"/>
-                                                        </Button>
-                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500 hover:ring-1 hover:ring-red-500/40 active:scale-95 transition-all" onClick={() => handleDelete(t.id, removeTautulliInstance)}>
-                                                            <Trash2 className="h-3.5 w-3.5"/>
-                                                        </Button>
-                                                    </div>
-                                                </div>
-                                                {tautulliTestResults[t.id] && (
-                                                    <div className={`text-[11px] p-1.5 rounded flex items-center gap-1 ${tautulliTestResults[t.id].success ? "text-emerald-400 bg-emerald-950/40" : "text-red-400 bg-red-950/40"}`}>
-                                                        {tautulliTestResults[t.id].success ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
-                                                        <span className="truncate">{tautulliTestResults[t.id].msg || tautulliTestResults[t.id].err}</span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                                <form 
-                                    key={editingTautulli ? `edit-tautulli-${editingTautulli.id}` : "new-tautulli"}
-                                    onSubmit={(e) => {
-                                        handleForm(e, editingTautulli ? updateTautulliInstance : addTautulliInstance);
-                                        if (editingTautulli) setEditingTautulli(null);
-                                        setTautulliFormTestResult(null);
-                                    }} 
-                                    className={`space-y-2 ${!editingTautulli && "border-t pt-4 mt-auto"}`}
-                                    autoComplete="off"
-                                    data-1p-ignore="true"
-                                    data-lpignore="true"
-                                 >
-                                    {editingTautulli && <input type="hidden" name="id" value={editingTautulli.id} />}
-                                    <div className="grid gap-2">
-                                        <Input 
-                                            name="name" 
-                                            placeholder="Friendly Name (e.g. Main Plex)" 
-                                            required 
-                                            className="h-9 text-sm" 
-                                            defaultValue={editingTautulli?.name} 
-                                            autoComplete="off"
-                                            data-1p-ignore="true"
-                                            data-lpignore="true"
-                                        />
-                                        <Input 
-                                            name="url" 
-                                            placeholder="URL (http://192.168.1.50:8181)" 
-                                            required 
-                                            className="h-9 text-sm font-mono" 
-                                            defaultValue={editingTautulli?.url} 
-                                            autoComplete="off"
-                                            data-1p-ignore="true"
-                                            data-lpignore="true"
-                                        />
+                            <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
+                                                            {/* CURATION, KOMETA & AGREGARR API KEYS CARD */}
+                            <Card className={`border-indigo-500/40 bg-[#121218]/80 backdrop-blur-md shadow-lg transition-all duration-300 ${
+                                isCurationDirty 
+                                    ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" 
+                                    : "shadow-indigo-950/20"
+                            }`}>
+                                <CardHeader>
+                                    <div className="flex justify-between items-start">
                                         <div>
+                                            <CardTitle className="flex items-center gap-2 text-indigo-400">
+                                                <Sparkles className="h-5 w-5 text-indigo-400"/> Curation & Discovery API Keys
+                                            </CardTitle>
+                                            <CardDescription>
+                                                Configure TMDb, Trakt.tv, and IMDb / Community Ratings (MDBList) API keys for automated movie/TV collections, ratings badges, and theatrical vs digital release calendars.
+                                            </CardDescription>
+                                        </div>
+                                        {isCurationDirty && (
+                                            <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
+                                                ● Unsaved Changes
+                                            </Badge>
+                                        )}
+                                    </div>
+                                </CardHeader>
+                                <CardContent>
+                                    <form 
+                                        onSubmit={async (e) => {
+                                            e.preventDefault();
+                                            const { saveCurationSettingsAction } = await import("@/app/curation-actions");
+                                            const res = await saveCurationSettingsAction({
+                                                tmdbApiKey: tmdbKey,
+                                                traktClientId: traktKey,
+                                                mdblistApiKey: mdblistKey
+                                            });
+                                            if (res.success) {
+                                                setCurationSavedMsg("Curation API keys saved successfully!");
+                                                setTimeout(() => setCurationSavedMsg(""), 4000);
+                                                loadAllData();
+                                            }
+                                        }}
+                                        className="space-y-4"
+                                    >
+                                        {curationSavedMsg && (
+                                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-2.5 rounded-lg flex items-center gap-1.5">
+                                                <CheckCircle2 className="h-3.5 w-3.5" />
+                                                <span>{curationSavedMsg}</span>
+                                            </div>
+                                        )}
+
+                                        {curationTestResult && (
+                                            <div className={`text-xs p-3 rounded-lg border space-y-1 ${curationTestResult.errors?.length === 0 ? 'bg-emerald-950/50 text-emerald-300 border-emerald-800' : 'bg-rose-950/50 text-rose-300 border-rose-800'}`}>
+                                                <div className="font-bold flex items-center gap-1.5">
+                                                    {curationTestResult.errors?.length === 0 ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+                                                    <span>API Verification Results:</span>
+                                                </div>
+                                                <div className="text-[11px] space-y-0.5 pl-5">
+                                                    {tmdbKey && <div>• TMDb: {curationTestResult.tmdb ? "✓ Connected (200 OK)" : "✗ Failed"}</div>}
+                                                    {traktKey && <div>• Trakt: {curationTestResult.trakt ? "✓ Connected (200 OK)" : "✗ Failed"}</div>}
+                                                    {mdblistKey && <div>• IMDb / Ratings (MDBList): {curationTestResult.mdblist ? "✓ Connected (200 OK)" : "✗ Failed"}</div>}
+                                                    {curationTestResult.errors?.map((err: string, i: number) => (
+                                                        <div key={i} className="text-rose-400">• {err}</div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <div className="space-y-3">
+                                            {/* TMDb API Key */}
+                                            <div className="space-y-1">
+                                                <div className="flex justify-between items-center text-xs">
+                                                    <Label className="font-semibold text-slate-200">The Movie Database (TMDb) API Key</Label>
+                                                    <a href="https://www.themoviedb.org/settings/api" target="_blank" className="text-[10px] text-primary hover:underline">
+                                                        Get Free Key ↗
+                                                    </a>
+                                                </div>
+                                                <div className="relative">
+                                                    <Input 
+                                                        type={showTmdbKey ? "text" : "password"}
+                                                        value={tmdbKey}
+                                                        onChange={e => setTmdbKey(e.target.value)}
+                                                        placeholder="e.g. 3a1f8c..."
+                                                        className="bg-black/50 border-white/10 text-xs pr-8"
+                                                    />
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="absolute right-1 top-1 h-7 w-7 text-muted-foreground hover:text-foreground"
+                                                        onClick={() => setShowTmdbKey(!showTmdbKey)}
+                                                    >
+                                                        {showTmdbKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                                    </Button>
+                                                </div>
+                                                <p className="text-[10px] text-slate-400">
+                                                    Powers franchise collections (MCU, Star Wars, Pixar, HBO, Netflix) and theatrical vs digital release countdowns.
+                                                </p>
+                                            </div>
+
+                                            {/* Trakt Client ID */}
+                                            <div className="space-y-1">
+                                                <div className="flex justify-between items-center text-xs">
+                                                    <Label className="font-semibold text-slate-200">Trakt.tv API Client ID</Label>
+                                                    <a href="https://trakt.tv/oauth/applications" target="_blank" className="text-[10px] text-primary hover:underline">
+                                                        Create Trakt App ↗
+                                                    </a>
+                                                </div>
+                                                <div className="relative">
+                                                    <Input 
+                                                        type={showTraktKey ? "text" : "password"}
+                                                        value={traktKey}
+                                                        onChange={e => setTraktKey(e.target.value)}
+                                                        placeholder="e.g. 9b7c6..."
+                                                        className="bg-black/50 border-white/10 text-xs pr-8"
+                                                    />
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="absolute right-1 top-1 h-7 w-7 text-muted-foreground hover:text-foreground"
+                                                        onClick={() => setShowTraktKey(!showTraktKey)}
+                                                    >
+                                                        {showTraktKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                                    </Button>
+                                                </div>
+                                                <p className="text-[10px] text-slate-400">
+                                                    Powers dynamic Trending This Week, Anticipated Movies, and custom public Trakt lists.
+                                                </p>
+                                            </div>
+
+                                            {/* MDBList API Key */}
+                                            <div className="space-y-1">
+                                                <div className="flex justify-between items-center text-xs">
+                                                    <Label className="font-semibold text-slate-200">IMDb & Community Ratings (MDBList API Key)</Label>
+                                                    <a href="https://mdblist.com/preferences/" target="_blank" className="text-[10px] text-primary hover:underline">
+                                                        Get MDBList Key ↗
+                                                    </a>
+                                                </div>
+                                                <div className="relative">
+                                                    <Input 
+                                                        type={showMdblistKey ? "text" : "password"}
+                                                        value={mdblistKey}
+                                                        onChange={e => setMdblistKey(e.target.value)}
+                                                        placeholder="e.g. key_..."
+                                                        className="bg-black/50 border-white/10 text-xs pr-8"
+                                                    />
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="absolute right-1 top-1 h-7 w-7 text-muted-foreground hover:text-foreground"
+                                                        onClick={() => setShowMdblistKey(!showMdblistKey)}
+                                                    >
+                                                        {showMdblistKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                                    </Button>
+                                                </div>
+                                                <p className="text-[10px] text-slate-400">
+                                                    Powers IMDb Top 250, Oscar Best Picture Winners, and composite IMDb/Rotten Tomatoes/Metacritic ratings badges.
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-2 pt-1">
+                                            <Button type="submit" size="sm" className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs h-8">
+                                                Save Curation Keys
+                                            </Button>
+                                            <Button 
+                                                type="button" 
+                                                variant="outline" 
+                                                size="sm" 
+                                                disabled={testingCurationKeys || (!tmdbKey && !traktKey && !mdblistKey)}
+                                                onClick={handleTestCurationKeys}
+                                                className="text-xs h-8 border-slate-700 font-semibold gap-1.5"
+                                            >
+                                                {testingCurationKeys ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 text-indigo-400" />}
+                                                Test API Keys
+                                            </Button>
+                                        </div>
+                                    </form>
+                                </CardContent>
+                            </Card>
+
+                                                            <Card className={`bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
+                                isGoogleBooksDirty ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" : ""
+                            }`}>
+                                <CardHeader>
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <CardTitle>Google Books API</CardTitle>
+                                            <CardDescription>Configure a free Google Cloud API key to bypass the 1,000 queries/day anonymous IP limit for fetching eBook covers.</CardDescription>
+                                        </div>
+                                        {isGoogleBooksDirty && (
+                                            <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
+                                                ● Unsaved Changes
+                                            </Badge>
+                                        )}
+                                    </div>
+                                </CardHeader>
+                                <CardContent>
+                                    <form 
+                                        key={`google-books-${systemSettings?.googleBooksApiKey ? "saved" : "empty"}`}
+                                        onSubmit={async (e) => {
+                                            e.preventDefault();
+                                            const formData = new FormData(e.currentTarget);
+                                            const res = await saveJobSettings(formData);
+                                            if (res.success) {
+                                                setSaveGoogleBooksMsg("Google Books settings saved successfully!");
+                                                setTimeout(() => setSaveGoogleBooksMsg(""), 4000);
+                                                loadAllData();
+                                            }
+                                        }} 
+                                        className="space-y-4"
+                                        autoComplete="off"
+                                        data-1p-ignore="true"
+                                        data-lpignore="true"
+                                    >
+                                        {saveGoogleBooksMsg && (
+                                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
+                                                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                                <span>{saveGoogleBooksMsg}</span>
+                                            </div>
+                                        )}
+                                        <div className="space-y-2">
+                                            <div className="flex justify-between items-center">
+                                                <Label>API Key</Label>
+                                                {systemSettings?.googleBooksApiKey && (
+                                                    <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
+                                                        <CheckCircle2 className="h-3 w-3" /> Saved
+                                                    </span>
+                                                )}
+                                            </div>
                                             <div className="relative">
                                                 <Input 
-                                                    name="apiKey" 
-                                                    type={showTautulliKey ? "text" : "password"} 
-                                                    placeholder="Tautulli API Key" 
-                                                    required 
-                                                    className="h-9 text-sm font-mono pr-8" 
-                                                    defaultValue={editingTautulli?.apiKey} 
+                                                    name="googleBooksApiKey"
+                                                    type={showGoogleBooksKey ? "text" : "password"}
+                                                    value={googleBooksKey}
+                                                    onChange={(e) => setGoogleBooksKey(e.target.value)}
+                                                    placeholder="AIzaSy..."
+                                                    className="bg-black/50 border-white/10 text-white placeholder:text-gray-500 pr-8"
                                                     autoComplete="new-password"
                                                     data-1p-ignore="true"
                                                     data-lpignore="true"
@@ -3744,732 +4595,298 @@ function SettingsPageContent() {
                                                     variant="ghost"
                                                     size="icon"
                                                     className="absolute right-1 top-1 h-7 w-7 text-muted-foreground hover:text-foreground"
-                                                    onClick={() => setShowTautulliKey(!showTautulliKey)}
+                                                    onClick={() => setShowGoogleBooksKey(!showGoogleBooksKey)}
                                                 >
-                                                    {showTautulliKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                                    {showGoogleBooksKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                                                 </Button>
                                             </div>
-                                            <p className="text-[10px] text-muted-foreground mt-1">Found in Tautulli Settings → Web Interface → API.</p>
+                                            <p className="text-xs text-gray-500 mt-1">
+                                                To get a key, <a href="https://console.cloud.google.com/apis/library/books.googleapis.com" target="_blank" className="text-primary hover:underline">enable the Books API</a> in Google Cloud Console and create an API Key under Credentials.
+                                                <br />
+                                                Leaving this blank will fall back to the `GOOGLE_BOOKS_API_KEY` environment variable, or anonymous IP rate limits.
+                                            </p>
                                         </div>
-                                    </div>
-                                    <div className="flex items-center space-x-2 pt-1">
-                                        <input type="hidden" name="monitored" value="false" />
-                                        <input 
-                                            type="checkbox" 
-                                            id="tautulli-monitored" 
-                                            name="monitored" 
-                                            value="true" 
-                                            defaultChecked={editingTautulli ? editingTautulli.monitored !== false : true} 
-                                            className="h-4 w-4 rounded border-gray-300 text-purple-500 focus:ring-purple-400" 
-                                        />
-                                        <Label htmlFor="tautulli-monitored" className="text-xs font-medium cursor-pointer">
-                                            Enable reachability audits & historical sync for this instance
-                                        </Label>
-                                    </div>
-                                    {tautulliFormTestResult && (
-                                        <div className={`text-[11px] p-2 rounded-lg flex items-center gap-1.5 ${tautulliFormTestResult.success ? "text-emerald-400 bg-emerald-950/40 border border-emerald-500/30" : "text-red-400 bg-red-950/40 border border-red-500/30"}`}>
-                                            {tautulliFormTestResult.success ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> : <XCircle className="h-3.5 w-3.5 shrink-0" />}
-                                            <span className="leading-tight">{tautulliFormTestResult.msg || tautulliFormTestResult.err}</span>
+                                        <Button type="submit" size="sm" className="font-semibold hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all">Save Google Books Settings</Button>
+                                    </form>
+                                </CardContent>
+                            </Card>
+                            </div>
+                        </div>
+                    )}
+                </TabsContent>
+
+                {/* ========================================================================= */}
+                {/* HUB 5: COMMUNICATIONS & COMMUNITY                                         */}
+                {/* ========================================================================= */}
+                <TabsContent value="communications" className="space-y-6">
+                    {/* Sub-tab Pill Switcher */}
+                    <div className="flex items-center gap-1.5 p-1 bg-white/[0.03] border border-white/10 rounded-xl w-fit overflow-x-auto max-w-full mb-6">
+                        <button
+                            type="button"
+                            onClick={() => handleSubTabChange("communications", "smtp")}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                                hubSubTabs.communications === "smtp"
+                                    ? "bg-indigo-500/20 text-indigo-400 border border-indigo-500/40 shadow-xs"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05]"
+                            }`}
+                        >
+                            <Mail className="h-3.5 w-3.5" />
+                            <span>Global SMTP & Kindle Delivery</span>
+                            {isSmtpDirty && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse ml-0.5" />
+                            )}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleSubTabChange("communications", "broadcast")}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                                hubSubTabs.communications === "broadcast"
+                                    ? "bg-indigo-500/20 text-indigo-400 border border-indigo-500/40 shadow-xs"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05]"
+                            }`}
+                        >
+                            <Bell className="h-3.5 w-3.5" />
+                            <span>Broadcasts & Notification Templates</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleSubTabChange("communications", "discord")}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                                hubSubTabs.communications === "discord"
+                                    ? "bg-indigo-500/20 text-indigo-400 border border-indigo-500/40 shadow-xs"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05]"
+                            }`}
+                        >
+                            <MessageSquare className="h-3.5 w-3.5" />
+                            <span>Discord Bot & Automation</span>
+                        </button>
+                    </div>
+
+                    {hubSubTabs.communications === "smtp" && (
+                        <div className="space-y-6">
+                                                        {/* SMTP & EMAIL INTEGRATION */}
+                            <Card className={`bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
+                                isSmtpDirty ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" : ""
+                            }`}>
+                                <CardHeader>
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <CardTitle className="flex items-center gap-2">
+                                                <Mail className="h-5 w-5 text-primary" /> Global SMTP & Kindle Sender
+                                            </CardTitle>
+                                            <CardDescription>Configure outbound SMTP server for Send-to-Kindle delivery & admin notifications.</CardDescription>
                                         </div>
-                                    )}
-                                    <div className="flex gap-2 mt-2">
-                                        <Button 
-                                            type="button" 
-                                            size="sm" 
-                                            variant="outline" 
-                                            className="text-xs font-semibold gap-1.5 border-primary/30 hover:border-primary hover:bg-primary/10 transition-all active:scale-95"
-                                            disabled={testingTautulliForm}
-                                            onClick={handleTestTautulliForm}
-                                        >
-                                            {testingTautulliForm ? <Loader2 className="h-3 w-3 animate-spin text-primary" /> : <Zap className="h-3 w-3 text-primary" />}
-                                            Test
-                                        </Button>
-                                        <Button type="submit" size="sm" className="flex-1 font-semibold hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all">
-                                            {editingTautulli ? "Save Changes" : "Add Historical Archive"}
-                                        </Button>
-                                        {editingTautulli && (
-                                            <Button type="button" size="sm" variant="outline" className="hover:ring-1 hover:ring-border active:scale-95 transition-all" onClick={() => { setEditingTautulli(null); setTautulliFormTestResult(null); }}>
-                                                Cancel
+                                        <div className="flex flex-wrap items-center gap-1.5">
+                                            {isSmtpDirty && (
+                                                <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
+                                                    ● Unsaved Changes
+                                                </Badge>
+                                            )}
+                                            {systemSettings?.smtpHost ? (
+                                                <Badge className="bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 text-[10px] gap-1">
+                                                    <CheckCircle2 className="h-3 w-3" /> SMTP Configured
+                                                </Badge>
+                                            ) : (
+                                                <Badge variant="outline" className="bg-red-500/10 text-red-400 border-red-500/30 text-[10px]">
+                                                    SMTP Inactive
+                                                </Badge>
+                                            )}
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => handleTabChange("emails")}
+                                                className="text-xs h-6 px-2 gap-1 border-primary/30 text-primary hover:bg-primary/10 cursor-pointer ml-1"
+                                            >
+                                                <Bell className="h-3 w-3" /> Broadcast & Templates &rarr;
                                             </Button>
-                                        )}
-                                    </div>
-                                </form>
-
-                                <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-between gap-3 text-xs">
-                                    <div className="space-y-0.5">
-                                        <span className="font-semibold text-purple-300 block">Looking to import past history?</span>
-                                        <span className="text-[11px] text-muted-foreground block">Run a 1-click historical backfill across all past sessions.</span>
-                                    </div>
-                                    <Link href="/admin/tautulli">
-                                        <Button size="sm" variant="outline" className="h-7 text-[10px] px-2.5 border-purple-500/30 text-purple-300 hover:bg-purple-500/20 shrink-0 cursor-pointer">
-                                            Open Backfill Tool
-                                        </Button>
-                                    </Link>
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        {/* GLANCES INSTANCES */}
-                        <Card className="flex flex-col bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                    <Activity className="h-5 w-5 text-sky-400"/> {editingGlances ? "Edit Glances" : "Glances Hardware"}
-                                </CardTitle>
-                                <CardDescription>{editingGlances ? `Modifying ${editingGlances.name}` : "CPU, Memory, and System Metrics."}</CardDescription>
-                            </CardHeader>
-                            <CardContent className="space-y-4 flex-1">
-                                {!editingGlances && (
-                                    <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
-                                        {glances.length === 0 && <p className="text-xs text-muted-foreground italic">No Glances instances added.</p>}
-                                        {glances.map(g => (
-                                            <div key={g.id} className="space-y-1.5 border border-border/40 p-2.5 rounded-xl bg-[#101014]/90 backdrop-blur-md hover:border-border/80 transition-all text-sm">
-                                                <div className="flex justify-between items-center">
-                                                    <span className="truncate font-semibold">{g.name}</span>
-                                                    <div className="flex items-center gap-1.5">
-                                                        <div className="flex items-center gap-1 bg-muted/40 px-2 py-0.5 rounded-md border border-border/40">
-                                                            <Switch 
-                                                                id={`monitored-glances-${g.id}`}
-                                                                checked={g.monitored !== false}
-                                                                disabled={togglingGlancesId === g.id}
-                                                                onCheckedChange={() => handleToggleGlancesMonitoring(g.id, g.monitored !== false)}
-                                                            />
-                                                            <Label htmlFor={`monitored-glances-${g.id}`} className="text-[10px] cursor-pointer font-medium select-none">
-                                                                {g.monitored !== false ? (
-                                                                    <span className="text-emerald-400 font-semibold flex items-center gap-1">
-                                                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Monitored
-                                                                    </span>
-                                                                ) : (
-                                                                    <span className="text-muted-foreground flex items-center gap-1">
-                                                                        <span className="w-1.5 h-1.5 rounded-full bg-slate-500" /> Paused
-                                                                    </span>
-                                                                )}
-                                                            </Label>
-                                                        </div>
-                                                        <Button 
-                                                            size="sm" 
-                                                            variant="ghost" 
-                                                            className="h-7 text-[11px] px-2 text-sky-400 hover:ring-1 hover:ring-sky-400/40 active:scale-95 transition-all"
-                                                            disabled={testingGlancesId === g.id}
-                                                            onClick={() => handleTestGlances(g.id)}
-                                                        >
-                                                            {testingGlancesId === g.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Test"}
-                                                        </Button>
-                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-400 hover:ring-1 hover:ring-blue-400/40 active:scale-95 transition-all" onClick={() => setEditingGlances(g)}>
-                                                            <Pencil className="h-3.5 w-3.5"/>
-                                                        </Button>
-                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500 hover:ring-1 hover:ring-red-500/40 active:scale-95 transition-all" onClick={() => handleDelete(g.id, removeGlancesInstance)}>
-                                                            <Trash2 className="h-3.5 w-3.5"/>
-                                                        </Button>
-                                                    </div>
-                                                </div>
-                                                {glancesTestResults[g.id] && (
-                                                    <div className={`text-[11px] p-1.5 rounded flex items-center gap-1 ${glancesTestResults[g.id].success ? "text-emerald-400 bg-emerald-950/40" : "text-red-400 bg-red-950/40"}`}>
-                                                        {glancesTestResults[g.id].success ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
-                                                        <span className="truncate">{glancesTestResults[g.id].msg || glancesTestResults[g.id].err}</span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                                <form 
-                                    key={editingGlances ? `edit-glances-${editingGlances.id}` : "new-glances"}
-                                    onSubmit={(e) => {
-                                        handleForm(e, editingGlances ? updateGlancesInstance : addGlancesInstance);
-                                        if (editingGlances) setEditingGlances(null);
-                                        setGlancesFormTestResult(null);
-                                    }} 
-                                    className={`space-y-2 ${!editingGlances && "border-t pt-4 mt-auto"}`}
-                                    autoComplete="off"
-                                    data-1p-ignore="true"
-                                    data-lpignore="true"
-                                >
-                                    {editingGlances && <input type="hidden" name="id" value={editingGlances.id} />}
-                                    <div className="grid gap-2">
-                                        <Input 
-                                            name="name" 
-                                            placeholder="Server Name (e.g. Unraid)" 
-                                            required 
-                                            className="h-9 text-sm" 
-                                            defaultValue={editingGlances?.name} 
-                                            autoComplete="off"
-                                            data-1p-ignore="true"
-                                            data-lpignore="true"
-                                        />
-                                        <Input 
-                                            name="url" 
-                                            placeholder="URL (http://192.168.1.50:61208)" 
-                                            required 
-                                            className="h-9 text-sm font-mono" 
-                                            defaultValue={editingGlances?.url} 
-                                            autoComplete="off"
-                                            data-1p-ignore="true"
-                                            data-lpignore="true"
-                                        />
-                                    </div>
-                                    <div className="flex items-center space-x-2 pt-1">
-                                        <input type="hidden" name="monitored" value="false" />
-                                        <input 
-                                            type="checkbox" 
-                                            id="glances-monitored" 
-                                            name="monitored" 
-                                            value="true" 
-                                            defaultChecked={editingGlances ? editingGlances.monitored !== false : true} 
-                                            className="h-4 w-4 rounded border-gray-300 text-sky-500 focus:ring-sky-400" 
-                                        />
-                                        <Label htmlFor="glances-monitored" className="text-xs font-medium cursor-pointer">
-                                            Monitor CPU/RAM metrics and host reachability
-                                        </Label>
-                                    </div>
-                                    {glancesFormTestResult && (
-                                        <div className={`text-[11px] p-2 rounded-lg flex items-center gap-1.5 ${glancesFormTestResult.success ? "text-emerald-400 bg-emerald-950/40 border border-emerald-500/30" : "text-red-400 bg-red-950/40 border border-red-500/30"}`}>
-                                            {glancesFormTestResult.success ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> : <XCircle className="h-3.5 w-3.5 shrink-0" />}
-                                            <span className="leading-tight">{glancesFormTestResult.msg || glancesFormTestResult.err}</span>
                                         </div>
-                                    )}
-                                    <div className="flex gap-2 mt-2">
-                                        <Button 
-                                            type="button" 
-                                            size="sm" 
-                                            variant="outline" 
-                                            className="text-xs font-semibold gap-1.5 border-sky-400/30 hover:border-sky-400 hover:bg-sky-400/10 transition-all active:scale-95 text-sky-400"
-                                            disabled={testingGlancesForm}
-                                            onClick={handleTestGlancesForm}
-                                        >
-                                            {testingGlancesForm ? <Loader2 className="h-3 w-3 animate-spin text-sky-400" /> : <Zap className="h-3 w-3 text-sky-400" />}
-                                            Test
-                                        </Button>
-                                        <Button type="submit" size="sm" className="flex-1 font-semibold hover:ring-2 hover:ring-sky-400/40 active:scale-95 transition-all">
-                                            {editingGlances ? "Save Changes" : "Add Glances Server"}
-                                        </Button>
-                                        {editingGlances && (
-                                            <Button type="button" size="sm" variant="outline" className="hover:ring-1 hover:ring-border active:scale-95 transition-all" onClick={() => { setEditingGlances(null); setGlancesFormTestResult(null); }}>
-                                                Cancel
-                                            </Button>
-                                        )}
                                     </div>
-                                </form>
-                            </CardContent>
-                        </Card>
-
-                        {/* MEDIA APPS & DOWNLOAD CLIENTS */}
-                        <Card className="flex flex-col bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                    <Shield className="h-5 w-5 text-emerald-400"/> {editingApp ? "Edit Application" : "Media Stack & Apps"}
-                                </CardTitle>
-                                <CardDescription>{editingApp ? `Modifying ${editingApp.name}` : "Connect Arr apps & download clients."}</CardDescription>
-                            </CardHeader>
-                            <CardContent className="space-y-4 flex-1">
-                                {!editingApp && (
-                                    <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
-                                        {mediaApps.length === 0 && <p className="text-xs text-muted-foreground italic">No applications configured.</p>}
-                                        {mediaApps.map(app => (
-                                            <div key={app.id} className="space-y-1.5 border border-border/40 p-2.5 rounded-xl bg-[#101014]/90 backdrop-blur-md hover:border-border/80 transition-all text-sm">
-                                                <div className="flex justify-between items-center">
-                                                    <div className="truncate">
-                                                        <div className="font-semibold">{app.name}</div>
-                                                        <div className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight">{app.type}</div>
-                                                    </div>
-                                                    <div className="flex items-center gap-1.5 shrink-0">
-                                                        <div className="flex items-center gap-1 bg-muted/40 px-2 py-0.5 rounded-md border border-border/40">
-                                                            <Switch 
-                                                                id={`monitored-app-${app.id}`}
-                                                                checked={app.monitored !== false}
-                                                                disabled={togglingMediaAppId === app.id}
-                                                                onCheckedChange={() => handleToggleMediaAppMonitoring(app.id, app.monitored !== false)}
-                                                            />
-                                                            <Label htmlFor={`monitored-app-${app.id}`} className="text-[10px] cursor-pointer font-medium select-none">
-                                                                {app.monitored !== false ? (
-                                                                    <span className="text-emerald-400 font-semibold flex items-center gap-1">
-                                                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Monitored
-                                                                    </span>
-                                                                ) : (
-                                                                    <span className="text-muted-foreground flex items-center gap-1">
-                                                                        <span className="w-1.5 h-1.5 rounded-full bg-slate-500" /> Paused
-                                                                    </span>
-                                                                )}
-                                                            </Label>
-                                                        </div>
-                                                        <Button 
-                                                            size="sm" 
-                                                            variant="ghost" 
-                                                            className="h-7 text-[11px] px-2 text-emerald-400 hover:ring-1 hover:ring-emerald-400/40 active:scale-95 transition-all"
-                                                            disabled={testingAppId === app.id}
-                                                            onClick={() => handleTestApp(app.id)}
-                                                        >
-                                                            {testingAppId === app.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Test"}
-                                                        </Button>
-                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-400 hover:ring-1 hover:ring-blue-400/40 active:scale-95 transition-all" onClick={() => { setEditingApp(app); setArrMeta(null); }}>
-                                                            <Pencil className="h-3.5 w-3.5"/>
-                                                        </Button>
-                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500 hover:ring-1 hover:ring-red-500/40 active:scale-95 transition-all" onClick={() => handleDelete(app.id, removeMediaApp)}>
-                                                            <Trash2 className="h-3.5 w-3.5"/>
-                                                        </Button>
-                                                    </div>
-                                                </div>
-                                                {appTestResults[app.id] && (
-                                                    <div className={`text-[11px] p-1.5 rounded flex items-center gap-1 ${appTestResults[app.id].success ? "text-emerald-400 bg-emerald-950/40" : "text-red-400 bg-red-950/40"}`}>
-                                                        {appTestResults[app.id].success ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
-                                                        <span className="truncate">{appTestResults[app.id].msg || appTestResults[app.id].err}</span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-
-                                <form 
-                                    key={editingApp ? `edit-app-${editingApp.id}` : `new-app-${newAppType || "default"}`}
-                                    onSubmit={(e) => {
-                                        handleForm(e, editingApp ? updateMediaApp : addMediaApp);
-                                        if (editingApp) setEditingApp(null);
-                                        setNewAppType("");
-                                        setAppFormTestResult(null);
-                                    }} 
-                                    className={`space-y-3 ${!editingApp && "border-t pt-4 mt-auto"}`}
-                                    autoComplete="off"
-                                    data-1p-ignore="true"
-                                    data-lpignore="true"
-                                >
-                                    {editingApp && <input type="hidden" name="id" value={editingApp.id} />}
-                                    <Select 
-                                        name="type" 
-                                        required 
-                                        defaultValue={editingApp?.type}
-                                        onValueChange={(v) => setNewAppType(v)}
-                                    >
-                                        <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="App Type" /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectGroup>
-                                                <SelectLabel>Downloads</SelectLabel>
-                                                <SelectItem value="sabnzbd">SABnzbd</SelectItem>
-                                                <SelectItem value="nzbget">NZBGet</SelectItem>
-                                                <SelectItem value="qbittorrent">qBittorrent</SelectItem>
-                                            </SelectGroup>
-                                            <SelectGroup>
-                                                <SelectLabel>Movies & TV</SelectLabel>
-                                                <SelectItem value="radarr">Radarr</SelectItem>
-                                                <SelectItem value="sonarr">Sonarr</SelectItem>
-                                            </SelectGroup>
-                                            <SelectGroup>
-                                                <SelectLabel>Requests</SelectLabel>
-                                                <SelectItem value="overseerr">Overseerr</SelectItem>
-                                                <SelectItem value="jellyseerr">Jellyseerr</SelectItem>
-                                                <SelectItem value="ombi">Ombi</SelectItem>
-                                            </SelectGroup>
-                                            <SelectGroup>
-                                                <SelectLabel>Utility & Indexers</SelectLabel>
-                                                <SelectItem value="prowlarr">Prowlarr</SelectItem>
-                                                <SelectItem value="readarr">Readarr</SelectItem>
-                                                <SelectItem value="bazarr">Bazarr</SelectItem>
-                                                <SelectItem value="lidarr">Lidarr</SelectItem>
-                                                <SelectItem value="maintainerr">Maintainerr</SelectItem>
-                                            </SelectGroup>
-                                        </SelectContent>
-                                    </Select>
-                                    <Input 
-                                        name="name" 
-                                        placeholder="Display Name" 
-                                        required 
-                                        className="h-9 text-sm" 
-                                        defaultValue={editingApp?.name} 
+                                </CardHeader>
+                                <CardContent>
+                                    <form 
+                                        key={`smtp-form-${systemSettings?.smtpHost || "new"}-${systemSettings?.smtpUser || ""}`} 
+                                        onSubmit={async (e) => {
+                                            e.preventDefault();
+                                            const formData = new FormData();
+                                            formData.append("smtpHost", smtpHostInput);
+                                            formData.append("smtpPort", String(smtpPortInput));
+                                            formData.append("smtpUser", smtpUserInput);
+                                            formData.append("smtpPass", smtpPassInput);
+                                            formData.append("smtpFrom", smtpFromInput);
+                                            const res = await saveSettings(formData);
+                                            if (res.success) {
+                                                setSaveSmtpMsg("SMTP settings saved successfully!");
+                                                setTimeout(() => setSaveSmtpMsg(""), 4000);
+                                                loadAllData();
+                                            }
+                                        }} 
+                                        className="space-y-4"
                                         autoComplete="off"
                                         data-1p-ignore="true"
                                         data-lpignore="true"
-                                    />
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <div className="space-y-1">
-                                            <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Internal URL</Label>
-                                            <Input 
-                                                name="url" 
-                                                placeholder={`http://192.168.1.50:${DEFAULT_PORTS[newAppType || editingApp?.type] || "8080"}`} 
-                                                required 
-                                                className="h-9 text-sm font-mono" 
-                                                defaultValue={editingApp?.url} 
-                                                autoComplete="off"
-                                                data-1p-ignore="true"
-                                                data-lpignore="true"
-                                            />
-                                        </div>
-                                        <div className="space-y-1">
-                                            <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">External URL</Label>
-                                            <Input 
-                                                name="externalUrl" 
-                                                placeholder="https://app.com" 
-                                                className="h-9 text-sm font-mono" 
-                                                defaultValue={editingApp?.externalUrl} 
-                                                autoComplete="off"
-                                                data-1p-ignore="true"
-                                                data-lpignore="true"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <div className="relative">
-                                            <Input 
-                                                name="apiKey" 
-                                                type={showMediaAppKey ? "text" : "password"} 
-                                                placeholder="API Key / Password" 
-                                                className="h-9 text-sm font-mono pr-8" 
-                                                defaultValue={editingApp?.apiKey} 
-                                                autoComplete="new-password"
-                                                data-1p-ignore="true"
-                                                data-lpignore="true"
-                                            />
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="icon"
-                                                className="absolute right-1 top-1 h-7 w-7 text-muted-foreground hover:text-foreground"
-                                                onClick={() => setShowMediaAppKey(!showMediaAppKey)}
-                                            >
-                                                {showMediaAppKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                                            </Button>
-                                        </div>
-                                        <p className="text-[10px] text-muted-foreground mt-1">Found in the app's Settings → General (or Settings → Security) tab.</p>
-                                    </div>
-                                    
-                                    <div className="space-y-2 border-t pt-3 mt-3">
-                                        <div className="flex items-center space-x-2">
-                                            <input type="checkbox" id="enabledForUsers" name="enabledForUsers" value="true" defaultChecked={editingApp?.enabledForUsers} className="h-4 w-4 rounded border-gray-300" />
-                                            <Label htmlFor="enabledForUsers" className="text-sm font-medium">Enable for Super Users (Radarr/Sonarr)</Label>
-                                        </div>
-                                        <p className="text-[10px] text-muted-foreground ml-6">If enabled, this instance will appear on the Radarr/Sonarr pages for SUPER_USERs.</p>
-                                        
-                                        <div className="grid grid-cols-2 gap-2 mt-2">
-                                            <div className="space-y-1">
-                                                <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Allowed Quality Profile IDs</Label>
-                                                <Input id="allowedQualityProfileIds" name="allowedQualityProfileIds" placeholder="e.g. 1,4,7" className="h-8 text-xs" defaultValue={editingApp?.allowedQualityProfileIds || ""} />
-                                            </div>
-                                            <div className="space-y-1">
-                                                <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Allowed Root Folder IDs</Label>
-                                                <Input id="allowedRootFolderIds" name="allowedRootFolderIds" placeholder="e.g. 1,2" className="h-8 text-xs" defaultValue={editingApp?.allowedRootFolderIds || ""} />
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center justify-between mt-1">
-                                            <p className="text-[10px] text-muted-foreground ml-1">Comma-separated list of IDs. Super Users will only be able to select from these.</p>
-                                            <Button type="button" variant="outline" size="sm" className="h-7 text-[10px] px-2 py-0 hover:ring-1 hover:ring-primary/40 active:scale-95 transition-all" onClick={handleFetchArrMeta} disabled={fetchingArrMeta}>
-                                                {fetchingArrMeta ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <RefreshCw className="h-3 w-3 mr-1" />}
-                                                Fetch IDs
-                                            </Button>
-                                        </div>
-                                        {arrMeta && (
-                                            <div className="space-y-3 bg-muted/30 p-2 rounded-md border mt-2">
-                                                <div>
-                                                    <p className="text-[10px] font-bold uppercase text-muted-foreground mb-1">Quality Profiles (Click to toggle)</p>
-                                                    <div className="flex flex-wrap gap-1">
-                                                        {arrMeta.profiles.map((p: any) => (
-                                                            <Badge 
-                                                                key={p.id} 
-                                                                variant="outline" 
-                                                                className="cursor-pointer hover:bg-primary/20 text-[10px] py-0 transition-colors"
-                                                                onClick={() => {
-                                                                    const input = document.getElementById("allowedQualityProfileIds") as HTMLInputElement;
-                                                                    if (!input) return;
-                                                                    const current = input.value.split(',').map(s => s.trim()).filter(s => s);
-                                                                    const id = p.id.toString();
-                                                                    if (!current.includes(id)) input.value = current.length > 0 ? `${current.join(',')},${id}` : id;
-                                                                    else input.value = current.filter(s => s !== id).join(',');
-                                                                }}
-                                                            >
-                                                                {p.id}: {p.name}
-                                                            </Badge>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                                <div>
-                                                    <p className="text-[10px] font-bold uppercase text-muted-foreground mb-1">Root Folders (Click to toggle)</p>
-                                                    <div className="flex flex-wrap gap-1">
-                                                        {arrMeta.folders.map((f: any) => (
-                                                            <Badge 
-                                                                key={f.id} 
-                                                                variant="outline" 
-                                                                className="cursor-pointer hover:bg-primary/20 text-[10px] py-0 transition-colors"
-                                                                onClick={() => {
-                                                                    const input = document.getElementById("allowedRootFolderIds") as HTMLInputElement;
-                                                                    if (!input) return;
-                                                                    const current = input.value.split(',').map(s => s.trim()).filter(s => s);
-                                                                    const id = f.id.toString();
-                                                                    if (!current.includes(id)) input.value = current.length > 0 ? `${current.join(',')},${id}` : id;
-                                                                    else input.value = current.filter(s => s !== id).join(',');
-                                                                }}
-                                                            >
-                                                                {f.id}: {f.path}
-                                                            </Badge>
-                                                        ))}
-                                                    </div>
-                                                </div>
+                                    >
+                                        {saveSmtpMsg && (
+                                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
+                                                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                                <span>{saveSmtpMsg}</span>
                                             </div>
                                         )}
-                                    </div>
-
-                                    <div className="flex items-center space-x-2 pt-1">
-                                        <input type="hidden" name="monitored" value="false" />
-                                        <input 
-                                            type="checkbox" 
-                                            id="app-monitored" 
-                                            name="monitored" 
-                                            value="true" 
-                                            defaultChecked={editingApp ? editingApp.monitored !== false : true} 
-                                            className="h-4 w-4 rounded border-gray-300 text-emerald-500 focus:ring-emerald-400" 
-                                        />
-                                        <Label htmlFor="app-monitored" className="text-xs font-medium cursor-pointer">
-                                            Monitor service reachability on dashboard
-                                        </Label>
-                                    </div>
-
-                                    {appFormTestResult && (
-                                        <div className={`text-[11px] p-2 rounded-lg flex items-center gap-1.5 ${appFormTestResult.success ? "text-emerald-400 bg-emerald-950/40 border border-emerald-500/30" : "text-red-400 bg-red-950/40 border border-red-500/30"}`}>
-                                            {appFormTestResult.success ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> : <XCircle className="h-3.5 w-3.5 shrink-0" />}
-                                            <span className="leading-tight">{appFormTestResult.msg || appFormTestResult.err}</span>
-                                        </div>
-                                    )}
-
-                                    <div className="flex gap-2">
-                                        <Button 
-                                            type="button" 
-                                            size="sm" 
-                                            variant="outline" 
-                                            className="h-9 text-xs font-semibold gap-1.5 border-emerald-400/30 hover:border-emerald-400 hover:bg-emerald-400/10 transition-all active:scale-95 text-emerald-400"
-                                            disabled={testingAppForm}
-                                            onClick={handleTestAppForm}
-                                        >
-                                            {testingAppForm ? <Loader2 className="h-3 w-3 animate-spin text-emerald-400" /> : <Zap className="h-3 w-3 text-emerald-400" />}
-                                            Test
-                                        </Button>
-                                        <Button type="submit" size="sm" className="flex-1 h-9 font-semibold hover:ring-2 hover:ring-emerald-400/40 active:scale-95 transition-all">
-                                            {editingApp ? "Update App" : "Add Application"}
-                                        </Button>
-                                        {editingApp && (
-                                            <Button type="button" size="sm" variant="outline" className="h-9 hover:ring-1 hover:ring-border active:scale-95 transition-all" onClick={() => { setEditingApp(null); setArrMeta(null); setNewAppType(""); setAppFormTestResult(null); }}>
-                                                <X className="h-4 w-4"/>
-                                            </Button>
-                                        )}
-                                    </div>
-                                </form>
-                            </CardContent>
-                        </Card>
-                    </div>
-                </TabsContent>
-
-                {/* --- TAB 4: BETA TESTING & ROADMAP --- */}
-                <TabsContent value="beta" className="space-y-6">
-                    {/* ROADMAP CARD EDITOR */}
-                    <Card className={`bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
-                        isRoadmapDirty ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" : ""
-                    }`}>
-                        <CardHeader>
-                            <div className="flex justify-between items-start">
-                                <div>
-                                    <CardTitle className="flex items-center gap-2">🗺️ Roadmap & Feature Announcements</CardTitle>
-                                    <CardDescription>Update the Markdown roadmap text displayed on the main dashboard.</CardDescription>
-                                </div>
-                                {isRoadmapDirty && (
-                                    <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
-                                        ● Unsaved Changes
-                                    </Badge>
-                                )}
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                            <form onSubmit={(e) => handleForm(e, updateRoadmapText)} className="space-y-4">
-                                <Tabs defaultValue="write" className="w-full">
-                                    <TabsList className="mb-2 grid w-full max-w-[200px] grid-cols-2">
-                                        <TabsTrigger value="write">Write</TabsTrigger>
-                                        <TabsTrigger value="preview">Preview</TabsTrigger>
-                                    </TabsList>
-                                    <TabsContent value="write">
-                                        <Textarea 
-                                            name="text" 
-                                            value={roadmapText} 
-                                            onChange={(e) => setRoadmapText(e.target.value)}
-                                            rows={12} 
-                                            className="font-mono text-sm leading-relaxed"
-                                            placeholder="### ✨ Recently Released..."
-                                            required
-                                        />
-                                    </TabsContent>
-                                    <TabsContent value="preview" className="border rounded-md p-5 min-h-[290px] bg-muted/10 prose prose-neutral dark:prose-invert max-w-none text-sm leading-relaxed overflow-y-auto prose-headings:font-bold prose-h3:text-base prose-h3:text-foreground prose-h3:mt-3 prose-h3:mb-2 prose-ul:my-2 prose-ul:space-y-2 prose-li:my-1 prose-hr:my-4">
-                                        <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{roadmapText || "*No content*"}</ReactMarkdown>
-                                    </TabsContent>
-                                </Tabs>
-                                <Button type="submit" className="font-semibold hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all">Save Roadmap Text</Button>
-                            </form>
-                        </CardContent>
-                    </Card>
-
-                    <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
-                        {/* BETA DASHBOARD INTRO EDITOR */}
-                        <Card className={`bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
-                            isBetaDirty ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" : ""
-                        }`}>
-                            <CardHeader>
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <CardTitle>Beta Dashboard Intro</CardTitle>
-                                        <CardDescription>This Markdown text appears on the main home dashboard.</CardDescription>
-                                    </div>
-                                    {isBetaDirty && (
-                                        <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
-                                            ● Unsaved Changes
-                                        </Badge>
-                                    )}
-                                </div>
-                            </CardHeader>
-                            <CardContent>
-                                <form onSubmit={(e) => handleForm(e, updateBetaDashboardText)} className="space-y-4">
-                                    <Tabs defaultValue="write" className="w-full">
-                                        <TabsList className="mb-2 grid w-full max-w-[200px] grid-cols-2">
-                                            <TabsTrigger value="write">Write</TabsTrigger>
-                                            <TabsTrigger value="preview">Preview</TabsTrigger>
-                                        </TabsList>
-                                        <TabsContent value="write">
-                                            <Textarea 
-                                                name="text" 
-                                                rows={6} 
-                                                value={betaText} 
-                                                onChange={(e) => setBetaText(e.target.value)} 
-                                                className="font-mono text-sm"
-                                                required 
-                                                placeholder="### Interested in Beta Testing?..." 
-                                            />
-                                        </TabsContent>
-                                        <TabsContent value="preview" className="border rounded-md p-4 min-h-[164px] bg-muted/10 prose prose-invert max-w-none text-sm overflow-y-auto">
-                                            <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{betaText || "*No content*"}</ReactMarkdown>
-                                        </TabsContent>
-                                    </Tabs>
-                                    <Button type="submit" className="font-semibold hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all">Save Intro Text</Button>
-                                </form>
-                            </CardContent>
-                        </Card>
-
-                        {/* BETA TESTING CARDS EDITOR */}
-                        <Card className="bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
-                            <CardHeader>
-                                <CardTitle>{editingBetaCard ? "Edit Beta Card" : "Beta Testing Cards"}</CardTitle>
-                                <CardDescription>Manage the interactive service cards on `/beta`.</CardDescription>
-                            </CardHeader>
-                            <CardContent className="space-y-6">
-                                {!editingBetaCard && (
-                                    <div className="space-y-4 max-h-[300px] overflow-y-auto">
-                                        {betaCards.map((card: any) => (
-                                            <div key={card.id} className="flex items-start justify-between border border-border/40 p-3 rounded-xl bg-[#101014]/90 backdrop-blur-md hover:border-border/80 transition-all">
-                                                <div className="space-y-1">
-                                                    <div className="font-semibold">{card.title}</div>
-                                                    <div className="text-xs text-muted-foreground line-clamp-1">{card.content}</div>
-                                                </div>
-                                                <div className="flex gap-1 shrink-0 ml-2">
-                                                    <Button type="button" variant="ghost" size="icon" className="hover:ring-1 hover:ring-blue-400/40 active:scale-95 transition-all" onClick={() => { setEditingBetaCard(card); setBetaCardContent(card.content); }}>
-                                                        <Pencil className="h-4 w-4 text-blue-500" />
-                                                    </Button>
-                                                    <Button type="button" variant="ghost" size="icon" className="hover:ring-1 hover:ring-red-500/40 active:scale-95 transition-all" onClick={() => handleDelete(card.id, deleteBetaCard)}>
-                                                        <Trash2 className="h-4 w-4 text-red-500" />
-                                                    </Button>
-                                                </div>
+                                        {testEmailMsg && (
+                                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
+                                                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                                <span>{testEmailMsg}</span>
                                             </div>
-                                        ))}
-                                    </div>
-                                )}
-                                <form 
-                                    key={editingBetaCard ? `edit-beta-${editingBetaCard.id}` : "new-beta"}
-                                    onSubmit={(e) => {
-                                        handleForm(e, editingBetaCard ? updateBetaCard : createBetaCard);
-                                        setBetaCardContent("");
-                                    }} 
-                                    className={`space-y-4 ${!editingBetaCard && "border-t pt-4"}`}
-                                    autoComplete="off"
-                                    data-1p-ignore="true"
-                                    data-lpignore="true"
-                                >
-                                    {editingBetaCard && <input type="hidden" name="id" value={editingBetaCard.id} />}
-                                    <div className="space-y-2">
-                                        <Label>Card Title</Label>
-                                        <Input 
-                                            name="title" 
-                                            placeholder="Ex: Audiobookshelf Beta" 
-                                            defaultValue={editingBetaCard?.title} 
-                                            required 
-                                            autoComplete="off"
-                                            data-1p-ignore="true"
-                                            data-lpignore="true"
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label>Content (Markdown)</Label>
-                                        <Tabs defaultValue="write" className="w-full">
-                                            <TabsList className="mb-2 grid w-full max-w-[200px] grid-cols-2 h-7">
-                                                <TabsTrigger value="write" className="text-xs">Write</TabsTrigger>
-                                                <TabsTrigger value="preview" className="text-xs">Preview</TabsTrigger>
-                                            </TabsList>
-                                            <TabsContent value="write">
-                                                <Textarea 
-                                                    name="content" 
-                                                    placeholder="Instructions..." 
-                                                    rows={4} 
-                                                    value={betaCardContent} 
-                                                    onChange={(e) => setBetaCardContent(e.target.value)} 
-                                                    required 
-                                                    className="font-mono text-sm"
+                                        )}
+                                        {testEmailErr && (
+                                            <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2">
+                                                <XCircle className="h-4 w-4 shrink-0" />
+                                                <span>{testEmailErr}</span>
+                                            </div>
+                                        )}
+
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-2">
+                                                <Label>SMTP Host</Label>
+                                                <Input 
+                                                    name="smtpHost" 
+                                                    value={smtpHostInput} 
+                                                    onChange={(e) => setSmtpHostInput(e.target.value)} 
+                                                    placeholder="smtp.gmail.com" 
+                                                    autoComplete="off" 
+                                                    data-1p-ignore="true" 
+                                                    data-lpignore="true"
                                                 />
-                                            </TabsContent>
-                                            <TabsContent value="preview" className="border rounded-md p-3 min-h-[104px] bg-muted/10 prose prose-invert max-w-none text-xs overflow-y-auto">
-                                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{betaCardContent || "*No content*"}</ReactMarkdown>
-                                            </TabsContent>
-                                        </Tabs>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <Label>Button Text</Label>
-                                            <Input 
-                                                name="buttonText" 
-                                                defaultValue={editingBetaCard?.buttonText} 
-                                                autoComplete="off"
-                                                data-1p-ignore="true"
-                                                data-lpignore="true"
-                                            />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label>Port</Label>
+                                                <Input 
+                                                    name="smtpPort" 
+                                                    value={smtpPortInput} 
+                                                    onChange={(e) => setSmtpPortInput(e.target.value)} 
+                                                    placeholder="587" 
+                                                    autoComplete="off" 
+                                                    data-1p-ignore="true" 
+                                                    data-lpignore="true"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-2">
+                                                <Label>User / Email</Label>
+                                                <Input 
+                                                    name="smtpUser" 
+                                                    value={smtpUserInput} 
+                                                    onChange={(e) => setSmtpUserInput(e.target.value)} 
+                                                    placeholder="user@gmail.com" 
+                                                    autoComplete="off" 
+                                                    data-1p-ignore="true" 
+                                                    data-lpignore="true"
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label>Password</Label>
+                                                <div className="relative">
+                                                    <Input 
+                                                        name="smtpPass" 
+                                                        type={showSmtpKey ? "text" : "password"} 
+                                                        value={smtpPassInput} 
+                                                        onChange={(e) => setSmtpPassInput(e.target.value)} 
+                                                        className="pr-8"
+                                                        autoComplete="new-password"
+                                                        data-1p-ignore="true"
+                                                        data-lpignore="true"
+                                                    />
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="absolute right-1 top-1 h-7 w-7 text-muted-foreground hover:text-foreground"
+                                                        onClick={() => setShowSmtpKey(!showSmtpKey)}
+                                                    >
+                                                        {showSmtpKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                                    </Button>
+                                                </div>
+                                                <p className="text-[10px] text-muted-foreground leading-tight">
+                                                    For Gmail, <a href="https://myaccount.google.com/apppasswords" target="_blank" className="text-primary hover:underline">generate an App Password</a> and use it here instead of your actual password.
+                                                </p>
+                                            </div>
                                         </div>
                                         <div className="space-y-2">
-                                            <Label>Button URL</Label>
+                                            <Label>Sender Email Address (From)</Label>
                                             <Input 
-                                                name="buttonUrl" 
-                                                defaultValue={editingBetaCard?.buttonUrl} 
-                                                autoComplete="off"
-                                                data-1p-ignore="true"
+                                                name="smtpFrom" 
+                                                value={smtpFromInput} 
+                                                onChange={(e) => setSmtpFromInput(e.target.value)} 
+                                                placeholder="dom@domshomelab.com" 
+                                                autoComplete="off" 
+                                                data-1p-ignore="true" 
                                                 data-lpignore="true"
                                             />
+                                            <div className="text-[11px] text-muted-foreground bg-muted/30 p-2.5 rounded-lg border border-muted/50 mt-1 space-y-1">
+                                                <div className="font-semibold text-foreground flex items-center gap-1">
+                                                    <Send className="h-3 w-3 text-amber-500" /> Send-to-Kindle Requirement:
+                                                </div>
+                                                <div>Add this Sender Email to your users' <strong>Amazon Approved Personal Document E-mail List</strong> under Amazon → Manage Your Content and Devices → Preferences.</div>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <Button type="submit" className="flex-1 font-semibold hover:ring-2 hover:ring-purple-400/40 active:scale-95 transition-all">{editingBetaCard ? "Update Beta Card" : "Add Beta Card"}</Button>
-                                        {editingBetaCard && <Button type="button" variant="outline" className="hover:ring-1 hover:ring-border active:scale-95 transition-all" onClick={() => { setEditingBetaCard(null); setBetaCardContent(""); }}><X className="h-4 w-4"/></Button>}
-                                    </div>
-                                </form>
-                            </CardContent>
-                        </Card>
-                    </div>
-                </TabsContent>
 
-                <TabsContent value="requests">
-                    <SeerrSettingsPanel 
-                        onNavigateTab={handleTabChange} 
-                        onDirtyChange={(dirty, sections) => {
-                            setIsSeerrDirty(dirty);
-                            setSeerrDirtySections(sections);
-                        }}
-                    />
-                </TabsContent>
+                                        <div className="flex flex-wrap gap-2 pt-2">
+                                            <Button type="submit" className="flex-1 font-bold hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all shadow-md">
+                                                <Mail className="h-4 w-4 mr-2"/> 
+                                                Save SMTP Settings
+                                            </Button>
 
-                <TabsContent value="discord">
-                    <DiscordSettingsPanel />
-                </TabsContent>
+                                            <Button 
+                                                type="button" 
+                                                variant="outline"
+                                                className="text-xs gap-1.5 border-primary/30 text-primary hover:bg-primary/10 font-semibold hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all"
+                                                onClick={handleTestSmtp}
+                                                disabled={testEmailLoading || !systemSettings?.smtpHost}
+                                                title="Send a test email to your SMTP account"
+                                            >
+                                                {testEmailLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MailCheck className="h-3.5 w-3.5" />}
+                                                Test Connection
+                                            </Button>
+                                            
+                                            {systemSettings?.smtpHost && (
+                                                <Button 
+                                                    type="button" 
+                                                    variant="destructive" 
+                                                    className="hover:ring-2 hover:ring-red-500/40 active:scale-95 transition-all"
+                                                    onClick={async () => {
+                                                        if(confirm("Are you sure you want to wipe SMTP settings?")) {
+                                                            await clearSmtpSettings();
+                                                            loadAllData();
+                                                        }
+                                                    }}
+                                                    title="Clear Credentials"
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </form>
+                                </CardContent>
+                            </Card>
+                        </div>
+                    )}
 
-                <TabsContent value="logs">
-                    <SystemLogsViewer />
+                    {hubSubTabs.communications === "broadcast" && (
+                        <div className="space-y-4">
+                            <EmailManagement />
+                        </div>
+                    )}
+
+                    {hubSubTabs.communications === "discord" && (
+                        <div className="space-y-4">
+                            <DiscordSettingsPanel />
+                        </div>
+                    )}
                 </TabsContent>
             </Tabs>
 
-            {/* FLOATING DOCKED SAVE BAR */}
+                        {/* FLOATING DOCKED SAVE BAR */}
             {hasUnsavedChanges && (
                 <div className="fixed bottom-6 right-6 z-50 animate-in fade-in slide-in-from-bottom-5 duration-300">
                     <div className="flex flex-col sm:flex-row items-center gap-3 bg-[#13131a]/95 backdrop-blur-xl border-2 border-amber-500/70 p-3.5 sm:px-5 sm:py-3.5 rounded-2xl shadow-[0_10px_35px_rgba(245,158,11,0.25)] text-foreground">
@@ -4511,7 +4928,7 @@ function SettingsPageContent() {
                 </div>
             )}
 
-            {/* UNSAVED CHANGES MODAL */}
+                        {/* UNSAVED CHANGES MODAL */}
             <Dialog open={leaveModalOpen} onOpenChange={(open) => { if (!open) { setLeaveModalOpen(false); setPendingNavigation(null); } }}>
                 <DialogContent className="w-[96vw] sm:max-w-md max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-[#13131a] border-amber-500/40 text-foreground shadow-2xl">
                     <DialogHeader className="shrink-0">
