@@ -217,7 +217,18 @@ export default async function UserLandingPage() {
                 {/* ========================================================================= */}
                 {isMember ? (
                     <div className="space-y-6">
-                        {/* 1. INVITE LINK BANNER AT THE TOP (GUIDE COLLAPSED BY DEFAULT) */}
+                        {/* 1. MODERN BUTTON-LED DASHBOARD LAUNCHPAD */}
+                        <UserLaunchpad isSuperUser={isSuperUser} />
+
+                        {/* 2. PROMINENT 24/7 AI SERVER ASSISTANT WITH SUPPORT TICKET BUTTON */}
+                        <div className="space-y-2">
+                            <AiServerAssistant />
+                            <div className="flex justify-end pt-1">
+                                <SupportTicketModal />
+                            </div>
+                        </div>
+
+                        {/* 3. DISCRETE INVITE LINK BANNER */}
                         <PlexInviteBanner 
                             referralCode={referralInfo?.referralCode || user?.username}
                             trialDays={joinConfig?.config?.defaultTrialDays || 14}
@@ -227,17 +238,6 @@ export default async function UserLandingPage() {
                             conversions={referralInfo?.conversions || 0}
                             appUrl={referralInfo?.appUrl || joinConfig?.config?.appUrl}
                         />
-
-                        {/* 2. MODERN BUTTON-LED DASHBOARD LAUNCHPAD */}
-                        <UserLaunchpad isSuperUser={isSuperUser} />
-
-                        {/* 3. PROMINENT 24/7 AI SERVER ASSISTANT WITH SUPPORT TICKET BUTTON */}
-                        <div className="space-y-2">
-                            <AiServerAssistant />
-                            <div className="flex justify-end pt-1">
-                                <SupportTicketModal />
-                            </div>
-                        </div>
 
                         {/* 4. MEDIA REQUESTS SECTION (BUILT-IN IS MAIN, SEERR, OMBI AT BOTTOM WITH NOTE) */}
                         <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm">

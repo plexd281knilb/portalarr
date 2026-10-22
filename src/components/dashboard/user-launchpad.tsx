@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { 
-    Compass, BookOpen, Activity, Zap, Tv2, LifeBuoy, Film, Tv, ArrowRight 
+    Compass, BookOpen, Activity, Zap, Tv2, LifeBuoy, Film, Tv, ArrowRight, Server 
 } from "lucide-react";
 import ServerSpeedTest from "@/components/server-speed-test";
 import PlexSetupGuides from "@/components/plex-setup-guides";
@@ -17,8 +17,8 @@ export function UserLaunchpad({ isSuperUser = false }: UserLaunchpadProps) {
         <section aria-label="Quick Access Launchpad" className="w-full">
             <div className={`grid grid-cols-2 gap-2.5 sm:gap-3.5 ${
                 isSuperUser 
-                    ? "sm:grid-cols-4 xl:grid-cols-8" 
-                    : "sm:grid-cols-3 xl:grid-cols-6"
+                    ? "sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-9" 
+                    : "sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7"
             }`}>
                 {/* 1. Browse & Request */}
                 <Link href="/discover" className="block group h-full">
@@ -111,6 +111,29 @@ export function UserLaunchpad({ isSuperUser = false }: UserLaunchpadProps) {
                             </h3>
                             <p className="text-[11px] text-muted-foreground line-clamp-1 sm:line-clamp-2 leading-tight">
                                 Read ebooks &amp; stream audiobooks
+                            </p>
+                        </div>
+                    </div>
+                </Link>
+
+                {/* Servers, Libraries & Add-ons */}
+                <Link href="/settings/profile" className="block group h-full">
+                    <div className="h-full flex flex-col justify-between p-3 sm:p-3.5 rounded-xl border bg-blue-500/10 border-blue-500/30 text-blue-400 hover:border-blue-500/60 hover:bg-blue-500/15 transition-all duration-200 active:scale-98 shadow-sm hover:shadow-md">
+                        <div className="flex items-center justify-between gap-1.5 mb-2">
+                            <div className="p-2 rounded-lg bg-background/50 border border-border/40 shadow-xs">
+                                <Server className="h-5 w-5 text-blue-400" />
+                            </div>
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border tracking-wide uppercase bg-blue-500/15 text-blue-300 border-blue-500/30">
+                                Access
+                            </span>
+                        </div>
+                        <div className="space-y-0.5">
+                            <h3 className="text-xs sm:text-sm font-bold text-foreground group-hover:text-blue-300 transition-colors flex items-center justify-between">
+                                <span>Servers &amp; Libraries</span>
+                                <ArrowRight className="h-3.5 w-3.5 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all shrink-0" />
+                            </h3>
+                            <p className="text-[11px] text-muted-foreground line-clamp-1 sm:line-clamp-2 leading-tight">
+                                Servers, libraries &amp; free add-ons
                             </p>
                         </div>
                     </div>

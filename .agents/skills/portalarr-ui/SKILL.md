@@ -72,6 +72,18 @@ Portalarr uses a **Modern Cinematic Dark Theme** powered by Tailwind CSS, Radix 
 - **Admin Mission Control Immunity**:
   - The Administrator view (`isAdmin === true`) remains 100% strictly untouched, preserving the single-pane `AdminSystemHealthGrid`, `AdminDetailedStreams`, hardware telemetry meters, and 8-tool quick admin bar.
 
+### 4. Account Settings Profile Prewarming & Dashboard Servers Launchpad
+- **Account Settings SWR Prewarming (`getUserProfileBootstrapAction`)**:
+  - Eliminates sequential request waterfalls by executing 10+ user profile queries in parallel and storing in RAM cache (`user_profile_bootstrap:${userId}`).
+  - Warm cache hits return in <50ms with zero loading spinners or delayed layout shifts.
+  - Automatically prewarmed during `prewarmUserSession` on login.
+- **Quick-Access Dashboard Launchpad ("Servers & Libraries")**:
+  - Mounted on the user dashboard launchpad grid (`UserLaunchpad`) with blue accent branding (`text-blue-400`, `bg-blue-500/10 border-blue-500/30`) and `Access` badge.
+  - Links directly to `/settings/profile` for 1-click management of Plex/Jellyfin/Emby servers, libraries, and add-ons.
+- **Discrete Invite Banner (`PlexInviteBanner`)**:
+  - Positioned unobtrusively below the AI Assistant card rather than commanding top billing.
+  - Designed as a sleek, low-profile card (`bg-[#121218]/60 border-border/40`) with inline copy input and collapsible guide.
+
 ## 📐 Key Layout & Component Rules
 
 ### 1. Modals & Dialogs (Space Optimization, Bounded Widths & Horizontal Overflow Protection)

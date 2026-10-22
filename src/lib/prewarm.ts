@@ -192,7 +192,29 @@ export async function prewarmUserSession(user: {
         } catch (e) {}
     })());
 
-    // 6. Admin / Super User Extra Prewarming
+    // 6. Prewarm User Profile Bootstrap (Account Settings Page)
+    tasks.push((async () => {
+        try {
+            const { getUserProfileBootstrapAction } = await import("@/app/actions");
+            const bootstrap = await getUserProfileBootstrapAction(true);
+            if (bootstrap && bootstrap.success) {
+                warmedItems.push("profile_bootstrap");
+            }
+        } catch (e) {}
+    })());
+
+    // 7. Prewarm User Media Servers & Libraries (Multi-Server Self-Selection)
+    tasks.push((async () => {
+        try {
+            const { getUserMediaServersAndLibrariesAction } = await import("@/app/media-server-actions");
+            const srvs = await getUserMediaServersAndLibrariesAction(true);
+            if (srvs && srvs.success) {
+                warmedItems.push("media_servers");
+            }
+        } catch (e) {}
+    })());
+
+    // 8. Admin / Super User Extra Prewarming
     if (userRole === "ADMIN" || userRole === "SUPER_USER") {
         tasks.push((async () => {
             try {

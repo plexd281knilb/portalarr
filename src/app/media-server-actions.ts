@@ -6,6 +6,7 @@ import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
 import { getJwtSecret } from "@/lib/auth-secret";
 import { revalidatePath } from "next/cache";
+import { getUserCache, setUserCache, clearUserCache } from "@/lib/prewarm";
 import { logger } from "@/lib/logger";
 import { 
     testMediaServerConnection, 
@@ -310,6 +311,8 @@ export async function deleteMediaServerAction(id: string): Promise<{ success: bo
         await prisma.mediaServer.delete({ where: { id } });
         safeRevalidate("/settings");
         safeRevalidate("/profile");
+        clearUserCache("user_media_servers:");
+        clearUserCache("user_profile_bootstrap:");
         return { success: true };
     } catch (err: any) {
         return { success: false, error: err.message || "Failed to delete media server" };
@@ -485,7 +488,7 @@ export interface UserAvailableServer {
 /**
  * Returns all media servers and libraries that the current user is permitted to see and select.
  */
-export async function getUserMediaServersAndLibrariesAction(): Promise<{
+export async function getUserMediaServersAndLibrariesAction(bypassCache = false): Promise<{
     success: boolean;
     isTrial: boolean;
     servers: UserAvailableServer[];
@@ -905,6 +908,8 @@ export async function updateUserMediaServersAndLibrariesAction(payload: {
 
         safeRevalidate("/profile");
         safeRevalidate("/settings");
+        clearUserCache(`user_media_servers:${user.id}`);
+        clearUserCache(`user_profile_bootstrap:${user.id}`);
 
         return {
             success: true,

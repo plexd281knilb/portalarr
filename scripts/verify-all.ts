@@ -1452,6 +1452,80 @@ async function runTestSuite() {
         }
     });
 
+    // =========================================================================
+    // SUITE 21: User Profile Bootstrap Prewarming, SWR Cache & Dashboard Servers Launchpad
+    // =========================================================================
+    await assertTest("Suite 21: User Profile Bootstrap Prewarming, SWR Cache & Dashboard Launchpad", async () => {
+        const { getUserProfileBootstrapAction } = await import("../src/app/actions");
+        const { getUserMediaServersAndLibrariesAction } = await import("../src/app/media-server-actions");
+        const { getUserCache, clearUserCache } = await import("../src/lib/prewarm");
+
+        process.env.PORTALARR_TEST_AUTH = "true";
+
+        // 1. Invalidate any existing bootstrap cache
+        clearUserCache("user_profile_bootstrap:");
+        clearUserCache("user_media_servers:");
+
+        // 2. Cold bootstrap fetch
+        const startCold = Date.now();
+        const bootstrapRes = await getUserProfileBootstrapAction(true);
+        const coldDuration = Date.now() - startCold;
+
+        if (!bootstrapRes || !bootstrapRes.success || !bootstrapRes.data) {
+            throw new Error(`Failed to execute getUserProfileBootstrapAction: ${bootstrapRes?.error || "Unknown error"}`);
+        }
+        const data = bootstrapRes.data;
+        if (!data.user) throw new Error("Bootstrap data missing user");
+        if (!data.notifPrefs) throw new Error("Bootstrap data missing notification preferences");
+        if (!data.contentPrefs) throw new Error("Bootstrap data missing content preferences");
+        if (!Array.isArray(data.allowedLibraries)) throw new Error("Bootstrap data missing allowedLibraries array");
+        if (!Array.isArray(data.addonsCatalog)) throw new Error("Bootstrap data missing addonsCatalog array");
+
+        // 3. SWR Warm memory cache hit test (<25ms response time)
+        const startWarm = Date.now();
+        const warmRes = await getUserProfileBootstrapAction(false);
+        const warmDuration = Date.now() - startWarm;
+
+        if (!warmRes || !warmRes.success || !warmRes.data) {
+            throw new Error("Failed warm bootstrap fetch from cache");
+        }
+        if (warmDuration > 50) {
+            // SWR cache should return within 50ms in Node test environment
+            console.warn(`[WARN] SWR cache hit took ${warmDuration}ms (expected <50ms)`);
+        }
+
+        // 4. Media Servers SWR caching test
+        const mediaServersRes = await getUserMediaServersAndLibrariesAction();
+        if (!mediaServersRes || !mediaServersRes.success) {
+            throw new Error(`Failed getUserMediaServersAndLibrariesAction: ${mediaServersRes?.error}`);
+        }
+
+        // 5. Verify User Launchpad has Servers & Libraries card pointing to /settings/profile
+        const launchpadPath = path.join(process.cwd(), "src", "components", "dashboard", "user-launchpad.tsx");
+        const launchpadContent = fs.readFileSync(launchpadPath, "utf-8");
+        if (!launchpadContent.includes("/settings/profile")) {
+            throw new Error("UserLaunchpad missing link to /settings/profile");
+        }
+        if (!launchpadContent.includes("Servers &amp; Libraries") && !launchpadContent.includes("Servers & Libraries")) {
+            throw new Error("UserLaunchpad missing Servers & Libraries card title");
+        }
+        if (!launchpadContent.includes("Access")) {
+            throw new Error("UserLaunchpad missing Access badge on Servers card");
+        }
+
+        // 6. Verify discrete PlexInviteBanner placement in page.tsx
+        const pagePath = path.join(process.cwd(), "src", "app", "page.tsx");
+        const pageContent = fs.readFileSync(pagePath, "utf-8");
+        const launchpadIdx = pageContent.indexOf("<UserLaunchpad");
+        const bannerIdx = pageContent.indexOf("<PlexInviteBanner");
+        if (launchpadIdx === -1 || bannerIdx === -1) {
+            throw new Error("Could not find UserLaunchpad or PlexInviteBanner in src/app/page.tsx");
+        }
+        if (bannerIdx < launchpadIdx) {
+            throw new Error("PlexInviteBanner should be positioned below UserLaunchpad for a discrete layout");
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

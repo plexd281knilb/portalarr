@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { UnsavedChangesPrompt } from "@/components/ui/unsaved-changes-prompt";
 import { getCurrentUser, changeUserPassword } from "@/app/auth-actions";
 import { 
+    getUserProfileBootstrapAction,
     getUserReferralInfo, 
     getPublicJoinConfig, 
     updateCurrentUserKindleEmail,
@@ -439,7 +440,19 @@ export default function UserProfilePage() {
         async function fetchProfile() {
             setLoading(true);
             try {
-                const u = await getCurrentUser();
+                const bootstrap = await getUserProfileBootstrapAction();
+                if (!bootstrap || !bootstrap.success || !bootstrap.data) {
+                    const u = await getCurrentUser();
+                    if (!u) {
+                        window.location.href = "/login";
+                        return;
+                    }
+                    setUser(u);
+                    return;
+                }
+
+                const d = bootstrap.data;
+                const u = d.user;
                 if (!u) {
                     window.location.href = "/login";
                     return;
@@ -457,123 +470,104 @@ export default function UserProfilePage() {
                         setKindleEmail(u.kindleEmail);
                     }
                 }
-                const ref = await getUserReferralInfo();
-                if (ref?.success) {
-                    setReferralInfo(ref);
+                if (d.referralInfo) {
+                    setReferralInfo(d.referralInfo);
                 }
-                const pConfig = await getPublicJoinConfig();
-                if (pConfig?.success && pConfig.config) {
-                    setPaymentConfig(pConfig.config);
-                    if (pConfig.config.discordInviteUrl) {
-                        setDiscordInviteUrl(pConfig.config.discordInviteUrl);
+                if (d.paymentConfig) {
+                    setPaymentConfig(d.paymentConfig);
+                    if (d.paymentConfig.discordInviteUrl) {
+                        setDiscordInviteUrl(d.paymentConfig.discordInviteUrl);
                     }
                 }
-                getDiscordServerInviteUrlAction().then(res => {
-                    if (res.success && res.inviteUrl) setDiscordInviteUrl(res.inviteUrl);
-                }).catch(() => {});
+                if (d.discordInviteUrl) {
+                    setDiscordInviteUrl(d.discordInviteUrl);
+                }
 
                 // Load Notification Preferences
-                const notifRes = await getUserNotificationPreferencesAction();
-                if (notifRes?.success && notifRes.preferences) {
+                if (d.notifPrefs) {
                     setNotifPrefs({
-                        emailMediaReady: Boolean(notifRes.preferences.emailMediaReady),
-                        emailNewContent: Boolean(notifRes.preferences.emailNewContent),
-                        emailAnnouncements: Boolean(notifRes.preferences.emailAnnouncements),
-                        emailSupportTickets: Boolean(notifRes.preferences.emailSupportTickets),
-                        emailSubscriptionReminders: Boolean(notifRes.preferences.emailSubscriptionReminders),
-                        emailReferralRewards: Boolean(notifRes.preferences.emailReferralRewards),
-                        discordMediaReady: Boolean(notifRes.preferences.discordMediaReady),
-                        discordAnnouncements: Boolean(notifRes.preferences.discordAnnouncements),
-                        discordWebhookUrl: notifRes.preferences.discordWebhookUrl || ""
+                        emailMediaReady: Boolean(d.notifPrefs.emailMediaReady),
+                        emailNewContent: Boolean(d.notifPrefs.emailNewContent),
+                        emailAnnouncements: Boolean(d.notifPrefs.emailAnnouncements),
+                        emailSupportTickets: Boolean(d.notifPrefs.emailSupportTickets ?? true),
+                        emailSubscriptionReminders: Boolean(d.notifPrefs.emailSubscriptionReminders ?? true),
+                        emailReferralRewards: Boolean(d.notifPrefs.emailReferralRewards ?? true),
+                        discordMediaReady: Boolean(d.notifPrefs.discordMediaReady),
+                        discordAnnouncements: Boolean(d.notifPrefs.discordAnnouncements),
+                        discordWebhookUrl: d.notifPrefs.discordWebhookUrl || ""
                     });
                 }
 
                 // Load Content Preferences
-                const contentRes = await getUserContentPreferencesAction();
-                if (contentRes?.success && contentRes.preferences) {
+                if (d.contentPrefs) {
                     setContentPrefs({
-                        maxContentRating: contentRes.preferences.maxContentRating || "ALL",
-                        hideLeavingSoon: Boolean(contentRes.preferences.hideLeavingSoon),
-                        hideHorror: Boolean(contentRes.preferences.hideHorror),
-                        hideNsfw: Boolean(contentRes.preferences.hideNsfw),
-                        hideGore: Boolean(contentRes.preferences.hideGore),
-                        excludedGenresList: contentRes.preferences.excludedGenresList || [],
-                        excludedTagsList: contentRes.preferences.excludedTagsList || []
+                        maxContentRating: d.contentPrefs.maxContentRating || "ALL",
+                        hideLeavingSoon: Boolean(d.contentPrefs.hideLeavingSoon),
+                        hideHorror: Boolean(d.contentPrefs.hideHorror),
+                        hideNsfw: Boolean(d.contentPrefs.hideNsfw),
+                        hideGore: Boolean(d.contentPrefs.hideGore),
+                        excludedGenresList: d.contentPrefs.excludedGenresList || [],
+                        excludedTagsList: d.contentPrefs.excludedTagsList || []
                     });
                 }
 
                 // Load Shared Plex Libraries
-                const libRes = await getUserAllowedPlexLibrariesAction();
-                if (libRes?.success) {
-                    setAllowedLibraries(libRes.allowedKeys || []);
-                    setSelectedLibraries(libRes.selectedKeys || []);
-                    setServerLibraries(libRes.servers || []);
-                }
+                setAllowedLibraries(d.allowedLibraries || []);
+                setSelectedLibraries(d.selectedLibraries || []);
+                setServerLibraries(d.serverLibraries || []);
 
                 // Load Household Sub-Accounts
-                const subRes = await getUserSubAccountsAction();
-                if (subRes?.success) {
-                    setSubAccounts(subRes.subAccounts || []);
-                    if (subRes.limits) setSubLimits(subRes.limits);
-                }
+                setSubAccounts(d.subAccounts || []);
+                if (d.subLimits) setSubLimits(d.subLimits);
 
                 // Load Add-ons Catalog
-                const addRes = await getAvailableAddonsAction();
-                if (addRes?.success) {
-                    setAddonsCatalog(addRes.catalog || []);
-                    setUserEnabledAddons(addRes.userEnabledAddons || []);
-                }
+                setAddonsCatalog(d.addonsCatalog || []);
+                setUserEnabledAddons(d.userEnabledAddons || []);
 
                 // Load Kids Library Access Status
-                const kidsLibRes = await getUserKidsLibraryAccessAction();
-                if (kidsLibRes?.success) {
-                    setHasKidsAccess(Boolean(kidsLibRes.hasKidsAccess));
-                    setKidsLibraries(kidsLibRes.kidsLibraries || []);
-                }
+                setHasKidsAccess(Boolean(d.hasKidsAccess));
+                setKidsLibraries(d.kidsLibraries || []);
 
                 // Load Audiobooks Library Access Status
-                const audioLibRes = await getUserAudiobooksLibraryAccessAction();
-                if (audioLibRes?.success) {
-                    setHasAudiobooksAccess(Boolean(audioLibRes.hasAudiobooksAccess));
-                    setAudiobookLibraries(audioLibRes.audiobookLibraries || []);
-                }
+                setHasAudiobooksAccess(Boolean(d.hasAudiobooksAccess));
+                setAudiobookLibraries(d.audiobookLibraries || []);
 
                 initialProfileRef.current = {
                     kindleEmail: u?.kindleEmail === "DIRECT_DOWNLOAD" ? "" : (u?.kindleEmail || ""),
                     bypassKindle: u?.kindleEmail === "DIRECT_DOWNLOAD",
                     notifPrefs: {
-                        emailMediaReady: Boolean(notifRes?.preferences?.emailMediaReady),
-                        emailNewContent: Boolean(notifRes?.preferences?.emailNewContent),
-                        emailAnnouncements: Boolean(notifRes?.preferences?.emailAnnouncements),
-                        emailSupportTickets: Boolean(notifRes?.preferences?.emailSupportTickets ?? true),
-                        emailSubscriptionReminders: Boolean(notifRes?.preferences?.emailSubscriptionReminders ?? true),
-                        emailReferralRewards: Boolean(notifRes?.preferences?.emailReferralRewards ?? true),
-                        discordMediaReady: Boolean(notifRes?.preferences?.discordMediaReady),
-                        discordAnnouncements: Boolean(notifRes?.preferences?.discordAnnouncements),
-                        discordWebhookUrl: notifRes?.preferences?.discordWebhookUrl || ""
+                        emailMediaReady: Boolean(d.notifPrefs?.emailMediaReady),
+                        emailNewContent: Boolean(d.notifPrefs?.emailNewContent),
+                        emailAnnouncements: Boolean(d.notifPrefs?.emailAnnouncements),
+                        emailSupportTickets: Boolean(d.notifPrefs?.emailSupportTickets ?? true),
+                        emailSubscriptionReminders: Boolean(d.notifPrefs?.emailSubscriptionReminders ?? true),
+                        emailReferralRewards: Boolean(d.notifPrefs?.emailReferralRewards ?? true),
+                        discordMediaReady: Boolean(d.notifPrefs?.discordMediaReady),
+                        discordAnnouncements: Boolean(d.notifPrefs?.discordAnnouncements),
+                        discordWebhookUrl: d.notifPrefs?.discordWebhookUrl || ""
                     },
                     contentPrefs: {
-                        maxContentRating: contentRes?.preferences?.maxContentRating || "ALL",
-                        hideLeavingSoon: Boolean(contentRes?.preferences?.hideLeavingSoon),
-                        hideHorror: Boolean(contentRes?.preferences?.hideHorror),
-                        hideNsfw: Boolean(contentRes?.preferences?.hideNsfw),
-                        hideGore: Boolean(contentRes?.preferences?.hideGore),
-                        excludedGenresList: contentRes?.preferences?.excludedGenresList || [],
-                        excludedTagsList: contentRes?.preferences?.excludedTagsList || []
+                        maxContentRating: d.contentPrefs?.maxContentRating || "ALL",
+                        hideLeavingSoon: Boolean(d.contentPrefs?.hideLeavingSoon),
+                        hideHorror: Boolean(d.contentPrefs?.hideHorror),
+                        hideNsfw: Boolean(d.contentPrefs?.hideNsfw),
+                        hideGore: Boolean(d.contentPrefs?.hideGore),
+                        excludedGenresList: d.contentPrefs?.excludedGenresList || [],
+                        excludedTagsList: d.contentPrefs?.excludedTagsList || []
                     },
-                    selectedLibraries: libRes?.selectedKeys || []
+                    selectedLibraries: d.selectedLibraries || []
                 };
 
                 initialSafetyPrefsRef.current = {
                     targetUserId: u?.id || "",
                     prefs: {
-                        maxContentRating: contentRes?.preferences?.maxContentRating || "ALL",
-                        hideLeavingSoon: Boolean(contentRes?.preferences?.hideLeavingSoon),
-                        hideHorror: Boolean(contentRes?.preferences?.hideHorror),
-                        hideNsfw: Boolean(contentRes?.preferences?.hideNsfw),
-                        hideGore: Boolean(contentRes?.preferences?.hideGore),
-                        excludedGenresList: contentRes?.preferences?.excludedGenresList || [],
-                        excludedTagsList: contentRes?.preferences?.excludedTagsList || []
+                        maxContentRating: d.contentPrefs?.maxContentRating || "ALL",
+                        hideLeavingSoon: Boolean(d.contentPrefs?.hideLeavingSoon),
+                        hideHorror: Boolean(d.contentPrefs?.hideHorror),
+                        hideNsfw: Boolean(d.contentPrefs?.hideNsfw),
+                        hideGore: Boolean(d.contentPrefs?.hideGore),
+                        excludedGenresList: d.contentPrefs?.excludedGenresList || [],
+                        excludedTagsList: d.contentPrefs?.excludedTagsList || []
                     }
                 };
             } catch (e) {
