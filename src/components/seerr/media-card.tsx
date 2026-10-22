@@ -18,9 +18,11 @@ interface MediaCardProps {
 
 export function MediaCard({ item, availability, onSelect, onRequest, compact = false }: MediaCardProps) {
     const [imageError, setImageError] = useState(false);
+    const [fallbackError, setFallbackError] = useState(false);
     const releaseYear = item.releaseDate ? item.releaseDate.split("-")[0] : "";
     const isTv = item.mediaType === "tv";
     const rating = item.voteAverage ? item.voteAverage.toFixed(1) : null;
+    const fallbackImageSrc = `/api/media/image?title=${encodeURIComponent(item.title)}&year=${encodeURIComponent(releaseYear)}&type=${isTv ? "show" : "movie"}`;
 
     const inLibrary = availability?.inLibrary;
     const isRequested = availability?.isRequested;
@@ -118,6 +120,14 @@ export function MediaCard({ item, availability, onSelect, onRequest, compact = f
                         alt={item.title}
                         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                         onError={() => setImageError(true)}
+                        loading="lazy"
+                    />
+                ) : !fallbackError ? (
+                    <img
+                        src={fallbackImageSrc}
+                        alt={item.title}
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                        onError={() => setFallbackError(true)}
                         loading="lazy"
                     />
                 ) : (

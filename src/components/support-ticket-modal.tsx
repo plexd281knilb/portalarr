@@ -10,7 +10,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { LifeBuoy, Send, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 
-export default function SupportTicketModal() {
+interface SupportTicketModalProps {
+    trigger?: React.ReactNode;
+}
+
+export default function SupportTicketModal({ trigger }: SupportTicketModalProps = {}) {
     const [open, setOpen] = useState(false);
     const [loading, setLoading] = useState(false);
     const [success, setSuccess] = useState(false);
@@ -41,15 +45,21 @@ export default function SupportTicketModal() {
 
     return (
         <>
-            <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setOpen(true)}
-                className="text-xs text-muted-foreground hover:text-foreground hover:bg-white/[0.04] gap-1.5 h-7 px-2.5 rounded-lg transition-all"
-            >
-                <LifeBuoy className="h-3.5 w-3.5 text-primary" />
-                <span>Need to open a manual support ticket? Click here</span>
-            </Button>
+            {trigger ? (
+                <div onClick={() => setOpen(true)} className="w-full h-full cursor-pointer">
+                    {trigger}
+                </div>
+            ) : (
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setOpen(true)}
+                    className="text-xs text-muted-foreground hover:text-foreground hover:bg-white/[0.04] gap-1.5 h-7 px-2.5 rounded-lg transition-all"
+                >
+                    <LifeBuoy className="h-3.5 w-3.5 text-primary" />
+                    <span>Need to open a manual support ticket? Click here</span>
+                </Button>
+            )}
 
             <Dialog open={open} onOpenChange={setOpen}>
                 <DialogContent className="sm:max-w-md bg-[#121218] border border-border/60 shadow-2xl">

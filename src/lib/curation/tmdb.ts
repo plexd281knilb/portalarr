@@ -13,7 +13,7 @@ import { filterKidsSafeMedia, filterAllowedMedia, isMediaAllowedGlobally } from 
 // Built-in public TMDb read-access token & fallback keys
 const DEFAULT_TMDB_API_KEY = "431a8708161bcd1f1fbe7536137e61ed";
 const TMDB_BASE_URL = "https://api.themoviedb.org/3";
-const TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/original";
+const TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w500";
 
 let cachedApiKey: { key: string; timestamp: number } | null = null;
 const API_KEY_CACHE_TTL = 5 * 60 * 1000; // 5 minutes

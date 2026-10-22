@@ -57,6 +57,7 @@ import {
     resolveResolution,
     formatDurationMs,
     formatEtaTimestamp,
+    formatWatchHistoryThumb,
     type WatchHistoryQueryOptions 
 } from "@/lib/telemetry/stream-tracker";
 import { diagnoseStreamSettings, detectDeviceCategory } from "@/lib/telemetry/device-diagnostics";
@@ -20647,7 +20648,7 @@ export async function getUserPlexHubData(options?: { skipCache?: boolean }) {
                             title: dbItem.title,
                             fullTitle: displayTitle,
                             mediaType: dbItem.mediaType || "movie",
-                            thumb: dbItem.thumb || null,
+                            thumb: formatWatchHistoryThumb(dbItem) || dbItem.thumb || null,
                             date: dbItem.watchedAt ? dbItem.watchedAt.toISOString() : new Date().toISOString(),
                             durationMinutes: durMs ? Math.round(durMs / 60000) : 0,
                             percentComplete: dbItem.progressPercent || 100,

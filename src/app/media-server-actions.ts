@@ -124,6 +124,34 @@ export async function getAdminMediaServersAction(): Promise<{
                 try { cached = JSON.parse(p.cachedLibraries); } catch {}
             }
 
+            if (cached.length === 0) {
+                try {
+                    const token = p.token ? decryptData(p.token) : adminPlexToken;
+                    if (token) {
+                        const cleanUrl = p.url.replace(/\/+$/, "");
+                        const sRes = await fetch(`${cleanUrl}/library/sections`, {
+                            headers: { "Accept": "application/json", "X-Plex-Token": token },
+                            signal: AbortSignal.timeout(3000)
+                        });
+                        if (sRes.ok) {
+                            const sData = await sRes.json();
+                            const dirs = sData.MediaContainer?.Directory || [];
+                            cached = dirs.map((d: any) => ({
+                                id: String(d.key),
+                                title: d.title,
+                                type: d.type === "movie" ? "movies" : d.type === "show" ? "tvshows" : d.type === "artist" ? "music" : d.type
+                            }));
+                            if (cached.length > 0) {
+                                await prisma.plexServer.update({
+                                    where: { id: p.id },
+                                    data: { cachedLibraries: JSON.stringify(cached) }
+                                }).catch(() => {});
+                            }
+                        }
+                    }
+                } catch (e) {}
+            }
+
             mappedPlex.push({
                 id: p.id,
                 name: p.name,
@@ -289,16 +317,79 @@ export async function deleteMediaServerAction(id: string): Promise<{ success: bo
 }
 
 /**
- * Tests connection to an Emby or Jellyfin server and optionally refreshes its cached libraries.
+ * Tests connection to a Plex, Emby, or Jellyfin server and refreshes its cached libraries.
  */
 export async function testMediaServerAction(params: {
-    type: "JELLYFIN" | "EMBY";
+    type: "PLEX" | "JELLYFIN" | "EMBY";
     url: string;
     apiKey?: string;
     serverId?: string;
 }): Promise<MediaServerConnectionResult & { librariesCount?: number }> {
     try {
         await verifySessionAdmin();
+
+        if (params.type === "PLEX") {
+            const start = Date.now();
+            let token = "";
+            let serverName = "Plex Media Server";
+
+            if (params.serverId) {
+                const ps = await prisma.plexServer.findUnique({ where: { id: params.serverId } });
+                if (ps) {
+                    serverName = ps.name;
+                    if (ps.token) {
+                        try { token = decryptData(ps.token); } catch {}
+                    }
+                }
+            }
+            if (!token) {
+                const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+                if (settings?.mainPlexToken) {
+                    try { token = decryptData(settings.mainPlexToken); } catch {}
+                }
+            }
+            if (!token) {
+                token = process.env.PLEX_TOKEN || process.env.MAIN_PLEX_TOKEN || "";
+            }
+
+            const cleanUrl = params.url.replace(/\/+$/, "");
+            const res = await fetch(`${cleanUrl}/library/sections`, {
+                headers: {
+                    "Accept": "application/json",
+                    "X-Plex-Token": token
+                },
+                signal: AbortSignal.timeout(5000)
+            });
+            const latencyMs = Date.now() - start;
+
+            if (!res.ok) {
+                return { ok: false, error: `Plex returned HTTP ${res.status}: ${res.statusText}`, latencyMs };
+            }
+
+            const data = await res.json();
+            const dirs = data.MediaContainer?.Directory || [];
+            const libs: MediaServerLibrary[] = dirs.map((d: any) => ({
+                id: String(d.key),
+                title: d.title,
+                type: d.type === "movie" ? "movies" : d.type === "show" ? "tvshows" : d.type === "artist" ? "music" : d.type
+            }));
+
+            if (params.serverId && libs.length > 0) {
+                await prisma.plexServer.update({
+                    where: { id: params.serverId },
+                    data: { cachedLibraries: JSON.stringify(libs) }
+                });
+            }
+
+            return {
+                ok: true,
+                serverName,
+                version: data.MediaContainer?.version || "PMS Online",
+                os: "Linux / PMS",
+                latencyMs,
+                librariesCount: libs.length
+            };
+        }
 
         let keyToUse = params.apiKey || "";
         if (!keyToUse && params.serverId) {

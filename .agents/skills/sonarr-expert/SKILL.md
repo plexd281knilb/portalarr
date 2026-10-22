@@ -94,6 +94,8 @@ See detailed runbook: [series-parsing-and-models.md](./references/series-parsing
     - When diagnosing missing tracks or corrupt episodes, inspect `/api/v3/release?episodeId={id}` and compare against `/api/v3/episodefile/{episodeFileId}`.
     - If Sonarr indexer releases are rejected with `Existing file on disk has a equal or higher Custom Format score: {score}` or the quality cutoff is met, return `alreadyOptimal: true` (with `releaseTitle`, `quality`, and `existingScore`) rather than falsely claiming an autonomous grab was queued.
     - If a superior candidate release is approved, queue download via `POST /api/v3/release { guid, indexerId }`.
+12. **Missing Cover & Poster Fallback**:
+    - When `series.images` lacks an external `remoteUrl` (e.g. running in Docker networks where only internal container paths `/MediaCover/...` exist), always fall back to `/api/media/image?title=${encodeURIComponent(series.title)}&year=${encodeURIComponent(String(series.year || ""))}&type=show` so artwork is proxied through TMDb or iTunes rather than rendering a blank "No Cover" placeholder.
 
 
 ---

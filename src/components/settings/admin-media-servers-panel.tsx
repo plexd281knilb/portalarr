@@ -132,28 +132,14 @@ export function AdminMediaServersPanel() {
     const handleTestServer = async (srv: DiscoveredServerInfo) => {
         setTestingMap(prev => ({ ...prev, [srv.id]: { testing: true } }));
         try {
-            if (srv.type === "PLEX") {
-                // Test Plex via standard ping
-                const start = Date.now();
-                const res = await fetch(`/api/system/logs?type=ping&url=${encodeURIComponent(srv.url)}`).catch(() => null);
-                const latency = Date.now() - start;
-                setTestingMap(prev => ({
-                    ...prev,
-                    [srv.id]: {
-                        testing: false,
-                        result: { ok: true, serverName: srv.name, latencyMs: latency, os: "PMS Online" }
-                    }
-                }));
-            } else {
-                const res = await testMediaServerAction({
-                    type: srv.type,
-                    url: srv.url,
-                    serverId: srv.id
-                });
-                setTestingMap(prev => ({ ...prev, [srv.id]: { testing: false, result: res } }));
-                if (res.ok) {
-                    await loadServers(true);
-                }
+            const res = await testMediaServerAction({
+                type: srv.type,
+                url: srv.url,
+                serverId: srv.id
+            });
+            setTestingMap(prev => ({ ...prev, [srv.id]: { testing: false, result: res } }));
+            if (res.ok) {
+                await loadServers(true);
             }
         } catch (err: any) {
             setTestingMap(prev => ({

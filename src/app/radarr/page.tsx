@@ -681,7 +681,9 @@ export default function RadarrPage() {
                 {searchResults.map((movie: any) => {
                   const coverImg =
                     movie.images?.find((i: any) => i.coverType === "poster")
-                      ?.remoteUrl || movie.images?.[0]?.remoteUrl;
+                      ?.remoteUrl ||
+                    movie.images?.[0]?.remoteUrl ||
+                    `/api/media/image?title=${encodeURIComponent(movie.title || "")}&year=${encodeURIComponent(String(movie.year || ""))}&type=movie`;
                   return (
                     <div
                       key={movie.tmdbId}
@@ -870,7 +872,9 @@ export default function RadarrPage() {
                     {filteredLibrary.map((movie: any) => {
                       const coverImg =
                         movie.images?.find((i: any) => i.coverType === "poster")
-                          ?.remoteUrl || movie.images?.[0]?.remoteUrl;
+                          ?.remoteUrl ||
+                        movie.images?.[0]?.remoteUrl ||
+                        `/api/media/image?title=${encodeURIComponent(movie.title || "")}&year=${encodeURIComponent(String(movie.year || ""))}&type=movie`;
                       return (
                         <div
                           key={movie.id}

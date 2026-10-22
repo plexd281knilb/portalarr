@@ -7,7 +7,11 @@ import { Progress } from "@/components/ui/progress";
 import { Zap, Activity, Gauge, CheckCircle2, AlertTriangle, RefreshCw, Wifi, ArrowDown, ArrowUp, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
-export default function ServerSpeedTest() {
+interface ServerSpeedTestProps {
+    trigger?: React.ReactNode;
+}
+
+export default function ServerSpeedTest({ trigger }: ServerSpeedTestProps = {}) {
     const [isOpen, setIsOpen] = useState(false);
     const [testing, setTesting] = useState(false);
     const [progress, setProgress] = useState(0);
@@ -138,14 +142,16 @@ export default function ServerSpeedTest() {
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
-                <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="h-8 text-xs font-semibold gap-1.5 border-primary/30 hover:border-primary hover:bg-primary/10 transition-all active:scale-95 shadow-sm"
-                >
-                    <Zap className="h-3.5 w-3.5 text-amber-400" />
-                    Speed Test
-                </Button>
+                {trigger || (
+                    <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="h-8 text-xs font-semibold gap-1.5 border-primary/30 hover:border-primary hover:bg-primary/10 transition-all active:scale-95 shadow-sm"
+                    >
+                        <Zap className="h-3.5 w-3.5 text-amber-400" />
+                        Speed Test
+                    </Button>
+                )}
             </DialogTrigger>
             <DialogContent className="w-[95vw] sm:max-w-lg max-h-[85vh] overflow-y-auto bg-[#121218]/95 border-border/60 backdrop-blur-xl shadow-2xl p-4 sm:p-6">
                 <DialogHeader className="pb-3 border-b border-border/40">

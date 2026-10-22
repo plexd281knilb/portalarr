@@ -54,6 +54,24 @@ Portalarr uses a **Modern Cinematic Dark Theme** powered by Tailwind CSS, Radix 
   - In User Profile (`UserMediaServersManager`), render an informative Tier Capabilities Banner highlighting Full Member privileges (unlimited library selection, playback quality caps, audio/subtitle language preferences, email digests).
   - Enforce server-side whitelist validation: any client tampering attempting to select unauthorized servers or hidden libraries is strictly filtered out before database persistence and API policy sync.
 
+### 4. Button-Led User Dashboard Architecture & Role Parity (`UserLaunchpad`)
+- **DRY Launchpad Pattern**: Replace lengthy, text-heavy vertical card stacks with the touch-friendly `UserLaunchpad` (`src/components/dashboard/user-launchpad.tsx`) positioned immediately below the dashboard header.
+- **Role Parity Standard (Super User = Full Member + Servarr)**:
+  - **Super Users do NOT have a stripped-down or disconnected dashboard**. They share the exact same rich Full Member dashboard experience (My Plex Hub, AI Assistant, Book & Audiobook Library, Server Speed Test, Plex Setup Guides, Support Tickets).
+  - The ONLY architectural difference is that `isSuperUser={true}` dynamically unlocks dedicated **🎬 Radarr Movies** and **📺 Sonarr TV Shows** quick-action buttons in an expanded 8-button launchpad grid (`grid-cols-2 sm:grid-cols-4 xl:grid-cols-8`).
+  - Full Members receive the streamlined 6-button launchpad grid (`grid-cols-2 sm:grid-cols-3 xl:grid-cols-6`).
+- **Free Trial Accounts (`TrialDashboardView`)**:
+  - Compact glowing amber countdown pill header: `⏳ Free Trial: [X] Days Remaining` with `[View Pricing]` trigger.
+  - 4-button launchpad (2x2 on mobile, 4 columns on desktop):
+    1. 🎬 **Request Media** (`/discover`) with live remaining quota badge (`3 Movies • 3 TV Left`).
+    2. 📺 **Plex Setup Guides** (modal trigger).
+    3. ⚡ **Server Speed Test** (modal trigger).
+    4. 💳 **Membership Pricing** (modal trigger with prorated monthly & annual calculations).
+- **Headless Modal Trigger Pattern**:
+  - Components like `ServerSpeedTest`, `PlexSetupGuides`, and `SupportTicketModal` support an optional `trigger?: React.ReactNode` prop. When provided, the dialog renders the custom launchpad card as its `DialogTrigger` without duplicate state or detached trigger buttons.
+- **Admin Mission Control Immunity**:
+  - The Administrator view (`isAdmin === true`) remains 100% strictly untouched, preserving the single-pane `AdminSystemHealthGrid`, `AdminDetailedStreams`, hardware telemetry meters, and 8-tool quick admin bar.
+
 ## 📐 Key Layout & Component Rules
 
 ### 1. Modals & Dialogs (Space Optimization, Bounded Widths & Horizontal Overflow Protection)

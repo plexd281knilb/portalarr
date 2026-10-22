@@ -32,6 +32,7 @@ import StreamQualityDoctorBanner from "@/components/stream-quality-doctor-banner
 import TrialDashboardView from "@/components/trial-dashboard-view";
 import SuperUserCard from "@/components/super-user-card";
 import SupportTicketModal from "@/components/support-ticket-modal";
+import { UserLaunchpad } from "@/components/dashboard/user-launchpad";
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -63,7 +64,7 @@ export default async function UserLandingPage() {
     const isAdmin = user?.role === "ADMIN";
     const isSuperUser = user?.role === "SUPER_USER";
     const isTrial = (user?.status === "TRIAL" || user?.membershipTier === "TRIAL") && user?.status !== "APPROVED" && user?.role !== "ADMIN";
-    const isFullUser = isLoggedIn && !isAdmin && !isSuperUser && !isTrial;
+    const isMember = isLoggedIn && !isAdmin && !isTrial;
 
     const cookieStore = await cookies();
     const isImpersonating = !!cookieStore.get("portalarr_impersonator_token")?.value;
@@ -212,9 +213,9 @@ export default async function UserLandingPage() {
                 ) : null}
 
                 {/* ========================================================================= */}
-                {/* ACCOUNT VIEW 2: FULL USER (BEGINNER / NON-SUPER USER) */}
+                {/* ACCOUNT VIEW 2: FULL MEMBER & SUPER USER DASHBOARD */}
                 {/* ========================================================================= */}
-                {isFullUser ? (
+                {isMember ? (
                     <div className="space-y-6">
                         {/* 1. INVITE LINK BANNER AT THE TOP (GUIDE COLLAPSED BY DEFAULT) */}
                         <PlexInviteBanner 
@@ -227,7 +228,10 @@ export default async function UserLandingPage() {
                             appUrl={referralInfo?.appUrl || joinConfig?.config?.appUrl}
                         />
 
-                        {/* 2. PROMINENT 24/7 AI SERVER ASSISTANT WITH SUPPORT TICKET BUTTON */}
+                        {/* 2. MODERN BUTTON-LED DASHBOARD LAUNCHPAD */}
+                        <UserLaunchpad isSuperUser={isSuperUser} />
+
+                        {/* 3. PROMINENT 24/7 AI SERVER ASSISTANT WITH SUPPORT TICKET BUTTON */}
                         <div className="space-y-2">
                             <AiServerAssistant />
                             <div className="flex justify-end pt-1">
@@ -235,7 +239,7 @@ export default async function UserLandingPage() {
                             </div>
                         </div>
 
-                        {/* 3. MEDIA REQUESTS SECTION (BUILT-IN IS MAIN, SEERR, OMBI AT BOTTOM WITH NOTE) */}
+                        {/* 4. MEDIA REQUESTS SECTION (BUILT-IN IS MAIN, SEERR, OMBI AT BOTTOM WITH NOTE) */}
                         <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm">
                             <CardHeader className="pb-3">
                                 <CardTitle className="text-base sm:text-lg font-bold flex items-center gap-2 text-foreground">
@@ -309,13 +313,15 @@ export default async function UserLandingPage() {
                             </CardContent>
                         </Card>
 
-                        {/* 4. OVERALL SYSTEM HEALTH INDICATOR */}
+                        {/* 5. OVERALL SYSTEM HEALTH INDICATOR */}
                         <SimpleSystemHealth />
 
-                        {/* 5. PROMINENT SUPER USER PROMOTION CARD */}
-                        <SuperUserCard initialRole="USER" />
+                        {/* 6. SUPER USER PROMOTION CARD (FOR STANDARD MEMBERS) */}
+                        {!isSuperUser && (
+                            <SuperUserCard initialRole="USER" />
+                        )}
 
-                        {/* 6. PROMINENT BOOK LIBRARY ACCESS CARD */}
+                        {/* 7. PROMINENT BOOK LIBRARY ACCESS CARD */}
                         <Card className="border-emerald-500/30 bg-gradient-to-br from-emerald-950/20 via-[#121218]/90 to-[#0d0d12] backdrop-blur-md shadow-md relative overflow-hidden">
                             <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
                             <CardHeader className="pb-3">
@@ -353,135 +359,17 @@ export default async function UserLandingPage() {
                             </CardContent>
                         </Card>
 
-                        {/* 7. MY PLEX HUB (ACTIVE STREAMS COLLAPSED BY DEFAULT) */}
-                        <div id="my-plex-hub" className="w-full scroll-mt-6">
-                            <MyPlexHub />
-                        </div>
-
-                        {/* 8. FEATURE VOTING POLL SECTION */}
-                        <div id="voting" className="w-full scroll-mt-6">
-                            <FeatureVotingPoll isAdmin={false} />
-                        </div>
-                    </div>
-                ) : null}
-
-                {/* ========================================================================= */}
-                {/* ACCOUNT VIEW 3: SUPER USER (TECH-SAVVY, BIG RADARR/SONARR BUTTONS, NO TICKETS) */}
-                {/* ========================================================================= */}
-                {isSuperUser && !isAdmin ? (
-                    <div className="space-y-6">
-                        {/* BIG QUICK ACCESS ACTION MATRIX */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-                            {/* RADARR QUICK FIX BUTTON */}
-                            <Link href="/radarr" className="block group">
-                                <Card className="p-4 bg-gradient-to-br from-amber-500/10 via-[#121218] to-[#0f0f14] border-amber-500/30 group-hover:border-amber-500/60 transition-all shadow-md group-active:scale-98">
-                                    <div className="flex items-center justify-between">
-                                        <div className="p-2 rounded-xl bg-amber-500/15 text-amber-400">
-                                            <Film className="h-6 w-6" />
-                                        </div>
-                                        <Badge variant="outline" className="text-[10px] text-amber-300 border-amber-500/30">
-                                            Movies
-                                        </Badge>
-                                    </div>
-                                    <div className="pt-3">
-                                        <h3 className="text-base font-bold text-foreground group-hover:text-amber-300 transition-colors flex items-center gap-1.5">
-                                            Open Radarr <ArrowRight className="h-4 w-4 opacity-70 group-hover:translate-x-1 transition-transform" />
-                                        </h3>
-                                        <p className="text-xs text-muted-foreground pt-0.5">
-                                            Fix missing movie files, re-trigger indexer grabs & check quality.
-                                        </p>
-                                    </div>
-                                </Card>
-                            </Link>
-
-                            {/* SONARR QUICK FIX BUTTON */}
-                            <Link href="/sonarr" className="block group">
-                                <Card className="p-4 bg-gradient-to-br from-sky-500/10 via-[#121218] to-[#0f0f14] border-sky-500/30 group-hover:border-sky-500/60 transition-all shadow-md group-active:scale-98">
-                                    <div className="flex items-center justify-between">
-                                        <div className="p-2 rounded-xl bg-sky-500/15 text-sky-400">
-                                            <Tv className="h-6 w-6" />
-                                        </div>
-                                        <Badge variant="outline" className="text-[10px] text-sky-300 border-sky-500/30">
-                                            TV Shows
-                                        </Badge>
-                                    </div>
-                                    <div className="pt-3">
-                                        <h3 className="text-base font-bold text-foreground group-hover:text-sky-300 transition-colors flex items-center gap-1.5">
-                                            Open Sonarr <ArrowRight className="h-4 w-4 opacity-70 group-hover:translate-x-1 transition-transform" />
-                                        </h3>
-                                        <p className="text-xs text-muted-foreground pt-0.5">
-                                            Manage missing episodes, season packs & series monitored states.
-                                        </p>
-                                    </div>
-                                </Card>
-                            </Link>
-
-                            {/* BOOK LIBRARY */}
-                            <Link href="/library" className="block group">
-                                <Card className="p-4 bg-gradient-to-br from-emerald-500/10 via-[#121218] to-[#0f0f14] border-emerald-500/30 group-hover:border-emerald-500/60 transition-all shadow-md group-active:scale-98">
-                                    <div className="flex items-center justify-between">
-                                        <div className="p-2 rounded-xl bg-emerald-500/15 text-emerald-400">
-                                            <BookOpen className="h-6 w-6" />
-                                        </div>
-                                        <Badge variant="outline" className="text-[10px] text-emerald-300 border-emerald-500/30">
-                                            Books & Audio
-                                        </Badge>
-                                    </div>
-                                    <div className="pt-3">
-                                        <h3 className="text-base font-bold text-foreground group-hover:text-emerald-300 transition-colors flex items-center gap-1.5">
-                                            Book Library <ArrowRight className="h-4 w-4 opacity-70 group-hover:translate-x-1 transition-transform" />
-                                        </h3>
-                                        <p className="text-xs text-muted-foreground pt-0.5">
-                                            Browse audiobooks, ebooks, and manage downloads.
-                                        </p>
-                                    </div>
-                                </Card>
-                            </Link>
-
-                            {/* MEDIA REQUESTS */}
-                            <Link href="/discover" className="block group">
-                                <Card className="p-4 bg-gradient-to-br from-primary/10 via-[#121218] to-[#0f0f14] border-primary/30 group-hover:border-primary/60 transition-all shadow-md group-active:scale-98">
-                                    <div className="flex items-center justify-between">
-                                        <div className="p-2 rounded-xl bg-primary/15 text-primary">
-                                            <Compass className="h-6 w-6" />
-                                        </div>
-                                        <Badge variant="outline" className="text-[10px] text-primary border-primary/30">
-                                            Requests
-                                        </Badge>
-                                    </div>
-                                    <div className="pt-3">
-                                        <h3 className="text-base font-bold text-foreground group-hover:text-primary transition-colors flex items-center gap-1.5">
-                                            Media Requests <ArrowRight className="h-4 w-4 opacity-70 group-hover:translate-x-1 transition-transform" />
-                                        </h3>
-                                        <p className="text-xs text-muted-foreground pt-0.5">
-                                            Browse trending movies, trailers, and submit requests.
-                                        </p>
-                                    </div>
-                                </Card>
-                            </Link>
-                        </div>
-
-                        {/* 24/7 AI SERVER ASSISTANT */}
-                        <div className="w-full">
-                            <AiServerAssistant />
-                        </div>
-
-                        {/* HARDWARE & SYSTEM STATUS */}
-                        <div className="w-full">
-                            <SystemStatus />
-                        </div>
-
-                        {/* ACTIVE DOWNLOADS */}
+                        {/* 8. ACTIVE DOWNLOADS */}
                         <div id="downloads" className="w-full scroll-mt-6">
                             <ActiveDownloads />
                         </div>
 
-                        {/* MY PLEX HUB */}
+                        {/* 9. MY PLEX HUB (ACTIVE STREAMS COLLAPSED BY DEFAULT) */}
                         <div id="my-plex-hub" className="w-full scroll-mt-6">
                             <MyPlexHub />
                         </div>
 
-                        {/* FEATURE VOTING POLL */}
+                        {/* 10. FEATURE VOTING POLL SECTION */}
                         <div id="voting" className="w-full scroll-mt-6">
                             <FeatureVotingPoll isAdmin={false} />
                         </div>

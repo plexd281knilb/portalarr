@@ -95,6 +95,8 @@ See detailed runbook: [movie-model-and-decisions.md](./references/movie-model-an
    - Prevents falsely claiming an autonomous grab was queued or unnecessarily escalating to an administrative support ticket when the highest available custom format score is already present on disk.
 12. **Admin Ticket Fallback Escalation**:
    - When no release candidate passes qualification scoring and the file is not already optimal, the agent creates an Admin Support Ticket (`escalateToAdminTicket`) with attached container telemetry and indexer search diagnostics, alerting administrators without degrading media quality.
+13. **Missing Cover & Poster Fallback**:
+   - When `movie.images` lacks an external `remoteUrl` (e.g. running in Docker networks where only internal container paths `/MediaCover/...` exist), always fall back to `/api/media/image?title=${encodeURIComponent(movie.title)}&year=${encodeURIComponent(String(movie.year || ""))}&type=movie` so artwork is proxied through TMDb or iTunes rather than rendering a blank "No Cover" placeholder.
 
 
 

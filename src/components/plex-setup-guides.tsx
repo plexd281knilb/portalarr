@@ -9,7 +9,11 @@ import { BookOpen, Tv, Tv2, Flame, Monitor, Smartphone, Globe, CheckCircle2, Spa
 import { getPlexSetupGuides } from "@/app/actions";
 import Link from "next/link";
 
-export default function PlexSetupGuides() {
+interface PlexSetupGuidesProps {
+    trigger?: React.ReactNode;
+}
+
+export default function PlexSetupGuides({ trigger }: PlexSetupGuidesProps = {}) {
     const [isOpen, setIsOpen] = useState(false);
     const [guides, setGuides] = useState<any[]>([]);
     const [activeTab, setActiveTab] = useState<string>("appletv");
@@ -41,14 +45,16 @@ export default function PlexSetupGuides() {
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
-                <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="h-8 text-xs font-semibold gap-1.5 border-primary/30 hover:border-primary hover:bg-primary/10 transition-all active:scale-95 shadow-sm"
-                >
-                    <BookOpen className="h-3.5 w-3.5 text-primary" />
-                    Setup Guides
-                </Button>
+                {trigger || (
+                    <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="h-8 text-xs font-semibold gap-1.5 border-primary/30 hover:border-primary hover:bg-primary/10 transition-all active:scale-95 shadow-sm"
+                    >
+                        <BookOpen className="h-3.5 w-3.5 text-primary" />
+                        Setup Guides
+                    </Button>
+                )}
             </DialogTrigger>
             <DialogContent className="w-[95vw] sm:max-w-3xl max-h-[85vh] flex flex-col bg-[#121218]/95 border-border/60 backdrop-blur-xl shadow-2xl p-0 overflow-hidden">
                 <DialogHeader className="p-6 pb-4 border-b border-border/40">
