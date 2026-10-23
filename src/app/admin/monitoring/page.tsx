@@ -584,6 +584,8 @@ export default function AdminFleetMonitoringPage() {
                                     >
                                         <option value="ALL">All Categories</option>
                                         <option value="plex">Plex Media Servers (Live Telemetry)</option>
+                                        <option value="jellyfin">Jellyfin Media Servers</option>
+                                        <option value="emby">Emby Media Servers</option>
                                         <option value="glances">Host Hardware (Glances)</option>
                                         <option value="tautulli">Historical Archive (Tautulli)</option>
                                         <option value="apps">Servarr & Request Apps</option>

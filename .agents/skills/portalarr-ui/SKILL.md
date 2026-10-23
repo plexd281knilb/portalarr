@@ -417,16 +417,18 @@ Portalarr features an automated, real-time versioning, branch identification, an
 - **Comprehensive Single-Pane Monitoring**:
   - Positioned at the very top of Admin Mission Control (`/`), aggregating all configured infrastructure services across 5 distinct categories:
     1. **Plex Media Servers** (Direct PMS status, API identity ping, latency)
-    2. **Host Hardware (Glances)** (Physical machines, CPU & RAM utilization, port 61208 status)
-    3. **Stream Monitors (Tautulli)** (Active playback count, API reachability, port 8181/18181)
-    4. **Servarr & Request Apps** (Radarr, Sonarr, Seerr, Ombi, Prowlarr, Bazarr, Maintainerr)
-    5. **Download Clients** (SABnzbd, qBittorrent, NZBGet)
+    2. **Jellyfin Media Servers** (Native Jellyfin REST ping `/System/Info`, dual-URL fallback, server version, purple badge)
+    3. **Emby Media Servers** (Native Emby REST ping `/System/Info`, dual-URL fallback, server version, emerald badge)
+    4. **Host Hardware (Glances)** (Physical machines, CPU & RAM utilization, port 61208 status)
+    5. **Stream Monitors (Tautulli)** (Active playback count, API reachability, port 8181/18181)
+    6. **Servarr & Request Apps** (Radarr, Sonarr, Seerr, Ombi, Prowlarr, Bazarr, Maintainerr)
+    7. **Download Clients** (SABnzbd, qBittorrent, NZBGet)
 - **Visual Status Hierarchy & Pulse States**:
   - 🟢 **ONLINE**: Emerald indicator with pulse, verified reachable response, and round-trip ping latency badge (e.g. `14ms`).
   - 🔴 **OFFLINE / UNREACHABLE**: Crimson rose badge and animated beacon, surfaced prominently with promoted filter badge (`Down (X)`).
   - ⚪ **PAUSED**: Slate neutral badge indicating intentional opt-out (`monitored === false`) configured in Settings > Monitoring. No unnecessary network probing or false alarms.
 - **Interactive Multi-Axis Filtering & Instant Search**:
-  - Status filter pills (`All`, `Down`, `Online`, `Paused`) paired with category dropdown selector (`All Categories`, `Plex Media Servers`, `Host Hardware`, `Stream Monitors`, `Servarr & Request Apps`, `Download Clients`) and client-side instant search input.
+  - Status filter pills (`All`, `Down`, `Online`, `Paused`) paired with category dropdown selector (`All Categories`, `Plex Media Servers`, `Jellyfin Media Servers`, `Emby Media Servers`, `Host Hardware`, `Stream Monitors`, `Servarr & Request Apps`, `Download Clients`) and client-side instant search input.
 - **My Plex Hub Real Monitored Server Isolation (`my-plex-hub.tsx`)**:
   - In user-facing `MyPlexHub` connected servers dialogs and status counters, dummy, paused, or unmonitored Plex servers (`monitored === false`) are strictly filtered out so that only genuine, monitored Plex instances (`KidsPlexServer`, `MainPlexServerBackup`, `MainPlexServer`) are visible to members.
 

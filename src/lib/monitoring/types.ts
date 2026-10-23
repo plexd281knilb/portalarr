@@ -38,7 +38,7 @@ export interface ServiceUptimeSummary {
     id: string;
     name: string;
     type: string;
-    category: "plex" | "glances" | "tautulli" | "apps" | "downloaders";
+    category: "plex" | "jellyfin" | "emby" | "glances" | "tautulli" | "apps" | "downloaders" | string;
     url: string;
     monitored: boolean;
     status: "ONLINE" | "OFFLINE" | "PAUSED";

@@ -97,6 +97,8 @@ export default function AdminSystemHealthGrid() {
     const getServiceIcon = (category: string, type: string) => {
         const t = (type || "").toLowerCase();
         if (category === "plex") return <Tv className="h-4 w-4 text-amber-400" />;
+        if (category === "jellyfin") return <Tv className="h-4 w-4 text-purple-400" />;
+        if (category === "emby") return <Tv className="h-4 w-4 text-emerald-400" />;
         if (category === "glances") return <Cpu className="h-4 w-4 text-emerald-400" />;
         if (category === "tautulli") return <Activity className="h-4 w-4 text-purple-400" />;
         if (t.includes("sonarr")) return <Tv className="h-4 w-4 text-sky-400" />;
@@ -110,6 +112,8 @@ export default function AdminSystemHealthGrid() {
     const getCategoryBadgeClass = (category: string) => {
         switch (category) {
             case "plex": return "bg-amber-500/10 text-amber-400 border-amber-500/30";
+            case "jellyfin": return "bg-purple-500/10 text-purple-400 border-purple-500/30";
+            case "emby": return "bg-emerald-500/10 text-emerald-400 border-emerald-500/30";
             case "glances": return "bg-emerald-500/10 text-emerald-400 border-emerald-500/30";
             case "tautulli": return "bg-purple-500/10 text-purple-400 border-purple-500/30";
             case "downloaders": return "bg-blue-500/10 text-blue-400 border-blue-500/30";
@@ -120,6 +124,8 @@ export default function AdminSystemHealthGrid() {
     const getCategoryLabel = (cat: string) => {
         switch (cat) {
             case "plex": return "Plex PMS";
+            case "jellyfin": return "Jellyfin";
+            case "emby": return "Emby";
             case "glances": return "Host Glances";
             case "tautulli": return "Tautulli (Archive)";
             case "downloaders": return "Downloader";
@@ -304,6 +310,8 @@ export default function AdminSystemHealthGrid() {
                         >
                             <option value="ALL">All Categories</option>
                             <option value="plex">Plex Media Servers (Live Telemetry)</option>
+                            <option value="jellyfin">Jellyfin Media Servers</option>
+                            <option value="emby">Emby Media Servers</option>
                             <option value="glances">Host Hardware (Glances)</option>
                             <option value="tautulli">Historical Archive (Tautulli)</option>
                             <option value="apps">Servarr &amp; Request Apps</option>

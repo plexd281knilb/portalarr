@@ -1182,7 +1182,12 @@ export async function saveSettings(formData: FormData) {
     }
   }
   if (formData.has("smtpFrom")) {
-    updateData.smtpFrom = formData.get("smtpFrom") as string || "";
+    let fromVal = (formData.get("smtpFrom") as string || "").trim();
+    const isResendHost = (updateData.smtpHost || "").includes("resend") || (formData.get("smtpHost") as string || "").includes("resend");
+    if (isResendHost && (fromVal.toLowerCase().includes("@gmail.com") || !fromVal)) {
+      fromVal = "notifications@domshomelab.com";
+    }
+    updateData.smtpFrom = fromVal;
   }
   if (formData.has("mainPlexToken")) {
     const rawToken = formData.get("mainPlexToken") as string;
@@ -2000,7 +2005,11 @@ export async function sendTestEmailTemplateAction(id: string, customSubject?: st
     });
 
     try {
-        const resolvedSender = resolveSenderAddress(id, settings.smtpFrom || settings.smtpUser);
+        const isResend = settings.smtpHost?.includes("resend") || settings.smtpUser?.toLowerCase() === "resend";
+        let resolvedSender = resolveSenderAddress(id, settings.smtpFrom || settings.smtpUser);
+        if (isResend && (!resolvedSender.isCustomDomain || resolvedSender.email.toLowerCase().includes("@gmail.com"))) {
+            resolvedSender = resolveSenderAddress(id, "notifications@domshomelab.com");
+        }
         const senderEmail = resolvedSender.formatted;
         const transporter = nodemailer.createTransport({
             host: settings.smtpHost,
@@ -2302,7 +2311,11 @@ export async function sendTestEmailAction() {
             select: { email: true }
         });
         const targetRecipient = adminUser?.email || (settings.smtpFrom?.includes("@") ? settings.smtpFrom : (settings.smtpUser?.includes("@") ? settings.smtpUser : "admin@domshomelab.com"));
-        const resolvedSender = resolveSenderAddress("notifications", settings.smtpFrom || settings.smtpUser);
+        const isResend = settings.smtpHost?.includes("resend") || settings.smtpUser?.toLowerCase() === "resend";
+        let resolvedSender = resolveSenderAddress("notifications", settings.smtpFrom || settings.smtpUser);
+        if (isResend && (!resolvedSender.isCustomDomain || resolvedSender.email.toLowerCase().includes("@gmail.com"))) {
+            resolvedSender = resolveSenderAddress("notifications", "notifications@domshomelab.com");
+        }
         const senderEmail = resolvedSender.formatted;
         const transporter = nodemailer.createTransport({
             host: settings.smtpHost,
@@ -17622,7 +17635,7 @@ export type InfrastructureServiceItem = {
     id: string;
     name: string;
     type: string;
-    category: "plex" | "glances" | "tautulli" | "apps" | "downloaders";
+    category: "plex" | "jellyfin" | "emby" | "glances" | "tautulli" | "apps" | "downloaders" | string;
     url: string;
     status: "ONLINE" | "OFFLINE" | "PAUSED";
     monitored: boolean;
@@ -17657,8 +17670,9 @@ export async function getAdminInfrastructureStatusAction(skipAuth: boolean = fal
             await verifyAdmin();
         }
 
-        const [plexServers, glances, tautulli, mediaApps, settings] = await Promise.all([
+        const [plexServers, mediaServers, glances, tautulli, mediaApps, settings] = await Promise.all([
             prisma.plexServer.findMany({ orderBy: { createdAt: "asc" } }).catch(() => []),
+            prisma.mediaServer.findMany({ orderBy: { createdAt: "asc" } }).catch(() => []),
             prisma.glancesInstance.findMany({ orderBy: { createdAt: "asc" } }).catch(() => []),
             prisma.tautulliInstance.findMany({ orderBy: { createdAt: "asc" } }).catch(() => []),
             prisma.mediaApp.findMany({ orderBy: { createdAt: "asc" } }).catch(() => []),
@@ -17721,6 +17735,62 @@ export async function getAdminInfrastructureStatusAction(skipAuth: boolean = fal
                 baseItem.status = "OFFLINE";
                 baseItem.details = err.name === "AbortError" ? "Timeout (4.5s)" : "Unreachable";
             }
+            return baseItem;
+        });
+
+        // 1b. Multi-Platform Media Servers (Jellyfin & Emby)
+        const mediaServerPromises = mediaServers.map(async (ms): Promise<InfrastructureServiceItem> => {
+            const isMonitored = ms.isMonitored !== false && ms.isActive !== false;
+            const clean = cleanUrl(ms.url?.trim() || "");
+            const srvType = ms.type === "EMBY" ? "Emby" : "Jellyfin";
+            const category: "jellyfin" | "emby" = ms.type === "EMBY" ? "emby" : "jellyfin";
+
+            const baseItem: InfrastructureServiceItem = {
+                id: ms.id,
+                name: ms.name,
+                type: `${srvType} Server`,
+                category,
+                url: clean,
+                monitored: isMonitored,
+                status: isMonitored ? "OFFLINE" : "PAUSED"
+            };
+
+            if (!isMonitored) {
+                return baseItem;
+            }
+
+            try {
+                const { testMediaServerConnection } = await import("@/lib/media-servers");
+                let apiKey = "";
+                try {
+                    apiKey = ms.apiKey ? decryptData(ms.apiKey) : "";
+                } catch {
+                    apiKey = ms.apiKey || "";
+                }
+
+                const res = await testMediaServerConnection(
+                    ms.type as "JELLYFIN" | "EMBY",
+                    ms.url,
+                    apiKey,
+                    4500,
+                    ms.internalUrl || undefined
+                );
+
+                if (res.ok) {
+                    baseItem.status = "ONLINE";
+                    baseItem.latencyMs = res.latencyMs;
+                    const ver = res.version && res.version !== "Unknown" ? ` v${res.version}` : "";
+                    baseItem.details = `${srvType} reachable${ver} (${res.latencyMs || 0}ms)`;
+                } else {
+                    baseItem.status = "OFFLINE";
+                    baseItem.latencyMs = res.latencyMs;
+                    baseItem.details = res.error || `${srvType} unreachable`;
+                }
+            } catch (err: any) {
+                baseItem.status = "OFFLINE";
+                baseItem.details = err.name === "AbortError" ? "Timeout (4.5s)" : "Unreachable";
+            }
+
             return baseItem;
         });
 
@@ -17849,8 +17919,9 @@ export async function getAdminInfrastructureStatusAction(skipAuth: boolean = fal
             return baseItem;
         });
 
-        const [plexResults, glancesResults, tautulliResults, appResults] = await Promise.all([
+        const [plexResults, mediaServerResults, glancesResults, tautulliResults, appResults] = await Promise.all([
             Promise.all(plexPromises),
+            Promise.all(mediaServerPromises),
             Promise.all(glancesPromises),
             Promise.all(tautulliPromises),
             Promise.all(appPromises)
@@ -17858,6 +17929,7 @@ export async function getAdminInfrastructureStatusAction(skipAuth: boolean = fal
 
         const services: InfrastructureServiceItem[] = [
             ...plexResults,
+            ...mediaServerResults,
             ...glancesResults,
             ...tautulliResults,
             ...appResults

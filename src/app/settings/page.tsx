@@ -4971,7 +4971,7 @@ function SettingsPageContent() {
                                                         setSmtpHostInput("smtp.resend.com");
                                                         setSmtpPortInput("465");
                                                         setSmtpUserInput("resend");
-                                                        if (!smtpFromInput) setSmtpFromInput("notifications@domshomelab.com");
+                                                        if (!smtpFromInput || smtpFromInput.toLowerCase().includes("@gmail.com")) setSmtpFromInput("notifications@domshomelab.com");
                                                     }}
                                                     className={`text-xs h-7 px-3 gap-1.5 font-bold transition-all ${
                                                         emailProviderMode === "resend"
@@ -5050,6 +5050,12 @@ function SettingsPageContent() {
                                                             {showSmtpKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                                                         </Button>
                                                     </div>
+                                                    {smtpPassInput && !smtpPassInput.startsWith("re_") && (
+                                                        <div className="flex items-center gap-1.5 p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs mt-1.5">
+                                                            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" />
+                                                            <span>Resend API keys start with <code className="font-bold text-amber-200">re_</code>. This looks like a Gmail App Password. If using Resend, please paste your Resend API Key.</span>
+                                                        </div>
+                                                    )}
                                                 </div>
 
                                                 <div className="space-y-2">
@@ -5064,6 +5070,23 @@ function SettingsPageContent() {
                                                         data-1p-ignore="true" 
                                                         data-lpignore="true"
                                                     />
+                                                    {smtpFromInput && (smtpFromInput.toLowerCase().includes("@gmail.com") || smtpFromInput.toLowerCase().includes("@yahoo.com") || smtpFromInput.toLowerCase().includes("@outlook.com")) && (
+                                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs">
+                                                            <div className="flex items-center gap-1.5">
+                                                                <AlertTriangle className="h-4 w-4 shrink-0 text-rose-400" />
+                                                                <span>Resend error 550: Resend cannot send from public webmail (<code className="font-bold text-rose-200">{smtpFromInput}</code>). Resend requires sending from your verified domain.</span>
+                                                            </div>
+                                                            <Button
+                                                                type="button"
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={() => setSmtpFromInput("notifications@domshomelab.com")}
+                                                                className="h-6 text-[10px] font-bold px-2 border-rose-500/40 text-rose-200 hover:bg-rose-500/20 shrink-0"
+                                                            >
+                                                                Set to notifications@domshomelab.com
+                                                            </Button>
+                                                        </div>
+                                                    )}
                                                     <div className="text-[11px] text-muted-foreground bg-black/40 p-2.5 rounded-lg border border-purple-500/20 space-y-1">
                                                         <div className="font-semibold text-purple-200 flex items-center gap-1">
                                                             <Send className="h-3 w-3 text-purple-400" /> Send-to-Kindle Dispatch:
