@@ -22,6 +22,7 @@ import {
     getPlexCloudServersMap
 } from "@/lib/plex";
 import prisma, { ensureSchemaColumns, isPlexMaintenanceWindow } from "@/lib/prisma";
+import { fetchMediaServerActiveSessions, stopMediaServerSession } from "@/lib/media-servers";
 import { resolveMetadataWithAI, resolveRequestMetadataWithAI, callDefaultResolver, analyzeAudiobookChaptersWithAI } from "@/lib/ai-agent";
 import type { AiAssistantResponse, UserDiagnosticSnapshot } from "@/lib/ai-server-assistant-types";
 
@@ -17042,12 +17043,13 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
         if (!skipAuth) {
             await verifyAdmin();
         }
-        const [tautulliInstances, glances, plexServers, settings, userProfiles] = await Promise.all([
+        const [tautulliInstances, glances, plexServers, settings, userProfiles, dbMediaServers] = await Promise.all([
             prisma.tautulliInstance.findMany({ orderBy: { createdAt: 'asc' } }).catch(() => []),
             prisma.glancesInstance.findMany({ orderBy: { createdAt: 'asc' } }).catch(() => []),
             prisma.plexServer.findMany({ orderBy: { createdAt: 'asc' } }).catch(() => []),
             prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null),
-            getUserStreamProfiles().catch(() => [])
+            getUserStreamProfiles().catch(() => []),
+            prisma.mediaServer.findMany({ orderBy: { createdAt: 'asc' } }).catch(() => [])
         ]);
 
         const userProfileMap = new Map<string, any>();
@@ -17285,6 +17287,36 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
             } catch (e) {}
         }
 
+        
+        // 2b. Native Jellyfin & Emby Active Sessions Collection
+        for (const ms of dbMediaServers) {
+            if (ms.isMonitored === false || ms.isActive === false) continue;
+            try {
+                const apiKey = decryptData(ms.apiKey);
+                const msSessions = await fetchMediaServerActiveSessions({
+                    id: ms.id,
+                    name: ms.name,
+                    type: ms.type,
+                    url: ms.url,
+                    internalUrl: ms.internalUrl,
+                    apiKey
+                });
+
+                for (const s of msSessions) {
+                    const fingerprint = `ms_${ms.id}_${s.sessionId || s.sessionKey}`;
+                    if (seenSessionFingerprints.has(fingerprint)) continue;
+                    seenSessionFingerprints.add(fingerprint);
+
+                    s.deviceDiagnosis = diagnoseStreamSettings(s);
+                    const telemetry = extractStreamTelemetry(s);
+                    Object.assign(s, telemetry);
+                    allSessions.push(s);
+                }
+            } catch (err: any) {
+                console.warn(`[ADMIN-STREAMS] Failed to fetch active sessions for ${ms.name} (${ms.type}):`, err?.message || err);
+            }
+        }
+
         // Align totalStreamCount exactly with deduplicated active sessions
         totalStreamCount = allSessions.length;
 
@@ -17327,6 +17359,26 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
                     id: t.id,
                     name: t.name,
                     type: "Tautulli",
+                    streamCount: 0,
+                    directPlayCount: 0,
+                    transcodeCount: 0,
+                    bandwidthKbps: 0,
+                    online: true,
+                    monitored: true
+                });
+            }
+        }
+
+        
+        // Seed with configured Jellyfin & Emby media servers that have monitoring TURNED ON
+        for (const ms of dbMediaServers) {
+            if (ms.isMonitored === false || ms.isActive === false) continue;
+            const normKey = ms.name.toLowerCase().trim();
+            if (!serverUsageMap.has(normKey)) {
+                serverUsageMap.set(normKey, {
+                    id: `media_server_${ms.id}`,
+                    name: ms.name,
+                    type: ms.type === "EMBY" ? "Emby Server" : "Jellyfin Server",
                     streamCount: 0,
                     directPlayCount: 0,
                     transcodeCount: 0,
@@ -20684,14 +20736,15 @@ export async function getUserPlexHubData(options?: { skipCache?: boolean }) {
         }
 
         const isAdmin = user.role === "ADMIN";
-        const [fullUser, settings, tautulli, dbPlexServers] = await Promise.all([
+        const [fullUser, settings, tautulli, dbPlexServers, dbMediaServers] = await Promise.all([
             prisma.user.findUnique({
                 where: { id: user.id },
                 select: { id: true, username: true, email: true, name: true, plexUsername: true, plexEmail: true, role: true, parentUserId: true }
             }).catch(() => null),
             prisma.settings.findFirst().catch(() => null),
             prisma.tautulliInstance.findMany().catch(() => []),
-            prisma.plexServer.findMany().catch(() => [])
+            prisma.plexServer.findMany().catch(() => []),
+            prisma.mediaServer.findMany({ orderBy: { createdAt: 'asc' } }).catch(() => [])
         ]);
 
         const userAliases = new Set<string>();
@@ -20955,6 +21008,54 @@ export async function getUserPlexHubData(options?: { skipCache?: boolean }) {
     }
 
     const rawWatchHistory: any[] = [];
+
+    
+    // --- 1b. DIRECT JELLYFIN & EMBY MEDIA SERVER MONITORING ---
+    for (const ms of dbMediaServers) {
+        if (ms.isMonitored === false || ms.isActive === false) continue;
+        const normKey = ms.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+        if (!serverMap.has(normKey)) {
+            serverMap.set(normKey, {
+                id: `media_server_${ms.id}`,
+                name: ms.name,
+                type: ms.type === "EMBY" ? "Emby Server" : "Jellyfin Server",
+                directPms: false,
+                tautulli: false,
+                online: true,
+                monitored: true
+            });
+        }
+
+        try {
+            const apiKey = decryptData(ms.apiKey);
+            const sessions = await fetchMediaServerActiveSessions({
+                id: ms.id,
+                name: ms.name,
+                type: ms.type,
+                url: ms.url,
+                internalUrl: ms.internalUrl,
+                apiKey
+            });
+
+            for (const s of sessions) {
+                const sessionUser = (s.user || "").toLowerCase().trim();
+                const isMatch = userAliases.has(sessionUser) || (isAdmin && (!sessionUser || sessionUser === "local" || sessionUser === "admin"));
+                if (isMatch) {
+                    const diagnosis = await analyzeStreamHealth(s);
+                    seenSessionKeys.add(s.sessionKey);
+                    seenSessionKeys.add(s.sessionId);
+                    seenSessionKeys.add(s.uniqueStreamKey);
+
+                    activeStreams.push({
+                        ...s,
+                        diagnosis
+                    });
+                }
+            }
+        } catch (err: any) {
+            console.warn(`[USER-HUB] Failed fetching sessions for ${ms.name} (${ms.type}):`, err?.message || err);
+        }
+    }
 
     // --- 2. TAUTULLI INSTANCES MONITORING (Query only monitored Tautulli servers concurrently) ---
     const monitoredTautulli = tautulli.filter(t => t.monitored !== false);
@@ -21658,6 +21759,68 @@ export async function killUserStream(instanceId: string, sessionKey: string) {
 
         } catch (e: any) {
             return { success: false, error: e.message || "Failed to terminate stream" };
+        }
+    }
+
+    
+    // CASE 1b: Direct Jellyfin & Emby Media Server Stream Termination
+    if (instanceId.startsWith("media_server_")) {
+        const mediaServerId = instanceId.replace("media_server_", "");
+        const mediaServer = await prisma.mediaServer.findUnique({
+            where: { id: mediaServerId }
+        });
+
+        if (!mediaServer) {
+            return { success: false, error: "Media server not found" };
+        }
+
+        const apiKey = decryptData(mediaServer.apiKey);
+        const serverConfig = {
+            url: mediaServer.url,
+            internalUrl: mediaServer.internalUrl,
+            apiKey
+        };
+
+        // If not admin, verify ownership by checking user aliases against active sessions
+        if (!isAdmin) {
+            try {
+                const activeSessions = await fetchMediaServerActiveSessions({
+                    id: mediaServer.id,
+                    name: mediaServer.name,
+                    type: mediaServer.type,
+                    url: mediaServer.url,
+                    internalUrl: mediaServer.internalUrl,
+                    apiKey
+                });
+
+                const targetSession = activeSessions.find(s => 
+                    String(s.sessionKey) === String(sessionKey) || 
+                    String(s.sessionId) === String(sessionKey)
+                );
+
+                if (!targetSession) {
+                    return { success: false, error: "Stream session not found or already ended" };
+                }
+
+                const sUser = (targetSession.user || "").toLowerCase().trim();
+                if (!userAliases.has(sUser)) {
+                    return { success: false, error: "Unauthorized: You can only terminate playback sessions for your own account." };
+                }
+            } catch (err: any) {
+                return { success: false, error: err?.message || "Failed to verify session ownership" };
+            }
+        }
+
+        const success = await stopMediaServerSession(serverConfig, sessionKey);
+        if (success) {
+            clearUserCache("user_plex_hub");
+            clearUserCache("user_diag_snapshot");
+            clearUserCache("user_transcode_alert");
+            clearUserCache("admin_detailed_streams");
+            logger.addLog("INFO", "MEDIA_SERVER", `User "${user.username}" terminated active stream on ${mediaServer.type} server "${mediaServer.name}".`);
+            return { success: true, message: "Stream terminated successfully." };
+        } else {
+            return { success: false, error: `Failed to terminate stream on ${mediaServer.type} server` };
         }
     }
 

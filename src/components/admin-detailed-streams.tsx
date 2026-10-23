@@ -424,7 +424,7 @@ export default function AdminDetailedStreams() {
                             <div className="flex items-center gap-2">
                                 <Layers className="h-4 w-4 text-sky-400" />
                                 <span className="text-xs font-bold text-foreground tracking-wide uppercase">
-                                    Streams Per Plex Server
+                                    Streams Per Media Server
                                 </span>
                             </div>
                             <Badge variant="outline" className="text-[10px] font-semibold bg-sky-500/10 text-sky-400 border-sky-500/30">
@@ -434,7 +434,7 @@ export default function AdminDetailedStreams() {
 
                         {serversUsage.length === 0 ? (
                             <div className="text-xs text-muted-foreground py-4 text-center">
-                                No monitored Plex servers active. Turn on monitoring in Settings &gt; Monitoring.
+                                No monitored media servers active. Turn on monitoring in Settings &gt; Media Servers or Monitoring.
                             </div>
                         ) : (
                             <div className="space-y-2.5">
@@ -669,7 +669,11 @@ export default function AdminDetailedStreams() {
                                                         {stream.householdBadge.label}
                                                     </Badge>
                                                 )}
-                                                <Badge variant="outline" className="text-[10px] text-muted-foreground max-w-[130px] sm:max-w-none truncate">
+                                                <Badge variant="outline" className={`text-[10px] max-w-[140px] sm:max-w-none truncate ${
+                                                        stream.serverType === "JELLYFIN" ? "bg-purple-500/10 text-purple-400 border-purple-500/30" :
+                                                        stream.serverType === "EMBY" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" :
+                                                        "text-muted-foreground"
+                                                    }`}>
                                                     🖥️ {stream.serverName}
                                                 </Badge>
                                                 <span className="text-[10px] font-mono text-muted-foreground/80 max-w-[130px] sm:max-w-none truncate">

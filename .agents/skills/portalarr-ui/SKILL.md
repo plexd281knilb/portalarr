@@ -97,6 +97,11 @@ Portalarr uses a **Modern Cinematic Dark Theme** powered by Tailwind CSS, Radix 
     2. **Sign In with Your Account**: Copyable configured username and password instructions.
     3. **Recommended Client Apps**: Swiftfin (Apple TV & iOS), official Jellyfin/Emby on Roku Channel Store, Fire TV, Android TV, Google TV, and web browsers.
     4. **Direct Play Optimization**: Instructions to set Remote Quality / Bitrate to Maximum / Auto for 100% Direct Play.
+- **Native Jellyfin & Emby Active Playback Sessions & Remote Termination**:
+  - **Admin Detailed Streams Matrix & User Dashboard Parity**: Active streams playing on monitored Jellyfin and Emby instances are queried natively via `/Sessions?activeWithinSeconds=960` and integrated seamlessly into `getAdminDetailedStreamsAction` and `getUserPlexHubData`.
+  - **Telemetry Normalization**: Extracts canonical playback metrics: item title, season/episode badges (S01E05), progress bar and percentages, video/audio transcoding decisions, codecs (H264, HEVC, AAC), resolution (4K, 1080p, 720p), bitrates, client devices, and IP addresses.
+  - **Brand Badge Styling**: Media server badges display signature brand tokens: Jellyfin uses a purple accent (`bg-purple-500/10 text-purple-400 border-purple-500/30`) and Emby uses emerald (`bg-emerald-500/10 text-emerald-400 border-emerald-500/30`).
+  - **Interactive Remote Stream Termination (`killUserStream`)**: Users can terminate their own active Jellyfin and Emby streams directly from the dashboard, and administrators can terminate any stream across the cluster via `stopMediaServerSession` (`POST /Sessions/{sessionId}/Playing/Stop`).
 
 ### 4. Button-Led User Dashboard Architecture & Role Parity (`UserLaunchpad`)
 - **DRY Launchpad Pattern**: Replace lengthy, text-heavy vertical card stacks with the touch-friendly `UserLaunchpad` (`src/components/dashboard/user-launchpad.tsx`) positioned immediately below the dashboard header.

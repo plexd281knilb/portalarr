@@ -1701,6 +1701,35 @@ async function runTestSuite() {
                 throw new Error("Expected empty Quick Connect code to be rejected");
             }
             delete process.env.PORTALARR_TEST_USER_ID;
+
+            // 12. Test Jellyfin/Emby Active Playback Session Normalization & Stream Termination
+            const { fetchMediaServerActiveSessions, stopMediaServerSession } = await import("../src/lib/media-servers");
+            const { killUserStream, getAdminDetailedStreamsAction } = await import("../src/app/actions");
+
+            // Verify stopMediaServerSession handles offline/unreachable servers gracefully
+            const stopResult = await stopMediaServerSession(
+                { url: "http://127.0.0.1:9999", apiKey: "mock_key" },
+                "mock_session_123"
+            );
+            if (stopResult !== false) {
+                throw new Error("Expected stopMediaServerSession to return false on unreachable server");
+            }
+
+            // Verify killUserStream handles media_server_ prefix for non-existent server
+            const killInvalidRes = await killUserStream("media_server_non_existent", "mock_key");
+            if (killInvalidRes.success || !killInvalidRes.error?.includes("Media server not found")) {
+                throw new Error(`Expected media server not found error, got: ${killInvalidRes.error}`);
+            }
+
+            // Verify getAdminDetailedStreamsAction includes monitored media server in server usage
+            const adminStreamsRes = await getAdminDetailedStreamsAction(true);
+            if (!adminStreamsRes || !Array.isArray(adminStreamsRes.serversUsage)) {
+                throw new Error("Expected getAdminDetailedStreamsAction to return serversUsage array");
+            }
+            const foundMsUsage = adminStreamsRes.serversUsage.find((s: any) => s.id === `media_server_${testMediaServer.id}` || s.name === testMediaServer.name);
+            if (!foundMsUsage) {
+                throw new Error(`Expected test media server "${testMediaServer.name}" to be present in serversUsage`);
+            }
         } finally {
             await prisma.user.delete({ where: { id: memberUser.id } }).catch(() => {});
             await prisma.mediaServer.delete({ where: { id: testMediaServer.id } }).catch(() => {});
