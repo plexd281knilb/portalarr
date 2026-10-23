@@ -18,6 +18,14 @@ model Settings {
   smtpUser         String?
   smtpPass         String?
   smtpFrom         String    @default("") // Email address the system sends books from
+  resendApiKey     String?
+  resendFrom       String?   @default("notifications@domshomelab.com")
+  customSmtpHost   String?
+  customSmtpPort   Int?
+  customSmtpUser   String?
+  customSmtpPass   String?
+  customSmtpFrom   String?
+  emailProviderMode String?  @default("resend")
   refreshInterval  Int       @default(10)
   theme            String    @default("dark")
   autoSyncInterval Int       @default(6)

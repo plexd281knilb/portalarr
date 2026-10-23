@@ -288,6 +288,14 @@ function SettingsPageContent() {
     const [smtpPassInput, setSmtpPassInput] = useState("");
     const [smtpFromInput, setSmtpFromInput] = useState("");
     const [emailProviderMode, setEmailProviderMode] = useState<"resend" | "custom">("resend");
+    // Dedicated decoupled state for Resend and Custom SMTP
+    const [resendApiKeyInput, setResendApiKeyInput] = useState("");
+    const [resendFromInput, setResendFromInput] = useState("notifications@domshomelab.com");
+    const [customSmtpHostInput, setCustomSmtpHostInput] = useState("smtp.gmail.com");
+    const [customSmtpPortInput, setCustomSmtpPortInput] = useState("587");
+    const [customSmtpUserInput, setCustomSmtpUserInput] = useState("");
+    const [customSmtpPassInput, setCustomSmtpPassInput] = useState("");
+    const [customSmtpFromInput, setCustomSmtpFromInput] = useState("");
     const [showAdvancedSmtp, setShowAdvancedSmtp] = useState(false);
     const [mainPlexTokenInput, setMainPlexTokenInput] = useState("");
     const [mainPlexUrlInput, setMainPlexUrlInput] = useState("");
@@ -1075,7 +1083,26 @@ function SettingsPageContent() {
             setSmtpPassInput(smtpPassVal);
             setSmtpFromInput(smtpFromVal);
             const isResend = smtpHostVal.includes("resend") || smtpUserVal.toLowerCase() === "resend";
-            setEmailProviderMode(isResend || (!smtpHostVal && !smtpUserVal) ? "resend" : "custom");
+            const effectiveMode = s?.emailProviderMode || (isResend || (!smtpHostVal && !smtpUserVal) ? "resend" : "custom");
+            setEmailProviderMode(effectiveMode);
+
+            // Populate decoupled Resend state
+            const rApiKey = s?.resendApiKey || (isResend && smtpPassVal.startsWith("re_") ? smtpPassVal : "");
+            setResendApiKeyInput(rApiKey);
+            const rFrom = s?.resendFrom || (isResend && smtpFromVal ? smtpFromVal : "notifications@domshomelab.com");
+            setResendFromInput(rFrom);
+
+            // Populate decoupled Custom SMTP state
+            const cHost = s?.customSmtpHost || (!isResend && smtpHostVal ? smtpHostVal : "smtp.gmail.com");
+            setCustomSmtpHostInput(cHost);
+            const cPort = s?.customSmtpPort || (!isResend && smtpPortVal ? smtpPortVal : "587");
+            setCustomSmtpPortInput(String(cPort));
+            const cUser = s?.customSmtpUser || (!isResend && smtpUserVal ? smtpUserVal : "");
+            setCustomSmtpUserInput(cUser);
+            const cPass = s?.customSmtpPass || (!isResend && smtpPassVal && !smtpPassVal.startsWith("re_") ? smtpPassVal : "");
+            setCustomSmtpPassInput(cPass);
+            const cFrom = s?.customSmtpFrom || (!isResend && smtpFromVal ? smtpFromVal : "");
+            setCustomSmtpFromInput(cFrom);
             setMainPlexTokenInput(mainPlexTokenVal);
             setMainPlexUrlInput(mainPlexUrlVal);
             setAutoSyncIntervalInput(autoSyncIntervalVal);
@@ -4923,11 +4950,28 @@ function SettingsPageContent() {
                                         onSubmit={async (e) => {
                                             e.preventDefault();
                                             const formData = new FormData();
-                                            formData.append("smtpHost", smtpHostInput);
-                                            formData.append("smtpPort", String(smtpPortInput));
-                                            formData.append("smtpUser", smtpUserInput);
-                                            formData.append("smtpPass", smtpPassInput);
-                                            formData.append("smtpFrom", smtpFromInput);
+                                            formData.append("emailProviderMode", emailProviderMode);
+                                            formData.append("resendApiKey", resendApiKeyInput);
+                                            formData.append("resendFrom", resendFromInput);
+                                            formData.append("customSmtpHost", customSmtpHostInput);
+                                            formData.append("customSmtpPort", String(customSmtpPortInput));
+                                            formData.append("customSmtpUser", customSmtpUserInput);
+                                            formData.append("customSmtpPass", customSmtpPassInput);
+                                            formData.append("customSmtpFrom", customSmtpFromInput);
+
+                                            if (emailProviderMode === "resend") {
+                                                formData.append("smtpHost", "smtp.resend.com");
+                                                formData.append("smtpPort", "465");
+                                                formData.append("smtpUser", "resend");
+                                                formData.append("smtpPass", resendApiKeyInput);
+                                                formData.append("smtpFrom", resendFromInput);
+                                            } else {
+                                                formData.append("smtpHost", customSmtpHostInput);
+                                                formData.append("smtpPort", String(customSmtpPortInput));
+                                                formData.append("smtpUser", customSmtpUserInput);
+                                                formData.append("smtpPass", customSmtpPassInput);
+                                                formData.append("smtpFrom", customSmtpFromInput);
+                                            }
                                             const res = await saveSettings(formData);
                                             if (res.success) {
                                                 setSaveSmtpMsg("SMTP settings saved successfully!");
@@ -4966,13 +5010,7 @@ function SettingsPageContent() {
                                                     type="button"
                                                     size="sm"
                                                     variant={emailProviderMode === "resend" ? "default" : "ghost"}
-                                                    onClick={() => {
-                                                        setEmailProviderMode("resend");
-                                                        setSmtpHostInput("smtp.resend.com");
-                                                        setSmtpPortInput("465");
-                                                        setSmtpUserInput("resend");
-                                                        if (!smtpFromInput || smtpFromInput.toLowerCase().includes("@gmail.com")) setSmtpFromInput("notifications@domshomelab.com");
-                                                    }}
+                                                    onClick={() => setEmailProviderMode("resend")}
                                                     className={`text-xs h-7 px-3 gap-1.5 font-bold transition-all ${
                                                         emailProviderMode === "resend"
                                                             ? "bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-900/30"
@@ -5030,10 +5068,10 @@ function SettingsPageContent() {
                                                     </Label>
                                                     <div className="relative">
                                                         <Input 
-                                                            name="smtpPass" 
+                                                            name="resendApiKey" 
                                                             type={showSmtpKey ? "text" : "password"} 
-                                                            value={smtpPassInput} 
-                                                            onChange={(e) => setSmtpPassInput(e.target.value)} 
+                                                            value={resendApiKeyInput} 
+                                                            onChange={(e) => setResendApiKeyInput(e.target.value)} 
                                                             className="pr-9 font-mono text-xs border-purple-500/30 focus-visible:ring-purple-500/40 bg-black/40"
                                                             placeholder="re_123456789_abcdef..."
                                                             autoComplete="new-password"
@@ -5050,7 +5088,7 @@ function SettingsPageContent() {
                                                             {showSmtpKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                                                         </Button>
                                                     </div>
-                                                    {smtpPassInput && !smtpPassInput.startsWith("re_") && (
+                                                    {resendApiKeyInput && !resendApiKeyInput.startsWith("re_") && (
                                                         <div className="flex items-center gap-1.5 p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs mt-1.5">
                                                             <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" />
                                                             <span>Resend API keys start with <code className="font-bold text-amber-200">re_</code>. This looks like a Gmail App Password. If using Resend, please paste your Resend API Key.</span>
@@ -5061,26 +5099,26 @@ function SettingsPageContent() {
                                                 <div className="space-y-2">
                                                     <Label className="text-xs font-semibold">Sender Email Address (From)</Label>
                                                     <Input 
-                                                        name="smtpFrom" 
-                                                        value={smtpFromInput} 
-                                                        onChange={(e) => setSmtpFromInput(e.target.value)} 
+                                                        name="resendFrom" 
+                                                        value={resendFromInput} 
+                                                        onChange={(e) => setResendFromInput(e.target.value)} 
                                                         placeholder="notifications@domshomelab.com" 
                                                         className="border-purple-500/30 font-mono text-xs bg-black/40"
                                                         autoComplete="off" 
                                                         data-1p-ignore="true" 
                                                         data-lpignore="true"
                                                     />
-                                                    {smtpFromInput && (smtpFromInput.toLowerCase().includes("@gmail.com") || smtpFromInput.toLowerCase().includes("@yahoo.com") || smtpFromInput.toLowerCase().includes("@outlook.com")) && (
+                                                    {resendFromInput && (resendFromInput.toLowerCase().includes("@gmail.com") || resendFromInput.toLowerCase().includes("@yahoo.com") || resendFromInput.toLowerCase().includes("@outlook.com")) && (
                                                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs">
                                                             <div className="flex items-center gap-1.5">
                                                                 <AlertTriangle className="h-4 w-4 shrink-0 text-rose-400" />
-                                                                <span>Resend error 550: Resend cannot send from public webmail (<code className="font-bold text-rose-200">{smtpFromInput}</code>). Resend requires sending from your verified domain.</span>
+                                                                <span>Resend error 550: Resend cannot send from public webmail (<code className="font-bold text-rose-200">{resendFromInput}</code>). Resend requires sending from your verified domain.</span>
                                                             </div>
                                                             <Button
                                                                 type="button"
                                                                 size="sm"
                                                                 variant="outline"
-                                                                onClick={() => setSmtpFromInput("notifications@domshomelab.com")}
+                                                                onClick={() => setResendFromInput("notifications@domshomelab.com")}
                                                                 className="h-6 text-[10px] font-bold px-2 border-rose-500/40 text-rose-200 hover:bg-rose-500/20 shrink-0"
                                                             >
                                                                 Set to notifications@domshomelab.com
@@ -5130,9 +5168,9 @@ function SettingsPageContent() {
                                                     <div className="space-y-2">
                                                         <Label>SMTP Host</Label>
                                                         <Input 
-                                                            name="smtpHost" 
-                                                            value={smtpHostInput} 
-                                                            onChange={(e) => setSmtpHostInput(e.target.value)} 
+                                                            name="customSmtpHost" 
+                                                            value={customSmtpHostInput} 
+                                                            onChange={(e) => setCustomSmtpHostInput(e.target.value)} 
                                                             placeholder="smtp.gmail.com" 
                                                             autoComplete="off" 
                                                             data-1p-ignore="true" 
@@ -5142,9 +5180,9 @@ function SettingsPageContent() {
                                                     <div className="space-y-2">
                                                         <Label>Port</Label>
                                                         <Input 
-                                                            name="smtpPort" 
-                                                            value={smtpPortInput} 
-                                                            onChange={(e) => setSmtpPortInput(e.target.value)} 
+                                                            name="customSmtpPort" 
+                                                            value={customSmtpPortInput} 
+                                                            onChange={(e) => setCustomSmtpPortInput(e.target.value)} 
                                                             placeholder="587" 
                                                             autoComplete="off" 
                                                             data-1p-ignore="true" 
@@ -5156,9 +5194,9 @@ function SettingsPageContent() {
                                                     <div className="space-y-2">
                                                         <Label>User / Email</Label>
                                                         <Input 
-                                                            name="smtpUser" 
-                                                            value={smtpUserInput} 
-                                                            onChange={(e) => setSmtpUserInput(e.target.value)} 
+                                                            name="customSmtpUser" 
+                                                            value={customSmtpUserInput} 
+                                                            onChange={(e) => setCustomSmtpUserInput(e.target.value)} 
                                                             placeholder="user@gmail.com" 
                                                             autoComplete="off" 
                                                             data-1p-ignore="true" 
@@ -5169,10 +5207,10 @@ function SettingsPageContent() {
                                                         <Label>Password</Label>
                                                         <div className="relative">
                                                             <Input 
-                                                                name="smtpPass" 
+                                                                name="customSmtpPass" 
                                                                 type={showSmtpKey ? "text" : "password"} 
-                                                                value={smtpPassInput} 
-                                                                onChange={(e) => setSmtpPassInput(e.target.value)} 
+                                                                value={customSmtpPassInput} 
+                                                                onChange={(e) => setCustomSmtpPassInput(e.target.value)} 
                                                                 className="pr-8"
                                                                 autoComplete="new-password"
                                                                 data-1p-ignore="true"
@@ -5196,10 +5234,10 @@ function SettingsPageContent() {
                                                 <div className="space-y-2">
                                                     <Label>Sender Email Address (From)</Label>
                                                     <Input 
-                                                        name="smtpFrom" 
-                                                        value={smtpFromInput} 
-                                                        onChange={(e) => setSmtpFromInput(e.target.value)} 
-                                                        placeholder="dom@domshomelab.com" 
+                                                        name="customSmtpFrom" 
+                                                        value={customSmtpFromInput} 
+                                                        onChange={(e) => setCustomSmtpFromInput(e.target.value)} 
+                                                        placeholder="PlexD281knilb@gmail.com" 
                                                         autoComplete="off" 
                                                         data-1p-ignore="true" 
                                                         data-lpignore="true"

@@ -1301,6 +1301,18 @@ Before completing any task, execute:
 
 ---
 
+### 41. Universal Floating Suggest Fix Launcher & Decoupled SMTP Settings Architecture
+- **Floating Suggest Fix Launcher (`FloatingSuggestFixLauncher` & `SuggestFixModal`)**:
+  - Mounted globally in `src/components/layout-wrapper.tsx` at `fixed bottom-16 right-4 sm:bottom-20 sm:right-6 z-40` for all authenticated members (positioned just above the AI Assistant pill).
+  - Explicit canonical label: **`Suggest Fix`** with `Wrench` icon (`text-amber-200`) and glowing purple/indigo pill gradient (`from-amber-600 via-purple-600 to-indigo-600`).
+  - Dismissible with `X` button and programmatically operable via `window.dispatchEvent(new CustomEvent("open-suggest-fix"))`.
+- **Decoupled SMTP & Resend Settings Architecture (`src/app/settings/page.tsx`)**:
+  - Resend credentials (`resendApiKey`, `resendFrom`) and Custom SMTP credentials (`customSmtpHost`, `customSmtpPort`, `customSmtpUser`, `customSmtpPass`, `customSmtpFrom`) are completely isolated in separate database columns and UI form states.
+  - Switching between provider tabs never mutates or overwrites the other provider's credentials, preventing API keys and passwords from overwriting each other.
+  - Active provider mode synchronizes outbound SMTP parameters while leaving both credential sets permanently preserved.
+
+---
+
 As the Portalarr frontend evolves or new design decisions are finalized:
 1. **Adding a New UI Rule**: Add the rule to the relevant section above or under `references/`.
 2. **Tweaking Component Defaults**: Update the corresponding reference file in `references/`.

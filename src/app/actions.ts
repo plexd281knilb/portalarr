@@ -1140,6 +1140,8 @@ export async function getSettings() {
         const settings = await prisma.settings.findFirst() || {} as any;
         
         if (settings.smtpPass) settings.smtpPass = decryptData(settings.smtpPass);
+        if (settings.resendApiKey) settings.resendApiKey = decryptData(settings.resendApiKey);
+        if (settings.customSmtpPass) settings.customSmtpPass = decryptData(settings.customSmtpPass);
         if (settings.mainPlexToken) settings.mainPlexToken = decryptData(settings.mainPlexToken);
         
         return settings;
@@ -1164,30 +1166,72 @@ export async function saveSettings(formData: FormData) {
     }
     updateData.appUrl = rawUrl;
   }
-  if (formData.has("smtpHost")) {
-    updateData.smtpHost = formData.get("smtpHost") as string || "";
+  if (formData.has("emailProviderMode")) {
+    updateData.emailProviderMode = (formData.get("emailProviderMode") as string || "resend");
   }
-  if (formData.has("smtpPort")) {
-    const rawPort = formData.get("smtpPort");
-    const p = Number(rawPort);
-    updateData.smtpPort = isNaN(p) ? 587 : p;
-  }
-  if (formData.has("smtpUser")) {
-    updateData.smtpUser = formData.get("smtpUser") as string || "";
-  }
-  if (formData.has("smtpPass")) {
-    const rawPass = formData.get("smtpPass") as string;
-    if (rawPass !== null) {
-      updateData.smtpPass = rawPass ? encryptData(rawPass) : "";
+
+  // Handle dedicated Resend fields
+  if (formData.has("resendApiKey")) {
+    const rawResendKey = (formData.get("resendApiKey") as string || "").trim();
+    if (rawResendKey) {
+      updateData.resendApiKey = encryptData(rawResendKey);
     }
   }
-  if (formData.has("smtpFrom")) {
-    let fromVal = (formData.get("smtpFrom") as string || "").trim();
-    const isResendHost = (updateData.smtpHost || "").includes("resend") || (formData.get("smtpHost") as string || "").includes("resend");
-    if (isResendHost && (fromVal.toLowerCase().includes("@gmail.com") || !fromVal)) {
-      fromVal = "notifications@domshomelab.com";
+  if (formData.has("resendFrom")) {
+    updateData.resendFrom = (formData.get("resendFrom") as string || "").trim() || "notifications@domshomelab.com";
+  }
+
+  // Handle dedicated Custom SMTP fields
+  if (formData.has("customSmtpHost")) {
+    updateData.customSmtpHost = (formData.get("customSmtpHost") as string || "").trim();
+  }
+  if (formData.has("customSmtpPort")) {
+    const cp = Number(formData.get("customSmtpPort"));
+    updateData.customSmtpPort = isNaN(cp) ? 587 : cp;
+  }
+  if (formData.has("customSmtpUser")) {
+    updateData.customSmtpUser = (formData.get("customSmtpUser") as string || "").trim();
+  }
+  if (formData.has("customSmtpPass")) {
+    const rawCustomPass = formData.get("customSmtpPass") as string;
+    if (rawCustomPass !== null && rawCustomPass !== undefined && rawCustomPass !== "") {
+      updateData.customSmtpPass = encryptData(rawCustomPass);
     }
-    updateData.smtpFrom = fromVal;
+  }
+  if (formData.has("customSmtpFrom")) {
+    updateData.customSmtpFrom = (formData.get("customSmtpFrom") as string || "").trim();
+  }
+
+  // Synchronize active SMTP delivery configuration
+  const mode = updateData.emailProviderMode || (formData.get("emailProviderMode") as string) || (formData.get("smtpHost")?.toString().includes("resend") ? "resend" : "custom");
+  if (mode === "resend") {
+    updateData.smtpHost = "smtp.resend.com";
+    updateData.smtpPort = 465;
+    updateData.smtpUser = "resend";
+    const resendKeyToUse = (formData.get("resendApiKey") as string) || (formData.get("smtpPass") as string) || "";
+    if (resendKeyToUse) {
+      updateData.smtpPass = encryptData(resendKeyToUse);
+    }
+    const rFrom = ((formData.get("resendFrom") as string) || (formData.get("smtpFrom") as string) || "").trim();
+    updateData.smtpFrom = (rFrom && !rFrom.toLowerCase().includes("@gmail.com")) ? rFrom : "notifications@domshomelab.com";
+  } else if (mode === "custom") {
+    updateData.smtpHost = updateData.customSmtpHost || (formData.get("smtpHost") as string || "");
+    updateData.smtpPort = updateData.customSmtpPort ?? (Number(formData.get("smtpPort")) || 587);
+    updateData.smtpUser = updateData.customSmtpUser || (formData.get("smtpUser") as string || "");
+    const cPass = (formData.get("customSmtpPass") as string) || (formData.get("smtpPass") as string) || "";
+    if (cPass) {
+      updateData.smtpPass = encryptData(cPass);
+    }
+    updateData.smtpFrom = updateData.customSmtpFrom || (formData.get("smtpFrom") as string || "");
+  } else {
+    if (formData.has("smtpHost")) updateData.smtpHost = formData.get("smtpHost") as string || "";
+    if (formData.has("smtpPort")) updateData.smtpPort = Number(formData.get("smtpPort")) || 587;
+    if (formData.has("smtpUser")) updateData.smtpUser = formData.get("smtpUser") as string || "";
+    if (formData.has("smtpPass")) {
+      const rawPass = formData.get("smtpPass") as string;
+      if (rawPass) updateData.smtpPass = encryptData(rawPass);
+    }
+    if (formData.has("smtpFrom")) updateData.smtpFrom = formData.get("smtpFrom") as string || "";
   }
   if (formData.has("mainPlexToken")) {
     const rawToken = formData.get("mainPlexToken") as string;
