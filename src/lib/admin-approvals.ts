@@ -3,7 +3,7 @@ import { getAppUrl } from "@/lib/app-url";
 import { logger } from "@/lib/logger";
 import { decryptData } from "@/lib/encryption";
 import { postDiscordMessage, type DiscordEmbed } from "@/lib/discord/discord-bot";
-import { wrapInPortalarrEmailLayout, resolveSenderAddress } from "@/lib/email-templates";
+import { wrapInPortalarrEmailLayout, resolveSenderAddress, resolveEmailProviderConfig } from "@/lib/email-templates";
 import nodemailer from "nodemailer";
 
 export interface ApprovalNotifyResult {
@@ -106,27 +106,11 @@ export async function notifyAdminsOnPendingApproval(approval: {
         }
 
         // 2. SMTP / RESEND ADMIN EMAIL ALERT
-        const effectiveMode = settings.emailProviderMode || (settings.smtpHost?.includes("resend") ? "resend" : "custom");
-        const isResend = effectiveMode === "resend";
-
-        const host = isResend ? "smtp.resend.com" : (settings.customSmtpHost || settings.smtpHost || "");
-        const port = isResend ? 465 : (settings.customSmtpPort || settings.smtpPort || 587);
-        const secure = port === 465;
-        const user = isResend ? "resend" : (settings.customSmtpUser || settings.smtpUser || "");
-        const rawPass = isResend ? (settings.resendApiKey || settings.smtpPass) : (settings.customSmtpPass || settings.smtpPass);
-        let pass = "";
-        if (rawPass) {
-            try { pass = decryptData(rawPass); } catch { pass = rawPass; }
-        }
-        const from = isResend 
-            ? ((settings.resendFrom && !settings.resendFrom.toLowerCase().includes("@gmail.com")) ? settings.resendFrom : "notifications@domshomelab.com")
-            : (settings.customSmtpFrom || settings.smtpFrom || user);
+        const emailConfig = resolveEmailProviderConfig(settings);
 
         if (
             settings.adminApprovalEmailNotify !== false && 
-            host && 
-            user && 
-            pass
+            emailConfig.isConfigured
         ) {
             // Find all administrators with valid email addresses
             const admins = await prisma.user.findMany({
@@ -138,16 +122,16 @@ export async function notifyAdminsOnPendingApproval(approval: {
             });
 
             if (admins.length > 0) {
-                const resolvedSender = resolveSenderAddress("admin_approval", from);
+                const resolvedSender = resolveSenderAddress("admin_approval", emailConfig.from);
                 const senderEmail = resolvedSender.formatted;
                 
                 const transporter = nodemailer.createTransport({
-                    host,
-                    port,
-                    secure,
+                    host: emailConfig.host,
+                    port: emailConfig.port,
+                    secure: emailConfig.secure,
                     auth: {
-                        user,
-                        pass
+                        user: emailConfig.user,
+                        pass: emailConfig.pass
                     }
                 });
 

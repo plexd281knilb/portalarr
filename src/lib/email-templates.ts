@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getAppUrl } from "@/lib/app-url";
+import { decryptData } from "@/lib/encryption";
 
 export interface TemplateVariableInfo {
     key: string;
@@ -190,6 +191,86 @@ export function resolveSenderAddress(
         isCustomDomain: true,
         senderCategory: category
     };
+}
+
+export interface EmailProviderConfig {
+    isResend: boolean;
+    providerMode: "resend" | "custom";
+    host: string;
+    port: number;
+    secure: boolean;
+    user: string;
+    pass: string;
+    from: string;
+    isConfigured: boolean;
+}
+
+export function resolveEmailProviderConfig(settings: any): EmailProviderConfig {
+    if (!settings) {
+        return {
+            isResend: false,
+            providerMode: "custom",
+            host: "",
+            port: 587,
+            secure: false,
+            user: "",
+            pass: "",
+            from: "notifications@domshomelab.com",
+            isConfigured: false
+        };
+    }
+
+    const providerMode = settings.emailProviderMode || (settings.smtpHost?.includes("resend") ? "resend" : "custom");
+    const isResend = providerMode === "resend";
+
+    const host = isResend ? "smtp.resend.com" : (settings.customSmtpHost || settings.smtpHost || "");
+    const port = isResend ? 465 : (settings.customSmtpPort || settings.smtpPort || 587);
+    const secure = port === 465;
+    const user = isResend ? "resend" : (settings.customSmtpUser || settings.smtpUser || "");
+    const rawPass = isResend ? (settings.resendApiKey || settings.smtpPass) : (settings.customSmtpPass || settings.smtpPass);
+    let pass = "";
+    if (rawPass) {
+        try { pass = decryptData(rawPass); } catch { pass = rawPass; }
+    }
+    const from = isResend 
+        ? ((settings.resendFrom && !settings.resendFrom.toLowerCase().includes("@gmail.com")) ? settings.resendFrom : "notifications@domshomelab.com")
+        : (settings.customSmtpFrom || settings.smtpFrom || user || "notifications@domshomelab.com");
+
+    const isConfigured = Boolean(host && user && pass);
+
+    return {
+        isResend,
+        providerMode,
+        host,
+        port,
+        secure,
+        user,
+        pass,
+        from,
+        isConfigured
+    };
+}
+
+export function isEmailDeliveryConfigured(settings: any): boolean {
+    return resolveEmailProviderConfig(settings).isConfigured;
+}
+
+export async function resolveAdminNotificationEmails(settings?: any): Promise<string[]> {
+    try {
+        const admins = await prisma.user.findMany({
+            where: { role: { in: ["ADMIN", "SUPER_USER"] } },
+            select: { email: true }
+        });
+        const emails = Array.from(new Set(admins.map(a => a.email?.trim()).filter((e): e is string => Boolean(e && e.includes("@")))));
+        if (emails.length > 0) return emails;
+    } catch {}
+
+    const cfg = settings ? resolveEmailProviderConfig(settings) : null;
+    const fallback = settings?.adminAlertEmail || settings?.customSmtpFrom || settings?.smtpFrom || (settings?.smtpUser?.includes("@") ? settings.smtpUser : null);
+    if (fallback && fallback.includes("@")) {
+        return [fallback.trim()];
+    }
+    return [];
 }
 
 export interface EmailTemplateDefinition {

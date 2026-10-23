@@ -32,7 +32,17 @@ import { encryptData, decryptData } from "@/lib/encryption";
 import { calculateProratedBilling } from "@/lib/prorated-billing";
 import { calculateUserRenewalSummary } from "@/lib/referral-rewards";
 import { logger, maskToken } from "@/lib/logger";
-import { renderEmailTemplate, DEFAULT_EMAIL_TEMPLATES, getDefaultEmailTemplate, wrapInPortalarrEmailLayout, resolveSenderAddress, getTemplateSenderCategory } from "@/lib/email-templates";
+import { 
+    renderEmailTemplate, 
+    DEFAULT_EMAIL_TEMPLATES, 
+    getDefaultEmailTemplate, 
+    wrapInPortalarrEmailLayout, 
+    resolveSenderAddress, 
+    getTemplateSenderCategory,
+    resolveEmailProviderConfig,
+    isEmailDeliveryConfigured,
+    resolveAdminNotificationEmails
+} from "@/lib/email-templates";
 import fs from "fs";
 import path from "path";
 import { convertEbookToEpub, validateAndFixEpubForKindle } from "@/lib/books/epub-converter";
@@ -2010,11 +2020,13 @@ export async function sendTestEmailTemplateAction(id: string, customSubject?: st
     });
 
     const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-    if (!settings?.smtpHost || !settings?.smtpUser || !settings?.smtpPass) {
-        return { success: false, error: "SMTP settings not configured on this server. Please configure SMTP in General & Email settings." };
+    const emailConfig = resolveEmailProviderConfig(settings);
+    if (!emailConfig.isConfigured) {
+        return { success: false, error: "Email delivery provider settings not configured on this server. Please configure Resend or Custom SMTP in Settings > Email." };
     }
 
-    const recipientEmail = adminUser?.email || settings.smtpUser;
+    const adminRecipients = await resolveAdminNotificationEmails(settings);
+    const recipientEmail = adminUser?.email || adminRecipients[0];
     if (!recipientEmail) {
         return { success: false, error: "No email address found for the current administrator." };
     }
@@ -2063,19 +2075,15 @@ export async function sendTestEmailTemplateAction(id: string, customSubject?: st
     });
 
     try {
-        const isResend = settings.smtpHost?.includes("resend") || settings.smtpUser?.toLowerCase() === "resend";
-        let resolvedSender = resolveSenderAddress(id, settings.smtpFrom || settings.smtpUser);
-        if (isResend && (!resolvedSender.isCustomDomain || resolvedSender.email.toLowerCase().includes("@gmail.com"))) {
-            resolvedSender = resolveSenderAddress(id, "notifications@domshomelab.com");
-        }
+        let resolvedSender = resolveSenderAddress(id, emailConfig.from);
         const senderEmail = resolvedSender.formatted;
         const transporter = nodemailer.createTransport({
-            host: settings.smtpHost,
-            port: settings.smtpPort || 587,
-            secure: settings.smtpPort === 465,
+            host: emailConfig.host,
+            port: emailConfig.port,
+            secure: emailConfig.secure,
             auth: {
-                user: settings.smtpUser,
-                pass: decryptData(settings.smtpPass)
+                user: emailConfig.user,
+                pass: emailConfig.pass
             }
         });
 
@@ -2267,11 +2275,13 @@ export async function sendTestBroadcastEmailAction(payload: { subject: string; b
     const adminUser = await prisma.user.findFirst({ where: { id: session.userId } });
 
     const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-    if (!settings?.smtpHost || !settings?.smtpUser || !settings?.smtpPass) {
-        return { success: false, error: "SMTP settings not configured on this server." };
+    const emailConfig = resolveEmailProviderConfig(settings);
+    if (!emailConfig.isConfigured) {
+        return { success: false, error: "Email delivery provider settings not configured on this server." };
     }
 
-    const recipientEmail = adminUser?.email || settings.smtpUser;
+    const adminRecipients = await resolveAdminNotificationEmails(settings);
+    const recipientEmail = adminUser?.email || adminRecipients[0];
     if (!recipientEmail) {
         return { success: false, error: "No email address found for the current administrator." };
     }
@@ -2305,15 +2315,15 @@ export async function sendTestBroadcastEmailAction(payload: { subject: string; b
     });
 
     try {
-        const resolvedSender = resolveSenderAddress("broadcast", settings.smtpFrom || settings.smtpUser);
+        const resolvedSender = resolveSenderAddress("broadcast", emailConfig.from);
         const senderEmail = resolvedSender.formatted;
         const transporter = nodemailer.createTransport({
-            host: settings.smtpHost,
-            port: settings.smtpPort || 587,
-            secure: settings.smtpPort === 465,
+            host: emailConfig.host,
+            port: emailConfig.port,
+            secure: emailConfig.secure,
             auth: {
-                user: settings.smtpUser,
-                pass: decryptData(settings.smtpPass)
+                user: emailConfig.user,
+                pass: emailConfig.pass
             }
         });
 
@@ -3465,22 +3475,21 @@ export async function notifyAdminUserRoleOrAccessChange(params: {
             `⚠️ [USER ACCESS/ROLE CHANGE] User "${username}" (${email}): Status [${statusChange}], Role [${oldRole} -> ${newRole}]. Reason: ${params.reason}`
         );
 
-        // 2. Dispatch email notification to admins if SMTP is enabled
+        // 2. Dispatch email notification to admins if email provider is configured
         const settings = await prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null);
-        if (!settings || !settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
-            return { success: true, emailed: false, reason: "SMTP not configured" };
+        const emailConfig = resolveEmailProviderConfig(settings);
+        if (!emailConfig.isConfigured) {
+            return { success: true, emailed: false, reason: "Email delivery not configured" };
         }
-        if (settings.emailNotificationsEnabled === false) {
+        if (settings?.emailNotificationsEnabled === false) {
             return { success: true, emailed: false, reason: "Email notifications disabled" };
         }
 
-        const admins = await prisma.user.findMany({
-            where: { role: "ADMIN" }
-        }).catch(() => []);
-
-        const adminEmails = admins.map(a => a.email).filter(Boolean);
-        const recipientEmails = adminEmails.length > 0 ? adminEmails : [settings.smtpUser];
-        const senderEmail = settings.smtpFrom || settings.smtpUser;
+        const recipientEmails = await resolveAdminNotificationEmails(settings);
+        if (recipientEmails.length === 0) {
+            return { success: true, emailed: false, reason: "No admin email recipients configured" };
+        }
+        const senderEmail = emailConfig.from;
 
         const { renderEmailTemplate } = await import("../lib/email-templates");
         const appUrl = await getAppUrl();
@@ -4867,21 +4876,13 @@ export async function sendOrQueueEmail(options: {
             }
         }
 
-        const providerMode = settings?.emailProviderMode || (settings?.smtpHost?.includes("resend") ? "resend" : "custom");
-        const isResend = providerMode === "resend";
-
-        const host = isResend ? "smtp.resend.com" : (settings?.customSmtpHost || settings?.smtpHost || "");
-        const port = isResend ? 465 : (settings?.customSmtpPort || settings?.smtpPort || 587);
-        const secure = port === 465;
-        const user = isResend ? "resend" : (settings?.customSmtpUser || settings?.smtpUser || "");
-        const rawPass = isResend ? (settings?.resendApiKey || settings?.smtpPass) : (settings?.customSmtpPass || settings?.smtpPass);
-        let pass = "";
-        if (rawPass) {
-            try { pass = decryptData(rawPass); } catch { pass = rawPass; }
-        }
-        const defaultFrom = isResend 
-            ? ((settings?.resendFrom && !settings?.resendFrom.toLowerCase().includes("@gmail.com")) ? settings.resendFrom : "notifications@domshomelab.com")
-            : (settings?.customSmtpFrom || settings?.smtpFrom || user);
+        const emailConfig = resolveEmailProviderConfig(settings);
+        const host = emailConfig.host;
+        const port = emailConfig.port;
+        const secure = emailConfig.secure;
+        const user = emailConfig.user;
+        const pass = emailConfig.pass;
+        const defaultFrom = emailConfig.from;
 
         const resolvedSender = options.from
             ? { formatted: options.from, email: options.from, displayName: "DomsHomeLab" }
@@ -7135,12 +7136,12 @@ export async function getPublicJoinConfig(refCode?: string) {
                 referrerName,
                 validReferral,
                 proratedBilling,
-                smtpFrom: settings?.smtpFrom || settings?.smtpUser || "",
-                kindleSenderEmail: resolveSenderAddress("kindle_delivery", settings?.smtpFrom || settings?.smtpUser).email,
-                paymentsSenderEmail: resolveSenderAddress("payment_received", settings?.smtpFrom || settings?.smtpUser).email,
-                supportSenderEmail: resolveSenderAddress("ticket_update", settings?.smtpFrom || settings?.smtpUser).email,
-                accountsSenderEmail: resolveSenderAddress("user_approval", settings?.smtpFrom || settings?.smtpUser).email,
-                requestsSenderEmail: resolveSenderAddress("media_ready", settings?.smtpFrom || settings?.smtpUser).email,
+                smtpFrom: resolveEmailProviderConfig(settings).from,
+                kindleSenderEmail: resolveSenderAddress("kindle_delivery", resolveEmailProviderConfig(settings).from).email,
+                paymentsSenderEmail: resolveSenderAddress("payment_received", resolveEmailProviderConfig(settings).from).email,
+                supportSenderEmail: resolveSenderAddress("ticket_update", resolveEmailProviderConfig(settings).from).email,
+                accountsSenderEmail: resolveSenderAddress("user_approval", resolveEmailProviderConfig(settings).from).email,
+                requestsSenderEmail: resolveSenderAddress("media_ready", resolveEmailProviderConfig(settings).from).email,
                 appUrl: await getAppUrl()
             }
         };
@@ -8684,27 +8685,30 @@ export async function submitSupportTicket(formData: FormData) {
 
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         
-        if (settings?.smtpHost && settings?.smtpUser && settings?.emailNotificationsEnabled !== false && settings?.notifySupportTickets !== false) {
-            const appUrl = await getAppUrl();
-            const { subject, html } = await renderEmailTemplate("ticket_error_alert", {
-                name,
-                email,
-                pageUrl: "/",
-                errorTitle: `New Ticket from ${name}`,
-                errorMessage: issue,
-                userNoteBlock: "",
-                ticketsUrl: `${appUrl}/admin/tickets`,
-                appUrl
-            });
+        if (isEmailDeliveryConfigured(settings) && settings?.emailNotificationsEnabled !== false && settings?.notifySupportTickets !== false) {
+            const adminRecipients = await resolveAdminNotificationEmails(settings);
+            if (adminRecipients.length > 0) {
+                const appUrl = await getAppUrl();
+                const { subject, html } = await renderEmailTemplate("ticket_error_alert", {
+                    name,
+                    email,
+                    pageUrl: "/",
+                    errorTitle: `New Ticket from ${name}`,
+                    errorMessage: issue,
+                    userNoteBlock: "",
+                    ticketsUrl: `${appUrl}/admin/tickets`,
+                    appUrl
+                });
 
-            await sendOrQueueEmail({
-                to: settings.smtpUser,
+                await sendOrQueueEmail({
+                    to: adminRecipients,
                 subject,
                 html,
                 text: `User: ${name} (${email})\n\nIssue:\n${issue}\n\nQuick Actions:\nManage User: ${appUrl}/settings/access?search=${encodeURIComponent(email)}\nTickets: ${appUrl}/admin/tickets`,
                 templateId: "ticket_error_alert",
                 targetUser: name
             });
+            }
         }
         try {
             revalidatePath("/");
@@ -8765,30 +8769,33 @@ export async function submitAutoErrorTicketAction(errorPayload: {
 
         // Send email notification to Admin if SMTP is configured
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-        if (settings?.smtpHost && settings?.smtpUser && settings?.emailNotificationsEnabled !== false && settings?.notifySupportTickets !== false) {
+        if (isEmailDeliveryConfigured(settings) && settings?.emailNotificationsEnabled !== false && settings?.notifySupportTickets !== false) {
             try {
-                const appUrl = await getAppUrl();
-                const userNoteBlock = errorPayload.customNote ? `<div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed #fca5a5;"><strong>User Note:</strong> ${errorPayload.customNote}</div>` : "";
+                const adminRecipients = await resolveAdminNotificationEmails(settings);
+                if (adminRecipients.length > 0) {
+                    const appUrl = await getAppUrl();
+                    const userNoteBlock = errorPayload.customNote ? `<div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed #fca5a5;"><strong>User Note:</strong> ${errorPayload.customNote}</div>` : "";
 
-                const { subject, html } = await renderEmailTemplate("ticket_error_alert", {
-                    name,
-                    email,
-                    pageUrl: errorPayload.pageUrl || "/",
-                    errorTitle: errorPayload.errorTitle || "System Error",
-                    errorMessage: errorPayload.errorMessage,
-                    userNoteBlock,
-                    ticketsUrl: `${appUrl}/admin/tickets`,
-                    appUrl
-                });
+                    const { subject, html } = await renderEmailTemplate("ticket_error_alert", {
+                        name,
+                        email,
+                        pageUrl: errorPayload.pageUrl || "/",
+                        errorTitle: errorPayload.errorTitle || "System Error",
+                        errorMessage: errorPayload.errorMessage,
+                        userNoteBlock,
+                        ticketsUrl: `${appUrl}/admin/tickets`,
+                        appUrl
+                    });
 
-                await sendOrQueueEmail({
-                    to: settings.smtpUser,
+                    await sendOrQueueEmail({
+                        to: adminRecipients,
                     subject,
                     html,
                     text: formattedIssue,
                     templateId: "ticket_error_alert",
                     targetUser: name
                 });
+                }
             } catch (mailErr: any) {
                 console.error("[AUTO-TICKET] Failed to send email alert for ticket:", mailErr.message || mailErr);
             }
@@ -9032,27 +9039,30 @@ export async function submitPageFixSuggestionAction(payload: PageFixSuggestionPa
         const ticketsUrl = `${appUrl}/admin/tickets`;
 
         // 1. Email Notification to Admin
-        if (settings?.smtpHost && settings?.smtpUser && settings?.emailNotificationsEnabled !== false && settings?.notifySupportTickets !== false) {
+        if (isEmailDeliveryConfigured(settings) && settings?.emailNotificationsEnabled !== false && settings?.notifySupportTickets !== false) {
             try {
-                const { subject, html } = await renderEmailTemplate("ticket_error_alert", {
-                    name: username,
-                    email: email,
-                    pageUrl: payload.pageUrl,
-                    errorTitle: `Page Fix Suggested: ${payload.summary}`,
-                    errorMessage: `${payload.category} on ${pageInfo.title}\n\n${payload.description}`,
-                    userNoteBlock: `<div style="margin-top: 10px; padding: 10px; background-color: #f8fafc; border-left: 3px solid #6366f1;"><strong>Category:</strong> ${payload.category}<br/><strong>Page:</strong> ${payload.pageUrl}</div>`,
-                    ticketsUrl,
-                    appUrl
-                });
+                const adminRecipients = await resolveAdminNotificationEmails(settings);
+                if (adminRecipients.length > 0) {
+                    const { subject, html } = await renderEmailTemplate("ticket_error_alert", {
+                        name: username,
+                        email: email,
+                        pageUrl: payload.pageUrl,
+                        errorTitle: `Page Fix Suggested: ${payload.summary}`,
+                        errorMessage: `${payload.category} on ${pageInfo.title}\n\n${payload.description}`,
+                        userNoteBlock: `<div style="margin-top: 10px; padding: 10px; background-color: #f8fafc; border-left: 3px solid #6366f1;"><strong>Category:</strong> ${payload.category}<br/><strong>Page:</strong> ${payload.pageUrl}</div>`,
+                        ticketsUrl,
+                        appUrl
+                    });
 
-                await sendOrQueueEmail({
-                    to: settings.smtpUser,
+                    await sendOrQueueEmail({
+                        to: adminRecipients,
                     subject: `[Page Fix] ${payload.summary}`,
                     html,
                     text: formattedIssue,
                     templateId: "ticket_error_alert",
                     targetUser: username
                 });
+                }
             } catch (mailErr: any) {
                 console.error("[PAGE-FIX] Failed to dispatch admin email notification:", mailErr?.message || mailErr);
             }
@@ -11242,7 +11252,7 @@ export async function getBookRequests() {
 export async function sendRequestCompletionNotification(requestIdOrBook: any, matchedBook?: any) {
     try {
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-        if (!settings || !settings.smtpHost || !settings.smtpUser || !settings.smtpPass || settings.emailNotificationsEnabled === false || settings.notifyMediaRequests === false) {
+        if (!isEmailDeliveryConfigured(settings) || settings?.emailNotificationsEnabled === false || settings?.notifyMediaRequests === false) {
             return;
         }
 
@@ -11308,26 +11318,18 @@ export async function sendRequestCompletionNotification(requestIdOrBook: any, ma
 export async function sendRequestNotificationToAdmins(request: { title: string, author: string, requestedBy: string, type: string, mediaType?: string, publishYear?: string | null }) {
     try {
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-        if (!settings || !settings.smtpHost || !settings.smtpUser || !settings.smtpPass || settings.emailNotificationsEnabled === false || settings.notifyMediaRequests === false) {
-            if (!settings?.smtpHost || !settings?.smtpUser || !settings?.smtpPass) {
-                logger.addLog("WARN", "EMAIL", `Skipping book request email notification for "${request.title}": SMTP host/user/pass is not configured in Settings > Email.`);
+        if (!isEmailDeliveryConfigured(settings) || settings?.emailNotificationsEnabled === false || settings?.notifyMediaRequests === false) {
+            if (!isEmailDeliveryConfigured(settings)) {
+                logger.addLog("WARN", "EMAIL", `Skipping book request email notification for "${request.title}": Email delivery provider settings are not configured in Settings > Email.`);
             }
             return;
         }
 
-        const admins = await prisma.user.findMany({
-            where: { role: { in: ["ADMIN", "SUPER_USER"] } }
-        });
-
-        if (admins.length === 0) {
-            return;
-        }
+        const adminEmails = await resolveAdminNotificationEmails(settings);
+        if (adminEmails.length === 0) return;
 
         const isAudiobook = request.mediaType === "audiobook";
         const mediaLabel = isAudiobook ? "Audiobook" : "Ebook";
-
-        const adminEmails = admins.map(a => a.email).filter(e => e && e.includes("@")) as string[];
-        if (adminEmails.length === 0) return;
 
         const appUrl = await getAppUrl();
         const { subject, html } = await renderEmailTemplate("media_request_admin", {
@@ -15919,14 +15921,14 @@ export async function sendBookToKindle(bookId: string, targetUsername?: string) 
         }
 
         const settings = await prisma.settings.findFirst({ where: { id: "global" } }) || {} as any;
-        if (!settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
-            return { success: false, error: "SMTP is not configured on this server. Please contact your administrator to configure SMTP." };
+        if (!isEmailDeliveryConfigured(settings)) {
+            return { success: false, error: "Email delivery provider is not configured on this server. Please contact your administrator to configure Resend or Custom SMTP." };
         }
         if (settings.emailNotificationsEnabled === false || settings.notifySendToKindle === false) {
             return { success: false, error: "Send-to-Kindle email delivery is currently disabled in Email Notification Settings." };
         }
 
-        const kindleSender = resolveSenderAddress("kindle_delivery", settings.smtpFrom || settings.smtpUser);
+        const kindleSender = resolveSenderAddress("kindle_delivery", resolveEmailProviderConfig(settings).from);
         const senderEmail = kindleSender.email;
         const senderFormatted = kindleSender.formatted;
 
@@ -16084,8 +16086,8 @@ export async function sendBookToPersonalEmail(bookId: string, targetUsername?: s
         }
 
         const settings = await prisma.settings.findFirst({ where: { id: "global" } }) || {} as any;
-        if (!settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
-            return { success: false, error: "SMTP email is not configured on this server. Please contact your administrator." };
+        if (!isEmailDeliveryConfigured(settings)) {
+            return { success: false, error: "Email delivery is not configured on this server. Please contact your administrator." };
         }
         if (settings.emailNotificationsEnabled === false || settings.notifySendToKindle === false) {
             return { success: false, error: "Email file delivery is currently disabled in Email Notification Settings." };
@@ -16199,8 +16201,8 @@ export async function sendBookToUserKindleInternal(bookId: string, username: str
     }
 
     const settings = await prisma.settings.findFirst({ where: { id: "global" } }) || {} as any;
-    if (!settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
-        console.error("[AUTO-KINDLE] SMTP is not configured on this server.");
+    if (!isEmailDeliveryConfigured(settings)) {
+        console.error("[AUTO-KINDLE] Email delivery is not configured on this server.");
         return;
     }
     if (settings.emailNotificationsEnabled === false || settings.notifySendToKindle === false) {
@@ -16208,7 +16210,7 @@ export async function sendBookToUserKindleInternal(bookId: string, username: str
         return;
     }
 
-    const kindleSender = resolveSenderAddress("kindle_delivery", settings.smtpFrom || settings.smtpUser);
+    const kindleSender = resolveSenderAddress("kindle_delivery", resolveEmailProviderConfig(settings).from);
     const senderEmail = kindleSender.email;
     const senderFormatted = kindleSender.formatted;
 
@@ -16426,22 +16428,23 @@ export async function diagnoseKindleHealth(bookId?: string) {
         const checks: Array<{ name: string; status: "pass" | "warn" | "fail"; message: string }> = [];
 
         // Check 1: Server SMTP Host
-        if (settings?.smtpHost && settings?.smtpUser && settings?.smtpPass) {
+        const emailConfig = resolveEmailProviderConfig(settings);
+        if (emailConfig.isConfigured) {
             checks.push({
-                name: "Server SMTP Configuration",
+                name: "Server Email Provider Configuration",
                 status: "pass",
-                message: `Configured on ${settings.smtpHost}:${settings.smtpPort || 587}`
+                message: emailConfig.isResend ? "Configured via Resend Outbound Delivery (smtp.resend.com:465)" : `Configured on ${emailConfig.host}:${emailConfig.port}`
             });
         } else {
             checks.push({
-                name: "Server SMTP Configuration",
+                name: "Server Email Provider Configuration",
                 status: "fail",
-                message: "SMTP is not configured on the server. Ask an admin to set it up in Settings."
+                message: "Email delivery is not configured on the server. Ask an admin to set it up in Settings > Email."
             });
         }
 
         // Check 2: Sender Email Address
-        const kindleSender = resolveSenderAddress("kindle_delivery", settings?.smtpFrom || settings?.smtpUser);
+        const kindleSender = resolveSenderAddress("kindle_delivery", emailConfig.from);
         const senderEmail = kindleSender.email;
         if (senderEmail && senderEmail.includes("@")) {
             checks.push({
@@ -16828,7 +16831,7 @@ export async function getPublicSmtpFromEmail(categoryOrTemplateId?: string) {
         await ensureSchemaColumns();
         const settings = await prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null);
         if (!settings) return "";
-        const baseSender = settings.smtpFrom || settings.smtpUser || "";
+        const baseSender = resolveEmailProviderConfig(settings).from;
         if (categoryOrTemplateId) {
             return resolveSenderAddress(categoryOrTemplateId, baseSender).email;
         }
@@ -16982,7 +16985,7 @@ export async function getKindleSenderUpdateNoticeStatusAction(): Promise<{
         const needsNotice = hasKindleEmail && !user?.kindleSenderUpdateAcknowledgedAt;
 
         const settings = await prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null);
-        const resolvedSender = resolveSenderAddress("kindle_delivery", settings?.smtpFrom || settings?.smtpUser);
+        const resolvedSender = resolveSenderAddress("kindle_delivery", resolveEmailProviderConfig(settings).from);
 
         return {
             hasKindleEmail,
@@ -18221,22 +18224,17 @@ export async function submitLibraryAccessRequest(email: string, kindleEmail: str
         });
 
         const settings = await prisma.settings.findFirst({ where: { id: "global" } }) || {} as any;
-        if (!settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
-            return { success: false, error: "SMTP is not configured on the server. Please contact your administrator." };
+        if (!isEmailDeliveryConfigured(settings)) {
+            return { success: false, error: "Email delivery is not configured on the server. Please contact your administrator." };
         }
         if (settings.emailNotificationsEnabled === false || settings.notifyMediaRequests === false) {
             return { success: true, message: "Your access request has been recorded." };
         }
 
-        const admins = await prisma.user.findMany({
-            where: { role: "ADMIN" }
-        });
-
-        const adminEmails = admins
-            .map(admin => admin.email)
-            .filter(email => !!email) as string[];
-
-        const recipientEmails = adminEmails.length > 0 ? adminEmails : [settings.smtpUser as string];
+        const recipientEmails = await resolveAdminNotificationEmails(settings);
+        if (recipientEmails.length === 0) {
+            return { success: true, message: "Your access request has been recorded." };
+        }
 
         const appUrl = await getAppUrl();
         const { subject, html } = await renderEmailTemplate("library_access_request", {
