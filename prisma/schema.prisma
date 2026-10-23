@@ -445,6 +445,7 @@ model User {
   mediaRequests          MediaRequest[]
   adminApprovals         AdminApproval[]
   watchHistories         WatchHistory[]
+  sentEmailLogs          SentEmailLog[]
 }
 
 model SupportTicket {
@@ -995,4 +996,31 @@ model WatchHistory {
   @@index([mediaType])
   @@index([ratingKey])
   @@index([isSharingAlert])
+}
+
+model SentEmailLog {
+  id              String    @id @default(cuid())
+  recipient       String
+  recipientName   String?
+  userId          String?
+  user            User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  subject         String
+  bodyPreview     String?
+  html            String?
+  templateId      String?
+  sendMode        String    @default("AUTOMATIC") // "AUTOMATIC" | "APPROVED_AND_SENT"
+  status          String    @default("SENT") // "SENT" | "FAILED"
+  error           String?
+  approvalId      String?
+  approvedBy      String?
+  approvedAt      DateTime?
+  sentAt          DateTime  @default(now())
+  createdAt       DateTime  @default(now())
+
+  @@index([recipient])
+  @@index([sendMode])
+  @@index([status])
+  @@index([templateId])
+  @@index([sentAt])
+  @@index([userId])
 }

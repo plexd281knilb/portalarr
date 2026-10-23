@@ -1711,6 +1711,87 @@ async function runTestSuite() {
         }
     });
 
+    // =========================================================================
+    // SUITE 22: Sent Email Audit Log & Automatic vs Approved Dispatch Tracking
+    // =========================================================================
+    await assertTest("Suite 22: Sent Email Audit Log & Automatic vs Approved Dispatches", async () => {
+        const { getSentEmailLogsAction, deleteSentEmailLogAction } = await import("../src/app/actions");
+
+        const testId = Date.now();
+        const autoEmail = await prisma.sentEmailLog.create({
+            data: {
+                recipient: `auto_test_${testId}@example.com`,
+                recipientName: `auto_user_${testId}`,
+                subject: `Automated Welcome Notification ${testId}`,
+                bodyPreview: "Welcome to DomsHomeLab. Your account is active.",
+                html: "<p>Welcome to DomsHomeLab. Your account is active.</p>",
+                templateId: "welcome",
+                sendMode: "AUTOMATIC",
+                status: "SENT"
+            }
+        });
+
+        const approvedEmail = await prisma.sentEmailLog.create({
+            data: {
+                recipient: `approved_test_${testId}@example.com`,
+                recipientName: `approved_user_${testId}`,
+                subject: `Account Approved by Governance ${testId}`,
+                bodyPreview: "Your access has been vetted and approved by administrator.",
+                html: "<p>Your access has been vetted and approved by administrator.</p>",
+                templateId: "user_approval",
+                sendMode: "APPROVED_AND_SENT",
+                status: "SENT",
+                approvalId: `appr_${testId}`,
+                approvedBy: "MasterAdmin",
+                approvedAt: new Date()
+            }
+        });
+
+        try {
+            // 1. Verify retrieval of all logs
+            const allRes = await getSentEmailLogsAction({ search: `${testId}` });
+            if (!allRes.success || !allRes.logs || allRes.logs.length < 2) {
+                throw new Error(`Expected at least 2 logs matching testId, got ${allRes.logs?.length}`);
+            }
+
+            // 2. Verify filter by AUTOMATIC
+            const autoRes = await getSentEmailLogsAction({ search: `${testId}`, mode: "AUTOMATIC" });
+            if (!autoRes.success || autoRes.logs.length !== 1 || autoRes.logs[0].sendMode !== "AUTOMATIC") {
+                throw new Error("Failed to filter sent emails by AUTOMATIC mode");
+            }
+            if (autoRes.logs[0].recipient !== autoEmail.recipient) {
+                throw new Error("Mismatched recipient for AUTOMATIC email");
+            }
+
+            // 3. Verify filter by APPROVED_AND_SENT
+            const approvedRes = await getSentEmailLogsAction({ search: `${testId}`, mode: "APPROVED_AND_SENT" });
+            if (!approvedRes.success || approvedRes.logs.length !== 1 || approvedRes.logs[0].sendMode !== "APPROVED_AND_SENT") {
+                throw new Error("Failed to filter sent emails by APPROVED_AND_SENT mode");
+            }
+            if (approvedRes.logs[0].approvedBy !== "MasterAdmin") {
+                throw new Error(`Expected approvedBy 'MasterAdmin', got '${approvedRes.logs[0].approvedBy}'`);
+            }
+
+            // 4. Verify Access Control page UI integrates Sent Emails tab
+            const accessPagePath = path.join(process.cwd(), "src", "app", "settings", "access", "page.tsx");
+            const accessPageContent = fs.readFileSync(accessPagePath, "utf-8");
+            if (!accessPageContent.includes('TabsTrigger value="sent-emails"')) {
+                throw new Error("Access Control page.tsx missing TabsTrigger for 'sent-emails'");
+            }
+            if (!accessPageContent.includes('TabsContent value="sent-emails"')) {
+                throw new Error("Access Control page.tsx missing TabsContent for 'sent-emails'");
+            }
+            if (!accessPageContent.includes("SentEmailAuditLog")) {
+                throw new Error("Access Control page.tsx missing SentEmailAuditLog component mount");
+            }
+        } finally {
+            await prisma.sentEmailLog.deleteMany({
+                where: { id: { in: [autoEmail.id, approvedEmail.id] } }
+            });
+        }
+    });
+
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

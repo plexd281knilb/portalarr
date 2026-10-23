@@ -4483,7 +4483,11 @@ export async function sendOrQueueEmail(options: {
     bypassApproval?: boolean;
     skipAdminAlert?: boolean;
     attachments?: Array<{ filename: string; path: string; contentType?: string }>;
-}): Promise<{ success: boolean; queued?: boolean; sent?: boolean; approvalId?: string; error?: string }> {
+    sendMode?: "AUTOMATIC" | "APPROVED_AND_SENT";
+    approvalId?: string;
+    approvedBy?: string;
+    approvedAt?: Date;
+}): Promise<{ success: boolean; queued?: boolean; sent?: boolean; approvalId?: string; error?: string; logId?: string }> {
     try {
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         const recipientStr = Array.isArray(options.to) ? options.to.join(", ") : options.to;
@@ -4606,10 +4610,78 @@ export async function sendOrQueueEmail(options: {
             attachments: options.attachments
         });
 
-        logger.addLog("INFO", "EMAIL", `Dispatched email "${options.subject}" to ${recipientStr}`);
-        return { success: true, sent: true };
+        const effectiveMode = options.sendMode || (options.bypassApproval && options.approvalId ? "APPROVED_AND_SENT" : "AUTOMATIC");
+        let bodyPreview = options.text;
+        if (!bodyPreview && options.html) {
+            bodyPreview = options.html
+                .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, " ")
+                .replace(/<[^>]+>/g, " ")
+                .replace(/\s+/g, " ")
+                .trim();
+        }
+        if (bodyPreview && bodyPreview.length > 300) {
+            bodyPreview = bodyPreview.slice(0, 300) + "...";
+        }
+
+        let createdLog: any = null;
+        try {
+            createdLog = await prisma.sentEmailLog.create({
+                data: {
+                    recipient: recipientStr,
+                    recipientName: options.targetUser || null,
+                    userId: options.userId || null,
+                    subject: options.subject,
+                    bodyPreview: bodyPreview || null,
+                    html: options.html,
+                    templateId: options.templateId || "general",
+                    sendMode: effectiveMode,
+                    status: "SENT",
+                    approvalId: options.approvalId || null,
+                    approvedBy: options.approvedBy || null,
+                    approvedAt: options.approvedAt || null,
+                    sentAt: new Date()
+                }
+            });
+        } catch (logErr: any) {
+            console.warn("[SENT-EMAIL-LOG-ERROR]:", logErr.message || logErr);
+        }
+
+        logger.addLog("INFO", "EMAIL", `Dispatched email "${options.subject}" to ${recipientStr} (${effectiveMode === "APPROVED_AND_SENT" ? "Approved by Admin" : "Automatic"})`);
+        return { success: true, sent: true, logId: createdLog?.id };
     } catch (e: any) {
         const recipientStr = Array.isArray(options.to) ? options.to.join(", ") : options.to;
+        const effectiveMode = options.sendMode || (options.bypassApproval && options.approvalId ? "APPROVED_AND_SENT" : "AUTOMATIC");
+        try {
+            let bodyPreview = options.text;
+            if (!bodyPreview && options.html) {
+                bodyPreview = options.html
+                    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, " ")
+                    .replace(/<[^>]+>/g, " ")
+                    .replace(/\s+/g, " ")
+                    .trim();
+            }
+            if (bodyPreview && bodyPreview.length > 300) {
+                bodyPreview = bodyPreview.slice(0, 300) + "...";
+            }
+            await prisma.sentEmailLog.create({
+                data: {
+                    recipient: recipientStr,
+                    recipientName: options.targetUser || null,
+                    userId: options.userId || null,
+                    subject: options.subject,
+                    bodyPreview: bodyPreview || null,
+                    html: options.html,
+                    templateId: options.templateId || "general",
+                    sendMode: effectiveMode,
+                    status: "FAILED",
+                    error: e.message || String(e),
+                    approvalId: options.approvalId || null,
+                    approvedBy: options.approvedBy || null,
+                    approvedAt: options.approvedAt || null,
+                    sentAt: new Date()
+                }
+            });
+        } catch {}
         logger.addLog("ERROR", "EMAIL", `Failed to dispatch email "${options.subject}" to ${recipientStr}: ${e.message || e}`);
         console.error("[EMAIL-GATE-ERROR]:", e.message || e);
         return { success: false, error: e.message || "Failed to send or queue email" };
@@ -4712,8 +4784,13 @@ export async function approveAdminApprovalAction(approvalId: string) {
                 text: payload.text,
                 templateId: payload.templateId,
                 targetUser: payload.targetUser,
+                userId: approval.userId || undefined,
                 attachments: payload.attachments,
-                bypassApproval: true
+                bypassApproval: true,
+                sendMode: "APPROVED_AND_SENT",
+                approvalId: approval.id,
+                approvedBy: session?.username || "Admin",
+                approvedAt: new Date()
             });
             if (!sendRes.success) {
                 return { success: false, error: `Email dispatch failed: ${sendRes.error}` };
@@ -4891,6 +4968,139 @@ export async function bulkRejectAdminApprovalsAction(ids: string[], reason?: str
         return { success: true, rejectedCount: res.count, message: `Rejected ${res.count} item(s).` };
     } catch (e: any) {
         return { success: false, error: e.message || "Bulk rejection failed" };
+    }
+}
+
+
+export async function getSentEmailLogsAction(params?: {
+    search?: string;
+    mode?: "ALL" | "AUTOMATIC" | "APPROVED_AND_SENT";
+    status?: "ALL" | "SENT" | "FAILED";
+    page?: number;
+    limit?: number;
+}) {
+    try {
+        await verifyAdmin();
+        await ensureSchemaColumns();
+
+        const search = (params?.search || "").trim();
+        const mode = params?.mode || "ALL";
+        const status = params?.status || "ALL";
+        const page = Math.max(1, params?.page || 1);
+        const limit = Math.max(1, Math.min(100, params?.limit || 25));
+        const skip = (page - 1) * limit;
+
+        const where: any = {};
+        if (mode && mode !== "ALL") {
+            where.sendMode = mode;
+        }
+        if (status && status !== "ALL") {
+            where.status = status;
+        }
+        if (search) {
+            where.OR = [
+                { recipient: { contains: search } },
+                { recipientName: { contains: search } },
+                { subject: { contains: search } },
+                { templateId: { contains: search } },
+                { approvedBy: { contains: search } }
+            ];
+        }
+
+        const [logs, filteredTotal, totalAll, automaticCount, approvedCount, failedCount] = await Promise.all([
+            prisma.sentEmailLog.findMany({
+                where,
+                orderBy: { sentAt: "desc" },
+                skip,
+                take: limit,
+                include: { user: { select: { id: true, username: true, email: true, name: true, role: true } } }
+            }),
+            prisma.sentEmailLog.count({ where }),
+            prisma.sentEmailLog.count(),
+            prisma.sentEmailLog.count({ where: { sendMode: "AUTOMATIC" } }),
+            prisma.sentEmailLog.count({ where: { sendMode: "APPROVED_AND_SENT" } }),
+            prisma.sentEmailLog.count({ where: { status: "FAILED" } })
+        ]);
+
+        return {
+            success: true,
+            logs,
+            counts: {
+                total: totalAll,
+                filteredTotal,
+                automaticCount,
+                approvedCount,
+                failedCount
+            },
+            pagination: {
+                page,
+                limit,
+                totalPages: Math.max(1, Math.ceil(filteredTotal / limit))
+            }
+        };
+    } catch (e: any) {
+        console.error("[GET-SENT-EMAIL-LOGS-ERROR]:", e.message || e);
+        return {
+            success: false,
+            error: e.message || "Failed to retrieve sent email logs",
+            logs: [],
+            counts: { total: 0, filteredTotal: 0, automaticCount: 0, approvedCount: 0, failedCount: 0 },
+            pagination: { page: 1, limit: 25, totalPages: 1 }
+        };
+    }
+}
+
+export async function resendSentEmailAction(logId: string) {
+    try {
+        const session: any = await verifyAdmin();
+        const log = await prisma.sentEmailLog.findUnique({ where: { id: logId } });
+        if (!log) return { success: false, error: "Sent email log entry not found" };
+
+        const sendRes = await sendOrQueueEmail({
+            to: log.recipient,
+            subject: log.subject,
+            html: log.html || `<p>${log.bodyPreview || ""}</p>`,
+            templateId: log.templateId || undefined,
+            targetUser: log.recipientName || undefined,
+            userId: log.userId || undefined,
+            bypassApproval: true,
+            sendMode: log.sendMode as any,
+            approvalId: log.approvalId || undefined,
+            approvedBy: session?.username || "Admin",
+            approvedAt: new Date()
+        });
+
+        if (!sendRes.success) {
+            return { success: false, error: sendRes.error || "Failed to resend email" };
+        }
+
+        revalidatePath("/settings/access");
+        return { success: true, message: `Email successfully re-dispatched to ${log.recipient}!` };
+    } catch (e: any) {
+        console.error("[RESEND-SENT-EMAIL-ERROR]:", e.message || e);
+        return { success: false, error: e.message || "Failed to resend email" };
+    }
+}
+
+export async function deleteSentEmailLogAction(logId: string) {
+    try {
+        await verifyAdmin();
+        await prisma.sentEmailLog.delete({ where: { id: logId } });
+        revalidatePath("/settings/access");
+        return { success: true, message: "Email record deleted successfully." };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to delete email record" };
+    }
+}
+
+export async function clearSentEmailLogsAction() {
+    try {
+        await verifyAdmin();
+        await prisma.sentEmailLog.deleteMany({});
+        revalidatePath("/settings/access");
+        return { success: true, message: "All sent email audit logs have been cleared." };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to clear sent email logs" };
     }
 }
 

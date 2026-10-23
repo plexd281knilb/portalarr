@@ -1254,6 +1254,31 @@ Before completing any task, execute:
 
 ---
 
+### 46. Dispatched Email Audit Log Architecture (`/settings/access?tab=sent-emails`, `SentEmailAuditLog`, `SentEmailLog`)
+- **6-Tab Access Control Navigation**:
+  - The Access Control directory (`src/app/settings/access/page.tsx`) features 6 dedicated tabs organized in a balanced `grid-cols-2 sm:grid-cols-3 lg:grid-cols-6` layout:
+    1. **User Directory**: Member directory, roles, and live Plex library shares.
+    2. **Referrals & Leaderboard**: Ambassador referral ranks, rewards, and credits.
+    3. **Payment & Onboarding**: Trial safe pool, automated proration, and pricing tiers.
+    4. **Email Scraper**: IMAP/Gmail automated payment scraping and ledger reconciliation.
+    5. **Approval Queue**: Staged live PMS modifications and staged user-facing emails.
+    6. **Sent Emails (`sent-emails`)**: Complete outbound email audit log displaying dispatch modes, delivery status, and full message previews.
+- **Automatic vs Approved & Sent Distinction (`SentEmailLog`)**:
+  - **Sent Automatically (`sendMode: "AUTOMATIC"`)**: Displays a purple/indigo badge (`bg-purple-500/15 text-purple-400 border-purple-500/40`) with `Bot` icon indicating messages triggered autonomously by background system workflows (welcome emails, automated renewal notices, system alerts, test emails, and scheduled digests).
+  - **Approved & Sent (`sendMode: "APPROVED_AND_SENT"`)**: Displays an emerald badge (`bg-emerald-500/15 text-emerald-400 border-emerald-500/40`) with `ShieldCheck` icon indicating messages that were staged in the Action Approval Queue and vetted by an administrator prior to live SMTP transmission. Displays approver identity (`Approved by "Admin"`) and exact approval timestamp.
+- **Audit Metrics & Telemetry Grid**:
+  - **Total Dispatched**: Platform-wide outbound email volume with `Mail` icon in sky blue (`text-sky-400`).
+  - **Sent Automatically**: Count of autonomous notifications in purple (`text-purple-400`).
+  - **Approved & Sent**: Count of vetted dispatches in emerald (`text-emerald-400`).
+  - **Delivery Failures**: Count of SMTP rejections or network errors in rose (`text-rose-400`).
+- **Inspection Modal & Operator Controls**:
+  - **Rendered Message Preview**: Sandboxed HTML view displaying the exact layout, styles, and branding received by the recipient.
+  - **Plaintext View & Audit Metadata**: Displays raw plain text body, log IDs, SMTP errors, and template identifiers.
+  - **1-Click Resend (`resendSentEmailAction`)**: Allows administrators to re-dispatch any previous message directly to the recipient via SMTP with immediate visual feedback.
+  - **Clean Pruning**: Supports individual log deletion and platform-wide audit log clearing.
+
+---
+
 As the Portalarr frontend evolves or new design decisions are finalized:
 1. **Adding a New UI Rule**: Add the rule to the relevant section above or under `references/`.
 2. **Tweaking Component Defaults**: Update the corresponding reference file in `references/`.

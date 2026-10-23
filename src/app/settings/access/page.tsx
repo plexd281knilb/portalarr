@@ -57,7 +57,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { 
-    UserCheck, Trash2, UserPlus, Shield, User, Mail, CheckCircle2, XCircle, 
+    UserCheck, Trash2, UserPlus, Shield, User, Mail, MailCheck, CheckCircle2, XCircle, 
     Clock, Play, RefreshCw, Loader2, KeyRound, Search, CheckCheck, Send, Edit2,
     Layers, Timer, Gift, Trophy, DollarSign, CreditCard, Sparkles, AlertTriangle,
     FolderCheck, ShieldAlert, Check, Users, ArrowUpRight, Copy, Calculator, Calendar, Monitor, Server, PauseCircle, SlidersHorizontal,
@@ -79,6 +79,7 @@ import {
 import { updateUserSubscriptionCadenceAction } from "@/app/payment-actions";
 import { format, differenceInDays } from "date-fns";
 import PaymentEmailManager from "@/components/payment-email-manager";
+import SentEmailAuditLog from "@/components/sent-email-audit-log";
 
 export default function AccessSettingsPage() {
     const [activeTab, setActiveTab] = useState("users");
@@ -290,6 +291,7 @@ export default function AccessSettingsPage() {
     // Admin Approval Queue State
     const [approvals, setApprovals] = useState<any[]>([]);
     const [approvalCounts, setApprovalCounts] = useState({ pendingCount: 0, approvedCount: 0, rejectedCount: 0, totalCount: 0 });
+    const [sentEmailsTotalCount, setSentEmailsTotalCount] = useState<number>(0);
     const [loadingApprovals, setLoadingApprovals] = useState(false);
     const [approvalFilterStatus, setApprovalFilterStatus] = useState<"ALL" | "PENDING" | "APPROVED" | "REJECTED">("PENDING");
     const [approvalFilterType, setApprovalFilterType] = useState<"ALL" | "EMAIL" | "PLEX_ACCESS_GRANT" | "PLEX_ACCESS_REVOKE">("ALL");
@@ -799,7 +801,7 @@ export default function AccessSettingsPage() {
             const search = params.get("search");
             if (search) setSearchQuery(search);
             const tab = params.get("tab");
-            if (tab && ["users", "referrals", "onboarding", "scraper", "approvals"].includes(tab)) {
+            if (tab && ["users", "referrals", "onboarding", "scraper", "approvals", "sent-emails"].includes(tab)) {
                 setActiveTab(tab);
                 if (window.location.hash) {
                     setTimeout(() => {
@@ -1704,7 +1706,7 @@ export default function AccessSettingsPage() {
 
             {/* TOP NAVIGATION TABS */}
             <Tabs defaultValue="users" value={activeTab} onValueChange={handleTabChange} className="w-full space-y-6">
-                <TabsList className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 bg-[#121218] border border-border/50 p-1.5 rounded-xl h-auto gap-1.5">
+                <TabsList className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 bg-[#121218] border border-border/50 p-1.5 rounded-xl h-auto gap-1.5">
                     <TabsTrigger value="users" className="gap-2 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground min-w-0 py-2">
                         <Users className="h-4 w-4 shrink-0" /> <span className="truncate">User Directory ({users.length})</span>
                     </TabsTrigger>
@@ -1726,6 +1728,15 @@ export default function AccessSettingsPage() {
                         {approvalCounts.pendingCount > 0 && (
                             <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-black animate-pulse">
                                 {approvalCounts.pendingCount}
+                            </span>
+                        )}
+                    </TabsTrigger>
+                    <TabsTrigger value="sent-emails" className="gap-2 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground min-w-0 py-2 relative">
+                        <MailCheck className="h-4 w-4 text-sky-400 shrink-0" />
+                        <span className="truncate">Sent Emails</span>
+                        {sentEmailsTotalCount > 0 && (
+                            <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-sky-500/20 text-sky-300 border border-sky-500/30">
+                                {sentEmailsTotalCount}
                             </span>
                         )}
                     </TabsTrigger>
@@ -4809,6 +4820,13 @@ export default function AccessSettingsPage() {
                             })}
                         </div>
                     )}
+                </TabsContent>
+
+                {/* ========================================================================= */}
+                {/* TAB 6: SENT EMAIL AUDIT LOG (AUTOMATIC VS APPROVED & SENT) */}
+                {/* ========================================================================= */}
+                <TabsContent value="sent-emails" className="space-y-6 animate-in fade-in-50 duration-200">
+                    <SentEmailAuditLog onCountChange={(count) => setSentEmailsTotalCount(count)} />
                 </TabsContent>
             </Tabs>
 

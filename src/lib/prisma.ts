@@ -2021,6 +2021,41 @@ export async function ensureSchemaColumns(): Promise<void> {
             console.error("[DB-SCHEMA-AUTOFIX] WatchHistory table check error:", e.message || e);
         }
 
+        // --- 16. SENT EMAIL AUDIT LOG TABLE ---
+        try {
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "SentEmailLog" (
+                    "id" TEXT NOT NULL PRIMARY KEY,
+                    "recipient" TEXT NOT NULL,
+                    "recipientName" TEXT,
+                    "userId" TEXT,
+                    "subject" TEXT NOT NULL,
+                    "bodyPreview" TEXT,
+                    "html" TEXT,
+                    "templateId" TEXT,
+                    "sendMode" TEXT NOT NULL DEFAULT 'AUTOMATIC',
+                    "status" TEXT NOT NULL DEFAULT 'SENT',
+                    "error" TEXT,
+                    "approvalId" TEXT,
+                    "approvedBy" TEXT,
+                    "approvedAt" DATETIME,
+                    "sentAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT "SentEmailLog_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+                );
+            `);
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SentEmailLog_recipient_idx" ON "SentEmailLog"("recipient");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SentEmailLog_sendMode_idx" ON "SentEmailLog"("sendMode");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SentEmailLog_status_idx" ON "SentEmailLog"("status");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SentEmailLog_templateId_idx" ON "SentEmailLog"("templateId");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SentEmailLog_sentAt_idx" ON "SentEmailLog"("sentAt");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SentEmailLog_userId_idx" ON "SentEmailLog"("userId");`).catch(() => {});
+        } catch (e: any) {
+            console.error("[DB-SCHEMA-AUTOFIX] SentEmailLog table check error:", e.message || e);
+        }
+
+
+
         schemaPatchCompleted = true;
     } catch (globalErr: any) {
         console.error("[DB-SCHEMA-AUTOFIX] Critical error in ensureSchemaColumns:", globalErr.message || globalErr);
