@@ -2290,7 +2290,13 @@ export async function sendTestEmailAction() {
     }
 
     try {
-        const senderEmail = settings.smtpFrom || settings.smtpUser;
+        const adminUser = await prisma.user.findFirst({
+            where: { role: "ADMIN", email: { contains: "@" } },
+            select: { email: true }
+        });
+        const targetRecipient = adminUser?.email || (settings.smtpFrom?.includes("@") ? settings.smtpFrom : (settings.smtpUser?.includes("@") ? settings.smtpUser : "admin@domshomelab.com"));
+        const rawSender = settings.smtpFrom?.trim() || settings.smtpUser;
+        const senderEmail = rawSender?.includes("<") ? rawSender : `"DomsHomeLab (d281knilb)" <${rawSender}>`;
         const transporter = nodemailer.createTransport({
             host: settings.smtpHost,
             port: settings.smtpPort || 587,
@@ -2303,7 +2309,7 @@ export async function sendTestEmailAction() {
 
         await transporter.sendMail({
             from: senderEmail,
-            to: settings.smtpUser,
+            to: targetRecipient,
             subject: "🧪 DomsHomeLab (d281knilb) SMTP Email Test",
             html: `
                 <div style="font-family: sans-serif; padding: 24px; color: #0f172a; max-width: 550px; margin: 0 auto; border: 1px solid #cbd5e1; border-radius: 12px; background-color: #ffffff;">
@@ -2317,8 +2323,8 @@ export async function sendTestEmailAction() {
                 </div>
             `
         });
-        logger.addLog("SUCCESS", "EMAIL", `Test email successfully dispatched to ${settings.smtpUser}!`, `Host: ${settings.smtpHost}:${settings.smtpPort || 587} | Sender: ${senderEmail}`);
-        return { success: true, message: `Test email successfully dispatched to ${settings.smtpUser}!` };
+        logger.addLog("SUCCESS", "EMAIL", `Test email successfully dispatched to ${targetRecipient}!`, `Host: ${settings.smtpHost}:${settings.smtpPort || 587} | Sender: ${senderEmail}`);
+        return { success: true, message: `Test email successfully dispatched to ${targetRecipient}!` };
     } catch (e: any) {
         logger.addLog("ERROR", "EMAIL", `Test email dispatch failed: ${e.message}`, e.stack || String(e));
         return { success: false, error: e.message || "Failed to dispatch test email." };
