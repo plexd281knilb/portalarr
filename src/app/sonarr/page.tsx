@@ -784,7 +784,9 @@ export default function SonarrPage() {
                 {searchResults.map((series: any) => {
                   const coverImg =
                     series.images?.find((i: any) => i.coverType === "poster")
-                      ?.remoteUrl || series.images?.[0]?.remoteUrl;
+                      ?.remoteUrl ||
+                    series.images?.[0]?.remoteUrl ||
+                    `/api/media/image?title=${encodeURIComponent(series.title || "")}&year=${encodeURIComponent(String(series.year || ""))}&type=show`;
                   return (
                     <div
                       key={series.tvdbId}
@@ -968,7 +970,9 @@ export default function SonarrPage() {
                       const coverImg =
                         series.images?.find(
                           (i: any) => i.coverType === "poster",
-                        )?.remoteUrl || series.images?.[0]?.remoteUrl;
+                        )?.remoteUrl ||
+                        series.images?.[0]?.remoteUrl ||
+                        `/api/media/image?title=${encodeURIComponent(series.title || "")}&year=${encodeURIComponent(String(series.year || ""))}&type=show`;
                       const monitoredSeasons =
                         series.seasons?.filter(
                           (s: any) => s.seasonNumber > 0 && s.monitored,

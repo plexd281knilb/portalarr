@@ -3,7 +3,7 @@
 > **Environment**: Test & Sandbox Discord Server  
 > **Server Name**: `Test Plex Server`  
 > **Guild ID**: `1559231517325135892`  
-> **Portalarr Target Version**: `v1.0.2`  
+> **Portalarr Target Version**: `v1.1.0`  
 > **Active Member Count**: 2 (Gemini_CLI_Connector Bot + Admin)  
 > **Live Production Counterpart**: `Plex Group` (`553667067363196941`)
 
@@ -117,7 +117,7 @@ All channels in the Test Server are organized strictly under 7 functional catego
 
 ## 4. Website-to-Discord Parity Audit & Strategic Recommendations
 
-To ensure the Discord server seamlessly reflects all active features of the **DomsHomeLab (`v1.0.2`) Web Portal**, the following strategic enhancements should be tested and validated here before rolling them out to the production server:
+To ensure the Discord server seamlessly reflects all active features of the **DomsHomeLab (`v1.1.0`) Web Portal**, the following strategic enhancements should be tested and validated here before rolling them out to the production server:
 
 ### 1. 24/7 AI Server Assistant Integration (`#transcode-doctor` & `#support-tickets`)
 - **Website Capability**: Portalarr features an autonomous AI Server Assistant accessible 24/7 with zero waiting time. It diagnoses buffering, quiet dialogue, forced subtitle burns, 4K unlocks, and provides personalized book/movie recommendations.

@@ -95,6 +95,8 @@ See detailed runbook: [movie-model-and-decisions.md](./references/movie-model-an
    - Prevents falsely claiming an autonomous grab was queued or unnecessarily escalating to an administrative support ticket when the highest available custom format score is already present on disk.
 12. **Admin Ticket Fallback Escalation**:
    - When no release candidate passes qualification scoring and the file is not already optimal, the agent creates an Admin Support Ticket (`escalateToAdminTicket`) with attached container telemetry and indexer search diagnostics, alerting administrators without degrading media quality.
+13. **Missing Cover & Poster Fallback**:
+   - When `movie.images` lacks an external `remoteUrl` (e.g. running in Docker networks where only internal container paths `/MediaCover/...` exist), always fall back to `/api/media/image?title=${encodeURIComponent(movie.title)}&year=${encodeURIComponent(String(movie.year || ""))}&type=movie` so artwork is proxied through TMDb or iTunes rather than rendering a blank "No Cover" placeholder.
 
 
 
@@ -106,4 +108,4 @@ To guarantee 100% reliability, quality control, and consistency, the following 4
 1. **Full Integration Testing:** Execute `cmd /c "npm test"` to run the verification suite (`scripts/verify-all.ts`). All 18+ test suites must pass (0 failures).
 2. **Production Build Verification:** Execute `cmd /c "npm run build"`. Ensure 100% clean compilation, zero TypeScript errors, and zero Turbopack runtime errors.
 3. **Skills & Documentation Sync:** Review and update relevant `.agents/skills/` documents to record any new UI patterns, API contracts, formulas, or operational guidelines.
-4. **SemVer Version Increment & Git Deployment Push:** Increment version in `package.json` according to SemVer (PATCH `+1` for fixes/polish, MINOR `+1` for features), stage all changes (`git add -A`), commit with freshly incremented semantic version prefix (`[v<version>] feat/fix(scope): message`), push to `origin/main`, merge into `stable`, and push to `origin/stable`.
+4. **SemVer Version Increment & Git Deployment Push:** Increment version in `package.json` according to SemVer (PATCH `+1` for fixes/polish, MINOR `+1` for features), stage all changes (`git add -A`), commit with freshly incremented semantic version prefix (`[v<version>] feat/fix(scope): message`), push strictly to `origin/main` (Beta). NEVER push to `stable` unless the user explicitly instructs.

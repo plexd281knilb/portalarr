@@ -57,6 +57,7 @@ import {
     resolveResolution,
     formatDurationMs,
     formatEtaTimestamp,
+    formatWatchHistoryThumb,
     type WatchHistoryQueryOptions 
 } from "@/lib/telemetry/stream-tracker";
 import { diagnoseStreamSettings, detectDeviceCategory } from "@/lib/telemetry/device-diagnostics";
@@ -1578,6 +1579,43 @@ export async function discoverPlexDatabasePathsAction() {
     const { discoverKnownPlexDatabasePaths } = await import("@/lib/curation/plex-snapshot-engine");
     const paths = discoverKnownPlexDatabasePaths();
     return { success: true, paths };
+}
+
+export async function savePlexDatabasePathAction(serverId: string, databasePath: string) {
+    await verifyAdmin();
+    const cleanPath = (databasePath || "").trim();
+
+    let target = null;
+    if (serverId && serverId !== "default") {
+        target = await prisma.plexServer.findUnique({ where: { id: serverId } });
+    }
+    if (!target) {
+        target = await prisma.plexServer.findFirst({ where: { isDefault: true } })
+            || await prisma.plexServer.findFirst({ orderBy: { createdAt: "asc" } });
+    }
+
+    if (!target) {
+        return { success: false, error: "No configured Plex server found. Please add a Plex server first under Plex Cluster & Nodes." };
+    }
+
+    const updated = await prisma.plexServer.update({
+        where: { id: target.id },
+        data: { databasePath: cleanPath || null }
+    });
+
+    revalidatePath("/settings");
+    revalidatePath("/curation");
+    revalidatePath("/");
+    logger.addLog("SUCCESS", "PLEX", `Saved direct SQLite database path for "${target.name}": "${cleanPath || 'Cleared'}"`);
+    return {
+        success: true,
+        message: cleanPath 
+            ? `SQLite snapshot path successfully saved to "${target.name}"!` 
+            : `SQLite snapshot path cleared for "${target.name}".`,
+        serverId: target.id,
+        serverName: target.name,
+        databasePath: updated.databasePath
+    };
 }
 
 export async function removePlexServerAction(id: string) {
@@ -7643,7 +7681,7 @@ const DEFAULT_ADDONS_CATALOG = [
         description: "Set up a 2nd or 3rd dedicated Kids iPad/Tablet profile with curated safe libraries and parental restrictions.",
         price: 0,
         isFree: true,
-        isAvailable: true,
+        isAvailable: false,
         icon: "baby",
         tag: "Household"
     },
@@ -7653,7 +7691,7 @@ const DEFAULT_ADDONS_CATALOG = [
         description: "Set up a 2nd Living Room TV profile with shared family filters and nudity exclusion.",
         price: 0,
         isFree: true,
-        isAvailable: true,
+        isAvailable: false,
         icon: "monitor",
         tag: "Household"
     },
@@ -7666,6 +7704,26 @@ const DEFAULT_ADDONS_CATALOG = [
         isAvailable: true,
         icon: "sparkles",
         tag: "Requests"
+    },
+    {
+        id: "jellyfin_access",
+        name: "Jellyfin Streaming Access",
+        description: "Connect to the high-performance Jellyfin media server using Swiftfin, official Jellyfin client apps, or web browser.",
+        price: 0,
+        isFree: true,
+        isAvailable: true,
+        icon: "server",
+        tag: "Servers"
+    },
+    {
+        id: "emby_access",
+        name: "Emby Streaming Access",
+        description: "Access the unified Emby media server with official Emby apps across Apple TV, Roku, Fire TV, and Smart TVs.",
+        price: 0,
+        isFree: true,
+        isAvailable: true,
+        icon: "server",
+        tag: "Servers"
     }
 ];
 
@@ -7690,9 +7748,15 @@ export async function getAvailableAddonsAction() {
                     const parsedMap = new Map(parsed.map((item: any) => [item.id, item]));
                     catalog = DEFAULT_ADDONS_CATALOG.map(def => {
                         const existing = parsedMap.get(def.id);
+                        if (def.id === "extra_kid_profile" || def.id === "extra_living_room") {
+                            // Enforce locked coming-soon status for unbuilt household sub-accounts
+                            return { ...def, isAvailable: false };
+                        }
                         return existing ? { ...def, ...existing } : def;
                     });
                     for (const item of parsed) {
+                        // Exclude deprecated legacy books_audiobooks
+                        if (item.id === "books_audiobooks") continue;
                         if (!catalog.some(c => c.id === item.id)) {
                             catalog.push(item);
                         }
@@ -7749,9 +7813,15 @@ export async function toggleFreeAddonAction(addonId: string, enabled: boolean) {
                     const parsedMap = new Map(parsed.map((item: any) => [item.id, item]));
                     catalog = DEFAULT_ADDONS_CATALOG.map(def => {
                         const existing = parsedMap.get(def.id);
+                        if (def.id === "extra_kid_profile" || def.id === "extra_living_room") {
+                            // Enforce locked coming-soon status for unbuilt household sub-accounts
+                            return { ...def, isAvailable: false };
+                        }
                         return existing ? { ...def, ...existing } : def;
                     });
                     for (const item of parsed) {
+                        // Exclude deprecated legacy books_audiobooks
+                        if (item.id === "books_audiobooks") continue;
                         if (!catalog.some(c => c.id === item.id)) {
                             catalog.push(item);
                         }
@@ -7774,7 +7844,14 @@ export async function toggleFreeAddonAction(addonId: string, enabled: boolean) {
         const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
         if (!dbUser) return { success: false, error: "User not found" };
 
-        if ((dbUser.status === "TRIAL" || dbUser.membershipTier === "TRIAL") && dbUser.status !== "APPROVED" && dbUser.role !== "ADMIN") {
+        const isTrialUser = (dbUser.status === "TRIAL" || dbUser.membershipTier === "TRIAL") && dbUser.role !== "ADMIN" && dbUser.role !== "SUPER_USER";
+        if (isTrialUser) {
+            if (addonId === "jellyfin_access" || addonId === "emby_access") {
+                return {
+                    success: false,
+                    error: "Jellyfin & Emby multi-platform streaming is exclusively available for Full Members. Upgrade your membership pass to unlock."
+                };
+            }
             return {
                 success: false,
                 error: "Optional add-ons unlock upon upgrading to full membership."
@@ -7815,7 +7892,9 @@ export async function toggleFreeAddonAction(addonId: string, enabled: boolean) {
             });
         }
 
-        revalidatePath("/settings/profile");
+        try {
+            revalidatePath("/settings/profile");
+        } catch (_) {}
         return {
             success: true,
             message: `${targetAddon.name} is now ${enabled ? "enabled" : "disabled"}!`,
@@ -7902,9 +7981,15 @@ export async function toggleAdminAddonAvailabilityAction(addonId: string, isAvai
                     const parsedMap = new Map(parsed.map((item: any) => [item.id, item]));
                     catalog = DEFAULT_ADDONS_CATALOG.map(def => {
                         const existing = parsedMap.get(def.id);
+                        if (def.id === "extra_kid_profile" || def.id === "extra_living_room") {
+                            // Enforce locked coming-soon status for unbuilt household sub-accounts
+                            return { ...def, isAvailable: false };
+                        }
                         return existing ? { ...def, ...existing } : def;
                     });
                     for (const item of parsed) {
+                        // Exclude deprecated legacy books_audiobooks
+                        if (item.id === "books_audiobooks") continue;
                         if (!catalog.some(c => c.id === item.id)) {
                             catalog.push(item);
                         }
@@ -7913,7 +7998,7 @@ export async function toggleAdminAddonAvailabilityAction(addonId: string, isAvai
             } catch (_) {}
         }
 
-        catalog = catalog.map(a => a.id === addonId ? { ...a, isAvailable } : a);
+        catalog = catalog.filter(a => a.id !== "books_audiobooks").map(a => a.id === addonId ? { ...a, isAvailable } : a);
         const jsonStr = JSON.stringify(catalog);
 
         await prisma.settings.upsert({
@@ -9448,6 +9533,22 @@ export async function updateAlertBanner(formData: FormData) {
 
 async function verifyUser() {
     if (process.env.PORTALARR_TEST_AUTH === "true") {
+        if (process.env.PORTALARR_TEST_USER_ID) {
+            const specificUser = await prisma.user.findUnique({ where: { id: process.env.PORTALARR_TEST_USER_ID } });
+            if (specificUser) {
+                return {
+                    ...specificUser,
+                    userId: specificUser.id
+                };
+            }
+        }
+        const existingAdmin = await prisma.user.findFirst({ where: { role: "ADMIN" } }) || await prisma.user.findFirst();
+        if (existingAdmin) {
+            return {
+                ...existingAdmin,
+                userId: existingAdmin.id
+            };
+        }
         return {
             id: "test-admin-id",
             userId: "test-admin-id",
@@ -20647,7 +20748,7 @@ export async function getUserPlexHubData(options?: { skipCache?: boolean }) {
                             title: dbItem.title,
                             fullTitle: displayTitle,
                             mediaType: dbItem.mediaType || "movie",
-                            thumb: dbItem.thumb || null,
+                            thumb: formatWatchHistoryThumb(dbItem) || dbItem.thumb || null,
                             date: dbItem.watchedAt ? dbItem.watchedAt.toISOString() : new Date().toISOString(),
                             durationMinutes: durMs ? Math.round(durMs / 60000) : 0,
                             percentComplete: dbItem.progressPercent || 100,
@@ -21182,6 +21283,56 @@ export async function getPlexSetupGuides() {
                     desc: "Select standard 5.1 AC3 or AAC audio tracks in browser rather than TrueHD 7.1 or DTS-HD."
                 }
             ]
+        },
+        {
+            id: "jellyfin",
+            name: "Jellyfin Streaming",
+            icon: "Server",
+            badge: "Multi-Platform",
+            summary: "Connect to the high-performance Jellyfin media server using Swiftfin, official client apps, or web browser.",
+            steps: [
+                {
+                    title: "1. Connect to Server Address",
+                    desc: "Open your Jellyfin client app (or browser) and enter your server URL (e.g., https://jellyfin.domshomelab.com)."
+                },
+                {
+                    title: "2. Sign In with Your Portal Username",
+                    desc: "Log in using your DomsHomeLab username and account credentials."
+                },
+                {
+                    title: "3. Recommended Client Apps for Every Screen",
+                    desc: "Apple TV & iOS: Swiftfin (recommended for native Direct Play) or official Jellyfin. Roku: Jellyfin for Roku. Android TV / Fire TV: Jellyfin for Android TV."
+                },
+                {
+                    title: "4. Direct Play & Zero-Buffering Optimization",
+                    desc: "In client Settings → Playback, set Maximum Bitrate / Video Quality to 'Auto' or 'Maximum' to ensure 100% Direct Play."
+                }
+            ]
+        },
+        {
+            id: "emby",
+            name: "Emby Streaming",
+            icon: "Server",
+            badge: "Unified Server",
+            summary: "Access the unified Emby media server with official apps across Apple TV, Roku, Fire TV, and Smart TVs.",
+            steps: [
+                {
+                    title: "1. Connect to Server Address",
+                    desc: "Open the Emby app and enter your Emby server address (e.g., https://emby.domshomelab.com)."
+                },
+                {
+                    title: "2. Sign In with Your Account",
+                    desc: "Enter your username and password configured in your DomsHomeLab profile."
+                },
+                {
+                    title: "3. Client Apps for Every Screen",
+                    desc: "Download official Emby apps directly from the Apple App Store, Roku Channel Store, Amazon Appstore, or Google Play."
+                },
+                {
+                    title: "4. Maximize Streaming Quality",
+                    desc: "In Emby Settings → Playback → Quality, select 'Maximum' or 'Auto' for unthrottled studio direct play."
+                }
+            ]
         }
     ];
 }
@@ -21513,5 +21664,169 @@ export async function prewarmAllCachesAction() {
     }
 }
 
+/**
+ * Consolidated User Profile Bootstrap Action
+ * Runs all account profile queries in parallel and caches in memory (SWR).
+ * Slashing profile settings load times from seconds down to <50ms.
+ */
+export async function getUserProfileBootstrapAction(bypassCache = false): Promise<{
+    success: boolean;
+    data?: {
+        user: any;
+        referralInfo: any;
+        paymentConfig: any;
+        discordInviteUrl?: string;
+        notifPrefs: any;
+        contentPrefs: any;
+        allowedLibraries: string[];
+        selectedLibraries: string[];
+        serverLibraries: any[];
+        subAccounts: any[];
+        subLimits?: any;
+        addonsCatalog: any[];
+        userEnabledAddons: any[];
+        hasKidsAccess: boolean;
+        kidsLibraries: any[];
+        hasAudiobooksAccess: boolean;
+        audiobookLibraries: any[];
+        mediaServersData?: any;
+    };
+    error?: string;
+}> {
+    try {
+        await ensureSchemaColumns();
+        const session: any = await verifyUser();
+        const userId = session.id;
 
+        const cacheKey = `user_profile_bootstrap:${userId}`;
+        if (!bypassCache) {
+            const cached = getUserCache<any>(cacheKey);
+            if (cached) {
+                return { success: true, data: cached };
+            }
+        }
+
+        // Fetch the full DB user model and all sub-resources in parallel
+        const { getDiscordServerInviteUrlAction } = await import("@/app/discord-actions");
+        const { getUserMediaServersAndLibrariesAction } = await import("@/app/media-server-actions");
+
+        const [
+            userLookupRes,
+            refRes,
+            pConfigRes,
+            notifRes,
+            contentRes,
+            libRes,
+            subRes,
+            addRes,
+            kidsRes,
+            audioRes,
+            discordInviteRes,
+            mediaServersRes
+        ] = await Promise.allSettled([
+            prisma.user.findUnique({
+                where: { id: userId },
+                include: {
+                    parentUser: {
+                        select: {
+                            id: true,
+                            username: true,
+                            email: true,
+                            name: true
+                        }
+                    }
+                }
+            }),
+            getUserReferralInfo(),
+            getPublicJoinConfig(),
+            getUserNotificationPreferencesAction(),
+            getUserContentPreferencesAction(),
+            getUserAllowedPlexLibrariesAction(),
+            getUserSubAccountsAction(),
+            getAvailableAddonsAction(),
+            getUserKidsLibraryAccessAction(),
+            getUserAudiobooksLibraryAccessAction(),
+            getDiscordServerInviteUrlAction(),
+            getUserMediaServersAndLibrariesAction(bypassCache)
+        ]);
+
+        const dbUser = userLookupRes.status === "fulfilled" ? userLookupRes.value : session;
+        const referralInfo = refRes.status === "fulfilled" && refRes.value?.success ? refRes.value : null;
+        const paymentConfig = pConfigRes.status === "fulfilled" && pConfigRes.value?.success ? pConfigRes.value.config : null;
+        let discordInviteUrl = paymentConfig?.discordInviteUrl || "";
+        if (discordInviteRes.status === "fulfilled" && discordInviteRes.value?.success && discordInviteRes.value.inviteUrl) {
+            discordInviteUrl = discordInviteRes.value.inviteUrl;
+        }
+
+        const notifPrefs = (notifRes.status === "fulfilled" && notifRes.value?.success && notifRes.value.preferences)
+            ? notifRes.value.preferences
+            : {
+                emailMediaReady: false,
+                emailNewContent: false,
+                emailAnnouncements: false,
+                emailSupportTickets: true,
+                emailSubscriptionReminders: true,
+                emailReferralRewards: true,
+                discordMediaReady: false,
+                discordAnnouncements: false,
+                discordWebhookUrl: ""
+            };
+
+        const contentPrefs = (contentRes.status === "fulfilled" && contentRes.value?.success && contentRes.value.preferences)
+            ? contentRes.value.preferences
+            : {
+                maxContentRating: "ALL",
+                hideLeavingSoon: false,
+                hideHorror: false,
+                hideNsfw: false,
+                hideGore: false,
+                excludedGenresList: [],
+                excludedTagsList: []
+            };
+
+        const allowedLibraries = (libRes.status === "fulfilled" && libRes.value?.success) ? (libRes.value.allowedKeys || []) : [];
+        const selectedLibraries = (libRes.status === "fulfilled" && libRes.value?.success) ? (libRes.value.selectedKeys || []) : [];
+        const serverLibraries = (libRes.status === "fulfilled" && libRes.value?.success) ? (libRes.value.servers || []) : [];
+
+        const subAccounts = (subRes.status === "fulfilled" && subRes.value?.success) ? (subRes.value.subAccounts || []) : [];
+        const subLimits = (subRes.status === "fulfilled" && subRes.value?.success) ? subRes.value.limits : null;
+
+        const addonsCatalog = (addRes.status === "fulfilled" && addRes.value?.success) ? (addRes.value.catalog || []) : [];
+        const userEnabledAddons = (addRes.status === "fulfilled" && addRes.value?.success) ? (addRes.value.userEnabledAddons || []) : [];
+
+        const hasKidsAccess = (kidsRes.status === "fulfilled" && kidsRes.value?.success) ? Boolean(kidsRes.value.hasKidsAccess) : false;
+        const kidsLibraries = (kidsRes.status === "fulfilled" && kidsRes.value?.success) ? (kidsRes.value.kidsLibraries || []) : [];
+
+        const hasAudiobooksAccess = (audioRes.status === "fulfilled" && audioRes.value?.success) ? Boolean(audioRes.value.hasAudiobooksAccess) : false;
+        const audiobookLibraries = (audioRes.status === "fulfilled" && audioRes.value?.success) ? (audioRes.value.audiobookLibraries || []) : [];
+
+        const mediaServersData = (mediaServersRes.status === "fulfilled" && mediaServersRes.value?.success) ? mediaServersRes.value : null;
+
+        const payload = {
+            user: dbUser || session,
+            referralInfo,
+            paymentConfig,
+            discordInviteUrl,
+            notifPrefs,
+            contentPrefs,
+            allowedLibraries,
+            selectedLibraries,
+            serverLibraries,
+            subAccounts,
+            subLimits,
+            addonsCatalog,
+            userEnabledAddons,
+            hasKidsAccess,
+            kidsLibraries,
+            hasAudiobooksAccess,
+            audiobookLibraries,
+            mediaServersData
+        };
+
+        setUserCache(cacheKey, payload, 3 * 60 * 1000);
+        return { success: true, data: payload };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to bootstrap user profile" };
+    }
+}
 

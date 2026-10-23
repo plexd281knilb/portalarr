@@ -28,9 +28,39 @@ Portalarr uses a **Modern Cinematic Dark Theme** powered by Tailwind CSS, Radix 
   - 🔴 **Crimson / Rose (`rose-400` / `rose-500`)**: Media Requests (Seerr/Overseerr engine), prune deletions, errors, stream terminations, declined requests.
   - 🟠 **Vibrant Orange (`orange-400` / `orange-500`)**: General setup, alert banners, server configuration.
 
-### 2. Multi-Tab Navigation & Active State Contrast
+### 2. Multi-Tab Navigation, 5-Hub Settings Architecture & Active State Contrast
+- **System Settings 5-Hub Architecture (`src/app/settings/page.tsx`)**:
+  Settings are consolidated into 5 high-level mission hubs, each organized with responsive sub-tab switchers, dirty-state indicators, and full backward-compatible routing:
+  1. **General & Platform (`general`)**:
+     - `platform`: Web & Automation Paths (Base URL, Webhook URL, CORS, Local Storage Paths, Public Hostname).
+     - `announcements`: Announcements & Roadmap (Feature broadcast banner, maintenance alert, roadmap cards).
+     - `logs`: Live System Logs (Real-time colored terminal log viewer, category filters, auto-refresh toggle).
+  2. **Servers & Fleet (`servers`)**:
+     - `fleet`: Server Fleet & Multi-Platform (Plex, Jellyfin, Emby server fleet, self-selection toggles, library discovery).
+     - `plex-admin`: Master Plex & Direct Snapshots (Primary PMS URL, Admin token, direct connection tester, cache flush).
+     - `plex-cluster`: Plex Cluster & Auto-Discovery (Multi-server cluster nodes, auto-discovery worker, monitored server toggles).
+     - `telemetry`: Historical Watch & Host Telemetry (Watch session tracking, sharing detection thresholds, Glances host hardware endpoints).
+  3. **Access & Members (`access`)**:
+     - Access Control, Admin Approval Gates, User Accounts, Role Assignments, and Pending Action Reviews (`<AccessSettingsPage />`).
+  4. **Integrations & Servarr (`integrations`)**:
+     - `servarr`: Servarr Stack & Downloaders (Radarr, Sonarr, Lidarr, Readarr, SABnzbd, qBittorrent connection testing and API keys).
+     - `requests`: Media Requests (Seerr / Jellyseerr / Overseerr synchronization, auto-approval rules, default request limits).
+     - `ai`: AI Agent & Curation Keys (Google Gemini API keys, OpenAI tokens, Kometa, Agregarr, Maintainerr curation webhooks).
+  5. **Communications & Alerts (`communications`)**:
+     - `smtp`: Global SMTP & Kindle Delivery (Outbound mail server, SMTP credentials, TLS/SSL, Amazon Send-to-Kindle address).
+     - `broadcast`: Broadcasts & Notification Templates (12 granular notification templates, Markdown editor, test email dispatches).
+     - `discord`: Discord Bot & Automation (Bot token, Guild ID, channel mappings for alerts/status/requests, role assignments).
+
+- **Sub-Tab Switcher Pattern & URL Synchronization**:
+  - Top hubs are switched via `<TabsList>` with active semantic brand tokens (`orange`, `blue`, `emerald`, `rose`, `indigo`).
+  - Active sub-tabs use secondary pill buttons (`variant="default"` when active with brand glow, `variant="outline"` when inactive).
+  - Dirty state tracking (`hasChanges`) highlights both the parent hub pill and the active sub-tab pill with amber warning accents (`border-amber-500/70 shadow-[0_0_15px_rgba(245,158,11,0.2)]`).
+  - Navigation guards prompt confirmation if unsaved changes exist before switching tabs or leaving the page.
+  - Deep-link and backward-compatible URL query routing: `/settings?tab=general&subtab=logs` or legacy parameters (`/settings?tab=logs`, `/settings?tab=monitoring`, `/settings?tab=beta`, `/settings?tab=emails`, `/settings?tab=discord`) automatically resolve to their respective parent hub and sub-tab.
+
 - **Semantic Tab Accents**: Tabs in settings or dashboards must never rely on monochrome/desaturated `text-primary` in dark mode. Every tab must specify its distinct brand color token for its icon, hover ring/shadow, and active selection state:
   - **General & Setup**: `text-orange-400`, `hover:ring-orange-400/80`, `data-[state=active]:text-orange-400 data-[state=active]:bg-orange-500/10 data-[state=active]:border-orange-500/40`
+  - **Media Servers**: `text-blue-400`, `hover:ring-blue-400/80`, `data-[state=active]:text-blue-400 data-[state=active]:bg-blue-500/10 data-[state=active]:border-blue-500/40`
   - **Access Control**: `text-emerald-400`, `hover:ring-emerald-400/80`, `data-[state=active]:text-emerald-400 data-[state=active]:bg-emerald-500/10 data-[state=active]:border-emerald-500/40`
   - **Media Requests**: `text-rose-400`, `hover:ring-rose-400/80`, `data-[state=active]:text-rose-400 data-[state=active]:bg-rose-500/10 data-[state=active]:border-rose-500/40`
   - **Broadcast & Emails**: `text-amber-400`, `hover:ring-amber-400/80`, `data-[state=active]:text-amber-400 data-[state=active]:bg-amber-500/10 data-[state=active]:border-amber-500/40`
@@ -40,6 +70,63 @@ Portalarr uses a **Modern Cinematic Dark Theme** powered by Tailwind CSS, Radix 
   - **Live System Logs**: `text-emerald-400`, `hover:ring-emerald-400/80`, `data-[state=active]:text-emerald-400 data-[state=active]:bg-emerald-500/10 data-[state=active]:border-emerald-500/40`
 - **Zero Opacity Washes on Tab Switch**: Tab switches must be instantaneous client-side state transitions. Never wrap tab content in `opacity-50` or `isPending` transitions that dim the screen on click. For URL updates, use `router.replace(url, { scroll: false })` without `startTransition`.
 - **Slot Inactive/Disabled Card Styling**: Unconfigured or optional slots (e.g. 4K Arrs or Kids Arrs) must use dashed borders (`border border-dashed border-border/40`) with muted text rather than container-wide `opacity-75` washes which make the whole panel look faded and inactive.
+
+### 3. Multi-Platform Media Servers (Plex, Jellyfin, Emby) & Library Self-Selection
+- **Distinct Server Brand Tokens**:
+  - **Plex**: Amber badge (`bg-amber-500/10 text-amber-400 border-amber-500/30`)
+  - **Jellyfin**: Purple badge (`bg-purple-500/10 text-purple-400 border-purple-500/30`)
+  - **Emby**: Emerald green badge (`bg-emerald-500/10 text-emerald-400 border-emerald-500/30`)
+- **Admin Server Whitelisting & Library Scoping**:
+  - In Admin Settings (`AdminMediaServersPanel`), each server exposes toggles for `Allow Full Members to Self-Select` alongside clear indicators that Trial Account access is centralized in Access Control.
+  - **Server Edit & Credential Transparency**: Jellyfin and Emby server cards include a dedicated `Edit` action button opening an edit modal. Administrators can modify the server display name and connection URL. The modal securely delivers and populates the saved decrypted API key for verified admins, with an interactive Show/Hide eye toggle and 1-click clipboard copy button, while displaying an active key badge (`Saved Key Loaded`).
+  - **Multi-Scheme Reverse Proxy & Jellyfin 10.9/12+ Authentication**: Backend requests (`testMediaServerConnection`, `fetchMediaServerLibraries`, `syncUserMediaServerAccess`) send modern `Authorization: MediaBrowser Token="..."`, `X-Emby-Authorization`, `X-Emby-Token`, and `X-MediaBrowser-Token` headers, alongside an automatic `?api_key=` query parameter fallback to guarantee seamless communication through reverse proxies (Nginx Proxy Manager, Cloudflare) that may strip custom headers.
+  - **Centralized Trial Safe Pool Governance**: Trial member library access is governed 100% centrally in `/settings/access` under Onboarding (`defaultTrialPlexLibraries` / "Trial Safe Pool / Restricted Shelf"). Per-server trial toggles are avoided to prevent fragmented or conflicting access rules.
+  - When whitelisting specific libraries, render interactive checkbox pills for each discovered virtual folder or PMS section with high-contrast text and clean allowed counts.
+- **User Self-Selection & Tier Capabilities**:
+  - In User Profile (`UserMediaServersManager`), render an informative Tier Capabilities Banner highlighting Full Member privileges (unlimited library selection, playback quality caps, audio/subtitle language preferences, email digests).
+  - Enforce server-side whitelist validation: any client tampering attempting to select unauthorized servers or hidden libraries is strictly filtered out before database persistence and API policy sync.
+- **Strict Full-Member Gating for Jellyfin & Emby**:
+  - Emby and Jellyfin server options and add-ons (`jellyfin_access`, `emby_access`) are **strictly restricted to Full Members** (and Super Users / Admins).
+  - For Trial Members (`isTrialUser`), Jellyfin and Emby switches are locked/disabled (`checked={false} disabled={true}`) with a `Full Members Only` lock badge and a prominent locked informational banner: "Jellyfin & Emby multi-platform streaming is exclusively available for Full Members. Upgrade your membership pass to unlock."
+  - Backend enforcement in `updateUserMediaServersAndLibrariesAction` and `toggleFreeAddonAction` strictly blocks and strips Jellyfin/Emby selections for trial users.
+- **Interactive Step-by-Step Setup Guides (`MediaServerSetupGuideModal` & `PlexSetupGuides`)**:
+  - Accessible via prominent "📖 Setup Guide" buttons on each Jellyfin/Emby card in `UserMediaServersManager`, inside the Free Add-ons catalog in `profile/page.tsx`, and auto-opened whenever a Full Member toggles ON a Jellyfin or Emby server for the first time.
+  - Dedicated tabs in `PlexSetupGuides` (`getPlexSetupGuides()`) for Jellyfin and Emby with platform device icons.
+  - 4-step interactive checklist:
+    1. **Connect to Server Address**: Copyable server URL with 1-click clipboard copy and web client launch.
+    2. **Sign In with Your Account**: Copyable configured username and password instructions.
+    3. **Recommended Client Apps**: Swiftfin (Apple TV & iOS), official Jellyfin/Emby on Roku Channel Store, Fire TV, Android TV, Google TV, and web browsers.
+    4. **Direct Play Optimization**: Instructions to set Remote Quality / Bitrate to Maximum / Auto for 100% Direct Play.
+
+### 4. Button-Led User Dashboard Architecture & Role Parity (`UserLaunchpad`)
+- **DRY Launchpad Pattern**: Replace lengthy, text-heavy vertical card stacks with the touch-friendly `UserLaunchpad` (`src/components/dashboard/user-launchpad.tsx`) positioned immediately below the dashboard header.
+- **Role Parity Standard (Super User = Full Member + Servarr)**:
+  - **Super Users do NOT have a stripped-down or disconnected dashboard**. They share the exact same rich Full Member dashboard experience (My Plex Hub, AI Assistant, Book & Audiobook Library, Server Speed Test, Plex Setup Guides, Support Tickets).
+  - The ONLY architectural difference is that `isSuperUser={true}` dynamically unlocks dedicated **🎬 Radarr Movies** and **📺 Sonarr TV Shows** quick-action buttons in an expanded 8-button launchpad grid (`grid-cols-2 sm:grid-cols-4 xl:grid-cols-8`).
+  - Full Members receive the streamlined 6-button launchpad grid (`grid-cols-2 sm:grid-cols-3 xl:grid-cols-6`).
+- **Free Trial Accounts (`TrialDashboardView`)**:
+  - Compact glowing amber countdown pill header: `⏳ Free Trial: [X] Days Remaining` with `[View Pricing]` trigger.
+  - 4-button launchpad (2x2 on mobile, 4 columns on desktop):
+    1. 🎬 **Request Media** (`/discover`) with live remaining quota badge (`3 Movies • 3 TV Left`).
+    2. 📺 **Plex Setup Guides** (modal trigger).
+    3. ⚡ **Server Speed Test** (modal trigger).
+    4. 💳 **Membership Pricing** (modal trigger with prorated monthly & annual calculations).
+- **Headless Modal Trigger Pattern**:
+  - Components like `ServerSpeedTest`, `PlexSetupGuides`, and `SupportTicketModal` support an optional `trigger?: React.ReactNode` prop. When provided, the dialog renders the custom launchpad card as its `DialogTrigger` without duplicate state or detached trigger buttons.
+- **Admin Mission Control Immunity**:
+  - The Administrator view (`isAdmin === true`) remains 100% strictly untouched, preserving the single-pane `AdminSystemHealthGrid`, `AdminDetailedStreams`, hardware telemetry meters, and 8-tool quick admin bar.
+
+### 4. Account Settings Profile Prewarming & Dashboard Servers Launchpad
+- **Account Settings SWR Prewarming (`getUserProfileBootstrapAction`)**:
+  - Eliminates sequential request waterfalls by executing 10+ user profile queries in parallel and storing in RAM cache (`user_profile_bootstrap:${userId}`).
+  - Warm cache hits return in <50ms with zero loading spinners or delayed layout shifts.
+  - Automatically prewarmed during `prewarmUserSession` on login.
+- **Quick-Access Dashboard Launchpad ("Servers & Libraries")**:
+  - Mounted on the user dashboard launchpad grid (`UserLaunchpad`) with blue accent branding (`text-blue-400`, `bg-blue-500/10 border-blue-500/30`) and `Access` badge.
+  - Links directly to `/settings/profile` for 1-click management of Plex/Jellyfin/Emby servers, libraries, and add-ons.
+- **Discrete Invite Banner (`PlexInviteBanner`)**:
+  - Positioned unobtrusively below the AI Assistant card rather than commanding top billing.
+  - Designed as a sleek, low-profile card (`bg-[#121218]/60 border-border/40`) with inline copy input and collapsible guide.
 
 ## 📐 Key Layout & Component Rules
 
@@ -1105,10 +1192,10 @@ Portalarr features an automated, real-time versioning, branch identification, an
     - Tickets: Rose (`text-rose-400`)
 - **AI Assistant Hero Card**:
   - Full-width hero container with dual-tier typography, glowing bot icon, and live pulse status badge (`24/7 AI Diagnostic Engine Active`).
-- **Grouped Curation Studios**:
-  - Administration links group Kometa, Agregarr, Maintainerr, and Tagging under an accordion subsection.
-- **Settings & Inline Logs Pill**:
-  - Quick action pill jumping directly to `/settings?tab=logs`.
+- **Top-Level Curation Studios Section**:
+  - Rendered as first-class, unindented `NavItem` elements with zero accordion dropdowns and pixel-perfect alignment across Desktop and Mobile sidebars.
+- **System Settings & Live System Logs Navigation**:
+  - Rendered as dedicated, full-width NavItem components with Live System Logs positioned directly below System Settings jumping to /settings?tab=logs.
 
 ---
 
@@ -1117,7 +1204,7 @@ Before completing any task, execute:
 1. `cmd /c "npm test"`: Full 18+ suite verification (`scripts/verify-all.ts`), 0 failures.
 2. `cmd /c "npm run build"`: Next.js production build, 0 TS errors, 100% clean.
 3. Skills & Documentation Sync: Update `.agents/skills/` and `.md` files with architectural learnings.
-4. SemVer Version Increment & Git Deployment Push: Increment version in `package.json` according to SemVer (PATCH `+1` for fixes/polish, MINOR `+1` for features), commit with freshly incremented `[v<version>]` prefix, push to `origin/main`, merge to `origin/stable`, push to `origin/stable`.
+4. SemVer Version Increment & Git Deployment Push: Increment version in `package.json` according to SemVer (PATCH `+1` for fixes/polish, MINOR `+1` for features), commit with freshly incremented `[v<version>]` prefix, push strictly to `origin/main` (Beta). NEVER push to `stable` unless the user explicitly instructs.
 
 ---
 

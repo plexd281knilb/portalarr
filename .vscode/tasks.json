@@ -2,9 +2,9 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "agy: Brain - Root Orchestrator (Argon 4 High)",
+      "label": "agy: Root Orchestrator (Gemini 3.8 Flash High - Default)",
       "type": "shell",
-      "command": "agy --model gemini-4-argon-high",
+      "command": "agy --model gemini-3.8-flash-high",
       "problemMatcher": [],
       "presentation": {
         "reveal": "always",
@@ -17,7 +17,29 @@
       }
     },
     {
-      "label": "agy: Pinky - Parallel Worker (Flash 3.8 High)",
+      "label": "agy: Deep Architect (Gemini 4 Argon High - Escalation)",
+      "type": "shell",
+      "command": "agy --model gemini-4-argon-high",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "group": "architect"
+      }
+    },
+    {
+      "label": "agy: Fallback Architect (Gemini 3.8 Flash High - Quota Fallback)",
+      "type": "shell",
+      "command": "agy --model gemini-3.8-flash-high",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new",
+        "group": "architect"
+      }
+    },
+    {
+      "label": "agy: Parallel Worker / Pinky (Gemini 3.8 Flash High)",
       "type": "shell",
       "command": "agy --model gemini-3.8-flash-high",
       "problemMatcher": [],
@@ -28,9 +50,19 @@
       }
     },
     {
-      "label": "agy: Ask Pinky (Flash 3.8 Print Mode)",
+      "label": "agy: Quick Task on Flash (Print Mode)",
       "type": "shell",
       "command": "agy --model gemini-3.8-flash-high --print \"${input:prompt}\"",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "agy: Light Recon & Search (Gemini 3.5 Flash Lite)",
+      "type": "shell",
+      "command": "agy --model gemini-3.5-flash-lite --print \"${input:prompt}\"",
       "problemMatcher": [],
       "presentation": {
         "reveal": "always",
@@ -62,7 +94,7 @@
     {
       "id": "prompt",
       "type": "promptString",
-      "description": "Enter the prompt for Pinky (Gemini 3.8 Flash worker)"
+      "description": "Enter the prompt for the Gemini Flash worker"
     }
   ]
 }

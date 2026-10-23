@@ -1,33 +1,27 @@
-> 🚀 **v1.0.0 Milestone Release Achieved & v1.0.1 Active**: Portalarr has officially completed its v1.0.0 milestone and is running in production across DomsHomeLab!
->
-> 🔧 **v1.0.1 Patch Highlights**:
-> - **My Plex Hub Watch Statistics**: Resolved watch time hours, movies finished, and episodes watched across Tautulli, Plex Media Server, and local database fallbacks.
-> - **Admin Telemetry Gating**: Restricted build diagnostic modals and commit inspection strictly to verified administrators.
-> - **Sidebar DRY Architecture**: Unified desktop and mobile navigation via `SidebarNavContent` with restored signature app colors.
+> 🚀 **DomsHomeLab Platform Highlights**: Welcome to your central homelab streaming and media mission control! Enjoy ultra-fast 4K Direct Play, 1-click media requests, personalized reading, custom device guides, and live 24/7 AI diagnostic assistance.
 
 ### ✨ What's New
 
-- **🍿 Unified Media Requests (Movies, TV Shows, Ebooks & Audiobooks):** A single 1-click request hub with Dual-Tier Seerr caching (`<50ms` response), granular season/episode monitoring, and real-time status tracking.
-- **🤖 Autonomous AI Server Assistant & Book Recommendations:** Your in-app conversational helper equipped with 11 structured diagnostic tools, personalized book & media recommendations (`📚 Book Recommendations`), custom format quality checks, automated replacement grabs, and 1-click support ticket escalation.
+- **🚀 Button-Led Mission Control:** Sleek 1-click launchpad across mobile and desktop for instant access to Media Requests, Books, My Streams, Server Speed Test, and Setup Guides.
+- **🍿 Unified Media Requests (Movies, TV Shows, Ebooks & Audiobooks):** A single 1-click request hub with live remaining quota badges and real-time status tracking.
+- **📺 Multi-Platform Media Servers (Plex, Jellyfin & Emby):** Flexible streaming choice across your favorite client apps (Plex, Swiftfin, official Jellyfin/Emby) with tailored step-by-step setup guides.
+- **🤖 24/7 AI Server Assistant & Book Recommendations:** Your in-app conversational helper for instant playback diagnostic fixes, device optimization, personalized book & media recommendations, and 1-click support ticket escalation.
 - **📚 Ebooks & Audiobooks Subsystem:**
-  - **In-Browser Reader:** Built-in reading experience with Bookerly typography, customizable margins, color themes, and persistent reading progress.
+  - **In-Browser Reader:** Built-in reading experience with custom typography, customizable margins, color themes, and persistent reading progress.
   - **1-Click Send-to-Kindle:** Dispatch any book directly to your Amazon Kindle devices and apps in seconds with zero manual configuration.
-  - **Floating Audiobook Player:** Interactive HTML5 audio player featuring chapter selection, disk track ordering, continuous background autoplay, and playback speed controls.
-- **⚡ Live Streams Doctor & Proactive Quality Banner:** Real-time playback telemetry, main-screen Stream Quality Doctor alerts, in-browser server speed test, and tailored device fix checklists to resolve buffering and unlock 1080p/4K Direct Play.
-- **🎨 4-Studio Native Curation Engine (Zero PMS Lock Architecture):**
-  - **Kometa Poster Overlays:** High-definition 4K HDR badges, Dolby Vision / Dolby Atmos ribbons, and IMDb ratings overlaid directly on movie and TV posters.
-  - **Maintainerr "Leaving Soon" Collections & Badges:** Automated storage reclamation with visual countdown ribbons and a 3-tier watch status engine so you never miss media rotating out of the library.
-  - **Agregarr Smart Hubs & Custom Collections:** Dynamic smart playlists, Trakt/TMDb/MDBList/IMDb discovery rows, placeholder stubs, and IMDb Parental Guide severity tagging.
-- **📡 Real-Time Server Status, Docker Fleet & Outage Alerts:** Live infrastructure health monitoring, 24h/7d/30d uptime tracking, and instant `#system-status` Discord notifications when maintenance or an outage occurs.
-- **🎁 Member Referral Rewards & Personalized Invite Links:** Share your personal referral link (`/join?ref=CODE`) with friends to earn **$15.00 off** your annual pass (or **+1 free month** on monthly plans) for every friend who joins.
-- **🛡️ Family Sub-Profiles (Kids & Living Room TV):** Dedicated sub-profiles with customizable age ratings (`Kids` / `YA` / `Adult`), IMDb content advisory sliders, child-safe library filtering, and secure PIN protection.
-- **⚡ Radarr & Sonarr Super User Accounts:** Direct, secure access to advanced movie and TV management tools for authorized power users to monitor downloads, inspect releases, and manage queue priorities.
+  - **Floating Audiobook Player:** Interactive HTML5 audio player featuring chapter selection, continuous background autoplay, and playback speed controls.
+- **⚡ Live Streams & Proactive Quality Doctor:** Real-time playback telemetry, buffering diagnostics, in-browser server speed test, and tailored device fix checklists to unlock 1080p/4K Direct Play.
+- **🎨 Enhanced Curation & Poster Badges:** High-definition 4K HDR badges, Dolby Vision ribbons, and "Leaving Soon" countdown alerts on movie and TV posters.
+- **🎁 Member Referral Rewards:** Share your personal referral link (`/join?ref=CODE`) with friends to earn discounts on your annual pass or free bonus streaming months.
+- **🛡️ Family Sub-Profiles (Kids & Living Room TV):** Dedicated sub-profiles with child-safe library filtering, age rating limits, and secure PIN protection.
+- **⚡ Radarr & Sonarr Super User Access:** Advanced queue and release management for authorized power users to monitor downloads, inspect releases, and manage queue priorities.
 
 ---
 
 ### 🚀 Coming Soon
 
-- **💬 1-Click Subtitle Search & Auto-Sync (Bazarr Deep Integration):** Search, download, and auto-align missing or out-of-sync external subtitles directly from your active stream card in My Plex Hub.
-- **📊 Personal Year-in-Review ("DomsHomeLab Wrapped"):** Interactive annual and monthly streaming recaps showcasing your top-watched genres, directors, actors, total hours streamed, and reading milestones.
-- **📱 Progressive Web App (PWA) Push Notifications:** Native mobile lock-screen notifications when your requested movies, TV episodes, or Kindle books finish downloading.
-- **🔁 Cross-Device Watchlist & Reading Sync:** Unified watchlist across Movies, TV Series, Ebooks, and Audiobooks that syncs directly with your Plex Watchlist and Goodreads/Hardcover shelves.
+- **📺 On-Demand Live TV & Self-Service Channel Activation (Dispatcharr Integration):** Watch live sports, news, and events seamlessly within your Plex, Jellyfin, or Emby apps. Activate custom channels from a master catalog with 1-click self-service, backed by automated Dispatcharr channel provisioning, Live TV buffering diagnostics, and 45-day dormancy cleanup.
+- **💬 1-Click Subtitle Search & Auto-Sync:** Search, download, and auto-align missing or out-of-sync external subtitles directly from your active stream card.
+- **📊 Personal Year-in-Review ("DomsHomeLab Wrapped"):** Interactive annual streaming recaps showcasing your top-watched genres, directors, actors, total hours streamed, and reading milestones.
+- **📱 Progressive Web App (PWA) Push Notifications:** Native mobile notifications when your requested movies, TV episodes, or Kindle books finish downloading.
+- **🔁 Cross-Device Watchlist & Reading Sync:** Unified watchlist across Movies, TV Series, Ebooks, and Audiobooks synced directly with your accounts.

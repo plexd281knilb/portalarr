@@ -119,7 +119,7 @@ See detailed runbook: [tags-collections-and-hubs.md](./references/tags-collectio
     - **Plex Crash Prevention via Hot Snapshots**: High-frequency HTTP polling and bulk library sweeps (parental tags, Kometa overlays, smart collections, and prune candidate evaluations) overload PMS's internal SQLite database, triggering database locks and daemon crashes. Portalarr decouples operational analysis from the live PMS process by taking detached local SQLite snapshots.
     - **Hot Backup Fallback Strategy**:
       1. Attempts atomic `sqlite3 "$src" ".backup '$dst'"` via shell.
-      2. If shell `sqlite3` is unavailable, executes hot file copy (`.db`, `.db-wal`, `.db-shm`) and performs WAL checkpoint truncation (`PRAGMA wal_checkpoint(TRUNCATE)`) using native Node 24 `node:sqlite` (`DatabaseSync`).
+      2. If shell `sqlite3` is unavailable, executes hot file copy (`.db`, `.db-wal`) and performs WAL checkpoint truncation (`PRAGMA wal_checkpoint(TRUNCATE)`) using native Node 22+ `node:sqlite` (`DatabaseSync`), with fallback to `sqlite3` CLI. Container runs on `node:22-bookworm-slim` with both `sqlite3` and native `node:sqlite`.
     - **Tag Audit Delta-Sync**: `getSnapshotLibraryTagsAudit(dbPath, sectionKey)` extracts all existing tags, genres, and collections indexed by `ratingKey` in <5ms. During parental tagging sweeps (`applyParentalTagsToLibrary`), items whose target tags match the snapshot are skipped with zero HTTP GET or PUT calls. If changes are needed, target tags are updated via paced PUT requests without redundant metadata GET fetches.
     - **Direct Media Items & Stream Badges**: `getSnapshotLibraryMediaItems(dbPath, sectionKey)` queries media parts, video/audio codecs, bitrates, resolutions, and stream attributes directly from SQLite tables (`metadata_items`, `media_items`, `media_parts`, `media_streams`), completely eliminating heavy `/all?includeStreams=1` HTTP queries.
     - **Safe Multi-Server Cross-Server Views**: Using `ATTACH DATABASE`, secondary server databases are cross-queried in <20ms for watch history synchronization without hitting secondary server HTTP APIs.
@@ -147,4 +147,4 @@ See detailed runbook: [tags-collections-and-hubs.md](./references/tags-collectio
     - Step 1: `cmd /c "npm test"` (18+ suites, 100% pass, 0 failures).
     - Step 2: `cmd /c "npm run build"` (Next.js production build, 0 TS errors, 100% clean).
     - Step 3: Skills & Documentation Sync.
-    - Step 4: SemVer Version Increment & Git Version Control (increment `package.json` version, `[v<version>]` prefix, push to `origin/main`, merge to `origin/stable`, push to `origin/stable`).
+    - Step 4: SemVer Version Increment & Git Version Control (increment `package.json` version, `[v<version>]` prefix, push strictly to `origin/main` (Beta). NEVER push to `stable` unless user explicitly instructs).

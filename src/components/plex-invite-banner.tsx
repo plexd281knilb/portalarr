@@ -7,8 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { 
     Gift, Copy, Check, Share2, Sparkles, Users, 
-    ArrowRight, CheckCircle2, ChevronDown, ChevronUp,
-    Tv, Clock, ShieldCheck, HeartHandshake
+    ArrowRight, ChevronDown, ChevronUp,
+    Tv, Clock
 } from "lucide-react";
 import Link from "next/link";
 
@@ -74,8 +74,8 @@ export default function PlexInviteBanner({
         if (navigator.share) {
             try {
                 await navigator.share({
-                    title: `Join my Plex Media Server (${trialDays}-Day Free Trial)`,
-                    text: `Here is your personal invite for a ${trialDays}-Day Free Trial with full access to our Plex Media Server & libraries!`,
+                    title: `Join our Media Server (${trialDays}-Day Free Trial)`,
+                    text: `Here is your invite for a ${trialDays}-Day Free Trial with full access to our media library!`,
                     url: inviteUrl
                 });
             } catch (err) {
@@ -87,57 +87,47 @@ export default function PlexInviteBanner({
     };
 
     return (
-        <Card className="w-full border-purple-500/30 bg-gradient-to-br from-purple-950/30 via-[#13121d] to-[#0f0e17] backdrop-blur-md shadow-lg relative overflow-hidden transition-all duration-300 hover:border-purple-500/50">
-            {/* Ambient Background Glow */}
-            <div className="absolute top-0 right-0 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl -z-10 pointer-events-none" />
-            <div className="absolute bottom-0 left-0 w-64 h-64 bg-primary/10 rounded-full blur-3xl -z-10 pointer-events-none" />
-            
-            {/* Top Accent Strip */}
-            <div className="h-1 w-full bg-gradient-to-r from-purple-500 via-pink-500 to-primary" />
-
-            <CardContent className="p-4 sm:p-6 space-y-4">
+        <Card className="w-full border-border/40 bg-[#121218]/60 backdrop-blur-xs shadow-xs relative overflow-hidden transition-all duration-200 hover:border-purple-500/30 rounded-xl">
+            <CardContent className="p-3 sm:p-4 space-y-2.5">
                 {/* Header Row */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="space-y-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                            <span className="p-1.5 rounded-lg bg-purple-500/20 text-purple-300 border border-purple-500/40">
-                                <Gift className="h-4 w-4" />
-                            </span>
-                            <h2 className="text-lg sm:text-xl font-extrabold tracking-tight text-foreground flex items-center gap-2">
-                                Invite Friends & Family to Plex
+                <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                        <div className="p-1.5 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-400 shrink-0">
+                            <Gift className="h-4 w-4" />
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap min-w-0">
+                            <h2 className="text-xs sm:text-sm font-bold text-foreground truncate">
+                                Invite Friends &amp; Family
                             </h2>
-                            <Badge className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white border-0 text-xs font-bold px-2.5 py-0.5 shadow-sm animate-pulse">
+                            <Badge variant="outline" className="text-[10px] bg-purple-500/10 text-purple-300 border-purple-500/20 px-1.5 py-0 font-medium">
                                 {trialDays}-Day Free Trial
                             </Badge>
+                            {totalReferrals > 0 && (
+                                <span className="text-[10px] text-muted-foreground hidden sm:inline-flex items-center gap-1">
+                                    <Users className="h-3 w-3 text-purple-400" />
+                                    {totalReferrals} invited
+                                </span>
+                            )}
                         </div>
-                        <p className="text-xs sm:text-sm text-muted-foreground">
-                            Share your personal invite link so your friends get an instant <strong className="text-purple-300">{trialDays}-day full access trial</strong> to movies, TV shows, and libraries.
-                        </p>
                     </div>
 
-                    <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
-                        {totalReferrals > 0 && (
-                            <Badge variant="outline" className="text-xs bg-purple-500/15 text-purple-300 border-purple-500/30 gap-1.5 py-1 px-2.5">
-                                <Users className="h-3.5 w-3.5" />
-                                <span>{totalReferrals} Invited</span>
-                            </Badge>
-                        )}
+                    <div className="flex items-center gap-1.5 shrink-0">
                         <Button 
                             variant="ghost" 
                             size="sm" 
                             onClick={toggleCollapse}
-                            className="h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground hover:bg-white/10 rounded-lg transition-all"
+                            className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground rounded-lg transition-all"
                             title={isCollapsed ? "Expand invitation guide" : "Collapse invitation guide"}
                         >
                             {isCollapsed ? (
                                 <span className="flex items-center gap-1">
-                                    <span>Show Guide</span>
-                                    <ChevronDown className="h-3.5 w-3.5" />
+                                    <span>Guide</span>
+                                    <ChevronDown className="h-3 w-3" />
                                 </span>
                             ) : (
                                 <span className="flex items-center gap-1">
-                                    <span>Hide Guide</span>
-                                    <ChevronUp className="h-3.5 w-3.5" />
+                                    <span>Hide</span>
+                                    <ChevronUp className="h-3 w-3" />
                                 </span>
                             )}
                         </Button>
@@ -145,34 +135,35 @@ export default function PlexInviteBanner({
                 </div>
 
                 {/* Personal Invite Link Box */}
-                <div className="flex flex-col sm:flex-row items-center gap-2 pt-1">
+                <div className="flex flex-col sm:flex-row items-center gap-2">
                     <div className="relative w-full">
                         <Input 
                             readOnly 
                             value={inviteUrl} 
                             onClick={(e) => (e.target as HTMLInputElement).select()}
-                            className="bg-background/90 font-mono text-xs sm:text-sm pr-10 text-foreground border-purple-500/40 focus-visible:ring-purple-400/50 shadow-inner h-11"
+                            className="bg-background/60 font-mono text-xs pr-16 text-foreground border-border/50 focus-visible:ring-purple-400/40 shadow-inner h-9 rounded-lg"
                         />
-                        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] uppercase font-bold text-purple-400/80 tracking-wider hidden sm:block pointer-events-none">
-                            Your Link
+                        <div className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[9px] uppercase font-bold text-muted-foreground tracking-wider pointer-events-none">
+                            Link
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+                    <div className="flex items-center gap-1.5 w-full sm:w-auto shrink-0">
                         <Button 
                             type="button" 
+                            size="sm"
                             onClick={handleCopy}
-                            className="flex-1 sm:flex-none font-bold bg-purple-600 hover:bg-purple-500 text-white gap-2 text-xs sm:text-sm h-11 px-4 shadow-md transition-all duration-200 hover:ring-2 hover:ring-purple-400/50 hover:shadow-purple-500/25 active:scale-95 cursor-pointer"
+                            className="flex-1 sm:flex-none font-semibold bg-purple-600/90 hover:bg-purple-600 text-white gap-1.5 text-xs h-9 px-3.5 rounded-lg shadow-xs transition-all active:scale-95 cursor-pointer"
                         >
                             {copied ? (
                                 <>
-                                    <Check className="h-4 w-4 text-emerald-300 animate-bounce" />
-                                    <span>Copied to Clipboard!</span>
+                                    <Check className="h-3.5 w-3.5 text-emerald-300" />
+                                    <span>Copied!</span>
                                 </>
                             ) : (
                                 <>
-                                    <Copy className="h-4 w-4" />
-                                    <span>Copy Invite Link</span>
+                                    <Copy className="h-3.5 w-3.5" />
+                                    <span>Copy Link</span>
                                 </>
                             )}
                         </Button>
@@ -180,12 +171,13 @@ export default function PlexInviteBanner({
                         {canShare && (
                             <Button 
                                 type="button" 
+                                size="sm"
                                 variant="outline"
                                 onClick={handleShare}
-                                className="border-purple-500/40 hover:bg-purple-500/15 text-purple-300 text-xs sm:text-sm h-11 px-3.5 transition-all active:scale-95"
-                                title="Share via messaging or apps"
+                                className="border-border/50 hover:bg-purple-500/10 text-purple-300 text-xs h-9 px-2.5 rounded-lg transition-all active:scale-95"
+                                title="Share link"
                             >
-                                <Share2 className="h-4 w-4" />
+                                <Share2 className="h-3.5 w-3.5" />
                             </Button>
                         )}
                     </div>
@@ -193,77 +185,77 @@ export default function PlexInviteBanner({
 
                 {/* 3-Step Guide (Expandable / Collapsible) */}
                 {!isCollapsed && (
-                    <div className="pt-3 border-t border-purple-500/20 space-y-3 animate-in fade-in-50 slide-in-from-top-2 duration-300">
+                    <div className="pt-2.5 border-t border-border/30 space-y-2.5 animate-in fade-in-50 slide-in-from-top-1 duration-200">
                         <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-foreground/90 uppercase tracking-wider flex items-center gap-1.5">
-                                <Sparkles className="h-3.5 w-3.5 text-purple-400" /> How Inviting Friends Works
+                            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                                <Sparkles className="h-3 w-3 text-purple-400" /> How It Works
                             </span>
                             <Link 
                                 href="/profile#referral" 
-                                className="text-xs text-purple-400 hover:text-purple-300 font-semibold flex items-center gap-1 hover:underline"
+                                className="text-[11px] text-purple-400 hover:text-purple-300 font-semibold flex items-center gap-1 hover:underline"
                             >
                                 Referral Stats <ArrowRight className="h-3 w-3" />
                             </Link>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                             {/* Step 1 */}
-                            <div className="p-3.5 rounded-xl bg-purple-950/30 border border-purple-500/20 space-y-1.5 relative overflow-hidden">
+                            <div className="p-2.5 rounded-lg bg-background/40 border border-border/40 space-y-1">
                                 <div className="flex items-center justify-between">
-                                    <span className="text-[10px] font-black uppercase tracking-wider text-purple-400 px-2 py-0.5 rounded-md bg-purple-500/20 border border-purple-500/30">
+                                    <span className="text-[9px] font-bold uppercase tracking-wider text-purple-400 px-1.5 py-0.5 rounded bg-purple-500/10 border border-purple-500/20">
                                         Step 1
                                     </span>
-                                    <Share2 className="h-4 w-4 text-purple-400/80" />
+                                    <Share2 className="h-3.5 w-3.5 text-purple-400/70" />
                                 </div>
-                                <h3 className="text-xs font-bold text-foreground">Share Your Personal Link</h3>
-                                <p className="text-[11px] text-muted-foreground leading-relaxed">
-                                    Send your unique link via text, email, or social chat. No manual codes needed.
+                                <h3 className="text-xs font-semibold text-foreground">Share Your Link</h3>
+                                <p className="text-[10px] text-muted-foreground leading-normal">
+                                    Send your link via text or chat. No codes needed.
                                 </p>
                             </div>
 
                             {/* Step 2 */}
-                            <div className="p-3.5 rounded-xl bg-purple-950/30 border border-purple-500/20 space-y-1.5 relative overflow-hidden">
+                            <div className="p-2.5 rounded-lg bg-background/40 border border-border/40 space-y-1">
                                 <div className="flex items-center justify-between">
-                                    <span className="text-[10px] font-black uppercase tracking-wider text-pink-400 px-2 py-0.5 rounded-md bg-pink-500/20 border border-pink-500/30">
+                                    <span className="text-[9px] font-bold uppercase tracking-wider text-pink-400 px-1.5 py-0.5 rounded bg-pink-500/10 border border-pink-500/20">
                                         Step 2
                                     </span>
-                                    <Clock className="h-4 w-4 text-pink-400/80" />
+                                    <Clock className="h-3.5 w-3.5 text-pink-400/70" />
                                 </div>
-                                <h3 className="text-xs font-bold text-foreground">{trialDays}-Day Instant Free Trial</h3>
-                                <p className="text-[11px] text-muted-foreground leading-relaxed">
-                                    Your friend signs up in seconds without paying anything upfront or waiting for manual approval.
+                                <h3 className="text-xs font-semibold text-foreground">{trialDays}-Day Free Trial</h3>
+                                <p className="text-[10px] text-muted-foreground leading-normal">
+                                    Instant sign-up without paying anything upfront.
                                 </p>
                             </div>
 
                             {/* Step 3 */}
-                            <div className="p-3.5 rounded-xl bg-purple-950/30 border border-purple-500/20 space-y-1.5 relative overflow-hidden">
+                            <div className="p-2.5 rounded-lg bg-background/40 border border-border/40 space-y-1">
                                 <div className="flex items-center justify-between">
-                                    <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400 px-2 py-0.5 rounded-md bg-emerald-500/20 border border-emerald-500/30">
+                                    <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-400 px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20">
                                         Step 3
                                     </span>
-                                    <Tv className="h-4 w-4 text-emerald-400/80" />
+                                    <Tv className="h-3.5 w-3.5 text-emerald-400/70" />
                                 </div>
-                                <h3 className="text-xs font-bold text-foreground">Instant Plex Server Access</h3>
-                                <p className="text-[11px] text-muted-foreground leading-relaxed">
-                                    Their Plex account is immediately invited and given streaming access across all devices!
+                                <h3 className="text-xs font-semibold text-foreground">Instant Server Access</h3>
+                                <p className="text-[10px] text-muted-foreground leading-normal">
+                                    Account is auto-invited with access across all devices.
                                 </p>
                             </div>
                         </div>
 
                         {/* Referral Summary Bar */}
                         {(totalReferrals > 0 || activeTrials > 0 || conversions > 0) && (
-                            <div className="grid grid-cols-3 gap-2 text-center pt-1 text-xs">
-                                <div className="p-2 rounded-lg bg-black/30 border border-purple-500/20">
-                                    <span className="text-[10px] text-muted-foreground uppercase font-bold block">Total Invited</span>
-                                    <span className="font-extrabold text-foreground text-sm">{totalReferrals}</span>
+                            <div className="grid grid-cols-3 gap-2 text-center pt-1 text-[11px]">
+                                <div className="p-1.5 rounded-md bg-background/40 border border-border/30">
+                                    <span className="text-[9px] text-muted-foreground uppercase font-bold block">Total Invited</span>
+                                    <span className="font-bold text-foreground text-xs">{totalReferrals}</span>
                                 </div>
-                                <div className="p-2 rounded-lg bg-black/30 border border-blue-500/20">
-                                    <span className="text-[10px] text-muted-foreground uppercase font-bold block">Active Trials</span>
-                                    <span className="font-extrabold text-blue-400 text-sm">{activeTrials}</span>
+                                <div className="p-1.5 rounded-md bg-background/40 border border-border/30">
+                                    <span className="text-[9px] text-muted-foreground uppercase font-bold block">Active Trials</span>
+                                    <span className="font-bold text-blue-400 text-xs">{activeTrials}</span>
                                 </div>
-                                <div className="p-2 rounded-lg bg-black/30 border border-emerald-500/20">
-                                    <span className="text-[10px] text-muted-foreground uppercase font-bold block">Converted Members</span>
-                                    <span className="font-extrabold text-emerald-400 text-sm">{conversions}</span>
+                                <div className="p-1.5 rounded-md bg-background/40 border border-border/30">
+                                    <span className="text-[9px] text-muted-foreground uppercase font-bold block">Conversions</span>
+                                    <span className="font-bold text-emerald-400 text-xs">{conversions}</span>
                                 </div>
                             </div>
                         )}

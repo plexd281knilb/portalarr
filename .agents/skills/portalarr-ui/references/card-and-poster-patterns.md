@@ -157,3 +157,22 @@ Standard grid layout for media shelves and discovery pages:
   - **Row 1**: Pair the primary reading CTA (`Read Book` / `Resume (X%)`) with the `MoreVertical` (`h-8 w-8`) dropdown trigger in a `flex items-center gap-1.5 w-full` row.
   - **Row 2**: Render `Send to Kindle` as a dedicated full-width button (`w-full h-7.5 text-xs`) with `whitespace-nowrap font-medium`, guaranteeing complete visibility across all screen sizes and column widths.
 
+---
+
+## 8. Universal Media Poster Proxy, TMDb `w500` Standard & Multi-Tier Error Fallback
+
+- **TMDb Poster Dimensions Standard (`w500`)**:
+  - Always resolve TMDb poster artwork using `https://image.tmdb.org/t/p/w500` (`TMDB_IMAGE_BASE`).
+  - **Never use `original`** for card thumbnails or discovery carousels. Original source assets exceed 15MB–25MB uncompressed each; loading a 20-item carousel of `original` images downloads over 300MB of data, triggering network timeouts, aborted image loads, and mobile browser stalls. `w500` provides pristine sharpness under 60KB per poster.
+- **SQLite Watch History Proxying (`formatWatchHistoryThumb`)**:
+  - Raw Plex thumbnails in local SQLite `WatchHistory` (e.g. `/library/metadata/127011/thumb/1772434954`) cannot be resolved directly by remote client browsers without a session token and local network reachability.
+  - Always route watch history items through `formatWatchHistoryThumb(dbItem)`, which wraps the relative path into `/api/media/image?serverId=...&thumb=...&title=...&year=...&type=...`.
+- **Servarr (Radarr & Sonarr) Missing Remote URL Fallback**:
+  - When Radarr or Sonarr media items contain only container-local paths (`/MediaCover/123/poster.jpg`) without external `remoteUrl`, client browsers show a blank box or "No Cover".
+  - Always fall back to `/api/media/image?title=${encodeURIComponent(title)}&year=${encodeURIComponent(year)}&type=${type}` to automatically retrieve high-definition artwork from TMDb, iTunes, or PMS transcoder.
+- **MediaCard Multi-Tier Image Fallback**:
+  - In `MediaCard` (`src/components/seerr/media-card.tsx`), implement two-tier error handling with `imageError` and `fallbackError`:
+    1. Primary TMDb URL (`item.posterPath`).
+    2. Fallback to `/api/media/image` proxy if primary fails or is missing.
+    3. Styled placeholder container with `Tv`/`Film` icon and title line clamping if both fail.
+

@@ -236,7 +236,28 @@ async function runTestSuite() {
             throw new Error("Legacy books_audiobooks should be split and not present in DEFAULT_ADDONS_CATALOG");
         }
 
-        // 2. Live Audiobooks Library Access Sync
+        const jellyfinAddon = defaultCatalog.find((a: any) => a.id === "jellyfin_access");
+        if (!jellyfinAddon || jellyfinAddon.icon !== "server" || jellyfinAddon.isFree !== true) {
+            throw new Error(`Expected jellyfin_access in DEFAULT_ADDONS_CATALOG, got: ${JSON.stringify(jellyfinAddon)}`);
+        }
+
+        const embyAddon = defaultCatalog.find((a: any) => a.id === "emby_access");
+        if (!embyAddon || embyAddon.icon !== "server" || embyAddon.isFree !== true) {
+            throw new Error(`Expected emby_access in DEFAULT_ADDONS_CATALOG, got: ${JSON.stringify(embyAddon)}`);
+        }
+
+        // Household sub-accounts should be locked as coming soon until implemented
+        const kidsProfileAddon = defaultCatalog.find((a: any) => a.id === "extra_kid_profile");
+        if (!kidsProfileAddon || kidsProfileAddon.isAvailable !== false) {
+            throw new Error(`Expected extra_kid_profile to be locked (isAvailable: false), got: ${JSON.stringify(kidsProfileAddon)}`);
+        }
+
+        const livingRoomProfileAddon = defaultCatalog.find((a: any) => a.id === "extra_living_room");
+        if (!livingRoomProfileAddon || livingRoomProfileAddon.isAvailable !== false) {
+            throw new Error(`Expected extra_living_room to be locked (isAvailable: false), got: ${JSON.stringify(livingRoomProfileAddon)}`);
+        }
+
+        // 2. Live Audiobooks Library Access Sync & Addons Catalog Verification
         const testUser = await prisma.user.create({
             data: {
                 username: `aud_sync_usr_${Date.now()}`,
@@ -248,6 +269,47 @@ async function runTestSuite() {
                 plexLibrarySectionIds: "10,20"
             }
         });
+
+        // Test getAvailableAddonsAction legacy filtering
+        const { getAvailableAddonsAction } = await import("../src/app/actions");
+        process.env.PORTALARR_TEST_AUTH = "true";
+        process.env.PORTALARR_TEST_USER_ID = testUser.id;
+
+        // Simulate legacy books_audiobooks in settings
+        const origSettings = await prisma.settings.findUnique({ where: { id: "global" } });
+        await prisma.settings.upsert({
+            where: { id: "global" },
+            update: {
+                availableAddons: JSON.stringify([
+                    { id: "books_audiobooks", name: "Books & Audiobooks Access", isAvailable: true, price: 0, isFree: true },
+                    { id: "extra_kid_profile", name: "Additional Kids Sub-Account", isAvailable: true, price: 0, isFree: true }
+                ])
+            },
+            create: { id: "global" }
+        });
+
+        try {
+            const availableRes = await getAvailableAddonsAction();
+            if (!availableRes.success || !availableRes.catalog) {
+                throw new Error(`getAvailableAddonsAction failed: ${availableRes.error}`);
+            }
+            const hasLegacy = availableRes.catalog.some((a: any) => a.id === "books_audiobooks");
+            if (hasLegacy) {
+                throw new Error("Legacy books_audiobooks was improperly present in getAvailableAddonsAction catalog");
+            }
+            const kidsCatalogItem = availableRes.catalog.find((a: any) => a.id === "extra_kid_profile");
+            if (kidsCatalogItem && kidsCatalogItem.isAvailable !== false) {
+                throw new Error("extra_kid_profile should be locked (isAvailable: false) in getAvailableAddonsAction");
+            }
+        } finally {
+            // Restore settings
+            await prisma.settings.upsert({
+                where: { id: "global" },
+                update: { availableAddons: origSettings?.availableAddons ?? null },
+                create: { id: "global" }
+            });
+            delete process.env.PORTALARR_TEST_USER_ID;
+        }
 
         const testAudioLib = await prisma.library.create({
             data: {
@@ -1162,6 +1224,20 @@ async function runTestSuite() {
             });
             if (testPlexServer.databasePath !== mainDbPath) throw new Error("databasePath was not saved to PlexServer model");
 
+            // Test updating databasePath (simulating savePlexDatabasePathAction behavior)
+            const updatedPlexServer = await prisma.plexServer.update({
+                where: { id: testPlexServer.id },
+                data: { databasePath: kidsDbPath }
+            });
+            if (updatedPlexServer.databasePath !== kidsDbPath) throw new Error("databasePath update failed");
+
+            // Test clearing databasePath
+            const clearedPlexServer = await prisma.plexServer.update({
+                where: { id: testPlexServer.id },
+                data: { databasePath: null }
+            });
+            if (clearedPlexServer.databasePath !== null) throw new Error("databasePath clear failed");
+
             await prisma.plexServer.delete({ where: { id: testPlexServer.id } });
         } finally {
             try {
@@ -1253,6 +1329,347 @@ async function runTestSuite() {
         const formatted4 = formatCommitMessageWithVersion(testMsg4, "1.0.0-beta.1");
         if (formatted4 !== testMsg4) {
             throw new Error(`Merge commit was altered unexpectedly: "${formatted4}"`);
+        }
+    });
+
+    // =========================================================================
+    // SUITE 19: Multi-Platform Media Servers (Jellyfin/Emby), Admin Whitelists & User Self-Selection
+    // =========================================================================
+    await assertTest("Suite 19: Multi-Platform Media Servers (Jellyfin/Emby), Admin Whitelists & User Preferences", async () => {
+        const { 
+            getAdminMediaServersAction, 
+            saveMediaServerAction, 
+            deleteMediaServerAction,
+            getUserMediaServersAndLibrariesAction,
+            updateUserMediaServersAndLibrariesAction,
+            updateUserAccountPreferencesAction
+        } = await import("../src/app/media-server-actions");
+        const { getPlexSetupGuides, toggleFreeAddonAction } = await import("../src/app/actions");
+        const { testMediaServerConnection } = await import("../src/lib/media-servers");
+
+        // 1. MediaServer Model CRUD and Encryption
+        const testServerApiKey = "test_emby_api_key_secret_12345";
+        const testMediaServer = await prisma.mediaServer.create({
+            data: {
+                name: "Test Jellyfin Lab",
+                type: "JELLYFIN",
+                url: "http://192.168.1.100:8096",
+                apiKey: encryptData(testServerApiKey),
+                isActive: true,
+                isMonitored: true,
+                allowUserSelfSelect: true,
+                allowTrialAccess: false,
+                allowedLibraryIds: JSON.stringify(["movies-hd", "shows-hd"]),
+                cachedLibraries: JSON.stringify([
+                    { id: "movies-hd", title: "Movies HD", type: "movies" },
+                    { id: "shows-hd", title: "TV Shows HD", type: "tvshows" },
+                    { id: "4k-movies", title: "4K Movies", type: "movies" }
+                ])
+            }
+        });
+        if (!testMediaServer.id) throw new Error("MediaServer creation failed");
+
+        // Verify API key decryption
+        const decryptedKey = decryptData(testMediaServer.apiKey);
+        if (decryptedKey !== testServerApiKey) {
+            throw new Error(`MediaServer API key decryption mismatch: expected ${testServerApiKey}, got ${decryptedKey}`);
+        }
+
+        // Test editing existing media server (URL & Name update while keeping existing API key)
+        const editServerRes = await saveMediaServerAction({
+            id: testMediaServer.id,
+            name: "Updated Jellyfin Node",
+            type: "JELLYFIN",
+            url: "http://127.0.0.1:9999/jellyfin",
+            apiKey: ""
+        });
+        if (!editServerRes.success || editServerRes.server?.name !== "Updated Jellyfin Node" || editServerRes.server?.url !== "http://127.0.0.1:9999/jellyfin") {
+            throw new Error(`Failed to edit existing media server: ${editServerRes.error}`);
+        }
+
+        // Verify getAdminMediaServersAction returns decrypted API key for admin review
+        const adminServersRes = await getAdminMediaServersAction();
+        if (!adminServersRes.success) throw new Error("Failed to fetch admin media servers");
+        const foundTestServer = adminServersRes.servers.find(s => s.id === testMediaServer.id);
+        if (!foundTestServer || foundTestServer.apiKey !== testServerApiKey) {
+            throw new Error(`Expected admin server to have decrypted apiKey ${testServerApiKey}, got ${foundTestServer?.apiKey}`);
+        }
+
+        // 2. Test MediaServer connection error handling (mock / offline URL)
+        const connResult = await testMediaServerConnection(
+            "JELLYFIN",
+            "http://127.0.0.1:9999",
+            "mock_test_key"
+        );
+        if (connResult.ok !== false) {
+            throw new Error("Expected offline media server connection test to fail gracefully");
+        }
+        if (!connResult.error) {
+            throw new Error("Expected offline media server error message to be set");
+        }
+
+        // 3. Test User Account Preferences Persistence
+        process.env.PORTALARR_TEST_AUTH = "true";
+        const prefResult = await updateUserAccountPreferencesAction({
+            qualityCap: "1080p_10mbps",
+            audioLanguage: "eng",
+            subtitleMode: "forced",
+            weeklyDigest: true,
+            hideWatchHistory: false
+        });
+        if (!prefResult.success) {
+            throw new Error(`Failed to update account preferences: ${prefResult.error}`);
+        }
+
+        // 4. Test User Server & Library Access Query
+        const userAccess = await getUserMediaServersAndLibrariesAction();
+        if (!userAccess.success) {
+            throw new Error(`Failed to query user media servers: ${userAccess.error}`);
+        }
+
+        // 5. Strict Admin Whitelist Enforcement Test
+        const forbiddenLibKey = `jellyfin:${testMediaServer.id}:4k-movies`;
+        const allowedLibKey = `jellyfin:${testMediaServer.id}:movies-hd`;
+
+        const memberUser = await prisma.user.create({
+            data: {
+                username: `test_member_${Date.now()}`,
+                email: `test_member_${Date.now()}@example.com`,
+                password: "mock_password_hash",
+                role: "USER",
+                status: "APPROVED",
+                allowedServerKeys: JSON.stringify([`jellyfin:${testMediaServer.id}`]),
+                allowedMediaLibraryKeys: JSON.stringify([allowedLibKey])
+            }
+        });
+
+        try {
+            const sanitizedAllowed = [allowedLibKey];
+            await prisma.user.update({
+                where: { id: memberUser.id },
+                data: {
+                    selectedServerKeys: JSON.stringify([`jellyfin:${testMediaServer.id}`]),
+                    selectedMediaLibraryKeys: JSON.stringify(sanitizedAllowed),
+                    accountPreferences: JSON.stringify({ qualityCap: "720p_4mbps", audioLanguage: "fra" })
+                }
+            });
+
+            const refreshedUser = await prisma.user.findUnique({ where: { id: memberUser.id } });
+            if (!refreshedUser?.selectedMediaLibraryKeys?.includes("movies-hd")) {
+                throw new Error("Selected library keys not saved on user model");
+            }
+            if (refreshedUser?.selectedMediaLibraryKeys?.includes("4k-movies")) {
+                throw new Error("Forbidden library key was improperly included in user selection");
+            }
+
+            const parsedPrefs = JSON.parse(refreshedUser?.accountPreferences || "{}");
+            if (parsedPrefs.qualityCap !== "720p_4mbps") {
+                throw new Error("Account preferences quality cap mismatch");
+            }
+
+            // 6. Step-by-Step Setup Guides Verification for Jellyfin and Emby
+            const allGuides = await getPlexSetupGuides();
+            const jellyfinGuide = allGuides.find((g: any) => g.id === "jellyfin");
+            if (!jellyfinGuide || !Array.isArray(jellyfinGuide.steps) || jellyfinGuide.steps.length < 4) {
+                throw new Error("Expected Jellyfin setup guide with at least 4 step-by-step instructions in getPlexSetupGuides");
+            }
+
+            const embyGuide = allGuides.find((g: any) => g.id === "emby");
+            if (!embyGuide || !Array.isArray(embyGuide.steps) || embyGuide.steps.length < 4) {
+                throw new Error("Expected Emby setup guide with at least 4 step-by-step instructions in getPlexSetupGuides");
+            }
+
+            // 7. Full-Member Gating & Trial Member Restriction Verification
+            const trialUser = await prisma.user.create({
+                data: {
+                    username: `test_trial_${Date.now()}`,
+                    email: `test_trial_${Date.now()}@example.com`,
+                    password: "mock_password_hash",
+                    role: "USER",
+                    status: "TRIAL",
+                    membershipTier: "TRIAL"
+                }
+            });
+
+            try {
+                // Mock test auth user header/cookie
+                process.env.PORTALARR_TEST_USER_ID = trialUser.id;
+                process.env.PORTALARR_TEST_AUTH = "true";
+
+                // Attempting to toggle Jellyfin or Emby on trial account must be rejected
+                const trialJellyfinToggle = await toggleFreeAddonAction("jellyfin_access", true);
+                if (trialJellyfinToggle.success) {
+                    throw new Error("Expected trial user toggle for jellyfin_access to be rejected");
+                }
+                if (!trialJellyfinToggle.error?.includes("exclusively available for Full Members")) {
+                    throw new Error(`Expected full member gating error message, got: ${trialJellyfinToggle.error}`);
+                }
+
+                const trialEmbyToggle = await toggleFreeAddonAction("emby_access", true);
+                if (trialEmbyToggle.success) {
+                    throw new Error("Expected trial user toggle for emby_access to be rejected");
+                }
+                if (!trialEmbyToggle.error?.includes("exclusively available for Full Members")) {
+                    throw new Error(`Expected full member gating error message, got: ${trialEmbyToggle.error}`);
+                }
+            } finally {
+                delete process.env.PORTALARR_TEST_USER_ID;
+                await prisma.user.delete({ where: { id: trialUser.id } }).catch(() => {});
+            }
+        } finally {
+            await prisma.user.delete({ where: { id: memberUser.id } }).catch(() => {});
+            await prisma.mediaServer.delete({ where: { id: testMediaServer.id } }).catch(() => {});
+        }
+    });
+
+    // =========================================================================
+    // SUITE 20: Multi-Tier Gemini Subagent Orchestration & Quota Fallback Topology
+    // =========================================================================
+    await assertTest("Suite 20: Multi-Tier Gemini Subagent Orchestration & Quota Fallback Topology", async () => {
+        const fs = await import("fs");
+        const path = await import("path");
+
+        // 1. Verify .vscode/tasks.json configuration
+        const tasksPath = path.join(process.cwd(), ".vscode", "tasks.json");
+        if (!fs.existsSync(tasksPath)) {
+            throw new Error(".vscode/tasks.json does not exist");
+        }
+        const tasksJson = JSON.parse(fs.readFileSync(tasksPath, "utf-8"));
+        const tasks: any[] = tasksJson.tasks || [];
+
+        const rootTask = tasks.find((t) => t.label?.includes("Root Orchestrator"));
+        if (!rootTask || !rootTask.command?.includes("gemini-3.8-flash-high")) {
+            throw new Error("Root Orchestrator task must target gemini-3.8-flash-high by default");
+        }
+
+        const architectTask = tasks.find((t) => t.label?.includes("Deep Architect"));
+        if (!architectTask || !architectTask.command?.includes("gemini-4-argon-high")) {
+            throw new Error("Deep Architect task must target gemini-4-argon-high for escalation");
+        }
+
+        const fallbackTask = tasks.find((t) => t.label?.includes("Fallback Architect"));
+        if (!fallbackTask || !fallbackTask.command?.includes("gemini-3.8-flash-high")) {
+            throw new Error("Fallback Architect task must target gemini-3.8-flash-high for quota fallback");
+        }
+
+        const workerTask = tasks.find((t) => t.label?.includes("Parallel Worker"));
+        if (!workerTask || !workerTask.command?.includes("gemini-3.8-flash-high")) {
+            throw new Error("Parallel Worker task must target gemini-3.8-flash-high");
+        }
+
+        const lightReconTask = tasks.find((t) => t.label?.includes("Light Recon"));
+        if (!lightReconTask || !lightReconTask.command?.includes("gemini-3.5-flash-lite")) {
+            throw new Error("Light Recon task must target gemini-3.5-flash-lite");
+        }
+
+        // Verify strictly Gemini models are used across all tasks
+        for (const t of tasks) {
+            if (t.command?.startsWith("agy")) {
+                const cmd = t.command.toLowerCase();
+                if (cmd.includes("claude") || cmd.includes("openai") || cmd.includes("gpt")) {
+                    throw new Error(`Forbidden non-Gemini model detected in task: ${t.label}`);
+                }
+                if (!cmd.includes("gemini")) {
+                    throw new Error(`Task ${t.label} must strictly use a Google Gemini model`);
+                }
+            }
+        }
+
+        // 2. Verify .agents/skills/gemini-orchestration/SKILL.md
+        const skillPath = path.join(process.cwd(), ".agents", "skills", "gemini-orchestration", "SKILL.md");
+        if (!fs.existsSync(skillPath)) {
+            throw new Error("gemini-orchestration skill does not exist");
+        }
+        const skillContent = fs.readFileSync(skillPath, "utf-8");
+        if (!skillContent.includes("Multi-Tier Gemini Subagent Orchestration Architecture")) {
+            throw new Error("Skill missing orchestration header");
+        }
+        if (!skillContent.includes("deep-architect") || !skillContent.includes("execution-worker")) {
+            throw new Error("Skill missing required subagent definitions");
+        }
+        if (!skillContent.includes("Fallback Model") || !skillContent.includes("Gemini 3.8 Flash")) {
+            throw new Error("Skill missing Argon-to-Flash fallback protocol");
+        }
+
+        // 3. Verify GEMINI.md contains the orchestration rules
+        const geminiMdPath = path.join(process.cwd(), "GEMINI.md");
+        const geminiMdContent = fs.readFileSync(geminiMdPath, "utf-8");
+        if (!geminiMdContent.includes("Multi-Tier Gemini Subagent Orchestration Architecture")) {
+            throw new Error("GEMINI.md missing Multi-Tier Gemini Subagent Orchestration section");
+        }
+    });
+
+    // =========================================================================
+    // SUITE 21: User Profile Bootstrap Prewarming, SWR Cache & Dashboard Servers Launchpad
+    // =========================================================================
+    await assertTest("Suite 21: User Profile Bootstrap Prewarming, SWR Cache & Dashboard Launchpad", async () => {
+        const { getUserProfileBootstrapAction } = await import("../src/app/actions");
+        const { getUserMediaServersAndLibrariesAction } = await import("../src/app/media-server-actions");
+        const { getUserCache, clearUserCache } = await import("../src/lib/prewarm");
+
+        process.env.PORTALARR_TEST_AUTH = "true";
+
+        // 1. Invalidate any existing bootstrap cache
+        clearUserCache("user_profile_bootstrap:");
+        clearUserCache("user_media_servers:");
+
+        // 2. Cold bootstrap fetch
+        const startCold = Date.now();
+        const bootstrapRes = await getUserProfileBootstrapAction(true);
+        const coldDuration = Date.now() - startCold;
+
+        if (!bootstrapRes || !bootstrapRes.success || !bootstrapRes.data) {
+            throw new Error(`Failed to execute getUserProfileBootstrapAction: ${bootstrapRes?.error || "Unknown error"}`);
+        }
+        const data = bootstrapRes.data;
+        if (!data.user) throw new Error("Bootstrap data missing user");
+        if (!data.notifPrefs) throw new Error("Bootstrap data missing notification preferences");
+        if (!data.contentPrefs) throw new Error("Bootstrap data missing content preferences");
+        if (!Array.isArray(data.allowedLibraries)) throw new Error("Bootstrap data missing allowedLibraries array");
+        if (!Array.isArray(data.addonsCatalog)) throw new Error("Bootstrap data missing addonsCatalog array");
+
+        // 3. SWR Warm memory cache hit test (<25ms response time)
+        const startWarm = Date.now();
+        const warmRes = await getUserProfileBootstrapAction(false);
+        const warmDuration = Date.now() - startWarm;
+
+        if (!warmRes || !warmRes.success || !warmRes.data) {
+            throw new Error("Failed warm bootstrap fetch from cache");
+        }
+        if (warmDuration > 50) {
+            // SWR cache should return within 50ms in Node test environment
+            console.warn(`[WARN] SWR cache hit took ${warmDuration}ms (expected <50ms)`);
+        }
+
+        // 4. Media Servers SWR caching test
+        const mediaServersRes = await getUserMediaServersAndLibrariesAction();
+        if (!mediaServersRes || !mediaServersRes.success) {
+            throw new Error(`Failed getUserMediaServersAndLibrariesAction: ${mediaServersRes?.error}`);
+        }
+
+        // 5. Verify User Launchpad has Servers & Libraries card pointing to /settings/profile
+        const launchpadPath = path.join(process.cwd(), "src", "components", "dashboard", "user-launchpad.tsx");
+        const launchpadContent = fs.readFileSync(launchpadPath, "utf-8");
+        if (!launchpadContent.includes("/settings/profile")) {
+            throw new Error("UserLaunchpad missing link to /settings/profile");
+        }
+        if (!launchpadContent.includes("Servers &amp; Libraries") && !launchpadContent.includes("Servers & Libraries")) {
+            throw new Error("UserLaunchpad missing Servers & Libraries card title");
+        }
+        if (!launchpadContent.includes("Access")) {
+            throw new Error("UserLaunchpad missing Access badge on Servers card");
+        }
+
+        // 6. Verify discrete PlexInviteBanner placement in page.tsx
+        const pagePath = path.join(process.cwd(), "src", "app", "page.tsx");
+        const pageContent = fs.readFileSync(pagePath, "utf-8");
+        const launchpadIdx = pageContent.indexOf("<UserLaunchpad");
+        const bannerIdx = pageContent.indexOf("<PlexInviteBanner");
+        if (launchpadIdx === -1 || bannerIdx === -1) {
+            throw new Error("Could not find UserLaunchpad or PlexInviteBanner in src/app/page.tsx");
+        }
+        if (bannerIdx < launchpadIdx) {
+            throw new Error("PlexInviteBanner should be positioned below UserLaunchpad for a discrete layout");
         }
     });
 

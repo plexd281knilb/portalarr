@@ -5,11 +5,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { BookOpen, Tv, Tv2, Flame, Monitor, Smartphone, Globe, CheckCircle2, Sparkles, AlertCircle, ExternalLink } from "lucide-react";
+import { BookOpen, Tv, Tv2, Flame, Monitor, Smartphone, Globe, CheckCircle2, Sparkles, AlertCircle, ExternalLink, Server } from "lucide-react";
 import { getPlexSetupGuides } from "@/app/actions";
 import Link from "next/link";
 
-export default function PlexSetupGuides() {
+interface PlexSetupGuidesProps {
+    trigger?: React.ReactNode;
+}
+
+export default function PlexSetupGuides({ trigger }: PlexSetupGuidesProps = {}) {
     const [isOpen, setIsOpen] = useState(false);
     const [guides, setGuides] = useState<any[]>([]);
     const [activeTab, setActiveTab] = useState<string>("appletv");
@@ -34,6 +38,8 @@ export default function PlexSetupGuides() {
             case "googletv": return <Smartphone className="h-4 w-4 text-emerald-400" />;
             case "mobile": return <Smartphone className="h-4 w-4 text-pink-400" />;
             case "web": return <Globe className="h-4 w-4 text-amber-400" />;
+            case "jellyfin": return <Server className="h-4 w-4 text-purple-400" />;
+            case "emby": return <Server className="h-4 w-4 text-emerald-400" />;
             default: return <Tv className="h-4 w-4 text-primary" />;
         }
     };
@@ -41,14 +47,16 @@ export default function PlexSetupGuides() {
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
-                <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="h-8 text-xs font-semibold gap-1.5 border-primary/30 hover:border-primary hover:bg-primary/10 transition-all active:scale-95 shadow-sm"
-                >
-                    <BookOpen className="h-3.5 w-3.5 text-primary" />
-                    Setup Guides
-                </Button>
+                {trigger || (
+                    <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="h-8 text-xs font-semibold gap-1.5 border-primary/30 hover:border-primary hover:bg-primary/10 transition-all active:scale-95 shadow-sm"
+                    >
+                        <BookOpen className="h-3.5 w-3.5 text-primary" />
+                        Setup Guides
+                    </Button>
+                )}
             </DialogTrigger>
             <DialogContent className="w-[95vw] sm:max-w-3xl max-h-[85vh] flex flex-col bg-[#121218]/95 border-border/60 backdrop-blur-xl shadow-2xl p-0 overflow-hidden">
                 <DialogHeader className="p-6 pb-4 border-b border-border/40">

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { UnsavedChangesPrompt } from "@/components/ui/unsaved-changes-prompt";
 import { getCurrentUser, changeUserPassword } from "@/app/auth-actions";
 import { 
+    getUserProfileBootstrapAction,
     getUserReferralInfo, 
     getPublicJoinConfig, 
     updateCurrentUserKindleEmail,
@@ -46,13 +47,15 @@ import {
     MailCheck, Zap, BookOpen, Gift, Copy, Check, Timer, DollarSign, Users, Sparkles, ExternalLink,
     CreditCard, Calendar, AlertCircle, Trash2, RefreshCw, Bell, Shield, Crown, Tv, Film,
     Flame, MessageSquare, Send, CheckCheck, Sliders, Volume2, Lock, Baby, Monitor, FolderCheck,
-    CheckSquare, Square, Plus, Edit2, AlertTriangle, Music, Eye, EyeOff, Gamepad2, Link as LinkIcon, Headphones
+    CheckSquare, Square, Plus, Edit2, AlertTriangle, Music, Eye, EyeOff, Gamepad2, Link as LinkIcon, Headphones, Server
 } from "lucide-react";
+import { MediaServerSetupGuideModal } from "@/components/profile/media-server-setup-guide-modal";
 import ServerSpeedTest from "@/components/server-speed-test";
 import FeatureGuideModal from "@/components/feature-guide-modal";
 import PlexSetupGuides from "@/components/plex-setup-guides";
 import SuperUserCard from "@/components/super-user-card";
 import { PaymentMethodsGrid } from "@/components/payment-methods-grid";
+import { UserMediaServersManager } from "@/components/profile/user-media-servers-manager";
 import { format, differenceInDays } from "date-fns";
 
 function safeFormatDate(dateVal: any, formatPattern: string, fallback = ""): string {
@@ -164,6 +167,8 @@ export default function UserProfilePage() {
     const [addonsCatalog, setAddonsCatalog] = useState<any[]>([]);
     const [userEnabledAddons, setUserEnabledAddons] = useState<string[]>([]);
     const [togglingAddonId, setTogglingAddonId] = useState<string | null>(null);
+    const [addonGuideModalOpen, setAddonGuideModalOpen] = useState(false);
+    const [addonGuideType, setAddonGuideType] = useState<"JELLYFIN" | "EMBY">("JELLYFIN");
     const [addonMsg, setAddonMsg] = useState("");
     const [addonErr, setAddonErr] = useState("");
 
@@ -438,7 +443,19 @@ export default function UserProfilePage() {
         async function fetchProfile() {
             setLoading(true);
             try {
-                const u = await getCurrentUser();
+                const bootstrap = await getUserProfileBootstrapAction();
+                if (!bootstrap || !bootstrap.success || !bootstrap.data) {
+                    const u = await getCurrentUser();
+                    if (!u) {
+                        window.location.href = "/login";
+                        return;
+                    }
+                    setUser(u);
+                    return;
+                }
+
+                const d = bootstrap.data;
+                const u = d.user;
                 if (!u) {
                     window.location.href = "/login";
                     return;
@@ -456,123 +473,104 @@ export default function UserProfilePage() {
                         setKindleEmail(u.kindleEmail);
                     }
                 }
-                const ref = await getUserReferralInfo();
-                if (ref?.success) {
-                    setReferralInfo(ref);
+                if (d.referralInfo) {
+                    setReferralInfo(d.referralInfo);
                 }
-                const pConfig = await getPublicJoinConfig();
-                if (pConfig?.success && pConfig.config) {
-                    setPaymentConfig(pConfig.config);
-                    if (pConfig.config.discordInviteUrl) {
-                        setDiscordInviteUrl(pConfig.config.discordInviteUrl);
+                if (d.paymentConfig) {
+                    setPaymentConfig(d.paymentConfig);
+                    if (d.paymentConfig.discordInviteUrl) {
+                        setDiscordInviteUrl(d.paymentConfig.discordInviteUrl);
                     }
                 }
-                getDiscordServerInviteUrlAction().then(res => {
-                    if (res.success && res.inviteUrl) setDiscordInviteUrl(res.inviteUrl);
-                }).catch(() => {});
+                if (d.discordInviteUrl) {
+                    setDiscordInviteUrl(d.discordInviteUrl);
+                }
 
                 // Load Notification Preferences
-                const notifRes = await getUserNotificationPreferencesAction();
-                if (notifRes?.success && notifRes.preferences) {
+                if (d.notifPrefs) {
                     setNotifPrefs({
-                        emailMediaReady: Boolean(notifRes.preferences.emailMediaReady),
-                        emailNewContent: Boolean(notifRes.preferences.emailNewContent),
-                        emailAnnouncements: Boolean(notifRes.preferences.emailAnnouncements),
-                        emailSupportTickets: Boolean(notifRes.preferences.emailSupportTickets),
-                        emailSubscriptionReminders: Boolean(notifRes.preferences.emailSubscriptionReminders),
-                        emailReferralRewards: Boolean(notifRes.preferences.emailReferralRewards),
-                        discordMediaReady: Boolean(notifRes.preferences.discordMediaReady),
-                        discordAnnouncements: Boolean(notifRes.preferences.discordAnnouncements),
-                        discordWebhookUrl: notifRes.preferences.discordWebhookUrl || ""
+                        emailMediaReady: Boolean(d.notifPrefs.emailMediaReady),
+                        emailNewContent: Boolean(d.notifPrefs.emailNewContent),
+                        emailAnnouncements: Boolean(d.notifPrefs.emailAnnouncements),
+                        emailSupportTickets: Boolean(d.notifPrefs.emailSupportTickets ?? true),
+                        emailSubscriptionReminders: Boolean(d.notifPrefs.emailSubscriptionReminders ?? true),
+                        emailReferralRewards: Boolean(d.notifPrefs.emailReferralRewards ?? true),
+                        discordMediaReady: Boolean(d.notifPrefs.discordMediaReady),
+                        discordAnnouncements: Boolean(d.notifPrefs.discordAnnouncements),
+                        discordWebhookUrl: d.notifPrefs.discordWebhookUrl || ""
                     });
                 }
 
                 // Load Content Preferences
-                const contentRes = await getUserContentPreferencesAction();
-                if (contentRes?.success && contentRes.preferences) {
+                if (d.contentPrefs) {
                     setContentPrefs({
-                        maxContentRating: contentRes.preferences.maxContentRating || "ALL",
-                        hideLeavingSoon: Boolean(contentRes.preferences.hideLeavingSoon),
-                        hideHorror: Boolean(contentRes.preferences.hideHorror),
-                        hideNsfw: Boolean(contentRes.preferences.hideNsfw),
-                        hideGore: Boolean(contentRes.preferences.hideGore),
-                        excludedGenresList: contentRes.preferences.excludedGenresList || [],
-                        excludedTagsList: contentRes.preferences.excludedTagsList || []
+                        maxContentRating: d.contentPrefs.maxContentRating || "ALL",
+                        hideLeavingSoon: Boolean(d.contentPrefs.hideLeavingSoon),
+                        hideHorror: Boolean(d.contentPrefs.hideHorror),
+                        hideNsfw: Boolean(d.contentPrefs.hideNsfw),
+                        hideGore: Boolean(d.contentPrefs.hideGore),
+                        excludedGenresList: d.contentPrefs.excludedGenresList || [],
+                        excludedTagsList: d.contentPrefs.excludedTagsList || []
                     });
                 }
 
                 // Load Shared Plex Libraries
-                const libRes = await getUserAllowedPlexLibrariesAction();
-                if (libRes?.success) {
-                    setAllowedLibraries(libRes.allowedKeys || []);
-                    setSelectedLibraries(libRes.selectedKeys || []);
-                    setServerLibraries(libRes.servers || []);
-                }
+                setAllowedLibraries(d.allowedLibraries || []);
+                setSelectedLibraries(d.selectedLibraries || []);
+                setServerLibraries(d.serverLibraries || []);
 
                 // Load Household Sub-Accounts
-                const subRes = await getUserSubAccountsAction();
-                if (subRes?.success) {
-                    setSubAccounts(subRes.subAccounts || []);
-                    if (subRes.limits) setSubLimits(subRes.limits);
-                }
+                setSubAccounts(d.subAccounts || []);
+                if (d.subLimits) setSubLimits(d.subLimits);
 
                 // Load Add-ons Catalog
-                const addRes = await getAvailableAddonsAction();
-                if (addRes?.success) {
-                    setAddonsCatalog(addRes.catalog || []);
-                    setUserEnabledAddons(addRes.userEnabledAddons || []);
-                }
+                setAddonsCatalog(d.addonsCatalog || []);
+                setUserEnabledAddons(d.userEnabledAddons || []);
 
                 // Load Kids Library Access Status
-                const kidsLibRes = await getUserKidsLibraryAccessAction();
-                if (kidsLibRes?.success) {
-                    setHasKidsAccess(Boolean(kidsLibRes.hasKidsAccess));
-                    setKidsLibraries(kidsLibRes.kidsLibraries || []);
-                }
+                setHasKidsAccess(Boolean(d.hasKidsAccess));
+                setKidsLibraries(d.kidsLibraries || []);
 
                 // Load Audiobooks Library Access Status
-                const audioLibRes = await getUserAudiobooksLibraryAccessAction();
-                if (audioLibRes?.success) {
-                    setHasAudiobooksAccess(Boolean(audioLibRes.hasAudiobooksAccess));
-                    setAudiobookLibraries(audioLibRes.audiobookLibraries || []);
-                }
+                setHasAudiobooksAccess(Boolean(d.hasAudiobooksAccess));
+                setAudiobookLibraries(d.audiobookLibraries || []);
 
                 initialProfileRef.current = {
                     kindleEmail: u?.kindleEmail === "DIRECT_DOWNLOAD" ? "" : (u?.kindleEmail || ""),
                     bypassKindle: u?.kindleEmail === "DIRECT_DOWNLOAD",
                     notifPrefs: {
-                        emailMediaReady: Boolean(notifRes?.preferences?.emailMediaReady),
-                        emailNewContent: Boolean(notifRes?.preferences?.emailNewContent),
-                        emailAnnouncements: Boolean(notifRes?.preferences?.emailAnnouncements),
-                        emailSupportTickets: Boolean(notifRes?.preferences?.emailSupportTickets ?? true),
-                        emailSubscriptionReminders: Boolean(notifRes?.preferences?.emailSubscriptionReminders ?? true),
-                        emailReferralRewards: Boolean(notifRes?.preferences?.emailReferralRewards ?? true),
-                        discordMediaReady: Boolean(notifRes?.preferences?.discordMediaReady),
-                        discordAnnouncements: Boolean(notifRes?.preferences?.discordAnnouncements),
-                        discordWebhookUrl: notifRes?.preferences?.discordWebhookUrl || ""
+                        emailMediaReady: Boolean(d.notifPrefs?.emailMediaReady),
+                        emailNewContent: Boolean(d.notifPrefs?.emailNewContent),
+                        emailAnnouncements: Boolean(d.notifPrefs?.emailAnnouncements),
+                        emailSupportTickets: Boolean(d.notifPrefs?.emailSupportTickets ?? true),
+                        emailSubscriptionReminders: Boolean(d.notifPrefs?.emailSubscriptionReminders ?? true),
+                        emailReferralRewards: Boolean(d.notifPrefs?.emailReferralRewards ?? true),
+                        discordMediaReady: Boolean(d.notifPrefs?.discordMediaReady),
+                        discordAnnouncements: Boolean(d.notifPrefs?.discordAnnouncements),
+                        discordWebhookUrl: d.notifPrefs?.discordWebhookUrl || ""
                     },
                     contentPrefs: {
-                        maxContentRating: contentRes?.preferences?.maxContentRating || "ALL",
-                        hideLeavingSoon: Boolean(contentRes?.preferences?.hideLeavingSoon),
-                        hideHorror: Boolean(contentRes?.preferences?.hideHorror),
-                        hideNsfw: Boolean(contentRes?.preferences?.hideNsfw),
-                        hideGore: Boolean(contentRes?.preferences?.hideGore),
-                        excludedGenresList: contentRes?.preferences?.excludedGenresList || [],
-                        excludedTagsList: contentRes?.preferences?.excludedTagsList || []
+                        maxContentRating: d.contentPrefs?.maxContentRating || "ALL",
+                        hideLeavingSoon: Boolean(d.contentPrefs?.hideLeavingSoon),
+                        hideHorror: Boolean(d.contentPrefs?.hideHorror),
+                        hideNsfw: Boolean(d.contentPrefs?.hideNsfw),
+                        hideGore: Boolean(d.contentPrefs?.hideGore),
+                        excludedGenresList: d.contentPrefs?.excludedGenresList || [],
+                        excludedTagsList: d.contentPrefs?.excludedTagsList || []
                     },
-                    selectedLibraries: libRes?.selectedKeys || []
+                    selectedLibraries: d.selectedLibraries || []
                 };
 
                 initialSafetyPrefsRef.current = {
                     targetUserId: u?.id || "",
                     prefs: {
-                        maxContentRating: contentRes?.preferences?.maxContentRating || "ALL",
-                        hideLeavingSoon: Boolean(contentRes?.preferences?.hideLeavingSoon),
-                        hideHorror: Boolean(contentRes?.preferences?.hideHorror),
-                        hideNsfw: Boolean(contentRes?.preferences?.hideNsfw),
-                        hideGore: Boolean(contentRes?.preferences?.hideGore),
-                        excludedGenresList: contentRes?.preferences?.excludedGenresList || [],
-                        excludedTagsList: contentRes?.preferences?.excludedTagsList || []
+                        maxContentRating: d.contentPrefs?.maxContentRating || "ALL",
+                        hideLeavingSoon: Boolean(d.contentPrefs?.hideLeavingSoon),
+                        hideHorror: Boolean(d.contentPrefs?.hideHorror),
+                        hideNsfw: Boolean(d.contentPrefs?.hideNsfw),
+                        hideGore: Boolean(d.contentPrefs?.hideGore),
+                        excludedGenresList: d.contentPrefs?.excludedGenresList || [],
+                        excludedTagsList: d.contentPrefs?.excludedTagsList || []
                     }
                 };
             } catch (e) {
@@ -745,6 +743,10 @@ export default function UserProfilePage() {
             if (res.success) {
                 setUserEnabledAddons(res.enabledAddons || []);
                 setAddonMsg(res.message || "Add-on preference updated!");
+                if (enabled && (addonId === "jellyfin_access" || addonId === "emby_access")) {
+                    setAddonGuideType(addonId === "jellyfin_access" ? "JELLYFIN" : "EMBY");
+                    setAddonGuideModalOpen(true);
+                }
                 if (addonId === "audiobooks") {
                     const [audioLibRes, libRes] = await Promise.all([
                         getUserAudiobooksLibraryAccessAction(),
@@ -1618,163 +1620,13 @@ export default function UserProfilePage() {
                 </CardContent>
             </Card>
 
-            {/* MY SHARED PLEX LIBRARIES CARD */}
-            <Card id="libraries" className={`transition-all duration-300 bg-[#121218]/80 backdrop-blur-md relative overflow-hidden scroll-mt-6 ${isLibrariesDirty ? "border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]" : "border-cyan-500/30 shadow-sm"}`}>
-                <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/5 rounded-full blur-3xl -z-10 pointer-events-none" />
-                <CardHeader className="pb-3">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                        <div>
-                            <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
-                                <FolderCheck className="h-5 w-5 text-cyan-400" /> My Shared Plex Libraries
-                                {isLibrariesDirty && (
-                                    <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-400 border-amber-500/30 font-medium ml-2 animate-in fade-in">
-                                        ● Unsaved Changes
-                                    </Badge>
-                                )}
-                            </CardTitle>
-                            <CardDescription className="text-xs">
-                                Choose which libraries from your allowed membership access appear on your Plex home screen and apps.
-                            </CardDescription>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="bg-cyan-500/20 text-cyan-300 border-cyan-500/40 text-xs w-fit">
-                                {serverLibraries.length > 0 
-                                    ? serverLibraries.reduce((total, srv) => total + (srv.sections || []).filter((sec: any) => isSectionSelected(sec, srv)).length, 0)
-                                    : selectedLibraries.length} Libraries Selected
-                            </Badge>
-                        </div>
-                    </div>
-                </CardHeader>
-                <CardContent>
-                    <form onSubmit={handleSaveLibraries} className="space-y-4">
-                        {libMsg && (
-                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
-                                <CheckCircle2 className="h-4 w-4 shrink-0" />
-                                <span>{libMsg}</span>
-                            </div>
-                        )}
-                        {libErr && (
-                            <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
-                                <XCircle className="h-4 w-4 shrink-0" />
-                                <span>{libErr}</span>
-                            </div>
-                        )}
-
-                        {serverLibraries.length === 0 ? (
-                            <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] text-center text-xs text-muted-foreground">
-                                No Plex server libraries found. Your shared libraries will appear here once configured by the administrator.
-                            </div>
-                        ) : (
-                            <div className="space-y-4">
-                                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                                    <span className="text-xs text-muted-foreground">
-                                        Toggle individual libraries on or off to tailor your Plex home screen:
-                                    </span>
-                                    <div className="flex items-center gap-2">
-                                        <Button 
-                                            type="button" 
-                                            variant="ghost" 
-                                            size="sm" 
-                                            onClick={handleSelectAllLibraries}
-                                            className="h-7 px-2.5 text-[11px] text-cyan-300 hover:text-cyan-200 hover:bg-cyan-500/10 cursor-pointer"
-                                        >
-                                            <CheckSquare className="h-3 w-3 mr-1" /> Select All
-                                        </Button>
-                                        <Button 
-                                            type="button" 
-                                            variant="ghost" 
-                                            size="sm" 
-                                            onClick={handleDeselectAllLibraries}
-                                            className="h-7 px-2.5 text-[11px] text-muted-foreground hover:text-foreground cursor-pointer"
-                                        >
-                                            <Square className="h-3 w-3 mr-1" /> Deselect All
-                                        </Button>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-3">
-                                    {serverLibraries.map((server) => {
-                                        if (isTrial) {
-                                            const sName = (server.serverName || "").toLowerCase();
-                                            if (sName.includes("kid") || sName.includes("backup")) {
-                                                return null;
-                                            }
-                                        }
-                                        let allowedSections = (server.sections || []).filter((sec: any) => isSectionAllowed(sec, server));
-                                        if (allowedSections.length === 0 && (user?.role === "ADMIN" || (!isTrial && allowedLibraries.length === 0))) {
-                                            allowedSections = server.sections || [];
-                                        }
-                                        if (allowedSections.length === 0) return null;
-
-                                        return (
-                                            <div key={server.serverId} className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-3">
-                                                <div className="flex items-center justify-between border-b border-border/30 pb-2">
-                                                    <span className="font-bold text-xs text-foreground uppercase tracking-wider flex items-center gap-1.5">
-                                                        <Tv className="h-3.5 w-3.5 text-primary" /> {server.serverName || "Plex Server"}
-                                                    </span>
-                                                    <Badge variant="outline" className="text-[10px] text-muted-foreground">
-                                                        {allowedSections.length} Available
-                                                    </Badge>
-                                                </div>
-
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
-                                                    {allowedSections.map((sec: any) => {
-                                                        const isSelected = isSectionSelected(sec, server);
-                                                        return (
-                                                            <button
-                                                                key={sec.uniqueKey || sec.id || sec.key}
-                                                                type="button"
-                                                                onClick={() => handleToggleLibrary(sec, server)}
-                                                                className={`p-2.5 rounded-lg border text-left flex items-center justify-between gap-2 transition-all cursor-pointer ${
-                                                                    isSelected
-                                                                        ? "bg-cyan-500/10 border-cyan-500/40 text-cyan-200 shadow-xs"
-                                                                        : "bg-background/50 border-border/40 text-muted-foreground hover:border-border hover:text-foreground"
-                                                                }`}
-                                                            >
-                                                                <div className="flex items-center gap-2 min-w-0">
-                                                                    {sec.type === "movie" ? (
-                                                                        <Film className={`h-4 w-4 shrink-0 ${isSelected ? "text-cyan-400" : "text-muted-foreground"}`} />
-                                                                    ) : sec.type === "show" ? (
-                                                                        <Tv className={`h-4 w-4 shrink-0 ${isSelected ? "text-purple-400" : "text-muted-foreground"}`} />
-                                                                    ) : sec.type === "artist" || sec.type === "music" ? (
-                                                                        <Music className={`h-4 w-4 shrink-0 ${isSelected ? "text-emerald-400" : "text-muted-foreground"}`} />
-                                                                    ) : (
-                                                                        <FolderCheck className={`h-4 w-4 shrink-0 ${isSelected ? "text-amber-400" : "text-muted-foreground"}`} />
-                                                                    )}
-                                                                    <span className="text-xs font-semibold truncate">{sec.title}</span>
-                                                                </div>
-                                                                <div className={`h-4 w-4 rounded shrink-0 flex items-center justify-center border transition-all ${
-                                                                    isSelected ? "bg-cyan-500 border-cyan-400 text-slate-950" : "border-muted-foreground/40 bg-transparent"
-                                                                }`}>
-                                                                    {isSelected && <Check className="h-3 w-3 stroke-[3]" />}
-                                                                </div>
-                                                            </button>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        )}
-
-                        <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-border/30">
-                            <p className="text-[11px] text-muted-foreground italic">
-                                💡 Library changes push directly to your Plex account immediately upon saving.
-                            </p>
-                            <Button
-                                type="submit"
-                                disabled={savingLibraries}
-                                className="w-full sm:w-auto font-bold text-xs h-9 bg-cyan-600 hover:bg-cyan-500 text-white gap-2 transition-all hover:ring-2 hover:ring-cyan-400/40 active:scale-95 cursor-pointer"
-                            >
-                                {savingLibraries ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCheck className="h-4 w-4" />}
-                                Save Library Preferences
-                            </Button>
-                        </div>
-                    </form>
-                </CardContent>
-            </Card>
+            {/* MULTI-PLATFORM MEDIA SERVERS & LIBRARIES (PLEX • JELLYFIN • EMBY) */}
+            <UserMediaServersManager 
+                userRole={user?.role} 
+                userStatus={user?.status} 
+                membershipTier={user?.membershipTier} 
+                username={user?.username} 
+            />
 
             {/* HOUSEHOLD SUB-ACCOUNTS CARD */}
             <Card id="subaccounts" className="border-purple-500/30 bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden scroll-mt-6">
@@ -2051,7 +1903,9 @@ export default function UserProfilePage() {
                                         <div className="space-y-2">
                                             <div className="flex items-center justify-between gap-2">
                                                 <div className="flex items-center gap-2 min-w-0">
-                                                    {addon.icon === "tv" ? (
+                                                    {addon.icon === "server" ? (
+                                                        <Server className="h-4 w-4 text-purple-400 shrink-0" />
+                                                    ) : addon.icon === "tv" ? (
                                                         <Tv className="h-4 w-4 text-cyan-400 shrink-0" />
                                                     ) : addon.icon === "music" ? (
                                                         <Music className="h-4 w-4 text-emerald-400 shrink-0" />
@@ -2086,7 +1940,8 @@ export default function UserProfilePage() {
                                         </div>
 
                                         <div className="pt-2 flex items-center justify-between border-t border-border/30">
-                                            <span className="text-[11px] font-medium text-muted-foreground">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[11px] font-medium text-muted-foreground">
                                                 {isEnabled ? (
                                                     <span className="text-emerald-400 flex items-center gap-1 font-semibold">
                                                         <Check className="h-3 w-3" /> Active
@@ -2095,6 +1950,21 @@ export default function UserProfilePage() {
                                                     <span>Inactive</span>
                                                 )}
                                             </span>
+                                            {(addon.id === "jellyfin_access" || addon.id === "emby_access") && (
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => {
+                                                        setAddonGuideType(addon.id === "jellyfin_access" ? "JELLYFIN" : "EMBY");
+                                                        setAddonGuideModalOpen(true);
+                                                    }}
+                                                    className="h-6 text-[10px] px-2 font-semibold gap-1 border-purple-500/40 text-purple-300 hover:bg-purple-500/10 cursor-pointer"
+                                                >
+                                                    📖 Setup Guide
+                                                </Button>
+                                            )}
+                                            </div>
                                             {isTrial ? (
                                                 <Button
                                                     type="button"

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 import { UnsavedChangesPrompt, CustomPendingNavigation } from "@/components/ui/unsaved-changes-prompt";
 import { 
@@ -60,7 +61,7 @@ import {
     Clock, Play, RefreshCw, Loader2, KeyRound, Search, CheckCheck, Send, Edit2,
     Layers, Timer, Gift, Trophy, DollarSign, CreditCard, Sparkles, AlertTriangle,
     FolderCheck, ShieldAlert, Check, Users, ArrowUpRight, Copy, Calculator, Calendar, Monitor, Server, PauseCircle, SlidersHorizontal,
-    Eye, Music, BookOpen, Tv, Baby, X, CalendarClock, Zap, BellRing, Gamepad2, Filter
+    Eye, Music, BookOpen, Tv, Baby, X, CalendarClock, Zap, BellRing, Gamepad2, Filter, Headphones
 } from "lucide-react";
 import { DiscordMemberManagerModal } from "@/components/discord-member-manager-modal";
 import {
@@ -3784,7 +3785,9 @@ export default function AccessSettingsPage() {
                                                 <Label className="text-xs font-bold text-foreground">Default Shared Plex Libraries for Regular Members & Signups</Label>
                                                 <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-emerald-500/10 text-emerald-300 border-emerald-500/30">Full Member Shelf</Badge>
                                             </div>
-                                            <p className="text-[11px] text-muted-foreground">Select which server libraries are available to regular full members. Members can select from these in their profile.</p>
+                                            <p className="text-[11px] text-muted-foreground">
+                                                Select which default Plex libraries are shared automatically with regular full members upon signup or approval. To configure Jellyfin, Emby, and overall server library whitelists, visit <Link href="/settings?tab=servers" className="text-purple-400 hover:text-purple-300 underline font-medium">System Settings ➔ Media Servers</Link>.
+                                            </p>
                                         </div>
                                         <Button 
                                             type="button" 
@@ -4130,6 +4133,10 @@ export default function AccessSettingsPage() {
                                                                     <Music className="h-4 w-4 text-emerald-400 shrink-0" />
                                                                 ) : addon.icon === "book" ? (
                                                                     <BookOpen className="h-4 w-4 text-amber-400 shrink-0" />
+                                                                ) : addon.icon === "headphones" ? (
+                                                                    <Headphones className="h-4 w-4 text-purple-400 shrink-0" />
+                                                                ) : addon.icon === "server" ? (
+                                                                    <Server className="h-4 w-4 text-sky-400 shrink-0" />
                                                                 ) : addon.icon === "baby" ? (
                                                                     <Baby className="h-4 w-4 text-purple-400 shrink-0" />
                                                                 ) : addon.icon === "monitor" ? (
