@@ -264,14 +264,9 @@ function SidebarNavContent({ onItemClick }: SidebarNavContentProps) {
       {/* Curation Studios Section */}
       {isAdmin && (
         <div className="pt-1">
-          <div className="border-t border-border/30 pt-3 pb-1.5 px-2.5 flex items-center justify-between text-[10px] font-bold tracking-wider uppercase text-muted-foreground/70 select-none">
-            <div className="flex items-center gap-1.5">
-              <Sparkles className="h-3 w-3 text-purple-400" />
-              <span>Curation Studios</span>
-            </div>
-            <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-purple-500/15 text-purple-300 border border-purple-500/25">
-              4
-            </span>
+          <div className="border-t border-border/30 pt-3 pb-1.5 px-2.5 flex items-center gap-1.5 text-[10px] font-bold tracking-wider uppercase text-muted-foreground/70 select-none">
+            <Sparkles className="h-3 w-3 text-purple-400" />
+            <span>Curation Studios</span>
           </div>
           <div className="space-y-1">
             <NavItem
