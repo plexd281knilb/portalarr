@@ -35,6 +35,29 @@ function simpleHash(str: string): string {
 function filterRoadmapByRole(markdown: string, role?: string): string {
     if (!markdown || !role || role === "ADMIN") return markdown;
 
+    const isSuperUser = role === "SUPER_USER";
+    const isTrial = role === "TRIAL";
+
+    // Technical / Admin-only jargon terms that regular members should never see
+    const technicalJargonTerms = [
+        "admin telemetry",
+        "telemetry gating",
+        "dry architecture",
+        "commit inspection",
+        "schema migration",
+        "cloudflare zero trust",
+        "cloudflare security",
+        "admin edge proxy",
+        "payment scraping",
+        "imap payment",
+        "database fallback",
+        "sqlite lock",
+        "admin only",
+        "patch highlights",
+        "v1.0.1 patch",
+        "backend api"
+    ];
+
     const lines = markdown.split("\n");
     const filtered: string[] = [];
     let skippingSection = false;
@@ -46,7 +69,7 @@ function filterRoadmapByRole(markdown: string, role?: string): string {
         // Check for header boundaries
         if (line.startsWith("#")) {
             skippingSection = false;
-            if (role === "TRIAL") {
+            if (isTrial) {
                 if (
                     trimmed.includes("book") || 
                     trimmed.includes("audiobook") || 
@@ -57,47 +80,59 @@ function filterRoadmapByRole(markdown: string, role?: string): string {
                     trimmed.includes("admin") ||
                     trimmed.includes("payment") ||
                     trimmed.includes("kometa") ||
-                    trimmed.includes("maintainerr")
+                    trimmed.includes("maintainerr") ||
+                    trimmed.includes("jellyfin") ||
+                    trimmed.includes("emby") ||
+                    trimmed.includes("family sub-profile")
                 ) {
                     skippingSection = true;
                     continue;
                 }
-            } else if (role === "USER" || role === "SUPER_USER") {
-                if (
-                    trimmed.includes("admin only") ||
-                    trimmed.includes("payment scraping") ||
-                    trimmed.includes("payment calculation") ||
-                    trimmed.includes("zero trust") ||
-                    trimmed.includes("schema migration")
-                ) {
+            } else if (!isSuperUser) {
+                if (trimmed.includes("radarr") || trimmed.includes("sonarr")) {
                     skippingSection = true;
                     continue;
                 }
+            }
+
+            if (
+                trimmed.includes("admin only") ||
+                trimmed.includes("payment scraping") ||
+                trimmed.includes("schema migration") ||
+                trimmed.includes("zero trust")
+            ) {
+                skippingSection = true;
+                continue;
             }
         }
 
         if (skippingSection) continue;
 
-        // Individual bullet filtering
-        if (role === "TRIAL") {
+        // Skip any developer / admin jargon lines
+        if (technicalJargonTerms.some(term => trimmed.includes(term))) {
+            continue;
+        }
+
+        // Filter out Radarr & Sonarr for standard users & trial accounts
+        if (!isSuperUser && role !== "ADMIN") {
+            if (trimmed.includes("radarr") || trimmed.includes("sonarr")) {
+                continue;
+            }
+        }
+
+        // Filter out trial-ineligible features
+        if (isTrial) {
             if (
                 trimmed.includes("book library") ||
                 trimmed.includes("send-to-kindle") ||
+                trimmed.includes("in-browser reader") ||
                 trimmed.includes("audiobook") ||
-                trimmed.includes("radarr") ||
-                trimmed.includes("sonarr") ||
-                trimmed.includes("payment formula") ||
-                trimmed.includes("imap payment") ||
-                trimmed.includes("cloudflare zero trust")
-            ) {
-                continue;
-            }
-        } else if (role === "USER" || role === "SUPER_USER") {
-            if (
-                trimmed.includes("payment scraping") ||
-                trimmed.includes("imap payment formula") ||
-                trimmed.includes("cloudflare security policy") ||
-                trimmed.includes("admin edge proxy")
+                trimmed.includes("jellyfin") ||
+                trimmed.includes("emby") ||
+                trimmed.includes("multi-platform") ||
+                trimmed.includes("family sub-profile") ||
+                trimmed.includes("curation") ||
+                trimmed.includes("payment formula")
             ) {
                 continue;
             }
@@ -107,7 +142,7 @@ function filterRoadmapByRole(markdown: string, role?: string): string {
     }
 
     const result = filtered.join("\n").trim();
-    return result || "Welcome to DomsHomeLab! Check out the media discovery and streaming features.";
+    return result || "> 🚀 **Welcome to DomsHomeLab!** Check out our latest media discovery and high-performance streaming features.";
 }
 
 export default function WhatsNewModal({ 
