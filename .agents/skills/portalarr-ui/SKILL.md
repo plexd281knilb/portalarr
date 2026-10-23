@@ -164,10 +164,19 @@ See detailed reference: [card-and-poster-patterns.md](./references/card-and-post
 
 ### 3. Forms, Autocomplete & Dirty State Management
 - **Autocomplete Dropdowns**: Always use `onMouseDown` on dropdown suggestion items instead of `onClick` to prevent input `onBlur` from unmounting items before the click event fires.
-- **Unsaved Settings Protection**:
-  - Track dirty states against `initialDataRef` snapshots.
-  - Highlight dirty sections with amber glowing borders (`border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]`) and `● Unsaved Changes` badges.
-  - Render the standard `<UnsavedChangesPrompt />` component for floating docked save bars, `beforeunload` protection, and in-app navigation dialogs.
+- **Universal Unsaved Settings Protection Standard (`<UnsavedChangesPrompt />`)**:
+  - All settings pages, curation studios, and administrative configuration panels enforce strict dirty tracking against baseline `initialDataRef` / `initialSettingsRef` snapshots.
+  - **3-Layer Defense Contract**:
+    1. **Docked Floating Save Bar**: Fixed at `bottom-6 right-6 z-50` with pulsating amber indicator, modified sections summary (`● Unsaved Settings (N)`), Discard button, and primary Save button.
+    2. **In-App Navigation Interception Guard**: Intercepts link clicks (e.g. sidebar navigation, header logo, in-app redirects) using capturing `document.addEventListener("click", handleLinkClick, true)` and displays an interactive modal dialog offering `Stay on Page`, `Discard & Leave`, and `Save & Continue`.
+    3. **Browser Tab Close & Reload Guard**: Listens on `window.beforeunload` whenever `hasUnsavedChanges === true` to prevent accidental tab closing or page refresh.
+  - **Embedded Sub-Panel Dirty Protocol**: Child panels mounted within parent settings hubs (e.g. `SeerrSettingsPanel`, `DiscordSettingsPanel`, `AdminMediaServersPanel`) accept `onDirtyChange?: (isDirty: boolean, dirtySections: string[]) => void`. When mounted in a parent hub like `src/app/settings/page.tsx`, they propagate dirty state upwards to trigger hub pulsating amber dots and master page save bars; when mounted standalone, they automatically render `<UnsavedChangesPrompt />` directly.
+  - **100% Page Coverage**:
+    - **System Settings Hub (`src/app/settings/page.tsx`)**: Dirty tracking for General, Public URL, SMTP, Plex server tokens, Direct SQLite DB snapshot presets/paths, Servarr/Requests (`SeerrSettingsPanel`), Media Server Fleet (`AdminMediaServersPanel`), Discord Bot (`DiscordSettingsPanel`), Curation keys, and Roadmap/Beta text.
+    - **Access Control (`src/app/settings/access/page.tsx`)**: Full `<UnsavedChangesPrompt />` tracking onboarding gates, role permissions, trial quotas, and Discord role mappings.
+    - **User Profile (`src/app/settings/profile/page.tsx` & `/profile`)**: Tracks profile info, passwords, shared Plex libraries, notifications, content safety, and `UserMediaServersManager` server access and library whitelist preferences (`isMediaServersDirty`).
+    - **Curation Studios (`KometaStudio`, `AgregarrStudio`, `PruneStudio`, `TaggingStudio`)**: Standardized on `<UnsavedChangesPrompt />` guaranteeing navigation modal interception and beforeunload guards across all 4 studios.
+    - **Script Editor Modal (`src/components/scripts/script-editor-modal.tsx`)**: Protects script content, interpreters, schedules, and timeouts against accidental outside-click dismissals.
 - **Sensitive Fields**:
   - Mask tokens and passwords by default (`type={showToken ? "text" : "password"}`).
   - Provide an inline toggle button with Lucide `<Eye />` / `<EyeOff />`.

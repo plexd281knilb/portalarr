@@ -112,11 +112,38 @@ export function ScriptEditorModal({
         }
     };
 
+
+    const isDirty = script ? (
+        name !== script.name ||
+        filename !== script.filename ||
+        description !== script.description ||
+        category !== script.category ||
+        interpreter !== script.interpreter ||
+        schedule !== script.schedule ||
+        timeoutSeconds !== (script.timeoutSeconds || 120) ||
+        content !== script.content
+    ) : (
+        name.trim() !== "" ||
+        filename.trim() !== "" ||
+        description.trim() !== "" ||
+        content !== "#!/bin/bash\n# Write custom script here\n\necho \"[$(date '+%Y-%m-%d %H:%M:%S')] Script starting...\"\n"
+    );
+
+    const handleCloseAttempt = () => {
+        if (isDirty) {
+            if (confirm("You have unsaved changes in this script. Discard changes and close?")) {
+                onClose();
+            }
+        } else {
+            onClose();
+        }
+    };
+
     const lineCount = content.split("\n").length;
 
     return (
-        <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="max-w-4xl w-[95vw] max-h-[92vh] flex flex-col bg-[#0d0e14] border-zinc-800 p-0 overflow-hidden shadow-2xl">
+        <Dialog open={isOpen} onOpenChange={(open) => !open && handleCloseAttempt()}>
+            <DialogContent onPointerDownOutside={(e) => { if (isDirty) e.preventDefault(); }} className="max-w-4xl w-[95vw] max-h-[92vh] flex flex-col bg-[#0d0e14] border-zinc-800 p-0 overflow-hidden shadow-2xl">
                 {/* Header */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 sm:px-5 py-3 sm:py-4 border-b border-zinc-800 bg-zinc-950/70">
                     <div className="flex items-center gap-3">
@@ -314,7 +341,7 @@ export function ScriptEditorModal({
                         <Button 
                             variant="ghost" 
                             size="sm" 
-                            onClick={onClose}
+                            onClick={handleCloseAttempt}
                             className="h-8 text-xs text-zinc-400 hover:text-zinc-200 flex-1 sm:flex-initial"
                         >
                             Cancel

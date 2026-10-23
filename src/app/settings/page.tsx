@@ -188,6 +188,10 @@ function SettingsPageContent() {
     const [bannerEnabled, setBannerEnabled] = useState(false);
     const [isSeerrDirty, setIsSeerrDirty] = useState(false);
     const [seerrDirtySections, setSeerrDirtySections] = useState<string[]>([]);
+    const [isDiscordDirty, setIsDiscordDirty] = useState(false);
+    const [discordDirtySections, setDiscordDirtySections] = useState<string[]>([]);
+    const [isMediaServersDirty, setIsMediaServersDirty] = useState(false);
+    const [mediaServersDirtySections, setMediaServersDirtySections] = useState<string[]>([]);
 
     // Edit Mode States
     const [editingApp, setEditingApp] = useState<any>(null);
@@ -401,11 +405,15 @@ function SettingsPageContent() {
         betaText !== initialDataRef.current.betaText
     ) : false;
 
+    const targetSnapshotServer = plexServers.find(s => s.id === snapshotTargetServerId) || plexServers[0];
+    const isSnapshotPathDirty = !!(targetSnapshotServer && plexServerFormDatabasePath.trim() !== (targetSnapshotServer.databasePath || "").trim());
+
     const unsavedSections: string[] = [];
     if (isAlertBannerDirty) unsavedSections.push("System Alert Banner");
     if (isAppUrlDirty) unsavedSections.push("Public Web Address (Base URL)");
     if (isSmtpDirty) unsavedSections.push("Global SMTP Settings");
     if (isPlexDirty) unsavedSections.push("Plex Server & Admin Token");
+    if (isSnapshotPathDirty) unsavedSections.push(`Plex DB Snapshot Path (${targetSnapshotServer?.name || "Server"})`);
     if (isAutomationDirty) unsavedSections.push("Automation & Directory Paths");
     if (isGoogleBooksDirty) unsavedSections.push("Google Books API Key");
     if (isCurationDirty) unsavedSections.push("Curation & Discovery API Keys");
@@ -415,12 +423,18 @@ function SettingsPageContent() {
     if (isSeerrDirty) {
         seerrDirtySections.forEach(s => unsavedSections.push(`Seerr: ${s}`));
     }
+    if (isMediaServersDirty) {
+        mediaServersDirtySections.forEach(s => unsavedSections.push(`Media Servers: ${s}`));
+    }
+    if (isDiscordDirty) {
+        discordDirtySections.forEach(s => unsavedSections.push(`Discord: ${s}`));
+    }
 
     const hasUnsavedChanges = unsavedSections.length > 0;
     const isGeneralHubDirty = isAlertBannerDirty || isAppUrlDirty || isAutomationDirty || isRoadmapDirty || isBetaDirty;
-    const isServersHubDirty = isPlexDirty;
+    const isServersHubDirty = isPlexDirty || isSnapshotPathDirty || isMediaServersDirty;
     const isIntegrationsHubDirty = isSeerrDirty || isAiDirty || isCurationDirty || isGoogleBooksDirty;
-    const isCommunicationsHubDirty = isSmtpDirty;
+    const isCommunicationsHubDirty = isSmtpDirty || isDiscordDirty;
 
     const isGeneralTabDirty = isGeneralHubDirty;
     const isBetaTabDirty = isRoadmapDirty || isBetaDirty;
@@ -1221,6 +1235,10 @@ function SettingsPageContent() {
                 promises.push(updateBetaDashboardText(formData));
             }
 
+            if (isSnapshotPathDirty) {
+                promises.push(handleSaveSnapshotPath());
+            }
+
             await Promise.all(promises);
             setSaveAllSuccessMsg("All changes saved successfully!");
             setTimeout(() => setSaveAllSuccessMsg(""), 4000);
@@ -1262,6 +1280,9 @@ function SettingsPageContent() {
         setAiApiKeyInput(init.aiApiKey);
         setRoadmapText(init.roadmapText);
         setBetaText(init.betaText);
+        if (targetSnapshotServer) {
+            setPlexServerFormDatabasePath(targetSnapshotServer.databasePath || "");
+        }
     };
 
     const handleConfirmDiscardAndLeave = () => {
@@ -2131,7 +2152,12 @@ function SettingsPageContent() {
                     </div>
 
                     {hubSubTabs.servers === "fleet" && (
-                        <AdminMediaServersPanel />
+                        <AdminMediaServersPanel 
+                            onDirtyChange={(dirty, sections) => {
+                                setIsMediaServersDirty(dirty);
+                                setMediaServersDirtySections(sections);
+                            }}
+                        />
                     )}
 
                     {hubSubTabs.servers === "plex-admin" && (
@@ -5024,7 +5050,12 @@ function SettingsPageContent() {
 
                     {hubSubTabs.communications === "discord" && (
                         <div className="space-y-4">
-                            <DiscordSettingsPanel />
+                            <DiscordSettingsPanel 
+                                onDirtyChange={(dirty, sections) => {
+                                    setIsDiscordDirty(dirty);
+                                    setDiscordDirtySections(sections);
+                                }}
+                            />
                         </div>
                     )}
                 </TabsContent>

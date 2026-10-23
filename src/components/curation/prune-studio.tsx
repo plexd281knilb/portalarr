@@ -1,5 +1,7 @@
 "use client";
 
+import { UnsavedChangesPrompt } from "@/components/ui/unsaved-changes-prompt";
+
 import React, { useState, useEffect } from "react";
 import {
     Trash2,
@@ -4696,47 +4698,15 @@ export function PruneStudio() {
                 </DialogContent>
             </Dialog>
 
-            {/* FLOATING UNSAVED CHANGES BAR */}
-            {hasUnsavedChanges && (
-                <div className="fixed bottom-6 right-6 z-50 animate-in fade-in slide-in-from-bottom-5 duration-300">
-                    <div className="flex flex-col sm:flex-row items-center gap-3 bg-[#13131a]/95 backdrop-blur-xl border-2 border-amber-500/70 p-3.5 sm:px-5 sm:py-3.5 rounded-2xl shadow-[0_10px_35px_rgba(245,158,11,0.25)] text-foreground">
-                        <div className="flex items-center gap-2.5">
-                            <span className="relative flex h-3 w-3">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
-                            </span>
-                            <div className="text-xs">
-                                <span className="font-bold text-amber-400">Unsaved Settings ({unsavedSections.length})</span>
-                                <p className="text-[10px] text-muted-foreground hidden sm:block max-w-[220px] truncate">
-                                    {unsavedSections.join(", ")}
-                                </p>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-2 w-full sm:w-auto">
-                            <Button 
-                                type="button" 
-                                variant="ghost" 
-                                size="sm" 
-                                onClick={handleDiscardAllDirty}
-                                disabled={isSavingAll}
-                                className="h-8 text-xs text-muted-foreground hover:text-foreground hover:bg-white/5 cursor-pointer"
-                            >
-                                <RotateCcw className="h-3.5 w-3.5 mr-1" /> Discard
-                            </Button>
-                            <Button 
-                                type="button" 
-                                size="sm" 
-                                onClick={handleSaveAllDirty}
-                                disabled={isSavingAll}
-                                className="h-8 text-xs font-bold bg-amber-500 hover:bg-amber-400 text-black shadow-md shadow-amber-500/20 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
-                            >
-                                {isSavingAll ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                                Save All Changes
-                            </Button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            {/* FLOATING SAVE BAR & UNSAVED CHANGES MODAL */}
+            <UnsavedChangesPrompt
+                hasUnsavedChanges={hasUnsavedChanges}
+                unsavedSections={unsavedSections}
+                onSave={handleSaveAllDirty}
+                onDiscard={handleDiscardAllDirty}
+                isSaving={isSavingAll}
+                saveLabel="Save All Changes"
+            />
         </div>
     );
 }

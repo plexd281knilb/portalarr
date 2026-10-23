@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { UnsavedChangesPrompt } from "@/components/ui/unsaved-changes-prompt";
 import { 
     getAdminMediaServersAction, 
     saveMediaServerAction, 
@@ -25,8 +26,14 @@ import {
     Eye, EyeOff, Copy, Users, Globe, Network
 } from "lucide-react";
 
-export function AdminMediaServersPanel() {
+interface AdminMediaServersPanelProps {
+    onDirtyChange?: (isDirty: boolean, dirtySections: string[]) => void;
+}
+
+export function AdminMediaServersPanel({ onDirtyChange }: AdminMediaServersPanelProps = {}) {
     const [servers, setServers] = useState<DiscoveredServerInfo[]>([]);
+    const initialServersRef = useRef<DiscoveredServerInfo[]>([]);
+    const [isSavingAll, setIsSavingAll] = useState(false);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState("");
@@ -60,6 +67,7 @@ export function AdminMediaServersPanel() {
             const res = await getAdminMediaServersAction();
             if (res.success) {
                 setServers(res.servers);
+                initialServersRef.current = JSON.parse(JSON.stringify(res.servers));
             } else {
                 setError(res.error || "Failed to load media servers");
             }
@@ -74,6 +82,58 @@ export function AdminMediaServersPanel() {
     useEffect(() => {
         loadServers();
     }, []);
+
+    // Unsaved changes tracking across server access rules
+    const dirtySections: string[] = [];
+    if (initialServersRef.current.length > 0) {
+        for (const srv of servers) {
+            const initial = initialServersRef.current.find(s => s.id === srv.id);
+            if (!initial) continue;
+            const rulesChanged = 
+                srv.allowUserSelfSelect !== initial.allowUserSelfSelect ||
+                srv.allowTrialAccess !== initial.allowTrialAccess;
+            const srvAllowed = (srv.allowedLibraryIds || []).slice().sort().join(",");
+            const initAllowed = (initial.allowedLibraryIds || []).slice().sort().join(",");
+            const libsChanged = srvAllowed !== initAllowed;
+
+            if (rulesChanged || libsChanged) {
+                dirtySections.push(`${srv.name} (${srv.type}) Access Rules`);
+            }
+        }
+    }
+    const hasUnsavedChanges = dirtySections.length > 0;
+
+    useEffect(() => {
+        if (!loading && initialServersRef.current.length > 0) {
+            onDirtyChange?.(hasUnsavedChanges, dirtySections);
+        }
+    }, [hasUnsavedChanges, dirtySections.join(",")]);
+
+    const handleDiscard = () => {
+        if (initialServersRef.current.length > 0) {
+            setServers(JSON.parse(JSON.stringify(initialServersRef.current)));
+        }
+    };
+
+    const handleSaveAllDirty = async () => {
+        setIsSavingAll(true);
+        try {
+            for (const srv of servers) {
+                const initial = initialServersRef.current.find(s => s.id === srv.id);
+                if (!initial) continue;
+                const rulesChanged = srv.allowUserSelfSelect !== initial.allowUserSelfSelect || srv.allowTrialAccess !== initial.allowTrialAccess;
+                const srvAllowed = (srv.allowedLibraryIds || []).slice().sort().join(",");
+                const initAllowed = (initial.allowedLibraryIds || []).slice().sort().join(",");
+                if (rulesChanged || srvAllowed !== initAllowed) {
+                    await handleSaveRules(srv);
+                }
+            }
+            initialServersRef.current = JSON.parse(JSON.stringify(servers));
+        } finally {
+            setIsSavingAll(false);
+        }
+    };
+
 
     const handleOpenAdd = () => {
         setEditingServer(null);
@@ -791,6 +851,17 @@ export function AdminMediaServersPanel() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {!onDirtyChange && (
+                <UnsavedChangesPrompt
+                    hasUnsavedChanges={hasUnsavedChanges}
+                    unsavedSections={dirtySections}
+                    onSave={handleSaveAllDirty}
+                    onDiscard={handleDiscard}
+                    isSaving={isSavingAll}
+                    saveLabel="Save Server Rules"
+                />
+            )}
         </div>
     );
 }
