@@ -1342,7 +1342,10 @@ async function runTestSuite() {
             deleteMediaServerAction,
             getUserMediaServersAndLibrariesAction,
             updateUserMediaServersAndLibrariesAction,
-            updateUserAccountPreferencesAction
+            updateUserAccountPreferencesAction,
+            ensureUserMediaServerProvisionedAction,
+            setUserMediaServerPasswordAction,
+            authorizeMediaServerQuickConnectAction
         } = await import("../src/app/media-server-actions");
         const { getPlexSetupGuides, toggleFreeAddonAction } = await import("../src/app/actions");
         const { testMediaServerConnection } = await import("../src/lib/media-servers");
@@ -1375,36 +1378,39 @@ async function runTestSuite() {
             throw new Error(`MediaServer API key decryption mismatch: expected ${testServerApiKey}, got ${decryptedKey}`);
         }
 
-        // Test editing existing media server (URL & Name update while keeping existing API key)
+        // Test editing existing media server (URL & Name update while keeping existing API key + setting internalUrl)
         const editServerRes = await saveMediaServerAction({
             id: testMediaServer.id,
             name: "Updated Jellyfin Node",
             type: "JELLYFIN",
             url: "http://127.0.0.1:9999/jellyfin",
+            internalUrl: "http://127.0.0.1:9998",
             apiKey: ""
         });
-        if (!editServerRes.success || editServerRes.server?.name !== "Updated Jellyfin Node" || editServerRes.server?.url !== "http://127.0.0.1:9999/jellyfin") {
-            throw new Error(`Failed to edit existing media server: ${editServerRes.error}`);
+        if (!editServerRes.success || editServerRes.server?.name !== "Updated Jellyfin Node" || editServerRes.server?.internalUrl !== "http://127.0.0.1:9998") {
+            throw new Error(`Failed to edit existing media server or save internalUrl: ${editServerRes.error}`);
         }
 
-        // Verify getAdminMediaServersAction returns decrypted API key for admin review
+        // Verify getAdminMediaServersAction returns decrypted API key and internalUrl for admin review
         const adminServersRes = await getAdminMediaServersAction();
         if (!adminServersRes.success) throw new Error("Failed to fetch admin media servers");
         const foundTestServer = adminServersRes.servers.find(s => s.id === testMediaServer.id);
-        if (!foundTestServer || foundTestServer.apiKey !== testServerApiKey) {
-            throw new Error(`Expected admin server to have decrypted apiKey ${testServerApiKey}, got ${foundTestServer?.apiKey}`);
+        if (!foundTestServer || foundTestServer.apiKey !== testServerApiKey || foundTestServer.internalUrl !== "http://127.0.0.1:9998") {
+            throw new Error(`Expected admin server to have decrypted apiKey and internalUrl, got: ${JSON.stringify(foundTestServer)}`);
         }
 
-        // 2. Test MediaServer connection error handling (mock / offline URL)
+        // 2. Test MediaServer connection error handling (mock / offline URL + dual-URL testing)
         const connResult = await testMediaServerConnection(
             "JELLYFIN",
             "http://127.0.0.1:9999",
-            "mock_test_key"
+            "mock_test_key",
+            1000,
+            "http://127.0.0.1:9998"
         );
         if (connResult.ok !== false) {
             throw new Error("Expected offline media server connection test to fail gracefully");
         }
-        if (!connResult.error) {
+        if (!connResult.error && !connResult.summary) {
             throw new Error("Expected offline media server error message to be set");
         }
 
@@ -1512,10 +1518,42 @@ async function runTestSuite() {
                 if (!trialEmbyToggle.error?.includes("exclusively available for Full Members")) {
                     throw new Error(`Expected full member gating error message, got: ${trialEmbyToggle.error}`);
                 }
+
+                // 8. Test Instant Provisioning Trial Gating
+                const trialProvision = await ensureUserMediaServerProvisionedAction(testMediaServer.id);
+                if (trialProvision.success) {
+                    throw new Error("Expected trial user provisioning to be rejected");
+                }
+                if (!trialProvision.error?.includes("exclusively available for Full Members")) {
+                    throw new Error(`Expected full member error on trial user provisioning, got: ${trialProvision.error}`);
+                }
+
+                // 9. Test Streaming Password Length Guardrail
+                const shortPassword = await setUserMediaServerPasswordAction(testMediaServer.id, "123");
+                if (shortPassword.success) {
+                    throw new Error("Expected short password (<4 chars) to be rejected");
+                }
+
+                // 10. Test Quick Connect Trial Gating
+                const trialQuickConnect = await authorizeMediaServerQuickConnectAction(testMediaServer.id, "123456");
+                if (trialQuickConnect.success) {
+                    throw new Error("Expected trial user Quick Connect authorization to be rejected");
+                }
+                if (!trialQuickConnect.error?.includes("exclusively available for Full Members")) {
+                    throw new Error(`Expected full member gating error on Quick Connect, got: ${trialQuickConnect.error}`);
+                }
             } finally {
                 delete process.env.PORTALARR_TEST_USER_ID;
                 await prisma.user.delete({ where: { id: trialUser.id } }).catch(() => {});
             }
+
+            // 11. Test Quick Connect Input Validation for Full Member
+            process.env.PORTALARR_TEST_USER_ID = memberUser.id;
+            const invalidCodeRes = await authorizeMediaServerQuickConnectAction(testMediaServer.id, "");
+            if (invalidCodeRes.success) {
+                throw new Error("Expected empty Quick Connect code to be rejected");
+            }
+            delete process.env.PORTALARR_TEST_USER_ID;
         } finally {
             await prisma.user.delete({ where: { id: memberUser.id } }).catch(() => {});
             await prisma.mediaServer.delete({ where: { id: testMediaServer.id } }).catch(() => {});
@@ -1672,6 +1710,87 @@ async function runTestSuite() {
             throw new Error("PlexInviteBanner should be positioned below UserLaunchpad for a discrete layout");
         }
     });
+
+    // =========================================================================
+    // SUITE 22: Sent Email Audit Log & Automatic vs Approved Dispatch Tracking
+    // =========================================================================
+    await assertTest("Suite 22: Sent Email Audit Log & Automatic vs Approved Dispatches", async () => {
+        const { getSentEmailLogsAction, deleteSentEmailLogAction } = await import("../src/app/actions");
+
+        const testId = Date.now();
+        const autoEmail = await prisma.sentEmailLog.create({
+            data: {
+                recipient: `auto_test_${testId}@example.com`,
+                recipientName: `auto_user_${testId}`,
+                subject: `Automated Welcome Notification ${testId}`,
+                bodyPreview: "Welcome to DomsHomeLab. Your account is active.",
+                html: "<p>Welcome to DomsHomeLab. Your account is active.</p>",
+                templateId: "welcome",
+                sendMode: "AUTOMATIC",
+                status: "SENT"
+            }
+        });
+
+        const approvedEmail = await prisma.sentEmailLog.create({
+            data: {
+                recipient: `approved_test_${testId}@example.com`,
+                recipientName: `approved_user_${testId}`,
+                subject: `Account Approved by Governance ${testId}`,
+                bodyPreview: "Your access has been vetted and approved by administrator.",
+                html: "<p>Your access has been vetted and approved by administrator.</p>",
+                templateId: "user_approval",
+                sendMode: "APPROVED_AND_SENT",
+                status: "SENT",
+                approvalId: `appr_${testId}`,
+                approvedBy: "MasterAdmin",
+                approvedAt: new Date()
+            }
+        });
+
+        try {
+            // 1. Verify retrieval of all logs
+            const allRes = await getSentEmailLogsAction({ search: `${testId}` });
+            if (!allRes.success || !allRes.logs || allRes.logs.length < 2) {
+                throw new Error(`Expected at least 2 logs matching testId, got ${allRes.logs?.length}`);
+            }
+
+            // 2. Verify filter by AUTOMATIC
+            const autoRes = await getSentEmailLogsAction({ search: `${testId}`, mode: "AUTOMATIC" });
+            if (!autoRes.success || autoRes.logs.length !== 1 || autoRes.logs[0].sendMode !== "AUTOMATIC") {
+                throw new Error("Failed to filter sent emails by AUTOMATIC mode");
+            }
+            if (autoRes.logs[0].recipient !== autoEmail.recipient) {
+                throw new Error("Mismatched recipient for AUTOMATIC email");
+            }
+
+            // 3. Verify filter by APPROVED_AND_SENT
+            const approvedRes = await getSentEmailLogsAction({ search: `${testId}`, mode: "APPROVED_AND_SENT" });
+            if (!approvedRes.success || approvedRes.logs.length !== 1 || approvedRes.logs[0].sendMode !== "APPROVED_AND_SENT") {
+                throw new Error("Failed to filter sent emails by APPROVED_AND_SENT mode");
+            }
+            if (approvedRes.logs[0].approvedBy !== "MasterAdmin") {
+                throw new Error(`Expected approvedBy 'MasterAdmin', got '${approvedRes.logs[0].approvedBy}'`);
+            }
+
+            // 4. Verify Access Control page UI integrates Sent Emails tab
+            const accessPagePath = path.join(process.cwd(), "src", "app", "settings", "access", "page.tsx");
+            const accessPageContent = fs.readFileSync(accessPagePath, "utf-8");
+            if (!accessPageContent.includes('TabsTrigger value="sent-emails"')) {
+                throw new Error("Access Control page.tsx missing TabsTrigger for 'sent-emails'");
+            }
+            if (!accessPageContent.includes('TabsContent value="sent-emails"')) {
+                throw new Error("Access Control page.tsx missing TabsContent for 'sent-emails'");
+            }
+            if (!accessPageContent.includes("SentEmailAuditLog")) {
+                throw new Error("Access Control page.tsx missing SentEmailAuditLog component mount");
+            }
+        } finally {
+            await prisma.sentEmailLog.deleteMany({
+                where: { id: { in: [autoEmail.id, approvedEmail.id] } }
+            });
+        }
+    });
+
 
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);

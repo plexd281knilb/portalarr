@@ -164,10 +164,19 @@ See detailed reference: [card-and-poster-patterns.md](./references/card-and-post
 
 ### 3. Forms, Autocomplete & Dirty State Management
 - **Autocomplete Dropdowns**: Always use `onMouseDown` on dropdown suggestion items instead of `onClick` to prevent input `onBlur` from unmounting items before the click event fires.
-- **Unsaved Settings Protection**:
-  - Track dirty states against `initialDataRef` snapshots.
-  - Highlight dirty sections with amber glowing borders (`border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]`) and `● Unsaved Changes` badges.
-  - Render the standard `<UnsavedChangesPrompt />` component for floating docked save bars, `beforeunload` protection, and in-app navigation dialogs.
+- **Universal Unsaved Settings Protection Standard (`<UnsavedChangesPrompt />`)**:
+  - All settings pages, curation studios, and administrative configuration panels enforce strict dirty tracking against baseline `initialDataRef` / `initialSettingsRef` snapshots.
+  - **3-Layer Defense Contract**:
+    1. **Docked Floating Save Bar**: Fixed at `bottom-6 right-6 z-50` with pulsating amber indicator, modified sections summary (`● Unsaved Settings (N)`), Discard button, and primary Save button.
+    2. **In-App Navigation Interception Guard**: Intercepts link clicks (e.g. sidebar navigation, header logo, in-app redirects) using capturing `document.addEventListener("click", handleLinkClick, true)` and displays an interactive modal dialog offering `Stay on Page`, `Discard & Leave`, and `Save & Continue`.
+    3. **Browser Tab Close & Reload Guard**: Listens on `window.beforeunload` whenever `hasUnsavedChanges === true` to prevent accidental tab closing or page refresh.
+  - **Embedded Sub-Panel Dirty Protocol**: Child panels mounted within parent settings hubs (e.g. `SeerrSettingsPanel`, `DiscordSettingsPanel`, `AdminMediaServersPanel`) accept `onDirtyChange?: (isDirty: boolean, dirtySections: string[]) => void`. When mounted in a parent hub like `src/app/settings/page.tsx`, they propagate dirty state upwards to trigger hub pulsating amber dots and master page save bars; when mounted standalone, they automatically render `<UnsavedChangesPrompt />` directly.
+  - **100% Page Coverage**:
+    - **System Settings Hub (`src/app/settings/page.tsx`)**: Dirty tracking for General, Public URL, SMTP, Plex server tokens, Direct SQLite DB snapshot presets/paths, Servarr/Requests (`SeerrSettingsPanel`), Media Server Fleet (`AdminMediaServersPanel`), Discord Bot (`DiscordSettingsPanel`), Curation keys, and Roadmap/Beta text.
+    - **Access Control (`src/app/settings/access/page.tsx`)**: Full `<UnsavedChangesPrompt />` tracking onboarding gates, role permissions, trial quotas, and Discord role mappings.
+    - **User Profile (`src/app/settings/profile/page.tsx` & `/profile`)**: Tracks profile info, passwords, shared Plex libraries, notifications, content safety, and `UserMediaServersManager` server access and library whitelist preferences (`isMediaServersDirty`).
+    - **Curation Studios (`KometaStudio`, `AgregarrStudio`, `PruneStudio`, `TaggingStudio`)**: Standardized on `<UnsavedChangesPrompt />` guaranteeing navigation modal interception and beforeunload guards across all 4 studios.
+    - **Script Editor Modal (`src/components/scripts/script-editor-modal.tsx`)**: Protects script content, interpreters, schedules, and timeouts against accidental outside-click dismissals.
 - **Sensitive Fields**:
   - Mask tokens and passwords by default (`type={showToken ? "text" : "password"}`).
   - Provide an inline toggle button with Lucide `<Eye />` / `<EyeOff />`.
@@ -1199,7 +1208,30 @@ Portalarr features an automated, real-time versioning, branch identification, an
 
 ---
 
-### 47. Mandatory 4-Step Verification & Delivery Protocol (Strict SemVer)
+### 46. Multi-Platform Media Server Auto-Provisioning & Streaming Password Architecture
+- **Plex OAuth vs Jellyfin/Emby Password Reality**:
+  - DomsHomeLab members authenticate via Plex OAuth and have no local passwords stored in Portalarr.
+  - Jellyfin and Emby accounts created via `POST /Users/New` initialize with a **BLANK (no password)** default state.
+  - Setup Guide Step 2 clearly explains this: members sign into Jellyfin client apps with their portal username and **leave the password field blank**.
+- **Instant Auto-Provisioning on Modal Mount**:
+  - Opening the setup guide modal (`MediaServerSetupGuideModal`) immediately invokes `ensureUserMediaServerProvisionedAction(serverId)` in the background.
+  - If the user does not yet exist on Jellyfin/Emby, Portalarr automatically provisions the user, configures library access policies, and saves `jellyfinUserId` / `embyUserId` in `prisma.user`.
+- **Dedicated Streaming Password Manager**:
+  - Inside Step 2 of the setup guide, users can optionally set a dedicated streaming password (min 4 characters) directly within Portalarr via `setUserMediaServerPasswordAction`.
+  - Portalarr pushes the new password to the Jellyfin API (`POST /Users/{id}/Password`) using admin API credentials, without requiring members to access the Jellyfin web client settings.
+- **Reverse Proxy Header Stripping & Dual-Mode Auth Fallback**:
+  - Reverse proxies (like Nginx Proxy Manager and Cloudflare) frequently strip non-standard HTTP request headers like `X-Emby-Token` or `Authorization`.
+  - `mediaServerFetch` implements automatic query parameter fallback: if header authentication returns HTTP 401 or network errors, it retries transparently with `?api_key=${apiKey}` appended to the URL.
+- **Two-URL Dual-Routing Architecture (Public Client URL + Internal LAN Fallback URL)**:
+  - **Public Client URL (`url`)**: The public reverse proxy address (e.g. `https://jellyfin.domshomelab.com`) presented to members in the Setup Guide and used by remote player apps, as well as pinged by Portalarr to monitor external reachability.
+  - **Internal LAN Fallback URL (`internalUrl`)**: The direct local network address (e.g. `http://192.168.1.87:8096`) used by Portalarr for high-speed backend API operations (user provisioning, password updates, library scans, and Quick Connect authorization) to completely bypass reverse proxy header stripping, SSL overhead, and NAT loopback.
+  - **Resilient Fallback**: `resilientMediaServerFetch` automatically tries the internal LAN URL first if available, and transparently falls back to the public URL.
+- **Native Quick Connect TV & Device Pairing (`authorizeMediaServerQuickConnectAction`)**:
+  - Embedded in Step 2 of `MediaServerSetupGuideModal`: allows members to enter the 6-character Quick Connect code displayed on smart TVs, Apple TV (Swiftfin), Android TV, Roku, or Fire TV.
+  - Portalarr calls `POST /QuickConnect/Authorize?Code={code}&UserId={userId}` using admin credentials and resilient internal LAN routing, immediately logging the TV into the member's account with zero remote typing.
+  - Includes a direct fallback button opening the Jellyfin Web Quick Connect page (`${resolvedUrl}/web/index.html#!/quickconnect.html`).
+
+---
 Before completing any task, execute:
 1. `cmd /c "npm test"`: Full 18+ suite verification (`scripts/verify-all.ts`), 0 failures.
 2. `cmd /c "npm run build"`: Next.js production build, 0 TS errors, 100% clean.
@@ -1219,6 +1251,31 @@ Before completing any task, execute:
   - On `/profile#billing`, pass the user's net effective amount due (accounting for trial proration, converted referral discounts, and `user.accountCredit`) into `<PaymentMethodsGrid amount={...} cadence={...} />`.
 - **Threshold Engine & Scraper Reconciliation (`evaluatePaymentThreshold`)**:
   - Automatically honors active referral discounts (`effectiveYearlyTarget = yearlyPrice - referralDiscount`), Rest-of-Year prorated annual quotes (within `$1.00` tolerance), and first-month prorated standalone monthly quotes (within `$0.50` tolerance) as full subscription fulfillments.
+
+---
+
+### 46. Dispatched Email Audit Log Architecture (`/settings/access?tab=sent-emails`, `SentEmailAuditLog`, `SentEmailLog`)
+- **6-Tab Access Control Navigation**:
+  - The Access Control directory (`src/app/settings/access/page.tsx`) features 6 dedicated tabs organized in a balanced `grid-cols-2 sm:grid-cols-3 lg:grid-cols-6` layout:
+    1. **User Directory**: Member directory, roles, and live Plex library shares.
+    2. **Referrals & Leaderboard**: Ambassador referral ranks, rewards, and credits.
+    3. **Payment & Onboarding**: Trial safe pool, automated proration, and pricing tiers.
+    4. **Email Scraper**: IMAP/Gmail automated payment scraping and ledger reconciliation.
+    5. **Approval Queue**: Staged live PMS modifications and staged user-facing emails.
+    6. **Sent Emails (`sent-emails`)**: Complete outbound email audit log displaying dispatch modes, delivery status, and full message previews.
+- **Automatic vs Approved & Sent Distinction (`SentEmailLog`)**:
+  - **Sent Automatically (`sendMode: "AUTOMATIC"`)**: Displays a purple/indigo badge (`bg-purple-500/15 text-purple-400 border-purple-500/40`) with `Bot` icon indicating messages triggered autonomously by background system workflows (welcome emails, automated renewal notices, system alerts, test emails, and scheduled digests).
+  - **Approved & Sent (`sendMode: "APPROVED_AND_SENT"`)**: Displays an emerald badge (`bg-emerald-500/15 text-emerald-400 border-emerald-500/40`) with `ShieldCheck` icon indicating messages that were staged in the Action Approval Queue and vetted by an administrator prior to live SMTP transmission. Displays approver identity (`Approved by "Admin"`) and exact approval timestamp.
+- **Audit Metrics & Telemetry Grid**:
+  - **Total Dispatched**: Platform-wide outbound email volume with `Mail` icon in sky blue (`text-sky-400`).
+  - **Sent Automatically**: Count of autonomous notifications in purple (`text-purple-400`).
+  - **Approved & Sent**: Count of vetted dispatches in emerald (`text-emerald-400`).
+  - **Delivery Failures**: Count of SMTP rejections or network errors in rose (`text-rose-400`).
+- **Inspection Modal & Operator Controls**:
+  - **Rendered Message Preview**: Sandboxed HTML view displaying the exact layout, styles, and branding received by the recipient.
+  - **Plaintext View & Audit Metadata**: Displays raw plain text body, log IDs, SMTP errors, and template identifiers.
+  - **1-Click Resend (`resendSentEmailAction`)**: Allows administrators to re-dispatch any previous message directly to the recipient via SMTP with immediate visual feedback.
+  - **Clean Pruning**: Supports individual log deletion and platform-wide audit log clearing.
 
 ---
 

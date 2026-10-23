@@ -99,6 +99,7 @@ export default function UserProfilePage() {
     const [kindleSaving, setKindleSaving] = useState(false);
     const [kindleMsg, setKindleMsg] = useState("");
     const [kindleErr, setKindleErr] = useState("");
+    const [isMediaServersDirty, setIsMediaServersDirty] = useState(false);
 
     // Notification Preferences State
     const [notifPrefs, setNotifPrefs] = useState({
@@ -354,6 +355,7 @@ export default function UserProfilePage() {
     if (isLibrariesDirty) unsavedSections.push("Shared Plex Libraries");
     if (isNotifDirty) unsavedSections.push("Notification Preferences");
     if (isContentDirty) unsavedSections.push("Content Safety");
+    if (isMediaServersDirty) unsavedSections.push("Media Servers & Allowed Libraries");
 
     const hasUnsavedChanges = unsavedSections.length > 0;
 
@@ -1626,6 +1628,7 @@ export default function UserProfilePage() {
                 userStatus={user?.status} 
                 membershipTier={user?.membershipTier} 
                 username={user?.username} 
+                onDirtyChange={setIsMediaServersDirty} 
             />
 
             {/* HOUSEHOLD SUB-ACCOUNTS CARD */}

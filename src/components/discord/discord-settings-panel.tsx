@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { UnsavedChangesPrompt } from "@/components/ui/unsaved-changes-prompt";
 import {
     getDiscordBotSettingsAction,
     saveDiscordBotSettingsAction,
@@ -23,7 +24,11 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 
-export default function DiscordSettingsPanel() {
+interface DiscordSettingsPanelProps {
+    onDirtyChange?: (isDirty: boolean, dirtySections: string[]) => void;
+}
+
+export default function DiscordSettingsPanel({ onDirtyChange }: DiscordSettingsPanelProps = {}) {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [testing, setTesting] = useState(false);
@@ -39,6 +44,8 @@ export default function DiscordSettingsPanel() {
     const [requestsChannelId, setRequestsChannelId] = useState("");
     const [announcementsChannelId, setAnnouncementsChannelId] = useState("");
     const [inviteUrl, setInviteUrl] = useState("");
+
+    const initialSettingsRef = useRef<any>(null);
 
     // UI Toggles & Telemetry
     const [showToken, setShowToken] = useState(false);
@@ -79,6 +86,16 @@ export default function DiscordSettingsPanel() {
                 setLastSyncStatus(res.lastSyncStatus || null);
                 setBlueprint(res.blueprint || []);
                 setRolesBlueprint(res.rolesBlueprint || []);
+                initialSettingsRef.current = {
+                    botToken: res.botTokenMasked || "",
+                    guildId: res.guildId || "",
+                    clientId: res.clientId || "",
+                    serverSyncEnabled: res.serverSyncEnabled,
+                    statusChannelId: res.statusChannelId || "",
+                    requestsChannelId: res.requestsChannelId || "",
+                    announcementsChannelId: res.announcementsChannelId || "",
+                    inviteUrl: res.inviteUrl || ""
+                };
             }
         } catch (e: any) {
             console.error("Failed to load Discord settings:", e);
@@ -90,6 +107,42 @@ export default function DiscordSettingsPanel() {
     useEffect(() => {
         loadSettings();
     }, []);
+
+    // Unsaved changes tracking
+    const isBotTokenDirty = initialSettingsRef.current ? botToken !== initialSettingsRef.current.botToken : false;
+    const isGuildIdDirty = initialSettingsRef.current ? guildId !== initialSettingsRef.current.guildId : false;
+    const isClientIdDirty = initialSettingsRef.current ? clientId !== initialSettingsRef.current.clientId : false;
+    const isServerSyncDirty = initialSettingsRef.current ? serverSyncEnabled !== initialSettingsRef.current.serverSyncEnabled : false;
+    const isStatusChannelDirty = initialSettingsRef.current ? statusChannelId !== initialSettingsRef.current.statusChannelId : false;
+    const isRequestsChannelDirty = initialSettingsRef.current ? requestsChannelId !== initialSettingsRef.current.requestsChannelId : false;
+    const isAnnouncementsChannelDirty = initialSettingsRef.current ? announcementsChannelId !== initialSettingsRef.current.announcementsChannelId : false;
+    const isInviteUrlDirty = initialSettingsRef.current ? inviteUrl !== initialSettingsRef.current.inviteUrl : false;
+
+    const hasUnsavedChanges = isBotTokenDirty || isGuildIdDirty || isClientIdDirty || isServerSyncDirty || isStatusChannelDirty || isRequestsChannelDirty || isAnnouncementsChannelDirty || isInviteUrlDirty;
+
+    const dirtySections: string[] = [];
+    if (isBotTokenDirty || isGuildIdDirty || isClientIdDirty) dirtySections.push("Discord Bot Credentials");
+    if (isServerSyncDirty || isStatusChannelDirty || isRequestsChannelDirty || isAnnouncementsChannelDirty) dirtySections.push("Discord Channel Routing");
+    if (isInviteUrlDirty) dirtySections.push("Discord Invite URL");
+
+    useEffect(() => {
+        if (!loading && initialSettingsRef.current) {
+            onDirtyChange?.(hasUnsavedChanges, dirtySections);
+        }
+    }, [hasUnsavedChanges, dirtySections.join(",")]);
+
+    const handleDiscard = () => {
+        if (!initialSettingsRef.current) return;
+        setBotToken(initialSettingsRef.current.botToken);
+        setGuildId(initialSettingsRef.current.guildId);
+        setClientId(initialSettingsRef.current.clientId);
+        setServerSyncEnabled(initialSettingsRef.current.serverSyncEnabled);
+        setStatusChannelId(initialSettingsRef.current.statusChannelId);
+        setRequestsChannelId(initialSettingsRef.current.requestsChannelId);
+        setAnnouncementsChannelId(initialSettingsRef.current.announcementsChannelId);
+        setInviteUrl(initialSettingsRef.current.inviteUrl);
+    };
+
 
     const handleSave = async () => {
         setSaving(true);
@@ -610,6 +663,17 @@ export default function DiscordSettingsPanel() {
                     </div>
                 </CardContent>
             </Card>
+
+            {!onDirtyChange && (
+                <UnsavedChangesPrompt
+                    hasUnsavedChanges={hasUnsavedChanges}
+                    unsavedSections={dirtySections}
+                    onSave={handleSave}
+                    onDiscard={handleDiscard}
+                    isSaving={saving}
+                    saveLabel="Save Discord Settings"
+                />
+            )}
         </div>
     );
 }

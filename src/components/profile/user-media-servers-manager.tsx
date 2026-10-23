@@ -27,13 +27,15 @@ interface UserMediaServersManagerProps {
     userStatus?: string;
     membershipTier?: string;
     username?: string;
+    onDirtyChange?: (isDirty: boolean) => void;
 }
 
 export function UserMediaServersManager({
     userRole = "USER",
     userStatus = "APPROVED",
     membershipTier = "STANDARD",
-    username = ""
+    username = "",
+    onDirtyChange
 }: UserMediaServersManagerProps) {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -64,6 +66,10 @@ export function UserMediaServersManager({
     const [guideServer, setGuideServer] = useState<UserAvailableServer | null>(null);
     const [guideModalOpen, setGuideModalOpen] = useState(false);
     const [isPrefsDirty, setIsPrefsDirty] = useState(false);
+
+    useEffect(() => {
+        onDirtyChange?.(isDirty || isPrefsDirty);
+    }, [isDirty, isPrefsDirty, onDirtyChange]);
 
     const loadData = async () => {
         setLoading(true);
@@ -586,6 +592,7 @@ export function UserMediaServersManager({
                     isOpen={guideModalOpen}
                     onClose={() => setGuideModalOpen(false)}
                     serverType={guideServer.serverType === "EMBY" ? "EMBY" : "JELLYFIN"}
+                    serverId={guideServer.serverId}
                     serverName={guideServer.serverName}
                     serverUrl={guideServer.serverUrl}
                     username={guideServer.serverType === "EMBY" ? (embyUsername || username) : (jellyfinUsername || username)}

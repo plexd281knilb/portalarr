@@ -1,12 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import Link from "next/link";
+import { UnsavedChangesPrompt } from "@/components/ui/unsaved-changes-prompt";
 import { 
     getAdminMediaServersAction, 
     saveMediaServerAction, 
     deleteMediaServerAction, 
     testMediaServerAction, 
     updateServerAccessRulesAction,
+    provisionAllUsersToMediaServerAction,
     DiscoveredServerInfo 
 } from "@/app/media-server-actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
@@ -21,11 +24,17 @@ import {
     Server, Tv, Film, Music, Check, Plus, Trash2, RefreshCw, 
     CheckCircle2, XCircle, Loader2, Shield, FolderCheck, CheckSquare, 
     Square, Activity, ExternalLink, Settings, Sparkles, Layers, Sliders, Pencil,
-    Eye, EyeOff, Copy
+    Eye, EyeOff, Copy, Users, Globe, Network
 } from "lucide-react";
 
-export function AdminMediaServersPanel() {
+interface AdminMediaServersPanelProps {
+    onDirtyChange?: (isDirty: boolean, dirtySections: string[]) => void;
+}
+
+export function AdminMediaServersPanel({ onDirtyChange }: AdminMediaServersPanelProps = {}) {
     const [servers, setServers] = useState<DiscoveredServerInfo[]>([]);
+    const initialServersRef = useRef<DiscoveredServerInfo[]>([]);
+    const [isSavingAll, setIsSavingAll] = useState(false);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState("");
@@ -37,6 +46,7 @@ export function AdminMediaServersPanel() {
     const [formName, setFormName] = useState("");
     const [formType, setFormType] = useState<"JELLYFIN" | "EMBY">("JELLYFIN");
     const [formUrl, setFormUrl] = useState("");
+    const [formInternalUrl, setFormInternalUrl] = useState("");
     const [formApiKey, setFormApiKey] = useState("");
     const [showApiKey, setShowApiKey] = useState(false);
     const [copiedKey, setCopiedKey] = useState(false);
@@ -47,6 +57,8 @@ export function AdminMediaServersPanel() {
     const [testingMap, setTestingMap] = useState<Record<string, { testing?: boolean; result?: any }>>({});
     // Saving rules state per server: serverId -> boolean
     const [savingRulesMap, setSavingRulesMap] = useState<Record<string, boolean>>({});
+    // Bulk provisioning state per server: serverId -> boolean
+    const [bulkProvisioningMap, setBulkProvisioningMap] = useState<Record<string, boolean>>({});
 
     const loadServers = async (isManualRefresh = false) => {
         if (isManualRefresh) setRefreshing(true);
@@ -56,6 +68,7 @@ export function AdminMediaServersPanel() {
             const res = await getAdminMediaServersAction();
             if (res.success) {
                 setServers(res.servers);
+                initialServersRef.current = JSON.parse(JSON.stringify(res.servers));
             } else {
                 setError(res.error || "Failed to load media servers");
             }
@@ -71,11 +84,64 @@ export function AdminMediaServersPanel() {
         loadServers();
     }, []);
 
+    // Unsaved changes tracking across server access rules
+    const dirtySections: string[] = [];
+    if (initialServersRef.current.length > 0) {
+        for (const srv of servers) {
+            const initial = initialServersRef.current.find(s => s.id === srv.id);
+            if (!initial) continue;
+            const rulesChanged = 
+                srv.allowUserSelfSelect !== initial.allowUserSelfSelect ||
+                srv.allowTrialAccess !== initial.allowTrialAccess;
+            const srvAllowed = (srv.allowedLibraryIds || []).slice().sort().join(",");
+            const initAllowed = (initial.allowedLibraryIds || []).slice().sort().join(",");
+            const libsChanged = srvAllowed !== initAllowed;
+
+            if (rulesChanged || libsChanged) {
+                dirtySections.push(`${srv.name} (${srv.type}) Access Rules`);
+            }
+        }
+    }
+    const hasUnsavedChanges = dirtySections.length > 0;
+
+    useEffect(() => {
+        if (!loading && initialServersRef.current.length > 0) {
+            onDirtyChange?.(hasUnsavedChanges, dirtySections);
+        }
+    }, [hasUnsavedChanges, dirtySections.join(",")]);
+
+    const handleDiscard = () => {
+        if (initialServersRef.current.length > 0) {
+            setServers(JSON.parse(JSON.stringify(initialServersRef.current)));
+        }
+    };
+
+    const handleSaveAllDirty = async () => {
+        setIsSavingAll(true);
+        try {
+            for (const srv of servers) {
+                const initial = initialServersRef.current.find(s => s.id === srv.id);
+                if (!initial) continue;
+                const rulesChanged = srv.allowUserSelfSelect !== initial.allowUserSelfSelect || srv.allowTrialAccess !== initial.allowTrialAccess;
+                const srvAllowed = (srv.allowedLibraryIds || []).slice().sort().join(",");
+                const initAllowed = (initial.allowedLibraryIds || []).slice().sort().join(",");
+                if (rulesChanged || srvAllowed !== initAllowed) {
+                    await handleSaveRules(srv);
+                }
+            }
+            initialServersRef.current = JSON.parse(JSON.stringify(servers));
+        } finally {
+            setIsSavingAll(false);
+        }
+    };
+
+
     const handleOpenAdd = () => {
         setEditingServer(null);
         setFormName("");
         setFormType("JELLYFIN");
         setFormUrl("");
+        setFormInternalUrl("");
         setFormApiKey("");
         setShowApiKey(true);
         setCopiedKey(false);
@@ -88,6 +154,7 @@ export function AdminMediaServersPanel() {
         setFormName(srv.name);
         setFormType(srv.type as "JELLYFIN" | "EMBY");
         setFormUrl(srv.url);
+        setFormInternalUrl(srv.internalUrl || "");
         setFormApiKey(srv.apiKey || "");
         setShowApiKey(false);
         setCopiedKey(false);
@@ -109,6 +176,7 @@ export function AdminMediaServersPanel() {
                 name: formName.trim(),
                 type: formType,
                 url: formUrl.trim(),
+                internalUrl: formInternalUrl.trim() || undefined,
                 apiKey: formApiKey.trim(),
                 allowUserSelfSelect: editingServer ? editingServer.allowUserSelfSelect : true,
                 allowTrialAccess: editingServer ? editingServer.allowTrialAccess : false,
@@ -152,6 +220,7 @@ export function AdminMediaServersPanel() {
             const res = await testMediaServerAction({
                 type: srv.type,
                 url: srv.url,
+                internalUrl: srv.internalUrl,
                 serverId: srv.id
             });
             setTestingMap(prev => ({ ...prev, [srv.id]: { testing: false, result: res } }));
@@ -222,6 +291,28 @@ export function AdminMediaServersPanel() {
         }
     };
 
+    const handleBulkProvisionUsers = async (srv: DiscoveredServerInfo) => {
+        if (!confirm(`Provision and sync all approved Full Members to "${srv.name}"? This creates their accounts in ${srv.type} with blank initial passwords and assigns the configured whitelist.`)) {
+            return;
+        }
+        setBulkProvisioningMap(prev => ({ ...prev, [srv.id]: true }));
+        setError("");
+        setSuccessMsg("");
+        try {
+            const res = await provisionAllUsersToMediaServerAction(srv.id);
+            if (res.success) {
+                setSuccessMsg(res.message || `Successfully provisioned ${res.count} users!`);
+                setTimeout(() => setSuccessMsg(""), 6000);
+            } else {
+                setError(res.error || "Failed to bulk provision users.");
+            }
+        } catch (e: any) {
+            setError(e.message || "Failed to bulk provision users.");
+        } finally {
+            setBulkProvisioningMap(prev => ({ ...prev, [srv.id]: false }));
+        }
+    };
+
     return (
         <div className="space-y-6">
             {/* Header & Quick Actions */}
@@ -234,7 +325,7 @@ export function AdminMediaServersPanel() {
                         </h2>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                        Configure Plex, Jellyfin, and Emby instances. Control strictly which servers and libraries your Full Members are allowed to self-select. (Trial member access is managed via the Trial Safe Pool in Access Control).
+                        Configure Plex, Jellyfin, and Emby instances. Control strictly which servers and libraries your Full Members are allowed to self-select. (Trial member access is managed via the <Link href="/settings/access?tab=onboarding#trial-safe-pool" className="text-purple-300 hover:text-purple-200 underline font-semibold">Trial Safe Pool</Link> in Access Control).
                     </p>
                 </div>
 
@@ -330,9 +421,19 @@ export function AdminMediaServersPanel() {
                                                         </Badge>
                                                     )}
                                                 </div>
-                                                <p className="text-xs text-muted-foreground font-mono truncate max-w-md">
-                                                    {srv.url}
-                                                </p>
+                                                <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground font-mono">
+                                                    <span className="flex items-center gap-1 text-slate-300">
+                                                        <Globe className="h-3 w-3 text-cyan-400" />
+                                                        <span className="truncate max-w-[200px] sm:max-w-xs">{srv.url}</span>
+                                                    </span>
+                                                    {srv.internalUrl && (
+                                                        <span className="flex items-center gap-1 text-slate-400 border-l border-border/50 pl-2">
+                                                            <Network className="h-3 w-3 text-emerald-400" />
+                                                            <span className="text-[11px] text-emerald-400/90 truncate max-w-[180px]">{srv.internalUrl}</span>
+                                                            <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5 border-emerald-500/30 text-emerald-400 bg-emerald-500/10">LAN Direct</Badge>
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
 
@@ -351,6 +452,24 @@ export function AdminMediaServersPanel() {
                                                 )}
                                                 <span>Test Connection</span>
                                             </Button>
+
+                                            {!isPlex && (
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => handleBulkProvisionUsers(srv)}
+                                                    disabled={bulkProvisioningMap[srv.id]}
+                                                    className="h-8 text-xs border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 gap-1.5 cursor-pointer"
+                                                    title={`Provision & sync all Full Members to ${srv.name}`}
+                                                >
+                                                    {bulkProvisioningMap[srv.id] ? (
+                                                        <Loader2 className="h-3 w-3 animate-spin text-emerald-400" />
+                                                    ) : (
+                                                        <Users className="h-3.5 w-3.5 text-emerald-400" />
+                                                    )}
+                                                    <span>Provision Users</span>
+                                                </Button>
+                                            )}
 
                                             {!isPlex && (
                                                 <Button
@@ -391,9 +510,13 @@ export function AdminMediaServersPanel() {
                                                     <XCircle className="h-3.5 w-3.5 text-red-400 shrink-0" />
                                                 )}
                                                 <span className="truncate">
-                                                    {testState.result.ok 
-                                                        ? `Connected to ${testState.result.serverName} (v${testState.result.version || "latest"}, ${testState.result.os || "Linux"}) in ${testState.result.latencyMs}ms`
-                                                        : testState.result.error || "Connection failed"}
+                                                    {testState.result.summary ? (
+                                                        testState.result.summary
+                                                    ) : testState.result.ok ? (
+                                                        `Connected to ${testState.result.serverName} (v${testState.result.version || "latest"}, ${testState.result.os || "Linux"}) in ${testState.result.latencyMs}ms`
+                                                    ) : (
+                                                        testState.result.error || "Connection failed"
+                                                    )}
                                                 </span>
                                             </div>
                                             {testState.result.latencyMs && (
@@ -432,12 +555,14 @@ export function AdminMediaServersPanel() {
                                                     </Label>
                                                 </div>
                                                 <p className="text-[11px] text-muted-foreground">
-                                                    Governed centrally via the <span className="text-purple-300 font-medium">Trial Safe Pool</span> in Access Control.
+                                                    Governed centrally via the <Link href="/settings/access?tab=onboarding#trial-safe-pool" className="text-purple-300 hover:text-purple-200 underline font-semibold inline-flex items-center gap-1">Trial Safe Pool in Access Control <ExternalLink className="h-2.5 w-2.5 inline" /></Link>.
                                                 </p>
                                             </div>
-                                            <Badge variant="outline" className="text-[10px] bg-purple-500/10 text-purple-300 border-purple-500/30 shrink-0">
-                                                Access Control
-                                            </Badge>
+                                            <Link href="/settings/access?tab=onboarding#trial-safe-pool">
+                                                <Badge variant="outline" className="text-[10px] bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border-purple-500/30 shrink-0 cursor-pointer transition-colors flex items-center gap-1">
+                                                    Configure Access <ExternalLink className="h-2.5 w-2.5" />
+                                                </Badge>
+                                            </Link>
                                         </div>
                                     </div>
 
@@ -615,13 +740,38 @@ export function AdminMediaServersPanel() {
                         </div>
 
                         <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold">Server URL (LAN or Domain)</Label>
+                            <Label className="text-xs font-semibold flex items-center gap-1.5">
+                                <Globe className="h-3.5 w-3.5 text-cyan-400" />
+                                <span>Public Client URL (Shown in Setup Guides)</span>
+                            </Label>
                             <Input
-                                placeholder="http://192.168.1.100:8096 or https://jellyfin.example.com"
+                                placeholder="https://jellyfin.domshomelab.com"
                                 value={formUrl}
                                 onChange={e => setFormUrl(e.target.value)}
-                                className="h-9 text-xs"
+                                className="h-9 text-xs font-mono"
                             />
+                            <p className="text-[10px] text-muted-foreground">
+                                The public reverse proxy address displayed to members in setup guides and client app connection screens.
+                            </p>
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <div className="flex items-center justify-between">
+                                <Label className="text-xs font-semibold flex items-center gap-1.5">
+                                    <Network className="h-3.5 w-3.5 text-emerald-400" />
+                                    <span>Internal LAN Fallback URL (Local Direct Routing)</span>
+                                </Label>
+                                <span className="text-[10px] text-muted-foreground">Optional</span>
+                            </div>
+                            <Input
+                                placeholder="http://192.168.1.87:8096"
+                                value={formInternalUrl}
+                                onChange={e => setFormInternalUrl(e.target.value)}
+                                className="h-9 text-xs font-mono"
+                            />
+                            <p className="text-[10px] text-muted-foreground">
+                                Direct internal IP & port used by Portalarr to bypass reverse proxy header stripping, SSL overhead, and NAT loopback.
+                            </p>
                         </div>
 
                         <div className="space-y-1.5">
@@ -704,6 +854,17 @@ export function AdminMediaServersPanel() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {!onDirtyChange && (
+                <UnsavedChangesPrompt
+                    hasUnsavedChanges={hasUnsavedChanges}
+                    unsavedSections={dirtySections}
+                    onSave={handleSaveAllDirty}
+                    onDiscard={handleDiscard}
+                    isSaving={isSavingAll}
+                    saveLabel="Save Server Rules"
+                />
+            )}
         </div>
     );
 }
