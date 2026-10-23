@@ -1286,8 +1286,9 @@ Before completing any task, execute:
     5. **Approval Queue**: Staged live PMS modifications and staged user-facing emails.
     6. **Sent Emails (`sent-emails`)**: Complete outbound email audit log displaying dispatch modes, delivery status, and full message previews.
 - **Automatic vs Approved & Sent Distinction (`SentEmailLog`)**:
-  - **Sent Automatically (`sendMode: "AUTOMATIC"`)**: Displays a purple/indigo badge (`bg-purple-500/15 text-purple-400 border-purple-500/40`) with `Bot` icon indicating messages triggered autonomously by background system workflows (welcome emails, automated renewal notices, system alerts, test emails, and scheduled digests).
+  - **Sent Automatically (`sendMode: "AUTOMATIC"`)**: Displays a purple/indigo badge (`bg-purple-500/15 text-purple-400 border-purple-500/40`) with `Bot` icon indicating messages triggered autonomously by background system workflows (welcome emails, automated renewal notices, system alerts, test emails via `sendTestEmailAction`, template preview tests, and scheduled digests).
   - **Approved & Sent (`sendMode: "APPROVED_AND_SENT"`)**: Displays an emerald badge (`bg-emerald-500/15 text-emerald-400 border-emerald-500/40`) with `ShieldCheck` icon indicating messages that were staged in the Action Approval Queue and vetted by an administrator prior to live SMTP transmission. Displays approver identity (`Approved by "Admin"`) and exact approval timestamp.
+  - **Comprehensive Outbound Logging**: 100% of outbound platform email paths (automated workflows, approved queue dispatches, test connection checks via Resend or Custom SMTP, template previews, and admin approval notifications) record directly to `SentEmailLog` to ensure the audit log is never falsely empty.
 - **Audit Metrics & Telemetry Grid**:
   - **Total Dispatched**: Platform-wide outbound email volume with `Mail` icon in sky blue (`text-sky-400`).
   - **Sent Automatically**: Count of autonomous notifications in purple (`text-purple-400`).

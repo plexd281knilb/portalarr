@@ -2085,6 +2085,27 @@ export async function sendTestEmailTemplateAction(id: string, customSubject?: st
             html
         });
 
+        try {
+            await prisma.sentEmailLog.create({
+                data: {
+                    recipient: recipientEmail,
+                    recipientName: adminUser?.username || "Administrator",
+                    userId: adminUser?.id || null,
+                    subject: `[PREVIEW TEST] ${subject}`,
+                    bodyPreview: body.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 300),
+                    html,
+                    templateId: id,
+                    sendMode: "AUTOMATIC",
+                    status: "SENT",
+                    sentAt: new Date()
+                }
+            });
+            revalidatePath("/settings");
+            revalidatePath("/settings/access");
+        } catch (logErr: any) {
+            console.warn("[SENT-EMAIL-LOG-PREVIEW-ERROR]:", logErr?.message || logErr);
+        }
+
         logger.addLog("INFO", "EMAIL", `Sent template preview test email for "${defaultDef.name}" from ${resolvedSender.email} to ${recipientEmail}`);
         return { success: true, message: `Preview test email successfully sent to ${recipientEmail} from ${resolvedSender.email} (${resolvedSender.displayName})!` };
     } catch (e: any) {
@@ -2302,6 +2323,27 @@ export async function sendTestBroadcastEmailAction(payload: { subject: string; b
             html: personalizedHtml
         });
 
+        try {
+            await prisma.sentEmailLog.create({
+                data: {
+                    recipient: recipientEmail,
+                    recipientName: adminUser?.username || "Administrator",
+                    userId: adminUser?.id || null,
+                    subject: `[BROADCAST TEST] ${personalizedSubject}`,
+                    bodyPreview: personalizedBody.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 300),
+                    html: personalizedHtml,
+                    templateId: "broadcast_test",
+                    sendMode: "AUTOMATIC",
+                    status: "SENT",
+                    sentAt: new Date()
+                }
+            });
+            revalidatePath("/settings");
+            revalidatePath("/settings/access");
+        } catch (logErr: any) {
+            console.warn("[SENT-EMAIL-LOG-BROADCAST-ERROR]:", logErr?.message || logErr);
+        }
+
         logger.addLog("INFO", "EMAIL", `Sent broadcast test preview email from ${resolvedSender.email} to ${recipientEmail}`);
         return { success: true, message: `Test email successfully delivered to ${recipientEmail} from ${resolvedSender.email}!` };
     } catch (e: any) {
@@ -2384,12 +2426,30 @@ export async function sendTestEmailAction(providerMode?: "resend" | "custom") {
         };
     }
 
+    let targetRecipient = from.includes("@") ? from : "admin@domshomelab.com";
+    let adminUserRecord: any = null;
+    const testSubject = `🧪 DomsHomeLab SMTP Test (${isResend ? "Resend" : "Custom SMTP"})`;
+    const testHtml = `
+        <div style="font-family: sans-serif; padding: 24px; color: #0f172a; max-width: 550px; margin: 0 auto; border: 1px solid #cbd5e1; border-radius: 12px; background-color: #ffffff;">
+            <h2 style="color: #0284c7; margin-top: 0; font-size: 20px;">SMTP Configuration Verified (${isResend ? "Resend" : "Custom SMTP"})</h2>
+            <p style="font-size: 14px; color: #334155;">Your DomsHomeLab (${isResend ? "Resend Outbound Delivery" : "Custom SMTP Server"}) is working properly.</p>
+            <div style="background-color: #f1f5f9; padding: 12px 16px; border-radius: 8px; font-size: 13px; color: #475569; margin: 16px 0;">
+                <strong>Provider:</strong> ${isResend ? "Resend (smtp.resend.com)" : "Custom SMTP"}<br/>
+                <strong>Host:</strong> ${host}:${port}<br/>
+                <strong>Sender:</strong> ${from}
+            </div>
+            <p style="font-size: 12px; color: #94a3b8; margin-bottom: 0;">Sent automatically from DomsHomeLab System Settings.</p>
+        </div>
+    `;
+
     try {
-        const adminUser = await prisma.user.findFirst({
+        adminUserRecord = await prisma.user.findFirst({
             where: { role: "ADMIN", email: { contains: "@" } },
-            select: { email: true }
+            select: { id: true, email: true, username: true }
         });
-        const targetRecipient = adminUser?.email || (from.includes("@") ? from : "admin@domshomelab.com");
+        if (adminUserRecord?.email) {
+            targetRecipient = adminUserRecord.email;
+        }
         const resolvedSender = resolveSenderAddress("notifications", from);
         const senderEmail = resolvedSender.formatted;
         const transporter = nodemailer.createTransport({
@@ -2405,23 +2465,53 @@ export async function sendTestEmailAction(providerMode?: "resend" | "custom") {
         await transporter.sendMail({
             from: senderEmail,
             to: targetRecipient,
-            subject: `🧪 DomsHomeLab SMTP Test (${isResend ? "Resend" : "Custom SMTP"})`,
-            html: `
-                <div style="font-family: sans-serif; padding: 24px; color: #0f172a; max-width: 550px; margin: 0 auto; border: 1px solid #cbd5e1; border-radius: 12px; background-color: #ffffff;">
-                    <h2 style="color: #0284c7; margin-top: 0; font-size: 20px;">SMTP Configuration Verified (${isResend ? "Resend" : "Custom SMTP"})</h2>
-                    <p style="font-size: 14px; color: #334155;">Your DomsHomeLab (${isResend ? "Resend Outbound Delivery" : "Custom SMTP Server"}) is working properly.</p>
-                    <div style="background-color: #f1f5f9; padding: 12px 16px; border-radius: 8px; font-size: 13px; color: #475569; margin: 16px 0;">
-                        <strong>Provider:</strong> ${isResend ? "Resend (smtp.resend.com)" : "Custom SMTP"}<br/>
-                        <strong>Host:</strong> ${host}:${port}<br/>
-                        <strong>Sender:</strong> ${senderEmail}
-                    </div>
-                    <p style="font-size: 12px; color: #94a3b8; margin-bottom: 0;">Sent automatically from DomsHomeLab System Settings.</p>
-                </div>
-            `
+            subject: testSubject,
+            html: testHtml
         });
+
+        try {
+            await prisma.sentEmailLog.create({
+                data: {
+                    recipient: targetRecipient,
+                    recipientName: adminUserRecord?.username || "Administrator",
+                    userId: adminUserRecord?.id || null,
+                    subject: testSubject,
+                    bodyPreview: `SMTP test connection via ${isResend ? "Resend (smtp.resend.com:465)" : `Custom SMTP (${host}:${port})`}`,
+                    html: testHtml,
+                    templateId: isResend ? "smtp_test_resend" : "smtp_test_custom",
+                    sendMode: "AUTOMATIC",
+                    status: "SENT",
+                    sentAt: new Date()
+                }
+            });
+            revalidatePath("/settings");
+            revalidatePath("/settings/access");
+        } catch (logErr: any) {
+            console.warn("[SENT-EMAIL-LOG-TEST-ERROR]:", logErr?.message || logErr);
+        }
+
         logger.addLog("SUCCESS", "EMAIL", `Test email successfully dispatched to ${targetRecipient}!`, `Provider: ${isResend ? "Resend" : "Custom"} | Host: ${host}:${port} | Sender: ${senderEmail}`);
         return { success: true, message: `Test email (${isResend ? "Resend" : "Custom SMTP"}) successfully dispatched to ${targetRecipient} from ${senderEmail}!` };
     } catch (e: any) {
+        try {
+            await prisma.sentEmailLog.create({
+                data: {
+                    recipient: targetRecipient,
+                    recipientName: adminUserRecord?.username || "Administrator",
+                    userId: adminUserRecord?.id || null,
+                    subject: testSubject,
+                    bodyPreview: `SMTP test connection failed: ${e.message}`,
+                    html: `<p>Failed: ${e.message}</p>`,
+                    templateId: isResend ? "smtp_test_resend" : "smtp_test_custom",
+                    sendMode: "AUTOMATIC",
+                    status: "FAILED",
+                    error: e.message || String(e),
+                    sentAt: new Date()
+                }
+            });
+            revalidatePath("/settings");
+            revalidatePath("/settings/access");
+        } catch {}
         logger.addLog("ERROR", "EMAIL", `Test email dispatch failed: ${e.message}`, e.stack || String(e));
         return { success: false, error: e.message || "Failed to dispatch test email." };
     }

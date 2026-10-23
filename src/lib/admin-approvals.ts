@@ -196,6 +196,26 @@ export async function notifyAdminsOnPendingApproval(approval: {
                     }).catch(e => {
                         console.warn(`[EMAIL-APPROVAL-NOTIFY-SEND-ERROR] Failed sending alert to ${admin.email}:`, e?.message || e);
                     });
+
+                    try {
+                        await prisma.sentEmailLog.create({
+                            data: {
+                                recipient: admin.email,
+                                recipientName: admin.username,
+                                userId: admin.id,
+                                subject: `⚖️ [Approval Required] ${approval.title}`,
+                                bodyPreview: `Approval Required: ${approval.title} - ${approval.description || ""}`.slice(0, 300),
+                                html: finalHtml,
+                                templateId: "admin_approval_alert",
+                                sendMode: "AUTOMATIC",
+                                status: "SENT",
+                                approvalId: approval.id,
+                                sentAt: new Date()
+                            }
+                        });
+                    } catch (logErr) {
+                        console.warn("[SENT-EMAIL-LOG-APPROVAL-ALERT-ERROR]:", logErr);
+                    }
                 }
 
                 logger.addLog("INFO", "APPROVAL", `Dispatched email approval alerts to ${admins.length} administrator(s) for "${approval.title}"`);
