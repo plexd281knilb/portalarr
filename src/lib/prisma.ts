@@ -939,6 +939,7 @@ export async function ensureSchemaColumns(): Promise<void> {
                     "name" TEXT NOT NULL,
                     "type" TEXT NOT NULL,
                     "url" TEXT NOT NULL,
+                    "internalUrl" TEXT,
                     "apiKey" TEXT NOT NULL,
                     "isActive" BOOLEAN NOT NULL DEFAULT 1,
                     "isMonitored" BOOLEAN NOT NULL DEFAULT 1,
@@ -950,6 +951,14 @@ export async function ensureSchemaColumns(): Promise<void> {
                     "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
             `).catch(() => {});
+
+            try {
+                const mediaServerTableInfo: any[] = await prisma.$queryRawUnsafe(`PRAGMA table_info("MediaServer");`);
+                const mediaServerCols = mediaServerTableInfo.map((c: any) => c.name);
+                if (!mediaServerCols.includes("internalUrl")) {
+                    await prisma.$executeRawUnsafe(`ALTER TABLE "MediaServer" ADD COLUMN "internalUrl" TEXT;`);
+                }
+            } catch (e) {}
         } catch (e: any) {
             console.error("[DB-SCHEMA-AUTOFIX] Auxiliary tables check error:", e.message || e);
         }

@@ -13,7 +13,8 @@ import {
 } from "lucide-react";
 import { 
     ensureUserMediaServerProvisionedAction, 
-    setUserMediaServerPasswordAction 
+    setUserMediaServerPasswordAction,
+    authorizeMediaServerQuickConnectAction
 } from "@/app/media-server-actions";
 
 export interface MediaServerSetupGuideModalProps {
@@ -49,6 +50,12 @@ export function MediaServerSetupGuideModal({
     const [savingPassword, setSavingPassword] = useState(false);
     const [passwordSuccess, setPasswordSuccess] = useState(false);
     const [passwordErr, setPasswordErr] = useState("");
+
+    // Quick Connect state
+    const [quickConnectCode, setQuickConnectCode] = useState("");
+    const [authorizingQuickConnect, setAuthorizingQuickConnect] = useState(false);
+    const [quickConnectSuccess, setQuickConnectSuccess] = useState<string | null>(null);
+    const [quickConnectErr, setQuickConnectErr] = useState<string | null>(null);
 
     const isJellyfin = serverType === "JELLYFIN";
     const displayName = serverName || (isJellyfin ? "Jellyfin Media Server" : "Emby Media Server");
@@ -259,6 +266,94 @@ export function MediaServerSetupGuideModal({
                             <p className="text-[11px] text-muted-foreground leading-relaxed">
                                 Because you sign into DomsHomeLab via Plex, your {serverType} account is created with <strong className="text-foreground">NO PASSWORD</strong>. When opening your {serverType} player app, enter your username (<code className="text-foreground">{username}</code>) and <strong className="text-foreground">leave the password field completely empty</strong> to log in.
                             </p>
+                        </div>
+
+                        {/* Quick Connect TV & Device Pairing */}
+                        <div className="p-3.5 rounded-xl bg-purple-950/20 border border-purple-500/30 space-y-2.5">
+                            <div className="flex items-center justify-between">
+                                <Label className="text-xs font-bold text-purple-300 flex items-center gap-1.5">
+                                    <Sparkles className="h-3.5 w-3.5 text-purple-400" />
+                                    <span>⚡ Quick Connect (TV & Player Apps)</span>
+                                </Label>
+                                <Badge variant="outline" className="text-[10px] text-purple-300 border-purple-500/40 bg-purple-500/10 font-medium">
+                                    No Remote Typing
+                                </Badge>
+                            </div>
+                            <p className="text-[11px] text-muted-foreground leading-relaxed">
+                                Opening {serverType} on a Smart TV, Apple TV, Fire TV, or Roku? Instead of typing your username and password, enter the 6-character code shown on your TV screen:
+                            </p>
+                            <div className="flex gap-2">
+                                <Input
+                                    placeholder="Enter TV code (e.g. 123456)"
+                                    value={quickConnectCode}
+                                    onChange={e => {
+                                        setQuickConnectCode(e.target.value.toUpperCase());
+                                        setQuickConnectErr(null);
+                                        setQuickConnectSuccess(null);
+                                    }}
+                                    maxLength={10}
+                                    className="h-8 text-xs font-mono tracking-widest uppercase flex-1 bg-black/40 border-purple-500/30"
+                                />
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={async () => {
+                                        const clean = quickConnectCode.trim();
+                                        if (!clean || clean.length < 3) {
+                                            setQuickConnectErr("Please enter the code shown on your TV screen.");
+                                            return;
+                                        }
+                                        setAuthorizingQuickConnect(true);
+                                        setQuickConnectErr(null);
+                                        setQuickConnectSuccess(null);
+                                        try {
+                                            const res = await authorizeMediaServerQuickConnectAction(serverId, clean);
+                                            if (res.success) {
+                                                setQuickConnectSuccess(res.message || "Device authorized! Your TV will log in immediately.");
+                                                setQuickConnectCode("");
+                                            } else {
+                                                setQuickConnectErr(res.error || "Failed to authorize Quick Connect code");
+                                            }
+                                        } catch (e: any) {
+                                            setQuickConnectErr(e.message || "Failed to authorize Quick Connect");
+                                        } finally {
+                                            setAuthorizingQuickConnect(false);
+                                        }
+                                    }}
+                                    disabled={authorizingQuickConnect || quickConnectCode.trim().length < 3}
+                                    className="h-8 text-xs font-semibold bg-purple-600 hover:bg-purple-500 text-white gap-1.5 shrink-0 cursor-pointer"
+                                >
+                                    {authorizingQuickConnect ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                                    Authorize TV
+                                </Button>
+                            </div>
+                            {quickConnectSuccess && (
+                                <div className="text-[11px] text-emerald-400 flex items-center gap-1 font-medium">
+                                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
+                                    <span>{quickConnectSuccess}</span>
+                                </div>
+                            )}
+                            {quickConnectErr && (
+                                <div className="text-[11px] text-red-400 flex items-center gap-1">
+                                    <XCircle className="h-3.5 w-3.5 shrink-0 text-red-400" />
+                                    <span>{quickConnectErr}</span>
+                                </div>
+                            )}
+                            <div className="pt-1 flex items-center justify-between text-[11px] text-muted-foreground">
+                                <span>Alternatively, authorize via browser:</span>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    asChild
+                                    className="h-6 px-1.5 text-[11px] text-purple-300 hover:text-purple-200 gap-1"
+                                >
+                                    <a href={`${resolvedUrl}/web/index.html#!/quickconnect.html`} target="_blank" rel="noopener noreferrer">
+                                        <span>Open Web Quick Connect</span>
+                                        <ExternalLink className="h-3 w-3" />
+                                    </a>
+                                </Button>
+                            </div>
                         </div>
 
                         {/* Optional: Set Dedicated Streaming Password */}

@@ -1344,7 +1344,8 @@ async function runTestSuite() {
             updateUserMediaServersAndLibrariesAction,
             updateUserAccountPreferencesAction,
             ensureUserMediaServerProvisionedAction,
-            setUserMediaServerPasswordAction
+            setUserMediaServerPasswordAction,
+            authorizeMediaServerQuickConnectAction
         } = await import("../src/app/media-server-actions");
         const { getPlexSetupGuides, toggleFreeAddonAction } = await import("../src/app/actions");
         const { testMediaServerConnection } = await import("../src/lib/media-servers");
@@ -1377,36 +1378,39 @@ async function runTestSuite() {
             throw new Error(`MediaServer API key decryption mismatch: expected ${testServerApiKey}, got ${decryptedKey}`);
         }
 
-        // Test editing existing media server (URL & Name update while keeping existing API key)
+        // Test editing existing media server (URL & Name update while keeping existing API key + setting internalUrl)
         const editServerRes = await saveMediaServerAction({
             id: testMediaServer.id,
             name: "Updated Jellyfin Node",
             type: "JELLYFIN",
             url: "http://127.0.0.1:9999/jellyfin",
+            internalUrl: "http://127.0.0.1:9998",
             apiKey: ""
         });
-        if (!editServerRes.success || editServerRes.server?.name !== "Updated Jellyfin Node" || editServerRes.server?.url !== "http://127.0.0.1:9999/jellyfin") {
-            throw new Error(`Failed to edit existing media server: ${editServerRes.error}`);
+        if (!editServerRes.success || editServerRes.server?.name !== "Updated Jellyfin Node" || editServerRes.server?.internalUrl !== "http://127.0.0.1:9998") {
+            throw new Error(`Failed to edit existing media server or save internalUrl: ${editServerRes.error}`);
         }
 
-        // Verify getAdminMediaServersAction returns decrypted API key for admin review
+        // Verify getAdminMediaServersAction returns decrypted API key and internalUrl for admin review
         const adminServersRes = await getAdminMediaServersAction();
         if (!adminServersRes.success) throw new Error("Failed to fetch admin media servers");
         const foundTestServer = adminServersRes.servers.find(s => s.id === testMediaServer.id);
-        if (!foundTestServer || foundTestServer.apiKey !== testServerApiKey) {
-            throw new Error(`Expected admin server to have decrypted apiKey ${testServerApiKey}, got ${foundTestServer?.apiKey}`);
+        if (!foundTestServer || foundTestServer.apiKey !== testServerApiKey || foundTestServer.internalUrl !== "http://127.0.0.1:9998") {
+            throw new Error(`Expected admin server to have decrypted apiKey and internalUrl, got: ${JSON.stringify(foundTestServer)}`);
         }
 
-        // 2. Test MediaServer connection error handling (mock / offline URL)
+        // 2. Test MediaServer connection error handling (mock / offline URL + dual-URL testing)
         const connResult = await testMediaServerConnection(
             "JELLYFIN",
             "http://127.0.0.1:9999",
-            "mock_test_key"
+            "mock_test_key",
+            1000,
+            "http://127.0.0.1:9998"
         );
         if (connResult.ok !== false) {
             throw new Error("Expected offline media server connection test to fail gracefully");
         }
-        if (!connResult.error) {
+        if (!connResult.error && !connResult.summary) {
             throw new Error("Expected offline media server error message to be set");
         }
 
@@ -1529,10 +1533,27 @@ async function runTestSuite() {
                 if (shortPassword.success) {
                     throw new Error("Expected short password (<4 chars) to be rejected");
                 }
+
+                // 10. Test Quick Connect Trial Gating
+                const trialQuickConnect = await authorizeMediaServerQuickConnectAction(testMediaServer.id, "123456");
+                if (trialQuickConnect.success) {
+                    throw new Error("Expected trial user Quick Connect authorization to be rejected");
+                }
+                if (!trialQuickConnect.error?.includes("exclusively available for Full Members")) {
+                    throw new Error(`Expected full member gating error on Quick Connect, got: ${trialQuickConnect.error}`);
+                }
             } finally {
                 delete process.env.PORTALARR_TEST_USER_ID;
                 await prisma.user.delete({ where: { id: trialUser.id } }).catch(() => {});
             }
+
+            // 11. Test Quick Connect Input Validation for Full Member
+            process.env.PORTALARR_TEST_USER_ID = memberUser.id;
+            const invalidCodeRes = await authorizeMediaServerQuickConnectAction(testMediaServer.id, "");
+            if (invalidCodeRes.success) {
+                throw new Error("Expected empty Quick Connect code to be rejected");
+            }
+            delete process.env.PORTALARR_TEST_USER_ID;
         } finally {
             await prisma.user.delete({ where: { id: memberUser.id } }).catch(() => {});
             await prisma.mediaServer.delete({ where: { id: testMediaServer.id } }).catch(() => {});

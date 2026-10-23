@@ -1213,8 +1213,14 @@ Portalarr features an automated, real-time versioning, branch identification, an
 - **Reverse Proxy Header Stripping & Dual-Mode Auth Fallback**:
   - Reverse proxies (like Nginx Proxy Manager and Cloudflare) frequently strip non-standard HTTP request headers like `X-Emby-Token` or `Authorization`.
   - `mediaServerFetch` implements automatic query parameter fallback: if header authentication returns HTTP 401 or network errors, it retries transparently with `?api_key=${apiKey}` appended to the URL.
-- **Admin Fleet Bulk Provisioning**:
-  - The Admin Media Servers panel (`admin-media-servers-panel.tsx`) provides a 1-click **"Provision Users"** button on each Jellyfin/Emby server card calling `provisionAllUsersToMediaServerAction(serverId)`, allowing homelab administrators to bulk-provision all approved Full Members at once.
+- **Two-URL Dual-Routing Architecture (Public Client URL + Internal LAN Fallback URL)**:
+  - **Public Client URL (`url`)**: The public reverse proxy address (e.g. `https://jellyfin.domshomelab.com`) presented to members in the Setup Guide and used by remote player apps, as well as pinged by Portalarr to monitor external reachability.
+  - **Internal LAN Fallback URL (`internalUrl`)**: The direct local network address (e.g. `http://192.168.1.87:8096`) used by Portalarr for high-speed backend API operations (user provisioning, password updates, library scans, and Quick Connect authorization) to completely bypass reverse proxy header stripping, SSL overhead, and NAT loopback.
+  - **Resilient Fallback**: `resilientMediaServerFetch` automatically tries the internal LAN URL first if available, and transparently falls back to the public URL.
+- **Native Quick Connect TV & Device Pairing (`authorizeMediaServerQuickConnectAction`)**:
+  - Embedded in Step 2 of `MediaServerSetupGuideModal`: allows members to enter the 6-character Quick Connect code displayed on smart TVs, Apple TV (Swiftfin), Android TV, Roku, or Fire TV.
+  - Portalarr calls `POST /QuickConnect/Authorize?Code={code}&UserId={userId}` using admin credentials and resilient internal LAN routing, immediately logging the TV into the member's account with zero remote typing.
+  - Includes a direct fallback button opening the Jellyfin Web Quick Connect page (`${resolvedUrl}/web/index.html#!/quickconnect.html`).
 
 ---
 Before completing any task, execute:

@@ -15,6 +15,10 @@ export interface MediaServerConnectionResult {
     version?: string;
     os?: string;
     latencyMs?: number;
+    internalOk?: boolean;
+    internalLatencyMs?: number;
+    internalError?: string;
+    summary?: string;
     error?: string;
 }
 
@@ -75,124 +79,211 @@ export async function mediaServerFetch(
 
 /**
  * Probes a Jellyfin or Emby instance via /System/Info with latency measurement.
+ * Supports dual-URL testing (Public Client URL + Internal LAN Fallback URL).
  */
 export async function testMediaServerConnection(
     type: "JELLYFIN" | "EMBY",
     url: string,
     apiKey: string,
-    timeoutMs = 6000
+    timeoutMs = 6000,
+    internalUrl?: string
 ): Promise<MediaServerConnectionResult> {
-    const cleanUrl = cleanBaseUrl(url);
-    if (!cleanUrl || !apiKey) {
+    const cleanPublic = cleanBaseUrl(url);
+    const cleanInternal = internalUrl ? cleanBaseUrl(internalUrl) : "";
+
+    if (!cleanPublic && !cleanInternal) {
         return { ok: false, error: "Missing server URL or API key" };
     }
+    if (!apiKey) {
+        return { ok: false, error: "Missing API key" };
+    }
 
-    const start = Date.now();
-    try {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), timeoutMs);
+    // Helper to probe a single target
+    const probeTarget = async (targetUrl: string): Promise<{ ok: boolean; latencyMs: number; data?: any; error?: string }> => {
+        const start = Date.now();
+        try {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-        const res = await mediaServerFetch(cleanUrl, "/System/Info", apiKey, {
-            method: "GET",
-            signal: controller.signal
-        });
-        clearTimeout(timer);
+            const res = await mediaServerFetch(targetUrl, "/System/Info", apiKey, {
+                method: "GET",
+                signal: controller.signal
+            });
+            clearTimeout(timer);
 
-        const latencyMs = Date.now() - start;
+            const latencyMs = Date.now() - start;
+            if (!res.ok) {
+                return {
+                    ok: false,
+                    latencyMs,
+                    error: `HTTP ${res.status}: ${res.statusText || "Unauthorized or server error"}`
+                };
+            }
 
-        if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            return { ok: true, latencyMs, data };
+        } catch (err: any) {
             return {
                 ok: false,
-                latencyMs,
-                error: `HTTP ${res.status}: ${res.statusText || "Unauthorized or server error"}`
+                latencyMs: Date.now() - start,
+                error: err.name === "AbortError" ? "Connection timed out" : (err.message || "Failed to reach media server")
             };
         }
+    };
 
-        const data: any = await res.json();
+    // Probe targets in parallel if internalUrl is provided
+    const [publicResult, internalResult] = await Promise.all([
+        cleanPublic ? probeTarget(cleanPublic) : Promise.resolve(null),
+        cleanInternal ? probeTarget(cleanInternal) : Promise.resolve(null)
+    ]);
+
+    // Consolidate response data
+    const activeData = (internalResult?.ok ? internalResult.data : null) || (publicResult?.ok ? publicResult.data : null) || {};
+    const serverName = activeData.ServerName || activeData.Name || (type === "JELLYFIN" ? "Jellyfin Server" : "Emby Server");
+    const version = activeData.Version || "Unknown";
+    const os = activeData.OperatingSystem || activeData.SystemArchitecture || "Linux";
+
+    if (publicResult && internalResult) {
+        const bothOk = publicResult.ok && internalResult.ok;
+        const eitherOk = publicResult.ok || internalResult.ok;
+
+        let summary = "";
+        if (bothOk) {
+            summary = `Connected (Public: ${publicResult.latencyMs}ms • LAN: ${internalResult.latencyMs}ms)`;
+        } else if (internalResult.ok && !publicResult.ok) {
+            summary = `LAN Operational (${internalResult.latencyMs}ms) • Public Reverse Proxy Unreachable (${publicResult.error})`;
+        } else if (publicResult.ok && !internalResult.ok) {
+            summary = `Public Operational (${publicResult.latencyMs}ms) • Internal LAN Unreachable (${internalResult.error})`;
+        } else {
+            summary = `Failed: Public (${publicResult.error}) • LAN (${internalResult.error})`;
+        }
+
         return {
-            ok: true,
-            serverName: data.ServerName || data.Name || (type === "JELLYFIN" ? "Jellyfin Server" : "Emby Server"),
-            version: data.Version || "Unknown",
-            os: data.OperatingSystem || data.SystemArchitecture || "Linux",
-            latencyMs
-        };
-    } catch (err: any) {
-        return {
-            ok: false,
-            latencyMs: Date.now() - start,
-            error: err.name === "AbortError" ? "Connection timed out" : (err.message || "Failed to reach media server")
+            ok: eitherOk,
+            serverName,
+            version,
+            os,
+            latencyMs: publicResult.latencyMs,
+            internalOk: internalResult.ok,
+            internalLatencyMs: internalResult.latencyMs,
+            internalError: internalResult.ok ? undefined : internalResult.error,
+            summary,
+            error: eitherOk ? undefined : summary
         };
     }
+
+    // Single target probe result
+    const primary = publicResult || internalResult!;
+    return {
+        ok: primary.ok,
+        serverName: primary.ok ? serverName : undefined,
+        version: primary.ok ? version : undefined,
+        os: primary.ok ? os : undefined,
+        latencyMs: primary.latencyMs,
+        error: primary.error
+    };
 }
 
 /**
  * Discovers virtual folders and media libraries configured on Jellyfin or Emby.
+ * Prefers internal LAN URL if available to bypass proxy header stripping and SSL overhead.
  */
 export async function fetchMediaServerLibraries(
     type: "JELLYFIN" | "EMBY",
     url: string,
     apiKey: string,
-    timeoutMs = 7000
+    timeoutMs = 7000,
+    internalUrl?: string
 ): Promise<MediaServerLibrary[]> {
-    const cleanUrl = cleanBaseUrl(url);
-    if (!cleanUrl || !apiKey) return [];
+    const urlsToTry = [internalUrl, url].filter(Boolean).map(u => cleanBaseUrl(u!));
+    if (urlsToTry.length === 0 || !apiKey) return [];
 
-    try {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), timeoutMs);
+    for (const targetUrl of urlsToTry) {
+        try {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-        // 1. Try /Library/VirtualFolders
-        const res = await mediaServerFetch(cleanUrl, "/Library/VirtualFolders", apiKey, {
-            method: "GET",
-            signal: controller.signal
-        });
-        clearTimeout(timer);
+            // 1. Try /Library/VirtualFolders
+            const res = await mediaServerFetch(targetUrl, "/Library/VirtualFolders", apiKey, {
+                method: "GET",
+                signal: controller.signal
+            });
+            clearTimeout(timer);
 
-        if (res.ok) {
-            const data: any = await res.json();
-            if (Array.isArray(data) && data.length > 0) {
-                return data.map((folder: any) => ({
-                    id: String(folder.ItemId || folder.Id || folder.Name),
-                    title: folder.Name || "Media Library",
-                    type: (folder.CollectionType || "mixed").toLowerCase()
-                }));
+            if (res.ok) {
+                const data: any = await res.json();
+                if (Array.isArray(data) && data.length > 0) {
+                    return data.map((folder: any) => ({
+                        id: String(folder.ItemId || folder.Id || folder.Name),
+                        title: folder.Name || "Media Library",
+                        type: (folder.CollectionType || "mixed").toLowerCase()
+                    }));
+                }
             }
-        }
 
-        // 2. Fallback: Query root views via /Users or /Library/MediaFolders
-        const fallbackRes = await mediaServerFetch(cleanUrl, "/Library/MediaFolders", apiKey, {
-            method: "GET"
-        }).catch(() => null);
+            // 2. Fallback: Query root views via /Library/MediaFolders
+            const fallbackRes = await mediaServerFetch(targetUrl, "/Library/MediaFolders", apiKey, {
+                method: "GET"
+            }).catch(() => null);
 
-        if (fallbackRes && fallbackRes.ok) {
-            const fbData: any = await fallbackRes.json();
-            const items = fbData.Items || fbData;
-            if (Array.isArray(items)) {
-                return items.map((f: any) => ({
-                    id: String(f.Id || f.ItemId || f.Name),
-                    title: f.Name || "Media Library",
-                    type: (f.CollectionType || f.Type || "mixed").toLowerCase()
-                }));
+            if (fallbackRes && fallbackRes.ok) {
+                const fbData: any = await fallbackRes.json();
+                const items = fbData.Items || fbData;
+                if (Array.isArray(items) && items.length > 0) {
+                    return items.map((f: any) => ({
+                        id: String(f.Id || f.ItemId || f.Name),
+                        title: f.Name || "Media Library",
+                        type: (f.CollectionType || f.Type || "mixed").toLowerCase()
+                    }));
+                }
             }
+        } catch (err) {
+            console.warn(`[MEDIA-SERVER-LIBS] Failed to fetch libraries from ${type} (${targetUrl}):`, err);
         }
-
-        return [];
-    } catch (err) {
-        console.warn(`[MEDIA-SERVER-LIBS] Failed to fetch libraries from ${type} (${cleanUrl}):`, err);
-        return [];
     }
+
+    return [];
+}
+
+/**
+ * Executes a resilient media server API call, trying internal LAN URL first if available,
+ * and falling back to public URL.
+ */
+export async function resilientMediaServerFetch(
+    server: { url: string; internalUrl?: string | null; apiKey: string },
+    endpoint: string,
+    options: RequestInit = {}
+): Promise<Response> {
+    const candidateUrls = [server.internalUrl, server.url].filter(Boolean) as string[];
+    let lastResponse: Response | null = null;
+    let lastErr: any = null;
+
+    for (const rawUrl of candidateUrls) {
+        try {
+            const res = await mediaServerFetch(rawUrl, endpoint, server.apiKey, options);
+            if (res.ok) {
+                return res;
+            }
+            lastResponse = res;
+        } catch (err: any) {
+            lastErr = err;
+        }
+    }
+
+    if (lastResponse) return lastResponse;
+    throw lastErr || new Error("Failed to contact media server on any configured URL");
 }
 
 /**
  * Synchronizes user account existence and library folder permissions in Jellyfin or Emby.
  */
 export async function syncUserMediaServerAccess(
-    server: { id: string; name: string; type: string; url: string; apiKey: string },
+    server: { id: string; name: string; type: string; url: string; internalUrl?: string | null; apiKey: string },
     user: { id: string; username: string; email?: string; jellyfinUserId?: string | null; embyUserId?: string | null },
     enabledServer: boolean,
     selectedLibraryIds: string[]
 ): Promise<{ success: boolean; remoteUserId?: string; error?: string }> {
-    const cleanUrl = cleanBaseUrl(server.url);
+    const cleanUrl = cleanBaseUrl(server.internalUrl || server.url);
     if (!cleanUrl || !server.apiKey) {
         return { success: false, error: "Missing server URL or API key" };
     }
@@ -205,7 +296,7 @@ export async function syncUserMediaServerAccess(
 
         // 1. Locate remote user ID if not known
         if (!remoteUserId) {
-            const usersRes = await mediaServerFetch(server.url, "/Users", server.apiKey);
+            const usersRes = await resilientMediaServerFetch(server, "/Users");
 
             if (usersRes.ok) {
                 const usersList: any = await usersRes.json();
@@ -223,7 +314,7 @@ export async function syncUserMediaServerAccess(
 
         // 2. If user doesn't exist and access is enabled, create user
         if (!remoteUserId && enabledServer) {
-            const createRes = await mediaServerFetch(server.url, "/Users/New", server.apiKey, {
+            const createRes = await resilientMediaServerFetch(server, "/Users/New", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -245,7 +336,7 @@ export async function syncUserMediaServerAccess(
         }
 
         // 3. Update Policy (Folder Whitelist + Disabled State)
-        const policyRes = await mediaServerFetch(server.url, `/Users/${remoteUserId}/Policy`, server.apiKey, {
+        const policyRes = await resilientMediaServerFetch(server, `/Users/${remoteUserId}/Policy`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -270,11 +361,11 @@ export async function syncUserMediaServerAccess(
  * and applying their permitted library whitelist.
  */
 export async function ensureUserMediaServerAccount(
-    server: { id: string; name: string; type: string; url: string; apiKey: string },
+    server: { id: string; name: string; type: string; url: string; internalUrl?: string | null; apiKey: string },
     user: { id: string; username: string; email?: string; jellyfinUserId?: string | null; embyUserId?: string | null },
     allowedLibraryIds: string[] = []
 ): Promise<{ success: boolean; remoteUserId?: string; created: boolean; error?: string }> {
-    const cleanUrl = cleanBaseUrl(server.url);
+    const cleanUrl = cleanBaseUrl(server.internalUrl || server.url);
     if (!cleanUrl || !server.apiKey) {
         return { success: false, created: false, error: "Missing server URL or API key" };
     }
@@ -285,7 +376,7 @@ export async function ensureUserMediaServerAccount(
     try {
         // 1. Check if user already exists on remote server
         if (!remoteUserId) {
-            const usersRes = await mediaServerFetch(server.url, "/Users", server.apiKey);
+            const usersRes = await resilientMediaServerFetch(server, "/Users");
             if (usersRes.ok) {
                 const usersList: any = await usersRes.json();
                 if (Array.isArray(usersList)) {
@@ -303,7 +394,7 @@ export async function ensureUserMediaServerAccount(
         let wasCreated = false;
         // 2. If user doesn't exist, create them with blank password
         if (!remoteUserId) {
-            const createRes = await mediaServerFetch(server.url, "/Users/New", server.apiKey, {
+            const createRes = await resilientMediaServerFetch(server, "/Users/New", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -326,7 +417,7 @@ export async function ensureUserMediaServerAccount(
 
         // 3. Apply permitted library folder whitelist & enable account
         if (remoteUserId) {
-            await mediaServerFetch(server.url, `/Users/${remoteUserId}/Policy`, server.apiKey, {
+            await resilientMediaServerFetch(server, `/Users/${remoteUserId}/Policy`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -350,13 +441,13 @@ export async function setUserMediaServerPassword(
     serverUrl: string,
     apiKey: string,
     remoteUserId: string,
-    newPassword: string
+    newPassword: string,
+    internalUrl?: string | null
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        const res = await mediaServerFetch(
-            serverUrl,
+        const res = await resilientMediaServerFetch(
+            { url: serverUrl, internalUrl, apiKey },
             `/Users/${remoteUserId}/Password`,
-            apiKey,
             {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -375,5 +466,59 @@ export async function setUserMediaServerPassword(
         return { success: true };
     } catch (err: any) {
         return { success: false, error: err.message || "Failed to set streaming password" };
+    }
+}
+
+/**
+ * Authorizes a Jellyfin Quick Connect code for a specific user using admin credentials.
+ * Works seamlessly across both Internal LAN and Public URL endpoints.
+ */
+export async function authorizeQuickConnect(
+    server: { url: string; internalUrl?: string | null; apiKey: string },
+    code: string,
+    userId: string
+): Promise<{ success: boolean; message?: string; error?: string }> {
+    const cleanCode = (code || "").trim().toUpperCase();
+    if (!cleanCode) {
+        return { success: false, error: "Missing Quick Connect code." };
+    }
+    if (!userId) {
+        return { success: false, error: "Missing user ID for authorization." };
+    }
+
+    try {
+        const endpoint = `/QuickConnect/Authorize?Code=${encodeURIComponent(cleanCode)}&UserId=${encodeURIComponent(userId)}`;
+        const res = await resilientMediaServerFetch(server, endpoint, {
+            method: "POST"
+        });
+
+        if (res.ok || res.status === 204) {
+            return {
+                success: true,
+                message: `Device successfully authorized for code ${cleanCode}! Your TV will log in immediately.`
+            };
+        }
+
+        if (res.status === 404) {
+            return {
+                success: false,
+                error: `Code "${cleanCode}" was not found or has expired. Please check your TV screen for a fresh code.`
+            };
+        }
+
+        if (res.status === 401) {
+            return {
+                success: false,
+                error: "Unauthorized: API key does not have permission to authorize Quick Connect."
+            };
+        }
+
+        const body = await res.text().catch(() => "");
+        return {
+            success: false,
+            error: `Jellyfin returned HTTP ${res.status}: ${body || res.statusText}`
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to authorize Quick Connect on media server" };
     }
 }
