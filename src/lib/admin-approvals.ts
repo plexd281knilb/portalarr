@@ -105,12 +105,28 @@ export async function notifyAdminsOnPendingApproval(approval: {
             }
         }
 
-        // 2. SMTP ADMIN EMAIL ALERT
+        // 2. SMTP / RESEND ADMIN EMAIL ALERT
+        const effectiveMode = settings.emailProviderMode || (settings.smtpHost?.includes("resend") ? "resend" : "custom");
+        const isResend = effectiveMode === "resend";
+
+        const host = isResend ? "smtp.resend.com" : (settings.customSmtpHost || settings.smtpHost || "");
+        const port = isResend ? 465 : (settings.customSmtpPort || settings.smtpPort || 587);
+        const secure = port === 465;
+        const user = isResend ? "resend" : (settings.customSmtpUser || settings.smtpUser || "");
+        const rawPass = isResend ? (settings.resendApiKey || settings.smtpPass) : (settings.customSmtpPass || settings.smtpPass);
+        let pass = "";
+        if (rawPass) {
+            try { pass = decryptData(rawPass); } catch { pass = rawPass; }
+        }
+        const from = isResend 
+            ? ((settings.resendFrom && !settings.resendFrom.toLowerCase().includes("@gmail.com")) ? settings.resendFrom : "notifications@domshomelab.com")
+            : (settings.customSmtpFrom || settings.smtpFrom || user);
+
         if (
             settings.adminApprovalEmailNotify !== false && 
-            settings.smtpHost && 
-            settings.smtpUser && 
-            settings.smtpPass
+            host && 
+            user && 
+            pass
         ) {
             // Find all administrators with valid email addresses
             const admins = await prisma.user.findMany({
@@ -122,16 +138,16 @@ export async function notifyAdminsOnPendingApproval(approval: {
             });
 
             if (admins.length > 0) {
-                const resolvedSender = resolveSenderAddress("admin_approval", settings.smtpFrom || settings.smtpUser);
+                const resolvedSender = resolveSenderAddress("admin_approval", from);
                 const senderEmail = resolvedSender.formatted;
                 
                 const transporter = nodemailer.createTransport({
-                    host: settings.smtpHost,
-                    port: settings.smtpPort || 587,
-                    secure: settings.smtpPort === 465,
+                    host,
+                    port,
+                    secure,
                     auth: {
-                        user: settings.smtpUser,
-                        pass: decryptData(settings.smtpPass)
+                        user,
+                        pass
                     }
                 });
 

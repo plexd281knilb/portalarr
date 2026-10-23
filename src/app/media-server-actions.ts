@@ -20,6 +20,7 @@ import {
 } from "@/lib/media-servers";
 import { getPlexServerLibrarySections } from "@/lib/plex";
 import { syncUserPlexShareInternal } from "@/app/actions";
+import { notifyAdminsOnPendingApproval } from "@/lib/admin-approvals";
 
 function safeRevalidate(path: string) {
     try {
@@ -881,7 +882,7 @@ export async function updateUserMediaServersAndLibrariesAction(payload: {
         const requireApproval = (settings?.requireApprovalForPlexChanges !== false) && user.role !== "ADMIN";
 
         if (requireApproval && plexSections.length > 0) {
-            await prisma.adminApproval.create({
+            const approval = await prisma.adminApproval.create({
                 data: {
                     type: "PLEX_ACCESS_GRANT",
                     status: "PENDING",
@@ -894,11 +895,13 @@ export async function updateUserMediaServersAndLibrariesAction(payload: {
                         userId: user.id,
                         selectedServerKeys: filteredServers,
                         selectedMediaLibraryKeys: filteredLibraries,
-                        selectedPlexSections: plexSections
+                        selectedPlexSections: plexSections,
+                        selectedKeys: plexSections
                     })
                 }
             });
-            logger.addLog("INFO", "APPROVAL", `Media server preference update for "${user.username}" staged in Admin Approval Queue.`);
+            logger.addLog("INFO", "APPROVAL", `Media server preference update for "${user.username}" staged in Admin Approval Queue (ID: ${approval.id}).`);
+            notifyAdminsOnPendingApproval(approval).catch(e => console.warn("[APPROVAL-NOTIFY-ERROR]:", e?.message || e));
         } else {
             // Instant Plex sync if configured
             let adminPlexToken = "";

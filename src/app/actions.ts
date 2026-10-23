@@ -4867,9 +4867,25 @@ export async function sendOrQueueEmail(options: {
             }
         }
 
+        const providerMode = settings?.emailProviderMode || (settings?.smtpHost?.includes("resend") ? "resend" : "custom");
+        const isResend = providerMode === "resend";
+
+        const host = isResend ? "smtp.resend.com" : (settings?.customSmtpHost || settings?.smtpHost || "");
+        const port = isResend ? 465 : (settings?.customSmtpPort || settings?.smtpPort || 587);
+        const secure = port === 465;
+        const user = isResend ? "resend" : (settings?.customSmtpUser || settings?.smtpUser || "");
+        const rawPass = isResend ? (settings?.resendApiKey || settings?.smtpPass) : (settings?.customSmtpPass || settings?.smtpPass);
+        let pass = "";
+        if (rawPass) {
+            try { pass = decryptData(rawPass); } catch { pass = rawPass; }
+        }
+        const defaultFrom = isResend 
+            ? ((settings?.resendFrom && !settings?.resendFrom.toLowerCase().includes("@gmail.com")) ? settings.resendFrom : "notifications@domshomelab.com")
+            : (settings?.customSmtpFrom || settings?.smtpFrom || user);
+
         const resolvedSender = options.from
             ? { formatted: options.from, email: options.from, displayName: "DomsHomeLab" }
-            : resolveSenderAddress(options.templateId, settings?.smtpFrom || settings?.smtpUser);
+            : resolveSenderAddress(options.templateId, defaultFrom);
         const senderEmail = resolvedSender.formatted;
 
         if (requireApproval) {
@@ -4903,19 +4919,19 @@ export async function sendOrQueueEmail(options: {
             return { success: true, queued: true, approvalId: approval.id };
         }
 
-        // Send email immediately via SMTP
-        if (!settings?.smtpHost || !settings?.smtpUser || !settings?.smtpPass) {
-            logger.addLog("WARN", "EMAIL", `Failed to dispatch email "${options.subject}" to ${recipientStr}: SMTP settings not configured`);
-            return { success: false, error: "SMTP settings not configured" };
+        // Send email immediately via SMTP / Resend
+        if (!host || !user || !pass) {
+            logger.addLog("WARN", "EMAIL", `Failed to dispatch email "${options.subject}" to ${recipientStr}: SMTP / Resend delivery settings not configured`);
+            return { success: false, error: "Email delivery provider settings not configured" };
         }
 
         const transporter = nodemailer.createTransport({
-            host: settings.smtpHost,
-            port: settings.smtpPort || 587,
-            secure: settings.smtpPort === 465,
+            host,
+            port,
+            secure,
             auth: {
-                user: settings.smtpUser,
-                pass: decryptData(settings.smtpPass)
+                user,
+                pass
             }
         });
 
@@ -5176,9 +5192,10 @@ export async function approveAdminApprovalAction(approvalId: string) {
                     }
                 }
             } else {
+                const keysToApply = payload.selectedKeys || payload.selectedPlexSections || [];
                 const updateRes = await executePlexLibraryAccessUpdateInternal(
                     payload.userId,
-                    payload.selectedKeys,
+                    keysToApply,
                     payload.activationType,
                     payload.customDateOrDays
                 );
@@ -5203,6 +5220,21 @@ export async function approveAdminApprovalAction(approvalId: string) {
     } catch (e: any) {
         console.error("[APPROVE-ADMIN-APPROVAL-ERROR]:", e.message || e);
         return { success: false, error: e.message || "Failed to approve action" };
+    }
+}
+
+export async function resendApprovalNotificationAction(approvalId: string) {
+    try {
+        await verifyAdmin();
+        const approval = await prisma.adminApproval.findUnique({ where: { id: approvalId } });
+        if (!approval) return { success: false, error: "Approval request not found" };
+        const res = await notifyAdminsOnPendingApproval(approval);
+        return { 
+            success: true, 
+            message: `Notification alert dispatched to ${res.adminsNotified} admin(s)${res.discordNotified ? " and Discord" : ""}.` 
+        };
+    } catch (e: any) {
+        return { success: false, error: e?.message || "Failed to resend approval alert" };
     }
 }
 

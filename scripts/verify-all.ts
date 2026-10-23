@@ -1954,6 +1954,29 @@ async function runTestSuite() {
             if (!accessPageContent.includes('TabsTrigger value="sent-emails"')) {
                 throw new Error("Access Control page.tsx missing TabsTrigger for 'sent-emails'");
             }
+
+            // 5. Verify resendApprovalNotificationAction and Media Server Preferences approval notification
+            const { resendApprovalNotificationAction } = await import("../src/app/actions");
+            const testApproval = await prisma.adminApproval.create({
+                data: {
+                    type: "PLEX_ACCESS_GRANT",
+                    status: "PENDING",
+                    title: `Media Server Preferences Test ${testId}`,
+                    description: "User updated media server choices (0 servers, 11 libraries). Staged for approval.",
+                    targetUser: `test_user_${testId}`,
+                    targetEmail: `test_${testId}@example.com`,
+                    payload: JSON.stringify({ userId: "mock", selectedPlexSections: ["1", "2"], selectedKeys: ["1", "2"] })
+                }
+            });
+
+            try {
+                const notifyRes = await resendApprovalNotificationAction(testApproval.id);
+                if (!notifyRes.success) {
+                    throw new Error(`Expected resendApprovalNotificationAction to succeed, got: ${notifyRes.error}`);
+                }
+            } finally {
+                await prisma.adminApproval.delete({ where: { id: testApproval.id } }).catch(() => {});
+            }
             if (!accessPageContent.includes('TabsContent value="sent-emails"')) {
                 throw new Error("Access Control page.tsx missing TabsContent for 'sent-emails'");
             }

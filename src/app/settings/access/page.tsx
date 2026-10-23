@@ -33,6 +33,7 @@ import {
     getAdminApprovalCountsAction,
     approveAdminApprovalAction,
     rejectAdminApprovalAction,
+    resendApprovalNotificationAction,
     bulkApproveAdminApprovalsAction,
     bulkRejectAdminApprovalsAction,
     getApprovalSettingsAction,
@@ -394,6 +395,24 @@ export default function AccessSettingsPage() {
             }
         } catch (e: any) {
             setApprovalErrMsg(e.message || "Approval failed.");
+        } finally {
+            setProcessingApprovalId(null);
+        }
+    };
+
+    const handleNotifyAdmins = async (id: string) => {
+        setProcessingApprovalId(id);
+        setApprovalSuccessMsg("");
+        setApprovalErrMsg("");
+        try {
+            const res = await resendApprovalNotificationAction(id);
+            if (res.success) {
+                setApprovalSuccessMsg(res.message || "Alert dispatched!");
+            } else {
+                setApprovalErrMsg(res.error || "Failed to dispatch alert.");
+            }
+        } catch (e: any) {
+            setApprovalErrMsg(e.message || "Failed to dispatch alert.");
         } finally {
             setProcessingApprovalId(null);
         }
@@ -4824,8 +4843,20 @@ export default function AccessSettingsPage() {
                                                         </Button>
                                                     )}
 
-                                                    {isPending && (
+{isPending && (
                                                         <>
+                                                            <Button
+                                                                type="button"
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={() => handleNotifyAdmins(item.id)}
+                                                                disabled={processingApprovalId === item.id}
+                                                                title="Dispatch notification email and Discord alert to administrators"
+                                                                className="h-8 px-2.5 text-xs font-semibold text-amber-400 border-amber-500/30 hover:bg-amber-500/10 gap-1.5 active:scale-95"
+                                                            >
+                                                                <BellRing className="h-3.5 w-3.5" />
+                                                                Alert Admin
+                                                            </Button>
                                                             <Button
                                                                 type="button"
                                                                 size="sm"
