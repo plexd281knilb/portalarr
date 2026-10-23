@@ -682,6 +682,7 @@ export async function ensureSchemaColumns(): Promise<void> {
                     "email" TEXT NOT NULL,
                     "password" TEXT NOT NULL,
                     "kindleEmail" TEXT NOT NULL DEFAULT '',
+                    "kindleSenderUpdateAcknowledgedAt" DATETIME,
                     "role" TEXT NOT NULL DEFAULT 'USER',
                     "status" TEXT NOT NULL DEFAULT 'APPROVED',
                     "trialEndsAt" DATETIME,
@@ -725,6 +726,7 @@ export async function ensureSchemaColumns(): Promise<void> {
             const userAddCols: [string, string][] = [
                 ["name", `ALTER TABLE "User" ADD COLUMN "name" TEXT;`],
                 ["kindleEmail", `ALTER TABLE "User" ADD COLUMN "kindleEmail" TEXT NOT NULL DEFAULT '';`],
+                ["kindleSenderUpdateAcknowledgedAt", `ALTER TABLE "User" ADD COLUMN "kindleSenderUpdateAcknowledgedAt" DATETIME;`],
                 ["role", `ALTER TABLE "User" ADD COLUMN "role" TEXT NOT NULL DEFAULT 'USER';`],
                 ["status", `ALTER TABLE "User" ADD COLUMN "status" TEXT NOT NULL DEFAULT 'APPROVED';`],
                 ["trialEndsAt", `ALTER TABLE "User" ADD COLUMN "trialEndsAt" DATETIME;`],

@@ -322,8 +322,8 @@ export const GUIDE_TOPICS: Record<FeatureGuideId, GuideTopic> = {
             },
             {
                 title: "2. Whitelist DomsHomeLab's Sender Email",
-                desc: "Under 'Approved Personal Document E-mail List' on Amazon, click 'Add a new approved e-mail address' and add the server sender address shown in your Kindle Settings tab.",
-                warning: "Amazon silently discards emails sent from unauthorized addresses. You must add the sender email before your first delivery!"
+                desc: "Under 'Approved Personal Document E-mail List' on Amazon, click 'Add a new approved e-mail address' and add kindle@domshomelab.com (or the server sender address shown in your Kindle Settings tab).",
+                warning: "Amazon silently discards emails sent from unauthorized addresses. You must add kindle@domshomelab.com before your first delivery!"
             },
             {
                 title: "3. Run Pre-Flight Diagnostics Check",

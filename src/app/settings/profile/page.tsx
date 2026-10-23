@@ -2729,6 +2729,11 @@ export default function UserProfilePage() {
                             Amazon requires that you authorize our outbound server email address in your Amazon account. Add the address below to your <strong className="text-foreground">Approved Personal Document E-mail List</strong>:
                         </p>
                         
+                        <div className="flex items-center gap-1.5 p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px]">
+                            <AlertCircle className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+                            <span><strong>Sender Email Update:</strong> Deliveries are dispatched from <code className="font-mono font-bold text-amber-200">{paymentConfig?.kindleSenderEmail || "kindle@domshomelab.com"}</code>. If you configured Amazon previously, ensure this exact address is authorized.</span>
+                        </div>
+                        
                         {paymentConfig?.kindleSenderEmail || paymentConfig?.smtpFrom ? (
                             <div className="flex flex-col sm:flex-row items-center gap-2 pt-1">
                                 <div className="p-2 rounded-lg bg-background/80 border border-purple-500/30 font-mono text-xs text-foreground flex-1 w-full truncate">

@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import { BookDiscoveryItem } from "@/lib/books/book-types";
+import { getKindleSenderUpdateNoticeStatusAction } from "@/app/actions";
+import { KindleSenderUpdateModal } from "@/components/kindle-sender-update-modal";
 import { 
     submitBookOrAudiobookRequestAction, 
     getAccessibleBookLibrariesAction,
@@ -64,6 +66,13 @@ export function BookDetailModal({
     const [requesting, setRequesting] = useState<boolean>(false);
     const [requestMessage, setRequestMessage] = useState<string | null>(null);
     const [requestError, setRequestError] = useState<string | null>(null);
+    const [kindleNoticeOpen, setKindleNoticeOpen] = useState<boolean>(false);
+    const [kindleNoticeData, setKindleNoticeData] = useState<{
+        hasKindleEmail: boolean;
+        kindleEmail: string | null;
+        needsNotice: boolean;
+        senderEmail: string;
+    } | null>(null);
 
     // Similar Books State
     const [similarBooks, setSimilarBooks] = useState<BookDiscoveryItem[]>([]);
@@ -85,6 +94,9 @@ export function BookDetailModal({
             setRequestError(null);
             loadLibraries(item.mediaType);
             loadSimilar(item);
+            getKindleSenderUpdateNoticeStatusAction().then(res => {
+                if (res) setKindleNoticeData(res);
+            }).catch(() => {});
         }
     }, [open, item]);
 
@@ -143,7 +155,30 @@ export function BookDetailModal({
         loadSimilar(prev);
     };
 
+    const handleKindleNoticeAcknowledged = () => {
+        setKindleNoticeData(prev => prev ? { ...prev, needsNotice: false } : null);
+        executeSubmitRequest();
+    };
+
     const handleRequest = async () => {
+        if (!activeBook) return;
+        if (activeBook.mediaType !== "audiobook" && sendToKindle) {
+            let notice = kindleNoticeData;
+            if (!notice) {
+                try {
+                    notice = await getKindleSenderUpdateNoticeStatusAction();
+                    if (notice) setKindleNoticeData(notice);
+                } catch {}
+            }
+            if (notice?.needsNotice) {
+                setKindleNoticeOpen(true);
+                return;
+            }
+        }
+        await executeSubmitRequest();
+    };
+
+    const executeSubmitRequest = async () => {
         if (!activeBook) return;
         setRequesting(true);
         setRequestError(null);
@@ -190,6 +225,7 @@ export function BookDetailModal({
     const status = activeBook.availability?.status || "NOT_AVAILABLE";
 
     return (
+        <>
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="w-[95vw] sm:w-[92vw] md:w-[90vw] max-w-3xl lg:max-w-4xl max-h-[90vh] sm:max-h-[92vh] bg-[#0c0c12] border border-border/60 shadow-2xl p-0 overflow-y-auto overflow-x-hidden sm:rounded-2xl scrollbar-thin text-foreground">
                 <div className="flex flex-col min-h-0 min-w-0 w-full overflow-x-hidden">
@@ -584,5 +620,14 @@ export function BookDetailModal({
             </div>
         </DialogContent>
         </Dialog>
+
+        <KindleSenderUpdateModal
+            open={kindleNoticeOpen}
+            onOpenChange={setKindleNoticeOpen}
+            userKindleEmail={kindleNoticeData?.kindleEmail}
+            senderEmail={kindleNoticeData?.senderEmail || "kindle@domshomelab.com"}
+            onAcknowledged={handleKindleNoticeAcknowledged}
+        />
+        </>
     );
 }

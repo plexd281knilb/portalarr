@@ -7,6 +7,8 @@ import {
     requestCompleteSeriesAction,
     toggleMonitorBookSeriesAction 
 } from "@/app/book-actions";
+import { getKindleSenderUpdateNoticeStatusAction } from "@/app/actions";
+import { KindleSenderUpdateModal } from "@/components/kindle-sender-update-modal";
 import { 
     Dialog, 
     DialogContent, 
@@ -54,6 +56,13 @@ export function SeriesDetailModal({
     const [requestingAll, setRequestingAll] = useState(false);
     const [batchMessage, setBatchMessage] = useState<string | null>(null);
     const [batchError, setBatchError] = useState<string | null>(null);
+    const [kindleNoticeOpen, setKindleNoticeOpen] = useState<boolean>(false);
+    const [kindleNoticeData, setKindleNoticeData] = useState<{
+        hasKindleEmail: boolean;
+        kindleEmail: string | null;
+        needsNotice: boolean;
+        senderEmail: string;
+    } | null>(null);
 
     useEffect(() => {
         if (open && seriesTitle) {
@@ -82,7 +91,25 @@ export function SeriesDetailModal({
         await toggleMonitorBookSeriesAction(series.id, val);
     };
 
+    const handleKindleNoticeAcknowledged = () => {
+        setKindleNoticeData(prev => prev ? { ...prev, needsNotice: false } : null);
+        executeRequestAllMissing();
+    };
+
     const handleRequestAllMissing = async () => {
+        if (!seriesTitle || !authorName) return;
+        try {
+            const notice = await getKindleSenderUpdateNoticeStatusAction();
+            if (notice?.needsNotice) {
+                setKindleNoticeData(notice);
+                setKindleNoticeOpen(true);
+                return;
+            }
+        } catch {}
+        await executeRequestAllMissing();
+    };
+
+    const executeRequestAllMissing = async () => {
         if (!seriesTitle || !authorName) return;
         setRequestingAll(true);
         setBatchMessage(null);
@@ -110,6 +137,7 @@ export function SeriesDetailModal({
     const totalCount = series?.volumes?.length || 0;
 
     return (
+        <>
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="w-[95vw] sm:w-[92vw] md:w-[90vw] max-w-4xl lg:max-w-5xl max-h-[90vh] sm:max-h-[92vh] bg-[#0c0c12] border border-border/60 shadow-2xl p-0 overflow-y-auto overflow-x-hidden sm:rounded-2xl flex flex-col min-w-0 scrollbar-thin text-foreground">
                 {/* Header Banner */}
@@ -329,5 +357,14 @@ export function SeriesDetailModal({
                 </div>
             </DialogContent>
         </Dialog>
+
+        <KindleSenderUpdateModal
+            open={kindleNoticeOpen}
+            onOpenChange={setKindleNoticeOpen}
+            userKindleEmail={kindleNoticeData?.kindleEmail}
+            senderEmail={kindleNoticeData?.senderEmail || "kindle@domshomelab.com"}
+            onAcknowledged={handleKindleNoticeAcknowledged}
+        />
+        </>
     );
 }

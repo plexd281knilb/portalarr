@@ -554,8 +554,8 @@ async function runTestSuite() {
         // 2. Amazon Send-to-Kindle bounce email parser
         const bounceMail: any = {
             from: { text: "kindle-cs@amazon.com" },
-            subject: "An email from books@domshomelab.com did not have an approved sender address",
-            text: "Dear Customer, the sender address (books@domshomelab.com) is not on your approved personal document list.",
+            subject: "An email from kindle@domshomelab.com did not have an approved sender address",
+            text: "Dear Customer, the sender address (kindle@domshomelab.com) is not on your approved personal document list.",
             date: new Date()
         };
         const bounce = parseAmazonBounceEmail(bounceMail);
@@ -571,6 +571,46 @@ async function runTestSuite() {
         const yaRating = inferBookRating({ overview: "Young adult high school fantasy adventure", title: "School of Spells" });
         if (yaRating.ageRating !== "YA (12+)") {
             throw new Error(`Expected YA rating YA (12+), got ${JSON.stringify(yaRating)}`);
+        }
+
+        // 4. Kindle Sender Update Notice Lifecycle for Existing Users
+        const { getKindleSenderUpdateNoticeStatusAction, acknowledgeKindleSenderUpdateAction } = await import("../src/app/actions");
+        const noticeTestUser = await prisma.user.create({
+            data: {
+                username: `kindlenotice_${Date.now()}`,
+                email: `kindlenotice_${Date.now()}@test.com`,
+                password: "mock_password_hash",
+                role: "USER",
+                accountType: "FULL",
+                kindleEmail: "reader_test_device@kindle.com"
+            }
+        });
+
+        try {
+            process.env.PORTALARR_TEST_AUTH = "true";
+            process.env.PORTALARR_TEST_USER_ID = noticeTestUser.id;
+
+            // Initially has Kindle configured and needs notice
+            const noticeStatus1 = await getKindleSenderUpdateNoticeStatusAction();
+            if (!noticeStatus1.hasKindleEmail || !noticeStatus1.needsNotice || noticeStatus1.senderEmail !== "kindle@domshomelab.com") {
+                throw new Error(`Expected needsNotice=true and senderEmail=kindle@domshomelab.com, got: ${JSON.stringify(noticeStatus1)}`);
+            }
+
+            // Acknowledge notice
+            const ackRes = await acknowledgeKindleSenderUpdateAction();
+            if (!ackRes.success) {
+                throw new Error(`acknowledgeKindleSenderUpdateAction failed: ${ackRes.error}`);
+            }
+
+            // Post-acknowledgment check
+            const noticeStatus2 = await getKindleSenderUpdateNoticeStatusAction();
+            if (!noticeStatus2.hasKindleEmail || noticeStatus2.needsNotice) {
+                throw new Error(`Expected needsNotice=false after acknowledgment, got: ${JSON.stringify(noticeStatus2)}`);
+            }
+        } finally {
+            process.env.PORTALARR_TEST_AUTH = "true";
+            delete process.env.PORTALARR_TEST_USER_ID;
+            await prisma.user.delete({ where: { id: noticeTestUser.id } }).catch(() => {});
         }
     });
 

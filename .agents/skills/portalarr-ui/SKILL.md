@@ -128,6 +128,15 @@ Portalarr uses a **Modern Cinematic Dark Theme** powered by Tailwind CSS, Radix 
   - Positioned unobtrusively below the AI Assistant card rather than commanding top billing.
   - Designed as a sleek, low-profile card (`bg-[#121218]/60 border-border/40`) with inline copy input and collapsible guide.
 
+### 5. Send-to-Kindle Sender Update Notice Modal (`KindleSenderUpdateModal`)
+- **Sender Address Lifecycle & Gating Rule**:
+  - Outbound wireless Kindle delivery emails are dispatched from `kindle@domshomelab.com`.
+  - When the outbound sender address is updated, Amazon requires that recipient Kindle users explicitly add `kindle@domshomelab.com` to their Amazon **Approved Personal Document E-mail List** (under *Manage Your Content and Devices → Preferences*).
+  - To prevent delivery failures or silent document drops by Amazon, an interactive update modal (`<KindleSenderUpdateModal />`) is triggered:
+    - **Trigger**: Displayed when an existing user with Send-to-Kindle set up (`user.kindleEmail` contains `@` and is not `"DIRECT_DOWNLOAD"`) goes to request an ebook or missing book in a series, or dispatches an existing ebook.
+    - **Isolation**: Strictly NOT shown to users who do not have Send-to-Kindle enabled or who have already acknowledged the notice (`user.kindleSenderUpdateAcknowledgedAt !== null`).
+    - **User Experience**: Features a 1-click clipboard copy button for `kindle@domshomelab.com`, a direct external link to Amazon's Personal Document Settings, step-by-step instructions, and an "I've Updated My Settings" confirmation button that records acknowledgment in the database (`acknowledgeKindleSenderUpdateAction`) and immediately resumes the pending book request without requiring the user to re-click.
+
 ## 📐 Key Layout & Component Rules
 
 ### 1. Modals & Dialogs (Space Optimization, Bounded Widths & Horizontal Overflow Protection)

@@ -15594,11 +15594,14 @@ export async function sendBookToKindle(bookId: string, targetUsername?: string) 
             return { success: false, error: "Send-to-Kindle email delivery is currently disabled in Email Notification Settings." };
         }
 
-        const senderEmail = settings.smtpFrom || settings.smtpUser;
+        const kindleSender = resolveSenderAddress("kindle_delivery", settings.smtpFrom || settings.smtpUser);
+        const senderEmail = kindleSender.email;
+        const senderFormatted = kindleSender.formatted;
 
         try {
             const mailRes = await sendOrQueueEmail({
                 to: user.kindleEmail,
+                from: senderFormatted,
                 subject: `Deliver Book: ${book.title}`,
                 text: `Delivering your ebook "${book.title}" to your Kindle device.`,
                 html: `<p>Delivering your ebook "${book.title}" to your Kindle device.</p>`,
@@ -15873,11 +15876,14 @@ export async function sendBookToUserKindleInternal(bookId: string, username: str
         return;
     }
 
-    const senderEmail = settings.smtpFrom || settings.smtpUser;
+    const kindleSender = resolveSenderAddress("kindle_delivery", settings.smtpFrom || settings.smtpUser);
+    const senderEmail = kindleSender.email;
+    const senderFormatted = kindleSender.formatted;
 
     try {
         const mailRes = await sendOrQueueEmail({
             to: user.kindleEmail,
+            from: senderFormatted,
             subject: `Deliver Book: ${book.title}`,
             text: `Delivering your ebook "${book.title}" to your Kindle device.`,
             html: `<p>Delivering your ebook "${book.title}" to your Kindle device.</p>`,
@@ -16103,7 +16109,8 @@ export async function diagnoseKindleHealth(bookId?: string) {
         }
 
         // Check 2: Sender Email Address
-        const senderEmail = settings?.smtpFrom || settings?.smtpUser;
+        const kindleSender = resolveSenderAddress("kindle_delivery", settings?.smtpFrom || settings?.smtpUser);
+        const senderEmail = kindleSender.email;
         if (senderEmail && senderEmail.includes("@")) {
             checks.push({
                 name: "Public Sender Address",
@@ -16611,6 +16618,70 @@ export async function setupBookLibraryAccessAction(options: { kindleEmail?: stri
         };
     } catch (e: any) {
         return { success: false, error: e.message || "Failed to setup book library access." };
+    }
+}
+
+/**
+ * Evaluates whether the current user has Send-to-Kindle set up and needs to be alerted
+ * about the updated outbound Kindle sender address (kindle@domshomelab.com).
+ * This only triggers for members who actually have a configured @kindle.com address.
+ */
+export async function getKindleSenderUpdateNoticeStatusAction(): Promise<{
+    hasKindleEmail: boolean;
+    kindleEmail: string | null;
+    needsNotice: boolean;
+    senderEmail: string;
+}> {
+    try {
+        await ensureSchemaColumns();
+        const session = await verifyUser();
+        const userId = String(session?.userId || session?.id || "");
+        if (!userId) {
+            return { hasKindleEmail: false, kindleEmail: null, needsNotice: false, senderEmail: "kindle@domshomelab.com" };
+        }
+
+        const user = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { kindleEmail: true, kindleSenderUpdateAcknowledgedAt: true }
+        });
+
+        const cleanKindle = (user?.kindleEmail || "").trim();
+        const hasKindleEmail = Boolean(cleanKindle.includes("@") && cleanKindle !== "DIRECT_DOWNLOAD");
+        const needsNotice = hasKindleEmail && !user?.kindleSenderUpdateAcknowledgedAt;
+
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null);
+        const resolvedSender = resolveSenderAddress("kindle_delivery", settings?.smtpFrom || settings?.smtpUser);
+
+        return {
+            hasKindleEmail,
+            kindleEmail: hasKindleEmail ? cleanKindle : null,
+            needsNotice,
+            senderEmail: resolvedSender.email
+        };
+    } catch {
+        return { hasKindleEmail: false, kindleEmail: null, needsNotice: false, senderEmail: "kindle@domshomelab.com" };
+    }
+}
+
+/**
+ * Acknowledges that the user has seen the notice about the updated Send-to-Kindle
+ * sending address and updated their Amazon Approved Senders settings.
+ */
+export async function acknowledgeKindleSenderUpdateAction(): Promise<{ success: boolean; error?: string }> {
+    try {
+        await ensureSchemaColumns();
+        const session = await verifyUser();
+        const userId = String(session?.userId || session?.id || "");
+        if (!userId) return { success: false, error: "Unauthorized" };
+
+        await prisma.user.update({
+            where: { id: userId },
+            data: { kindleSenderUpdateAcknowledgedAt: new Date() }
+        });
+
+        return { success: true };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to acknowledge Kindle sender update." };
     }
 }
 
