@@ -7,12 +7,198 @@ export interface TemplateVariableInfo {
     sampleValue: string;
 }
 
+export type SenderCategory = "kindle" | "payments" | "accounts" | "requests" | "support" | "notifications";
+
+export interface ResolvedSender {
+    displayName: string;
+    email: string;
+    formatted: string;
+    localPart: string;
+    domain: string;
+    isCustomDomain: boolean;
+    senderCategory: SenderCategory;
+}
+
+export const PUBLIC_WEBMAIL_DOMAINS = new Set([
+    "gmail.com",
+    "googlemail.com",
+    "yahoo.com",
+    "yahoo.co.uk",
+    "hotmail.com",
+    "outlook.com",
+    "live.com",
+    "msn.com",
+    "icloud.com",
+    "me.com",
+    "mac.com",
+    "aol.com",
+    "proton.me",
+    "protonmail.com",
+    "zoho.com"
+]);
+
+export function getTemplateSenderCategory(templateId?: string): SenderCategory {
+    if (!templateId) return "notifications";
+    const id = templateId.toLowerCase().trim();
+
+    // Kindle Ebooks
+    if (id.startsWith("kindle_") || id === "kindle") {
+        return "kindle";
+    }
+
+    // Payments, Billing & Subscriptions
+    if (
+        id.startsWith("payment_") ||
+        id.startsWith("subscription_") ||
+        id === "referral_reward_credited" ||
+        id === "payments" ||
+        id === "billing"
+    ) {
+        return "payments";
+    }
+
+    // Accounts, Auth, Passwords, Trials, Approvals
+    if (
+        id === "user_approval" ||
+        id === "admin_new_user" ||
+        id === "password_reset" ||
+        id.startsWith("trial_") ||
+        id === "admin_user_access_revoked" ||
+        id === "library_access_request" ||
+        id === "admin_approval" ||
+        id === "auth" ||
+        id === "accounts"
+    ) {
+        return "accounts";
+    }
+
+    // Support Tickets & Alerts
+    if (id.startsWith("ticket_") || id === "support") {
+        return "support";
+    }
+
+    // Media Requests & Seerr
+    if (id.startsWith("media_") || id.startsWith("seerr_") || id === "requests") {
+        return "requests";
+    }
+
+    // Default: General Notifications & Announcements
+    return "notifications";
+}
+
+export function resolveSenderAddress(
+    templateId?: string,
+    baseSender?: string | null
+): ResolvedSender {
+    const raw = (baseSender || "").trim();
+
+    // Extract email address if wrapped in <...>
+    let extractedEmail = raw;
+    const match = raw.match(/<([^>]+)>/);
+    if (match) {
+        extractedEmail = match[1].trim();
+    }
+
+    let domain = "domshomelab.com";
+    let isCustomDomain = true;
+
+    if (extractedEmail.includes("@")) {
+        const parts = extractedEmail.split("@");
+        const detectedDomain = parts[parts.length - 1].toLowerCase().trim();
+        if (detectedDomain) {
+            domain = detectedDomain;
+        }
+    }
+
+    if (PUBLIC_WEBMAIL_DOMAINS.has(domain)) {
+        isCustomDomain = false;
+    }
+
+    const category = getTemplateSenderCategory(templateId);
+
+    // If using a public webmail provider (like gmail.com), preserve the exact email
+    // to prevent SPF/DKIM/DMARC rejection by recipient servers.
+    if (!isCustomDomain) {
+        const email = extractedEmail || `notifications@${domain}`;
+        let displayName = "DomsHomeLab";
+        if (category === "kindle") displayName = "DomsHomeLab Kindle";
+        else if (category === "payments") displayName = "DomsHomeLab Billing";
+        else if (category === "accounts") displayName = "DomsHomeLab Accounts";
+        else if (category === "requests") displayName = "DomsHomeLab Requests";
+        else if (category === "support") displayName = "DomsHomeLab Support";
+
+        const formatted = raw.includes("<") && raw.includes(extractedEmail)
+            ? raw
+            : `"${displayName}" <${email}>`;
+
+        return {
+            displayName,
+            email,
+            formatted,
+            localPart: email.split("@")[0],
+            domain,
+            isCustomDomain: false,
+            senderCategory: category
+        };
+    }
+
+    let localPart = "notifications";
+    let displayName = "DomsHomeLab";
+
+    if (templateId === "admin_approval") {
+        localPart = "accounts";
+        displayName = "DomsHomeLab Governance";
+    } else {
+        switch (category) {
+            case "kindle":
+                localPart = "kindle";
+                displayName = "DomsHomeLab Kindle";
+                break;
+            case "payments":
+                localPart = "payments";
+                displayName = "DomsHomeLab Billing";
+                break;
+            case "accounts":
+                localPart = "accounts";
+                displayName = "DomsHomeLab Accounts";
+                break;
+            case "requests":
+                localPart = "requests";
+                displayName = "DomsHomeLab Requests";
+                break;
+            case "support":
+                localPart = "support";
+                displayName = "DomsHomeLab Support";
+                break;
+            case "notifications":
+            default:
+                localPart = "notifications";
+                displayName = "DomsHomeLab";
+                break;
+        }
+    }
+
+    const email = `${localPart}@${domain}`;
+    const formatted = `"${displayName}" <${email}>`;
+
+    return {
+        displayName,
+        email,
+        formatted,
+        localPart,
+        domain,
+        isCustomDomain: true,
+        senderCategory: category
+    };
+}
+
 export interface EmailTemplateDefinition {
     id: string;
     name: string;
     description: string;
     triggerEvent: string;
     category: "AUTH" | "REQUESTS" | "SUPPORT" | "KINDLE" | "TRIALS" | "PAYMENTS" | string;
+    senderCategory?: SenderCategory;
     defaultSubject: string;
     defaultBody: string;
     variables: TemplateVariableInfo[];
@@ -1343,10 +1529,13 @@ export async function renderEmailTemplate(
     }
 
     const appUrl = (variables.appUrl as string) || (await getAppUrl());
+    const resolvedSender = resolveSenderAddress(templateId, (variables.senderEmail as string) || null);
     const allVars: Record<string, string> = {
         appUrl,
         portalName: "DomsHomeLab",
         serverName: "d281knilb",
+        senderEmail: resolvedSender.email,
+        senderFormatted: resolvedSender.formatted,
         ...Object.fromEntries(
             Object.entries(variables).map(([k, v]) => [k, v !== undefined && v !== null ? String(v) : ""])
         )

@@ -2729,16 +2729,16 @@ export default function UserProfilePage() {
                             Amazon requires that you authorize our outbound server email address in your Amazon account. Add the address below to your <strong className="text-foreground">Approved Personal Document E-mail List</strong>:
                         </p>
                         
-                        {paymentConfig?.smtpFrom ? (
+                        {paymentConfig?.kindleSenderEmail || paymentConfig?.smtpFrom ? (
                             <div className="flex flex-col sm:flex-row items-center gap-2 pt-1">
                                 <div className="p-2 rounded-lg bg-background/80 border border-purple-500/30 font-mono text-xs text-foreground flex-1 w-full truncate">
-                                    {paymentConfig.smtpFrom}
+                                    {paymentConfig.kindleSenderEmail || paymentConfig.smtpFrom}
                                 </div>
                                 <Button
                                     type="button"
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => handleCopy(paymentConfig.smtpFrom, "smtpFrom")}
+                                    onClick={() => handleCopy(paymentConfig.kindleSenderEmail || paymentConfig.smtpFrom, "smtpFrom")}
                                     className="w-full sm:w-auto font-sans text-xs gap-1.5 shrink-0 border-purple-500/30 hover:bg-purple-500/10"
                                 >
                                     {copiedHandle === "smtpFrom" ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5 text-purple-400" />}

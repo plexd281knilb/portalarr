@@ -3,7 +3,7 @@ import { getAppUrl } from "@/lib/app-url";
 import { logger } from "@/lib/logger";
 import { decryptData } from "@/lib/encryption";
 import { postDiscordMessage, type DiscordEmbed } from "@/lib/discord/discord-bot";
-import { wrapInPortalarrEmailLayout } from "@/lib/email-templates";
+import { wrapInPortalarrEmailLayout, resolveSenderAddress } from "@/lib/email-templates";
 import nodemailer from "nodemailer";
 
 export interface ApprovalNotifyResult {
@@ -122,8 +122,8 @@ export async function notifyAdminsOnPendingApproval(approval: {
             });
 
             if (admins.length > 0) {
-                const rawSender = settings.smtpFrom?.trim() || settings.smtpUser;
-                const senderEmail = rawSender?.includes("<") ? rawSender : `"DomsHomeLab Governance" <${rawSender}>`;
+                const resolvedSender = resolveSenderAddress("admin_approval", settings.smtpFrom || settings.smtpUser);
+                const senderEmail = resolvedSender.formatted;
                 
                 const transporter = nodemailer.createTransport({
                     host: settings.smtpHost,

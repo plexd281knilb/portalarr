@@ -774,6 +774,17 @@ Portalarr features an automated, real-time versioning, branch identification, an
   - Quick action presets: `⚡ Auto-Send Kindle Only`, `Require All`, `Auto-Send All`.
   - Staged emails preserve recipient, subject, rendered HTML, templateId, and file attachments in `payload`.
   - Emails are dispatched via SMTP when approved in the queue (`approveAdminApprovalAction`) or when configured to auto-dispatch.
+- **Dedicated Category-Based Outbound Sender Routing (`resolveSenderAddress`)**:
+  - Dynamically routes outgoing email dispatches to category-matched sender mailboxes based on `templateId` when using a custom verified domain (e.g. `domshomelab.com`):
+    - **Kindle Ebooks (`kindle@<domain>`)**: `"DomsHomeLab Kindle"` for `kindle_delivery`, `kindle_failed`, `kindle_success`.
+    - **Billing & Payments (`payments@<domain>`)**: `"DomsHomeLab Billing"` for `payment_received`, `payment_underpayment`, `admin_payment_received`, `subscription_activated`, and renewal reminders.
+    - **Accounts & Authentication (`accounts@<domain>`)**: `"DomsHomeLab Accounts"` for `user_approval`, `admin_new_user`, `password_reset`, `trial_welcome`, `trial_expiring_soon`, `trial_expired`, and `library_access_request`.
+    - **Requests & Seerr (`requests@<domain>`)**: `"DomsHomeLab Requests"` for `media_ready`, `media_request_admin`, and all `seerr_request_*` notifications.
+    - **Support Tickets (`support@<domain>`)**: `"DomsHomeLab Support"` for `ticket_update` and `ticket_error_alert`.
+    - **Governance Approvals (`accounts@<domain>`)**: `"DomsHomeLab Governance"` for `admin_approval` queue alerts.
+    - **General Announcements & Broadcasts (`notifications@<domain>`)**: `"DomsHomeLab"` for broadcasts and general alerts.
+  - **Safe Webmail Fallback (`PUBLIC_WEBMAIL_DOMAINS`)**: When the configured SMTP sender is a public webmail domain (e.g. `@gmail.com`, `@yahoo.com`, `@outlook.com`), the exact configured sender address is strictly preserved to prevent SPF/DKIM/DMARC rejection by recipient mail providers.
+  - **Email Management UI Integration**: Displays dedicated sender mailboxes (`From: <sender>`) on each template card and in the template editor header, with 1-click preview testing matching the exact routed sender.
 - **Admin Real-Time Approval Notifications (`notifyAdminOnPendingApproval`)**:
   - Whenever an action or staged email enters the queue, Portalarr automatically alerts administrators via configured channels (`adminApprovalDiscordNotify` Discord embeds and `adminApprovalEmailNotify` SMTP emails).
   - Admin notification emails pass `bypassApproval: true` to prevent infinite recursion into the approval queue.

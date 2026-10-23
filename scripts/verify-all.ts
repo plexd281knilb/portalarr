@@ -478,6 +478,61 @@ async function runTestSuite() {
             throw new Error("media_request_admin failed to render book metadata");
         }
 
+        // Category-specific email sender routing verification
+        const { resolveSenderAddress, getTemplateSenderCategory } = await import("../src/lib/email-templates");
+        
+        const kindleSender = resolveSenderAddress("kindle_delivery", "notifications@domshomelab.com");
+        if (kindleSender.email !== "kindle@domshomelab.com" || kindleSender.displayName !== "DomsHomeLab Kindle") {
+            throw new Error(`Expected kindle_delivery sender to be kindle@domshomelab.com, got: ${kindleSender.formatted}`);
+        }
+
+        const billingSender = resolveSenderAddress("payment_received", "notifications@domshomelab.com");
+        if (billingSender.email !== "payments@domshomelab.com" || billingSender.displayName !== "DomsHomeLab Billing") {
+            throw new Error(`Expected payment_received sender to be payments@domshomelab.com, got: ${billingSender.formatted}`);
+        }
+
+        const accountsSender = resolveSenderAddress("user_approval", "notifications@domshomelab.com");
+        if (accountsSender.email !== "accounts@domshomelab.com" || accountsSender.displayName !== "DomsHomeLab Accounts") {
+            throw new Error(`Expected user_approval sender to be accounts@domshomelab.com, got: ${accountsSender.formatted}`);
+        }
+
+        const requestsSender = resolveSenderAddress("media_ready", "notifications@domshomelab.com");
+        if (requestsSender.email !== "requests@domshomelab.com" || requestsSender.displayName !== "DomsHomeLab Requests") {
+            throw new Error(`Expected media_ready sender to be requests@domshomelab.com, got: ${requestsSender.formatted}`);
+        }
+
+        const supportSender = resolveSenderAddress("ticket_update", "notifications@domshomelab.com");
+        if (supportSender.email !== "support@domshomelab.com" || supportSender.displayName !== "DomsHomeLab Support") {
+            throw new Error(`Expected ticket_update sender to be support@domshomelab.com, got: ${supportSender.formatted}`);
+        }
+
+        const govSender = resolveSenderAddress("admin_approval", "notifications@domshomelab.com");
+        if (govSender.email !== "accounts@domshomelab.com" || govSender.displayName !== "DomsHomeLab Governance") {
+            throw new Error(`Expected admin_approval sender to be accounts@domshomelab.com (Governance), got: ${govSender.formatted}`);
+        }
+
+        const broadcastSender = resolveSenderAddress("broadcast", "notifications@domshomelab.com");
+        if (broadcastSender.email !== "notifications@domshomelab.com" || broadcastSender.displayName !== "DomsHomeLab") {
+            throw new Error(`Expected broadcast sender to be notifications@domshomelab.com, got: ${broadcastSender.formatted}`);
+        }
+
+        // Public webmail domain preservation (prevents SPF/DKIM breakage)
+        const gmailSender = resolveSenderAddress("kindle_delivery", "d281knilb@gmail.com");
+        if (gmailSender.email !== "d281knilb@gmail.com" || gmailSender.isCustomDomain) {
+            throw new Error(`Expected gmail sender to preserve address, got: ${gmailSender.formatted}`);
+        }
+
+        const { getPublicSmtpFromEmail, getPublicJoinConfig } = await import("../src/app/actions");
+        const publicKindle = await getPublicSmtpFromEmail("kindle");
+        if (publicKindle !== "kindle@domshomelab.com") {
+            throw new Error(`Expected getPublicSmtpFromEmail('kindle') to be kindle@domshomelab.com, got: ${publicKindle}`);
+        }
+
+        const joinConfig = await getPublicJoinConfig();
+        if (!joinConfig.success || joinConfig.config?.kindleSenderEmail !== "kindle@domshomelab.com") {
+            throw new Error(`Expected joinConfig kindleSenderEmail to be kindle@domshomelab.com, got: ${joinConfig.config?.kindleSenderEmail}`);
+        }
+
         await prisma.mediaRequest.delete({ where: { id: testReq.id } });
     });
 

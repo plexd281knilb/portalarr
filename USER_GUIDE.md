@@ -143,7 +143,7 @@ When you first visit the Library, you will be prompted to set up Send-to-Kindle 
 Amazon requires all senders to be approved before emails can reach your Kindle:
 1. Under *Personal Document Settings*, scroll to **Approved Personal Document E-mail List**.
 2. Click **Add a new approved e-mail address**.
-3. Add the server sender address provided in your Kindle Setup prompt (or ask your server admin).
+3. Add **`kindle@domshomelab.com`** (or the server sender address displayed in your Kindle Setup prompt).
 
 ### Step 3: Save & Test
 - Enter your Kindle email and click **Save Email & Unlock Automatic Delivery**.

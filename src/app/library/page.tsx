@@ -1385,7 +1385,7 @@ function BookLibraryPageContent() {
           setUserKindleEmail(profile.kindleEmail || "");
         }
 
-        const smtpFromEmail = await getPublicSmtpFromEmail();
+        const smtpFromEmail = await getPublicSmtpFromEmail("kindle");
         setServerSmtpFrom(smtpFromEmail || "");
 
         let libs = await getLibraries().catch(() => []);

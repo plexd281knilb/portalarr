@@ -31,7 +31,7 @@ import { encryptData, decryptData } from "@/lib/encryption";
 import { calculateProratedBilling } from "@/lib/prorated-billing";
 import { calculateUserRenewalSummary } from "@/lib/referral-rewards";
 import { logger, maskToken } from "@/lib/logger";
-import { renderEmailTemplate, DEFAULT_EMAIL_TEMPLATES, getDefaultEmailTemplate, wrapInPortalarrEmailLayout } from "@/lib/email-templates";
+import { renderEmailTemplate, DEFAULT_EMAIL_TEMPLATES, getDefaultEmailTemplate, wrapInPortalarrEmailLayout, resolveSenderAddress, getTemplateSenderCategory } from "@/lib/email-templates";
 import fs from "fs";
 import path from "path";
 import { convertEbookToEpub, validateAndFixEpubForKindle } from "@/lib/books/epub-converter";
@@ -1857,17 +1857,23 @@ export async function getEmailTemplatesAction() {
     await verifyAdmin();
     await ensureSchemaColumns();
     try {
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        const baseSender = settings?.smtpFrom?.trim() || settings?.smtpUser;
         const customTemplates = await prisma.emailTemplate.findMany().catch(() => []);
         const customMap = new Map(customTemplates.map(t => [t.id, t]));
 
         const results = DEFAULT_EMAIL_TEMPLATES.map(def => {
             const custom = customMap.get(def.id);
+            const resolved = resolveSenderAddress(def.id, baseSender);
             return {
                 id: def.id,
                 name: def.name,
                 description: def.description,
                 triggerEvent: def.triggerEvent,
                 category: def.category,
+                senderCategory: def.senderCategory || resolved.senderCategory,
+                senderEmail: resolved.email,
+                senderFormatted: resolved.formatted,
                 subject: custom?.subject || def.defaultSubject,
                 body: custom?.body || def.defaultBody,
                 defaultSubject: def.defaultSubject,
@@ -1994,8 +2000,8 @@ export async function sendTestEmailTemplateAction(id: string, customSubject?: st
     });
 
     try {
-        const rawSender = settings.smtpFrom?.trim() || settings.smtpUser;
-        const senderEmail = rawSender?.includes("<") ? rawSender : `"DomsHomeLab (d281knilb)" <${rawSender}>`;
+        const resolvedSender = resolveSenderAddress(id, settings.smtpFrom || settings.smtpUser);
+        const senderEmail = resolvedSender.formatted;
         const transporter = nodemailer.createTransport({
             host: settings.smtpHost,
             port: settings.smtpPort || 587,
@@ -2013,8 +2019,8 @@ export async function sendTestEmailTemplateAction(id: string, customSubject?: st
             html
         });
 
-        logger.addLog("INFO", "EMAIL", `Sent template preview test email for "${defaultDef.name}" to ${recipientEmail}`);
-        return { success: true, message: `Preview test email successfully sent to ${recipientEmail}!` };
+        logger.addLog("INFO", "EMAIL", `Sent template preview test email for "${defaultDef.name}" from ${resolvedSender.email} to ${recipientEmail}`);
+        return { success: true, message: `Preview test email successfully sent to ${recipientEmail} from ${resolvedSender.email} (${resolvedSender.displayName})!` };
     } catch (e: any) {
         logger.addLog("ERROR", "EMAIL", `Preview test email failed: ${e.message}`);
         return { success: false, error: e.message || "Failed to send preview test email" };
@@ -2211,7 +2217,8 @@ export async function sendTestBroadcastEmailAction(payload: { subject: string; b
     });
 
     try {
-        const senderEmail = settings.smtpFrom || settings.smtpUser;
+        const resolvedSender = resolveSenderAddress("broadcast", settings.smtpFrom || settings.smtpUser);
+        const senderEmail = resolvedSender.formatted;
         const transporter = nodemailer.createTransport({
             host: settings.smtpHost,
             port: settings.smtpPort || 587,
@@ -2229,8 +2236,8 @@ export async function sendTestBroadcastEmailAction(payload: { subject: string; b
             html: personalizedHtml
         });
 
-        logger.addLog("INFO", "EMAIL", `Sent broadcast test preview email to ${recipientEmail}`);
-        return { success: true, message: `Test email successfully delivered to ${recipientEmail}!` };
+        logger.addLog("INFO", "EMAIL", `Sent broadcast test preview email from ${resolvedSender.email} to ${recipientEmail}`);
+        return { success: true, message: `Test email successfully delivered to ${recipientEmail} from ${resolvedSender.email}!` };
     } catch (e: any) {
         logger.addLog("ERROR", "EMAIL", `Broadcast test failed: ${e.message}`);
         return { success: false, error: e.message || "Failed to send test email" };
@@ -2295,8 +2302,8 @@ export async function sendTestEmailAction() {
             select: { email: true }
         });
         const targetRecipient = adminUser?.email || (settings.smtpFrom?.includes("@") ? settings.smtpFrom : (settings.smtpUser?.includes("@") ? settings.smtpUser : "admin@domshomelab.com"));
-        const rawSender = settings.smtpFrom?.trim() || settings.smtpUser;
-        const senderEmail = rawSender?.includes("<") ? rawSender : `"DomsHomeLab (d281knilb)" <${rawSender}>`;
+        const resolvedSender = resolveSenderAddress("notifications", settings.smtpFrom || settings.smtpUser);
+        const senderEmail = resolvedSender.formatted;
         const transporter = nodemailer.createTransport({
             host: settings.smtpHost,
             port: settings.smtpPort || 587,
@@ -4484,6 +4491,7 @@ export async function sendOrQueueEmail(options: {
     html: string;
     text?: string;
     templateId?: string;
+    from?: string;
     targetUser?: string;
     userId?: string;
     bypassApproval?: boolean;
@@ -4559,6 +4567,11 @@ export async function sendOrQueueEmail(options: {
             }
         }
 
+        const resolvedSender = options.from
+            ? { formatted: options.from, email: options.from, displayName: "DomsHomeLab" }
+            : resolveSenderAddress(options.templateId, settings?.smtpFrom || settings?.smtpUser);
+        const senderEmail = resolvedSender.formatted;
+
         if (requireApproval) {
             const attachmentNote = options.attachments && options.attachments.length > 0 ? ` [${options.attachments.length} attachment(s)]` : "";
             const approval = await prisma.adminApproval.create({
@@ -4572,6 +4585,7 @@ export async function sendOrQueueEmail(options: {
                     userId: options.userId || null,
                     payload: JSON.stringify({
                         to: options.to,
+                        from: senderEmail,
                         subject: options.subject,
                         html: options.html,
                         text: options.text,
@@ -4595,8 +4609,6 @@ export async function sendOrQueueEmail(options: {
             return { success: false, error: "SMTP settings not configured" };
         }
 
-        const rawSender = settings.smtpFrom?.trim() || settings.smtpUser;
-        const senderEmail = rawSender?.includes("<") ? rawSender : `"DomsHomeLab (d281knilb)" <${rawSender}>`;
         const transporter = nodemailer.createTransport({
             host: settings.smtpHost,
             port: settings.smtpPort || 587,
@@ -4785,6 +4797,7 @@ export async function approveAdminApprovalAction(approvalId: string) {
         if (approval.type === "EMAIL") {
             const sendRes = await sendOrQueueEmail({
                 to: payload.to,
+                from: payload.from,
                 subject: payload.subject,
                 html: payload.html,
                 text: payload.text,
@@ -6791,6 +6804,11 @@ export async function getPublicJoinConfig(refCode?: string) {
                 validReferral,
                 proratedBilling,
                 smtpFrom: settings?.smtpFrom || settings?.smtpUser || "",
+                kindleSenderEmail: resolveSenderAddress("kindle_delivery", settings?.smtpFrom || settings?.smtpUser).email,
+                paymentsSenderEmail: resolveSenderAddress("payment_received", settings?.smtpFrom || settings?.smtpUser).email,
+                supportSenderEmail: resolveSenderAddress("ticket_update", settings?.smtpFrom || settings?.smtpUser).email,
+                accountsSenderEmail: resolveSenderAddress("user_approval", settings?.smtpFrom || settings?.smtpUser).email,
+                requestsSenderEmail: resolveSenderAddress("media_ready", settings?.smtpFrom || settings?.smtpUser).email,
                 appUrl: await getAppUrl()
             }
         };
@@ -16466,12 +16484,16 @@ export async function toggleMonitorSeries(requestId: string, monitor?: boolean) 
 }
 
 
-export async function getPublicSmtpFromEmail() {
+export async function getPublicSmtpFromEmail(categoryOrTemplateId?: string) {
     try {
         await ensureSchemaColumns();
         const settings = await prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null);
         if (!settings) return "";
-        return settings.smtpFrom || settings.smtpUser || "";
+        const baseSender = settings.smtpFrom || settings.smtpUser || "";
+        if (categoryOrTemplateId) {
+            return resolveSenderAddress(categoryOrTemplateId, baseSender).email;
+        }
+        return baseSender;
     } catch (e) {
         return "";
     }
