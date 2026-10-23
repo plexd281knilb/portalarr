@@ -487,12 +487,19 @@ export async function authorizeQuickConnect(
     }
 
     try {
-        const endpoint = `/QuickConnect/Authorize?Code=${encodeURIComponent(cleanCode)}&UserId=${encodeURIComponent(userId)}`;
+        const endpoint = `/QuickConnect/Authorize?code=${encodeURIComponent(cleanCode)}&userId=${encodeURIComponent(userId)}&Code=${encodeURIComponent(cleanCode)}&UserId=${encodeURIComponent(userId)}`;
         const res = await resilientMediaServerFetch(server, endpoint, {
             method: "POST"
         });
 
         if (res.ok || res.status === 204) {
+            const bodyText = await res.text().catch(() => "");
+            if (bodyText.trim() === "false") {
+                return {
+                    success: false,
+                    error: `Code "${cleanCode}" was rejected by Jellyfin (not found or expired). Please select "Quick Connect" on your TV to generate a fresh 6-character code.`
+                };
+            }
             return {
                 success: true,
                 message: `Device successfully authorized for code ${cleanCode}! Your TV will log in immediately.`

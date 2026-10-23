@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 import { UnsavedChangesPrompt } from "@/components/ui/unsaved-changes-prompt";
 import { 
     getAdminMediaServersAction, 
@@ -324,7 +325,7 @@ export function AdminMediaServersPanel({ onDirtyChange }: AdminMediaServersPanel
                         </h2>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                        Configure Plex, Jellyfin, and Emby instances. Control strictly which servers and libraries your Full Members are allowed to self-select. (Trial member access is managed via the Trial Safe Pool in Access Control).
+                        Configure Plex, Jellyfin, and Emby instances. Control strictly which servers and libraries your Full Members are allowed to self-select. (Trial member access is managed via the <Link href="/settings/access?tab=onboarding#trial-safe-pool" className="text-purple-300 hover:text-purple-200 underline font-semibold">Trial Safe Pool</Link> in Access Control).
                     </p>
                 </div>
 
@@ -554,12 +555,14 @@ export function AdminMediaServersPanel({ onDirtyChange }: AdminMediaServersPanel
                                                     </Label>
                                                 </div>
                                                 <p className="text-[11px] text-muted-foreground">
-                                                    Governed centrally via the <span className="text-purple-300 font-medium">Trial Safe Pool</span> in Access Control.
+                                                    Governed centrally via the <Link href="/settings/access?tab=onboarding#trial-safe-pool" className="text-purple-300 hover:text-purple-200 underline font-semibold inline-flex items-center gap-1">Trial Safe Pool in Access Control <ExternalLink className="h-2.5 w-2.5 inline" /></Link>.
                                                 </p>
                                             </div>
-                                            <Badge variant="outline" className="text-[10px] bg-purple-500/10 text-purple-300 border-purple-500/30 shrink-0">
-                                                Access Control
-                                            </Badge>
+                                            <Link href="/settings/access?tab=onboarding#trial-safe-pool">
+                                                <Badge variant="outline" className="text-[10px] bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border-purple-500/30 shrink-0 cursor-pointer transition-colors flex items-center gap-1">
+                                                    Configure Access <ExternalLink className="h-2.5 w-2.5" />
+                                                </Badge>
+                                            </Link>
                                         </div>
                                     </div>
 

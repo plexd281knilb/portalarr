@@ -801,6 +801,14 @@ export default function AccessSettingsPage() {
             const tab = params.get("tab");
             if (tab && ["users", "referrals", "onboarding", "scraper", "approvals"].includes(tab)) {
                 setActiveTab(tab);
+                if (window.location.hash) {
+                    setTimeout(() => {
+                        const target = document.querySelector(window.location.hash);
+                        if (target) {
+                            target.scrollIntoView({ behavior: "smooth", block: "start" });
+                        }
+                    }, 300);
+                }
             }
         }
     }, []);
@@ -3889,8 +3897,8 @@ export default function AccessSettingsPage() {
                                     )}
                                 </div>
 
-                                {/* DEFAULT PLEX LIBRARIES SELECTION FOR TRIAL ACCOUNTS */}
-                                <div className="space-y-3 pt-2 border-t border-border/40">
+                                {/* DEFAULT PLEX LIBRARIES SELECTION FOR TRIAL ACCOUNTS (Trial Safe Pool) */}
+                                <div id="trial-safe-pool" className="space-y-3 pt-2 border-t border-border/40 scroll-mt-24">
                                     <div className="flex items-center justify-between">
                                         <div>
                                             <div className="flex items-center gap-2">

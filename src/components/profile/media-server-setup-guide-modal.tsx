@@ -279,28 +279,39 @@ export function MediaServerSetupGuideModal({
                                     No Remote Typing
                                 </Badge>
                             </div>
-                            <p className="text-[11px] text-muted-foreground leading-relaxed">
-                                Opening {serverType} on a Smart TV, Apple TV, Fire TV, or Roku? Instead of typing your username and password, enter the 6-character code shown on your TV screen:
-                            </p>
+                            <div className="text-[11px] text-muted-foreground leading-relaxed space-y-1">
+                                <p>
+                                    Opening <strong className="text-purple-300">{serverType}</strong> on an Apple TV, Roku, Fire TV, Android TV, or Smart TV? Skip typing passwords with the TV remote:
+                                </p>
+                                <ol className="list-decimal list-inside space-y-0.5 text-[10.5px] text-muted-foreground/90 pl-0.5">
+                                    <li>Open {serverType} on your TV and select <strong className="text-foreground">"Quick Connect"</strong> on the sign-in screen.</li>
+                                    <li>Your TV will display a temporary <strong className="text-purple-300 font-mono">6-character pairing code</strong> (e.g. <code>834912</code>).</li>
+                                    <li>Type that TV code below and click <strong className="text-foreground">Authorize TV</strong>. Your TV logs in immediately!</li>
+                                </ol>
+                            </div>
                             <div className="flex gap-2">
                                 <Input
-                                    placeholder="Enter TV code (e.g. 123456)"
+                                    placeholder="Enter TV code from screen (e.g. 834912)"
                                     value={quickConnectCode}
                                     onChange={e => {
                                         setQuickConnectCode(e.target.value.toUpperCase());
                                         setQuickConnectErr(null);
                                         setQuickConnectSuccess(null);
                                     }}
-                                    maxLength={10}
+                                    maxLength={12}
                                     className="h-8 text-xs font-mono tracking-widest uppercase flex-1 bg-black/40 border-purple-500/30"
                                 />
                                 <Button
                                     type="button"
                                     size="sm"
                                     onClick={async () => {
-                                        const clean = quickConnectCode.trim();
+                                        const clean = quickConnectCode.replace(/[\s-]/g, "").trim().toUpperCase();
                                         if (!clean || clean.length < 3) {
-                                            setQuickConnectErr("Please enter the code shown on your TV screen.");
+                                            setQuickConnectErr("Please enter the pairing code shown on your TV screen.");
+                                            return;
+                                        }
+                                        if (username && (clean.toLowerCase() === username.toLowerCase() || clean === "D281KNILB")) {
+                                            setQuickConnectErr(`"${clean}" is an account name. Look at your TV screen after selecting "Quick Connect" — it will display a temporary 6-character code (e.g. 834912).`);
                                             return;
                                         }
                                         setAuthorizingQuickConnect(true);
