@@ -5,7 +5,7 @@ import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { 
     getAppUsers, createAppUser, deleteAppUser, 
-    getSettings, saveSettings, saveAppUrlAction, savePlexSettingsAction, clearPlexSettings, saveJobSettings, clearSmtpSettings, sendTestEmailAction, syncPlexFriendsAction, autoLinkAdminPlexTokenAction,
+    getSettings, saveSettings, saveAppUrlAction, savePlexSettingsAction, clearPlexSettings, saveJobSettings, clearSmtpSettings, sendTestEmailAction, syncPlexFriendsAction, autoLinkAdminPlexTokenAction, getAdminNotificationEmailAction, updateCurrentUserPrimaryEmail,
     getPlexServersAction, addPlexServerAction, updatePlexServerAction, removePlexServerAction, setDefaultPlexServerAction, testPlexServerConfigAction, testPlexServerConnectionAction,
     testPlexDatabasePathAction, discoverPlexDatabasePathsAction, savePlexDatabasePathAction,
     togglePlexServerMonitoringAction, getDiscoveredPlexServersAction, importDiscoveredPlexServerAction,
@@ -205,6 +205,14 @@ function SettingsPageContent() {
     const [testEmailLoading, setTestEmailLoading] = useState(false);
     const [testEmailMsg, setTestEmailMsg] = useState("");
     const [testEmailErr, setTestEmailErr] = useState("");
+
+    // Admin Notification Email States
+    const [adminNotificationEmail, setAdminNotificationEmail] = useState("");
+    const [showAdminEmailModal, setShowAdminEmailModal] = useState(false);
+    const [newAdminEmailInput, setNewAdminEmailInput] = useState("");
+    const [adminEmailSaving, setAdminEmailSaving] = useState(false);
+    const [adminEmailModalMsg, setAdminEmailModalMsg] = useState("");
+    const [adminEmailModalErr, setAdminEmailModalErr] = useState("");
 
     // Connection Testing States
     const [testingAppId, setTestingAppId] = useState<string | null>(null);
@@ -490,6 +498,34 @@ function SettingsPageContent() {
             setTestEmailMsg(res.message || "Test email dispatched successfully!");
         } else {
             setTestEmailErr(res.error || "Failed to send test email.");
+        }
+    };
+
+    const handleSaveAdminEmail = async () => {
+        if (!newAdminEmailInput || !newAdminEmailInput.includes("@")) {
+            setAdminEmailModalErr("Please enter a valid email address.");
+            return;
+        }
+        setAdminEmailSaving(true);
+        setAdminEmailModalMsg("");
+        setAdminEmailModalErr("");
+        try {
+            const res = await updateCurrentUserPrimaryEmail(newAdminEmailInput);
+            if (res.success) {
+                setAdminEmailModalMsg(res.message || "Admin email updated successfully!");
+                setAdminNotificationEmail(newAdminEmailInput.trim().toLowerCase());
+                setTimeout(() => {
+                    setShowAdminEmailModal(false);
+                    setAdminEmailModalMsg("");
+                }, 1200);
+                loadAllData();
+            } else {
+                setAdminEmailModalErr(res.error || "Failed to update email.");
+            }
+        } catch (e: any) {
+            setAdminEmailModalErr(e.message || "Failed to update email.");
+        } finally {
+            setAdminEmailSaving(false);
         }
     };
 
@@ -980,7 +1016,7 @@ function SettingsPageContent() {
         }, 2500);
 
         try {
-            const [u, s, t, g, m, bt, bc, rt, ab, ai, ps] = await Promise.all([
+            const [u, s, t, g, m, bt, bc, rt, ab, ai, ps, adminEmailRes] = await Promise.all([
                 getAppUsers().catch(err => { console.error("getAppUsers error:", err); return []; }),
                 getSettings().catch(err => { console.error("getSettings error:", err); return {}; }),
                 getTautulliInstances().catch(err => { console.error("getTautulliInstances error:", err); return []; }),
@@ -991,10 +1027,14 @@ function SettingsPageContent() {
                 getRoadmapText().catch(() => ""),
                 getAlertBanner().catch(() => ({ enabled: false, text: "" })),
                 getAiAgentSettings().catch(() => null),
-                getPlexServersAction().catch(err => { console.error("getPlexServersAction error:", err); return []; })
+                getPlexServersAction().catch(err => { console.error("getPlexServersAction error:", err); return []; }),
+                getAdminNotificationEmailAction().catch(() => null)
             ]);
             setUsers(u || []);
             setSystemSettings(s || {});
+            if (adminEmailRes?.success && adminEmailRes.email) {
+                setAdminNotificationEmail(adminEmailRes.email);
+            }
             setPlexServers(ps || []);
             if (ps && ps.length > 0) {
                 setSnapshotTargetServerId(prev => {
@@ -5151,6 +5191,41 @@ function SettingsPageContent() {
                                             </div>
                                         )}
 
+                                        {/* Test Email & Admin Alerts Recipient Indicator */}
+                                        <div className="rounded-xl border border-border/50 bg-background/60 p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                <div className="h-8 w-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
+                                                    <MailCheck className="h-4 w-4" />
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <div className="text-[11px] text-muted-foreground font-medium flex items-center gap-1.5">
+                                                        <span>Test Emails & Admin Alerts Deliver To:</span>
+                                                        <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-mono text-primary border-primary/30">
+                                                            Administrator
+                                                        </Badge>
+                                                    </div>
+                                                    <div className="font-mono text-xs font-semibold text-foreground truncate mt-0.5">
+                                                        {adminNotificationEmail || (users.find(u => u.role === "ADMIN")?.email || "d281knilb@gmail.com")}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => {
+                                                    setNewAdminEmailInput(adminNotificationEmail || (users.find(u => u.role === "ADMIN")?.email || ""));
+                                                    setAdminEmailModalErr("");
+                                                    setAdminEmailModalMsg("");
+                                                    setShowAdminEmailModal(true);
+                                                }}
+                                                className="text-xs h-7 px-2.5 text-primary border-primary/30 hover:bg-primary/10 gap-1 font-semibold shrink-0"
+                                            >
+                                                <Pencil className="h-3 w-3" />
+                                                <span>Change Recipient Email</span>
+                                            </Button>
+                                        </div>
+
                                         <div className="flex flex-wrap gap-2 pt-2">
                                             <Button type="submit" className="flex-1 font-bold hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all shadow-md">
                                                 <Mail className="h-4 w-4 mr-2"/> 
@@ -5189,6 +5264,71 @@ function SettingsPageContent() {
                                     </form>
                                 </CardContent>
                             </Card>
+
+                    {/* ADMIN NOTIFICATION EMAIL UPDATE MODAL */}
+                    <Dialog open={showAdminEmailModal} onOpenChange={setShowAdminEmailModal}>
+                        <DialogContent className="sm:max-w-[425px] bg-[#121218]/95 border-border/60">
+                            <DialogHeader>
+                                <DialogTitle className="flex items-center gap-2 text-base font-bold">
+                                    <Mail className="h-5 w-5 text-primary" />
+                                    Update Admin Notification Email
+                                </DialogTitle>
+                                <DialogDescription className="text-xs">
+                                    This email address receives SMTP connection test emails, media request alerts, account approvals, and support ticket notifications.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4 py-2">
+                                {adminEmailModalMsg && (
+                                    <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-2.5 rounded-lg flex items-center gap-2">
+                                        <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                        <span>{adminEmailModalMsg}</span>
+                                    </div>
+                                )}
+                                {adminEmailModalErr && (
+                                    <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-2.5 rounded-lg flex items-center gap-2">
+                                        <XCircle className="h-4 w-4 shrink-0" />
+                                        <span>{adminEmailModalErr}</span>
+                                    </div>
+                                )}
+                                <div className="space-y-2">
+                                    <Label className="text-xs font-semibold">Administrator Primary Email</Label>
+                                    <Input
+                                        type="email"
+                                        value={newAdminEmailInput}
+                                        onChange={(e) => setNewAdminEmailInput(e.target.value)}
+                                        placeholder="admin@domshomelab.com"
+                                        className="font-mono text-xs"
+                                        autoFocus
+                                    />
+                                    <p className="text-[11px] text-muted-foreground">
+                                        This updates your administrator primary email and all automated alert routing.
+                                    </p>
+                                </div>
+                            </div>
+                            <DialogFooter className="gap-2 sm:gap-0">
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setShowAdminEmailModal(false)}
+                                    disabled={adminEmailSaving}
+                                    className="text-xs"
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={handleSaveAdminEmail}
+                                    disabled={adminEmailSaving || !newAdminEmailInput.trim()}
+                                    className="text-xs font-bold gap-1.5"
+                                >
+                                    {adminEmailSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                                    Save Recipient Email
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
                         </div>
                     )}
 

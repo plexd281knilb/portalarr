@@ -47,7 +47,7 @@ Portalarr uses a **Modern Cinematic Dark Theme** powered by Tailwind CSS, Radix 
      - `requests`: Media Requests (Seerr / Jellyseerr / Overseerr synchronization, auto-approval rules, default request limits).
      - `ai`: AI Agent & Curation Keys (Google Gemini API keys, OpenAI tokens, Kometa, Agregarr, Maintainerr curation webhooks).
   5. **Communications & Alerts (`communications`)**:
-     - `smtp`: Global SMTP & Kindle Delivery (Outbound mail server, SMTP credentials, TLS/SSL, Amazon Send-to-Kindle address).
+     - `smtp`: Global SMTP & Kindle Delivery (Outbound mail server, SMTP credentials, TLS/SSL, Amazon Send-to-Kindle address, live test email dispatches, and Admin Recipient indicator with 1-click Change Recipient modal).
      - `broadcast`: Broadcasts & Notification Templates (12 granular notification templates, Markdown editor, test email dispatches).
      - `discord`: Discord Bot & Automation (Bot token, Guild ID, channel mappings for alerts/status/requests, role assignments).
 

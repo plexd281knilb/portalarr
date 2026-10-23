@@ -199,7 +199,7 @@ async function runTestSuite() {
             }
 
             // Page Fix Suggestion & AI Telemetry Engine test
-            const { getPageFileHints } = await import("../src/app/actions");
+            const { getPageFileHints, getAdminNotificationEmailAction, updateAppUserEmail } = await import("../src/app/actions");
             const libHints = await getPageFileHints("/library");
             if (!libHints.title.includes("Library") || !libHints.fileHints.includes("src/app/library/page.tsx")) {
                 throw new Error("getPageFileHints failed for /library");
@@ -208,7 +208,34 @@ async function runTestSuite() {
             if (!rootHints.fileHints.includes("src/app/page.tsx")) {
                 throw new Error("getPageFileHints failed for /");
             }
+
+            // Primary Email Resolution & Admin Recipient Verification
+            process.env.PORTALARR_TEST_AUTH = "true";
+            process.env.PORTALARR_TEST_USER_ID = adminUser.id;
+
+            const adminEmailRes = await getAdminNotificationEmailAction();
+            if (!adminEmailRes.success || !adminEmailRes.email?.includes("@")) {
+                throw new Error(`getAdminNotificationEmailAction failed: ${JSON.stringify(adminEmailRes)}`);
+            }
+
+            // Update user email action test
+            const newEmail = `updated_kid_${testId}@example.com`;
+            const updateEmailRes = await updateAppUserEmail(kidUser.id, newEmail);
+            if (!updateEmailRes.success) {
+                throw new Error(`updateAppUserEmail failed: ${JSON.stringify(updateEmailRes)}`);
+            }
+            const verifiedKid = await prisma.user.findUnique({ where: { id: kidUser.id } });
+            if (verifiedKid?.email !== newEmail) {
+                throw new Error(`Expected email ${newEmail}, got ${verifiedKid?.email}`);
+            }
+
+            // Duplicate email prevention test
+            const dupRes = await updateAppUserEmail(adminUser.id, newEmail);
+            if (dupRes.success) {
+                throw new Error("Expected updateAppUserEmail to fail on duplicate email collision!");
+            }
         } finally {
+            delete process.env.PORTALARR_TEST_USER_ID;
             await prisma.user.deleteMany({ where: { id: { in: [adminUser.id, kidUser.id] } } });
         }
     });

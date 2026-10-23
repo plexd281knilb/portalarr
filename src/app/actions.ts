@@ -2338,6 +2338,26 @@ export async function sendTestEmailAction() {
     }
 }
 
+export async function getAdminNotificationEmailAction() {
+    try {
+        await verifyAdmin();
+        const adminUser = await prisma.user.findFirst({
+            where: { role: "ADMIN", email: { contains: "@" } },
+            select: { email: true, username: true, id: true }
+        });
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        const resolvedEmail = adminUser?.email || (settings?.smtpFrom?.includes("@") ? settings.smtpFrom : (settings?.smtpUser?.includes("@") ? settings.smtpUser : "admin@domshomelab.com"));
+        return {
+            success: true,
+            email: resolvedEmail,
+            adminUsername: adminUser?.username || "Admin",
+            adminUserId: adminUser?.id
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to resolve admin notification email." };
+    }
+}
+
 export async function addTautulliInstance(formData: FormData) {
   await verifyAdmin();
   const name = formData.get("name") as string;
@@ -3892,6 +3912,106 @@ export async function adminResetUserPassword(id: string, newPass: string) {
     } catch (e: any) {
         return { error: e.message || "Failed to reset password" };
     }
+}
+
+export async function updateCurrentUserPrimaryEmail(newEmail: string) {
+    const session: any = await verifyUser();
+    const userId = session?.userId || session?.id;
+    if (!userId) return { success: false, error: "Unauthorized" };
+
+    const cleanEmail = (newEmail || "").trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!cleanEmail || !emailRegex.test(cleanEmail)) {
+        return { success: false, error: "Please enter a valid email address." };
+    }
+
+    // Check collision with another user
+    const existing = await prisma.user.findFirst({
+        where: {
+            email: cleanEmail,
+            NOT: { id: userId }
+        }
+    });
+    if (existing) {
+        return { success: false, error: "This email address is already registered to another account." };
+    }
+
+    const currentUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { username: true, email: true }
+    });
+
+    const updateData: any = { email: cleanEmail };
+    // If username was identical to old email, keep username in sync
+    if (currentUser && currentUser.username.toLowerCase() === currentUser.email.toLowerCase()) {
+        const usernameCollision = await prisma.user.findFirst({
+            where: { username: cleanEmail, NOT: { id: userId } }
+        });
+        if (!usernameCollision) {
+            updateData.username = cleanEmail;
+        }
+    }
+
+    await prisma.user.update({
+        where: { id: userId },
+        data: updateData
+    });
+
+    logger.addLog("INFO", "AUTH", `User "${currentUser?.username || userId}" updated primary email to "${cleanEmail}"`);
+    try {
+        revalidatePath("/settings");
+        revalidatePath("/settings/profile");
+        revalidatePath("/settings/access");
+    } catch {}
+    return { success: true, message: `Account email successfully updated to ${cleanEmail}!` };
+}
+
+export async function updateAppUserEmail(id: string, newEmail: string) {
+    await verifyAdmin();
+    const cleanEmail = (newEmail || "").trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!cleanEmail || !emailRegex.test(cleanEmail)) {
+        return { success: false, error: "Please enter a valid email address." };
+    }
+
+    // Check collision with another user
+    const existing = await prisma.user.findFirst({
+        where: {
+            email: cleanEmail,
+            NOT: { id }
+        }
+    });
+    if (existing) {
+        return { success: false, error: "This email address is already in use by another account." };
+    }
+
+    const targetUser = await prisma.user.findUnique({
+        where: { id },
+        select: { username: true, email: true }
+    });
+
+    const updateData: any = { email: cleanEmail };
+    if (targetUser && targetUser.username.toLowerCase() === targetUser.email.toLowerCase()) {
+        const usernameCollision = await prisma.user.findFirst({
+            where: { username: cleanEmail, NOT: { id } }
+        });
+        if (!usernameCollision) {
+            updateData.username = cleanEmail;
+        }
+    }
+
+    await prisma.user.update({
+        where: { id },
+        data: updateData
+    });
+
+    logger.addLog("INFO", "AUTH", `Admin updated email for user "${targetUser?.username || id}" to "${cleanEmail}"`);
+    try {
+        revalidatePath("/settings");
+        revalidatePath("/settings/profile");
+        revalidatePath("/settings/access");
+    } catch {}
+    return { success: true, message: `User email successfully updated to ${cleanEmail}!` };
 }
 
 export async function approveAllPendingAppUsers() {

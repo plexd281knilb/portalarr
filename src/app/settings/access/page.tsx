@@ -11,7 +11,7 @@ import {
     rejectAppUser, 
     syncPlexFriendsAction, 
     updateAppUserRole, 
-    updateAppUserKindleEmail, 
+    updateAppUserKindleEmail, updateAppUserEmail, 
     updateAppUserName,
     adminResetUserPassword, 
     approveAllPendingAppUsers,
@@ -278,6 +278,8 @@ export default function AccessSettingsPage() {
     const [adminResetLoading, setAdminResetLoading] = useState(false);
 
     // Inline Edit Kindle Email state
+    const [editingEmailUserId, setEditingEmailUserId] = useState<string | null>(null);
+    const [userEmailInput, setUserEmailInput] = useState("");
     const [editingKindleUserId, setEditingKindleUserId] = useState<string | null>(null);
     const [kindleEmailInput, setKindleEmailInput] = useState("");
 
@@ -933,6 +935,13 @@ export default function AccessSettingsPage() {
     const handleMembershipTierChange = async (userId: string, newTier: string) => {
         setUsers((prev: any[]) => prev.map(u => u.id === userId ? { ...u, membershipTier: newTier } : u));
         await updateUserMembershipTierAction(userId, newTier);
+        loadUsers();
+    };
+
+    const handleSaveUserEmail = async (userId: string) => {
+        await updateAppUserEmail(userId, userEmailInput);
+        setEditingEmailUserId(null);
+        setUserEmailInput("");
         loadUsers();
     };
 
@@ -2481,7 +2490,39 @@ export default function AccessSettingsPage() {
                                                             </div>
                                                             <div className="text-xs text-muted-foreground flex items-center gap-1.5 truncate">
                                                                 <Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" />
-                                                                <span className="truncate">{user.email || "No Email Associated"}</span>
+                                                                {editingEmailUserId === user.id ? (
+                                                                    <div className="flex items-center gap-1">
+                                                                        <Input 
+                                                                            className="h-6 text-xs bg-background/90 px-1.5 py-0 font-mono w-44" 
+                                                                            placeholder="user@example.com"
+                                                                            value={userEmailInput}
+                                                                            onChange={(e) => setUserEmailInput(e.target.value)}
+                                                                            autoFocus
+                                                                        />
+                                                                        <Button size="sm" className="h-6 px-2 text-[10px] bg-emerald-600 hover:bg-emerald-500 text-white shrink-0 font-semibold" onClick={() => handleSaveUserEmail(user.id)}>
+                                                                            Save
+                                                                        </Button>
+                                                                        <Button size="sm" variant="ghost" className="h-6 px-1.5 text-[10px] shrink-0" onClick={() => setEditingEmailUserId(null)}>
+                                                                            ✕
+                                                                        </Button>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="flex items-center gap-1 truncate">
+                                                                        <span className="truncate">{user.email || "No Email Associated"}</span>
+                                                                        <Button 
+                                                                            variant="ghost" 
+                                                                            size="icon" 
+                                                                            className="h-5 w-5 text-muted-foreground/70 hover:text-foreground shrink-0"
+                                                                            onClick={() => {
+                                                                                setEditingEmailUserId(user.id);
+                                                                                setUserEmailInput(user.email || "");
+                                                                            }}
+                                                                            title="Edit Email Address"
+                                                                        >
+                                                                            <Edit2 className="h-2.5 w-2.5" />
+                                                                        </Button>
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     </div>
