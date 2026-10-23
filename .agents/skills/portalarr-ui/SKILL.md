@@ -1308,6 +1308,9 @@ Before completing any task, execute:
   - Dismissible with `X` button and programmatically operable via `window.dispatchEvent(new CustomEvent("open-suggest-fix"))`.
 - **Decoupled SMTP & Resend Settings Architecture (`src/app/settings/page.tsx`)**:
   - Resend credentials (`resendApiKey`, `resendFrom`) and Custom SMTP credentials (`customSmtpHost`, `customSmtpPort`, `customSmtpUser`, `customSmtpPass`, `customSmtpFrom`) are completely isolated in separate database columns and UI form states.
+  - **Active Outbound Email Engine Selector Bar**: Administrators can toggle which outbound engine is active using dedicated selector buttons: `Resend (Domain: @domshomelab.com)` with purple styling and `Custom SMTP (Gmail / Outlook / SES)` with sky-blue styling, each displaying real-time `[ ACTIVE ]` vs `[ Standby ]` indicators.
+  - **Panel Status Badges & Quick Set-Active Controls**: Each provider panel features an `Active Engine` emerald pulse badge or a direct 1-click `Set Active` action button.
+  - **Provider-Aware Test Connection (`sendTestEmailAction(emailProviderMode)`)**: When an administrator clicks `Test Connection (Resend)` or `Test Connection (Custom SMTP)`, the action tests the explicitly chosen provider mode rather than whatever was previously saved in the generic SMTP fields. Resend tests route strictly through `smtp.resend.com:465` with `notifications@domshomelab.com`, while Custom SMTP routes through the configured custom host/credentials.
   - Switching between provider tabs never mutates or overwrites the other provider's credentials, preventing API keys and passwords from overwriting each other.
   - Active provider mode synchronizes outbound SMTP parameters while leaving both credential sets permanently preserved.
 

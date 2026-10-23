@@ -500,7 +500,7 @@ function SettingsPageContent() {
         setTestEmailLoading(true);
         setTestEmailMsg("");
         setTestEmailErr("");
-        const res = await sendTestEmailAction();
+        const res = await sendTestEmailAction(emailProviderMode);
         setTestEmailLoading(false);
         if (res.success) {
             setTestEmailMsg(res.message || "Test email dispatched successfully!");
@@ -4923,9 +4923,13 @@ function SettingsPageContent() {
                                                     ● Unsaved Changes
                                                 </Badge>
                                             )}
-                                            {systemSettings?.smtpHost ? (
+                                            {systemSettings?.emailProviderMode === "resend" || systemSettings?.smtpHost?.includes("resend") ? (
+                                                <Badge className="bg-purple-500/15 text-purple-300 border border-purple-500/30 text-[10px] gap-1">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Active: Resend
+                                                </Badge>
+                                            ) : systemSettings?.smtpHost ? (
                                                 <Badge className="bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 text-[10px] gap-1">
-                                                    <CheckCircle2 className="h-3 w-3" /> SMTP Configured
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Active: Custom SMTP
                                                 </Badge>
                                             ) : (
                                                 <Badge variant="outline" className="bg-red-500/10 text-red-400 border-red-500/30 text-[10px]">
@@ -5003,41 +5007,57 @@ function SettingsPageContent() {
                                             </div>
                                         )}
 
-                                        {/* Provider Selector Switcher */}
-                                        <div className="flex items-center justify-between gap-2 p-1.5 bg-background/80 rounded-xl border border-border/40">
-                                            <div className="flex items-center gap-1.5">
-                                                <Button
+                                        {/* Provider Selector Switcher & Active Engine Selector */}
+                                        <div className="p-3 bg-background/80 rounded-xl border border-border/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                            <div className="space-y-0.5">
+                                                <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                                                    <Radio className="h-3.5 w-3.5 text-primary animate-pulse" /> Active Outbound Email Engine
+                                                </span>
+                                                <p className="text-[11px] text-muted-foreground">
+                                                    Click to choose which provider is active. Both can be configured independently without overwriting.
+                                                </p>
+                                            </div>
+                                            <div className="flex items-center gap-1.5 bg-black/40 p-1 rounded-xl border border-border/40 self-start sm:self-auto">
+                                                <button
                                                     type="button"
-                                                    size="sm"
-                                                    variant={emailProviderMode === "resend" ? "default" : "ghost"}
                                                     onClick={() => setEmailProviderMode("resend")}
-                                                    className={`text-xs h-7 px-3 gap-1.5 font-bold transition-all ${
+                                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                                                         emailProviderMode === "resend"
-                                                            ? "bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-900/30"
-                                                            : "text-muted-foreground hover:text-foreground"
+                                                            ? "bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-900/30 border border-purple-400/40 ring-1 ring-purple-400/50"
+                                                            : "text-muted-foreground hover:text-foreground hover:bg-white/[0.04]"
                                                     }`}
                                                 >
                                                     <Zap className="h-3.5 w-3.5 text-amber-300" />
-                                                    <span>Resend (API Key)</span>
-                                                </Button>
-                                                <Button
+                                                    <span>Resend</span>
+                                                    {emailProviderMode === "resend" ? (
+                                                        <span className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 rounded-full font-mono ml-0.5">
+                                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> ACTIVE
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-[10px] text-muted-foreground/60 ml-0.5">Standby</span>
+                                                    )}
+                                                </button>
+
+                                                <button
                                                     type="button"
-                                                    size="sm"
-                                                    variant={emailProviderMode === "custom" ? "default" : "ghost"}
                                                     onClick={() => setEmailProviderMode("custom")}
-                                                    className={`text-xs h-7 px-3 gap-1.5 font-semibold transition-all ${
+                                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                                                         emailProviderMode === "custom"
-                                                            ? "bg-primary text-primary-foreground shadow-sm"
-                                                            : "text-muted-foreground hover:text-foreground"
+                                                            ? "bg-primary text-primary-foreground shadow-sm border border-primary/40 ring-1 ring-primary/50"
+                                                            : "text-muted-foreground hover:text-foreground hover:bg-white/[0.04]"
                                                     }`}
                                                 >
                                                     <Mail className="h-3.5 w-3.5" />
-                                                    <span>Custom SMTP / Gmail</span>
-                                                </Button>
+                                                    <span>Custom SMTP</span>
+                                                    {emailProviderMode === "custom" ? (
+                                                        <span className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 rounded-full font-mono ml-0.5">
+                                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> ACTIVE
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-[10px] text-muted-foreground/60 ml-0.5">Standby</span>
+                                                    )}
+                                                </button>
                                             </div>
-                                            <Badge variant="outline" className="text-[10px] hidden sm:inline-flex border-purple-500/30 text-purple-300 bg-purple-500/10">
-                                                Verified: domshomelab.com
-                                            </Badge>
                                         </div>
 
                                         {emailProviderMode === "resend" ? (
@@ -5051,14 +5071,32 @@ function SettingsPageContent() {
                                                             Enter your Resend API Key below. Portalarr automatically routes emails through Resend's SMTP server (<code className="text-purple-300 font-mono text-[11px]">smtp.resend.com:465</code>) using your verified domain.
                                                         </p>
                                                     </div>
-                                                    <a
-                                                        href="https://resend.com/api-keys"
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="text-[11px] text-purple-400 hover:text-purple-300 flex items-center gap-1 shrink-0 font-medium underline underline-offset-2"
-                                                    >
-                                                        Resend Dashboard <ExternalLink className="h-3 w-3" />
-                                                    </a>
+                                                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                                                        {emailProviderMode === "resend" ? (
+                                                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Active Engine
+                                                            </span>
+                                                        ) : (
+                                                            <Button
+                                                                type="button"
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={() => setEmailProviderMode("resend")}
+                                                                className="text-xs h-7 px-3 gap-1.5 font-bold border-purple-500/40 text-purple-300 hover:bg-purple-500/20"
+                                                            >
+                                                                <CheckCircle2 className="h-3.5 w-3.5 text-purple-400" />
+                                                                <span>Set Active</span>
+                                                            </Button>
+                                                        )}
+                                                        <a
+                                                            href="https://resend.com/api-keys"
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="text-[11px] text-purple-400 hover:text-purple-300 flex items-center gap-1 font-medium underline underline-offset-2 ml-1"
+                                                        >
+                                                            Resend Dashboard <ExternalLink className="h-3 w-3" />
+                                                        </a>
+                                                    </div>
                                                 </div>
 
                                                 <div className="space-y-2">
@@ -5163,7 +5201,33 @@ function SettingsPageContent() {
                                                 </div>
                                             </div>
                                         ) : (
-                                            <div className="space-y-4">
+                                            <div className="p-4 rounded-xl bg-slate-900/40 border border-border/50 space-y-4">
+                                                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                                                    <div className="space-y-0.5">
+                                                        <div className="text-sm font-extrabold text-foreground flex items-center gap-1.5">
+                                                            <Mail className="h-4 w-4 text-sky-400" /> Custom SMTP / Gmail Outbound Delivery
+                                                        </div>
+                                                        <p className="text-xs text-muted-foreground leading-relaxed">
+                                                            Connect your standard SMTP server (e.g. Gmail, Outlook, Amazon SES) to route platform emails.
+                                                        </p>
+                                                    </div>
+                                                    {emailProviderMode === "custom" ? (
+                                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shrink-0">
+                                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Active Engine
+                                                        </span>
+                                                    ) : (
+                                                        <Button
+                                                            type="button"
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={() => setEmailProviderMode("custom")}
+                                                            className="text-xs h-7 px-3 gap-1.5 font-bold border-sky-500/40 text-sky-300 hover:bg-sky-500/20 shrink-0"
+                                                        >
+                                                            <CheckCircle2 className="h-3.5 w-3.5 text-sky-400" />
+                                                            <span>Set Active</span>
+                                                        </Button>
+                                                    )}
+                                                </div>
                                                 <div className="grid grid-cols-2 gap-4">
                                                     <div className="space-y-2">
                                                         <Label>SMTP Host</Label>
@@ -5290,7 +5354,7 @@ function SettingsPageContent() {
                                         <div className="flex flex-wrap gap-2 pt-2">
                                             <Button type="submit" className="flex-1 font-bold hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all shadow-md">
                                                 <Mail className="h-4 w-4 mr-2"/> 
-                                                Save SMTP Settings
+                                                Save &amp; Activate {emailProviderMode === "resend" ? "Resend" : "Custom SMTP"}
                                             </Button>
 
                                             <Button 
@@ -5302,7 +5366,7 @@ function SettingsPageContent() {
                                                 title="Send a test email to your SMTP account"
                                             >
                                                 {testEmailLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MailCheck className="h-3.5 w-3.5" />}
-                                                Test Connection
+                                                Test Connection ({emailProviderMode === "resend" ? "Resend" : "Custom SMTP"})
                                             </Button>
                                             
                                             {systemSettings?.smtpHost && (

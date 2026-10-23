@@ -75,7 +75,32 @@ async function runTestSuite() {
         const decrypted = decryptData(encrypted);
         if (decrypted !== secretToken) throw new Error(`Decrypted value "${decrypted}" !== original "${secretToken}"`);
 
-        // 3. User Model Basic Persistence
+        // 3. Decoupled Outbound Email Engine Persistence (Resend vs Custom SMTP)
+        const mockResendKey = "re_test_key_abc123xyz789";
+        const mockCustomPass = "gmail-app-password-secret-xyz";
+        await prisma.settings.update({
+            where: { id: "global" },
+            data: {
+                resendApiKey: encryptData(mockResendKey),
+                resendFrom: "notifications@domshomelab.com",
+                customSmtpHost: "smtp.gmail.com",
+                customSmtpPort: 587,
+                customSmtpUser: "testuser@gmail.com",
+                customSmtpPass: encryptData(mockCustomPass),
+                customSmtpFrom: "testuser@gmail.com",
+                emailProviderMode: "resend"
+            }
+        });
+
+        const verifySettings = await prisma.settings.findUnique({ where: { id: "global" } });
+        if (!verifySettings) throw new Error("Settings not found after decoupled email test");
+        if (verifySettings.emailProviderMode !== "resend") throw new Error("emailProviderMode mismatch");
+        if (decryptData(verifySettings.resendApiKey || "") !== mockResendKey) throw new Error("resendApiKey decryption mismatch");
+        if (decryptData(verifySettings.customSmtpPass || "") !== mockCustomPass) throw new Error("customSmtpPass decryption mismatch");
+        if (verifySettings.customSmtpHost !== "smtp.gmail.com") throw new Error("customSmtpHost mismatch");
+        if (verifySettings.resendFrom !== "notifications@domshomelab.com") throw new Error("resendFrom mismatch");
+
+        // 4. User Model Basic Persistence
         const testUser = await prisma.user.create({
             data: {
                 username: `core_db_user_${Date.now()}`,

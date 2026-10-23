@@ -1154,6 +1154,7 @@ export async function getSettings() {
 export async function saveSettings(formData: FormData) {
   await verifyAdmin();
   await ensureSchemaColumns();
+  const currentSettings = await prisma.settings.findFirst({ where: { id: "global" } });
   const updateData: any = {};
 
   if (formData.has("appUrl")) {
@@ -1211,18 +1212,30 @@ export async function saveSettings(formData: FormData) {
     const resendKeyToUse = (formData.get("resendApiKey") as string) || (formData.get("smtpPass") as string) || "";
     if (resendKeyToUse) {
       updateData.smtpPass = encryptData(resendKeyToUse);
+    } else if (updateData.resendApiKey) {
+      updateData.smtpPass = updateData.resendApiKey;
+    } else if (currentSettings?.resendApiKey) {
+      updateData.smtpPass = currentSettings.resendApiKey;
+    } else if (currentSettings?.smtpHost?.includes("resend") && currentSettings?.smtpPass) {
+      updateData.smtpPass = currentSettings.smtpPass;
     }
-    const rFrom = ((formData.get("resendFrom") as string) || (formData.get("smtpFrom") as string) || "").trim();
+    const rFrom = ((formData.get("resendFrom") as string) || (formData.get("smtpFrom") as string) || currentSettings?.resendFrom || "").trim();
     updateData.smtpFrom = (rFrom && !rFrom.toLowerCase().includes("@gmail.com")) ? rFrom : "notifications@domshomelab.com";
   } else if (mode === "custom") {
-    updateData.smtpHost = updateData.customSmtpHost || (formData.get("smtpHost") as string || "");
-    updateData.smtpPort = updateData.customSmtpPort ?? (Number(formData.get("smtpPort")) || 587);
-    updateData.smtpUser = updateData.customSmtpUser || (formData.get("smtpUser") as string || "");
+    updateData.smtpHost = updateData.customSmtpHost || currentSettings?.customSmtpHost || (formData.get("smtpHost") as string || "");
+    updateData.smtpPort = updateData.customSmtpPort ?? currentSettings?.customSmtpPort ?? (Number(formData.get("smtpPort")) || 587);
+    updateData.smtpUser = updateData.customSmtpUser || currentSettings?.customSmtpUser || (formData.get("smtpUser") as string || "");
     const cPass = (formData.get("customSmtpPass") as string) || (formData.get("smtpPass") as string) || "";
     if (cPass) {
       updateData.smtpPass = encryptData(cPass);
+    } else if (updateData.customSmtpPass) {
+      updateData.smtpPass = updateData.customSmtpPass;
+    } else if (currentSettings?.customSmtpPass) {
+      updateData.smtpPass = currentSettings.customSmtpPass;
+    } else if (!currentSettings?.smtpHost?.includes("resend") && currentSettings?.smtpPass) {
+      updateData.smtpPass = currentSettings.smtpPass;
     }
-    updateData.smtpFrom = updateData.customSmtpFrom || (formData.get("smtpFrom") as string || "");
+    updateData.smtpFrom = updateData.customSmtpFrom || currentSettings?.customSmtpFrom || (formData.get("smtpFrom") as string || "");
   } else {
     if (formData.has("smtpHost")) updateData.smtpHost = formData.get("smtpHost") as string || "";
     if (formData.has("smtpPort")) updateData.smtpPort = Number(formData.get("smtpPort")) || 587;
@@ -2342,11 +2355,33 @@ export async function clearSmtpSettings() {
   revalidatePath("/settings");
 }
 
-export async function sendTestEmailAction() {
+export async function sendTestEmailAction(providerMode?: "resend" | "custom") {
     await verifyAdmin();
     const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-    if (!settings?.smtpHost || !settings?.smtpUser || !settings?.smtpPass) {
-        return { success: false, error: "SMTP host, username, and password must be saved before testing." };
+    if (!settings) {
+        return { success: false, error: "Settings not found." };
+    }
+
+    const effectiveMode = providerMode || settings.emailProviderMode || (settings.smtpHost?.includes("resend") ? "resend" : "custom");
+    const isResend = effectiveMode === "resend";
+
+    const host = isResend ? "smtp.resend.com" : (settings.customSmtpHost || settings.smtpHost || "smtp.gmail.com");
+    const port = isResend ? 465 : (settings.customSmtpPort || settings.smtpPort || 587);
+    const secure = port === 465;
+    const user = isResend ? "resend" : (settings.customSmtpUser || settings.smtpUser || "");
+    const rawPass = isResend ? (settings.resendApiKey || settings.smtpPass) : (settings.customSmtpPass || settings.smtpPass);
+    const pass = rawPass ? decryptData(rawPass) : "";
+    const from = isResend 
+        ? ((settings.resendFrom && !settings.resendFrom.toLowerCase().includes("@gmail.com")) ? settings.resendFrom : "notifications@domshomelab.com")
+        : (settings.customSmtpFrom || settings.smtpFrom || user);
+
+    if (!host || !user || !pass) {
+        return { 
+            success: false, 
+            error: isResend 
+                ? "Resend API Key must be saved before testing." 
+                : "Custom SMTP host, username, and password must be saved before testing." 
+        };
     }
 
     try {
@@ -2354,41 +2389,38 @@ export async function sendTestEmailAction() {
             where: { role: "ADMIN", email: { contains: "@" } },
             select: { email: true }
         });
-        const targetRecipient = adminUser?.email || (settings.smtpFrom?.includes("@") ? settings.smtpFrom : (settings.smtpUser?.includes("@") ? settings.smtpUser : "admin@domshomelab.com"));
-        const isResend = settings.smtpHost?.includes("resend") || settings.smtpUser?.toLowerCase() === "resend";
-        let resolvedSender = resolveSenderAddress("notifications", settings.smtpFrom || settings.smtpUser);
-        if (isResend && (!resolvedSender.isCustomDomain || resolvedSender.email.toLowerCase().includes("@gmail.com"))) {
-            resolvedSender = resolveSenderAddress("notifications", "notifications@domshomelab.com");
-        }
+        const targetRecipient = adminUser?.email || (from.includes("@") ? from : "admin@domshomelab.com");
+        const resolvedSender = resolveSenderAddress("notifications", from);
         const senderEmail = resolvedSender.formatted;
         const transporter = nodemailer.createTransport({
-            host: settings.smtpHost,
-            port: settings.smtpPort || 587,
-            secure: settings.smtpPort === 465,
+            host,
+            port,
+            secure,
             auth: {
-                user: settings.smtpUser,
-                pass: decryptData(settings.smtpPass)
+                user,
+                pass
             }
         });
 
         await transporter.sendMail({
             from: senderEmail,
             to: targetRecipient,
-            subject: "🧪 DomsHomeLab (d281knilb) SMTP Email Test",
+            subject: `🧪 DomsHomeLab SMTP Test (${isResend ? "Resend" : "Custom SMTP"})`,
             html: `
                 <div style="font-family: sans-serif; padding: 24px; color: #0f172a; max-width: 550px; margin: 0 auto; border: 1px solid #cbd5e1; border-radius: 12px; background-color: #ffffff;">
-                    <h2 style="color: #0284c7; margin-top: 0; font-size: 20px;">SMTP Configuration Verified</h2>
-                    <p style="font-size: 14px; color: #334155;">Your DomsHomeLab (d281knilb) SMTP server configuration is working properly.</p>
+                    <h2 style="color: #0284c7; margin-top: 0; font-size: 20px;">SMTP Configuration Verified (${isResend ? "Resend" : "Custom SMTP"})</h2>
+                    <p style="font-size: 14px; color: #334155;">Your DomsHomeLab (${isResend ? "Resend Outbound Delivery" : "Custom SMTP Server"}) is working properly.</p>
                     <div style="background-color: #f1f5f9; padding: 12px 16px; border-radius: 8px; font-size: 13px; color: #475569; margin: 16px 0;">
-                        <strong>SMTP Host:</strong> ${settings.smtpHost}:${settings.smtpPort || 587}<br/>
+                        <strong>Provider:</strong> ${isResend ? "Resend (smtp.resend.com)" : "Custom SMTP"}<br/>
+                        <strong>Host:</strong> ${host}:${port}<br/>
                         <strong>Sender:</strong> ${senderEmail}
                     </div>
                     <p style="font-size: 12px; color: #94a3b8; margin-bottom: 0;">Sent automatically from DomsHomeLab System Settings.</p>
                 </div>
             `
         });
-        logger.addLog("SUCCESS", "EMAIL", `Test email successfully dispatched to ${targetRecipient}!`, `Host: ${settings.smtpHost}:${settings.smtpPort || 587} | Sender: ${senderEmail}`);
-        return { success: true, message: `Test email successfully dispatched to ${targetRecipient}!` };
+        logger.addLog("SUCCESS", "EMAIL", `Test email successfully dispatched to ${targetRecipient}!`, `Provider: ${isResend ? "Resend" : "Custom"} | Host: ${host}:${port} | Sender: ${senderEmail}`);
+        return { success: true, message: `Test email (${isResend ? "Resend" : "Custom SMTP"}) successfully dispatched to ${targetRecipient} from ${senderEmail}!` };
     } catch (e: any) {
         logger.addLog("ERROR", "EMAIL", `Test email dispatch failed: ${e.message}`, e.stack || String(e));
         return { success: false, error: e.message || "Failed to dispatch test email." };
