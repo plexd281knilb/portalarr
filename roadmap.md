@@ -20,7 +20,7 @@
 
 ### 🚀 Coming Soon
 
-- **📺 On-Demand Live TV & Self-Service Channel Activation:** Search an extensive master catalog of sports, news, regional networks, and live events right inside Portalarr and activate your favorites with 1 click. Features instant auto-provisioning for Full Members, smart 1:N stream multiplexing (multiplexing upstream provider connections), and automated 45-day dormancy cleanup to keep your TV guide lean and lightning-fast.
+- **📺 On-Demand Live TV & Self-Service Channel Activation (Dispatcharr Integration):** Watch live sports, news, and events seamlessly within your Plex, Jellyfin, or Emby apps. Activate custom channels from a master catalog with 1-click self-service, backed by automated Dispatcharr channel provisioning, Live TV buffering diagnostics, and 45-day dormancy cleanup.
 - **💬 1-Click Subtitle Search & Auto-Sync:** Search, download, and auto-align missing or out-of-sync external subtitles directly from your active stream card.
 - **📊 Personal Year-in-Review ("DomsHomeLab Wrapped"):** Interactive annual streaming recaps showcasing your top-watched genres, directors, actors, total hours streamed, and reading milestones.
 - **📱 Progressive Web App (PWA) Push Notifications:** Native mobile notifications when your requested movies, TV episodes, or Kindle books finish downloading.

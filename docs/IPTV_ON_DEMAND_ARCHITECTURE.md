@@ -1,147 +1,147 @@
-# 📺 Portalarr IPTV Hub: On-Demand Channel Requests & Auto-Provisioning Engine
+# 📺 Portalarr IPTV Hub: Dispatcharr Integration & Live TV Channel Management
 **Architectural Specification & System Design**  
-*Target Release Milestone: v1.4.0+ | Author: Deep Architect (Layer 1) & Antigravity*
+*Target Release Milestone: v1.4.0+ | Author: Antigravity & Deep Architect*
 
 ---
 
-## 1. Executive Summary & Problem Statement
+## 1. Executive Summary & Topology
 
-### The Fundamental Problem
-Upstream IPTV providers furnish massive raw playlists (5,000 to 30,000+ channels) coupled with gargantuan XMLTV guide files (100MB–600MB). Ingesting these master feeds directly into Plex, Jellyfin, Emby, or Threadfin creates disastrous operational bottlenecks:
-- **Plex PMS SQLite Lockups**: Plex's internal database (`com.plexapp.plugins.library.db`) locks up when processing >400–500 live channels, leading to guide sync timeouts, crash loops, and degraded playback across VOD libraries.
-- **Client App Guide Lag**: Apple TV, Roku, Android TV, and Fire TV clients freeze or crash attempting to render a 15,000-channel EPG grid.
-- **Provider Account Bans**: IPTV providers enforce strict concurrent stream limits (typically 2 to 5 connections). When multiple household members or server users watch popular live events (e.g., Super Bowl, UFC PPV), unmanaged direct streams exhaust account slots and trigger instant provider IP/account bans.
-- **Admin Burnout**: Administrators cannot feasibly curate 2,000+ channels manually or predict which niche sports team, regional broadcast, or international event users want to watch.
-
-### The Architectural Solution: Dual-Tier On-Demand Provisioning
-Portalarr decouples the **Master Upstream Catalog (Cold Tier)** from the **Active Tuner Lineup (Hot Tier)**:
+### Separation of Concerns
+In this architecture, **Portalarr does NOT serve live video streams directly to end users**. Instead, playback and stream delivery are cleanly delegated to the homelab media stack:
 
 ```mermaid
 flowchart TD
-    Provider["Upstream IPTV Provider\n(10,000–30,000 Channels M3U/Xtream)"]
+    Upstream["Upstream IPTV Provider\n(M3U / Xtream Codes API)"]
     
-    subgraph PortalarrHub ["Portalarr IPTV Engine"]
-        Ingest["Master Catalog Ingestion\n(Streaming Parser, Country/Category Filters)"]
-        ColdDB[("Tier 1: Cold Catalog Database\n(Searchable in Portalarr, Offline to Servers)")]
-        
-        Search["User Channel Discovery & 1-Click Request\n(Search by Team, League, City, Network)"]
-        Policy["Quota & Auto-Approval Engine\n• Full Members: Instant Auto-Approve (Up to 15 Channels)\n• Trial Members: Admin Approval Queue"]
-        
-        HotDB[("Tier 2: Hot Lineup\n(Only Active Channels ~50-250)")]
-        VirtualFeed["Dynamic Pruned M3U & XMLTV\n(280MB XMLTV ➔ 1.8MB! 48h Window)"]
-        StreamBridge["Stream Multiplexing Bridge (1:N Fanout)\n(1 Upstream Provider Stream = Many Local Viewers)"]
-        Prune["Auto-Dormancy Reclamation\n(Auto-prunes 0-view channels after 45 days)"]
+    subgraph TunerEngine ["Tuner & Stream Proxy: Dispatcharr"]
+        Dispatcharr["Dispatcharr Engine\n• Connects to IPTV Provider\n• Manages Stream Buffers & Tuner Limits\n• Exposes HDHomeRun & M3U/XMLTV Feeds"]
     end
     
-    subgraph Servers ["Media Servers & Clients"]
-        Tuner["Local Tuner Proxy\n(Threadfin / Dispatcharr / xTeVe)"]
-        Plex["Plex Media Server\n(Fast 2.5s Guide Reload)"]
-        Jellyfin["Jellyfin Media Server\n(Granular User Permissions)"]
-        Emby["Emby Media Server\n(Live TV Access)"]
-        WebGuide["Portalarr Web EPG Guide\n(In-Browser Player)"]
+    subgraph ControlPlane ["Control Plane: Portalarr"]
+        Catalog[("Master Channel Index\n(All Provider Channels Cached)")]
+        Discovery["Channel Request & Discovery (/discover/tv)\n• Search by Team, League, City, Network\n• 1-Click Request with Full Member Auto-Approval"]
+        Bridge["Dispatcharr API Controller\n• Enable / Disable Active Channels\n• Trigger Lineup & EPG Updates"]
+        Doctor["Live TV Buffer & Health Doctor\n• Periodic Probe for Buffering / Drops\n• Channel Availability & TTFB Benchmark"]
+        Pruner["45-Day Inactive Channel Reclamation\n• Auto-deactivates 0-play channels via API"]
+    end
+    
+    subgraph MediaServers ["Media Server Playback Layer"]
+        Plex["Plex Media Server (Live TV / DVR)"]
+        Jellyfin["Jellyfin Media Server (Live TV)"]
+        Emby["Emby Media Server (Live TV)"]
+    end
+    
+    subgraph ClientApps ["User Playback Devices"]
+        PlexApps["Plex Apps (Apple TV, Roku, Fire TV, iOS)"]
+        JellyfinApps["Jellyfin / Swiftfin Apps"]
+        EmbyApps["Emby Apps"]
     end
 
-    Provider --> Ingest --> ColdDB
-    ColdDB --> Search --> Policy --> HotDB
-    HotDB --> VirtualFeed --> Tuner
-    HotDB --> StreamBridge
-    Tuner --> Plex
-    Tuner --> Jellyfin
-    Tuner --> Emby
-    StreamBridge --> WebGuide
-    HotDB -.->|0 Plays in 45 Days| Prune
+    Upstream --> Dispatcharr
+    Catalog --> Discovery --> Bridge
+    Bridge <-->|REST API: Channels & EPG| Dispatcharr
+    Bridge -.->|Trigger Guide Reload| MediaServers
+    Doctor -.->|Health Probes & Buffering Checks| Dispatcharr
+    
+    Dispatcharr -->|HDHomeRun Emulator / M3U Feed| Plex
+    Dispatcharr -->|M3U / XMLTV Feed| Jellyfin
+    Dispatcharr -->|M3U / XMLTV Feed| Emby
+    
+    Plex --> PlexApps
+    Jellyfin --> JellyfinApps
+    Emby --> EmbyApps
 ```
+
+### Key Benefits
+1. **Zero Media Server Guide Bloat**: Instead of pushing all 10,000+ upstream channels into Plex/Jellyfin (which causes Plex database lockups and client app freezing), Dispatcharr exposes only an active, curated lineup (~50 to 200 channels).
+2. **Native TV Experience**: Users continue watching on their preferred TV apps (Plex, Swiftfin/Jellyfin, or Emby) with full DVR and native hardware-accelerated playback.
+3. **Portalarr as the Intelligent Orchestrator**: Portalarr manages user requests, commands Dispatcharr via REST API, triggers media server guide refreshes, and runs buffer diagnostics.
 
 ---
 
-## 2. Database Schema (`prisma/schema.prisma`)
+## 2. Dispatcharr Integration & API Bridge
+
+Portalarr connects to Dispatcharr's REST API using its base URL and API key:
+
+### 2.1 Core API Interactions
+- **Master Channel Ingestion & Search (`GET /api/channels`)**:
+  Portalarr periodically queries Dispatcharr to synchronize the master channel catalog into SQLite. Channels remain disabled in Dispatcharr until activated.
+- **On-Demand Channel Activation (`POST /api/channels/{id}/enable`)**:
+  When a user requests a channel:
+  1. Portalarr validates user quotas (e.g. up to 10–15 channels per Full Member).
+  2. Portalarr calls Dispatcharr's API to enable the channel in the active lineup.
+  3. Portalarr triggers Dispatcharr's EPG sync (`POST /api/epg/sync`).
+- **Channel Deactivation & Reclamation (`POST /api/channels/{id}/disable`)**:
+  When a channel has 0 views for 45 days, Portalarr calls Dispatcharr to disable it, immediately freeing the channel slot.
+- **Media Server Guide Triggering**:
+  Immediately after Dispatcharr updates its lineup, Portalarr notifies the configured media servers to reload their guides:
+  - **Plex**: `POST {plexUrl}/livetv/dvrs/{id}/reloadGuide?X-Plex-Token={token}`
+  - **Jellyfin**: `POST {jellyfinUrl}/LiveTv/Tuners/Discover` and `POST {jellyfinUrl}/ScheduledTasks/Running/{guideTaskId}`
+  - **Emby**: `POST {embyUrl}/LiveTv/Tuners/Discover?api_key={key}`
+
+---
+
+## 3. Database Schema (`prisma/schema.prisma`)
 
 ```prisma
 // ============================================================================
-// --- IPTV HUB & ON-DEMAND PROVISIONING MODELS ---
+// --- DISPATCHARR & IPTV HUB MODELS ---
 // ============================================================================
 
-model IptvProvider {
-  id                    String              @id @default(cuid())
-  name                  String              // Friendly provider label e.g. "Primary IPTV - StrongStreams"
-  type                  String              @default("XTREAM") // "XTREAM", "M3U_URL", "LOCAL_M3U"
-  serverUrl             String              // e.g. "http://line.provider.tv:8080"
-  username              String?             // Encrypted or plain upstream username
-  password              String?             // AES-256-GCM encrypted upstream password
-  m3uUrl                String?             // For direct M3U providers
-  epgUrl                String?             // Master upstream XMLTV URL
-  maxConcurrentStreams  Int                 @default(2) // Purchased provider stream capacity
-  activeStreamCount     Int                 @default(0) // Live downstream connections actively consuming upstream
-  streamOutputFormat    String              @default("ts") // "ts", "m3u8", "auto"
-  countryFilter         String?             // JSON array e.g. ["US", "CA", "UK"] - discards foreign bloat at parse time
-  categoryFilter        String?             // JSON array of category whitelist/blacklist
-  syncIntervalHours     Int                 @default(24) // Catalog refresh schedule
+model DispatcharrConfig {
+  id                    String              @id @default("global")
+  name                  String              @default("Dispatcharr Tuner Proxy")
+  url                   String              // e.g. "http://192.168.1.50:9000"
+  apiKey                String              // AES-256-GCM encrypted API key
+  maxConcurrentStreams  Int                 @default(3) // Upstream provider stream limit
+  isActive              Boolean             @default(true)
   lastSyncAt            DateTime?
-  lastSyncStatus        String?             // JSON summary: { total: 18500, ingested: 3200, skipped: 15300, durationMs: 4120 }
-  status                String              @default("ACTIVE") // "ACTIVE", "ERROR", "DISABLED", "RATE_LIMITED"
-  errorMessage          String?
-  isEnabled             Boolean             @default(true)
-  priority              Int                 @default(1) // 1 = Primary, 2 = Secondary/Fallback
-  customHeaders         String?             // JSON key-value headers e.g. {"User-Agent": "VLC/3.0.18"}
+  lastSyncStatus        String?             // JSON summary of catalog sync
+  autoReloadMediaServers Boolean            @default(true) // Trigger Plex/Jellyfin guide reload on change
   createdAt             DateTime            @default(now())
   updatedAt             DateTime            @updatedAt
-
-  channels              IptvChannel[]
-  activeStreams         IptvActiveStream[]
-
-  @@index([isEnabled, priority])
 }
 
 model IptvChannel {
   id                    String              @id @default(cuid())
-  providerId            String
-  provider              IptvProvider        @relation(fields: [providerId], references: [id], onDelete: Cascade)
-  upstreamStreamId      String              // Upstream stream ID or M3U stream URL hash
-  upstreamUrl           String              // AES-256-GCM encrypted raw streaming URL
-  name                  String              // Raw provider name: "US | ESPN HD [60FPS]"
-  cleanName             String              // Normalized display name: "ESPN"
+  dispatcharrChannelId  String              @unique // Dispatcharr internal channel ID
+  name                  String              // Raw provider title: "US | ESPN HD [60FPS]"
+  cleanName             String              // Normalized title: "ESPN"
   callSign              String?             // e.g. "ESPN-HD"
-  logoUrl               String?             // Channel icon / tvg-logo
-  groupTitle            String?             // Raw category e.g. "USA SPORTS"
-  category              String?             @default("SPORTS") // Normalized: "SPORTS", "NEWS", "ENTERTAINMENT", "MOVIES", "KIDS", "LOCALS", "OTHER"
-  country               String?             @default("US") // e.g. "US", "CA", "UK"
-  language              String?             @default("en")
-  resolution            String?             // "4K", "1080p", "720p", "SD"
-  frameRate             Float?              // 60.0, 30.0, 29.97
-  tvgId                 String?             // EPG mapping ID e.g. "ESPN.us"
-  tvgName               String?             // EPG title e.g. "ESPN HD"
-  tvgShift              String?             // EPG timezone shift
-  tags                  String?             // JSON array of searchable tokens e.g. ["NFL", "NBA", "MLB", "Sports"]
-
-  // Provisioning & Lineup Attributes
-  isProvisioned         Boolean             @default(false) // Hot vs Cold catalog gate
-  provisionedAt         DateTime?
-  channelNumber         Int?                @unique // Virtual guide number e.g. 1042 (Plex/Threadfin)
-  isPinned              Boolean             @default(false) // Immune to auto-prune (e.g. core locals, admin channels)
+  logoUrl               String?             // Channel icon
+  groupTitle            String?             // Category: "USA SPORTS"
+  category              String?             @default("SPORTS") // "SPORTS", "NEWS", "ENTERTAINMENT", "LOCALS", "OTHER"
+  country               String?             @default("US")
+  resolution            String?             // "1080p", "720p", "4K"
+  channelNumber         Int?                // Virtual guide number
+  
+  // Status in Dispatcharr Lineup
+  isEnabledInLineup     Boolean             @default(false) // Active in Dispatcharr lineup
+  isPinned              Boolean             @default(false) // Core channel (immune to 45-day auto-prune)
   pinReason             String?             // "Core Local", "Admin Permanent"
   
-  // Usage Telemetry & Inactive Channel Pruning
+  // Health & Buffer Diagnostics
+  healthStatus          String              @default("HEALTHY") // "HEALTHY", "BUFFERING", "OFFLINE"
+  lastLatencyMs         Int?                // Probe TTFB response time in ms
+  lastBitrateKbps       Int?                // Probe detected stream bitrate
+  lastProbedAt          DateTime?
+  consecutiveProbeFails Int                 @default(0)
+  
+  // Usage & Inactivity Tracking
   viewCount             Int                 @default(0)
-  totalWatchDurationSec Int                 @default(0)
   lastViewedAt          DateTime?
   lastViewerUserId      String?
-  lastPruneWarningAt    DateTime?           // Timestamp when impending deletion warning was dispatched
-  status                String              @default("ONLINE") // "ONLINE", "OFFLINE", "UNSTABLE"
-  lastHealthCheckAt     DateTime?
+  lastPruneWarningAt    DateTime?
 
   createdAt             DateTime            @default(now())
   updatedAt             DateTime            @updatedAt
 
   requests              IptvChannelRequest[]
-  activeStreams         IptvActiveStream[]
 
-  @@index([providerId])
-  @@index([isProvisioned])
+  @@index([isEnabledInLineup])
   @@index([category])
-  @@index([country])
   @@index([cleanName])
-  @@index([lastViewedAt])
-  @@index([upstreamStreamId, providerId])
+  @@index([healthStatus])
 }
 
 model IptvChannelRequest {
@@ -150,128 +150,76 @@ model IptvChannelRequest {
   channel               IptvChannel         @relation(fields: [channelId], references: [id], onDelete: Cascade)
   userId                String
   user                  User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  status                String              @default("PENDING") // "PENDING", "APPROVED", "PROVISIONED", "REJECTED", "PRUNED"
+  status                String              @default("PENDING") // "PENDING", "APPROVED", "ACTIVE", "REJECTED", "PRUNED"
   autoApproved          Boolean             @default(false)
-  approvalReason        String?             // e.g. "Auto-approved: Full Member Quota Valid"
-  adminNotes            String?
-  userReason            String?             // User justification e.g. "College football tournament"
+  approvalReason        String?             // "Auto-approved: Full Member Quota"
   requestedAt           DateTime            @default(now())
   approvedAt            DateTime?
-  provisionedAt         DateTime?
-  lastViewedByUserAt    DateTime?
-  userViewCount         Int                 @default(0)
-  expiryDate            DateTime?           // Optional temporary lease (e.g., weekend sports pass)
+  activatedAt           DateTime?
   createdAt             DateTime            @default(now())
   updatedAt             DateTime            @updatedAt
 
   @@index([userId, status])
   @@index([channelId])
   @@index([status])
-  @@index([createdAt])
-}
-
-model IptvTunerProxy {
-  id                    String              @id @default(cuid())
-  name                  String              // e.g. "Local Threadfin Container"
-  type                  String              @default("THREADFIN") // "THREADFIN", "DISPATCHARR", "XTEVE", "PORTALARR_NATIVE"
-  url                   String              // e.g. "http://192.168.1.50:34400"
-  apiKey                String?             // Encrypted API token/password
-  tunerCount            Int                 @default(4) // Virtual HDHomeRun tuners exposed downstream
-  virtualM3uUrl         String?             // Exported M3U feed URL
-  virtualXmltvUrl       String?             // Exported XMLTV feed URL
-  isDefault             Boolean             @default(true)
-  isActive              Boolean             @default(true)
-  lastSyncAt            DateTime?
-  lastSyncStatus        String?             // Telemetry summary of last reload
-  syncOnApproval        Boolean             @default(true) // Auto-reload tuner proxy upon channel provisioning
-  targetMediaServers    String?             // JSON array of MediaServer/PlexServer IDs to trigger on reload
-  createdAt             DateTime            @default(now())
-  updatedAt             DateTime            @updatedAt
-}
-
-model IptvActiveStream {
-  id                    String              @id @default(cuid())
-  channelId             String
-  channel               IptvChannel         @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  providerId            String
-  provider              IptvProvider        @relation(fields: [providerId], references: [id], onDelete: Cascade)
-  userId                String?
-  user                  User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
-  mediaServerType       String              @default("PLEX") // "PLEX", "JELLYFIN", "EMBY", "DIRECT"
-  clientIp              String
-  clientDevice          String?             // e.g. "Apple TV 4K", "Living Room Shield"
-  clientUserAgent       String?
-  startedAt             DateTime            @default(now())
-  lastKeepAliveAt       DateTime            @default(now())
-  bytesTransferred      Float               @default(0)
-  isMulticastLeader     Boolean             @default(false) // True if holding physical upstream connection
-  upstreamSessionId     String?             // Multiplex cluster identifier
-  status                String              @default("STREAMING") // "STREAMING", "TERMINATED", "TIMED_OUT"
-  stoppedAt             DateTime?
-  durationSeconds       Int                 @default(0)
-
-  @@index([channelId, status])
-  @@index([providerId, status])
-  @@index([userId])
-  @@index([startedAt])
 }
 ```
 
 ---
 
-## 3. Self-Service Channel Request & Auto-Provisioning Pipeline
+## 4. Live TV Stream Doctor & Buffering Diagnostics
 
-1. **Member Searches Catalog (`/discover/tv` or in Live TV modal)**:
-   - Search by team (e.g. "Lions", "Warriors"), league ("NFL", "F1", "EPL"), network ("Bally", "Sky", "ESPN"), or city.
-   - Portalarr queries the cold `IptvChannel` index in `<15ms`.
-2. **1-Click "Add to Lineup"**:
-   - **Full Members:** Auto-approved immediately if within personal quota (e.g., up to 15 custom channels).
-   - **Trial Members:** Placed in the Admin Approval queue.
-3. **Automated Provisioning Dispatch**:
-   - Assigns a virtual channel number (Sports: 1000s, News: 1200s, Locals: 1300s, Movies: 1400s).
-   - Marks `IptvChannel.isProvisioned = true`.
-   - Regenerates the virtual M3U and dynamic 48h XMLTV guide.
-   - Pushes reload commands to the Tuner Proxy (Threadfin / Dispatcharr) and media servers (Plex, Jellyfin, Emby).
-   - Channel appears on user TVs in seconds.
+A common issue with IPTV is upstream buffer pauses, dead streams, or sudden ISP throttling. Portalarr includes a **Live TV Stream Doctor**:
 
----
+```mermaid
+flowchart LR
+    Scheduler["Diagnostic Scheduler\n(Every 15-30 mins or on-demand)"]
+    Scheduler --> Probe["Portalarr Stream Probe Worker"]
+    Probe -->|Sample 3-Second Probe Stream| Dispatcharr["Dispatcharr Stream Endpoint"]
+    
+    Probe --> Evaluate["Telemetry Evaluation\n• Time to First Byte (TTFB)\n• Stream Bitrate Stability\n• HTTP Status & Chunk Continuity"]
+    
+    Evaluate -->|Healthy (<1500ms TTFB, Stable Bitrate)| UpdateOK["Mark HEALTHY in DB"]
+    Evaluate -->|Slow / Fragmented (>3000ms TTFB, Drops)| UpdateWarn["Mark BUFFERING in DB\n(Flag in Admin Health Grid)"]
+    Evaluate -->|Connection Refused / HTTP 404/502| UpdateFail["Mark OFFLINE in DB\n(Alert Admin / Auto-Failover)"]
+```
 
-## 4. Inactive Channel Reclamation Engine (Auto-Pruner)
-
-To prevent the lineup from creeping back to 800+ channels over months:
-- **Weekly Evaluation (`0 4 * * 0` Sunday 4 AM)**:
-  - Scans all unpinned provisioned channels (`isProvisioned = true AND isPinned = false`).
-  - Calculates `daysInactive = NOW - max(lastViewedAt, provisionedAt)`.
-  - **At 38 Days of 0 Plays**: Dispatches friendly warning to the original requester:
-    > *"Channel 'Sky Sports F1' has had 0 views for 38 days. It will be released in 7 days to free up tuner slots."*
-    *(If anyone tunes into the channel, `lastViewedAt` resets the 45-day clock!).*
-  - **At 45 Days of 0 Plays**: Channel is automatically unprovisioned, channel number freed, and proxy reloaded.
-  - Core network channels (ABC, CBS, NBC, FOX, ESPN) are marked `isPinned = true` and are 100% immune to pruning.
+### Stream Doctor Features:
+1. **Non-Intrusive Probing**: Opens a lightweight 2-to-3 second probe connection through Dispatcharr to verify that the upstream stream is delivering valid video chunks without consuming a full continuous connection.
+2. **Buffering Threshold Detection**:
+   - **Healthy**: TTFB < 1,500ms, steady transport stream chunks.
+   - **Buffering Risk**: TTFB > 3,000ms or erratic chunk arrival (signals upstream provider saturation).
+   - **Offline**: HTTP error or timeout > 5,000ms.
+3. **AI Assistant Integration**: When a user tells the AI Server Assistant *"ESPN is buffering"*, the assistant can run an on-demand probe of that channel in Dispatcharr, verify whether it's an upstream provider issue or a local WiFi issue, and recommend the best fix.
 
 ---
 
-## 5. Stream Deduplication & Provider Ban Protection (1:N Fanout)
+## 5. Self-Cleaning 45-Day Dormancy Reclamation
 
-Upstream IPTV providers enforce hard concurrent stream limits (2 to 5 connections). If 4 household members tune into the Super Bowl or a Sunday NFL game simultaneously:
-- **Raw IPTV**: Opens 4 upstream connections ➔ Provider account banned or throttled.
-- **Portalarr Stream Bridge (`GET /api/iptv/stream/[channelId]`)**:
-  - If Channel 1024 is already playing, User B and User C attach to the existing local broadcast stream.
-  - **Only 1 upstream provider connection is consumed.**
-  - If provider stream cap is reached by different channels, subsequent channel requests receive a friendly *"All provider tuner slots currently in use"* notice rather than risking account termination.
+1. **Weekly Automated Scan (`0 4 * * 0` Sunday 4 AM)**:
+   - Queries all enabled channels in Dispatcharr that are not pinned (`isEnabledInLineup = true AND isPinned = false`).
+   - Checks `daysSinceLastView = NOW - max(lastViewedAt, createdAt)`.
+2. **Advance Notice (At 38 Days)**:
+   - Dispatches a Discord DM or in-app notification to the original requester:
+     > *"Channel 'Sky Sports F1' has had 0 views for 38 days. It will be released in 7 days to keep your TV guide fast."*
+   - If anyone watches it on Plex, Jellyfin, or Emby, the watch tracker updates `lastViewedAt` and resets the timer!
+3. **Automated Deactivation (At 45 Days)**:
+   - Portalarr calls Dispatcharr: `POST /api/channels/{id}/disable`.
+   - Portalarr triggers media server guide reload.
+   - Keeps the lineup curated, clean, and under the 200-channel sweet spot.
 
 ---
 
-## 6. Implementation Phases
+## 6. Implementation Roadmap
 
-- **Phase 1: Database & Provider Manager**
-  - Add Prisma models and migration.
-  - Create Admin IPTV Provider settings panel (M3U / Xtream connection test, country filter, stream limit).
-- **Phase 2: Master Ingestion & Dynamic Pruned Guide Engine**
-  - Chunked streaming M3U parser.
-  - Dynamic virtual `/api/iptv/lineup.m3u` and lightweight 48-hour `/api/iptv/lineup.xml` generator.
-- **Phase 3: Channel Discovery & Auto-Provisioning**
-  - User-facing Channel Discovery UI with category filters, search, and "Add to Lineup" button.
-  - Server actions for requesting, auto-approving, and releasing channels.
-- **Phase 4: Stream Multiplexer & Inactive Reclamation Cron**
-  - 1:N fanout stream bridge for stream deduplication.
-  - Automated 45-day dormancy pruner.
+- **Phase 1: Dispatcharr Connection & Settings Panel**
+  - Add `DispatcharrConfig` and `IptvChannel` models.
+  - Create Dispatcharr Connection card in System Settings (URL, API Key, Test Connection button).
+- **Phase 2: Channel Catalog Sync & Request UI**
+  - Implement periodic synchronization from Dispatcharr's channel list into Portalarr's search index.
+  - Build the user-facing Channel Discovery & 1-Click Request modal.
+- **Phase 3: Automated Enablement & Media Server Reload**
+  - Server actions to enable channels in Dispatcharr and trigger Plex/Jellyfin/Emby guide tasks.
+- **Phase 4: Live TV Stream Doctor & Probing**
+  - Background probe worker for TTFB and buffer detection.
+  - Health status badges in Admin Mission Control and AI Assistant diagnostic tools.
