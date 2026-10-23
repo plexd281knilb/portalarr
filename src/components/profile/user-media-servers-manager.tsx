@@ -586,6 +586,7 @@ export function UserMediaServersManager({
                     isOpen={guideModalOpen}
                     onClose={() => setGuideModalOpen(false)}
                     serverType={guideServer.serverType === "EMBY" ? "EMBY" : "JELLYFIN"}
+                    serverId={guideServer.serverId}
                     serverName={guideServer.serverName}
                     serverUrl={guideServer.serverUrl}
                     username={guideServer.serverType === "EMBY" ? (embyUsername || username) : (jellyfinUsername || username)}

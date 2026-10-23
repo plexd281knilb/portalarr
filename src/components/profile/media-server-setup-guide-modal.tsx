@@ -1,19 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { 
     Server, Tv, Monitor, Smartphone, Globe, Copy, Check, 
-    ExternalLink, Sparkles, AlertCircle, ShieldCheck, CheckCircle2 
+    ExternalLink, Sparkles, AlertCircle, ShieldCheck, CheckCircle2,
+    Key, Lock, Loader2, XCircle
 } from "lucide-react";
+import { 
+    ensureUserMediaServerProvisionedAction, 
+    setUserMediaServerPasswordAction 
+} from "@/app/media-server-actions";
 
 export interface MediaServerSetupGuideModalProps {
     isOpen: boolean;
     onClose: () => void;
     serverType: "JELLYFIN" | "EMBY";
+    serverId?: string;
     serverName?: string;
     serverUrl?: string;
     username?: string;
@@ -23,6 +30,7 @@ export function MediaServerSetupGuideModal({
     isOpen,
     onClose,
     serverType,
+    serverId,
     serverName,
     serverUrl,
     username = ""
@@ -30,11 +38,51 @@ export function MediaServerSetupGuideModal({
     const [copiedUrl, setCopiedUrl] = useState(false);
     const [copiedUser, setCopiedUser] = useState(false);
 
+    // Auto-provisioning state
+    const [isProvisioning, setIsProvisioning] = useState(false);
+    const [provisionSuccess, setProvisionSuccess] = useState<boolean | null>(null);
+    const [provisionMsg, setProvisionMsg] = useState("");
+
+    // Streaming password management state
+    const [showPasswordSetup, setShowPasswordSetup] = useState(false);
+    const [passwordInput, setPasswordInput] = useState("");
+    const [savingPassword, setSavingPassword] = useState(false);
+    const [passwordSuccess, setPasswordSuccess] = useState(false);
+    const [passwordErr, setPasswordErr] = useState("");
+
     const isJellyfin = serverType === "JELLYFIN";
     const displayName = serverName || (isJellyfin ? "Jellyfin Media Server" : "Emby Media Server");
     const resolvedUrl = serverUrl && serverUrl.trim() !== "" 
         ? serverUrl.trim() 
         : (isJellyfin ? "https://jellyfin.domshomelab.com" : "https://emby.domshomelab.com");
+
+    // Automatically verify or provision the user on the remote media server upon opening the guide
+    useEffect(() => {
+        if (!isOpen) return;
+        let isCancelled = false;
+        const runProvision = async () => {
+            setIsProvisioning(true);
+            try {
+                const res = await ensureUserMediaServerProvisionedAction(serverId);
+                if (isCancelled) return;
+                if (res.success) {
+                    setProvisionSuccess(true);
+                    setProvisionMsg(res.message || `Account verified & active on ${serverType}`);
+                } else {
+                    setProvisionSuccess(false);
+                    setProvisionMsg(res.error || `Could not automatically provision on ${serverType}`);
+                }
+            } catch (e: any) {
+                if (isCancelled) return;
+                setProvisionSuccess(false);
+                setProvisionMsg(e.message || "Failed to reach media server");
+            } finally {
+                if (!isCancelled) setIsProvisioning(false);
+            }
+        };
+        runProvision();
+        return () => { isCancelled = true; };
+    }, [isOpen, serverId, serverType]);
 
     const copyToClipboard = (text: string, type: "url" | "user") => {
         if (!navigator?.clipboard) return;
@@ -146,50 +194,162 @@ export function MediaServerSetupGuideModal({
                         </div>
                     </div>
 
-                    {/* Step 2: Sign In with Your Username */}
-                    <div className="p-4 rounded-xl bg-white/[0.02] border border-border/40 space-y-2.5">
+                    {/* Step 2: Sign In with Your Username & Password */}
+                    <div className="p-4 rounded-xl bg-white/[0.02] border border-border/40 space-y-3">
                         <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2">
                                 <span className={`text-xs font-bold uppercase tracking-wider ${themeColor.accentText}`}>
                                     Step 2: Sign In with Your Account
                                 </span>
                             </div>
-                            <Badge variant="outline" className="text-[10px] text-muted-foreground">
-                                User Credentials
-                            </Badge>
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                            Use your configured portal username to log into the {serverType} server:
-                        </p>
-                        <div className="flex items-center gap-2">
-                            <div className="flex-1 px-3 py-2 rounded-lg bg-black/40 border border-border/50 font-mono text-xs text-foreground truncate select-all">
-                                {username || "Your Portal Username"}
+                            <div className="flex items-center gap-1.5">
+                                {isProvisioning ? (
+                                    <Badge variant="outline" className="text-[10px] text-purple-300 border-purple-500/30 gap-1 bg-purple-500/10">
+                                        <Loader2 className="h-2.5 w-2.5 animate-spin" /> Provisioning...
+                                    </Badge>
+                                ) : provisionSuccess ? (
+                                    <Badge variant="outline" className="text-[10px] text-emerald-300 border-emerald-500/40 bg-emerald-500/10 gap-1">
+                                        <CheckCircle2 className="h-3 w-3 text-emerald-400" /> Account Active on {serverType}
+                                    </Badge>
+                                ) : provisionSuccess === false ? (
+                                    <Badge variant="outline" className="text-[10px] text-amber-300 border-amber-500/40 bg-amber-500/10 gap-1">
+                                        <AlertCircle className="h-3 w-3 text-amber-400" /> Pending Server Sync
+                                    </Badge>
+                                ) : null}
                             </div>
-                            {username && (
+                        </div>
+
+                        {/* Username Block */}
+                        <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Server Username</Label>
+                            <div className="flex items-center gap-2">
+                                <div className="flex-1 px-3 py-2 rounded-lg bg-black/40 border border-border/50 font-mono text-xs text-foreground truncate select-all font-bold">
+                                    {username || "Your Portal Username"}
+                                </div>
+                                {username && (
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => copyToClipboard(username, "user")}
+                                        className="h-9 px-3 gap-1.5 text-xs font-semibold shrink-0 cursor-pointer"
+                                    >
+                                        {copiedUser ? (
+                                            <>
+                                                <Check className="h-3.5 w-3.5 text-emerald-400" />
+                                                <span className="text-emerald-400">Copied!</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Copy className="h-3.5 w-3.5" />
+                                                <span>Copy Username</span>
+                                            </>
+                                        )}
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Password Guidance Callout */}
+                        <div className="p-3 rounded-lg bg-blue-950/20 border border-blue-500/30 space-y-1.5 text-xs">
+                            <div className="flex items-center gap-1.5 font-bold text-blue-300">
+                                <ShieldCheck className="h-3.5 w-3.5 text-blue-400" />
+                                <span>Initial Sign-In Password: (None / Blank)</span>
+                            </div>
+                            <p className="text-[11px] text-muted-foreground leading-relaxed">
+                                Because you sign into DomsHomeLab via Plex, your {serverType} account is created with <strong className="text-foreground">NO PASSWORD</strong>. When opening your {serverType} player app, enter your username (<code className="text-foreground">{username}</code>) and <strong className="text-foreground">leave the password field completely empty</strong> to log in.
+                            </p>
+                        </div>
+
+                        {/* Optional: Set Dedicated Streaming Password */}
+                        <div className="pt-1">
+                            {!showPasswordSetup ? (
                                 <Button
                                     type="button"
+                                    variant="ghost"
                                     size="sm"
-                                    variant="outline"
-                                    onClick={() => copyToClipboard(username, "user")}
-                                    className="h-9 px-3 gap-1.5 text-xs font-semibold shrink-0 cursor-pointer"
+                                    onClick={() => setShowPasswordSetup(true)}
+                                    className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground gap-1.5 cursor-pointer"
                                 >
-                                    {copiedUser ? (
-                                        <>
-                                            <Check className="h-3.5 w-3.5 text-emerald-400" />
-                                            <span className="text-emerald-400">Copied!</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Copy className="h-3.5 w-3.5" />
-                                            <span>Copy Username</span>
-                                        </>
-                                    )}
+                                    <Key className="h-3.5 w-3.5 text-amber-400" />
+                                    <span>Want to set a dedicated streaming password? (Optional)</span>
                                 </Button>
+                            ) : (
+                                <div className="p-3 rounded-lg bg-black/40 border border-border/50 space-y-2.5">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                                            <Key className="h-3.5 w-3.5 text-amber-400" />
+                                            <span>Set {serverType} Streaming Password</span>
+                                        </Label>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => setShowPasswordSetup(false)}
+                                            className="h-5 px-1 text-[10px] text-muted-foreground hover:text-foreground cursor-pointer"
+                                        >
+                                            Hide
+                                        </Button>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <Input
+                                            type="password"
+                                            placeholder="Enter streaming password (min 4 chars)"
+                                            value={passwordInput}
+                                            onChange={e => {
+                                                setPasswordInput(e.target.value);
+                                                setPasswordErr("");
+                                                setPasswordSuccess(false);
+                                            }}
+                                            className="h-8 text-xs font-mono flex-1"
+                                        />
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            onClick={async () => {
+                                                if (!passwordInput.trim() || passwordInput.trim().length < 4) {
+                                                    setPasswordErr("Password must be at least 4 characters.");
+                                                    return;
+                                                }
+                                                setSavingPassword(true);
+                                                setPasswordErr("");
+                                                try {
+                                                    const targetId = serverId || "";
+                                                    const res = await setUserMediaServerPasswordAction(targetId, passwordInput.trim());
+                                                    if (res.success) {
+                                                        setPasswordSuccess(true);
+                                                        setPasswordInput("");
+                                                    } else {
+                                                        setPasswordErr(res.error || "Failed to set password");
+                                                    }
+                                                } catch (e: any) {
+                                                    setPasswordErr(e.message || "Failed to set password");
+                                                } finally {
+                                                    setSavingPassword(false);
+                                                }
+                                            }}
+                                            disabled={savingPassword || passwordInput.trim().length < 4}
+                                            className="h-8 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground gap-1 shrink-0 cursor-pointer"
+                                        >
+                                            {savingPassword ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                                            Save Password
+                                        </Button>
+                                    </div>
+                                    {passwordSuccess && (
+                                        <div className="text-[11px] text-emerald-400 flex items-center gap-1">
+                                            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                                            <span>Streaming password saved! You can now use this password in your {serverType} apps.</span>
+                                        </div>
+                                    )}
+                                    {passwordErr && (
+                                        <div className="text-[11px] text-red-400 flex items-center gap-1">
+                                            <XCircle className="h-3.5 w-3.5 shrink-0" />
+                                            <span>{passwordErr}</span>
+                                        </div>
+                                    )}
+                                </div>
                             )}
                         </div>
-                        <p className="text-[11px] text-muted-foreground/80 italic">
-                            💡 For initial login or password synchronization, use your standard DomsHomeLab password or request a reset in Support Tickets.
-                        </p>
                     </div>
 
                     {/* Step 3: Recommended Client Apps for Every Device */}

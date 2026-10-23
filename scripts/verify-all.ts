@@ -1342,7 +1342,9 @@ async function runTestSuite() {
             deleteMediaServerAction,
             getUserMediaServersAndLibrariesAction,
             updateUserMediaServersAndLibrariesAction,
-            updateUserAccountPreferencesAction
+            updateUserAccountPreferencesAction,
+            ensureUserMediaServerProvisionedAction,
+            setUserMediaServerPasswordAction
         } = await import("../src/app/media-server-actions");
         const { getPlexSetupGuides, toggleFreeAddonAction } = await import("../src/app/actions");
         const { testMediaServerConnection } = await import("../src/lib/media-servers");
@@ -1511,6 +1513,21 @@ async function runTestSuite() {
                 }
                 if (!trialEmbyToggle.error?.includes("exclusively available for Full Members")) {
                     throw new Error(`Expected full member gating error message, got: ${trialEmbyToggle.error}`);
+                }
+
+                // 8. Test Instant Provisioning Trial Gating
+                const trialProvision = await ensureUserMediaServerProvisionedAction(testMediaServer.id);
+                if (trialProvision.success) {
+                    throw new Error("Expected trial user provisioning to be rejected");
+                }
+                if (!trialProvision.error?.includes("exclusively available for Full Members")) {
+                    throw new Error(`Expected full member error on trial user provisioning, got: ${trialProvision.error}`);
+                }
+
+                // 9. Test Streaming Password Length Guardrail
+                const shortPassword = await setUserMediaServerPasswordAction(testMediaServer.id, "123");
+                if (shortPassword.success) {
+                    throw new Error("Expected short password (<4 chars) to be rejected");
                 }
             } finally {
                 delete process.env.PORTALARR_TEST_USER_ID;

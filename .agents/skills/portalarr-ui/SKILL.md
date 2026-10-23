@@ -1199,7 +1199,24 @@ Portalarr features an automated, real-time versioning, branch identification, an
 
 ---
 
-### 47. Mandatory 4-Step Verification & Delivery Protocol (Strict SemVer)
+### 46. Multi-Platform Media Server Auto-Provisioning & Streaming Password Architecture
+- **Plex OAuth vs Jellyfin/Emby Password Reality**:
+  - DomsHomeLab members authenticate via Plex OAuth and have no local passwords stored in Portalarr.
+  - Jellyfin and Emby accounts created via `POST /Users/New` initialize with a **BLANK (no password)** default state.
+  - Setup Guide Step 2 clearly explains this: members sign into Jellyfin client apps with their portal username and **leave the password field blank**.
+- **Instant Auto-Provisioning on Modal Mount**:
+  - Opening the setup guide modal (`MediaServerSetupGuideModal`) immediately invokes `ensureUserMediaServerProvisionedAction(serverId)` in the background.
+  - If the user does not yet exist on Jellyfin/Emby, Portalarr automatically provisions the user, configures library access policies, and saves `jellyfinUserId` / `embyUserId` in `prisma.user`.
+- **Dedicated Streaming Password Manager**:
+  - Inside Step 2 of the setup guide, users can optionally set a dedicated streaming password (min 4 characters) directly within Portalarr via `setUserMediaServerPasswordAction`.
+  - Portalarr pushes the new password to the Jellyfin API (`POST /Users/{id}/Password`) using admin API credentials, without requiring members to access the Jellyfin web client settings.
+- **Reverse Proxy Header Stripping & Dual-Mode Auth Fallback**:
+  - Reverse proxies (like Nginx Proxy Manager and Cloudflare) frequently strip non-standard HTTP request headers like `X-Emby-Token` or `Authorization`.
+  - `mediaServerFetch` implements automatic query parameter fallback: if header authentication returns HTTP 401 or network errors, it retries transparently with `?api_key=${apiKey}` appended to the URL.
+- **Admin Fleet Bulk Provisioning**:
+  - The Admin Media Servers panel (`admin-media-servers-panel.tsx`) provides a 1-click **"Provision Users"** button on each Jellyfin/Emby server card calling `provisionAllUsersToMediaServerAction(serverId)`, allowing homelab administrators to bulk-provision all approved Full Members at once.
+
+---
 Before completing any task, execute:
 1. `cmd /c "npm test"`: Full 18+ suite verification (`scripts/verify-all.ts`), 0 failures.
 2. `cmd /c "npm run build"`: Next.js production build, 0 TS errors, 100% clean.

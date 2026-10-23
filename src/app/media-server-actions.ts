@@ -12,6 +12,8 @@ import {
     testMediaServerConnection, 
     fetchMediaServerLibraries, 
     syncUserMediaServerAccess,
+    ensureUserMediaServerAccount,
+    setUserMediaServerPassword,
     MediaServerLibrary,
     MediaServerConnectionResult
 } from "@/lib/media-servers";
@@ -980,5 +982,283 @@ export async function updateUserAccountPreferencesAction(
         return { success: true };
     } catch (err: any) {
         return { success: false, error: err.message || "Failed to update account preferences" };
+    }
+}
+
+/**
+ * Ensures the currently authenticated Full Member is provisioned on a Jellyfin or Emby media server.
+ * Creates the user account on the server if not already present, applies library whitelist policies,
+ * and updates prisma.user with their remote ID.
+ */
+export async function ensureUserMediaServerProvisionedAction(
+    serverId?: string
+): Promise<{
+    success: boolean;
+    serverName?: string;
+    serverType?: string;
+    serverUrl?: string;
+    username?: string;
+    remoteUserId?: string;
+    created?: boolean;
+    message?: string;
+    error?: string;
+}> {
+    try {
+        const user = await verifySessionUser();
+
+        // Strict Full Member gating
+        const isTrial = user.role === "TRIAL" || user.status === "TRIAL" || user.membershipTier === "TRIAL";
+        if (isTrial) {
+            return {
+                success: false,
+                error: "Jellyfin & Emby multi-platform streaming is exclusively available for Full Members. Upgrade your membership pass to unlock."
+            };
+        }
+
+        // Find target server: by specific ID, or find first active Jellyfin/Emby server
+        let srv = null;
+        if (serverId) {
+            srv = await prisma.mediaServer.findUnique({ where: { id: serverId } });
+        }
+        if (!srv) {
+            srv = await prisma.mediaServer.findFirst({
+                where: { isActive: true, type: { in: ["JELLYFIN", "EMBY"] } },
+                orderBy: { createdAt: "asc" }
+            });
+        }
+
+        if (!srv) {
+            return { success: false, error: "No active Jellyfin or Emby media server found." };
+        }
+
+        let decKey = "";
+        try { decKey = decryptData(srv.apiKey); } catch {}
+        if (!decKey) {
+            return { success: false, error: "Failed to decrypt media server API key." };
+        }
+
+        const srvType = srv.type.toUpperCase();
+        const username = (srvType === "JELLYFIN" ? user.jellyfinUsername : user.embyUsername) || user.username;
+
+        // Parse allowed libraries whitelist
+        let allowedLibIds: string[] = [];
+        if (srv.allowedLibraryIds) {
+            try {
+                const parsed = JSON.parse(srv.allowedLibraryIds);
+                if (Array.isArray(parsed)) allowedLibIds = parsed.filter(x => x !== "__none__");
+            } catch {
+                allowedLibIds = srv.allowedLibraryIds.split(",").map(s => s.trim()).filter(x => x && x !== "__none__");
+            }
+        }
+
+        const res = await ensureUserMediaServerAccount(
+            { id: srv.id, name: srv.name, type: srv.type, url: srv.url, apiKey: decKey },
+            { 
+                id: user.id, 
+                username, 
+                email: user.email, 
+                jellyfinUserId: user.jellyfinUserId, 
+                embyUserId: user.embyUserId 
+            },
+            allowedLibIds
+        );
+
+        if (!res.success) {
+            return { success: false, error: res.error || `Failed to provision user on ${srv.name}` };
+        }
+
+        // Save remote user ID on prisma.user
+        const idField = srvType === "JELLYFIN" ? "jellyfinUserId" : "embyUserId";
+        const updateData: any = { [idField]: res.remoteUserId };
+
+        // Ensure server is present in user's selectedServerKeys
+        const srvKey = `${srvType.toLowerCase()}:${srv.id}`;
+        let selectedKeys: string[] = [];
+        if (user.selectedServerKeys) {
+            try {
+                const p = JSON.parse(user.selectedServerKeys);
+                if (Array.isArray(p)) selectedKeys = p;
+            } catch {
+                selectedKeys = user.selectedServerKeys.split(",").map((s: string) => s.trim()).filter(Boolean);
+            }
+        }
+        if (!selectedKeys.includes(srvKey) && !selectedKeys.includes(srv.id)) {
+            selectedKeys.push(srvKey);
+            updateData.selectedServerKeys = JSON.stringify(selectedKeys);
+        }
+
+        await prisma.user.update({
+            where: { id: user.id },
+            data: updateData
+        });
+
+        safeRevalidate("/profile");
+        safeRevalidate("/settings");
+        clearUserCache(`user_media_servers:${user.id}`);
+        clearUserCache(`user_profile_bootstrap:${user.id}`);
+
+        logger.addLog("SUCCESS", "MEDIA_SERVER", `Provisioned user "${username}" on ${srv.name} (${srvType}) [ID: ${res.remoteUserId}, Created: ${res.created}]`);
+
+        return {
+            success: true,
+            serverName: srv.name,
+            serverType: srv.type,
+            serverUrl: srv.url,
+            username,
+            remoteUserId: res.remoteUserId,
+            created: res.created,
+            message: res.created 
+                ? `Account "${username}" successfully created on ${srv.name} with no initial password!`
+                : `Account "${username}" is active and synced on ${srv.name}.`
+        };
+    } catch (err: any) {
+        return { success: false, error: err.message || "Failed to provision user account" };
+    }
+}
+
+/**
+ * Allows a Full Member to set or update their dedicated streaming password on Jellyfin or Emby.
+ */
+export async function setUserMediaServerPasswordAction(
+    serverId: string,
+    newPassword: string
+): Promise<{ success: boolean; message?: string; error?: string }> {
+    try {
+        const user = await verifySessionUser();
+
+        // Strict Full Member gating
+        const isTrial = user.role === "TRIAL" || user.status === "TRIAL" || user.membershipTier === "TRIAL";
+        if (isTrial) {
+            return {
+                success: false,
+                error: "Jellyfin & Emby multi-platform streaming is exclusively available for Full Members."
+            };
+        }
+
+        const trimmedPassword = (newPassword || "").trim();
+        if (trimmedPassword.length < 4) {
+            return { success: false, error: "Password must be at least 4 characters long." };
+        }
+
+        const srv = await prisma.mediaServer.findUnique({ where: { id: serverId } });
+        if (!srv) {
+            return { success: false, error: "Media server not found." };
+        }
+
+        let decKey = "";
+        try { decKey = decryptData(srv.apiKey); } catch {}
+        if (!decKey) {
+            return { success: false, error: "Failed to decrypt media server API key." };
+        }
+
+        const srvType = srv.type.toUpperCase();
+        let remoteUserId = srvType === "JELLYFIN" ? user.jellyfinUserId : user.embyUserId;
+
+        // If user not yet provisioned, provision them first
+        if (!remoteUserId) {
+            const provRes = await ensureUserMediaServerProvisionedAction(srv.id);
+            if (!provRes.success || !provRes.remoteUserId) {
+                return { success: false, error: provRes.error || "Failed to initialize account on media server." };
+            }
+            remoteUserId = provRes.remoteUserId;
+        }
+
+        const passRes = await setUserMediaServerPassword(srv.url, decKey, remoteUserId, trimmedPassword);
+        if (!passRes.success) {
+            return { success: false, error: passRes.error || "Failed to set streaming password." };
+        }
+
+        logger.addLog("SUCCESS", "MEDIA_SERVER", `Updated streaming password for user "${user.username}" on ${srv.name}`);
+        return {
+            success: true,
+            message: `Streaming password set successfully on ${srv.name}! You can now use this password across all your ${srvType} player apps.`
+        };
+    } catch (err: any) {
+        return { success: false, error: err.message || "Failed to set streaming password" };
+    }
+}
+
+/**
+ * Administrator bulk action: Provisions all active Full Members to a specified Jellyfin or Emby server.
+ */
+export async function provisionAllUsersToMediaServerAction(
+    serverId: string
+): Promise<{ success: boolean; count?: number; total?: number; message?: string; error?: string }> {
+    try {
+        await verifySessionAdmin();
+
+        const srv = await prisma.mediaServer.findUnique({ where: { id: serverId } });
+        if (!srv) {
+            return { success: false, error: "Media server not found." };
+        }
+
+        let decKey = "";
+        try { decKey = decryptData(srv.apiKey); } catch {}
+        if (!decKey) {
+            return { success: false, error: "Failed to decrypt media server API key." };
+        }
+
+        const srvType = srv.type.toUpperCase();
+
+        // Parse allowed libraries whitelist
+        let allowedLibIds: string[] = [];
+        if (srv.allowedLibraryIds) {
+            try {
+                const parsed = JSON.parse(srv.allowedLibraryIds);
+                if (Array.isArray(parsed)) allowedLibIds = parsed.filter(x => x !== "__none__");
+            } catch {
+                allowedLibIds = srv.allowedLibraryIds.split(",").map(s => s.trim()).filter(x => x && x !== "__none__");
+            }
+        }
+
+        // Query all approved Full Members (excluding trial users)
+        const eligibleUsers = await prisma.user.findMany({
+            where: {
+                status: "APPROVED",
+                role: { not: "TRIAL" },
+                membershipTier: { not: "TRIAL" }
+            }
+        });
+
+        let successCount = 0;
+        for (const u of eligibleUsers) {
+            const username = (srvType === "JELLYFIN" ? u.jellyfinUsername : u.embyUsername) || u.username;
+            try {
+                const res = await ensureUserMediaServerAccount(
+                    { id: srv.id, name: srv.name, type: srv.type, url: srv.url, apiKey: decKey },
+                    { 
+                        id: u.id, 
+                        username, 
+                        email: u.email, 
+                        jellyfinUserId: u.jellyfinUserId, 
+                        embyUserId: u.embyUserId 
+                    },
+                    allowedLibIds
+                );
+                if (res.success && res.remoteUserId) {
+                    const idField = srvType === "JELLYFIN" ? "jellyfinUserId" : "embyUserId";
+                    await prisma.user.update({
+                        where: { id: u.id },
+                        data: { [idField]: res.remoteUserId }
+                    });
+                    successCount++;
+                }
+            } catch (err) {
+                console.warn(`[BULK-PROV-ERROR] User "${u.username}":`, err);
+            }
+        }
+
+        safeRevalidate("/settings");
+        safeRevalidate("/profile");
+        logger.addLog("SUCCESS", "MEDIA_SERVER", `Admin bulk-provisioned ${successCount}/${eligibleUsers.length} full members to ${srv.name}`);
+
+        return {
+            success: true,
+            count: successCount,
+            total: eligibleUsers.length,
+            message: `Successfully provisioned & synchronized ${successCount} of ${eligibleUsers.length} Full Members to ${srv.name}!`
+        };
+    } catch (err: any) {
+        return { success: false, error: err.message || "Failed to bulk provision users" };
     }
 }

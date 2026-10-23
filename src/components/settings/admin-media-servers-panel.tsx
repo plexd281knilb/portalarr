@@ -7,6 +7,7 @@ import {
     deleteMediaServerAction, 
     testMediaServerAction, 
     updateServerAccessRulesAction,
+    provisionAllUsersToMediaServerAction,
     DiscoveredServerInfo 
 } from "@/app/media-server-actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
@@ -21,7 +22,7 @@ import {
     Server, Tv, Film, Music, Check, Plus, Trash2, RefreshCw, 
     CheckCircle2, XCircle, Loader2, Shield, FolderCheck, CheckSquare, 
     Square, Activity, ExternalLink, Settings, Sparkles, Layers, Sliders, Pencil,
-    Eye, EyeOff, Copy
+    Eye, EyeOff, Copy, Users
 } from "lucide-react";
 
 export function AdminMediaServersPanel() {
@@ -47,6 +48,8 @@ export function AdminMediaServersPanel() {
     const [testingMap, setTestingMap] = useState<Record<string, { testing?: boolean; result?: any }>>({});
     // Saving rules state per server: serverId -> boolean
     const [savingRulesMap, setSavingRulesMap] = useState<Record<string, boolean>>({});
+    // Bulk provisioning state per server: serverId -> boolean
+    const [bulkProvisioningMap, setBulkProvisioningMap] = useState<Record<string, boolean>>({});
 
     const loadServers = async (isManualRefresh = false) => {
         if (isManualRefresh) setRefreshing(true);
@@ -222,6 +225,28 @@ export function AdminMediaServersPanel() {
         }
     };
 
+    const handleBulkProvisionUsers = async (srv: DiscoveredServerInfo) => {
+        if (!confirm(`Provision and sync all approved Full Members to "${srv.name}"? This creates their accounts in ${srv.type} with blank initial passwords and assigns the configured whitelist.`)) {
+            return;
+        }
+        setBulkProvisioningMap(prev => ({ ...prev, [srv.id]: true }));
+        setError("");
+        setSuccessMsg("");
+        try {
+            const res = await provisionAllUsersToMediaServerAction(srv.id);
+            if (res.success) {
+                setSuccessMsg(res.message || `Successfully provisioned ${res.count} users!`);
+                setTimeout(() => setSuccessMsg(""), 6000);
+            } else {
+                setError(res.error || "Failed to bulk provision users.");
+            }
+        } catch (e: any) {
+            setError(e.message || "Failed to bulk provision users.");
+        } finally {
+            setBulkProvisioningMap(prev => ({ ...prev, [srv.id]: false }));
+        }
+    };
+
     return (
         <div className="space-y-6">
             {/* Header & Quick Actions */}
@@ -351,6 +376,24 @@ export function AdminMediaServersPanel() {
                                                 )}
                                                 <span>Test Connection</span>
                                             </Button>
+
+                                            {!isPlex && (
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => handleBulkProvisionUsers(srv)}
+                                                    disabled={bulkProvisioningMap[srv.id]}
+                                                    className="h-8 text-xs border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 gap-1.5 cursor-pointer"
+                                                    title={`Provision & sync all Full Members to ${srv.name}`}
+                                                >
+                                                    {bulkProvisioningMap[srv.id] ? (
+                                                        <Loader2 className="h-3 w-3 animate-spin text-emerald-400" />
+                                                    ) : (
+                                                        <Users className="h-3.5 w-3.5 text-emerald-400" />
+                                                    )}
+                                                    <span>Provision Users</span>
+                                                </Button>
+                                            )}
 
                                             {!isPlex && (
                                                 <Button

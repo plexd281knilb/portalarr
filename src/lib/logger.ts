@@ -26,6 +26,7 @@ export type LogCategory =
     | "MONITORING"
     | "DISCORD"
     | "SCRIPTS"
+    | "MEDIA_SERVER"
     | "PLEX_HUB"; // backward compatibility
 
 export interface SystemLogEntry {
