@@ -44,7 +44,7 @@ export function MediaServerSetupGuideModal({
     const [provisionMsg, setProvisionMsg] = useState("");
 
     // Streaming password management state
-    const [showPasswordSetup, setShowPasswordSetup] = useState(false);
+    const [showPasswordSetup, setShowPasswordSetup] = useState(true);
     const [passwordInput, setPasswordInput] = useState("");
     const [savingPassword, setSavingPassword] = useState(false);
     const [passwordSuccess, setPasswordSuccess] = useState(false);
@@ -272,14 +272,14 @@ export function MediaServerSetupGuideModal({
                                     className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground gap-1.5 cursor-pointer"
                                 >
                                     <Key className="h-3.5 w-3.5 text-amber-400" />
-                                    <span>Want to set a dedicated streaming password? (Optional)</span>
+                                    <span>Set a dedicated streaming password (Optional)</span>
                                 </Button>
                             ) : (
                                 <div className="p-3 rounded-lg bg-black/40 border border-border/50 space-y-2.5">
                                     <div className="flex items-center justify-between">
                                         <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                                             <Key className="h-3.5 w-3.5 text-amber-400" />
-                                            <span>Set {serverType} Streaming Password</span>
+                                            <span>Set {serverType} Streaming Password (Optional)</span>
                                         </Label>
                                         <Button
                                             type="button"
@@ -288,7 +288,7 @@ export function MediaServerSetupGuideModal({
                                             onClick={() => setShowPasswordSetup(false)}
                                             className="h-5 px-1 text-[10px] text-muted-foreground hover:text-foreground cursor-pointer"
                                         >
-                                            Hide
+                                            Minimize
                                         </Button>
                                     </div>
                                     <div className="flex gap-2">
