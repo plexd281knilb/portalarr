@@ -81,6 +81,7 @@ import { updateUserSubscriptionCadenceAction } from "@/app/payment-actions";
 import { format, differenceInDays } from "date-fns";
 import PaymentEmailManager from "@/components/payment-email-manager";
 import SentEmailAuditLog from "@/components/sent-email-audit-log";
+import CloudflarePolicyCard from "@/components/cloudflare-policy-card";
 
 export default function AccessSettingsPage() {
     const [activeTab, setActiveTab] = useState("users");
@@ -1734,7 +1735,7 @@ export default function AccessSettingsPage() {
 
             {/* TOP NAVIGATION TABS */}
             <Tabs defaultValue="users" value={activeTab} onValueChange={handleTabChange} className="w-full space-y-6">
-                <TabsList className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 bg-[#121218] border border-border/50 p-1.5 rounded-xl h-auto gap-1.5">
+                <TabsList className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 bg-[#121218] border border-border/50 p-1.5 rounded-xl h-auto gap-1.5">
                     <TabsTrigger value="users" className="gap-2 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground min-w-0 py-2">
                         <Users className="h-4 w-4 shrink-0" /> <span className="truncate">User Directory ({users.length})</span>
                     </TabsTrigger>
@@ -1767,6 +1768,10 @@ export default function AccessSettingsPage() {
                                 {sentEmailsTotalCount}
                             </span>
                         )}
+                    </TabsTrigger>
+                    <TabsTrigger value="cloudflare" className="gap-2 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground min-w-0 py-2 relative">
+                        <Shield className="h-4 w-4 text-orange-400 shrink-0" />
+                        <span className="truncate">Cloudflare Access</span>
                     </TabsTrigger>
                 </TabsList>
 
@@ -4899,6 +4904,13 @@ export default function AccessSettingsPage() {
                 {/* ========================================================================= */}
                 <TabsContent value="sent-emails" className="space-y-6 animate-in fade-in-50 duration-200">
                     <SentEmailAuditLog onCountChange={(count) => setSentEmailsTotalCount(count)} />
+                </TabsContent>
+
+                {/* ========================================================================= */}
+                {/* TAB 7: CLOUDFLARE ACCESS & EDGE SECURITY POLICY PATHS */}
+                {/* ========================================================================= */}
+                <TabsContent value="cloudflare" className="space-y-6 animate-in fade-in-50 duration-200">
+                    <CloudflarePolicyCard />
                 </TabsContent>
             </Tabs>
 

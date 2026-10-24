@@ -4,19 +4,33 @@ import { useState } from "react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Shield, Copy, Check, ExternalLink, Lock, Globe, Film, AlertTriangle } from "lucide-react";
+import { Shield, Copy, Check, ExternalLink, Lock, Globe, Film, AlertTriangle, Network, Sparkles } from "lucide-react";
 import { CLOUDFLARE_BYPASS_PATHS, CLOUDFLARE_SUPER_USER_PATHS, CLOUDFLARE_ADMIN_PATHS } from "@/lib/edge-policy-paths";
 
 export default function CloudflarePolicyCard() {
     const [copiedBypass, setCopiedBypass] = useState(false);
     const [copiedSuperUser, setCopiedSuperUser] = useState(false);
     const [copiedAdmin, setCopiedAdmin] = useState(false);
+    const [copiedTunnel, setCopiedTunnel] = useState(false);
 
     const bypassPaths = CLOUDFLARE_BYPASS_PATHS;
     const superUserPaths = CLOUDFLARE_SUPER_USER_PATHS;
     const adminProtectedPaths = CLOUDFLARE_ADMIN_PATHS;
 
-    const handleCopy = (text: string, type: "bypass" | "superuser" | "admin") => {
+    // Cloudflare Tunnel Public Hostname format (without leading slash for Tunnel UI)
+    const tunnelPublicHostnamePaths = [
+        "settings*",
+        "admin*",
+        "curation*",
+        "api/system*",
+        "api/debug*",
+        "api/curation*",
+        "api/users*",
+        "api/books/upload*",
+        "api/admin*"
+    ];
+
+    const handleCopy = (text: string, type: "bypass" | "superuser" | "admin" | "tunnel") => {
         navigator.clipboard.writeText(text);
         if (type === "bypass") {
             setCopiedBypass(true);
@@ -24,9 +38,12 @@ export default function CloudflarePolicyCard() {
         } else if (type === "superuser") {
             setCopiedSuperUser(true);
             setTimeout(() => setCopiedSuperUser(false), 2000);
-        } else {
+        } else if (type === "admin") {
             setCopiedAdmin(true);
             setTimeout(() => setCopiedAdmin(false), 2000);
+        } else {
+            setCopiedTunnel(true);
+            setTimeout(() => setCopiedTunnel(false), 2000);
         }
     };
 
@@ -42,17 +59,74 @@ export default function CloudflarePolicyCard() {
                                 Cloudflare Access & Edge Security Policy Paths
                             </CardTitle>
                             <Badge variant="outline" className="text-[10px] bg-orange-500/10 text-orange-300 border-orange-500/30">
-                                Reverse Proxy / WAF
+                                Reverse Proxy / WAF / Zero Trust
                             </Badge>
                         </div>
                         <CardDescription className="text-xs">
-                            If you run Cloudflare Access, Zero Trust, Authentik, or Authelia in front of DomsHomeLab, configure these route policies to ensure users and webhooks are not blocked.
+                            Authoritative route configurations for Cloudflare Tunnels (Public Hostnames) and Cloudflare Access Zero Trust policies in front of DomsHomeLab.
                         </CardDescription>
                     </div>
                 </div>
             </CardHeader>
 
             <CardContent className="space-y-4">
+                {/* CLOUDFLARE TUNNEL PUBLIC HOSTNAMES SECTION */}
+                <div className="p-3.5 rounded-xl bg-orange-500/5 border border-orange-500/20 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                            <Network className="h-4 w-4 text-orange-400 shrink-0" />
+                            <div>
+                                <span className="font-bold text-xs text-foreground flex items-center gap-1.5">
+                                    Cloudflare Tunnel • Public Hostnames (<code className="text-orange-400">home.domshomelab.com</code>)
+                                </span>
+                                <p className="text-[11px] text-muted-foreground">
+                                    Routes that should be mapped in your Cloudflare Tunnel to point to <code className="text-slate-300">http://localhost:3000</code>:
+                                </p>
+                            </div>
+                        </div>
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleCopy(tunnelPublicHostnamePaths.join("\n"), "tunnel")}
+                            className="text-xs font-semibold gap-1.5 border-orange-500/40 hover:bg-orange-500/15 text-orange-300 self-start sm:self-auto shrink-0"
+                        >
+                            {copiedTunnel ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                            {copiedTunnel ? "Copied Tunnel Paths!" : "Copy Tunnel Hostname Paths"}
+                        </Button>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 pt-1">
+                        {tunnelPublicHostnamePaths.map((p) => {
+                            const isRecommendedScript = p === "api/admin*";
+                            return (
+                                <div
+                                    key={p}
+                                    className={`p-2 rounded-lg border text-xs font-mono flex items-center justify-between transition-all ${
+                                        isRecommendedScript
+                                            ? "bg-amber-500/10 border-amber-500/40 text-amber-300 shadow-[0_0_10px_rgba(245,158,11,0.15)] ring-1 ring-amber-400/30"
+                                            : "bg-black/40 border-white/[0.08] text-slate-300"
+                                    }`}
+                                >
+                                    <span className="truncate">{p}</span>
+                                    {isRecommendedScript && (
+                                        <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-400/20 text-amber-300 border-amber-400/40 shrink-0 ml-1">
+                                            NEW
+                                        </Badge>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    <div className="flex items-center gap-2 text-[11px] text-amber-300/90 bg-amber-950/30 border border-amber-500/30 rounded-lg p-2">
+                        <Sparkles className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                        <span>
+                            <strong>Note on <code className="text-amber-200">api/admin*</code>:</strong> Protects <code className="text-amber-200">/api/admin/scripts</code> (homelab shell & powershell automation). Add this path to your Cloudflare Tunnel to ensure automated scripts run seamlessly.
+                        </span>
+                    </div>
+                </div>
+
+                {/* 3-COLUMN ACCESS POLICY BREAKDOWN */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                     {/* BYPASS / PUBLIC PATHS */}
                     <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-3 flex flex-col justify-between">
@@ -124,10 +198,10 @@ export default function CloudflarePolicyCard() {
                             <div className="flex items-center justify-between">
                                 <span className="font-bold text-xs text-foreground flex items-center gap-1.5">
                                     <Lock className="h-4 w-4 text-orange-400" />
-                                    Admin-Only Paths (Only You)
+                                    Admin-Only Paths (Strict Zero-Trust)
                                 </span>
                                 <Badge variant="outline" className="text-[10px] bg-orange-500/10 text-orange-300 border-orange-500/30">
-                                    Require Admin (Strict)
+                                    Require Admin Email
                                 </Badge>
                             </div>
                             <p className="text-[11px] text-muted-foreground leading-relaxed">
@@ -167,7 +241,7 @@ export default function CloudflarePolicyCard() {
                             </span>
                             <ul className="list-disc list-inside space-y-1 text-slate-300/90">
                                 <li><strong>Action:</strong> <code className="text-orange-300">Allow</code></li>
-                                <li><strong>Paths:</strong> Add all <strong>Admin-Only Paths</strong> (<code className="text-orange-300">/settings*</code>, <code className="text-orange-300">/admin*</code>, <code className="text-orange-300">/curation*</code>, etc.).</li>
+                                <li><strong>Paths:</strong> Add all <strong>Admin-Only Paths</strong> (<code className="text-orange-300">/settings*</code>, <code className="text-orange-300">/admin*</code>, <code className="text-orange-300">/curation*</code>, <code className="text-orange-300">/api/admin*</code>, etc.).</li>
                                 <li><strong>Include:</strong> <code className="text-orange-300">Emails: [your-admin-email@example.com]</code></li>
                                 <li><strong>Result:</strong> Anyone outside of you is stopped with an HTTP 403 / Access Denied at Cloudflare&apos;s edge before reaching your server.</li>
                             </ul>
