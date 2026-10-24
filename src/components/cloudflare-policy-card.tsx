@@ -29,6 +29,9 @@ export default function CloudflarePolicyCard() {
         "settings*",
         "admin*",
         "curation*",
+        "tautulli*",
+        "streams*",
+        "api/admin*",
         "api/system*",
         "api/debug*",
         "api/curation*",
@@ -84,8 +87,8 @@ export default function CloudflarePolicyCard() {
             </CardHeader>
 
             <CardContent className="space-y-4">
-                {/* PROACTIVE WARNING IF ANY ROUTE IS MISSING IN CLOUDFLARE */}
-                {missingCloudflareHostnames.length > 0 && (
+                {/* PROACTIVE CLOUDFLARE SYNC BANNER */}
+                {missingCloudflareHostnames.length > 0 ? (
                     <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/40 space-y-2">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                             <div className="flex items-center gap-2">
@@ -114,6 +117,18 @@ export default function CloudflarePolicyCard() {
                                 </Badge>
                             ))}
                         </div>
+                    </div>
+                ) : (
+                    <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                            <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                            <span className="text-xs font-semibold text-emerald-300">
+                                100% Edge Coverage: All {tunnelPublicHostnamePaths.length} Admin & API Public Hostnames are active and protected in your Cloudflare Tunnel (<code className="text-emerald-200">home.domshomelab.com</code>).
+                            </span>
+                        </div>
+                        <Badge variant="outline" className="text-[10px] bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shrink-0">
+                            Zero Drift • Fully Protected
+                        </Badge>
                     </div>
                 )}
 
