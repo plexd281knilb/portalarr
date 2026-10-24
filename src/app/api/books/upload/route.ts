@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
 
               let dirPath = library.path;
         if (!dirPath || !fs.existsSync(dirPath)) {
-            dirPath = path.join(process.cwd(), "data", "books");
+            dirPath = path.join(/*turbopackIgnore: true*/ process.cwd(), "data", "books");
             if (!fs.existsSync(dirPath)) {
                 fs.mkdirSync(dirPath, { recursive: true });
             }

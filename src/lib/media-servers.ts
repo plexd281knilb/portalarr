@@ -30,14 +30,17 @@ function cleanBaseUrl(url: string): string {
     return clean.replace(/\/+$/, "");
 }
 
+import packageJson from "../../package.json";
+
 export function getMediaServerAuthHeaders(apiKey: string): Record<string, string> {
     const cleanKey = (apiKey || "").trim();
+    const clientVersion = packageJson.version || "1.3.26";
     return {
         "Accept": "application/json",
         "X-Emby-Token": cleanKey,
         "X-MediaBrowser-Token": cleanKey,
         "Authorization": `MediaBrowser Token="${cleanKey}"`,
-        "X-Emby-Authorization": `MediaBrowser Client="Portalarr", Device="Portalarr Dashboard", DeviceId="portalarr-server", Version="1.3.5", Token="${cleanKey}"`
+        "X-Emby-Authorization": `MediaBrowser Client="Portalarr", Device="Portalarr Dashboard", DeviceId="portalarr-server", Version="${clientVersion}", Token="${cleanKey}"`
     };
 }
 
