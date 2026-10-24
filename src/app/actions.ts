@@ -28,6 +28,7 @@ import type { AiAssistantResponse, UserDiagnosticSnapshot } from "@/lib/ai-serve
 
 import { getJwtSecret } from "@/lib/auth-secret";
 import { getAppUrl } from "@/lib/app-url";
+import { processEpubForKindle as validateEpubForKindle } from "@/lib/books/epub-validator";
 import { encryptData, decryptData } from "@/lib/encryption";
 import { calculateProratedBilling } from "@/lib/prorated-billing";
 import { calculateUserRenewalSummary } from "@/lib/referral-rewards";
@@ -11518,25 +11519,7 @@ async function expandSeriesRequest(seriesTitle: string, author: string, requeste
 }
 
 export async function processEpubForKindle(filePath: string): Promise<string> {
-    if (!fs.existsSync(filePath)) {
-        throw new Error("File does not exist.");
-    }
-
-    const stats = fs.statSync(filePath);
-    if (stats.size > 50 * 1024 * 1024) {
-        throw new Error("File size exceeds 50MB Kindle limit.");
-    }
-
-    const fd = fs.openSync(filePath, 'r');
-    const buffer = Buffer.alloc(4);
-    fs.readSync(fd, buffer, 0, 4, 0);
-    fs.closeSync(fd);
-
-    if (buffer.toString('hex') !== '504b0304') {
-        throw new Error("Invalid file format. File is not a valid ZIP/EPUB archive.");
-    }
-
-    return filePath;
+    return validateEpubForKindle(filePath);
 }
 
 export async function scanLibrary(libraryId?: string): Promise<{ success: boolean, error?: string, message?: string, count?: number }> {

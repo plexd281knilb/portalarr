@@ -4,6 +4,7 @@ import prisma from "@/lib/prisma";
 import fs from "fs";
 import path from "path";
 import { getJwtSecret } from "@/lib/auth-secret";
+import { processEpubForKindle } from "@/lib/books/epub-validator";
 
 export async function POST(req: NextRequest) {
     const session = req.cookies.get("session")?.value;
@@ -60,7 +61,6 @@ export async function POST(req: NextRequest) {
         let finalSize = file.size;
         if (fileExtension.toLowerCase() === ".epub") {
             try {
-                const { processEpubForKindle } = require("@/app/actions");
                 finalPath = await processEpubForKindle(filePath);
                 const stats = fs.statSync(finalPath);
                 finalSize = stats.size;
