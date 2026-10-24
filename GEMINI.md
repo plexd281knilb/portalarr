@@ -8,7 +8,7 @@ Portalarr is a centralized, self-hosted dashboard designed to manage a media ser
 
 Portalarr adheres to strict Semantic Versioning (`MAJOR.MINOR.PATCH`):
 - **Released Baseline**: `v1.0.0` is the production milestone baseline release.
-- **Active Feature Release**: `v1.3.29` is the current active release.
+- **Active Feature Release**: `v1.3.30` is the current active release.
 - **Strict SemVer Policy**:
   - **PATCH increments (`1.3.22` ➔ `1.3.23`)**: Bug fixes, security patches, styling polish, telemetry adjustments, and non-breaking corrections.
   - **MINOR increments (`1.1.2` ➔ `1.2.0`)**: Backwards-compatible new features, new curation studios, new third-party integrations, or major enhancements.
@@ -52,15 +52,20 @@ Personalized watch time and media statistics in `MyPlexHub` (`getUserPlexHubData
 5. **Local SQLite `WatchHistory` Fallback**: If Tautulli is offline or unconfigured, queries Prisma `WatchHistory` using exact and lowercased alias arrays (avoiding SQLite `mode: "insensitive"` crashes) to accurately aggregate watch hours, movies finished, and episodes watched.
 
 
-To guarantee 100% reliability, quality control, and consistency, the following 4-step protocol MUST be executed at the end of every task or feature change before considering the work complete:
+To guarantee 100% reliability, quality control, and consistency, the following 5-step protocol MUST be executed at the end of every task or feature change before considering the work complete:
 
 1. **Full Integration Testing:**
    Execute `cmd /c "npm test"` to run the Portalarr verification suite (`scripts/verify-all.ts`). All tests must pass (0 failures). Add new test cases whenever adding new actions or core calculations.
 2. **Production Build Verification:**
    Execute `cmd /c "npm run build"`. Ensure 100% clean compilation, zero TypeScript errors, and zero Turbopack runtime errors.
-3. **Skills & Documentation Sync:**
+3. **Mandatory Edge Security & Cloudflare Policy Audit:**
+   Whenever ANY page route (`src/app/**/page.tsx`) or API route (`src/app/api/**/route.ts`) is created, moved, or updated:
+   - **Authoritative Definition**: Immediately register it in `src/lib/edge-policy-paths.ts` (`CLOUDFLARE_ADMIN_PATHS`, `CLOUDFLARE_SUPER_USER_PATHS`, or `CLOUDFLARE_BYPASS_PATHS`).
+   - **Settings UI Sync**: Verify that `src/components/cloudflare-policy-card.tsx` and the Settings Access Tab (`/settings?tab=access`) dynamically reflect the change.
+   - **MANDATORY USER NOTIFICATION**: You MUST explicitly cross-reference the user's active Cloudflare Tunnel hostnames and Access policies, and directly inform the user in your response if ANY route needs to be added to their Cloudflare Tunnel or Access dashboard (specifying the exact path string, e.g. `api/admin*`). Never complete a task involving route changes without explicitly reporting the edge policy impact to the user!
+4. **Skills & Documentation Sync:**
    Review and update relevant `.agents/skills/` documents (e.g. `portalarr-ui`, `seerr-expert`, etc.) to record any new UI patterns, API contracts, formulas, or operational guidelines.
-4. **SemVer Version Increment & Git Deployment Push:**
+5. **SemVer Version Increment & Git Deployment Push:**
    - **MANDATORY VERSION INCREMENT**: ALWAYS increment the version in `package.json` (and `package-lock.json` / `GEMINI.md`) BEFORE staging and committing according to SemVer rules (PATCH `+1` e.g. `1.1.0` ➔ `1.1.1` for bug fixes, polish, and non-breaking corrections; MINOR `+1` e.g. `1.1.0` ➔ `1.2.0` for new features and capabilities; MAJOR `+1` for breaking changes). Never reuse an existing release version on a new task or commit!
    - **Staging, Verification & Push**:
      Inspect `git status` to verify all touched and new files, stage all changes (`git add -A`), commit with a clear, descriptive message adhering to conventional commit style that ALWAYS includes the freshly incremented active version from `package.json` at the FRONT in brackets (e.g. `[v1.1.0] feat(scope): descriptive message` or `[v1.1.0] fix(scope): fix bug`), and push strictly to `origin/main` (Beta preview environment). **CRITICAL RULE**: NEVER merge or push to `stable` / `origin/stable` unless the user explicitly instructs to push to `stable`! Automatic git hook enforcement via `scripts/git-commit-msg-hook.js` is verified in `npm test` and executed by Git on every commit to guarantee version prefixing.

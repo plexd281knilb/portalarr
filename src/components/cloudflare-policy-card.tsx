@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Shield, Copy, Check, ExternalLink, Lock, Globe, Film, AlertTriangle, Network, Sparkles } from "lucide-react";
+import { Shield, Copy, Check, ExternalLink, Lock, Globe, Film, AlertTriangle, Network, Sparkles, CheckCircle2 } from "lucide-react";
 import { CLOUDFLARE_BYPASS_PATHS, CLOUDFLARE_SUPER_USER_PATHS, CLOUDFLARE_ADMIN_PATHS } from "@/lib/edge-policy-paths";
 
 export default function CloudflarePolicyCard() {
@@ -12,13 +12,20 @@ export default function CloudflarePolicyCard() {
     const [copiedSuperUser, setCopiedSuperUser] = useState(false);
     const [copiedAdmin, setCopiedAdmin] = useState(false);
     const [copiedTunnel, setCopiedTunnel] = useState(false);
+    const [copiedMissing, setCopiedMissing] = useState(false);
 
     const bypassPaths = CLOUDFLARE_BYPASS_PATHS;
     const superUserPaths = CLOUDFLARE_SUPER_USER_PATHS;
     const adminProtectedPaths = CLOUDFLARE_ADMIN_PATHS;
 
     // Cloudflare Tunnel Public Hostname format (without leading slash for Tunnel UI)
-    const tunnelPublicHostnamePaths = [
+    // Dynamically derived from CLOUDFLARE_ADMIN_PATHS to guarantee zero code drift
+    const tunnelPublicHostnamePaths = Array.from(new Set(
+        adminProtectedPaths.map((p) => p.replace(/^\//, ""))
+    ));
+
+    // Active hostnames verified in Dom's Cloudflare Zero Trust dashboard
+    const userConfiguredCloudflareHostnames = new Set([
         "settings*",
         "admin*",
         "curation*",
@@ -26,11 +33,15 @@ export default function CloudflarePolicyCard() {
         "api/debug*",
         "api/curation*",
         "api/users*",
-        "api/books/upload*",
-        "api/admin*"
-    ];
+        "api/books/upload*"
+    ]);
 
-    const handleCopy = (text: string, type: "bypass" | "superuser" | "admin" | "tunnel") => {
+    // Detect paths that exist in Portalarr backend but are not yet added to Cloudflare
+    const missingCloudflareHostnames = tunnelPublicHostnamePaths.filter(
+        (p) => !userConfiguredCloudflareHostnames.has(p)
+    );
+
+    const handleCopy = (text: string, type: "bypass" | "superuser" | "admin" | "tunnel" | "missing") => {
         navigator.clipboard.writeText(text);
         if (type === "bypass") {
             setCopiedBypass(true);
@@ -41,9 +52,12 @@ export default function CloudflarePolicyCard() {
         } else if (type === "admin") {
             setCopiedAdmin(true);
             setTimeout(() => setCopiedAdmin(false), 2000);
-        } else {
+        } else if (type === "tunnel") {
             setCopiedTunnel(true);
             setTimeout(() => setCopiedTunnel(false), 2000);
+        } else {
+            setCopiedMissing(true);
+            setTimeout(() => setCopiedMissing(false), 2000);
         }
     };
 
@@ -70,6 +84,39 @@ export default function CloudflarePolicyCard() {
             </CardHeader>
 
             <CardContent className="space-y-4">
+                {/* PROACTIVE WARNING IF ANY ROUTE IS MISSING IN CLOUDFLARE */}
+                {missingCloudflareHostnames.length > 0 && (
+                    <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/40 space-y-2">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                                <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 animate-pulse" />
+                                <span className="text-xs font-bold text-amber-300">
+                                    Security Notice: {missingCloudflareHostnames.length} route(s) require entry in your Cloudflare Tunnel / Access Dashboard
+                                </span>
+                            </div>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleCopy(missingCloudflareHostnames.join("\n"), "missing")}
+                                className="text-xs font-semibold gap-1.5 border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 self-start sm:self-auto shrink-0"
+                            >
+                                {copiedMissing ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                                {copiedMissing ? "Copied Missing Paths!" : "Copy Missing Paths Only"}
+                            </Button>
+                        </div>
+                        <p className="text-[11px] text-amber-200/80 leading-relaxed">
+                            The following route(s) were added to Portalarr and must be registered in your Cloudflare Zero Trust public hostnames (<code className="text-amber-100">home.domshomelab.com</code>):
+                        </p>
+                        <div className="flex flex-wrap gap-2 pt-1">
+                            {missingCloudflareHostnames.map((p) => (
+                                <Badge key={p} variant="outline" className="text-xs font-mono bg-amber-950/60 text-amber-300 border-amber-400/50 px-2 py-0.5">
+                                    {p}
+                                </Badge>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 {/* CLOUDFLARE TUNNEL PUBLIC HOSTNAMES SECTION */}
                 <div className="p-3.5 rounded-xl bg-orange-500/5 border border-orange-500/20 space-y-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -80,7 +127,7 @@ export default function CloudflarePolicyCard() {
                                     Cloudflare Tunnel • Public Hostnames (<code className="text-orange-400">home.domshomelab.com</code>)
                                 </span>
                                 <p className="text-[11px] text-muted-foreground">
-                                    Routes that should be mapped in your Cloudflare Tunnel to point to <code className="text-slate-300">http://localhost:3000</code>:
+                                    Routes mapped in your Cloudflare Tunnel pointing to <code className="text-slate-300">http://localhost:3000</code>:
                                 </p>
                             </div>
                         </div>
@@ -91,26 +138,30 @@ export default function CloudflarePolicyCard() {
                             className="text-xs font-semibold gap-1.5 border-orange-500/40 hover:bg-orange-500/15 text-orange-300 self-start sm:self-auto shrink-0"
                         >
                             {copiedTunnel ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
-                            {copiedTunnel ? "Copied Tunnel Paths!" : "Copy Tunnel Hostname Paths"}
+                            {copiedTunnel ? "Copied Tunnel Paths!" : "Copy All Tunnel Hostname Paths"}
                         </Button>
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 pt-1">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 pt-1">
                         {tunnelPublicHostnamePaths.map((p) => {
-                            const isRecommendedScript = p === "api/admin*";
+                            const isConfigured = userConfiguredCloudflareHostnames.has(p);
                             return (
                                 <div
                                     key={p}
-                                    className={`p-2 rounded-lg border text-xs font-mono flex items-center justify-between transition-all ${
-                                        isRecommendedScript
+                                    className={`p-2.5 rounded-lg border text-xs font-mono flex items-center justify-between transition-all ${
+                                        !isConfigured
                                             ? "bg-amber-500/10 border-amber-500/40 text-amber-300 shadow-[0_0_10px_rgba(245,158,11,0.15)] ring-1 ring-amber-400/30"
                                             : "bg-black/40 border-white/[0.08] text-slate-300"
                                     }`}
                                 >
                                     <span className="truncate">{p}</span>
-                                    {isRecommendedScript && (
-                                        <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-400/20 text-amber-300 border-amber-400/40 shrink-0 ml-1">
-                                            NEW
+                                    {isConfigured ? (
+                                        <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30 shrink-0 ml-1.5">
+                                            <CheckCircle2 className="h-2.5 w-2.5 mr-0.5 inline" /> In Cloudflare
+                                        </Badge>
+                                    ) : (
+                                        <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-400/20 text-amber-300 border-amber-400/50 shrink-0 ml-1.5 animate-pulse">
+                                            ⚠️ Action Req.
                                         </Badge>
                                     )}
                                 </div>
