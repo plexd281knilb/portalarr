@@ -2003,6 +2003,11 @@ async function runTestSuite() {
         if (bannerIdx < launchpadIdx) {
             throw new Error("PlexInviteBanner should be positioned below UserLaunchpad for a discrete layout");
         }
+
+        // 7. Verify PaidThroughHeader mount in page.tsx for members
+        if (!pageContent.includes("<PaidThroughHeader") || !pageContent.includes("Paid Through:")) {
+            throw new Error("src/app/page.tsx missing PaidThroughHeader or Paid Through indicator");
+        }
     });
 
     // =========================================================================

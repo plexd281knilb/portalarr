@@ -128,7 +128,10 @@ Portalarr uses a **Modern Cinematic Dark Theme** powered by Tailwind CSS, Radix 
   - Automatically prewarmed during `prewarmUserSession` on login.
 - **Quick-Access Dashboard Launchpad ("Servers & Libraries")**:
   - Mounted on the user dashboard launchpad grid (`UserLaunchpad`) with blue accent branding (`text-blue-400`, `bg-blue-500/10 border-blue-500/30`) and `Access` badge.
-  - Links directly to `/settings/profile` for 1-click management of Plex/Jellyfin/Emby servers, libraries, and add-ons.
+  - Links directly to `/profile` for 1-click management of Plex/Jellyfin/Emby servers, libraries, and add-ons.
+- **Dashboard Paid Through Header (`PaidThroughHeader`)**:
+  - Positioned at the top of the user dashboard view (`isMember`) and as a compact pill in the System Dashboard title header.
+  - Renders active plan badge (`Annual Plan` / `Monthly Plan` / `Lifetime Pass`), pulsing indicator, exact `Paid Through: [MMMM d, yyyy]`, countdown days remaining, applied account credit, and 1-click direct link to `/profile` for renewal management.
 - **Discrete Invite Banner (`PlexInviteBanner`)**:
   - Positioned unobtrusively below the AI Assistant card rather than commanding top billing.
   - Designed as a sleek, low-profile card (`bg-[#121218]/60 border-border/40`) with inline copy input and collapsible guide.
