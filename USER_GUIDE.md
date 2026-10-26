@@ -326,7 +326,7 @@ When upgrading from your free trial pass to full membership, choose the cadence 
   - **Monthly Subscribers:** Your monthly billing is delayed by **+1 full month** per friend (e.g. pushes billing start from January 1 to February 1).
 
 ### 💳 Zero-Fee P2P Payments & Automated Receipts
-- **P2P Direct Methods:** Renew seamlessly via Venmo, PayPal, Cash App, or Zelle with zero gateway fees.
+- **P2P Direct Methods:** Renew seamlessly via Venmo, PayPal, or Zelle with zero gateway fees.
 - **Pre-Filled Memo Notes & QR Codes:** Use the interactive QR code modal on the dashboard, `/profile`, or `/join` to prefill your exact payment memo (your clean username, e.g. `dominicjuliano`) for automated IMAP reconciliation.
 - **Instant Payment Receipts:** Whenever your payment is processed, DomsHomeLab automatically dispatches a branded HTML payment confirmation receipt (`payment_received`) confirming the amount received, date, new expiration date, and active perks.
 - **Full Membership Activation Alerts:** Upgrading from trial to full membership dispatches a welcome email (`subscription_activated`) highlighting all unlocked features.

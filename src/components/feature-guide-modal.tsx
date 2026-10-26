@@ -383,7 +383,7 @@ export const GUIDE_TOPICS: Record<FeatureGuideId, GuideTopic> = {
         highlights: [
             "Earn 1 free month ($15.00 discount) per friend who joins",
             "Annual Pass ($180/yr) vs Flexible Monthly ($17.50/mo)",
-            "P2P payments (Venmo, PayPal, Cash App, Zelle)",
+            "P2P payments (Venmo, PayPal, Zelle)",
             "Living Room TV & Kids PG-curated profiles"
         ],
         sections: [
@@ -406,7 +406,7 @@ export const GUIDE_TOPICS: Record<FeatureGuideId, GuideTopic> = {
             },
             {
                 title: "3. Direct P2P Payments & Automatic Matching",
-                desc: "Renew seamlessly via Venmo, PayPal, Cash App, or Zelle with zero processing fees. Include your username in the payment note/memo for instant automatic matching."
+                desc: "Renew seamlessly via Venmo, PayPal, or Zelle with zero processing fees. Include your username in the payment note/memo for instant automatic matching."
             },
             {
                 title: "4. Managed Living Room & Kids Profiles",

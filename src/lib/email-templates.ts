@@ -734,7 +734,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{email}", description: "Email address of user", sampleValue: "jordan@example.com" },
             { key: "{daysRemaining}", description: "Number of days remaining in trial", sampleValue: "3" },
             { key: "{expirationDate}", description: "Date when trial expires", sampleValue: "October 15, 2026" },
-            { key: "{renewUrl}", description: "URL to renewal or profile page", sampleValue: "https://portal.example.com/profile#billing" },
+            { key: "{renewUrl}", description: "URL to renewal or profile page", sampleValue: "https://portal.example.com/settings/profile#billing" },
             { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
         ]
     },
@@ -759,7 +759,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{username}", description: "Username of user", sampleValue: "jordan_reader" },
             { key: "{email}", description: "Email address of user", sampleValue: "jordan@example.com" },
             { key: "{expirationDate}", description: "Date when trial concluded", sampleValue: "October 15, 2026" },
-            { key: "{renewUrl}", description: "URL to renewal page", sampleValue: "https://portal.example.com/profile#billing" },
+            { key: "{renewUrl}", description: "URL to renewal page", sampleValue: "https://portal.example.com/settings/profile#billing" },
             { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
         ]
     },
@@ -810,8 +810,8 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
     {
         id: "payment_received",
         name: "Payment Receipt & Membership Confirmation",
-        description: "Sent to the user anytime a payment is received and processed (via Venmo, PayPal, Cash App, Zelle, or manual attribution), confirming the amount paid, new expiration date, and active membership perks.",
-        triggerEvent: "Triggered automatically whenever an incoming payment (Venmo, PayPal, Cash App, Zelle) is matched and fulfilled by the automated IMAP email scraper or manually attributed by an administrator.",
+        description: "Sent to the user anytime a payment is received and processed (via Venmo, PayPal, Zelle, or manual attribution), confirming the amount paid, new expiration date, and active membership perks.",
+        triggerEvent: "Triggered automatically whenever an incoming payment (Venmo, PayPal, Zelle) is matched and fulfilled by the automated IMAP email scraper or manually attributed by an administrator.",
         category: "PAYMENTS",
         defaultSubject: "💳 Payment Received & Membership Confirmed ({amount})",
         defaultBody: `<h2>Payment Received! 💳</h2>
@@ -864,7 +864,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{username}", description: "Username of the payer", sampleValue: "jordan_reader" },
             { key: "{email}", description: "Email address of user", sampleValue: "jordan@example.com" },
             { key: "{amount}", description: "Payment amount received (e.g. 15.00 or 40.16)", sampleValue: "40.16" },
-            { key: "{provider}", description: "Payment provider (Venmo, PayPal, Cash App, Zelle)", sampleValue: "Venmo" },
+            { key: "{provider}", description: "Payment provider (Venmo, PayPal, Zelle)", sampleValue: "Venmo" },
             { key: "{paymentDate}", description: "Date payment was received", sampleValue: "October 10, 2026" },
             { key: "{periodGranted}", description: "Subscription period granted", sampleValue: "Rest of Year (through Dec 31, 2026)" },
             { key: "{validUntil}", description: "New membership expiration date", sampleValue: "December 31, 2026" },
@@ -927,21 +927,21 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{username}", description: "Username of the member", sampleValue: "alex_reader" },
             { key: "{amountPaid}", description: "Amount received in the latest transaction", sampleValue: "$15.00" },
             { key: "{accountCredit}", description: "Total available credit on the account", sampleValue: "$15.00" },
-            { key: "{provider}", description: "Payment provider (Venmo, PayPal, Cash App, Zelle)", sampleValue: "Venmo" },
+            { key: "{provider}", description: "Payment provider (Venmo, PayPal, Zelle)", sampleValue: "Venmo" },
             { key: "{paymentDate}", description: "Date payment was received", sampleValue: "October 9, 2026" },
             { key: "{planType}", description: "Target subscription plan (Monthly Plan or Annual Plan)", sampleValue: "Monthly Plan" },
             { key: "{targetPrice}", description: "Target plan price", sampleValue: "$17.50" },
             { key: "{shortfall}", description: "Remaining balance needed to complete the plan", sampleValue: "$2.50" },
             { key: "{yearlyOptionNote}", description: "Optional callout for switching to discounted annual plan", sampleValue: "" },
             { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" },
-            { key: "{profileUrl}", description: "Direct link to user profile settings", sampleValue: "https://portal.example.com/profile" }
+            { key: "{profileUrl}", description: "Direct link to user profile settings", sampleValue: "https://portal.example.com/settings/profile" }
         ]
     },
     {
         id: "admin_payment_received",
         name: "New Payment Alert (Admins)",
-        description: "Sent to administrators whenever an incoming payment is detected and recorded from Venmo, PayPal, Cash App, or Zelle.",
-        triggerEvent: "Triggered whenever an incoming payment is detected and recorded from Venmo, PayPal, Cash App, or Zelle, alerting administrators of received funds and whether it was auto-matched or requires manual review.",
+        description: "Sent to administrators whenever an incoming payment is detected and recorded from Venmo, PayPal, or Zelle.",
+        triggerEvent: "Triggered whenever an incoming payment is detected and recorded from Venmo, PayPal, or Zelle, alerting administrators of received funds and whether it was auto-matched or requires manual review.",
         category: "PAYMENTS",
         defaultSubject: "💰 Payment Received: {amount} via {provider} ({matchedUser})",
         defaultBody: `<h2>Incoming Payment Received 💰</h2>
@@ -1317,7 +1317,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 </ul>
 
 <div style="text-align: center; margin: 28px 0;">
-    <a href="{appUrl}/profile" style="background-color: #7c3aed; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">View Referral Rewards</a>
+    <a href="{appUrl}/settings/profile" style="background-color: #7c3aed; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">View Referral Rewards</a>
 </div>
 <p style="font-size: 13px; color: #64748b;">Keep sharing your personal invite link! You can earn an unlimited number of free months for each friend you invite.</p>`,
         variables: [
@@ -1375,7 +1375,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 </p>
 
 <p style="font-size: 13px; color: #475569; line-height: 1.5; margin-top: 16px;">
-    To renew your membership, send your payment via <strong>Venmo</strong>, <strong>Cash App</strong>, <strong>PayPal</strong>, or <strong>Zelle</strong> with your username <code>{paymentMemo}</code> in the payment note/memo.
+    To renew your membership, send your payment via <strong>Venmo</strong>, <strong>PayPal</strong>, or <strong>Zelle</strong> with your username <code>{paymentMemo}</code> in the payment note/memo.
 </p>
 
 <div style="text-align: center; margin: 28px 0;">
@@ -1429,7 +1429,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 </div>
 
 <p style="font-size: 13px; color: #475569; line-height: 1.5;">
-    To maintain uninterrupted access to your Plex libraries and media downloads, please submit your payment via <strong>Venmo</strong>, <strong>Cash App</strong>, <strong>PayPal</strong>, or <strong>Zelle</strong> with your username <code>{paymentMemo}</code> in the payment note/memo.
+    To maintain uninterrupted access to your Plex libraries and media downloads, please submit your payment via <strong>Venmo</strong>, <strong>PayPal</strong>, or <strong>Zelle</strong> with your username <code>{paymentMemo}</code> in the payment note/memo.
 </p>
 
 <div style="text-align: center; margin: 28px 0;">
@@ -1484,7 +1484,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 </p>
 
 <div style="text-align: center; margin: 28px 0;">
-    <a href="{appUrl}/profile#billing" style="background-color: #16a34a; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">View Payment Details & Memo</a>
+    <a href="{appUrl}/settings/profile#billing" style="background-color: #16a34a; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">View Payment Details & Memo</a>
 </div>
 <p style="font-size: 13px; color: #64748b;">Thank you for being a valued member of DomsHomeLab!</p>`,
         variables: [
@@ -1555,7 +1555,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px;">
     <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">💳 6. Membership Status &amp; Billing Details (<a href="{appUrl}/settings/profile" style="color: #4f46e5; text-decoration: none;">/settings/profile</a>)</p>
-    <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">Check your membership tier, active pass, renewal date, and preferred payment methods (Venmo, PayPal, Cash App, Zelle) anytime in your profile.</p>
+    <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">Check your membership tier, active pass, renewal date, and preferred payment methods (Venmo, PayPal, Zelle) anytime in your profile.</p>
 </div>
 
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 20px;">
@@ -1624,7 +1624,29 @@ export function wrapInPortalarrEmailLayout(options: {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light dark">
+    <meta name="supported-color-schemes" content="light dark">
     <title>${options.title}</title>
+    <style>
+        :root {
+            color-scheme: light dark;
+            supported-color-schemes: light dark;
+        }
+        @media (prefers-color-scheme: dark) {
+            body { background-color: #0b0c10 !important; }
+            .email-card { background-color: #13141f !important; border-color: #27273a !important; color: #e2e8f0 !important; }
+            .email-footer-text { color: #94a3b8 !important; }
+            .email-footer-copyright { color: #64748b !important; }
+            .open-dashboard-btn { background-color: #6366f1 !important; color: #ffffff !important; border: 1px solid rgba(255, 255, 255, 0.2) !important; }
+        }
+        @media (prefers-color-scheme: light) {
+            body { background-color: #f1f5f9 !important; }
+            .email-card { background-color: #ffffff !important; border-color: #e2e8f0 !important; color: #1e293b !important; }
+            .email-footer-text { color: #475569 !important; }
+            .email-footer-copyright { color: #64748b !important; }
+            .open-dashboard-btn { background-color: #4f46e5 !important; color: #ffffff !important; }
+        }
+    </style>
 </head>
 <body style="margin: 0; padding: 0; background-color: #0b0c10; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; color: #1e293b;">
     <div style="max-width: 600px; margin: 0 auto; padding: 32px 16px;">
@@ -1636,19 +1658,19 @@ export function wrapInPortalarrEmailLayout(options: {
                 </span>
             </div>
             <div style="font-size: 11px; color: #94a3b8; letter-spacing: 1px; text-transform: uppercase; margin-top: 4px;">
-                ${serverName} Media Server & Dashboard
+                ${serverName} Media Server &amp; Dashboard
             </div>
         </div>
 
         <!-- Main Card Body -->
-        <div style="background-color: #ffffff; padding: 32px 28px; border-radius: 0 0 12px 12px; border: 1px solid #e2e8f0; border-top: none; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);">
+        <div class="email-card" style="background-color: #ffffff; padding: 32px 28px; border-radius: 0 0 12px 12px; border: 1px solid #e2e8f0; border-top: none; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);">
             <div style="font-size: 15px; line-height: 1.65; color: #334155;">
                 ${options.contentHtml}
             </div>
 
             ${options.actionButton ? `
                 <div style="text-align: center; margin: 32px 0 16px 0;">
-                    <a href="${options.actionButton.url}" style="background-color: ${options.actionButton.color || '#4f46e5'}; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);">
+                    <a href="${options.actionButton.url}" style="background-color: ${options.actionButton.color || '#4f46e5'}; color: #ffffff !important; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);">
                         ${options.actionButton.text}
                     </a>
                 </div>
@@ -1657,9 +1679,18 @@ export function wrapInPortalarrEmailLayout(options: {
             <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 32px 0 20px 0;" />
 
             <!-- Footer -->
-            <div style="text-align: center; font-size: 12px; color: #94a3b8; line-height: 1.5;">
-                <p style="margin: 0;">${portalName} • ${serverName} Media Server • <a href="${appUrl}" style="color: #6366f1; text-decoration: none; font-weight: 500;">Open Dashboard</a></p>
-                <p style="margin: 4px 0 0 0; font-size: 11px; color: #cbd5e1;">© ${currentYear} ${portalName}. All rights reserved.</p>
+            <div style="text-align: center; font-size: 12px; line-height: 1.6;">
+                <p class="email-footer-text" style="margin: 0 0 10px 0; font-weight: 600; color: #475569;">
+                    ${portalName} &bull; ${serverName} Media Server
+                </p>
+                <div style="margin: 8px 0 12px 0;">
+                    <a href="${appUrl}" class="open-dashboard-btn" style="background-color: #4f46e5; color: #ffffff !important; text-decoration: none; font-weight: 700; font-size: 12px; padding: 8px 18px; border-radius: 6px; display: inline-block; box-shadow: 0 2px 6px rgba(79, 70, 229, 0.25);">
+                        Open Dashboard &rarr;
+                    </a>
+                </div>
+                <p class="email-footer-copyright" style="margin: 8px 0 0 0; font-size: 11px; color: #64748b;">
+                    &copy; ${currentYear} ${portalName}. All rights reserved.
+                </p>
             </div>
         </div>
     </div>

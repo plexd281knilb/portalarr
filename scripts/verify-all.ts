@@ -2101,6 +2101,25 @@ async function runTestSuite() {
             if (!accessPageContent.includes("SentEmailAuditLog")) {
                 throw new Error("Access Control page.tsx missing SentEmailAuditLog component mount");
             }
+
+            // 6. Verify Email Template text hygiene & dark/light mode Open Dashboard button
+            const { DEFAULT_EMAIL_TEMPLATES, wrapInPortalarrEmailLayout } = await import("../src/lib/email-templates");
+            for (const t of DEFAULT_EMAIL_TEMPLATES) {
+                if (t.defaultBody.includes("Cash App") || t.description.includes("Cash App")) {
+                    throw new Error(`Email template ${t.id} contains disallowed Cash App reference`);
+                }
+            }
+            const testEmailHtml = wrapInPortalarrEmailLayout({
+                title: "Test Layout",
+                contentHtml: "<p>Test Content</p>",
+                appUrl: "https://home.domshomelab.com"
+            });
+            if (!testEmailHtml.includes("open-dashboard-btn") || !testEmailHtml.includes("Open Dashboard")) {
+                throw new Error("wrapInPortalarrEmailLayout missing high-contrast Open Dashboard button");
+            }
+            if (!testEmailHtml.includes("color-scheme: light dark")) {
+                throw new Error("wrapInPortalarrEmailLayout missing light/dark color-scheme meta/styles");
+            }
         } finally {
             await prisma.sentEmailLog.deleteMany({
                 where: { id: { in: [autoEmail.id, approvedEmail.id] } }

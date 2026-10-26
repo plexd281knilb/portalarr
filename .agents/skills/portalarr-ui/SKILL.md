@@ -389,7 +389,7 @@ Portalarr features an automated, real-time versioning, branch identification, an
 - **Zero Generic Branding Leakage in User Communications**:
   - Never allow internal/generic software names (e.g. "Portalarr") to appear in outgoing email subjects, email body text, email header banners, or user-facing UI views. Users must instantly recognize the communications as coming directly from their trusted server host to prevent confusion or spam reports.
   - Email header banner: `DOMS<span style="color: #6366f1;">HOMELAB</span>` with subtitle `d281knilb Media Server & Dashboard`.
-  - Email footer: `DomsHomeLab • d281knilb Media Server • Open Dashboard` and `© {year} DomsHomeLab. All rights reserved.`.
+  - Email footer: `DomsHomeLab • d281knilb Media Server` with high-contrast, theme-resilient `Open Dashboard →` action button (deep indigo `#4f46e5` / `#6366f1` and pure white text for guaranteed WCAG AA legibility across dark and light modes) and `© {year} DomsHomeLab. All rights reserved.`.
 - **Payment Reconciliation Memo Notes**:
   - Payment memo notes are cleanly formatted as the member's username (e.g. `johndoe`), making it simple and frictionless for members to include in transaction notes.
   - Payment scrapers retain backwards-compatible substring matching for plain usernames as well as legacy `#DOMSHOMELAB-`, `#D281KNILB-`, and `#PORTALARR-` tags.
