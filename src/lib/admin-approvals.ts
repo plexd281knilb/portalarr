@@ -3,7 +3,7 @@ import { getAppUrl } from "@/lib/app-url";
 import { logger } from "@/lib/logger";
 import { decryptData } from "@/lib/encryption";
 import { postDiscordMessage, type DiscordEmbed } from "@/lib/discord/discord-bot";
-import { wrapInPortalarrEmailLayout } from "@/lib/email-templates";
+import { wrapInPortalarrEmailLayout, resolveSenderAddress, resolveEmailProviderConfig } from "@/lib/email-templates";
 import nodemailer from "nodemailer";
 
 export interface ApprovalNotifyResult {
@@ -105,12 +105,12 @@ export async function notifyAdminsOnPendingApproval(approval: {
             }
         }
 
-        // 2. SMTP ADMIN EMAIL ALERT
+        // 2. SMTP / RESEND ADMIN EMAIL ALERT
+        const emailConfig = resolveEmailProviderConfig(settings);
+
         if (
             settings.adminApprovalEmailNotify !== false && 
-            settings.smtpHost && 
-            settings.smtpUser && 
-            settings.smtpPass
+            emailConfig.isConfigured
         ) {
             // Find all administrators with valid email addresses
             const admins = await prisma.user.findMany({
@@ -122,16 +122,16 @@ export async function notifyAdminsOnPendingApproval(approval: {
             });
 
             if (admins.length > 0) {
-                const rawSender = settings.smtpFrom?.trim() || settings.smtpUser;
-                const senderEmail = rawSender?.includes("<") ? rawSender : `"DomsHomeLab Governance" <${rawSender}>`;
+                const resolvedSender = resolveSenderAddress("admin_approval", emailConfig.from);
+                const senderEmail = resolvedSender.formatted;
                 
                 const transporter = nodemailer.createTransport({
-                    host: settings.smtpHost,
-                    port: settings.smtpPort || 587,
-                    secure: settings.smtpPort === 465,
+                    host: emailConfig.host,
+                    port: emailConfig.port,
+                    secure: emailConfig.secure,
                     auth: {
-                        user: settings.smtpUser,
-                        pass: decryptData(settings.smtpPass)
+                        user: emailConfig.user,
+                        pass: emailConfig.pass
                     }
                 });
 
@@ -196,6 +196,26 @@ export async function notifyAdminsOnPendingApproval(approval: {
                     }).catch(e => {
                         console.warn(`[EMAIL-APPROVAL-NOTIFY-SEND-ERROR] Failed sending alert to ${admin.email}:`, e?.message || e);
                     });
+
+                    try {
+                        await prisma.sentEmailLog.create({
+                            data: {
+                                recipient: admin.email,
+                                recipientName: admin.username,
+                                userId: admin.id,
+                                subject: `⚖️ [Approval Required] ${approval.title}`,
+                                bodyPreview: `Approval Required: ${approval.title} - ${approval.description || ""}`.slice(0, 300),
+                                html: finalHtml,
+                                templateId: "admin_approval_alert",
+                                sendMode: "AUTOMATIC",
+                                status: "SENT",
+                                approvalId: approval.id,
+                                sentAt: new Date()
+                            }
+                        });
+                    } catch (logErr) {
+                        console.warn("[SENT-EMAIL-LOG-APPROVAL-ALERT-ERROR]:", logErr);
+                    }
                 }
 
                 logger.addLog("INFO", "APPROVAL", `Dispatched email approval alerts to ${admins.length} administrator(s) for "${approval.title}"`);

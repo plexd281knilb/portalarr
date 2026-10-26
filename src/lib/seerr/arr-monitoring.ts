@@ -284,17 +284,15 @@ export async function getArrMediaMonitoringDetails(
         const radarrApps = (radarrAppsRes.success && radarrAppsRes.data) ? radarrAppsRes.data : [];
         const sonarrApps = (sonarrAppsRes.success && sonarrAppsRes.data) ? sonarrAppsRes.data : [];
 
+        // Pre-warm / retrieve in-memory Arr index (<1ms when cached)
+        const index = await getArrIndex();
+
         if (mediaType === "movie") {
-            // Resolve Radarr 1080p App
-            let app1080p = null;
-            if (isKids) {
-                app1080p = radarrApps.find(a => a.id === settings?.seerrKidsMovieAppId);
-            }
+            let app1080p = isKids ? radarrApps.find(a => a.id === settings?.seerrKidsMovieAppId) : null;
             if (!app1080p) {
                 app1080p = radarrApps.find(a => a.id === settings?.seerrDefaultMovieAppId) || radarrApps.find(a => !a.name.toLowerCase().includes("4k")) || radarrApps[0];
             }
 
-            // Resolve Radarr 4K App
             let app4k = null;
             if (isKids) {
                 if (settings?.seerrKidsMovie4kAppId && settings.seerrKidsMovie4kAppId !== "none") {
@@ -311,19 +309,12 @@ export async function getArrMediaMonitoringDetails(
                 details.app1080pId = app1080p.id;
                 details.app1080pName = app1080p.name;
 
-                try {
-                    const res = await arrApiGet(app1080p, "/api/v3/movie");
-                    if (res.success && Array.isArray(res.data)) {
-                        const movie = res.data.find((m: any) => m.tmdbId === tmdbId || (imdbId && m.imdbId === imdbId));
-                        if (movie) {
-                            details.existsIn1080p = true;
-                            details.servarr1080pId = movie.id;
-                            details.isMonitored1080p = Boolean(movie.monitored);
-                            details.hasFile1080p = Boolean(movie.hasFile);
-                        }
-                    }
-                } catch (err: any) {
-                    logger.addLog("WARN", "SEERR", `Error checking Radarr 1080p for movie ${tmdbId}: ${err.message}`);
+                const movie1080 = index.radarr1080p.get(tmdbId);
+                if (movie1080) {
+                    details.existsIn1080p = true;
+                    details.servarr1080pId = movie1080.id;
+                    details.isMonitored1080p = Boolean(movie1080.monitored);
+                    details.hasFile1080p = Boolean(movie1080.hasFile);
                 }
             }
 
@@ -332,27 +323,17 @@ export async function getArrMediaMonitoringDetails(
                 details.app4kId = app4k.id;
                 details.app4kName = app4k.name;
 
-                try {
-                    const res = await arrApiGet(app4k, "/api/v3/movie");
-                    if (res.success && Array.isArray(res.data)) {
-                        const movie = res.data.find((m: any) => m.tmdbId === tmdbId || (imdbId && m.imdbId === imdbId));
-                        if (movie) {
-                            details.existsIn4k = true;
-                            details.servarr4kId = movie.id;
-                            details.isMonitored4k = Boolean(movie.monitored);
-                            details.hasFile4k = Boolean(movie.hasFile);
-                        }
-                    }
-                } catch (err: any) {
-                    logger.addLog("WARN", "SEERR", `Error checking Radarr 4K for movie ${tmdbId}: ${err.message}`);
+                const movie4k = index.radarr4k.get(tmdbId);
+                if (movie4k) {
+                    details.existsIn4k = true;
+                    details.servarr4kId = movie4k.id;
+                    details.isMonitored4k = Boolean(movie4k.monitored);
+                    details.hasFile4k = Boolean(movie4k.hasFile);
                 }
             }
         } else {
             // TV SHOWS (Sonarr)
-            let app1080p = null;
-            if (isKids) {
-                app1080p = sonarrApps.find(a => a.id === settings?.seerrKidsTvAppId);
-            }
+            let app1080p = isKids ? sonarrApps.find(a => a.id === settings?.seerrKidsTvAppId) : null;
             if (!app1080p) {
                 app1080p = sonarrApps.find(a => a.id === settings?.seerrDefaultTvAppId) || sonarrApps.find(a => !a.name.toLowerCase().includes("4k")) || sonarrApps[0];
             }
@@ -368,7 +349,10 @@ export async function getArrMediaMonitoringDetails(
                 }
             }
 
-            // Check Sonarr 1080p
+            const normTitle = normalizeTitle(title);
+            const series1080 = (tvdbId ? index.sonarr1080p.get(tvdbId) : null) || (normTitle ? index.sonarrTitles1080p.get(normTitle) : null);
+            const series4k = (tvdbId ? index.sonarr4k.get(tvdbId) : null) || (normTitle ? index.sonarrTitles4k.get(normTitle) : null);
+
             if (app1080p) {
                 details.isConfigured1080p = true;
                 details.app1080pId = app1080p.id;
@@ -376,89 +360,31 @@ export async function getArrMediaMonitoringDetails(
                 details.seasons1080p = {};
                 details.episodes1080p = {};
 
-                try {
-                    const seriesRes = await arrApiGet(app1080p, "/api/v3/series");
-                    if (seriesRes.success && Array.isArray(seriesRes.data)) {
-                        const series = seriesRes.data.find((s: any) => (tvdbId && s.tvdbId === tvdbId) || (imdbId && s.imdbId === imdbId) || normalizeTitle(s.title) === normalizeTitle(title));
-                        if (series) {
-                            details.existsIn1080p = true;
-                            details.servarr1080pId = series.id;
-                            details.isMonitored1080p = Boolean(series.monitored);
+                if (series1080) {
+                    details.existsIn1080p = true;
+                    details.servarr1080pId = series1080.id;
+                    details.isMonitored1080p = Boolean(series1080.monitored);
 
-                            // Fetch all episodes for this series
-                            const epRes = await arrApiGet(app1080p, `/api/v3/episode?seriesId=${series.id}`);
-                            const episodesList: any[] = epRes.success && Array.isArray(epRes.data) ? epRes.data : [];
-
-                            const seasonMap: Record<number, ArrSeasonMonitoring> = {};
-                            const episodeMap: Record<string, ArrEpisodeMonitoring> = {};
-
-                            for (const ep of episodesList) {
-                                const sNum = ep.seasonNumber;
-                                const eNum = ep.episodeNumber;
-                                const key = `s${sNum}e${eNum}`;
-
-                                episodeMap[key] = {
-                                    id: ep.id,
-                                    seriesId: ep.seriesId,
-                                    seasonNumber: sNum,
-                                    episodeNumber: eNum,
-                                    title: ep.title,
-                                    airDate: ep.airDate,
-                                    monitored: Boolean(ep.monitored),
-                                    hasFile: Boolean(ep.hasFile)
-                                };
-
-                                if (!seasonMap[sNum]) {
-                                    seasonMap[sNum] = {
-                                        seasonNumber: sNum,
-                                        monitored: false,
-                                        episodeCount: 0,
-                                        monitoredEpisodeCount: 0,
-                                        hasFileCount: 0,
-                                        isFullyMonitored: false,
-                                        isPartiallyMonitored: false
-                                    };
-                                }
-
-                                seasonMap[sNum].episodeCount++;
-                                if (ep.monitored) seasonMap[sNum].monitoredEpisodeCount++;
-                                if (ep.hasFile) seasonMap[sNum].hasFileCount++;
-                            }
-
-                            // Reconcile with series.seasons metadata
-                            for (const s of (series.seasons || [])) {
-                                const sNum = s.seasonNumber;
-                                if (!seasonMap[sNum]) {
-                                    seasonMap[sNum] = {
-                                        seasonNumber: sNum,
-                                        monitored: Boolean(s.monitored),
-                                        episodeCount: s.statistics?.totalEpisodeCount || 0,
-                                        monitoredEpisodeCount: s.monitored ? (s.statistics?.totalEpisodeCount || 0) : 0,
-                                        hasFileCount: s.statistics?.episodeFileCount || 0,
-                                        isFullyMonitored: Boolean(s.monitored),
-                                        isPartiallyMonitored: false
-                                    };
-                                } else {
-                                    const sm = seasonMap[sNum];
-                                    sm.monitored = Boolean(s.monitored) || sm.monitoredEpisodeCount > 0;
-                                    sm.isFullyMonitored = sm.monitoredEpisodeCount > 0 && sm.monitoredEpisodeCount === sm.episodeCount;
-                                    sm.isPartiallyMonitored = sm.monitoredEpisodeCount > 0 && !sm.isFullyMonitored;
-                                }
-                            }
-
-                            details.seasons1080p = seasonMap;
-                            details.episodes1080p = episodeMap;
-                            details.hasFile1080p = episodesList.some(e => e.hasFile);
-                            // Overall series is considered monitored if series flag is true or any non-specials season is monitored
-                            details.isMonitored1080p = Boolean(series.monitored) || Object.values(seasonMap).some(s => s.seasonNumber > 0 && s.monitoredEpisodeCount > 0);
-                        }
+                    const seasonMap: Record<number, ArrSeasonMonitoring> = {};
+                    for (const s of (series1080.seasons || [])) {
+                        const sNum = s.seasonNumber;
+                        seasonMap[sNum] = {
+                            seasonNumber: sNum,
+                            monitored: Boolean(s.monitored),
+                            episodeCount: s.statistics?.totalEpisodeCount || 0,
+                            monitoredEpisodeCount: s.monitored ? (s.statistics?.totalEpisodeCount || 0) : 0,
+                            hasFileCount: s.statistics?.episodeFileCount || 0,
+                            isFullyMonitored: Boolean(s.monitored),
+                            isPartiallyMonitored: false
+                        };
                     }
-                } catch (err: any) {
-                    logger.addLog("WARN", "SEERR", `Error checking Sonarr 1080p for series ${title}: ${err.message}`);
+                    details.seasons1080p = seasonMap;
+                    details.hasFile1080p = (series1080.seasons || []).some((s: any) => s.statistics?.episodeFileCount > 0);
+                    details.isMonitored1080p = Boolean(series1080.monitored) || Object.values(seasonMap).some(s => s.seasonNumber > 0 && s.monitored);
+
                 }
             }
 
-            // Check Sonarr 4K
             if (app4k) {
                 details.isConfigured4k = true;
                 details.app4kId = app4k.id;
@@ -466,83 +392,78 @@ export async function getArrMediaMonitoringDetails(
                 details.seasons4k = {};
                 details.episodes4k = {};
 
-                try {
-                    const seriesRes = await arrApiGet(app4k, "/api/v3/series");
-                    if (seriesRes.success && Array.isArray(seriesRes.data)) {
-                        const series = seriesRes.data.find((s: any) => (tvdbId && s.tvdbId === tvdbId) || (imdbId && s.imdbId === imdbId) || normalizeTitle(s.title) === normalizeTitle(title));
-                        if (series) {
-                            details.existsIn4k = true;
-                            details.servarr4kId = series.id;
-                            details.isMonitored4k = Boolean(series.monitored);
+                if (series4k) {
+                    details.existsIn4k = true;
+                    details.servarr4kId = series4k.id;
+                    details.isMonitored4k = Boolean(series4k.monitored);
 
-                            const epRes = await arrApiGet(app4k, `/api/v3/episode?seriesId=${series.id}`);
-                            const episodesList: any[] = epRes.success && Array.isArray(epRes.data) ? epRes.data : [];
-
-                            const seasonMap: Record<number, ArrSeasonMonitoring> = {};
-                            const episodeMap: Record<string, ArrEpisodeMonitoring> = {};
-
-                            for (const ep of episodesList) {
-                                const sNum = ep.seasonNumber;
-                                const eNum = ep.episodeNumber;
-                                const key = `s${sNum}e${eNum}`;
-
-                                episodeMap[key] = {
-                                    id: ep.id,
-                                    seriesId: ep.seriesId,
-                                    seasonNumber: sNum,
-                                    episodeNumber: eNum,
-                                    title: ep.title,
-                                    airDate: ep.airDate,
-                                    monitored: Boolean(ep.monitored),
-                                    hasFile: Boolean(ep.hasFile)
-                                };
-
-                                if (!seasonMap[sNum]) {
-                                    seasonMap[sNum] = {
-                                        seasonNumber: sNum,
-                                        monitored: false,
-                                        episodeCount: 0,
-                                        monitoredEpisodeCount: 0,
-                                        hasFileCount: 0,
-                                        isFullyMonitored: false,
-                                        isPartiallyMonitored: false
-                                    };
-                                }
-
-                                seasonMap[sNum].episodeCount++;
-                                if (ep.monitored) seasonMap[sNum].monitoredEpisodeCount++;
-                                if (ep.hasFile) seasonMap[sNum].hasFileCount++;
-                            }
-
-                            for (const s of (series.seasons || [])) {
-                                const sNum = s.seasonNumber;
-                                if (!seasonMap[sNum]) {
-                                    seasonMap[sNum] = {
-                                        seasonNumber: sNum,
-                                        monitored: Boolean(s.monitored),
-                                        episodeCount: s.statistics?.totalEpisodeCount || 0,
-                                        monitoredEpisodeCount: s.monitored ? (s.statistics?.totalEpisodeCount || 0) : 0,
-                                        hasFileCount: s.statistics?.episodeFileCount || 0,
-                                        isFullyMonitored: Boolean(s.monitored),
-                                        isPartiallyMonitored: false
-                                    };
-                                } else {
-                                    const sm = seasonMap[sNum];
-                                    sm.monitored = Boolean(s.monitored) || sm.monitoredEpisodeCount > 0;
-                                    sm.isFullyMonitored = sm.monitoredEpisodeCount > 0 && sm.monitoredEpisodeCount === sm.episodeCount;
-                                    sm.isPartiallyMonitored = sm.monitoredEpisodeCount > 0 && !sm.isFullyMonitored;
-                                }
-                            }
-
-                            details.seasons4k = seasonMap;
-                            details.episodes4k = episodeMap;
-                            details.hasFile4k = episodesList.some(e => e.hasFile);
-                            details.isMonitored4k = Boolean(series.monitored) || Object.values(seasonMap).some(s => s.seasonNumber > 0 && s.monitoredEpisodeCount > 0);
-                        }
+                    const seasonMap4k: Record<number, ArrSeasonMonitoring> = {};
+                    for (const s of (series4k.seasons || [])) {
+                        const sNum = s.seasonNumber;
+                        seasonMap4k[sNum] = {
+                            seasonNumber: sNum,
+                            monitored: Boolean(s.monitored),
+                            episodeCount: s.statistics?.totalEpisodeCount || 0,
+                            monitoredEpisodeCount: s.monitored ? (s.statistics?.totalEpisodeCount || 0) : 0,
+                            hasFileCount: s.statistics?.episodeFileCount || 0,
+                            isFullyMonitored: Boolean(s.monitored),
+                            isPartiallyMonitored: false
+                        };
                     }
-                } catch (err: any) {
-                    logger.addLog("WARN", "SEERR", `Error checking Sonarr 4K for series ${title}: ${err.message}`);
+                    details.seasons4k = seasonMap4k;
+                    details.hasFile4k = (series4k.seasons || []).some((s: any) => s.statistics?.episodeFileCount > 0);
+                    details.isMonitored4k = Boolean(series4k.monitored) || Object.values(seasonMap4k).some(s => s.seasonNumber > 0 && s.monitored);
                 }
+            }
+
+            // Fetch episodes concurrently for 1080p and 4K if series exists
+            const fetch1080 = (series1080 && app1080p)
+                ? arrApiGet(app1080p, `/api/v3/episode?seriesId=${series1080.id}`)
+                : Promise.resolve(null);
+            const fetch4k = (series4k && app4k)
+                ? arrApiGet(app4k, `/api/v3/episode?seriesId=${series4k.id}`)
+                : Promise.resolve(null);
+
+            const [res1080, res4k] = await Promise.allSettled([fetch1080, fetch4k]);
+
+            if (res1080.status === "fulfilled" && res1080.value?.success && Array.isArray(res1080.value.data)) {
+                const episodeMap: Record<string, ArrEpisodeMonitoring> = {};
+                for (const ep of res1080.value.data) {
+                    const sNum = ep.seasonNumber;
+                    const eNum = ep.episodeNumber;
+                    const key = `s${sNum}e${eNum}`;
+                    episodeMap[key] = {
+                        id: ep.id,
+                        seriesId: ep.seriesId,
+                        seasonNumber: sNum,
+                        episodeNumber: eNum,
+                        title: ep.title,
+                        airDate: ep.airDate,
+                        monitored: Boolean(ep.monitored),
+                        hasFile: Boolean(ep.hasFile)
+                    };
+                }
+                details.episodes1080p = episodeMap;
+            }
+
+            if (res4k.status === "fulfilled" && res4k.value?.success && Array.isArray(res4k.value.data)) {
+                const episodeMap4k: Record<string, ArrEpisodeMonitoring> = {};
+                for (const ep of res4k.value.data) {
+                    const sNum = ep.seasonNumber;
+                    const eNum = ep.episodeNumber;
+                    const key = `s${sNum}e${eNum}`;
+                    episodeMap4k[key] = {
+                        id: ep.id,
+                        seriesId: ep.seriesId,
+                        seasonNumber: sNum,
+                        episodeNumber: eNum,
+                        title: ep.title,
+                        airDate: ep.airDate,
+                        monitored: Boolean(ep.monitored),
+                        hasFile: Boolean(ep.hasFile)
+                    };
+                }
+                details.episodes4k = episodeMap4k;
             }
         }
     } catch (e: any) {

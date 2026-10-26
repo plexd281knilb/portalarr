@@ -30,14 +30,17 @@ function cleanBaseUrl(url: string): string {
     return clean.replace(/\/+$/, "");
 }
 
+import packageJson from "../../package.json";
+
 export function getMediaServerAuthHeaders(apiKey: string): Record<string, string> {
     const cleanKey = (apiKey || "").trim();
+    const clientVersion = packageJson.version || "1.3.26";
     return {
         "Accept": "application/json",
         "X-Emby-Token": cleanKey,
         "X-MediaBrowser-Token": cleanKey,
         "Authorization": `MediaBrowser Token="${cleanKey}"`,
-        "X-Emby-Authorization": `MediaBrowser Client="Portalarr", Device="Portalarr Dashboard", DeviceId="portalarr-server", Version="1.3.5", Token="${cleanKey}"`
+        "X-Emby-Authorization": `MediaBrowser Client="Portalarr", Device="Portalarr Dashboard", DeviceId="portalarr-server", Version="${clientVersion}", Token="${cleanKey}"`
     };
 }
 
@@ -527,5 +530,163 @@ export async function authorizeQuickConnect(
         };
     } catch (e: any) {
         return { success: false, error: e.message || "Failed to authorize Quick Connect on media server" };
+    }
+}
+
+/**
+ * Fetches all active playback sessions from a Jellyfin or Emby server.
+ * Returns normalized session items matching Portalarr's stream telemetry model.
+ */
+export async function fetchMediaServerActiveSessions(
+    server: { id: string; name: string; type: string; url: string; internalUrl?: string | null; apiKey: string }
+): Promise<any[]> {
+    try {
+        const res = await resilientMediaServerFetch(server, "/Sessions?activeWithinSeconds=960", {
+            cache: "no-store",
+            signal: AbortSignal.timeout(3500)
+        });
+        if (!res.ok) return [];
+        const rawSessions = await res.json().catch(() => []);
+        if (!Array.isArray(rawSessions)) return [];
+
+        const activeSessions: any[] = [];
+        for (const s of rawSessions) {
+            if (!s || !s.NowPlayingItem) continue;
+
+            const nowPlaying = s.NowPlayingItem;
+            const playState = s.PlayState || {};
+            const transcodeInfo = s.TranscodingInfo;
+
+            const isEpisode = nowPlaying.Type === "Episode" || !!nowPlaying.SeriesName;
+            const seasonNum = nowPlaying.ParentIndexNumber !== undefined ? Number(nowPlaying.ParentIndexNumber) : undefined;
+            const episodeNum = nowPlaying.IndexNumber !== undefined ? Number(nowPlaying.IndexNumber) : undefined;
+            const seasonEpisodeTag = (seasonNum !== undefined && episodeNum !== undefined)
+                ? `S${String(seasonNum).padStart(2, "0")}E${String(episodeNum).padStart(2, "0")}`
+                : (seasonNum !== undefined ? `S${String(seasonNum).padStart(2, "0")}` : (nowPlaying.SeasonName || ""));
+
+            let fullTitle = nowPlaying.Name || "Unknown Media";
+            if (isEpisode && nowPlaying.SeriesName) {
+                if (seasonEpisodeTag) {
+                    fullTitle = `${nowPlaying.SeriesName} - ${seasonEpisodeTag}${nowPlaying.Name ? `: ${nowPlaying.Name}` : ""}`;
+                } else {
+                    fullTitle = `${nowPlaying.SeriesName} - ${nowPlaying.Name || "Episode"}`;
+                }
+            }
+
+            const rawSessionKey = String(s.Id || `${nowPlaying.Id}_${s.DeviceId}`);
+            const uniqueStreamKey = `${server.type.toLowerCase()}_${server.id}_${rawSessionKey}`;
+            const userTitle = s.UserName || "Media User";
+
+            // Poster image URL
+            const cleanBase = (server.url || "").replace(/\/+$/, "");
+            const thumbUrl = nowPlaying.Id
+                ? `${cleanBase}/Items/${nowPlaying.Id}/Images/Primary?maxWidth=400&quality=85`
+                : null;
+
+            const isDirectPlay = playState.PlayMethod === "DirectPlay" || (!transcodeInfo && playState.PlayMethod !== "Transcode");
+            const isDirectStream = playState.PlayMethod === "DirectStream";
+            const isTranscode = Boolean(transcodeInfo || playState.PlayMethod === "Transcode");
+
+            const videoDecision = isTranscode ? "transcode" : (isDirectStream ? "direct stream" : "direct play");
+            const audioDecision = transcodeInfo?.IsAudioDirect === false ? "transcode" : "direct play";
+
+            const videoCodec = (transcodeInfo?.VideoCodec || nowPlaying.MediaStreams?.find((m: any) => m.Type === "Video")?.Codec || "").toUpperCase();
+            const audioCodec = (transcodeInfo?.AudioCodec || nowPlaying.MediaStreams?.find((m: any) => m.Type === "Audio")?.Codec || "").toUpperCase();
+
+            let progressPercent = 0;
+            if (nowPlaying.RunTimeTicks && playState.PositionTicks) {
+                progressPercent = Math.min(100, Math.max(0, Math.round((playState.PositionTicks / nowPlaying.RunTimeTicks) * 100)));
+            }
+
+            const streamBitrate = transcodeInfo?.Bitrate
+                ? Math.round(transcodeInfo.Bitrate / 1000)
+                : (nowPlaying.Bitrate ? Math.round(nowPlaying.Bitrate / 1000) : 0);
+
+            let durationMinutes = 0;
+            let viewOffsetMinutes = 0;
+            if (nowPlaying.RunTimeTicks) {
+                durationMinutes = Math.round(Number(nowPlaying.RunTimeTicks) / (10000000 * 60));
+            }
+            if (playState.PositionTicks) {
+                viewOffsetMinutes = Math.round(Number(playState.PositionTicks) / (10000000 * 60));
+            }
+
+            const videoStream = nowPlaying.MediaStreams?.find((m: any) => m.Type === 'Video');
+            const videoHeight = videoStream?.Height || transcodeInfo?.Height;
+            const videoResolution = videoHeight 
+                ? (videoHeight >= 2160 ? '4K' : videoHeight >= 1080 ? '1080p' : videoHeight >= 720 ? '720p' : '480p') 
+                : '1080p';
+
+            const sessionItem: any = {
+                instanceId: `media_server_${server.id}`,
+                instanceName: server.name,
+                serverId: server.id,
+                serverName: server.name,
+                serverType: server.type, // "JELLYFIN" | "EMBY"
+                sessionKey: rawSessionKey,
+                sessionId: String(s.Id || ""),
+                uniqueStreamKey,
+                user: userTitle,
+                email: "",
+                title: fullTitle,
+                fullTitle,
+                grandparentTitle: nowPlaying.SeriesName || "",
+                parentTitle: nowPlaying.SeasonName || "",
+                seasonNum,
+                episodeNum,
+                seasonEpisodeTag,
+                episodeTitle: isEpisode ? (nowPlaying.Name || "") : "",
+                mediaType: isEpisode ? "episode" : "movie",
+                year: nowPlaying.ProductionYear ? String(nowPlaying.ProductionYear) : "",
+                thumb: thumbUrl,
+                player: s.Client || s.DeviceName || `${server.type} Client`,
+                platform: s.DeviceName || s.Client || "",
+                device: s.DeviceName || s.Client || "",
+                ipAddress: s.RemoteEndPoint?.split(":")?.[0] || "",
+                videoDecision,
+                audioDecision,
+                transcodeDecision: videoDecision,
+                streamVideoResolution: videoResolution,
+                sourceVideoResolution: videoResolution,
+                videoCodec,
+                audioCodec,
+                streamBitrate,
+                streamBitrateMbps: (streamBitrate ? (streamBitrate / 1000).toFixed(1) : "0"),
+                bandwidthMbps: (streamBitrate ? (streamBitrate / 1000).toFixed(1) : "0"),
+                transcodeHwRequested: Boolean(transcodeInfo?.HardwareAccelerationType),
+                transcodeHwDecoding: transcodeInfo?.HardwareAccelerationType || "",
+                transcodeHwEncoding: transcodeInfo?.HardwareAccelerationType || "",
+                durationMinutes,
+                viewOffsetMinutes,
+                progressPercent,
+                state: playState.IsPaused ? "paused" : "playing"
+            };
+
+            activeSessions.push(sessionItem);
+        }
+
+        return activeSessions;
+    } catch (err: any) {
+        console.warn(`[MEDIA-SERVER-SESSIONS] Failed fetching sessions for ${server.name} (${server.type}):`, err?.message || err);
+        return [];
+    }
+}
+
+/**
+ * Remotely terminates an active playback session on a Jellyfin or Emby server.
+ */
+export async function stopMediaServerSession(
+    server: { url: string; internalUrl?: string | null; apiKey: string },
+    sessionId: string
+): Promise<boolean> {
+    try {
+        const res = await resilientMediaServerFetch(
+            server,
+            `/Sessions/${encodeURIComponent(sessionId)}/Playing/Stop`,
+            { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ Command: "Stop" }) }
+        );
+        return res.ok || res.status === 204;
+    } catch {
+        return false;
     }
 }

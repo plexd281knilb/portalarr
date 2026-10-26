@@ -53,6 +53,9 @@ import {
     ChevronRight
 } from "lucide-react";
 
+// Module-level client-side cache for previously loaded media details & monitoring status
+const modalDetailsCache = new Map<string, { details: TmdbMediaDetail; availability?: MediaAvailabilityStatus; timestamp: number }>();
+
 interface MediaDetailModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -60,6 +63,7 @@ interface MediaDetailModalProps {
     mediaType: "movie" | "tv";
     isKids?: boolean;
     initialAvailability?: MediaAvailabilityStatus;
+    initialItem?: Partial<TmdbMediaItem> | null;
     onRequestSubmitted?: () => void;
 }
 
@@ -70,6 +74,7 @@ export function MediaDetailModal({
     mediaType,
     isKids = false,
     initialAvailability,
+    initialItem,
     onRequestSubmitted
 }: MediaDetailModalProps) {
     const [loading, setLoading] = useState(false);
@@ -122,6 +127,46 @@ export function MediaDetailModal({
             setSelectedEpisodeKeys([]);
             setEpisodeSuccessMsg(null);
             setEpisodeErrorMsg(null);
+
+            const cacheKey = `${mediaType}:${tmdbId}:${isKids ? "kids" : "standard"}`;
+            const cached = modalDetailsCache.get(cacheKey);
+
+            if (cached) {
+                setDetails(cached.details);
+                setAvailability(cached.availability || initialAvailability);
+                setLoading(false);
+                if (mediaType === "tv" && cached.details.seasons) {
+                    const validSeasons = cached.details.seasons.filter(s => s.seasonNumber > 0).map(s => s.seasonNumber);
+                    setSelectedSeasons(validSeasons);
+                    setSelectAllSeasons(true);
+                    if (validSeasons.length > 0) {
+                        setSelectedSeasonNumber(validSeasons[0]);
+                        loadEpisodesForSeason(tmdbId, validSeasons[0]);
+                    }
+                }
+            } else if (initialItem && initialItem.id === tmdbId) {
+                // Instantly construct placeholder details so the modal opens with 0ms blank screen
+                const placeholderDetails: TmdbMediaDetail = {
+                    id: initialItem.id,
+                    mediaType,
+                    title: initialItem.title || "",
+                    overview: initialItem.overview || "",
+                    posterPath: initialItem.posterPath || null,
+                    backdropPath: initialItem.backdropPath || null,
+                    releaseDate: initialItem.releaseDate || "",
+                    voteAverage: initialItem.voteAverage || 0,
+                    genres: initialItem.genres || [],
+                    certification: initialItem.certification,
+                    cast: [],
+                    videos: [],
+                    recommendations: []
+                };
+                setDetails(placeholderDetails);
+                setAvailability(initialAvailability);
+            } else if (initialAvailability) {
+                setAvailability(initialAvailability);
+            }
+
             loadMediaData(tmdbId, mediaType);
             loadQuota();
         } else {
@@ -141,7 +186,11 @@ export function MediaDetailModal({
     }, [isOpen, tmdbId, mediaType, isKids]);
 
     const loadMediaData = async (id: number, type: "movie" | "tv") => {
-        setLoading(true);
+        const cacheKey = `${type}:${id}:${isKids ? "kids" : "standard"}`;
+        const hasCached = modalDetailsCache.has(cacheKey);
+        if (!hasCached && !initialItem) {
+            setLoading(true);
+        }
         setRequestSuccessMsg(null);
         setRequestErrorMsg(null);
         try {
@@ -149,6 +198,11 @@ export function MediaDetailModal({
             if (res.success && res.details) {
                 setDetails(res.details);
                 setAvailability(res.availability);
+                modalDetailsCache.set(cacheKey, {
+                    details: res.details,
+                    availability: res.availability,
+                    timestamp: Date.now()
+                });
                 if (!res.availability?.arrMonitoring?.isConfigured4k) {
                     setIs4k(false);
                 }
@@ -198,6 +252,30 @@ export function MediaDetailModal({
         setSelectedEpisodeKeys([]);
         setEpisodeSuccessMsg(null);
         setEpisodeErrorMsg(null);
+
+        const cacheKey = `${rec.mediaType}:${rec.id}:${isKids ? "kids" : "standard"}`;
+        const cached = modalDetailsCache.get(cacheKey);
+        if (cached) {
+            setDetails(cached.details);
+            setAvailability(cached.availability);
+        } else {
+            // Instantly render recommended item metadata with 0ms blank screen
+            const placeholderDetails: TmdbMediaDetail = {
+                id: rec.id,
+                mediaType: rec.mediaType,
+                title: rec.title,
+                overview: rec.overview,
+                posterPath: rec.posterPath,
+                backdropPath: rec.backdropPath,
+                releaseDate: rec.releaseDate,
+                voteAverage: rec.voteAverage,
+                genres: rec.genres || [],
+                cast: [],
+                videos: [],
+                recommendations: []
+            };
+            setDetails(placeholderDetails);
+        }
         loadMediaData(rec.id, rec.mediaType);
     };
 
@@ -477,7 +555,7 @@ export function MediaDetailModal({
     return (
         <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
             <DialogContent className="w-[95vw] sm:w-[92vw] md:w-[90vw] max-w-4xl lg:max-w-5xl max-h-[90vh] sm:max-h-[92vh] bg-[#0c0c12] border-border/60 p-0 overflow-y-auto overflow-x-hidden shadow-2xl rounded-2xl sm:rounded-3xl scrollbar-thin text-foreground">
-                {loading || !details ? (
+                {!details ? (
                     <div className="flex flex-col items-center justify-center p-20 space-y-4">
                         <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
                         <p className="text-sm font-semibold text-muted-foreground animate-pulse">
@@ -619,6 +697,13 @@ export function MediaDetailModal({
                                                 <Badge variant="outline" className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/25 text-purple-300 border-purple-500/50 backdrop-blur-md flex items-center gap-1">
                                                     <Check className="h-3 w-3" />
                                                     <span>4K UHD Monitored</span>
+                                                </Badge>
+                                            )}
+
+                                            {loading && (
+                                                <Badge variant="outline" className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border-cyan-500/30 backdrop-blur-md flex items-center gap-1 animate-pulse">
+                                                    <RefreshCw className="h-3 w-3 animate-spin" />
+                                                    <span>Checking Arr status...</span>
                                                 </Badge>
                                             )}
 

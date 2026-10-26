@@ -226,7 +226,11 @@ export default function MyPlexHub() {
                                                     <Badge className="text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border-emerald-500/30">
                                                         <Activity className="h-3 w-3 mr-1 animate-pulse" /> LIVE NOW
                                                     </Badge>
-                                                    <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                                                    <Badge variant="outline" className={`text-[10px] ${
+                                                        stream.serverType === "JELLYFIN" ? "bg-purple-500/10 text-purple-400 border-purple-500/30 font-semibold" :
+                                                        stream.serverType === "EMBY" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-semibold" :
+                                                        "text-muted-foreground"
+                                                    }`}>
                                                         {stream.instanceName}
                                                     </Badge>
                                                     <Badge 

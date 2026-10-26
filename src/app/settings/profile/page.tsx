@@ -7,7 +7,7 @@ import {
     getUserProfileBootstrapAction,
     getUserReferralInfo, 
     getPublicJoinConfig, 
-    updateCurrentUserKindleEmail,
+    updateCurrentUserKindleEmail, updateCurrentUserPrimaryEmail,
     getUserNotificationPreferencesAction,
     updateUserNotificationPreferencesAction,
     getUserContentPreferencesAction,
@@ -47,7 +47,7 @@ import {
     MailCheck, Zap, BookOpen, Gift, Copy, Check, Timer, DollarSign, Users, Sparkles, ExternalLink,
     CreditCard, Calendar, AlertCircle, Trash2, RefreshCw, Bell, Shield, Crown, Tv, Film,
     Flame, MessageSquare, Send, CheckCheck, Sliders, Volume2, Lock, Baby, Monitor, FolderCheck,
-    CheckSquare, Square, Plus, Edit2, AlertTriangle, Music, Eye, EyeOff, Gamepad2, Link as LinkIcon, Headphones, Server
+    CheckSquare, Square, Plus, Edit2, AlertTriangle, Save, Music, Eye, EyeOff, Gamepad2, Link as LinkIcon, Headphones, Server
 } from "lucide-react";
 import { MediaServerSetupGuideModal } from "@/components/profile/media-server-setup-guide-modal";
 import ServerSpeedTest from "@/components/server-speed-test";
@@ -97,6 +97,11 @@ export default function UserProfilePage() {
     const [kindleEmail, setKindleEmail] = useState("");
     const [bypassKindle, setBypassKindle] = useState(false);
     const [kindleSaving, setKindleSaving] = useState(false);
+    const [showEditEmailModal, setShowEditEmailModal] = useState(false);
+    const [editEmailInput, setEditEmailInput] = useState("");
+    const [editEmailLoading, setEditEmailLoading] = useState(false);
+    const [editEmailMsg, setEditEmailMsg] = useState("");
+    const [editEmailErr, setEditEmailErr] = useState("");
     const [kindleMsg, setKindleMsg] = useState("");
     const [kindleErr, setKindleErr] = useState("");
     const [isMediaServersDirty, setIsMediaServersDirty] = useState(false);
@@ -808,6 +813,33 @@ export default function UserProfilePage() {
                 initialProfileRef.current.bypassKindle = bypassKindle;
             }
             setTimeout(() => setKindleMsg(""), 5000);
+        }
+    };
+
+    const handleSaveUserPrimaryEmail = async () => {
+        if (!editEmailInput || !editEmailInput.includes("@")) {
+            setEditEmailErr("Please enter a valid email address.");
+            return;
+        }
+        setEditEmailLoading(true);
+        setEditEmailMsg("");
+        setEditEmailErr("");
+        try {
+            const res = await updateCurrentUserPrimaryEmail(editEmailInput);
+            if (res.success) {
+                setEditEmailMsg(res.message || "Email updated successfully!");
+                setUser((prev: any) => ({ ...prev, email: editEmailInput.trim().toLowerCase() }));
+                setTimeout(() => {
+                    setShowEditEmailModal(false);
+                    setEditEmailMsg("");
+                }, 1200);
+            } else {
+                setEditEmailErr(res.error || "Failed to update email.");
+            }
+        } catch (e: any) {
+            setEditEmailErr(e.message || "Failed to update email.");
+        } finally {
+            setEditEmailLoading(false);
         }
     };
 
@@ -2729,16 +2761,21 @@ export default function UserProfilePage() {
                             Amazon requires that you authorize our outbound server email address in your Amazon account. Add the address below to your <strong className="text-foreground">Approved Personal Document E-mail List</strong>:
                         </p>
                         
-                        {paymentConfig?.smtpFrom ? (
+                        <div className="flex items-center gap-1.5 p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px]">
+                            <AlertCircle className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+                            <span><strong>Sender Email Update:</strong> Deliveries are dispatched from <code className="font-mono font-bold text-amber-200">{paymentConfig?.kindleSenderEmail || "kindle@domshomelab.com"}</code>. If you configured Amazon previously, ensure this exact address is authorized.</span>
+                        </div>
+                        
+                        {paymentConfig?.kindleSenderEmail || paymentConfig?.smtpFrom ? (
                             <div className="flex flex-col sm:flex-row items-center gap-2 pt-1">
                                 <div className="p-2 rounded-lg bg-background/80 border border-purple-500/30 font-mono text-xs text-foreground flex-1 w-full truncate">
-                                    {paymentConfig.smtpFrom}
+                                    {paymentConfig.kindleSenderEmail || paymentConfig.smtpFrom}
                                 </div>
                                 <Button
                                     type="button"
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => handleCopy(paymentConfig.smtpFrom, "smtpFrom")}
+                                    onClick={() => handleCopy(paymentConfig.kindleSenderEmail || paymentConfig.smtpFrom, "smtpFrom")}
                                     className="w-full sm:w-auto font-sans text-xs gap-1.5 shrink-0 border-purple-500/30 hover:bg-purple-500/10"
                                 >
                                     {copiedHandle === "smtpFrom" ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5 text-purple-400" />}
@@ -2993,7 +3030,24 @@ export default function UserProfilePage() {
                         </div>
 
                         <div className="space-y-1 pt-2 border-t border-border/40">
-                            <Label className="text-xs text-muted-foreground font-semibold">Email Address</Label>
+                            <div className="flex items-center justify-between">
+                                <Label className="text-xs text-muted-foreground font-semibold">Email Address</Label>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                        setEditEmailInput(user?.email || "");
+                                        setEditEmailMsg("");
+                                        setEditEmailErr("");
+                                        setShowEditEmailModal(true);
+                                    }}
+                                    className="h-6 text-[11px] px-2 text-primary hover:text-primary hover:bg-primary/10 gap-1 font-semibold"
+                                >
+                                    <Edit2 className="h-3 w-3" />
+                                    <span>Edit</span>
+                                </Button>
+                            </div>
                             <div className="text-sm font-medium flex items-center gap-2 text-foreground">
                                 <Mail className="h-4 w-4 text-muted-foreground" />
                                 <span>{user?.email || "No Email Associated"}</span>
@@ -3394,6 +3448,68 @@ export default function UserProfilePage() {
                 onDiscard={handleDiscardAll}
                 isSaving={savingAllDirty || savingLibraries || savingNotif || savingContent || kindleSaving}
             />
-        </div>
+        
+
+            {/* UPDATE PRIMARY EMAIL MODAL */}
+            <Dialog open={showEditEmailModal} onOpenChange={setShowEditEmailModal}>
+                <DialogContent className="sm:max-w-[425px] bg-[#121218]/95 border-border/60">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-base font-bold">
+                            <Mail className="h-5 w-5 text-primary" />
+                            Update Primary Email Address
+                        </DialogTitle>
+                        <DialogDescription className="text-xs">
+                            Your primary email is used for account sign-in, password resets, and automated system alerts.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-2">
+                        {editEmailMsg && (
+                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-2.5 rounded-lg flex items-center gap-2">
+                                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                <span>{editEmailMsg}</span>
+                            </div>
+                        )}
+                        {editEmailErr && (
+                            <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-2.5 rounded-lg flex items-center gap-2">
+                                <XCircle className="h-4 w-4 shrink-0" />
+                                <span>{editEmailErr}</span>
+                            </div>
+                        )}
+                        <div className="space-y-2">
+                            <Label className="text-xs font-semibold">Primary Email Address</Label>
+                            <Input
+                                type="email"
+                                value={editEmailInput}
+                                onChange={(e) => setEditEmailInput(e.target.value)}
+                                placeholder="user@example.com"
+                                className="font-mono text-xs"
+                                autoFocus
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter className="gap-2 sm:gap-0">
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setShowEditEmailModal(false)}
+                            disabled={editEmailLoading}
+                            className="text-xs"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            onClick={handleSaveUserPrimaryEmail}
+                            disabled={editEmailLoading || !editEmailInput.trim()}
+                            className="text-xs font-bold gap-1.5"
+                        >
+                            {editEmailLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                            Save Email
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog></div>
     );
 }

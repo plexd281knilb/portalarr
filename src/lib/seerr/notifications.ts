@@ -1,7 +1,7 @@
 import prisma from "@/lib/prisma";
 import { decryptData } from "@/lib/encryption";
 import { getAppUrl } from "@/lib/app-url";
-import { renderEmailTemplate } from "@/lib/email-templates";
+import { renderEmailTemplate, resolveEmailProviderConfig, isEmailDeliveryConfigured } from "@/lib/email-templates";
 import { logger } from "@/lib/logger";
 import { postDiscordMessage } from "@/lib/discord/discord-bot";
 
@@ -320,9 +320,9 @@ export async function sendSeerrEmailNotification(
         }
 
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-        if (!settings || !settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
-            logger.addLog("WARN", "EMAIL", `Skipping media request email notification for "${request.title}": SMTP settings (host, user, pass) are not configured in Settings > Email.`);
-            return { success: true }; // SMTP not configured, skip
+        if (!settings || !isEmailDeliveryConfigured(settings)) {
+            logger.addLog("WARN", "EMAIL", `Skipping media request email notification for "${request.title}": Email delivery provider settings are not configured in Settings > Email.`);
+            return { success: true }; // Email not configured, skip
         }
 
         if (settings.emailNotificationsEnabled === false) {
@@ -348,7 +348,7 @@ export async function sendSeerrEmailNotification(
             : (request.is4k ? "4K UHD" : "1080p Standard");
         const sectionStr = request.isKids ? "Kids & Family" : "Main Library";
         const appUrl = await getAppUrl();
-        const senderEmail = settings.smtpFrom || settings.smtpUser;
+        const senderEmail = resolveEmailProviderConfig(settings).from;
 
         // Parse seasons for TV
         let seasonsText = "";

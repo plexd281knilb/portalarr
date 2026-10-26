@@ -11,7 +11,7 @@ import {
     rejectAppUser, 
     syncPlexFriendsAction, 
     updateAppUserRole, 
-    updateAppUserKindleEmail, 
+    updateAppUserKindleEmail, updateAppUserEmail, 
     updateAppUserName,
     adminResetUserPassword, 
     approveAllPendingAppUsers,
@@ -33,6 +33,7 @@ import {
     getAdminApprovalCountsAction,
     approveAdminApprovalAction,
     rejectAdminApprovalAction,
+    resendApprovalNotificationAction,
     bulkApproveAdminApprovalsAction,
     bulkRejectAdminApprovalsAction,
     getApprovalSettingsAction,
@@ -80,6 +81,7 @@ import { updateUserSubscriptionCadenceAction } from "@/app/payment-actions";
 import { format, differenceInDays } from "date-fns";
 import PaymentEmailManager from "@/components/payment-email-manager";
 import SentEmailAuditLog from "@/components/sent-email-audit-log";
+import CloudflarePolicyCard from "@/components/cloudflare-policy-card";
 
 export default function AccessSettingsPage() {
     const [activeTab, setActiveTab] = useState("users");
@@ -278,6 +280,8 @@ export default function AccessSettingsPage() {
     const [adminResetLoading, setAdminResetLoading] = useState(false);
 
     // Inline Edit Kindle Email state
+    const [editingEmailUserId, setEditingEmailUserId] = useState<string | null>(null);
+    const [userEmailInput, setUserEmailInput] = useState("");
     const [editingKindleUserId, setEditingKindleUserId] = useState<string | null>(null);
     const [kindleEmailInput, setKindleEmailInput] = useState("");
 
@@ -392,6 +396,24 @@ export default function AccessSettingsPage() {
             }
         } catch (e: any) {
             setApprovalErrMsg(e.message || "Approval failed.");
+        } finally {
+            setProcessingApprovalId(null);
+        }
+    };
+
+    const handleNotifyAdmins = async (id: string) => {
+        setProcessingApprovalId(id);
+        setApprovalSuccessMsg("");
+        setApprovalErrMsg("");
+        try {
+            const res = await resendApprovalNotificationAction(id);
+            if (res.success) {
+                setApprovalSuccessMsg(res.message || "Alert dispatched!");
+            } else {
+                setApprovalErrMsg(res.error || "Failed to dispatch alert.");
+            }
+        } catch (e: any) {
+            setApprovalErrMsg(e.message || "Failed to dispatch alert.");
         } finally {
             setProcessingApprovalId(null);
         }
@@ -933,6 +955,13 @@ export default function AccessSettingsPage() {
     const handleMembershipTierChange = async (userId: string, newTier: string) => {
         setUsers((prev: any[]) => prev.map(u => u.id === userId ? { ...u, membershipTier: newTier } : u));
         await updateUserMembershipTierAction(userId, newTier);
+        loadUsers();
+    };
+
+    const handleSaveUserEmail = async (userId: string) => {
+        await updateAppUserEmail(userId, userEmailInput);
+        setEditingEmailUserId(null);
+        setUserEmailInput("");
         loadUsers();
     };
 
@@ -1706,7 +1735,7 @@ export default function AccessSettingsPage() {
 
             {/* TOP NAVIGATION TABS */}
             <Tabs defaultValue="users" value={activeTab} onValueChange={handleTabChange} className="w-full space-y-6">
-                <TabsList className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 bg-[#121218] border border-border/50 p-1.5 rounded-xl h-auto gap-1.5">
+                <TabsList className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 bg-[#121218] border border-border/50 p-1.5 rounded-xl h-auto gap-1.5">
                     <TabsTrigger value="users" className="gap-2 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground min-w-0 py-2">
                         <Users className="h-4 w-4 shrink-0" /> <span className="truncate">User Directory ({users.length})</span>
                     </TabsTrigger>
@@ -1739,6 +1768,10 @@ export default function AccessSettingsPage() {
                                 {sentEmailsTotalCount}
                             </span>
                         )}
+                    </TabsTrigger>
+                    <TabsTrigger value="cloudflare" className="gap-2 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground min-w-0 py-2 relative">
+                        <Shield className="h-4 w-4 text-orange-400 shrink-0" />
+                        <span className="truncate">Cloudflare Access</span>
                     </TabsTrigger>
                 </TabsList>
 
@@ -2481,7 +2514,39 @@ export default function AccessSettingsPage() {
                                                             </div>
                                                             <div className="text-xs text-muted-foreground flex items-center gap-1.5 truncate">
                                                                 <Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" />
-                                                                <span className="truncate">{user.email || "No Email Associated"}</span>
+                                                                {editingEmailUserId === user.id ? (
+                                                                    <div className="flex items-center gap-1">
+                                                                        <Input 
+                                                                            className="h-6 text-xs bg-background/90 px-1.5 py-0 font-mono w-44" 
+                                                                            placeholder="user@example.com"
+                                                                            value={userEmailInput}
+                                                                            onChange={(e) => setUserEmailInput(e.target.value)}
+                                                                            autoFocus
+                                                                        />
+                                                                        <Button size="sm" className="h-6 px-2 text-[10px] bg-emerald-600 hover:bg-emerald-500 text-white shrink-0 font-semibold" onClick={() => handleSaveUserEmail(user.id)}>
+                                                                            Save
+                                                                        </Button>
+                                                                        <Button size="sm" variant="ghost" className="h-6 px-1.5 text-[10px] shrink-0" onClick={() => setEditingEmailUserId(null)}>
+                                                                            ✕
+                                                                        </Button>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="flex items-center gap-1 truncate">
+                                                                        <span className="truncate">{user.email || "No Email Associated"}</span>
+                                                                        <Button 
+                                                                            variant="ghost" 
+                                                                            size="icon" 
+                                                                            className="h-5 w-5 text-muted-foreground/70 hover:text-foreground shrink-0"
+                                                                            onClick={() => {
+                                                                                setEditingEmailUserId(user.id);
+                                                                                setUserEmailInput(user.email || "");
+                                                                            }}
+                                                                            title="Edit Email Address"
+                                                                        >
+                                                                            <Edit2 className="h-2.5 w-2.5" />
+                                                                        </Button>
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     </div>
@@ -4783,8 +4848,20 @@ export default function AccessSettingsPage() {
                                                         </Button>
                                                     )}
 
-                                                    {isPending && (
+{isPending && (
                                                         <>
+                                                            <Button
+                                                                type="button"
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={() => handleNotifyAdmins(item.id)}
+                                                                disabled={processingApprovalId === item.id}
+                                                                title="Dispatch notification email and Discord alert to administrators"
+                                                                className="h-8 px-2.5 text-xs font-semibold text-amber-400 border-amber-500/30 hover:bg-amber-500/10 gap-1.5 active:scale-95"
+                                                            >
+                                                                <BellRing className="h-3.5 w-3.5" />
+                                                                Alert Admin
+                                                            </Button>
                                                             <Button
                                                                 type="button"
                                                                 size="sm"
@@ -4827,6 +4904,13 @@ export default function AccessSettingsPage() {
                 {/* ========================================================================= */}
                 <TabsContent value="sent-emails" className="space-y-6 animate-in fade-in-50 duration-200">
                     <SentEmailAuditLog onCountChange={(count) => setSentEmailsTotalCount(count)} />
+                </TabsContent>
+
+                {/* ========================================================================= */}
+                {/* TAB 7: CLOUDFLARE ACCESS & EDGE SECURITY POLICY PATHS */}
+                {/* ========================================================================= */}
+                <TabsContent value="cloudflare" className="space-y-6 animate-in fade-in-50 duration-200">
+                    <CloudflarePolicyCard />
                 </TabsContent>
             </Tabs>
 

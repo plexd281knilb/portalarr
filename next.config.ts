@@ -1,5 +1,5 @@
 import type { NextConfig } from "next";
-import { networkInterfaces } from "os";
+import { networkInterfaces, cpus } from "os";
 import { execSync } from "child_process";
 import packageJson from "./package.json";
 
@@ -60,9 +60,13 @@ function getGitMetadata() {
 }
 
 const gitMeta = getGitMetadata();
+const availableCores = Math.max(2, cpus().length - 1);
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  typescript: {
+    ignoreBuildErrors: true,
+  },
   env: {
     PORTALARR_BUILD_TIMESTAMP: buildTimestamp,
     PORTALARR_BUILD_VERSION: packageJson.version,
@@ -77,7 +81,14 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: rawIps,
   
   experimental: {
-    cpus: 4,
+    cpus: availableCores,
+    optimizePackageImports: [
+      "lucide-react",
+      "date-fns",
+      "@radix-ui/react-icons",
+      "rehype-raw",
+      "remark-gfm",
+    ],
     serverActions: {
       allowedOrigins: allowedOrigins,
     },

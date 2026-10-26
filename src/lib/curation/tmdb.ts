@@ -76,8 +76,8 @@ function mapTmdbMovie(m: any): TmdbMediaItem {
 
     // Parse release dates and certifications if available
     if (m.release_dates?.results && Array.isArray(m.release_dates.results)) {
-        // First check US release
-        const usReleases = m.release_dates.results.find((r: any) => r.iso_3166_1 === "US") || m.release_dates.results[0];
+        // 1. Authoritative US release certification (MPAA: G, PG, PG-13, R, NC-17)
+        const usReleases = m.release_dates.results.find((r: any) => r.iso_3166_1 === "US");
         if (usReleases?.release_dates) {
             for (const rel of usReleases.release_dates) {
                 if (rel.certification && typeof rel.certification === "string" && rel.certification.trim() && !certification) {
@@ -93,19 +93,52 @@ function mapTmdbMovie(m: any): TmdbMediaItem {
             }
         }
 
-        // Also check international releases to catch numeric/foreign adult ratings (18, 19, R18+, Cat III, etc.)
-        for (const countryRel of m.release_dates.results) {
-            if (countryRel?.release_dates) {
-                for (const rel of countryRel.release_dates) {
-                    const c = (rel.certification || "").trim();
-                    if (c) {
-                        if (!certification) {
-                            certification = c;
-                        } else if (/\b(18\+|19\+|18|19|r18|cat\s*iii|xxx)\b/i.test(c)) {
-                            // Elevate to adult rating if any regional board flagged it as 18/19/adult
-                            certification = c;
+        // 2. Extract theatrical / digital dates if not set by US
+        if (!theatricalDate || !digitalDate) {
+            for (const countryRel of m.release_dates.results) {
+                if (countryRel?.release_dates) {
+                    for (const rel of countryRel.release_dates) {
+                        if (rel.type === 3 && !theatricalDate) {
+                            theatricalDate = rel.release_date ? rel.release_date.split("T")[0] : undefined;
+                        }
+                        if (rel.type === 4 && !digitalDate) {
+                            digitalDate = rel.release_date ? rel.release_date.split("T")[0] : undefined;
                         }
                     }
+                }
+            }
+        }
+
+        // 3. Fallback: ONLY check international releases if NO official US rating exists
+        // (Prevents foreign boards e.g. Russia from overwriting family/PG films with 18+)
+        if (!certification) {
+            const priorityCountries = ["GB", "CA", "AU", "NZ", "DE", "FR"];
+            for (const code of priorityCountries) {
+                const cRel = m.release_dates.results.find((r: any) => r.iso_3166_1 === code);
+                if (cRel?.release_dates) {
+                    for (const rel of cRel.release_dates) {
+                        const c = (rel.certification || "").trim();
+                        if (c) {
+                            certification = c;
+                            break;
+                        }
+                    }
+                }
+                if (certification) break;
+            }
+
+            if (!certification) {
+                for (const countryRel of m.release_dates.results) {
+                    if (countryRel?.release_dates) {
+                        for (const rel of countryRel.release_dates) {
+                            const c = (rel.certification || "").trim();
+                            if (c) {
+                                certification = c;
+                                break;
+                            }
+                        }
+                    }
+                    if (certification) break;
                 }
             }
         }
@@ -152,17 +185,29 @@ function mapTmdbMovie(m: any): TmdbMediaItem {
 function mapTmdbTv(t: any): TmdbMediaItem {
     let certification: string | undefined;
     if (t.content_ratings?.results && Array.isArray(t.content_ratings.results)) {
+        // 1. Authoritative US TV rating (TV-Y, TV-Y7, TV-G, TV-PG, TV-14, TV-MA)
         const usRating = t.content_ratings.results.find((r: any) => r.iso_3166_1 === "US");
-        if (usRating?.rating) {
+        if (usRating?.rating && usRating.rating.trim()) {
             certification = usRating.rating.trim();
         }
-        for (const cr of t.content_ratings.results) {
-            const r = (cr.rating || "").trim();
-            if (r) {
-                if (!certification) {
-                    certification = r;
-                } else if (/\b(18\+|19\+|18|19|r18|tv-ma)\b/i.test(r)) {
-                    certification = r;
+
+        // 2. Fallback: ONLY check international ratings if NO official US rating exists
+        if (!certification) {
+            const priorityCountries = ["GB", "CA", "AU", "NZ", "DE", "FR"];
+            for (const code of priorityCountries) {
+                const cRating = t.content_ratings.results.find((r: any) => r.iso_3166_1 === code);
+                if (cRating?.rating && cRating.rating.trim()) {
+                    certification = cRating.rating.trim();
+                    break;
+                }
+            }
+            if (!certification) {
+                for (const cr of t.content_ratings.results) {
+                    const r = (cr.rating || "").trim();
+                    if (r) {
+                        certification = r;
+                        break;
+                    }
                 }
             }
         }
@@ -782,7 +827,7 @@ export async function fetchMediaCertification(id: number, mediaType: "movie" | "
 export async function enrichItemsWithCertifications(items: TmdbMediaItem[]): Promise<TmdbMediaItem[]> {
     if (!items || items.length === 0) return [];
     try {
-        const enriched = await Promise.all(items.map(async (item) => {
+        const enrichTask = Promise.all(items.map(async (item) => {
             if (item.certification && item.certification.trim()) return item;
             const cert = await fetchMediaCertification(item.id, item.mediaType);
             if (cert) {
@@ -790,7 +835,9 @@ export async function enrichItemsWithCertifications(items: TmdbMediaItem[]): Pro
             }
             return item;
         }));
-        return enriched;
+
+        const timeoutTask = new Promise<TmdbMediaItem[]>((resolve) => setTimeout(() => resolve(items), 1500));
+        return await Promise.race([enrichTask, timeoutTask]);
     } catch {
         return items;
     }
@@ -799,15 +846,51 @@ export async function enrichItemsWithCertifications(items: TmdbMediaItem[]): Pro
 /**
  * Search TMDb by title and release year for movie matching
  */
-export async function searchTmdbMovie(title: string, year?: number): Promise<TmdbMediaItem[]> {
+export async function searchTmdbMovie(
+    title: string,
+    year?: number,
+    page = 1,
+    isKids = false
+): Promise<TmdbMediaItem[]> {
     try {
-        const params: Record<string, string | number> = { query: title };
+        const cleanTitle = (title || "").trim();
+        if (!cleanTitle) return [];
+        const params: Record<string, string | number> = {
+            query: cleanTitle,
+            page,
+            include_adult: "false"
+        };
         if (year) params.primary_release_year = year;
         const data = await tmdbFetch("/search/movie", params);
-        const mapped = (data?.results || []).map(mapTmdbMovie);
-        const enriched = await enrichItemsWithCertifications(mapped);
-        const allowed = filterAllowedMedia(enriched);
-        return rankMediaByDownloadLikelihood(allowed, title);
+        let rawResults = data?.results || [];
+
+        // If no results on first page, attempt fast spelling correction fallback
+        if (rawResults.length === 0 && page === 1) {
+            try {
+                const suggestion = await getSpellingSuggestion(cleanTitle);
+                if (suggestion && suggestion.toLowerCase() !== cleanTitle.toLowerCase()) {
+                    const altData = await tmdbFetch("/search/movie", {
+                        query: suggestion,
+                        page: 1,
+                        include_adult: "false"
+                    });
+                    if (altData?.results && altData.results.length > 0) {
+                        rawResults = altData.results;
+                    }
+                }
+            } catch {}
+        }
+
+        const mapped = rawResults.map(mapTmdbMovie);
+        // Enrich top 12 items with certification ratings for fast response
+        const toEnrich = mapped.slice(0, 12);
+        const enriched = await enrichItemsWithCertifications(toEnrich);
+        const combined = [...enriched, ...mapped.slice(12)];
+        let allowed = filterAllowedMedia(combined);
+        if (isKids) {
+            allowed = filterKidsSafeMedia(allowed);
+        }
+        return rankMediaByDownloadLikelihood(allowed, cleanTitle);
     } catch {
         return [];
     }
@@ -816,15 +899,51 @@ export async function searchTmdbMovie(title: string, year?: number): Promise<Tmd
 /**
  * Search TMDb for TV show matching
  */
-export async function searchTmdbTv(title: string, year?: number): Promise<TmdbMediaItem[]> {
+export async function searchTmdbTv(
+    title: string,
+    year?: number,
+    page = 1,
+    isKids = false
+): Promise<TmdbMediaItem[]> {
     try {
-        const params: Record<string, string | number> = { query: title };
+        const cleanTitle = (title || "").trim();
+        if (!cleanTitle) return [];
+        const params: Record<string, string | number> = {
+            query: cleanTitle,
+            page,
+            include_adult: "false"
+        };
         if (year) params.first_air_date_year = year;
         const data = await tmdbFetch("/search/tv", params);
-        const mapped = (data?.results || []).map(mapTmdbTv);
-        const enriched = await enrichItemsWithCertifications(mapped);
-        const allowed = filterAllowedMedia(enriched);
-        return rankMediaByDownloadLikelihood(allowed, title);
+        let rawResults = data?.results || [];
+
+        // If no results on first page, attempt fast spelling correction fallback
+        if (rawResults.length === 0 && page === 1) {
+            try {
+                const suggestion = await getSpellingSuggestion(cleanTitle);
+                if (suggestion && suggestion.toLowerCase() !== cleanTitle.toLowerCase()) {
+                    const altData = await tmdbFetch("/search/tv", {
+                        query: suggestion,
+                        page: 1,
+                        include_adult: "false"
+                    });
+                    if (altData?.results && altData.results.length > 0) {
+                        rawResults = altData.results;
+                    }
+                }
+            } catch {}
+        }
+
+        const mapped = rawResults.map(mapTmdbTv);
+        // Enrich top 12 items with certification ratings for fast response
+        const toEnrich = mapped.slice(0, 12);
+        const enriched = await enrichItemsWithCertifications(toEnrich);
+        const combined = [...enriched, ...mapped.slice(12)];
+        let allowed = filterAllowedMedia(combined);
+        if (isKids) {
+            allowed = filterKidsSafeMedia(allowed);
+        }
+        return rankMediaByDownloadLikelihood(allowed, cleanTitle);
     } catch {
         return [];
     }

@@ -18,6 +18,14 @@ model Settings {
   smtpUser         String?
   smtpPass         String?
   smtpFrom         String    @default("") // Email address the system sends books from
+  resendApiKey     String?
+  resendFrom       String?   @default("notifications@domshomelab.com")
+  customSmtpHost   String?
+  customSmtpPort   Int?
+  customSmtpUser   String?
+  customSmtpPass   String?
+  customSmtpFrom   String?
+  emailProviderMode String?  @default("resend")
   refreshInterval  Int       @default(10)
   theme            String    @default("dark")
   autoSyncInterval Int       @default(6)
@@ -376,6 +384,7 @@ model User {
   email                  String    @unique 
   password               String    // Hashed
   kindleEmail            String    @default("") // Send-to-Kindle email address
+  kindleSenderUpdateAcknowledgedAt DateTime? // When the user acknowledged the updated kindle@domshomelab.com sender address
   role                   String    @default("USER") // "ADMIN", "SUPER_USER", "USER"
   status                 String    @default("APPROVED") // "APPROVED", "PENDING", "REJECTED", "TRIAL", "SUSPENDED", "EXPIRED"
   trialEndsAt            DateTime?

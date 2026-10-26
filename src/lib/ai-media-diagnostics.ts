@@ -1609,14 +1609,18 @@ ${params.recommendation}
                 });
 
                 const { sendOrQueueEmail } = await import("@/app/actions");
-                await sendOrQueueEmail({
-                    to: settings.smtpUser,
-                    subject: `🚨 [AI Escalation] ${params.title || "Stream Issue"} - Action Required`,
+                const { resolveAdminNotificationEmails } = await import("@/lib/email-templates");
+                const adminRecipients = await resolveAdminNotificationEmails(settings);
+                if (adminRecipients.length > 0) {
+                    await sendOrQueueEmail({
+                        to: adminRecipients,
+                        subject: `🚨 [AI Escalation] ${params.title || "Stream Issue"} - Action Required`,
                     html,
                     text: formattedIssue,
                     templateId: "ticket_error_alert",
                     targetUser: userName
                 });
+                }
 
                 logAgentEvent("INFO", `Admin notification email dispatched or queued for ticket #${ticketId}`);
             } catch (mailErr: any) {

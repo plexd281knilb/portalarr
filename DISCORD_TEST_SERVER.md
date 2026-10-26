@@ -139,7 +139,7 @@ To ensure the Discord server seamlessly reflects all active features of the **Do
 - **Website Capability**: The platform features a full-featured ePub web reader, integrated audiobook player, and 1-click **Send-to-Kindle** with automatic Amazon approved sender verification and delivery tracking.
 - **Discord Action**:
   - Update the pinned guide in `#kindle-and-audiobooks` with step-by-step instructions:
-    1. Add `books@domshomelab.org` to your Amazon Approved Personal Document E-mail List.
+    1. Add `kindle@domshomelab.com` to your Amazon Approved Personal Document E-mail List.
     2. Enter your `@kindle.com` address in [Account Settings → Profile](https://domshomelab.org/settings/profile).
     3. Click **Send to Kindle** on any book in the library for instantaneous Wi-Fi sync.
 

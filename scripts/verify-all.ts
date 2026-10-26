@@ -75,7 +75,32 @@ async function runTestSuite() {
         const decrypted = decryptData(encrypted);
         if (decrypted !== secretToken) throw new Error(`Decrypted value "${decrypted}" !== original "${secretToken}"`);
 
-        // 3. User Model Basic Persistence
+        // 3. Decoupled Outbound Email Engine Persistence (Resend vs Custom SMTP)
+        const mockResendKey = "re_test_key_abc123xyz789";
+        const mockCustomPass = "gmail-app-password-secret-xyz";
+        await prisma.settings.update({
+            where: { id: "global" },
+            data: {
+                resendApiKey: encryptData(mockResendKey),
+                resendFrom: "notifications@domshomelab.com",
+                customSmtpHost: "smtp.gmail.com",
+                customSmtpPort: 587,
+                customSmtpUser: "testuser@gmail.com",
+                customSmtpPass: encryptData(mockCustomPass),
+                customSmtpFrom: "testuser@gmail.com",
+                emailProviderMode: "resend"
+            }
+        });
+
+        const verifySettings = await prisma.settings.findUnique({ where: { id: "global" } });
+        if (!verifySettings) throw new Error("Settings not found after decoupled email test");
+        if (verifySettings.emailProviderMode !== "resend") throw new Error("emailProviderMode mismatch");
+        if (decryptData(verifySettings.resendApiKey || "") !== mockResendKey) throw new Error("resendApiKey decryption mismatch");
+        if (decryptData(verifySettings.customSmtpPass || "") !== mockCustomPass) throw new Error("customSmtpPass decryption mismatch");
+        if (verifySettings.customSmtpHost !== "smtp.gmail.com") throw new Error("customSmtpHost mismatch");
+        if (verifySettings.resendFrom !== "notifications@domshomelab.com") throw new Error("resendFrom mismatch");
+
+        // 4. User Model Basic Persistence
         const testUser = await prisma.user.create({
             data: {
                 username: `core_db_user_${Date.now()}`,
@@ -199,7 +224,7 @@ async function runTestSuite() {
             }
 
             // Page Fix Suggestion & AI Telemetry Engine test
-            const { getPageFileHints } = await import("../src/app/actions");
+            const { getPageFileHints, getAdminNotificationEmailAction, updateAppUserEmail } = await import("../src/app/actions");
             const libHints = await getPageFileHints("/library");
             if (!libHints.title.includes("Library") || !libHints.fileHints.includes("src/app/library/page.tsx")) {
                 throw new Error("getPageFileHints failed for /library");
@@ -208,7 +233,34 @@ async function runTestSuite() {
             if (!rootHints.fileHints.includes("src/app/page.tsx")) {
                 throw new Error("getPageFileHints failed for /");
             }
+
+            // Primary Email Resolution & Admin Recipient Verification
+            process.env.PORTALARR_TEST_AUTH = "true";
+            process.env.PORTALARR_TEST_USER_ID = adminUser.id;
+
+            const adminEmailRes = await getAdminNotificationEmailAction();
+            if (!adminEmailRes.success || !adminEmailRes.email?.includes("@")) {
+                throw new Error(`getAdminNotificationEmailAction failed: ${JSON.stringify(adminEmailRes)}`);
+            }
+
+            // Update user email action test
+            const newEmail = `updated_kid_${testId}@example.com`;
+            const updateEmailRes = await updateAppUserEmail(kidUser.id, newEmail);
+            if (!updateEmailRes.success) {
+                throw new Error(`updateAppUserEmail failed: ${JSON.stringify(updateEmailRes)}`);
+            }
+            const verifiedKid = await prisma.user.findUnique({ where: { id: kidUser.id } });
+            if (verifiedKid?.email !== newEmail) {
+                throw new Error(`Expected email ${newEmail}, got ${verifiedKid?.email}`);
+            }
+
+            // Duplicate email prevention test
+            const dupRes = await updateAppUserEmail(adminUser.id, newEmail);
+            if (dupRes.success) {
+                throw new Error("Expected updateAppUserEmail to fail on duplicate email collision!");
+            }
         } finally {
+            delete process.env.PORTALARR_TEST_USER_ID;
             await prisma.user.deleteMany({ where: { id: { in: [adminUser.id, kidUser.id] } } });
         }
     });
@@ -478,6 +530,84 @@ async function runTestSuite() {
             throw new Error("media_request_admin failed to render book metadata");
         }
 
+        // Category-specific email sender routing verification
+        const { resolveSenderAddress, getTemplateSenderCategory } = await import("../src/lib/email-templates");
+        
+        const kindleSender = resolveSenderAddress("kindle_delivery", "notifications@domshomelab.com");
+        if (kindleSender.email !== "kindle@domshomelab.com" || kindleSender.displayName !== "DomsHomeLab Kindle") {
+            throw new Error(`Expected kindle_delivery sender to be kindle@domshomelab.com, got: ${kindleSender.formatted}`);
+        }
+
+        const billingSender = resolveSenderAddress("payment_received", "notifications@domshomelab.com");
+        if (billingSender.email !== "payments@domshomelab.com" || billingSender.displayName !== "DomsHomeLab Billing") {
+            throw new Error(`Expected payment_received sender to be payments@domshomelab.com, got: ${billingSender.formatted}`);
+        }
+
+        const accountsSender = resolveSenderAddress("user_approval", "notifications@domshomelab.com");
+        if (accountsSender.email !== "accounts@domshomelab.com" || accountsSender.displayName !== "DomsHomeLab Accounts") {
+            throw new Error(`Expected user_approval sender to be accounts@domshomelab.com, got: ${accountsSender.formatted}`);
+        }
+
+        const requestsSender = resolveSenderAddress("media_ready", "notifications@domshomelab.com");
+        if (requestsSender.email !== "requests@domshomelab.com" || requestsSender.displayName !== "DomsHomeLab Requests") {
+            throw new Error(`Expected media_ready sender to be requests@domshomelab.com, got: ${requestsSender.formatted}`);
+        }
+
+        const supportSender = resolveSenderAddress("ticket_update", "notifications@domshomelab.com");
+        if (supportSender.email !== "support@domshomelab.com" || supportSender.displayName !== "DomsHomeLab Support") {
+            throw new Error(`Expected ticket_update sender to be support@domshomelab.com, got: ${supportSender.formatted}`);
+        }
+
+        const govSender = resolveSenderAddress("admin_approval", "notifications@domshomelab.com");
+        if (govSender.email !== "accounts@domshomelab.com" || govSender.displayName !== "DomsHomeLab Governance") {
+            throw new Error(`Expected admin_approval sender to be accounts@domshomelab.com (Governance), got: ${govSender.formatted}`);
+        }
+
+        const broadcastSender = resolveSenderAddress("broadcast", "notifications@domshomelab.com");
+        if (broadcastSender.email !== "notifications@domshomelab.com" || broadcastSender.displayName !== "DomsHomeLab") {
+            throw new Error(`Expected broadcast sender to be notifications@domshomelab.com, got: ${broadcastSender.formatted}`);
+        }
+
+        // Public webmail domain preservation (prevents SPF/DKIM breakage)
+        const gmailSender = resolveSenderAddress("kindle_delivery", "d281knilb@gmail.com");
+        if (gmailSender.email !== "d281knilb@gmail.com" || gmailSender.isCustomDomain) {
+            throw new Error(`Expected gmail sender to preserve address, got: ${gmailSender.formatted}`);
+        }
+
+        const { getPublicSmtpFromEmail, getPublicJoinConfig } = await import("../src/app/actions");
+        const publicKindle = await getPublicSmtpFromEmail("kindle");
+        if (publicKindle !== "kindle@domshomelab.com") {
+            throw new Error(`Expected getPublicSmtpFromEmail('kindle') to be kindle@domshomelab.com, got: ${publicKindle}`);
+        }
+
+        const joinConfig = await getPublicJoinConfig();
+        if (!joinConfig.success || joinConfig.config?.kindleSenderEmail !== "kindle@domshomelab.com") {
+            throw new Error(`Expected joinConfig kindleSenderEmail to be kindle@domshomelab.com, got: ${joinConfig.config?.kindleSenderEmail}`);
+        }
+
+        // Progressive Sequential Search Verification (Movies, TV Shows, Books, Audiobooks)
+        const { searchMediaAction } = await import("../src/app/seerr-actions");
+        const emptySearch = await searchMediaAction("");
+        if (!emptySearch.success || emptySearch.items.length !== 0) {
+            throw new Error("Expected empty query to return empty items immediately");
+        }
+
+        const movieSearch = await searchMediaAction("Inception", 1, false, "movie");
+        if (!movieSearch.success || !Array.isArray(movieSearch.items)) {
+            throw new Error("Expected movie search to succeed");
+        }
+        if (movieSearch.items.length > 0 && movieSearch.items.some(i => i.mediaType !== "movie")) {
+            throw new Error("Expected movie search to only return movies");
+        }
+
+        const tvSearch = await searchMediaAction("Breaking Bad", 1, false, "tv");
+        if (!tvSearch.success || !Array.isArray(tvSearch.items)) {
+            throw new Error("Expected tv search to succeed");
+        }
+        if (tvSearch.items.length > 0 && tvSearch.items.some(i => i.mediaType !== "tv")) {
+            throw new Error("Expected tv search to only return tv shows");
+        }
+
         await prisma.mediaRequest.delete({ where: { id: testReq.id } });
     });
 
@@ -499,8 +629,8 @@ async function runTestSuite() {
         // 2. Amazon Send-to-Kindle bounce email parser
         const bounceMail: any = {
             from: { text: "kindle-cs@amazon.com" },
-            subject: "An email from books@domshomelab.com did not have an approved sender address",
-            text: "Dear Customer, the sender address (books@domshomelab.com) is not on your approved personal document list.",
+            subject: "An email from kindle@domshomelab.com did not have an approved sender address",
+            text: "Dear Customer, the sender address (kindle@domshomelab.com) is not on your approved personal document list.",
             date: new Date()
         };
         const bounce = parseAmazonBounceEmail(bounceMail);
@@ -516,6 +646,46 @@ async function runTestSuite() {
         const yaRating = inferBookRating({ overview: "Young adult high school fantasy adventure", title: "School of Spells" });
         if (yaRating.ageRating !== "YA (12+)") {
             throw new Error(`Expected YA rating YA (12+), got ${JSON.stringify(yaRating)}`);
+        }
+
+        // 4. Kindle Sender Update Notice Lifecycle for Existing Users
+        const { getKindleSenderUpdateNoticeStatusAction, acknowledgeKindleSenderUpdateAction } = await import("../src/app/actions");
+        const noticeTestUser = await prisma.user.create({
+            data: {
+                username: `kindlenotice_${Date.now()}`,
+                email: `kindlenotice_${Date.now()}@test.com`,
+                password: "mock_password_hash",
+                role: "USER",
+                accountType: "FULL",
+                kindleEmail: "reader_test_device@kindle.com"
+            }
+        });
+
+        try {
+            process.env.PORTALARR_TEST_AUTH = "true";
+            process.env.PORTALARR_TEST_USER_ID = noticeTestUser.id;
+
+            // Initially has Kindle configured and needs notice
+            const noticeStatus1 = await getKindleSenderUpdateNoticeStatusAction();
+            if (!noticeStatus1.hasKindleEmail || !noticeStatus1.needsNotice || noticeStatus1.senderEmail !== "kindle@domshomelab.com") {
+                throw new Error(`Expected needsNotice=true and senderEmail=kindle@domshomelab.com, got: ${JSON.stringify(noticeStatus1)}`);
+            }
+
+            // Acknowledge notice
+            const ackRes = await acknowledgeKindleSenderUpdateAction();
+            if (!ackRes.success) {
+                throw new Error(`acknowledgeKindleSenderUpdateAction failed: ${ackRes.error}`);
+            }
+
+            // Post-acknowledgment check
+            const noticeStatus2 = await getKindleSenderUpdateNoticeStatusAction();
+            if (!noticeStatus2.hasKindleEmail || noticeStatus2.needsNotice) {
+                throw new Error(`Expected needsNotice=false after acknowledgment, got: ${JSON.stringify(noticeStatus2)}`);
+            }
+        } finally {
+            process.env.PORTALARR_TEST_AUTH = "true";
+            delete process.env.PORTALARR_TEST_USER_ID;
+            await prisma.user.delete({ where: { id: noticeTestUser.id } }).catch(() => {});
         }
     });
 
@@ -1554,6 +1724,35 @@ async function runTestSuite() {
                 throw new Error("Expected empty Quick Connect code to be rejected");
             }
             delete process.env.PORTALARR_TEST_USER_ID;
+
+            // 12. Test Jellyfin/Emby Active Playback Session Normalization & Stream Termination
+            const { fetchMediaServerActiveSessions, stopMediaServerSession } = await import("../src/lib/media-servers");
+            const { killUserStream, getAdminDetailedStreamsAction } = await import("../src/app/actions");
+
+            // Verify stopMediaServerSession handles offline/unreachable servers gracefully
+            const stopResult = await stopMediaServerSession(
+                { url: "http://127.0.0.1:9999", apiKey: "mock_key" },
+                "mock_session_123"
+            );
+            if (stopResult !== false) {
+                throw new Error("Expected stopMediaServerSession to return false on unreachable server");
+            }
+
+            // Verify killUserStream handles media_server_ prefix for non-existent server
+            const killInvalidRes = await killUserStream("media_server_non_existent", "mock_key");
+            if (killInvalidRes.success || !killInvalidRes.error?.includes("Media server not found")) {
+                throw new Error(`Expected media server not found error, got: ${killInvalidRes.error}`);
+            }
+
+            // Verify getAdminDetailedStreamsAction includes monitored media server in server usage
+            const adminStreamsRes = await getAdminDetailedStreamsAction(true);
+            if (!adminStreamsRes || !Array.isArray(adminStreamsRes.serversUsage)) {
+                throw new Error("Expected getAdminDetailedStreamsAction to return serversUsage array");
+            }
+            const foundMsUsage = adminStreamsRes.serversUsage.find((s: any) => s.id === `media_server_${testMediaServer.id}` || s.name === testMediaServer.name);
+            if (!foundMsUsage) {
+                throw new Error(`Expected test media server "${testMediaServer.name}" to be present in serversUsage`);
+            }
         } finally {
             await prisma.user.delete({ where: { id: memberUser.id } }).catch(() => {});
             await prisma.mediaServer.delete({ where: { id: testMediaServer.id } }).catch(() => {});
@@ -1777,6 +1976,29 @@ async function runTestSuite() {
             const accessPageContent = fs.readFileSync(accessPagePath, "utf-8");
             if (!accessPageContent.includes('TabsTrigger value="sent-emails"')) {
                 throw new Error("Access Control page.tsx missing TabsTrigger for 'sent-emails'");
+            }
+
+            // 5. Verify resendApprovalNotificationAction and Media Server Preferences approval notification
+            const { resendApprovalNotificationAction } = await import("../src/app/actions");
+            const testApproval = await prisma.adminApproval.create({
+                data: {
+                    type: "PLEX_ACCESS_GRANT",
+                    status: "PENDING",
+                    title: `Media Server Preferences Test ${testId}`,
+                    description: "User updated media server choices (0 servers, 11 libraries). Staged for approval.",
+                    targetUser: `test_user_${testId}`,
+                    targetEmail: `test_${testId}@example.com`,
+                    payload: JSON.stringify({ userId: "mock", selectedPlexSections: ["1", "2"], selectedKeys: ["1", "2"] })
+                }
+            });
+
+            try {
+                const notifyRes = await resendApprovalNotificationAction(testApproval.id);
+                if (!notifyRes.success) {
+                    throw new Error(`Expected resendApprovalNotificationAction to succeed, got: ${notifyRes.error}`);
+                }
+            } finally {
+                await prisma.adminApproval.delete({ where: { id: testApproval.id } }).catch(() => {});
             }
             if (!accessPageContent.includes('TabsContent value="sent-emails"')) {
                 throw new Error("Access Control page.tsx missing TabsContent for 'sent-emails'");

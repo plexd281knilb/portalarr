@@ -25,6 +25,8 @@ import {
     getDisneyTrending,
     getNetflixTrending,
     searchTmdbMulti,
+    searchTmdbMovie,
+    searchTmdbTv,
     rankMediaByDownloadLikelihood,
     getTmdbMovieDetailsFull,
     getTmdbTvDetailsFull,
@@ -369,7 +371,12 @@ export async function getDiscoverMediaAction(
  * Search across Movies & TV Shows with instant availability lookup
  * Supports filtering out mature ratings in Kids mode
  */
-export async function searchMediaAction(query: string, page = 1, isKids = false) {
+export async function searchMediaAction(
+    query: string,
+    page = 1,
+    isKids = false,
+    mediaType: "all" | "movie" | "tv" = "all"
+) {
     try {
         if (!query || !query.trim()) {
             return { success: true, items: [], availabilityMap: {} };
@@ -380,7 +387,7 @@ export async function searchMediaAction(query: string, page = 1, isKids = false)
             return { success: true, items: [], availabilityMap: {} };
         }
 
-        const cacheKey = `${cleanQuery.toLowerCase()}:${page}:${Boolean(isKids)}`;
+        const cacheKey = `${cleanQuery.toLowerCase()}:${page}:${Boolean(isKids)}:${mediaType}`;
         const cached = mediaSearchCache.get(cacheKey);
         let items: TmdbMediaItem[] = [];
 
@@ -390,11 +397,17 @@ export async function searchMediaAction(query: string, page = 1, isKids = false)
             items = await getOrFetchMediaCache<TmdbMediaItem[]>(
                 `search:${cacheKey}`,
                 async () => {
-                    let results = await searchTmdbMulti(cleanQuery, page);
-                    if (isKids) {
-                        results = filterKidsSafeMedia(results);
+                    if (mediaType === "movie") {
+                        return await searchTmdbMovie(cleanQuery, undefined, page, Boolean(isKids));
+                    } else if (mediaType === "tv") {
+                        return await searchTmdbTv(cleanQuery, undefined, page, Boolean(isKids));
+                    } else {
+                        let results = await searchTmdbMulti(cleanQuery, page);
+                        if (isKids) {
+                            results = filterKidsSafeMedia(results);
+                        }
+                        return results;
                     }
-                    return results;
                 },
                 { ttlMs: TTL_MEDIA_SEARCH, staleTtlMs: STALE_MEDIA_SEARCH }
             );
@@ -455,28 +468,23 @@ export async function getMediaDetailsAction(tmdbId: number, mediaType: "movie" |
             return { success: false, error: "NC-17 and adult-rated titles are not permitted on this server." };
         }
 
-        // Run availability checks concurrently for maximum responsiveness
-        const [availability, recAvailability] = await Promise.all([
-            checkMediaAvailability(
-                tmdbId,
-                mediaType,
-                details.imdbId,
-                details.tvdbId,
-                details.title,
-                details.releaseDate ? details.releaseDate.split("-")[0] : undefined,
-                Boolean(isKids),
-                true // fetchDeepArrDetails
-            ),
-            details.recommendations && details.recommendations.length > 0
-                ? batchCheckMediaAvailability(details.recommendations, Boolean(isKids))
-                : Promise.resolve({})
-        ]);
+        // Run fast availability check for this media item (using in-memory indexed Arr and Plex lookups)
+        const availability = await checkMediaAvailability(
+            tmdbId,
+            mediaType,
+            details.imdbId,
+            details.tvdbId,
+            details.title,
+            details.releaseDate ? details.releaseDate.split("-")[0] : undefined,
+            Boolean(isKids),
+            true // fetchDeepArrDetails
+        );
 
         return {
             success: true,
             details,
             availability,
-            recAvailability
+            recAvailability: {}
         };
     } catch (e: any) {
         return { success: false, error: e.message };

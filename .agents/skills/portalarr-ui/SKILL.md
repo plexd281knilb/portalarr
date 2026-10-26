@@ -47,7 +47,7 @@ Portalarr uses a **Modern Cinematic Dark Theme** powered by Tailwind CSS, Radix 
      - `requests`: Media Requests (Seerr / Jellyseerr / Overseerr synchronization, auto-approval rules, default request limits).
      - `ai`: AI Agent & Curation Keys (Google Gemini API keys, OpenAI tokens, Kometa, Agregarr, Maintainerr curation webhooks).
   5. **Communications & Alerts (`communications`)**:
-     - `smtp`: Global SMTP & Kindle Delivery (Outbound mail server, SMTP credentials, TLS/SSL, Amazon Send-to-Kindle address).
+     - `smtp`: Global SMTP & Kindle Delivery (Outbound mail server, SMTP credentials, TLS/SSL, Amazon Send-to-Kindle address, live test email dispatches, and Admin Recipient indicator with 1-click Change Recipient modal).
      - `broadcast`: Broadcasts & Notification Templates (12 granular notification templates, Markdown editor, test email dispatches).
      - `discord`: Discord Bot & Automation (Bot token, Guild ID, channel mappings for alerts/status/requests, role assignments).
 
@@ -97,6 +97,11 @@ Portalarr uses a **Modern Cinematic Dark Theme** powered by Tailwind CSS, Radix 
     2. **Sign In with Your Account**: Copyable configured username and password instructions.
     3. **Recommended Client Apps**: Swiftfin (Apple TV & iOS), official Jellyfin/Emby on Roku Channel Store, Fire TV, Android TV, Google TV, and web browsers.
     4. **Direct Play Optimization**: Instructions to set Remote Quality / Bitrate to Maximum / Auto for 100% Direct Play.
+- **Native Jellyfin & Emby Active Playback Sessions & Remote Termination**:
+  - **Admin Detailed Streams Matrix & User Dashboard Parity**: Active streams playing on monitored Jellyfin and Emby instances are queried natively via `/Sessions?activeWithinSeconds=960` and integrated seamlessly into `getAdminDetailedStreamsAction` and `getUserPlexHubData`.
+  - **Telemetry Normalization**: Extracts canonical playback metrics: item title, season/episode badges (S01E05), progress bar and percentages, video/audio transcoding decisions, codecs (H264, HEVC, AAC), resolution (4K, 1080p, 720p), bitrates, client devices, and IP addresses.
+  - **Brand Badge Styling**: Media server badges display signature brand tokens: Jellyfin uses a purple accent (`bg-purple-500/10 text-purple-400 border-purple-500/30`) and Emby uses emerald (`bg-emerald-500/10 text-emerald-400 border-emerald-500/30`).
+  - **Interactive Remote Stream Termination (`killUserStream`)**: Users can terminate their own active Jellyfin and Emby streams directly from the dashboard, and administrators can terminate any stream across the cluster via `stopMediaServerSession` (`POST /Sessions/{sessionId}/Playing/Stop`).
 
 ### 4. Button-Led User Dashboard Architecture & Role Parity (`UserLaunchpad`)
 - **DRY Launchpad Pattern**: Replace lengthy, text-heavy vertical card stacks with the touch-friendly `UserLaunchpad` (`src/components/dashboard/user-launchpad.tsx`) positioned immediately below the dashboard header.
@@ -127,6 +132,15 @@ Portalarr uses a **Modern Cinematic Dark Theme** powered by Tailwind CSS, Radix 
 - **Discrete Invite Banner (`PlexInviteBanner`)**:
   - Positioned unobtrusively below the AI Assistant card rather than commanding top billing.
   - Designed as a sleek, low-profile card (`bg-[#121218]/60 border-border/40`) with inline copy input and collapsible guide.
+
+### 5. Send-to-Kindle Sender Update Notice Modal (`KindleSenderUpdateModal`)
+- **Sender Address Lifecycle & Gating Rule**:
+  - Outbound wireless Kindle delivery emails are dispatched from `kindle@domshomelab.com`.
+  - When the outbound sender address is updated, Amazon requires that recipient Kindle users explicitly add `kindle@domshomelab.com` to their Amazon **Approved Personal Document E-mail List** (under *Manage Your Content and Devices → Preferences*).
+  - To prevent delivery failures or silent document drops by Amazon, an interactive update modal (`<KindleSenderUpdateModal />`) is triggered:
+    - **Trigger**: Displayed when an existing user with Send-to-Kindle set up (`user.kindleEmail` contains `@` and is not `"DIRECT_DOWNLOAD"`) goes to request an ebook or missing book in a series, or dispatches an existing ebook.
+    - **Isolation**: Strictly NOT shown to users who do not have Send-to-Kindle enabled or who have already acknowledged the notice (`user.kindleSenderUpdateAcknowledgedAt !== null`).
+    - **User Experience**: Features a 1-click clipboard copy button for `kindle@domshomelab.com`, a direct external link to Amazon's Personal Document Settings, step-by-step instructions, and an "I've Updated My Settings" confirmation button that records acknowledgment in the database (`acknowledgeKindleSenderUpdateAction`) and immediately resumes the pending book request without requiring the user to re-click.
 
 ## 📐 Key Layout & Component Rules
 
@@ -408,16 +422,18 @@ Portalarr features an automated, real-time versioning, branch identification, an
 - **Comprehensive Single-Pane Monitoring**:
   - Positioned at the very top of Admin Mission Control (`/`), aggregating all configured infrastructure services across 5 distinct categories:
     1. **Plex Media Servers** (Direct PMS status, API identity ping, latency)
-    2. **Host Hardware (Glances)** (Physical machines, CPU & RAM utilization, port 61208 status)
-    3. **Stream Monitors (Tautulli)** (Active playback count, API reachability, port 8181/18181)
-    4. **Servarr & Request Apps** (Radarr, Sonarr, Seerr, Ombi, Prowlarr, Bazarr, Maintainerr)
-    5. **Download Clients** (SABnzbd, qBittorrent, NZBGet)
+    2. **Jellyfin Media Servers** (Native Jellyfin REST ping `/System/Info`, dual-URL fallback, server version, purple badge)
+    3. **Emby Media Servers** (Native Emby REST ping `/System/Info`, dual-URL fallback, server version, emerald badge)
+    4. **Host Hardware (Glances)** (Physical machines, CPU & RAM utilization, port 61208 status)
+    5. **Stream Monitors (Tautulli)** (Active playback count, API reachability, port 8181/18181)
+    6. **Servarr & Request Apps** (Radarr, Sonarr, Seerr, Ombi, Prowlarr, Bazarr, Maintainerr)
+    7. **Download Clients** (SABnzbd, qBittorrent, NZBGet)
 - **Visual Status Hierarchy & Pulse States**:
   - 🟢 **ONLINE**: Emerald indicator with pulse, verified reachable response, and round-trip ping latency badge (e.g. `14ms`).
   - 🔴 **OFFLINE / UNREACHABLE**: Crimson rose badge and animated beacon, surfaced prominently with promoted filter badge (`Down (X)`).
   - ⚪ **PAUSED**: Slate neutral badge indicating intentional opt-out (`monitored === false`) configured in Settings > Monitoring. No unnecessary network probing or false alarms.
 - **Interactive Multi-Axis Filtering & Instant Search**:
-  - Status filter pills (`All`, `Down`, `Online`, `Paused`) paired with category dropdown selector (`All Categories`, `Plex Media Servers`, `Host Hardware`, `Stream Monitors`, `Servarr & Request Apps`, `Download Clients`) and client-side instant search input.
+  - Status filter pills (`All`, `Down`, `Online`, `Paused`) paired with category dropdown selector (`All Categories`, `Plex Media Servers`, `Jellyfin Media Servers`, `Emby Media Servers`, `Host Hardware`, `Stream Monitors`, `Servarr & Request Apps`, `Download Clients`) and client-side instant search input.
 - **My Plex Hub Real Monitored Server Isolation (`my-plex-hub.tsx`)**:
   - In user-facing `MyPlexHub` connected servers dialogs and status counters, dummy, paused, or unmonitored Plex servers (`monitored === false`) are strictly filtered out so that only genuine, monitored Plex instances (`KidsPlexServer`, `MainPlexServerBackup`, `MainPlexServer`) are visible to members.
 
@@ -774,6 +790,17 @@ Portalarr features an automated, real-time versioning, branch identification, an
   - Quick action presets: `⚡ Auto-Send Kindle Only`, `Require All`, `Auto-Send All`.
   - Staged emails preserve recipient, subject, rendered HTML, templateId, and file attachments in `payload`.
   - Emails are dispatched via SMTP when approved in the queue (`approveAdminApprovalAction`) or when configured to auto-dispatch.
+- **Dedicated Category-Based Outbound Sender Routing (`resolveSenderAddress`)**:
+  - Dynamically routes outgoing email dispatches to category-matched sender mailboxes based on `templateId` when using a custom verified domain (e.g. `domshomelab.com`):
+    - **Kindle Ebooks (`kindle@<domain>`)**: `"DomsHomeLab Kindle"` for `kindle_delivery`, `kindle_failed`, `kindle_success`.
+    - **Billing & Payments (`payments@<domain>`)**: `"DomsHomeLab Billing"` for `payment_received`, `payment_underpayment`, `admin_payment_received`, `subscription_activated`, and renewal reminders.
+    - **Accounts & Authentication (`accounts@<domain>`)**: `"DomsHomeLab Accounts"` for `user_approval`, `admin_new_user`, `password_reset`, `trial_welcome`, `trial_expiring_soon`, `trial_expired`, and `library_access_request`.
+    - **Requests & Seerr (`requests@<domain>`)**: `"DomsHomeLab Requests"` for `media_ready`, `media_request_admin`, and all `seerr_request_*` notifications.
+    - **Support Tickets (`support@<domain>`)**: `"DomsHomeLab Support"` for `ticket_update` and `ticket_error_alert`.
+    - **Governance Approvals (`accounts@<domain>`)**: `"DomsHomeLab Governance"` for `admin_approval` queue alerts.
+    - **General Announcements & Broadcasts (`notifications@<domain>`)**: `"DomsHomeLab"` for broadcasts and general alerts.
+  - **Safe Webmail Fallback (`PUBLIC_WEBMAIL_DOMAINS`)**: When the configured SMTP sender is a public webmail domain (e.g. `@gmail.com`, `@yahoo.com`, `@outlook.com`), the exact configured sender address is strictly preserved to prevent SPF/DKIM/DMARC rejection by recipient mail providers.
+  - **Email Management UI Integration**: Displays dedicated sender mailboxes (`From: <sender>`) on each template card and in the template editor header, with 1-click preview testing matching the exact routed sender.
 - **Admin Real-Time Approval Notifications (`notifyAdminOnPendingApproval`)**:
   - Whenever an action or staged email enters the queue, Portalarr automatically alerts administrators via configured channels (`adminApprovalDiscordNotify` Discord embeds and `adminApprovalEmailNotify` SMTP emails).
   - Admin notification emails pass `bypassApproval: true` to prevent infinite recursion into the approval queue.
@@ -1264,8 +1291,9 @@ Before completing any task, execute:
     5. **Approval Queue**: Staged live PMS modifications and staged user-facing emails.
     6. **Sent Emails (`sent-emails`)**: Complete outbound email audit log displaying dispatch modes, delivery status, and full message previews.
 - **Automatic vs Approved & Sent Distinction (`SentEmailLog`)**:
-  - **Sent Automatically (`sendMode: "AUTOMATIC"`)**: Displays a purple/indigo badge (`bg-purple-500/15 text-purple-400 border-purple-500/40`) with `Bot` icon indicating messages triggered autonomously by background system workflows (welcome emails, automated renewal notices, system alerts, test emails, and scheduled digests).
+  - **Sent Automatically (`sendMode: "AUTOMATIC"`)**: Displays a purple/indigo badge (`bg-purple-500/15 text-purple-400 border-purple-500/40`) with `Bot` icon indicating messages triggered autonomously by background system workflows (welcome emails, automated renewal notices, system alerts, test emails via `sendTestEmailAction`, template preview tests, and scheduled digests).
   - **Approved & Sent (`sendMode: "APPROVED_AND_SENT"`)**: Displays an emerald badge (`bg-emerald-500/15 text-emerald-400 border-emerald-500/40`) with `ShieldCheck` icon indicating messages that were staged in the Action Approval Queue and vetted by an administrator prior to live SMTP transmission. Displays approver identity (`Approved by "Admin"`) and exact approval timestamp.
+  - **Comprehensive Outbound Logging**: 100% of outbound platform email paths (automated workflows, approved queue dispatches, test connection checks via Resend or Custom SMTP, template previews, and admin approval notifications) record directly to `SentEmailLog` to ensure the audit log is never falsely empty.
 - **Audit Metrics & Telemetry Grid**:
   - **Total Dispatched**: Platform-wide outbound email volume with `Mail` icon in sky blue (`text-sky-400`).
   - **Sent Automatically**: Count of autonomous notifications in purple (`text-purple-400`).
@@ -1276,6 +1304,21 @@ Before completing any task, execute:
   - **Plaintext View & Audit Metadata**: Displays raw plain text body, log IDs, SMTP errors, and template identifiers.
   - **1-Click Resend (`resendSentEmailAction`)**: Allows administrators to re-dispatch any previous message directly to the recipient via SMTP with immediate visual feedback.
   - **Clean Pruning**: Supports individual log deletion and platform-wide audit log clearing.
+
+---
+
+### 41. Universal Floating Suggest Fix Launcher & Decoupled SMTP Settings Architecture
+- **Floating Suggest Fix Launcher (`FloatingSuggestFixLauncher` & `SuggestFixModal`)**:
+  - Mounted globally in `src/components/layout-wrapper.tsx` at `fixed bottom-16 right-4 sm:bottom-20 sm:right-6 z-40` for all authenticated members (positioned just above the AI Assistant pill).
+  - Explicit canonical label: **`Suggest Fix`** with `Wrench` icon (`text-amber-200`) and glowing purple/indigo pill gradient (`from-amber-600 via-purple-600 to-indigo-600`).
+  - Dismissible with `X` button and programmatically operable via `window.dispatchEvent(new CustomEvent("open-suggest-fix"))`.
+- **Decoupled SMTP & Resend Settings Architecture (`src/app/settings/page.tsx`)**:
+  - Resend credentials (`resendApiKey`, `resendFrom`) and Custom SMTP credentials (`customSmtpHost`, `customSmtpPort`, `customSmtpUser`, `customSmtpPass`, `customSmtpFrom`) are completely isolated in separate database columns and UI form states.
+  - **Active Outbound Email Engine Selector Bar**: Administrators can toggle which outbound engine is active using dedicated selector buttons: `Resend (Domain: @domshomelab.com)` with purple styling and `Custom SMTP (Gmail / Outlook / SES)` with sky-blue styling, each displaying real-time `[ ACTIVE ]` vs `[ Standby ]` indicators.
+  - **Panel Status Badges & Quick Set-Active Controls**: Each provider panel features an `Active Engine` emerald pulse badge or a direct 1-click `Set Active` action button.
+  - **Provider-Aware Test Connection (`sendTestEmailAction(emailProviderMode)`)**: When an administrator clicks `Test Connection (Resend)` or `Test Connection (Custom SMTP)`, the action tests the explicitly chosen provider mode rather than whatever was previously saved in the generic SMTP fields. Resend tests route strictly through `smtp.resend.com:465` with `notifications@domshomelab.com`, while Custom SMTP routes through the configured custom host/credentials.
+  - Switching between provider tabs never mutates or overwrites the other provider's credentials, preventing API keys and passwords from overwriting each other.
+  - Active provider mode synchronizes outbound SMTP parameters while leaving both credential sets permanently preserved.
 
 ---
 

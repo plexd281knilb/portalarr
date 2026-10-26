@@ -7,7 +7,7 @@ import sharp from "sharp";
 import { getJwtSecret } from "@/lib/auth-secret";
 import { logger } from "@/lib/logger";
 
-const CUSTOM_BADGES_DIR = path.join(process.cwd(), "data", "custom_badges");
+const CUSTOM_BADGES_DIR = path.join(/*turbopackIgnore: true*/ process.cwd(), "data", "custom_badges");
 
 function ensureCustomBadgesDir() {
     if (!fs.existsSync(CUSTOM_BADGES_DIR)) {

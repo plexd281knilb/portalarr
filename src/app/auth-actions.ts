@@ -478,12 +478,12 @@ async function sendAdminNewAccountRequestEmail(user: { id: string; username: str
       return;
     }
 
-    const admins = await prisma.user.findMany({
-      where: { role: "ADMIN" }
-    });
-
-    const adminEmails = admins.map(a => a.email).filter(Boolean) as string[];
-    const recipientEmails = adminEmails.length > 0 ? adminEmails : [settings.smtpUser as string];
+    const { resolveAdminNotificationEmails } = await import("@/lib/email-templates");
+    const recipientEmails = await resolveAdminNotificationEmails(settings);
+    if (recipientEmails.length === 0) {
+      console.log("[AUTH] No admin recipient emails configured. Skipping account request email.");
+      return;
+    }
     const appUrl = await getAppUrl();
     const { subject, html } = await renderEmailTemplate("admin_new_user", {
       username: user.username,

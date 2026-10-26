@@ -40,8 +40,8 @@ export function FloatingSuggestFixLauncher({ userRole = "USER", username = "Memb
                     <div className="p-1 rounded-full bg-white/20 group-hover:rotate-12 transition-transform duration-200">
                         <Wrench className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-amber-200" />
                     </div>
-                    <span className="hidden xs:inline">Suggest a Fix</span>
-                    <span className="xs:hidden">Fix</span>
+                    <span className="whitespace-nowrap">Suggest Fix</span>
+
                     <Sparkles className="h-3 w-3 text-amber-300 shrink-0" />
                 </button>
 
@@ -49,7 +49,7 @@ export function FloatingSuggestFixLauncher({ userRole = "USER", username = "Memb
                     type="button"
                     onClick={() => setDismissed(true)}
                     className="p-1 rounded-full bg-black/40 hover:bg-black/70 text-muted-foreground hover:text-foreground text-[10px] border border-white/10 transition-colors cursor-pointer"
-                    title="Hide Suggest a Fix launcher"
+                    title="Hide Suggest Fix launcher"
                 >
                     <X className="h-3 w-3" />
                 </button>

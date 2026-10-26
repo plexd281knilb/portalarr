@@ -347,9 +347,19 @@ export async function batchCheckMediaAvailability(
             requestMap.set(`${req.mediaType}:${req.tmdbId}`, req);
         }
 
-        const [guidIndex, arrIndex] = await Promise.all([
+        const guidIndexPromise = Promise.race([
             getPlexLibraryGuidIndex().catch(() => new Map<string, PlexGuidEntry[]>()),
-            import("@/lib/seerr/arr-monitoring").then(m => m.getArrIndex()).catch(() => null)
+            new Promise<Map<string, PlexGuidEntry[]>>((resolve) => setTimeout(() => resolve(new Map()), 1500))
+        ]);
+
+        const arrIndexPromise = Promise.race([
+            import("@/lib/seerr/arr-monitoring").then(m => m.getArrIndex()).catch(() => null),
+            new Promise<null>((resolve) => setTimeout(() => resolve(null), 1500))
+        ]);
+
+        const [guidIndex, arrIndex] = await Promise.all([
+            guidIndexPromise,
+            arrIndexPromise
         ]);
 
         for (const item of items) {

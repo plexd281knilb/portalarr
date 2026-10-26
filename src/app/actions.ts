@@ -22,16 +22,28 @@ import {
     getPlexCloudServersMap
 } from "@/lib/plex";
 import prisma, { ensureSchemaColumns, isPlexMaintenanceWindow } from "@/lib/prisma";
+import { fetchMediaServerActiveSessions, stopMediaServerSession } from "@/lib/media-servers";
 import { resolveMetadataWithAI, resolveRequestMetadataWithAI, callDefaultResolver, analyzeAudiobookChaptersWithAI } from "@/lib/ai-agent";
 import type { AiAssistantResponse, UserDiagnosticSnapshot } from "@/lib/ai-server-assistant-types";
 
 import { getJwtSecret } from "@/lib/auth-secret";
 import { getAppUrl } from "@/lib/app-url";
+import { processEpubForKindle as validateEpubForKindle } from "@/lib/books/epub-validator";
 import { encryptData, decryptData } from "@/lib/encryption";
 import { calculateProratedBilling } from "@/lib/prorated-billing";
 import { calculateUserRenewalSummary } from "@/lib/referral-rewards";
 import { logger, maskToken } from "@/lib/logger";
-import { renderEmailTemplate, DEFAULT_EMAIL_TEMPLATES, getDefaultEmailTemplate, wrapInPortalarrEmailLayout } from "@/lib/email-templates";
+import { 
+    renderEmailTemplate, 
+    DEFAULT_EMAIL_TEMPLATES, 
+    getDefaultEmailTemplate, 
+    wrapInPortalarrEmailLayout, 
+    resolveSenderAddress, 
+    getTemplateSenderCategory,
+    resolveEmailProviderConfig,
+    isEmailDeliveryConfigured,
+    resolveAdminNotificationEmails
+} from "@/lib/email-templates";
 import fs from "fs";
 import path from "path";
 import { convertEbookToEpub, validateAndFixEpubForKindle } from "@/lib/books/epub-converter";
@@ -1140,6 +1152,8 @@ export async function getSettings() {
         const settings = await prisma.settings.findFirst() || {} as any;
         
         if (settings.smtpPass) settings.smtpPass = decryptData(settings.smtpPass);
+        if (settings.resendApiKey) settings.resendApiKey = decryptData(settings.resendApiKey);
+        if (settings.customSmtpPass) settings.customSmtpPass = decryptData(settings.customSmtpPass);
         if (settings.mainPlexToken) settings.mainPlexToken = decryptData(settings.mainPlexToken);
         
         return settings;
@@ -1152,6 +1166,7 @@ export async function getSettings() {
 export async function saveSettings(formData: FormData) {
   await verifyAdmin();
   await ensureSchemaColumns();
+  const currentSettings = await prisma.settings.findFirst({ where: { id: "global" } });
   const updateData: any = {};
 
   if (formData.has("appUrl")) {
@@ -1164,25 +1179,84 @@ export async function saveSettings(formData: FormData) {
     }
     updateData.appUrl = rawUrl;
   }
-  if (formData.has("smtpHost")) {
-    updateData.smtpHost = formData.get("smtpHost") as string || "";
+  if (formData.has("emailProviderMode")) {
+    updateData.emailProviderMode = (formData.get("emailProviderMode") as string || "resend");
   }
-  if (formData.has("smtpPort")) {
-    const rawPort = formData.get("smtpPort");
-    const p = Number(rawPort);
-    updateData.smtpPort = isNaN(p) ? 587 : p;
-  }
-  if (formData.has("smtpUser")) {
-    updateData.smtpUser = formData.get("smtpUser") as string || "";
-  }
-  if (formData.has("smtpPass")) {
-    const rawPass = formData.get("smtpPass") as string;
-    if (rawPass !== null) {
-      updateData.smtpPass = rawPass ? encryptData(rawPass) : "";
+
+  // Handle dedicated Resend fields
+  if (formData.has("resendApiKey")) {
+    const rawResendKey = (formData.get("resendApiKey") as string || "").trim();
+    if (rawResendKey) {
+      updateData.resendApiKey = encryptData(rawResendKey);
     }
   }
-  if (formData.has("smtpFrom")) {
-    updateData.smtpFrom = formData.get("smtpFrom") as string || "";
+  if (formData.has("resendFrom")) {
+    updateData.resendFrom = (formData.get("resendFrom") as string || "").trim() || "notifications@domshomelab.com";
+  }
+
+  // Handle dedicated Custom SMTP fields
+  if (formData.has("customSmtpHost")) {
+    updateData.customSmtpHost = (formData.get("customSmtpHost") as string || "").trim();
+  }
+  if (formData.has("customSmtpPort")) {
+    const cp = Number(formData.get("customSmtpPort"));
+    updateData.customSmtpPort = isNaN(cp) ? 587 : cp;
+  }
+  if (formData.has("customSmtpUser")) {
+    updateData.customSmtpUser = (formData.get("customSmtpUser") as string || "").trim();
+  }
+  if (formData.has("customSmtpPass")) {
+    const rawCustomPass = formData.get("customSmtpPass") as string;
+    if (rawCustomPass !== null && rawCustomPass !== undefined && rawCustomPass !== "") {
+      updateData.customSmtpPass = encryptData(rawCustomPass);
+    }
+  }
+  if (formData.has("customSmtpFrom")) {
+    updateData.customSmtpFrom = (formData.get("customSmtpFrom") as string || "").trim();
+  }
+
+  // Synchronize active SMTP delivery configuration
+  const mode = updateData.emailProviderMode || (formData.get("emailProviderMode") as string) || (formData.get("smtpHost")?.toString().includes("resend") ? "resend" : "custom");
+  if (mode === "resend") {
+    updateData.smtpHost = "smtp.resend.com";
+    updateData.smtpPort = 465;
+    updateData.smtpUser = "resend";
+    const resendKeyToUse = (formData.get("resendApiKey") as string) || (formData.get("smtpPass") as string) || "";
+    if (resendKeyToUse) {
+      updateData.smtpPass = encryptData(resendKeyToUse);
+    } else if (updateData.resendApiKey) {
+      updateData.smtpPass = updateData.resendApiKey;
+    } else if (currentSettings?.resendApiKey) {
+      updateData.smtpPass = currentSettings.resendApiKey;
+    } else if (currentSettings?.smtpHost?.includes("resend") && currentSettings?.smtpPass) {
+      updateData.smtpPass = currentSettings.smtpPass;
+    }
+    const rFrom = ((formData.get("resendFrom") as string) || (formData.get("smtpFrom") as string) || currentSettings?.resendFrom || "").trim();
+    updateData.smtpFrom = (rFrom && !rFrom.toLowerCase().includes("@gmail.com")) ? rFrom : "notifications@domshomelab.com";
+  } else if (mode === "custom") {
+    updateData.smtpHost = updateData.customSmtpHost || currentSettings?.customSmtpHost || (formData.get("smtpHost") as string || "");
+    updateData.smtpPort = updateData.customSmtpPort ?? currentSettings?.customSmtpPort ?? (Number(formData.get("smtpPort")) || 587);
+    updateData.smtpUser = updateData.customSmtpUser || currentSettings?.customSmtpUser || (formData.get("smtpUser") as string || "");
+    const cPass = (formData.get("customSmtpPass") as string) || (formData.get("smtpPass") as string) || "";
+    if (cPass) {
+      updateData.smtpPass = encryptData(cPass);
+    } else if (updateData.customSmtpPass) {
+      updateData.smtpPass = updateData.customSmtpPass;
+    } else if (currentSettings?.customSmtpPass) {
+      updateData.smtpPass = currentSettings.customSmtpPass;
+    } else if (!currentSettings?.smtpHost?.includes("resend") && currentSettings?.smtpPass) {
+      updateData.smtpPass = currentSettings.smtpPass;
+    }
+    updateData.smtpFrom = updateData.customSmtpFrom || currentSettings?.customSmtpFrom || (formData.get("smtpFrom") as string || "");
+  } else {
+    if (formData.has("smtpHost")) updateData.smtpHost = formData.get("smtpHost") as string || "";
+    if (formData.has("smtpPort")) updateData.smtpPort = Number(formData.get("smtpPort")) || 587;
+    if (formData.has("smtpUser")) updateData.smtpUser = formData.get("smtpUser") as string || "";
+    if (formData.has("smtpPass")) {
+      const rawPass = formData.get("smtpPass") as string;
+      if (rawPass) updateData.smtpPass = encryptData(rawPass);
+    }
+    if (formData.has("smtpFrom")) updateData.smtpFrom = formData.get("smtpFrom") as string || "";
   }
   if (formData.has("mainPlexToken")) {
     const rawToken = formData.get("mainPlexToken") as string;
@@ -1857,17 +1931,23 @@ export async function getEmailTemplatesAction() {
     await verifyAdmin();
     await ensureSchemaColumns();
     try {
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        const baseSender = settings?.smtpFrom?.trim() || settings?.smtpUser;
         const customTemplates = await prisma.emailTemplate.findMany().catch(() => []);
         const customMap = new Map(customTemplates.map(t => [t.id, t]));
 
         const results = DEFAULT_EMAIL_TEMPLATES.map(def => {
             const custom = customMap.get(def.id);
+            const resolved = resolveSenderAddress(def.id, baseSender);
             return {
                 id: def.id,
                 name: def.name,
                 description: def.description,
                 triggerEvent: def.triggerEvent,
                 category: def.category,
+                senderCategory: def.senderCategory || resolved.senderCategory,
+                senderEmail: resolved.email,
+                senderFormatted: resolved.formatted,
                 subject: custom?.subject || def.defaultSubject,
                 body: custom?.body || def.defaultBody,
                 defaultSubject: def.defaultSubject,
@@ -1941,11 +2021,13 @@ export async function sendTestEmailTemplateAction(id: string, customSubject?: st
     });
 
     const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-    if (!settings?.smtpHost || !settings?.smtpUser || !settings?.smtpPass) {
-        return { success: false, error: "SMTP settings not configured on this server. Please configure SMTP in General & Email settings." };
+    const emailConfig = resolveEmailProviderConfig(settings);
+    if (!emailConfig.isConfigured) {
+        return { success: false, error: "Email delivery provider settings not configured on this server. Please configure Resend or Custom SMTP in Settings > Email." };
     }
 
-    const recipientEmail = adminUser?.email || settings.smtpUser;
+    const adminRecipients = await resolveAdminNotificationEmails(settings);
+    const recipientEmail = adminUser?.email || adminRecipients[0];
     if (!recipientEmail) {
         return { success: false, error: "No email address found for the current administrator." };
     }
@@ -1994,15 +2076,15 @@ export async function sendTestEmailTemplateAction(id: string, customSubject?: st
     });
 
     try {
-        const rawSender = settings.smtpFrom?.trim() || settings.smtpUser;
-        const senderEmail = rawSender?.includes("<") ? rawSender : `"DomsHomeLab (d281knilb)" <${rawSender}>`;
+        let resolvedSender = resolveSenderAddress(id, emailConfig.from);
+        const senderEmail = resolvedSender.formatted;
         const transporter = nodemailer.createTransport({
-            host: settings.smtpHost,
-            port: settings.smtpPort || 587,
-            secure: settings.smtpPort === 465,
+            host: emailConfig.host,
+            port: emailConfig.port,
+            secure: emailConfig.secure,
             auth: {
-                user: settings.smtpUser,
-                pass: decryptData(settings.smtpPass)
+                user: emailConfig.user,
+                pass: emailConfig.pass
             }
         });
 
@@ -2013,8 +2095,29 @@ export async function sendTestEmailTemplateAction(id: string, customSubject?: st
             html
         });
 
-        logger.addLog("INFO", "EMAIL", `Sent template preview test email for "${defaultDef.name}" to ${recipientEmail}`);
-        return { success: true, message: `Preview test email successfully sent to ${recipientEmail}!` };
+        try {
+            await prisma.sentEmailLog.create({
+                data: {
+                    recipient: recipientEmail,
+                    recipientName: adminUser?.username || "Administrator",
+                    userId: adminUser?.id || null,
+                    subject: `[PREVIEW TEST] ${subject}`,
+                    bodyPreview: body.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 300),
+                    html,
+                    templateId: id,
+                    sendMode: "AUTOMATIC",
+                    status: "SENT",
+                    sentAt: new Date()
+                }
+            });
+            revalidatePath("/settings");
+            revalidatePath("/settings/access");
+        } catch (logErr: any) {
+            console.warn("[SENT-EMAIL-LOG-PREVIEW-ERROR]:", logErr?.message || logErr);
+        }
+
+        logger.addLog("INFO", "EMAIL", `Sent template preview test email for "${defaultDef.name}" from ${resolvedSender.email} to ${recipientEmail}`);
+        return { success: true, message: `Preview test email successfully sent to ${recipientEmail} from ${resolvedSender.email} (${resolvedSender.displayName})!` };
     } catch (e: any) {
         logger.addLog("ERROR", "EMAIL", `Preview test email failed: ${e.message}`);
         return { success: false, error: e.message || "Failed to send preview test email" };
@@ -2173,11 +2276,13 @@ export async function sendTestBroadcastEmailAction(payload: { subject: string; b
     const adminUser = await prisma.user.findFirst({ where: { id: session.userId } });
 
     const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-    if (!settings?.smtpHost || !settings?.smtpUser || !settings?.smtpPass) {
-        return { success: false, error: "SMTP settings not configured on this server." };
+    const emailConfig = resolveEmailProviderConfig(settings);
+    if (!emailConfig.isConfigured) {
+        return { success: false, error: "Email delivery provider settings not configured on this server." };
     }
 
-    const recipientEmail = adminUser?.email || settings.smtpUser;
+    const adminRecipients = await resolveAdminNotificationEmails(settings);
+    const recipientEmail = adminUser?.email || adminRecipients[0];
     if (!recipientEmail) {
         return { success: false, error: "No email address found for the current administrator." };
     }
@@ -2211,14 +2316,15 @@ export async function sendTestBroadcastEmailAction(payload: { subject: string; b
     });
 
     try {
-        const senderEmail = settings.smtpFrom || settings.smtpUser;
+        const resolvedSender = resolveSenderAddress("broadcast", emailConfig.from);
+        const senderEmail = resolvedSender.formatted;
         const transporter = nodemailer.createTransport({
-            host: settings.smtpHost,
-            port: settings.smtpPort || 587,
-            secure: settings.smtpPort === 465,
+            host: emailConfig.host,
+            port: emailConfig.port,
+            secure: emailConfig.secure,
             auth: {
-                user: settings.smtpUser,
-                pass: decryptData(settings.smtpPass)
+                user: emailConfig.user,
+                pass: emailConfig.pass
             }
         });
 
@@ -2229,8 +2335,29 @@ export async function sendTestBroadcastEmailAction(payload: { subject: string; b
             html: personalizedHtml
         });
 
-        logger.addLog("INFO", "EMAIL", `Sent broadcast test preview email to ${recipientEmail}`);
-        return { success: true, message: `Test email successfully delivered to ${recipientEmail}!` };
+        try {
+            await prisma.sentEmailLog.create({
+                data: {
+                    recipient: recipientEmail,
+                    recipientName: adminUser?.username || "Administrator",
+                    userId: adminUser?.id || null,
+                    subject: `[BROADCAST TEST] ${personalizedSubject}`,
+                    bodyPreview: personalizedBody.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 300),
+                    html: personalizedHtml,
+                    templateId: "broadcast_test",
+                    sendMode: "AUTOMATIC",
+                    status: "SENT",
+                    sentAt: new Date()
+                }
+            });
+            revalidatePath("/settings");
+            revalidatePath("/settings/access");
+        } catch (logErr: any) {
+            console.warn("[SENT-EMAIL-LOG-BROADCAST-ERROR]:", logErr?.message || logErr);
+        }
+
+        logger.addLog("INFO", "EMAIL", `Sent broadcast test preview email from ${resolvedSender.email} to ${recipientEmail}`);
+        return { success: true, message: `Test email successfully delivered to ${recipientEmail} from ${resolvedSender.email}!` };
     } catch (e: any) {
         logger.addLog("ERROR", "EMAIL", `Broadcast test failed: ${e.message}`);
         return { success: false, error: e.message || "Failed to send test email" };
@@ -2282,46 +2409,143 @@ export async function clearSmtpSettings() {
   revalidatePath("/settings");
 }
 
-export async function sendTestEmailAction() {
+export async function sendTestEmailAction(providerMode?: "resend" | "custom") {
     await verifyAdmin();
     const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-    if (!settings?.smtpHost || !settings?.smtpUser || !settings?.smtpPass) {
-        return { success: false, error: "SMTP host, username, and password must be saved before testing." };
+    if (!settings) {
+        return { success: false, error: "Settings not found." };
     }
 
+    const effectiveMode = providerMode || settings.emailProviderMode || (settings.smtpHost?.includes("resend") ? "resend" : "custom");
+    const isResend = effectiveMode === "resend";
+
+    const host = isResend ? "smtp.resend.com" : (settings.customSmtpHost || settings.smtpHost || "smtp.gmail.com");
+    const port = isResend ? 465 : (settings.customSmtpPort || settings.smtpPort || 587);
+    const secure = port === 465;
+    const user = isResend ? "resend" : (settings.customSmtpUser || settings.smtpUser || "");
+    const rawPass = isResend ? (settings.resendApiKey || settings.smtpPass) : (settings.customSmtpPass || settings.smtpPass);
+    const pass = rawPass ? decryptData(rawPass) : "";
+    const from = isResend 
+        ? ((settings.resendFrom && !settings.resendFrom.toLowerCase().includes("@gmail.com")) ? settings.resendFrom : "notifications@domshomelab.com")
+        : (settings.customSmtpFrom || settings.smtpFrom || user);
+
+    if (!host || !user || !pass) {
+        return { 
+            success: false, 
+            error: isResend 
+                ? "Resend API Key must be saved before testing." 
+                : "Custom SMTP host, username, and password must be saved before testing." 
+        };
+    }
+
+    let targetRecipient = from.includes("@") ? from : "admin@domshomelab.com";
+    let adminUserRecord: any = null;
+    const testSubject = `🧪 DomsHomeLab SMTP Test (${isResend ? "Resend" : "Custom SMTP"})`;
+    const testHtml = `
+        <div style="font-family: sans-serif; padding: 24px; color: #0f172a; max-width: 550px; margin: 0 auto; border: 1px solid #cbd5e1; border-radius: 12px; background-color: #ffffff;">
+            <h2 style="color: #0284c7; margin-top: 0; font-size: 20px;">SMTP Configuration Verified (${isResend ? "Resend" : "Custom SMTP"})</h2>
+            <p style="font-size: 14px; color: #334155;">Your DomsHomeLab (${isResend ? "Resend Outbound Delivery" : "Custom SMTP Server"}) is working properly.</p>
+            <div style="background-color: #f1f5f9; padding: 12px 16px; border-radius: 8px; font-size: 13px; color: #475569; margin: 16px 0;">
+                <strong>Provider:</strong> ${isResend ? "Resend (smtp.resend.com)" : "Custom SMTP"}<br/>
+                <strong>Host:</strong> ${host}:${port}<br/>
+                <strong>Sender:</strong> ${from}
+            </div>
+            <p style="font-size: 12px; color: #94a3b8; margin-bottom: 0;">Sent automatically from DomsHomeLab System Settings.</p>
+        </div>
+    `;
+
     try {
-        const senderEmail = settings.smtpFrom || settings.smtpUser;
+        adminUserRecord = await prisma.user.findFirst({
+            where: { role: "ADMIN", email: { contains: "@" } },
+            select: { id: true, email: true, username: true }
+        });
+        if (adminUserRecord?.email) {
+            targetRecipient = adminUserRecord.email;
+        }
+        const resolvedSender = resolveSenderAddress("notifications", from);
+        const senderEmail = resolvedSender.formatted;
         const transporter = nodemailer.createTransport({
-            host: settings.smtpHost,
-            port: settings.smtpPort || 587,
-            secure: settings.smtpPort === 465,
+            host,
+            port,
+            secure,
             auth: {
-                user: settings.smtpUser,
-                pass: decryptData(settings.smtpPass)
+                user,
+                pass
             }
         });
 
         await transporter.sendMail({
             from: senderEmail,
-            to: settings.smtpUser,
-            subject: "🧪 DomsHomeLab (d281knilb) SMTP Email Test",
-            html: `
-                <div style="font-family: sans-serif; padding: 24px; color: #0f172a; max-width: 550px; margin: 0 auto; border: 1px solid #cbd5e1; border-radius: 12px; background-color: #ffffff;">
-                    <h2 style="color: #0284c7; margin-top: 0; font-size: 20px;">SMTP Configuration Verified</h2>
-                    <p style="font-size: 14px; color: #334155;">Your DomsHomeLab (d281knilb) SMTP server configuration is working properly.</p>
-                    <div style="background-color: #f1f5f9; padding: 12px 16px; border-radius: 8px; font-size: 13px; color: #475569; margin: 16px 0;">
-                        <strong>SMTP Host:</strong> ${settings.smtpHost}:${settings.smtpPort || 587}<br/>
-                        <strong>Sender:</strong> ${senderEmail}
-                    </div>
-                    <p style="font-size: 12px; color: #94a3b8; margin-bottom: 0;">Sent automatically from DomsHomeLab System Settings.</p>
-                </div>
-            `
+            to: targetRecipient,
+            subject: testSubject,
+            html: testHtml
         });
-        logger.addLog("SUCCESS", "EMAIL", `Test email successfully dispatched to ${settings.smtpUser}!`, `Host: ${settings.smtpHost}:${settings.smtpPort || 587} | Sender: ${senderEmail}`);
-        return { success: true, message: `Test email successfully dispatched to ${settings.smtpUser}!` };
+
+        try {
+            await prisma.sentEmailLog.create({
+                data: {
+                    recipient: targetRecipient,
+                    recipientName: adminUserRecord?.username || "Administrator",
+                    userId: adminUserRecord?.id || null,
+                    subject: testSubject,
+                    bodyPreview: `SMTP test connection via ${isResend ? "Resend (smtp.resend.com:465)" : `Custom SMTP (${host}:${port})`}`,
+                    html: testHtml,
+                    templateId: isResend ? "smtp_test_resend" : "smtp_test_custom",
+                    sendMode: "AUTOMATIC",
+                    status: "SENT",
+                    sentAt: new Date()
+                }
+            });
+            revalidatePath("/settings");
+            revalidatePath("/settings/access");
+        } catch (logErr: any) {
+            console.warn("[SENT-EMAIL-LOG-TEST-ERROR]:", logErr?.message || logErr);
+        }
+
+        logger.addLog("SUCCESS", "EMAIL", `Test email successfully dispatched to ${targetRecipient}!`, `Provider: ${isResend ? "Resend" : "Custom"} | Host: ${host}:${port} | Sender: ${senderEmail}`);
+        return { success: true, message: `Test email (${isResend ? "Resend" : "Custom SMTP"}) successfully dispatched to ${targetRecipient} from ${senderEmail}!` };
     } catch (e: any) {
+        try {
+            await prisma.sentEmailLog.create({
+                data: {
+                    recipient: targetRecipient,
+                    recipientName: adminUserRecord?.username || "Administrator",
+                    userId: adminUserRecord?.id || null,
+                    subject: testSubject,
+                    bodyPreview: `SMTP test connection failed: ${e.message}`,
+                    html: `<p>Failed: ${e.message}</p>`,
+                    templateId: isResend ? "smtp_test_resend" : "smtp_test_custom",
+                    sendMode: "AUTOMATIC",
+                    status: "FAILED",
+                    error: e.message || String(e),
+                    sentAt: new Date()
+                }
+            });
+            revalidatePath("/settings");
+            revalidatePath("/settings/access");
+        } catch {}
         logger.addLog("ERROR", "EMAIL", `Test email dispatch failed: ${e.message}`, e.stack || String(e));
         return { success: false, error: e.message || "Failed to dispatch test email." };
+    }
+}
+
+export async function getAdminNotificationEmailAction() {
+    try {
+        await verifyAdmin();
+        const adminUser = await prisma.user.findFirst({
+            where: { role: "ADMIN", email: { contains: "@" } },
+            select: { email: true, username: true, id: true }
+        });
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        const resolvedEmail = adminUser?.email || (settings?.smtpFrom?.includes("@") ? settings.smtpFrom : (settings?.smtpUser?.includes("@") ? settings.smtpUser : "admin@domshomelab.com"));
+        return {
+            success: true,
+            email: resolvedEmail,
+            adminUsername: adminUser?.username || "Admin",
+            adminUserId: adminUser?.id
+        };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to resolve admin notification email." };
     }
 }
 
@@ -3252,22 +3476,21 @@ export async function notifyAdminUserRoleOrAccessChange(params: {
             `⚠️ [USER ACCESS/ROLE CHANGE] User "${username}" (${email}): Status [${statusChange}], Role [${oldRole} -> ${newRole}]. Reason: ${params.reason}`
         );
 
-        // 2. Dispatch email notification to admins if SMTP is enabled
+        // 2. Dispatch email notification to admins if email provider is configured
         const settings = await prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null);
-        if (!settings || !settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
-            return { success: true, emailed: false, reason: "SMTP not configured" };
+        const emailConfig = resolveEmailProviderConfig(settings);
+        if (!emailConfig.isConfigured) {
+            return { success: true, emailed: false, reason: "Email delivery not configured" };
         }
-        if (settings.emailNotificationsEnabled === false) {
+        if (settings?.emailNotificationsEnabled === false) {
             return { success: true, emailed: false, reason: "Email notifications disabled" };
         }
 
-        const admins = await prisma.user.findMany({
-            where: { role: "ADMIN" }
-        }).catch(() => []);
-
-        const adminEmails = admins.map(a => a.email).filter(Boolean);
-        const recipientEmails = adminEmails.length > 0 ? adminEmails : [settings.smtpUser];
-        const senderEmail = settings.smtpFrom || settings.smtpUser;
+        const recipientEmails = await resolveAdminNotificationEmails(settings);
+        if (recipientEmails.length === 0) {
+            return { success: true, emailed: false, reason: "No admin email recipients configured" };
+        }
+        const senderEmail = emailConfig.from;
 
         const { renderEmailTemplate } = await import("../lib/email-templates");
         const appUrl = await getAppUrl();
@@ -3881,6 +4104,106 @@ export async function adminResetUserPassword(id: string, newPass: string) {
     }
 }
 
+export async function updateCurrentUserPrimaryEmail(newEmail: string) {
+    const session: any = await verifyUser();
+    const userId = session?.userId || session?.id;
+    if (!userId) return { success: false, error: "Unauthorized" };
+
+    const cleanEmail = (newEmail || "").trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!cleanEmail || !emailRegex.test(cleanEmail)) {
+        return { success: false, error: "Please enter a valid email address." };
+    }
+
+    // Check collision with another user
+    const existing = await prisma.user.findFirst({
+        where: {
+            email: cleanEmail,
+            NOT: { id: userId }
+        }
+    });
+    if (existing) {
+        return { success: false, error: "This email address is already registered to another account." };
+    }
+
+    const currentUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { username: true, email: true }
+    });
+
+    const updateData: any = { email: cleanEmail };
+    // If username was identical to old email, keep username in sync
+    if (currentUser && currentUser.username.toLowerCase() === currentUser.email.toLowerCase()) {
+        const usernameCollision = await prisma.user.findFirst({
+            where: { username: cleanEmail, NOT: { id: userId } }
+        });
+        if (!usernameCollision) {
+            updateData.username = cleanEmail;
+        }
+    }
+
+    await prisma.user.update({
+        where: { id: userId },
+        data: updateData
+    });
+
+    logger.addLog("INFO", "AUTH", `User "${currentUser?.username || userId}" updated primary email to "${cleanEmail}"`);
+    try {
+        revalidatePath("/settings");
+        revalidatePath("/settings/profile");
+        revalidatePath("/settings/access");
+    } catch {}
+    return { success: true, message: `Account email successfully updated to ${cleanEmail}!` };
+}
+
+export async function updateAppUserEmail(id: string, newEmail: string) {
+    await verifyAdmin();
+    const cleanEmail = (newEmail || "").trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!cleanEmail || !emailRegex.test(cleanEmail)) {
+        return { success: false, error: "Please enter a valid email address." };
+    }
+
+    // Check collision with another user
+    const existing = await prisma.user.findFirst({
+        where: {
+            email: cleanEmail,
+            NOT: { id }
+        }
+    });
+    if (existing) {
+        return { success: false, error: "This email address is already in use by another account." };
+    }
+
+    const targetUser = await prisma.user.findUnique({
+        where: { id },
+        select: { username: true, email: true }
+    });
+
+    const updateData: any = { email: cleanEmail };
+    if (targetUser && targetUser.username.toLowerCase() === targetUser.email.toLowerCase()) {
+        const usernameCollision = await prisma.user.findFirst({
+            where: { username: cleanEmail, NOT: { id } }
+        });
+        if (!usernameCollision) {
+            updateData.username = cleanEmail;
+        }
+    }
+
+    await prisma.user.update({
+        where: { id },
+        data: updateData
+    });
+
+    logger.addLog("INFO", "AUTH", `Admin updated email for user "${targetUser?.username || id}" to "${cleanEmail}"`);
+    try {
+        revalidatePath("/settings");
+        revalidatePath("/settings/profile");
+        revalidatePath("/settings/access");
+    } catch {}
+    return { success: true, message: `User email successfully updated to ${cleanEmail}!` };
+}
+
 export async function approveAllPendingAppUsers() {
     await verifyAdmin();
     try {
@@ -3940,11 +4263,6 @@ export async function getTicketsDashboardAction() {
         },
         tickets
     };
-}
-
-export async function getSupportTickets() {
-    const res = await getTicketsDashboardAction();
-    return res.tickets;
 }
 
 export async function updateTicketStatus(id: string, status: string, adminComment?: string) {
@@ -4030,27 +4348,6 @@ export async function fetchPlexServerLibraries() {
     } catch (e: any) {
         console.error("[PLEX-LIBRARIES-ERROR]:", e?.message || e, e?.stack);
         return { success: false, servers: [], error: e?.message || "Failed to fetch Plex libraries" };
-    }
-}
-
-export async function fetchUserPlexShares() {
-    try {
-        await verifyAdmin();
-        const settings = await prisma.settings.findUnique({ where: { id: "global" } });
-        let adminToken = "";
-        if (settings?.mainPlexToken) {
-            adminToken = decryptData(settings.mainPlexToken);
-        }
-        if (!adminToken) {
-            adminToken = process.env.PLEX_TOKEN || process.env.MAIN_PLEX_TOKEN || "";
-        }
-        if (!adminToken) {
-            return { success: false, shares: [] };
-        }
-        const shares = await getPlexSharedServersList(adminToken);
-        return { success: true, shares };
-    } catch (e: any) {
-        return { success: false, shares: [], error: e.message };
     }
 }
 
@@ -4478,6 +4775,7 @@ export async function sendOrQueueEmail(options: {
     html: string;
     text?: string;
     templateId?: string;
+    from?: string;
     targetUser?: string;
     userId?: string;
     bypassApproval?: boolean;
@@ -4553,6 +4851,19 @@ export async function sendOrQueueEmail(options: {
             }
         }
 
+        const emailConfig = resolveEmailProviderConfig(settings);
+        const host = emailConfig.host;
+        const port = emailConfig.port;
+        const secure = emailConfig.secure;
+        const user = emailConfig.user;
+        const pass = emailConfig.pass;
+        const defaultFrom = emailConfig.from;
+
+        const resolvedSender = options.from
+            ? { formatted: options.from, email: options.from, displayName: "DomsHomeLab" }
+            : resolveSenderAddress(options.templateId, defaultFrom);
+        const senderEmail = resolvedSender.formatted;
+
         if (requireApproval) {
             const attachmentNote = options.attachments && options.attachments.length > 0 ? ` [${options.attachments.length} attachment(s)]` : "";
             const approval = await prisma.adminApproval.create({
@@ -4566,6 +4877,7 @@ export async function sendOrQueueEmail(options: {
                     userId: options.userId || null,
                     payload: JSON.stringify({
                         to: options.to,
+                        from: senderEmail,
                         subject: options.subject,
                         html: options.html,
                         text: options.text,
@@ -4583,21 +4895,19 @@ export async function sendOrQueueEmail(options: {
             return { success: true, queued: true, approvalId: approval.id };
         }
 
-        // Send email immediately via SMTP
-        if (!settings?.smtpHost || !settings?.smtpUser || !settings?.smtpPass) {
-            logger.addLog("WARN", "EMAIL", `Failed to dispatch email "${options.subject}" to ${recipientStr}: SMTP settings not configured`);
-            return { success: false, error: "SMTP settings not configured" };
+        // Send email immediately via SMTP / Resend
+        if (!host || !user || !pass) {
+            logger.addLog("WARN", "EMAIL", `Failed to dispatch email "${options.subject}" to ${recipientStr}: SMTP / Resend delivery settings not configured`);
+            return { success: false, error: "Email delivery provider settings not configured" };
         }
 
-        const rawSender = settings.smtpFrom?.trim() || settings.smtpUser;
-        const senderEmail = rawSender?.includes("<") ? rawSender : `"DomsHomeLab (d281knilb)" <${rawSender}>`;
         const transporter = nodemailer.createTransport({
-            host: settings.smtpHost,
-            port: settings.smtpPort || 587,
-            secure: settings.smtpPort === 465,
+            host,
+            port,
+            secure,
             auth: {
-                user: settings.smtpUser,
-                pass: decryptData(settings.smtpPass)
+                user,
+                pass
             }
         });
 
@@ -4779,6 +5089,7 @@ export async function approveAdminApprovalAction(approvalId: string) {
         if (approval.type === "EMAIL") {
             const sendRes = await sendOrQueueEmail({
                 to: payload.to,
+                from: payload.from,
                 subject: payload.subject,
                 html: payload.html,
                 text: payload.text,
@@ -4857,9 +5168,10 @@ export async function approveAdminApprovalAction(approvalId: string) {
                     }
                 }
             } else {
+                const keysToApply = payload.selectedKeys || payload.selectedPlexSections || [];
                 const updateRes = await executePlexLibraryAccessUpdateInternal(
                     payload.userId,
-                    payload.selectedKeys,
+                    keysToApply,
                     payload.activationType,
                     payload.customDateOrDays
                 );
@@ -4884,6 +5196,21 @@ export async function approveAdminApprovalAction(approvalId: string) {
     } catch (e: any) {
         console.error("[APPROVE-ADMIN-APPROVAL-ERROR]:", e.message || e);
         return { success: false, error: e.message || "Failed to approve action" };
+    }
+}
+
+export async function resendApprovalNotificationAction(approvalId: string) {
+    try {
+        await verifyAdmin();
+        const approval = await prisma.adminApproval.findUnique({ where: { id: approvalId } });
+        if (!approval) return { success: false, error: "Approval request not found" };
+        const res = await notifyAdminsOnPendingApproval(approval);
+        return { 
+            success: true, 
+            message: `Notification alert dispatched to ${res.adminsNotified} admin(s)${res.discordNotified ? " and Discord" : ""}.` 
+        };
+    } catch (e: any) {
+        return { success: false, error: e?.message || "Failed to resend approval alert" };
     }
 }
 
@@ -6784,7 +7111,12 @@ export async function getPublicJoinConfig(refCode?: string) {
                 referrerName,
                 validReferral,
                 proratedBilling,
-                smtpFrom: settings?.smtpFrom || settings?.smtpUser || "",
+                smtpFrom: resolveEmailProviderConfig(settings).from,
+                kindleSenderEmail: resolveSenderAddress("kindle_delivery", resolveEmailProviderConfig(settings).from).email,
+                paymentsSenderEmail: resolveSenderAddress("payment_received", resolveEmailProviderConfig(settings).from).email,
+                supportSenderEmail: resolveSenderAddress("ticket_update", resolveEmailProviderConfig(settings).from).email,
+                accountsSenderEmail: resolveSenderAddress("user_approval", resolveEmailProviderConfig(settings).from).email,
+                requestsSenderEmail: resolveSenderAddress("media_ready", resolveEmailProviderConfig(settings).from).email,
                 appUrl: await getAppUrl()
             }
         };
@@ -6838,35 +7170,6 @@ export async function validateMemberReferenceAction(reference: string): Promise<
         };
     } catch (e: any) {
         return { success: false, valid: false, error: e.message || "Failed to validate invite reference." };
-    }
-}
-
-export async function sendManualEmail(formData: FormData) {
-    await verifyAdmin();
-    const to = formData.get("to") as string;
-    const subject = formData.get("subject") as string;
-    const message = formData.get("message") as string;
-
-    if (!to || !subject || !message) return { error: "All fields are required." };
-
-    try {
-        const mailRes = await sendOrQueueEmail({
-            to,
-            subject,
-            html: `<div style="font-family: sans-serif; white-space: pre-wrap;">${message}</div>`,
-            text: message,
-            templateId: "manual_email",
-            targetUser: to
-        });
-
-        if (!mailRes.success) {
-            return { error: mailRes.error || "Failed to send email. Please check your SMTP settings in the General tab." };
-        }
-
-        return { success: true, queued: mailRes.queued, message: mailRes.queued ? "Email staged in Admin Approval Queue for review." : "Email sent successfully!" };
-    } catch (e: any) {
-        console.error("Email Failed:", e);
-        return { error: e.message || "Failed to send email. Please check your SMTP settings in the General tab." };
     }
 }
 
@@ -7076,56 +7379,6 @@ export async function updateUserContentPreferencesAction(data: {
         return { success: true, message: "Content safety preferences saved successfully!", preferences: updated };
     } catch (e: any) {
         return { success: false, error: e.message || "Failed to update content preferences" };
-    }
-}
-
-export async function updateUserAccountTypeAction(userId: string, accountType: string) {
-    try {
-        await verifyAdmin();
-        const validTypes = ["STANDARD", "KID", "LIVING_ROOM"];
-        const cleanType = validTypes.includes(accountType) ? accountType : "STANDARD";
-
-        const updated = await prisma.user.update({
-            where: { id: userId },
-            data: {
-                accountType: cleanType,
-                // Automatically enforce kid restrictions if accountType is KID
-                ...(cleanType === "KID"
-                    ? {
-                          canRequest4k: false,
-                          autoApproveMovies: true,
-                          autoApproveTv: true
-                      }
-                    : {})
-            },
-            select: { id: true, username: true, accountType: true, membershipTier: true }
-        });
-
-        // Set default kid content preference if newly assigned
-        if (cleanType === "KID") {
-            await prisma.userContentPreference.upsert({
-                where: { userId },
-                update: {
-                    maxContentRating: "PG",
-                    hideHorror: true,
-                    hideNsfw: true,
-                    hideGore: true
-                },
-                create: {
-                    userId,
-                    maxContentRating: "PG",
-                    hideHorror: true,
-                    hideNsfw: true,
-                    hideGore: true
-                }
-            }).catch(() => {});
-        }
-
-        syncUserRoleToDiscord(userId).catch(() => {});
-        revalidatePath("/settings/access");
-        return { success: true, message: `Updated ${updated.username} account type to ${cleanType}`, user: updated };
-    } catch (e: any) {
-        return { success: false, error: e.message || "Failed to update account type" };
     }
 }
 
@@ -8226,30 +8479,6 @@ export async function toggleAdminAddonAvailabilityAction(addonId: string, isAvai
     }
 }
 
-/**
- * Saves the global add-ons catalog (Admin only).
- */
-export async function saveAddonsCatalogAction(addons: any[]) {
-    try {
-        await verifyAdmin();
-        await ensureSchemaColumns();
-        const jsonStr = JSON.stringify(addons);
-
-        await prisma.settings.upsert({
-            where: { id: "global" },
-            update: { availableAddons: jsonStr },
-            create: { id: "global", availableAddons: jsonStr }
-        });
-
-        revalidatePath("/settings");
-        revalidatePath("/settings/access");
-        revalidatePath("/settings/profile");
-        return { success: true, message: "Add-ons catalog saved successfully!" };
-    } catch (e: any) {
-        return { success: false, error: e.message || "Failed to save add-ons catalog" };
-    }
-}
-
 export async function requestTierUpgradeAction(targetTier: string, note?: string) {
     try {
         const user: any = await verifyUser();
@@ -8328,27 +8557,30 @@ export async function submitSupportTicket(formData: FormData) {
 
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
         
-        if (settings?.smtpHost && settings?.smtpUser && settings?.emailNotificationsEnabled !== false && settings?.notifySupportTickets !== false) {
-            const appUrl = await getAppUrl();
-            const { subject, html } = await renderEmailTemplate("ticket_error_alert", {
-                name,
-                email,
-                pageUrl: "/",
-                errorTitle: `New Ticket from ${name}`,
-                errorMessage: issue,
-                userNoteBlock: "",
-                ticketsUrl: `${appUrl}/admin/tickets`,
-                appUrl
-            });
+        if (isEmailDeliveryConfigured(settings) && settings?.emailNotificationsEnabled !== false && settings?.notifySupportTickets !== false) {
+            const adminRecipients = await resolveAdminNotificationEmails(settings);
+            if (adminRecipients.length > 0) {
+                const appUrl = await getAppUrl();
+                const { subject, html } = await renderEmailTemplate("ticket_error_alert", {
+                    name,
+                    email,
+                    pageUrl: "/",
+                    errorTitle: `New Ticket from ${name}`,
+                    errorMessage: issue,
+                    userNoteBlock: "",
+                    ticketsUrl: `${appUrl}/admin/tickets`,
+                    appUrl
+                });
 
-            await sendOrQueueEmail({
-                to: settings.smtpUser,
+                await sendOrQueueEmail({
+                    to: adminRecipients,
                 subject,
                 html,
                 text: `User: ${name} (${email})\n\nIssue:\n${issue}\n\nQuick Actions:\nManage User: ${appUrl}/settings/access?search=${encodeURIComponent(email)}\nTickets: ${appUrl}/admin/tickets`,
                 templateId: "ticket_error_alert",
                 targetUser: name
             });
+            }
         }
         try {
             revalidatePath("/");
@@ -8409,30 +8641,33 @@ export async function submitAutoErrorTicketAction(errorPayload: {
 
         // Send email notification to Admin if SMTP is configured
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-        if (settings?.smtpHost && settings?.smtpUser && settings?.emailNotificationsEnabled !== false && settings?.notifySupportTickets !== false) {
+        if (isEmailDeliveryConfigured(settings) && settings?.emailNotificationsEnabled !== false && settings?.notifySupportTickets !== false) {
             try {
-                const appUrl = await getAppUrl();
-                const userNoteBlock = errorPayload.customNote ? `<div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed #fca5a5;"><strong>User Note:</strong> ${errorPayload.customNote}</div>` : "";
+                const adminRecipients = await resolveAdminNotificationEmails(settings);
+                if (adminRecipients.length > 0) {
+                    const appUrl = await getAppUrl();
+                    const userNoteBlock = errorPayload.customNote ? `<div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed #fca5a5;"><strong>User Note:</strong> ${errorPayload.customNote}</div>` : "";
 
-                const { subject, html } = await renderEmailTemplate("ticket_error_alert", {
-                    name,
-                    email,
-                    pageUrl: errorPayload.pageUrl || "/",
-                    errorTitle: errorPayload.errorTitle || "System Error",
-                    errorMessage: errorPayload.errorMessage,
-                    userNoteBlock,
-                    ticketsUrl: `${appUrl}/admin/tickets`,
-                    appUrl
-                });
+                    const { subject, html } = await renderEmailTemplate("ticket_error_alert", {
+                        name,
+                        email,
+                        pageUrl: errorPayload.pageUrl || "/",
+                        errorTitle: errorPayload.errorTitle || "System Error",
+                        errorMessage: errorPayload.errorMessage,
+                        userNoteBlock,
+                        ticketsUrl: `${appUrl}/admin/tickets`,
+                        appUrl
+                    });
 
-                await sendOrQueueEmail({
-                    to: settings.smtpUser,
+                    await sendOrQueueEmail({
+                        to: adminRecipients,
                     subject,
                     html,
                     text: formattedIssue,
                     templateId: "ticket_error_alert",
                     targetUser: name
                 });
+                }
             } catch (mailErr: any) {
                 console.error("[AUTO-TICKET] Failed to send email alert for ticket:", mailErr.message || mailErr);
             }
@@ -8676,27 +8911,30 @@ export async function submitPageFixSuggestionAction(payload: PageFixSuggestionPa
         const ticketsUrl = `${appUrl}/admin/tickets`;
 
         // 1. Email Notification to Admin
-        if (settings?.smtpHost && settings?.smtpUser && settings?.emailNotificationsEnabled !== false && settings?.notifySupportTickets !== false) {
+        if (isEmailDeliveryConfigured(settings) && settings?.emailNotificationsEnabled !== false && settings?.notifySupportTickets !== false) {
             try {
-                const { subject, html } = await renderEmailTemplate("ticket_error_alert", {
-                    name: username,
-                    email: email,
-                    pageUrl: payload.pageUrl,
-                    errorTitle: `Page Fix Suggested: ${payload.summary}`,
-                    errorMessage: `${payload.category} on ${pageInfo.title}\n\n${payload.description}`,
-                    userNoteBlock: `<div style="margin-top: 10px; padding: 10px; background-color: #f8fafc; border-left: 3px solid #6366f1;"><strong>Category:</strong> ${payload.category}<br/><strong>Page:</strong> ${payload.pageUrl}</div>`,
-                    ticketsUrl,
-                    appUrl
-                });
+                const adminRecipients = await resolveAdminNotificationEmails(settings);
+                if (adminRecipients.length > 0) {
+                    const { subject, html } = await renderEmailTemplate("ticket_error_alert", {
+                        name: username,
+                        email: email,
+                        pageUrl: payload.pageUrl,
+                        errorTitle: `Page Fix Suggested: ${payload.summary}`,
+                        errorMessage: `${payload.category} on ${pageInfo.title}\n\n${payload.description}`,
+                        userNoteBlock: `<div style="margin-top: 10px; padding: 10px; background-color: #f8fafc; border-left: 3px solid #6366f1;"><strong>Category:</strong> ${payload.category}<br/><strong>Page:</strong> ${payload.pageUrl}</div>`,
+                        ticketsUrl,
+                        appUrl
+                    });
 
-                await sendOrQueueEmail({
-                    to: settings.smtpUser,
+                    await sendOrQueueEmail({
+                        to: adminRecipients,
                     subject: `[Page Fix] ${payload.summary}`,
                     html,
                     text: formattedIssue,
                     templateId: "ticket_error_alert",
                     targetUser: username
                 });
+                }
             } catch (mailErr: any) {
                 console.error("[PAGE-FIX] Failed to dispatch admin email notification:", mailErr?.message || mailErr);
             }
@@ -10723,33 +10961,6 @@ export async function renameBookFileOnDisk(bookId: string): Promise<string> {
     }
 }
 
-
-export async function deleteBookRequest(id: string) {
-    const session = await verifyUser();
-    const request = await prisma.bookRequest.findUnique({ where: { id } });
-    if (!request) throw new Error("Request not found");
-
-    if (session.role !== "ADMIN" && request.requestedBy !== session.username) {
-        throw new Error("You are not authorized to delete this request");
-    }
-
-    // Cascade delete matching MediaRequest so it does not resurrect or remain orphaned
-    await prisma.mediaRequest.deleteMany({
-        where: {
-            title: request.title,
-            mediaType: { in: ["book", "ebook", "audiobook"] },
-            requestedByUsername: request.requestedBy
-        }
-    }).catch(() => {});
-
-    await prisma.bookRequest.delete({ where: { id } });
-    try {
-        revalidatePath("/library");
-        revalidatePath("/requests");
-        revalidatePath("/discover");
-    } catch {}
-}
-
 export async function getBookRequests() {
     let session: any = null;
     try {
@@ -10886,7 +11097,7 @@ export async function getBookRequests() {
 export async function sendRequestCompletionNotification(requestIdOrBook: any, matchedBook?: any) {
     try {
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-        if (!settings || !settings.smtpHost || !settings.smtpUser || !settings.smtpPass || settings.emailNotificationsEnabled === false || settings.notifyMediaRequests === false) {
+        if (!isEmailDeliveryConfigured(settings) || settings?.emailNotificationsEnabled === false || settings?.notifyMediaRequests === false) {
             return;
         }
 
@@ -10952,26 +11163,18 @@ export async function sendRequestCompletionNotification(requestIdOrBook: any, ma
 export async function sendRequestNotificationToAdmins(request: { title: string, author: string, requestedBy: string, type: string, mediaType?: string, publishYear?: string | null }) {
     try {
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-        if (!settings || !settings.smtpHost || !settings.smtpUser || !settings.smtpPass || settings.emailNotificationsEnabled === false || settings.notifyMediaRequests === false) {
-            if (!settings?.smtpHost || !settings?.smtpUser || !settings?.smtpPass) {
-                logger.addLog("WARN", "EMAIL", `Skipping book request email notification for "${request.title}": SMTP host/user/pass is not configured in Settings > Email.`);
+        if (!isEmailDeliveryConfigured(settings) || settings?.emailNotificationsEnabled === false || settings?.notifyMediaRequests === false) {
+            if (!isEmailDeliveryConfigured(settings)) {
+                logger.addLog("WARN", "EMAIL", `Skipping book request email notification for "${request.title}": Email delivery provider settings are not configured in Settings > Email.`);
             }
             return;
         }
 
-        const admins = await prisma.user.findMany({
-            where: { role: { in: ["ADMIN", "SUPER_USER"] } }
-        });
-
-        if (admins.length === 0) {
-            return;
-        }
+        const adminEmails = await resolveAdminNotificationEmails(settings);
+        if (adminEmails.length === 0) return;
 
         const isAudiobook = request.mediaType === "audiobook";
         const mediaLabel = isAudiobook ? "Audiobook" : "Ebook";
-
-        const adminEmails = admins.map(a => a.email).filter(e => e && e.includes("@")) as string[];
-        if (adminEmails.length === 0) return;
 
         const appUrl = await getAppUrl();
         const { subject, html } = await renderEmailTemplate("media_request_admin", {
@@ -11315,35 +11518,8 @@ async function expandSeriesRequest(seriesTitle: string, author: string, requeste
     }
 }
 
-export async function updateBookRequestStatus(id: string, status: string) {
-    await verifyAdmin();
-    await prisma.bookRequest.update({
-        where: { id },
-        data: { status }
-    });
-    revalidatePath("/library");
-}
-
 export async function processEpubForKindle(filePath: string): Promise<string> {
-    if (!fs.existsSync(filePath)) {
-        throw new Error("File does not exist.");
-    }
-
-    const stats = fs.statSync(filePath);
-    if (stats.size > 50 * 1024 * 1024) {
-        throw new Error("File size exceeds 50MB Kindle limit.");
-    }
-
-    const fd = fs.openSync(filePath, 'r');
-    const buffer = Buffer.alloc(4);
-    fs.readSync(fd, buffer, 0, 4, 0);
-    fs.closeSync(fd);
-
-    if (buffer.toString('hex') !== '504b0304') {
-        throw new Error("Invalid file format. File is not a valid ZIP/EPUB archive.");
-    }
-
-    return filePath;
+    return validateEpubForKindle(filePath);
 }
 
 export async function scanLibrary(libraryId?: string): Promise<{ success: boolean, error?: string, message?: string, count?: number }> {
@@ -15563,18 +15739,21 @@ export async function sendBookToKindle(bookId: string, targetUsername?: string) 
         }
 
         const settings = await prisma.settings.findFirst({ where: { id: "global" } }) || {} as any;
-        if (!settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
-            return { success: false, error: "SMTP is not configured on this server. Please contact your administrator to configure SMTP." };
+        if (!isEmailDeliveryConfigured(settings)) {
+            return { success: false, error: "Email delivery provider is not configured on this server. Please contact your administrator to configure Resend or Custom SMTP." };
         }
         if (settings.emailNotificationsEnabled === false || settings.notifySendToKindle === false) {
             return { success: false, error: "Send-to-Kindle email delivery is currently disabled in Email Notification Settings." };
         }
 
-        const senderEmail = settings.smtpFrom || settings.smtpUser;
+        const kindleSender = resolveSenderAddress("kindle_delivery", resolveEmailProviderConfig(settings).from);
+        const senderEmail = kindleSender.email;
+        const senderFormatted = kindleSender.formatted;
 
         try {
             const mailRes = await sendOrQueueEmail({
                 to: user.kindleEmail,
+                from: senderFormatted,
                 subject: `Deliver Book: ${book.title}`,
                 text: `Delivering your ebook "${book.title}" to your Kindle device.`,
                 html: `<p>Delivering your ebook "${book.title}" to your Kindle device.</p>`,
@@ -15725,8 +15904,8 @@ export async function sendBookToPersonalEmail(bookId: string, targetUsername?: s
         }
 
         const settings = await prisma.settings.findFirst({ where: { id: "global" } }) || {} as any;
-        if (!settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
-            return { success: false, error: "SMTP email is not configured on this server. Please contact your administrator." };
+        if (!isEmailDeliveryConfigured(settings)) {
+            return { success: false, error: "Email delivery is not configured on this server. Please contact your administrator." };
         }
         if (settings.emailNotificationsEnabled === false || settings.notifySendToKindle === false) {
             return { success: false, error: "Email file delivery is currently disabled in Email Notification Settings." };
@@ -15840,8 +16019,8 @@ export async function sendBookToUserKindleInternal(bookId: string, username: str
     }
 
     const settings = await prisma.settings.findFirst({ where: { id: "global" } }) || {} as any;
-    if (!settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
-        console.error("[AUTO-KINDLE] SMTP is not configured on this server.");
+    if (!isEmailDeliveryConfigured(settings)) {
+        console.error("[AUTO-KINDLE] Email delivery is not configured on this server.");
         return;
     }
     if (settings.emailNotificationsEnabled === false || settings.notifySendToKindle === false) {
@@ -15849,11 +16028,14 @@ export async function sendBookToUserKindleInternal(bookId: string, username: str
         return;
     }
 
-    const senderEmail = settings.smtpFrom || settings.smtpUser;
+    const kindleSender = resolveSenderAddress("kindle_delivery", resolveEmailProviderConfig(settings).from);
+    const senderEmail = kindleSender.email;
+    const senderFormatted = kindleSender.formatted;
 
     try {
         const mailRes = await sendOrQueueEmail({
             to: user.kindleEmail,
+            from: senderFormatted,
             subject: `Deliver Book: ${book.title}`,
             text: `Delivering your ebook "${book.title}" to your Kindle device.`,
             html: `<p>Delivering your ebook "${book.title}" to your Kindle device.</p>`,
@@ -16064,22 +16246,24 @@ export async function diagnoseKindleHealth(bookId?: string) {
         const checks: Array<{ name: string; status: "pass" | "warn" | "fail"; message: string }> = [];
 
         // Check 1: Server SMTP Host
-        if (settings?.smtpHost && settings?.smtpUser && settings?.smtpPass) {
+        const emailConfig = resolveEmailProviderConfig(settings);
+        if (emailConfig.isConfigured) {
             checks.push({
-                name: "Server SMTP Configuration",
+                name: "Server Email Provider Configuration",
                 status: "pass",
-                message: `Configured on ${settings.smtpHost}:${settings.smtpPort || 587}`
+                message: emailConfig.isResend ? "Configured via Resend Outbound Delivery (smtp.resend.com:465)" : `Configured on ${emailConfig.host}:${emailConfig.port}`
             });
         } else {
             checks.push({
-                name: "Server SMTP Configuration",
+                name: "Server Email Provider Configuration",
                 status: "fail",
-                message: "SMTP is not configured on the server. Ask an admin to set it up in Settings."
+                message: "Email delivery is not configured on the server. Ask an admin to set it up in Settings > Email."
             });
         }
 
         // Check 2: Sender Email Address
-        const senderEmail = settings?.smtpFrom || settings?.smtpUser;
+        const kindleSender = resolveSenderAddress("kindle_delivery", emailConfig.from);
+        const senderEmail = kindleSender.email;
         if (senderEmail && senderEmail.includes("@")) {
             checks.push({
                 name: "Public Sender Address",
@@ -16181,291 +16365,16 @@ export async function recordFailedRelease(
     }
 }
 
-export async function getBlocklistedReleases() {
-    try {
-        await verifyUser();
-        return await prisma.failedRelease.findMany({
-            orderBy: { createdAt: "desc" },
-            take: 100
-        });
-    } catch (e) {
-        return [];
-    }
-}
-
-export async function blocklistRelease(downloadUrl: string, releaseTitle: string, reason: string) {
-    try {
-        await verifyAdmin();
-        await recordFailedRelease(releaseTitle, downloadUrl, undefined, "torrent", reason);
-        revalidatePath("/library");
-        return { success: true, message: `Release "${releaseTitle}" has been blocklisted.` };
-    } catch (e: any) {
-        return { success: false, error: e.message || "Failed to blocklist release" };
-    }
-}
-
-export async function unblocklistRelease(id: string) {
-    try {
-        await verifyAdmin();
-        await prisma.failedRelease.delete({ where: { id } });
-        revalidatePath("/library");
-        return { success: true, message: "Release removed from blocklist." };
-    } catch (e: any) {
-        return { success: false, error: e.message || "Failed to unblocklist release" };
-    }
-}
-
-export async function fulfillRequestWithUpload(formData: FormData) {
-    try {
-        const session = await verifyUser();
-        const requestId = formData.get("requestId") as string;
-        const file = formData.get("file") as File;
-
-        if (!requestId || !file) {
-            return { success: false, error: "Missing requestId or uploaded file." };
-        }
-
-        const request = await prisma.bookRequest.findUnique({ where: { id: requestId } });
-        if (!request) {
-            return { success: false, error: "Book request not found." };
-        }
-
-        const buffer = Buffer.from(await file.arrayBuffer());
-        const originalName = file.name;
-        const ext = path.extname(originalName).toLowerCase();
-
-        // If torrent file: push directly to qBittorrent!
-        if (ext === ".torrent") {
-            const qbitApp = await prisma.mediaApp.findFirst({
-                where: { type: { contains: "qbit" } }
-            });
-            if (!qbitApp) return { success: false, error: "qBittorrent is not configured." };
-            const qbitUrl = cleanUrl(qbitApp.url);
-            const qbitKey = decryptData(qbitApp.apiKey as string);
-            const category = request.mediaType === "audiobook" ? "audiobooks" : "books";
-            
-            const form = new FormData();
-            form.append("torrents", new Blob([buffer], { type: "application/x-bittorrent" }), originalName);
-            form.append("category", category);
-
-            try {
-                await fetch(`${qbitUrl}/api/v2/torrents/add`, { method: "POST", body: form });
-            } catch (e) {
-                const loginRes = await fetch(`${qbitUrl}/api/v2/auth/login`, {
-                    method: "POST",
-                    body: new URLSearchParams({ username: "admin", password: qbitKey }),
-                    headers: { "Content-Type": "application/x-www-form-urlencoded" }
-                });
-                const cookie = loginRes.headers.get("set-cookie");
-                await fetch(`${qbitUrl}/api/v2/torrents/add`, {
-                    method: "POST",
-                    body: form,
-                    headers: cookie ? { "Cookie": cookie } : undefined
-                });
-            }
-
-            await prisma.bookRequest.update({
-                where: { id: requestId },
-                data: { status: "Downloading (Uploaded Torrent)" }
-            });
-            revalidatePath("/library");
-            return { success: true, message: `Uploaded torrent file to qBittorrent for "${request.title}"!` };
-        }
-
-        // If NZB file: push directly to SABnzbd!
-        if (ext === ".nzb") {
-            const sabApp = await prisma.mediaApp.findFirst({ where: { type: "sabnzbd" } });
-            if (!sabApp) return { success: false, error: "SABnzbd is not configured." };
-            const sabUrl = cleanUrl(sabApp.url);
-            const sabKey = decryptData(sabApp.apiKey as string);
-            const targetLibForNzb = await getTargetLibraryForUser(request.requestedBy, request.mediaType || "ebook", request.coverUrl, request.libraryId);
-            const category = targetLibForNzb ? getDownloadCategoryForLibrary(targetLibForNzb, request.mediaType || "ebook") : (request.mediaType === "audiobook" ? "audiobooks" : "books");
-
-            const form = new FormData();
-            form.append("name", new Blob([buffer], { type: "application/x-nzb" }), originalName);
-            form.append("cat", category);
-            form.append("output", "json");
-            form.append("apikey", sabKey);
-            form.append("mode", "addfile");
-
-            const res = await fetch(`${sabUrl}/api`, { method: "POST", body: form });
-            if (!res.ok) return { success: false, error: "SABnzbd failed to accept NZB upload." };
-
-            await prisma.bookRequest.update({
-                where: { id: requestId },
-                data: { status: "Downloading (Uploaded NZB)" }
-            });
-            revalidatePath("/library");
-            return { success: true, message: `Uploaded NZB file to SABnzbd for "${request.title}"!` };
-        }
-
-        // Media file (.epub, .pdf, .m4b, .mp3, etc.)
-        const targetLib = await getTargetLibraryForUser(request.requestedBy, request.mediaType || "ebook", request.coverUrl, request.libraryId);
-        if (!targetLib) {
-            return { success: false, error: "No target library found for user." };
-        }
-
-        const sanitize = (str: string) => str.replace(/[<>:"/\\|?*\x00-\x1F]/g, "").trim();
-        const safeAuthor = sanitize(request.author || "Unknown Author");
-        const safeTitle = sanitize(request.title);
-        const destDir = path.join(targetLib.path, safeAuthor, safeTitle);
-        if (!fs.existsSync(destDir)) {
-            fs.mkdirSync(destDir, { recursive: true });
-        }
-
-        let destPath = path.join(destDir, `${safeAuthor} - ${safeTitle}${ext}`);
-        fs.writeFileSync(destPath, buffer);
-
-        if (request.mediaType !== "audiobook") {
-            if (ext !== ".epub") {
-                const convRes = await convertEbookToEpub(destPath);
-                if (!convRes.success || !convRes.epubPath || !fs.existsSync(convRes.epubPath)) {
-                    try { if (fs.existsSync(destPath)) fs.unlinkSync(destPath); } catch (e) {}
-                    return { success: false, error: `Failed to convert uploaded ${ext} file to EPUB: ${convRes.error || "Conversion error"}` };
-                }
-                destPath = convRes.epubPath;
-            }
-
-            const valRes = await validateAndFixEpubForKindle(destPath);
-            if (!valRes.valid) {
-                try { if (fs.existsSync(destPath)) fs.unlinkSync(destPath); } catch (e) {}
-                return { success: false, error: `Uploaded EPUB failed Kindle preflight validation: ${valRes.error}` };
-            }
-        }
-
-        // Scan the library to register the new book
-        await scanLibraryInternal(targetLib.id, { enableAi: true });
-
-        // Mark request as Downloaded
-        await prisma.bookRequest.update({
-            where: { id: requestId },
-            data: { status: "Downloaded" }
-        });
-
-        // Find created book
-        const createdBook = await prisma.book.findFirst({
-            where: { filePath: destPath }
-        });
-
-        // If request had series information, assign it
-        if (createdBook && request.series) {
-            await prisma.book.update({
-                where: { id: createdBook.id },
-                data: {
-                    series: request.series,
-                    volumeNumber: request.volumeNumber || createdBook.volumeNumber
-                }
-            });
-        }
-
-        // Send completion notification email
-        sendRequestCompletionNotification(request, createdBook || { title: request.title, author: request.author, mediaType: request.mediaType }).catch(() => {});
-
-        // If ebook and user has Kindle configured, auto-deliver
-        if (request.mediaType !== "audiobook" && createdBook) {
-            sendBookToUserKindleInternal(createdBook.id, request.requestedBy).catch(() => {});
-        }
-
-        revalidatePath("/library");
-        return { success: true, message: `Successfully fulfilled request for "${request.title}" with uploaded file!` };
-    } catch (e: any) {
-        console.error("[FULFILL-UPLOAD-ERROR]:", e);
-        return { success: false, error: e.message || "Failed to fulfill request with uploaded file" };
-    }
-}
-
-export async function getServicesHealthPulse() {
-    try {
-        const [prowlarrApp, sabApp, qbitApp] = await Promise.all([
-            prisma.mediaApp.findFirst({ where: { type: "prowlarr" } }),
-            prisma.mediaApp.findFirst({ where: { type: "sabnzbd" } }),
-            prisma.mediaApp.findFirst({ where: { type: { contains: "qbit" } } })
-        ]);
-
-        const checkService = async (app: any, checkFn: (signal: AbortSignal) => Promise<boolean>) => {
-            if (!app) return { configured: false, online: false, name: "Not configured" };
-            try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 3000);
-                const online = await checkFn(controller.signal);
-                clearTimeout(timeoutId);
-                return { configured: true, online: Boolean(online), name: app.name || app.type };
-            } catch (e) {
-                return { configured: true, online: false, name: app.name || app.type };
-            }
-        };
-
-        const [prowlarr, sabnzbd, qbittorrent] = await Promise.all([
-            checkService(prowlarrApp, async (signal) => {
-                const url = cleanUrl(prowlarrApp!.url);
-                const key = decryptData(prowlarrApp!.apiKey as string);
-                const res = await fetch(`${url}/api/v1/health?apikey=${key}`, { cache: "no-store", signal });
-                return res.ok;
-            }),
-            checkService(sabApp, async (signal) => {
-                const url = cleanUrl(sabApp!.url);
-                const key = decryptData(sabApp!.apiKey as string);
-                const res = await fetch(`${url}/api?mode=version&output=json&apikey=${key}`, { cache: "no-store", signal });
-                return res.ok;
-            }),
-            checkService(qbitApp, async (signal) => {
-                const url = cleanUrl(qbitApp!.url);
-                const res = await fetch(`${url}/api/v2/app/version`, { cache: "no-store", signal });
-                return res.ok || res.status === 403;
-            })
-        ]);
-
-        return {
-            prowlarr,
-            sabnzbd,
-            qbittorrent
-        };
-    } catch (e) {
-        return {
-            prowlarr: { configured: false, online: false, name: "Prowlarr" },
-            sabnzbd: { configured: false, online: false, name: "SABnzbd" },
-            qbittorrent: { configured: false, online: false, name: "qBittorrent" }
-        };
-    }
-}
-
-export async function toggleMonitorSeries(requestId: string, monitor?: boolean) {
-    try {
-        const session = await verifyUser();
-        const req = await prisma.bookRequest.findUnique({ where: { id: requestId } });
-        if (!req) return { success: false, error: "Request not found" };
-
-        if (session.role !== "ADMIN" && req.requestedBy !== session.username) {
-            return { success: false, error: "Unauthorized" };
-        }
-
-        const targetMonitor = monitor !== undefined ? monitor : !req.monitorSeries;
-
-        await prisma.bookRequest.update({
-            where: { id: requestId },
-            data: { monitorSeries: targetMonitor }
-        });
-
-        revalidatePath("/library");
-        return {
-            success: true,
-            monitorSeries: targetMonitor,
-            message: targetMonitor
-                ? `Auto-monitoring activated for "${req.series || req.title}". Future installments will be discovered automatically!`
-                : `Auto-monitoring disabled for "${req.series || req.title}".`
-        };
-    } catch (e: any) {
-        return { success: false, error: e.message || "Failed to update series monitor" };
-    }
-}
-
-
-export async function getPublicSmtpFromEmail() {
+export async function getPublicSmtpFromEmail(categoryOrTemplateId?: string) {
     try {
         await ensureSchemaColumns();
         const settings = await prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null);
         if (!settings) return "";
-        return settings.smtpFrom || settings.smtpUser || "";
+        const baseSender = resolveEmailProviderConfig(settings).from;
+        if (categoryOrTemplateId) {
+            return resolveSenderAddress(categoryOrTemplateId, baseSender).email;
+        }
+        return baseSender;
     } catch (e) {
         return "";
     }
@@ -16587,6 +16496,70 @@ export async function setupBookLibraryAccessAction(options: { kindleEmail?: stri
 }
 
 /**
+ * Evaluates whether the current user has Send-to-Kindle set up and needs to be alerted
+ * about the updated outbound Kindle sender address (kindle@domshomelab.com).
+ * This only triggers for members who actually have a configured @kindle.com address.
+ */
+export async function getKindleSenderUpdateNoticeStatusAction(): Promise<{
+    hasKindleEmail: boolean;
+    kindleEmail: string | null;
+    needsNotice: boolean;
+    senderEmail: string;
+}> {
+    try {
+        await ensureSchemaColumns();
+        const session = await verifyUser();
+        const userId = String(session?.userId || session?.id || "");
+        if (!userId) {
+            return { hasKindleEmail: false, kindleEmail: null, needsNotice: false, senderEmail: "kindle@domshomelab.com" };
+        }
+
+        const user = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { kindleEmail: true, kindleSenderUpdateAcknowledgedAt: true }
+        });
+
+        const cleanKindle = (user?.kindleEmail || "").trim();
+        const hasKindleEmail = Boolean(cleanKindle.includes("@") && cleanKindle !== "DIRECT_DOWNLOAD");
+        const needsNotice = hasKindleEmail && !user?.kindleSenderUpdateAcknowledgedAt;
+
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null);
+        const resolvedSender = resolveSenderAddress("kindle_delivery", resolveEmailProviderConfig(settings).from);
+
+        return {
+            hasKindleEmail,
+            kindleEmail: hasKindleEmail ? cleanKindle : null,
+            needsNotice,
+            senderEmail: resolvedSender.email
+        };
+    } catch {
+        return { hasKindleEmail: false, kindleEmail: null, needsNotice: false, senderEmail: "kindle@domshomelab.com" };
+    }
+}
+
+/**
+ * Acknowledges that the user has seen the notice about the updated Send-to-Kindle
+ * sending address and updated their Amazon Approved Senders settings.
+ */
+export async function acknowledgeKindleSenderUpdateAction(): Promise<{ success: boolean; error?: string }> {
+    try {
+        await ensureSchemaColumns();
+        const session = await verifyUser();
+        const userId = String(session?.userId || session?.id || "");
+        if (!userId) return { success: false, error: "Unauthorized" };
+
+        await prisma.user.update({
+            where: { id: userId },
+            data: { kindleSenderUpdateAcknowledgedAt: new Date() }
+        });
+
+        return { success: true };
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to acknowledge Kindle sender update." };
+    }
+}
+
+/**
  * Self-service toggle for Super User access.
  * Gives full accounts direct access to Radarr & Sonarr to fix and manage their own media.
  * Trial accounts are strictly blocked.
@@ -16644,12 +16617,13 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
         if (!skipAuth) {
             await verifyAdmin();
         }
-        const [tautulliInstances, glances, plexServers, settings, userProfiles] = await Promise.all([
+        const [tautulliInstances, glances, plexServers, settings, userProfiles, dbMediaServers] = await Promise.all([
             prisma.tautulliInstance.findMany({ orderBy: { createdAt: 'asc' } }).catch(() => []),
             prisma.glancesInstance.findMany({ orderBy: { createdAt: 'asc' } }).catch(() => []),
             prisma.plexServer.findMany({ orderBy: { createdAt: 'asc' } }).catch(() => []),
             prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null),
-            getUserStreamProfiles().catch(() => [])
+            getUserStreamProfiles().catch(() => []),
+            prisma.mediaServer.findMany({ orderBy: { createdAt: 'asc' } }).catch(() => [])
         ]);
 
         const userProfileMap = new Map<string, any>();
@@ -16887,6 +16861,36 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
             } catch (e) {}
         }
 
+        
+        // 2b. Native Jellyfin & Emby Active Sessions Collection
+        for (const ms of dbMediaServers) {
+            if (ms.isMonitored === false || ms.isActive === false) continue;
+            try {
+                const apiKey = decryptData(ms.apiKey);
+                const msSessions = await fetchMediaServerActiveSessions({
+                    id: ms.id,
+                    name: ms.name,
+                    type: ms.type,
+                    url: ms.url,
+                    internalUrl: ms.internalUrl,
+                    apiKey
+                });
+
+                for (const s of msSessions) {
+                    const fingerprint = `ms_${ms.id}_${s.sessionId || s.sessionKey}`;
+                    if (seenSessionFingerprints.has(fingerprint)) continue;
+                    seenSessionFingerprints.add(fingerprint);
+
+                    s.deviceDiagnosis = diagnoseStreamSettings(s);
+                    const telemetry = extractStreamTelemetry(s);
+                    Object.assign(s, telemetry);
+                    allSessions.push(s);
+                }
+            } catch (err: any) {
+                console.warn(`[ADMIN-STREAMS] Failed to fetch active sessions for ${ms.name} (${ms.type}):`, err?.message || err);
+            }
+        }
+
         // Align totalStreamCount exactly with deduplicated active sessions
         totalStreamCount = allSessions.length;
 
@@ -16929,6 +16933,26 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
                     id: t.id,
                     name: t.name,
                     type: "Tautulli",
+                    streamCount: 0,
+                    directPlayCount: 0,
+                    transcodeCount: 0,
+                    bandwidthKbps: 0,
+                    online: true,
+                    monitored: true
+                });
+            }
+        }
+
+        
+        // Seed with configured Jellyfin & Emby media servers that have monitoring TURNED ON
+        for (const ms of dbMediaServers) {
+            if (ms.isMonitored === false || ms.isActive === false) continue;
+            const normKey = ms.name.toLowerCase().trim();
+            if (!serverUsageMap.has(normKey)) {
+                serverUsageMap.set(normKey, {
+                    id: `media_server_${ms.id}`,
+                    name: ms.name,
+                    type: ms.type === "EMBY" ? "Emby Server" : "Jellyfin Server",
                     streamCount: 0,
                     directPlayCount: 0,
                     transcodeCount: 0,
@@ -17358,30 +17382,6 @@ export async function getUserDetailedTelemetryAction(username: string, options?:
 }
 
 /**
- * Server Action: Retrieve connection security insights and credential sharing alerts
- */
-export async function getConnectionSecurityInsightsAction() {
-    await verifyAdmin();
-    return await getConnectionSecurityInsights();
-}
-
-/**
- * Server Action: Dismiss/acknowledge a user's sharing alert count
- */
-export async function dismissSharingAlertAction(userId: string) {
-    await verifyAdmin();
-    try {
-        await prisma.user.update({
-            where: { id: userId },
-            data: { sharingAlertCount: 0 }
-        });
-        return { success: true };
-    } catch (e: any) {
-        return { success: false, error: e.message || "Failed to dismiss sharing alert" };
-    }
-}
-
-/**
  * Server Action: Delete watch history record or clear all history
  */
 export async function clearWatchHistoryAction(id?: string) {
@@ -17403,7 +17403,7 @@ export type InfrastructureServiceItem = {
     id: string;
     name: string;
     type: string;
-    category: "plex" | "glances" | "tautulli" | "apps" | "downloaders";
+    category: "plex" | "jellyfin" | "emby" | "glances" | "tautulli" | "apps" | "downloaders" | string;
     url: string;
     status: "ONLINE" | "OFFLINE" | "PAUSED";
     monitored: boolean;
@@ -17438,8 +17438,9 @@ export async function getAdminInfrastructureStatusAction(skipAuth: boolean = fal
             await verifyAdmin();
         }
 
-        const [plexServers, glances, tautulli, mediaApps, settings] = await Promise.all([
+        const [plexServers, mediaServers, glances, tautulli, mediaApps, settings] = await Promise.all([
             prisma.plexServer.findMany({ orderBy: { createdAt: "asc" } }).catch(() => []),
+            prisma.mediaServer.findMany({ orderBy: { createdAt: "asc" } }).catch(() => []),
             prisma.glancesInstance.findMany({ orderBy: { createdAt: "asc" } }).catch(() => []),
             prisma.tautulliInstance.findMany({ orderBy: { createdAt: "asc" } }).catch(() => []),
             prisma.mediaApp.findMany({ orderBy: { createdAt: "asc" } }).catch(() => []),
@@ -17502,6 +17503,62 @@ export async function getAdminInfrastructureStatusAction(skipAuth: boolean = fal
                 baseItem.status = "OFFLINE";
                 baseItem.details = err.name === "AbortError" ? "Timeout (4.5s)" : "Unreachable";
             }
+            return baseItem;
+        });
+
+        // 1b. Multi-Platform Media Servers (Jellyfin & Emby)
+        const mediaServerPromises = mediaServers.map(async (ms): Promise<InfrastructureServiceItem> => {
+            const isMonitored = ms.isMonitored !== false && ms.isActive !== false;
+            const clean = cleanUrl(ms.url?.trim() || "");
+            const srvType = ms.type === "EMBY" ? "Emby" : "Jellyfin";
+            const category: "jellyfin" | "emby" = ms.type === "EMBY" ? "emby" : "jellyfin";
+
+            const baseItem: InfrastructureServiceItem = {
+                id: ms.id,
+                name: ms.name,
+                type: `${srvType} Server`,
+                category,
+                url: clean,
+                monitored: isMonitored,
+                status: isMonitored ? "OFFLINE" : "PAUSED"
+            };
+
+            if (!isMonitored) {
+                return baseItem;
+            }
+
+            try {
+                const { testMediaServerConnection } = await import("@/lib/media-servers");
+                let apiKey = "";
+                try {
+                    apiKey = ms.apiKey ? decryptData(ms.apiKey) : "";
+                } catch {
+                    apiKey = ms.apiKey || "";
+                }
+
+                const res = await testMediaServerConnection(
+                    ms.type as "JELLYFIN" | "EMBY",
+                    ms.url,
+                    apiKey,
+                    4500,
+                    ms.internalUrl || undefined
+                );
+
+                if (res.ok) {
+                    baseItem.status = "ONLINE";
+                    baseItem.latencyMs = res.latencyMs;
+                    const ver = res.version && res.version !== "Unknown" ? ` v${res.version}` : "";
+                    baseItem.details = `${srvType} reachable${ver} (${res.latencyMs || 0}ms)`;
+                } else {
+                    baseItem.status = "OFFLINE";
+                    baseItem.latencyMs = res.latencyMs;
+                    baseItem.details = res.error || `${srvType} unreachable`;
+                }
+            } catch (err: any) {
+                baseItem.status = "OFFLINE";
+                baseItem.details = err.name === "AbortError" ? "Timeout (4.5s)" : "Unreachable";
+            }
+
             return baseItem;
         });
 
@@ -17630,8 +17687,9 @@ export async function getAdminInfrastructureStatusAction(skipAuth: boolean = fal
             return baseItem;
         });
 
-        const [plexResults, glancesResults, tautulliResults, appResults] = await Promise.all([
+        const [plexResults, mediaServerResults, glancesResults, tautulliResults, appResults] = await Promise.all([
             Promise.all(plexPromises),
+            Promise.all(mediaServerPromises),
             Promise.all(glancesPromises),
             Promise.all(tautulliPromises),
             Promise.all(appPromises)
@@ -17639,6 +17697,7 @@ export async function getAdminInfrastructureStatusAction(skipAuth: boolean = fal
 
         const services: InfrastructureServiceItem[] = [
             ...plexResults,
+            ...mediaServerResults,
             ...glancesResults,
             ...tautulliResults,
             ...appResults
@@ -17667,668 +17726,6 @@ export async function getAdminInfrastructureStatusAction(skipAuth: boolean = fal
     }
 }
 
-export async function submitLibraryAccessRequest(email: string, kindleEmail: string) {
-    try {
-        const session = await verifyUser();
-        
-        const user = await prisma.user.update({
-            where: { username: session.username as string },
-            data: {
-                email: email || undefined,
-                kindleEmail: kindleEmail || ""
-            }
-        });
-
-        const settings = await prisma.settings.findFirst({ where: { id: "global" } }) || {} as any;
-        if (!settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
-            return { success: false, error: "SMTP is not configured on the server. Please contact your administrator." };
-        }
-        if (settings.emailNotificationsEnabled === false || settings.notifyMediaRequests === false) {
-            return { success: true, message: "Your access request has been recorded." };
-        }
-
-        const admins = await prisma.user.findMany({
-            where: { role: "ADMIN" }
-        });
-
-        const adminEmails = admins
-            .map(admin => admin.email)
-            .filter(email => !!email) as string[];
-
-        const recipientEmails = adminEmails.length > 0 ? adminEmails : [settings.smtpUser as string];
-
-        const appUrl = await getAppUrl();
-        const { subject, html } = await renderEmailTemplate("library_access_request", {
-            username: user.username,
-            email: user.email || "Not Provided",
-            kindleEmail: user.kindleEmail || "Not Provided",
-            accessUrl: `${appUrl}/settings/access`,
-            appUrl
-        });
-
-        try {
-            const mailRes = await sendOrQueueEmail({
-                to: recipientEmails,
-                subject,
-                html,
-                templateId: "library_access_request",
-                targetUser: user.username,
-                userId: user.id
-            });
-            if (!mailRes.success) {
-                return { success: false, error: mailRes.error || "Failed to send request email" };
-            }
-            return { success: true };
-        } catch (e: any) {
-            console.error("Failed to email admin about access request:", e);
-            return { success: false, error: `Failed to send request: ${e.message || "Unknown mail error"}` };
-        }
-    } catch (e: any) {
-        console.error("Failed library access request submission:", e);
-        return { success: false, error: e.message || "An unexpected error occurred." };
-    }
-}
-
-export async function searchOpenLibrary(query: string, mediaType: "ebook" | "audiobook" = "ebook") {
-    if (!query || query.trim().length < 2) return [];
-    try {
-        const cleanQuery = query.trim();
-        let results: any[] = [];
-        
-        // Parse compound query if separators exist (e.g. "Cold Wind by Andrew Givler" or "Cold Wind - Andrew Givler")
-        let parsedTitle = cleanQuery;
-        let parsedAuthor = "";
-        if (/\s+by\s+/i.test(cleanQuery)) {
-            const parts = cleanQuery.split(/\s+by\s+/i);
-            parsedTitle = parts[0].trim();
-            parsedAuthor = parts.slice(1).join(" by ").trim();
-        } else if (cleanQuery.includes(" - ")) {
-            const parts = cleanQuery.split(" - ");
-            parsedTitle = parts[0].trim();
-            parsedAuthor = parts.slice(1).join(" - ").trim();
-        } else if (cleanQuery.includes(": ")) {
-            const parts = cleanQuery.split(": ");
-            parsedTitle = parts[0].trim();
-            parsedAuthor = parts.slice(1).join(": ").trim();
-        }
-        
-        // 1. Audible API (Only for Audiobooks)
-        if (mediaType === "audiobook") {
-            try {
-                // Use keywords parameter to search across both title and author simultaneously
-                const audUrl = `https://api.audible.com/1.0/catalog/products?keywords=${encodeURIComponent(cleanQuery)}&response_groups=product_attrs,contributors,product_desc&num_results=12&products_sort_by=Relevance`;
-                const audRes = await fetchWithRetry(audUrl, { headers: { "Accept": "application/json" } });
-                const audData = audRes && audRes.ok ? await audRes.json() : null;
-                
-                if (audData && audData.products && audData.products.length > 0) {
-                    for (const prod of audData.products) {
-                        const title = prod.title;
-                        if (!title) continue;
-                        
-                        let author = "Unknown Author";
-                        if (prod.authors && prod.authors.length > 0) {
-                            author = prod.authors[0].name;
-                        }
-                        
-                        let coverUrl = "";
-                        if (prod.product_images && prod.product_images["500"]) {
-                            coverUrl = prod.product_images["500"];
-                        }
-                        
-                        let year = "Unknown Year";
-                        if (prod.release_date) {
-                            year = prod.release_date.substring(0, 4);
-                        }
-                        
-                        results.push({ title, author, coverUrl, year, mediaType: "audiobook" });
-                    }
-                }
-            } catch (e) {
-                console.warn("[API-FAILOVER] Audible search failed:", e);
-            }
-        }
-
-        // 2. iTunes API
-        try {
-            const entity = mediaType === "audiobook" ? "audiobook" : "ebook";
-            let iUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(cleanQuery)}&entity=${entity}&limit=12`;
-            let iRes = await fetchWithRetry(iUrl, { headers: { "Accept": "application/json" } });
-            let data = iRes && iRes.ok ? await iRes.json() : null;
-            
-            if (data && data.results && data.results.length > 0) {
-                for (const item of data.results) {
-                    const title = item.trackName || item.collectionName;
-                    if (!title) continue;
-                    let artwork = item.artworkUrl100 || item.artworkUrl60;
-                    if (artwork) {
-                        artwork = artwork.replace("100x100bb", "600x600bb").replace("60x60bb", "600x600bb").replace(/^http:/, "https:");
-                    }
-                    results.push({
-                        title: title,
-                        author: item.artistName || "Unknown Author",
-                        coverUrl: artwork || "",
-                        year: item.releaseDate ? item.releaseDate.substring(0, 4) : "Unknown Year",
-                        mediaType
-                    });
-                }
-            }
-        } catch(e) {
-            console.warn("[API-FAILOVER] iTunes search failed:", e);
-        }
-
-        // 3. Open Library
-        try {
-            const olUrl = parsedAuthor
-                ? `https://openlibrary.org/search.json?title=${encodeURIComponent(parsedTitle)}&author=${encodeURIComponent(parsedAuthor)}&limit=12&fields=key,title,author_name,cover_i,first_publish_year`
-                : `https://openlibrary.org/search.json?q=${encodeURIComponent(cleanQuery)}&limit=12&fields=key,title,author_name,cover_i,first_publish_year`;
-            const response = await fetchWithRetry(olUrl, {
-                headers: { "Accept": "application/json" }
-            });
-            const data = response && response.ok ? await response.json() : null;
-            if (data && data.docs) {
-                for (const doc of data.docs) {
-                    if (doc.title) {
-                        results.push({
-                            title: doc.title,
-                            author: doc.author_name ? doc.author_name[0] : "Unknown Author",
-                            coverUrl: doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg` : "",
-                            year: doc.first_publish_year ? String(doc.first_publish_year) : "Unknown Year",
-                            mediaType
-                        });
-                    }
-                }
-            }
-        } catch (e: any) {
-            console.warn("[API-FAILOVER] OpenLibrary search failed:", e?.message || String(e));
-        }
-
-        // 4. Google Books
-        try {
-            const gUrl = parsedAuthor
-                ? `https://www.googleapis.com/books/v1/volumes?q=intitle:${encodeURIComponent(parsedTitle)}+inauthor:${encodeURIComponent(parsedAuthor)}&maxResults=12`
-                : `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(cleanQuery)}&maxResults=12`;
-            const gRes = await fetchWithRetry(gUrl, { headers: { "Accept": "application/json" } });
-            const gData = gRes && gRes.ok ? await gRes.json() : null;
-            if (gData && gData.items) {
-                for (const item of gData.items) {
-                    const vol = item.volumeInfo;
-                    if (vol && vol.title) {
-                        results.push({
-                            title: vol.title,
-                            author: vol.authors ? vol.authors[0] : "Unknown Author",
-                            coverUrl: vol.imageLinks?.thumbnail ? vol.imageLinks.thumbnail.replace("http:", "https:").replace("&edge=curl", "").replace("&zoom=1", "&zoom=0") : "",
-                            year: vol.publishedDate ? vol.publishedDate.substring(0, 4) : "Unknown Year",
-                            mediaType
-                        });
-                    }
-                }
-            }
-        } catch (e: any) {
-            console.warn("[API-FAILOVER] Google Books API Error:", e?.message || String(e));
-        }
-        
-        // Deduplicate results by normalized title + author
-        const uniqueResults = [];
-        const seenTitles = new Set();
-        for (const res of results) {
-            const normalized = (res.title + res.author).toLowerCase().replace(/[^a-z0-9]/g, "");
-            if (!seenTitles.has(normalized)) {
-                seenTitles.add(normalized);
-                uniqueResults.push(res);
-            }
-        }
-        
-        // Smart query token relevance scoring
-        const stopWords = new Set(["by", "the", "a", "an", "and", "or", "in", "of", "to", "for", "with", "on", "at"]);
-        const queryTokens = cleanQuery.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(t => t.length >= 2 && !stopWords.has(t));
-
-        uniqueResults.sort((a, b) => {
-            const aTitleLower = (a.title || "").toLowerCase();
-            const aAuthorLower = (a.author || "").toLowerCase();
-            const bTitleLower = (b.title || "").toLowerCase();
-            const bAuthorLower = (b.author || "").toLowerCase();
-
-            let aScore = 0;
-            let bScore = 0;
-
-            let aTitleMatches = 0;
-            let aAuthorMatches = 0;
-            let bTitleMatches = 0;
-            let bAuthorMatches = 0;
-
-            for (const token of queryTokens) {
-                if (aTitleLower.includes(token)) {
-                    aScore += 15;
-                    aTitleMatches++;
-                }
-                if (aAuthorLower.includes(token)) {
-                    aScore += 20;
-                    aAuthorMatches++;
-                }
-                if (bTitleLower.includes(token)) {
-                    bScore += 15;
-                    bTitleMatches++;
-                }
-                if (bAuthorLower.includes(token)) {
-                    bScore += 20;
-                    bAuthorMatches++;
-                }
-            }
-
-            // Big bonus if both title and author matched tokens in the combined query
-            if (aTitleMatches > 0 && aAuthorMatches > 0) aScore += 50;
-            if (bTitleMatches > 0 && bAuthorMatches > 0) bScore += 50;
-
-            // Extra bonus for having cover art
-            if (a.coverUrl) aScore += 10;
-            if (b.coverUrl) bScore += 10;
-
-            return bScore - aScore;
-        });
-        
-        return uniqueResults.slice(0, 20);
-    } catch (e) {
-        console.error("All metadata APIs failed:", e);
-        return [];
-    }
-}
-
-export async function searchOpenLibraryByAuthor(author: string, mediaType: "ebook" | "audiobook" = "ebook") {
-    if (!author || author.trim().length < 2) return [];
-    try {
-        const cleanAuthor = author.trim();
-        let results: any[] = [];
-        
-        // 1. Audible API (Audiobooks by Author)
-        if (mediaType === "audiobook") {
-            try {
-                const audUrl = `https://api.audible.com/1.0/catalog/products?author=${encodeURIComponent(cleanAuthor)}&response_groups=product_attrs,contributors,product_desc&num_results=16&products_sort_by=Relevance`;
-                const audRes = await fetchWithRetry(audUrl, { headers: { "Accept": "application/json" } });
-                const audData = audRes && audRes.ok ? await audRes.json() : null;
-                
-                if (audData && audData.products && audData.products.length > 0) {
-                    for (const prod of audData.products) {
-                        const title = prod.title;
-                        if (!title) continue;
-                        
-                        let authorName = cleanAuthor;
-                        if (prod.authors && prod.authors.length > 0) {
-                            authorName = prod.authors[0].name || cleanAuthor;
-                        }
-                        
-                        let coverUrl = "";
-                        if (prod.product_images && prod.product_images["500"]) {
-                            coverUrl = prod.product_images["500"];
-                        }
-                        
-                        let year = "Unknown Year";
-                        if (prod.release_date) {
-                            year = prod.release_date.substring(0, 4);
-                        }
-                        
-                        results.push({ title, author: authorName, coverUrl, year, mediaType: "audiobook" });
-                    }
-                }
-            } catch (e: any) {
-                console.warn("[API-FAILOVER] Audible author search failed:", e?.message || String(e));
-            }
-        }
-
-        // 2. iTunes API (Audiobooks or Ebooks by Author/Artist)
-        try {
-            const entity = mediaType === "audiobook" ? "audiobook" : "ebook";
-            let iUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(cleanAuthor)}&entity=${entity}&attribute=authorTerm&limit=15`;
-            let iRes = await fetchWithRetry(iUrl, { headers: { "Accept": "application/json" } });
-            let data = iRes && iRes.ok ? await iRes.json() : null;
-            
-            if (!data || !data.results || data.results.length === 0) {
-                iUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(cleanAuthor)}&entity=${entity}&limit=15`;
-                iRes = await fetchWithRetry(iUrl, { headers: { "Accept": "application/json" } });
-                data = iRes && iRes.ok ? await iRes.json() : null;
-            }
-            
-            if (data && data.results && data.results.length > 0) {
-                for (const item of data.results) {
-                    const title = item.trackName || item.collectionName;
-                    if (!title) continue;
-                    let artwork = item.artworkUrl100 || item.artworkUrl60;
-                    if (artwork) {
-                        artwork = artwork.replace("100x100bb", "600x600bb").replace("60x60bb", "600x600bb").replace(/^http:/, "https:");
-                    }
-                    results.push({
-                        title: title,
-                        author: item.artistName || cleanAuthor,
-                        coverUrl: artwork || "",
-                        year: item.releaseDate ? item.releaseDate.substring(0, 4) : "Unknown Year",
-                        mediaType
-                    });
-                }
-            }
-        } catch (e: any) {
-            console.warn("[API-FAILOVER] iTunes author search failed:", e?.message || String(e));
-        }
-
-        // 3. Open Library (Author Search)
-        try {
-            const response = await fetchWithRetry(`https://openlibrary.org/search.json?author=${encodeURIComponent(cleanAuthor)}&limit=25&fields=key,title,author_name,cover_i,first_publish_year,edition_count`, {
-                headers: { "Accept": "application/json" }
-            });
-            const data = response && response.ok ? await response.json() : null;
-            if (data && data.docs) {
-                for (const doc of data.docs) {
-                    if (doc.title) {
-                        const titleLower = doc.title.toLowerCase();
-                        const isCompilation = titleLower.includes("box set") || 
-                                              titleLower.includes("boxed set") || 
-                                              titleLower.includes("collection") || 
-                                              titleLower.includes("omnibus") || 
-                                              titleLower.includes("bundle") || 
-                                              titleLower.includes("boxedset");
-                        if (isCompilation && data.docs.length > 5) continue;
-
-                        const authorName = doc.author_name && doc.author_name.length > 0 ? doc.author_name[0] : cleanAuthor;
-                        results.push({
-                            title: doc.title,
-                            author: authorName,
-                            coverUrl: doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg` : "",
-                            year: doc.first_publish_year ? String(doc.first_publish_year) : "Unknown Year",
-                            mediaType
-                        });
-                    }
-                }
-            }
-        } catch (e: any) {
-            console.warn("[API-FAILOVER] OpenLibrary author search failed:", e?.message || String(e));
-        }
-
-        // 4. Google Books API (Author Search)
-        try {
-            const gUrl = `https://www.googleapis.com/books/v1/volumes?q=inauthor:${encodeURIComponent(cleanAuthor)}&maxResults=15`;
-            const gRes = await fetchWithRetry(gUrl, { headers: { "Accept": "application/json" } });
-            const gData = gRes && gRes.ok ? await gRes.json() : null;
-            if (gData && gData.items) {
-                for (const item of gData.items) {
-                    const vol = item.volumeInfo;
-                    if (vol && vol.title) {
-                        results.push({
-                            title: vol.title,
-                            author: vol.authors ? vol.authors[0] : cleanAuthor,
-                            coverUrl: vol.imageLinks?.thumbnail ? vol.imageLinks.thumbnail.replace("http:", "https:").replace("&edge=curl", "").replace("&zoom=1", "&zoom=0") : "",
-                            year: vol.publishedDate ? vol.publishedDate.substring(0, 4) : "Unknown Year",
-                            mediaType
-                        });
-                    }
-                }
-            }
-        } catch (e: any) {
-            console.warn("[API-FAILOVER] Google Books author API error:", e?.message || String(e));
-        }
-
-        // Deduplicate results by normalized title + author
-        const uniqueResults = [];
-        const seenTitles = new Set();
-        for (const res of results) {
-            const normalized = (res.title + res.author).toLowerCase().replace(/[^a-z0-9]/g, "");
-            if (!seenTitles.has(normalized)) {
-                seenTitles.add(normalized);
-                uniqueResults.push(res);
-            }
-        }
-
-        // Sort so that items with covers come first
-        uniqueResults.sort((a, b) => {
-            if (a.coverUrl && !b.coverUrl) return -1;
-            if (!a.coverUrl && b.coverUrl) return 1;
-            return 0;
-        });
-
-        return uniqueResults.slice(0, 25);
-    } catch (e) {
-        console.error("Author metadata search failed:", e);
-        return [];
-    }
-}
-
-export async function getSeriesBooksList(seriesTitle: string, author: string = "") {
-    try {
-        const query = author ? `${seriesTitle} ${author}` : seriesTitle;
-        const uniqueBooks: any[] = [];
-        const seenTitles = new Set<string>();
-        
-        // 1. Primary: OpenLibrary (best for series compilations)
-        try {
-            const response = await fetchWithRetry(`https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=45&fields=key,title,author_name,cover_i,first_publish_year`, {
-                headers: { "Accept": "application/json" },
-                cache: "no-store"
-            });
-            if (response && response.ok) {
-                const data = await response.json();
-                const docs = data.docs || [];
-                
-                for (const doc of docs) {
-                    const normalizedTitle = doc.title.toLowerCase().replace(/[^a-z0-9]/g, "");
-                    const titleLower = doc.title.toLowerCase();
-                    const isCompilation = titleLower.includes("box set") || 
-                                          titleLower.includes("boxed set") || 
-                                          titleLower.includes("collection") || 
-                                          titleLower.includes("series 1-") || 
-                                          titleLower.includes("pack") || 
-                                          titleLower.includes("omnibus") || 
-                                          titleLower.includes("bundle") ||
-                                          titleLower.includes("boxedset");
-                                          
-                    if (isCompilation) continue;
-                    
-                    if (author && doc.author_name) {
-                        const authorLower = author.toLowerCase();
-                        const matchesAuthor = doc.author_name.some((name: string) => 
-                            name.toLowerCase().includes(authorLower)
-                        );
-                        if (!matchesAuthor) continue;
-                    }
-                    
-                    if (!seenTitles.has(normalizedTitle)) {
-                        seenTitles.add(normalizedTitle);
-                        
-                        const authorName = doc.author_name && doc.author_name.length > 0 
-                            ? doc.author_name[0] 
-                            : author || "Unknown Author";
-                            
-                        const coverUrl = doc.cover_i 
-                            ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` 
-                            : "";
-                            
-                        uniqueBooks.push({
-                            title: doc.title,
-                            author: authorName,
-                            coverUrl,
-                            year: doc.first_publish_year || "Unknown Year"
-                        });
-                    }
-                }
-            }
-        } catch (e: any) {
-            console.warn("[API-FAILOVER] OpenLibrary series search failed:", e?.message || String(e));
-        }
-        
-        // 2. Failover: Google Books
-        if (uniqueBooks.length === 0) {
-            try {
-                const gUrl = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=40`;
-                const gRes = await fetchWithRetry(gUrl, { headers: { "Accept": "application/json" } });
-                if (gRes && gRes.ok) {
-                    const data = await gRes.json();
-                    if (data.items) {
-                        for (const item of data.items) {
-                            const title = item.volumeInfo?.title || "";
-                            if (!title) continue;
-                            
-                            const normalizedTitle = title.toLowerCase().replace(/[^a-z0-9]/g, "");
-                            const titleLower = title.toLowerCase();
-                            const isCompilation = titleLower.includes("box set") || 
-                                                  titleLower.includes("boxed set") || 
-                                                  titleLower.includes("collection") || 
-                                                  titleLower.includes("series 1-") || 
-                                                  titleLower.includes("pack") || 
-                                                  titleLower.includes("omnibus");
-                            if (isCompilation) continue;
-                            
-                            if (author && item.volumeInfo?.authors) {
-                                const authorLower = author.toLowerCase();
-                                const matchesAuthor = item.volumeInfo.authors.some((name: string) => 
-                                    name.toLowerCase().includes(authorLower)
-                                );
-                                if (!matchesAuthor) continue;
-                            }
-                            
-                            if (!seenTitles.has(normalizedTitle)) {
-                                seenTitles.add(normalizedTitle);
-                                const authorName = item.volumeInfo?.authors?.[0] || author || "Unknown Author";
-                                let coverUrl = item.volumeInfo?.imageLinks?.thumbnail || "";
-                                if (coverUrl) {
-                                    coverUrl = coverUrl.replace(/^http:/, "https:").replace("&edge=curl", "");
-                                }
-                                uniqueBooks.push({
-                                    title,
-                                    author: authorName,
-                                    coverUrl,
-                                    year: item.volumeInfo?.publishedDate ? item.volumeInfo.publishedDate.substring(0, 4) : "Unknown Year"
-                                });
-                            }
-                        }
-                    }
-                }
-            } catch(e) {
-                console.warn("[API-FAILOVER] Google Books series search failed:", e);
-            }
-        }
-
-        return uniqueBooks;
-    } catch (e) {
-        console.error("Failed to fetch series books list:", e);
-        return [];
-    }
-}
-
-export async function createMultipleBookRequests(booksList: { title: string, author: string, coverUrl: string, publishYear: string }[], requestedFor?: string, mediaType: string = "ebook", libraryId?: string) {
-    try {
-        const session = await verifyUser();
-        const isAdmin = session.role === "ADMIN";
-        if (!booksList || booksList.length === 0) return { success: false, error: "No books provided" };
-        
-        let targetUser = session.username as string;
-        if (isAdmin && requestedFor) {
-            targetUser = requestedFor;
-        }
-        
-        let targetLib: any = null;
-        if (libraryId) {
-            targetLib = await prisma.library.findUnique({ where: { id: libraryId } }).catch(() => null);
-        }
-        const isKidsLib = targetLib ? isKidsLibrary(targetLib) : false;
-        const isKyraOrPublicLib = targetLib ? isAutoApprovedBookLibrary(targetLib) : false;
-
-        for (const book of booksList) {
-            let finalCover = book.coverUrl;
-            
-            const rating = inferBookRating({
-                title: book.title,
-                author: book.author
-            });
-            const isKidsBook = isKidsLib || rating.ageRating === "Kids";
-            const isApproved = isKyraOrPublicLib || !isKidsBook;
-
-            const request = await prisma.bookRequest.create({
-                data: {
-                    title: book.title,
-                    author: book.author,
-                    coverUrl: finalCover,
-                    publishYear: book.publishYear,
-                    maturityRating: rating.maturityRating || null,
-                    ageRating: rating.ageRating || null,
-                    requestedBy: targetUser,
-                    libraryId: libraryId || null,
-                    type: "book",
-                    mediaType: mediaType,
-                    status: isApproved ? "Approved" : "Pending"
-                }
-            });
-            
-            if (isApproved) {
-                autoDownloadBookRequest(request.id, book.title, book.author).catch(err => {
-                    console.error(`[AUTO-DOWNLOAD] Failed for series book "${book.title}":`, err);
-                });
-            }
-        }
-
-        if (booksList.length > 0) {
-            const listText = booksList.map(b => `- ${b.title} by ${b.author}`).join("\n");
-            sendRequestNotificationToAdmins({
-                title: `${booksList.length} ${mediaType === "audiobook" ? "Audiobooks" : "Books"} from checklist`,
-                author: listText,
-                requestedBy: targetUser,
-                type: "checklist",
-                mediaType,
-                publishYear: null
-            }).catch(err => {
-                console.error(`[SMTP-NOTIFICATION] Checklist request email notification failed:`, err);
-            });
-        }
-        
-        revalidatePath("/library");
-        return { success: true, message: `${booksList.length} requests submitted successfully!` };
-    } catch (e: any) {
-        console.error("[CREATE-MULTIPLE-BOOK-REQUESTS-ERROR]:", e);
-        return { success: false, error: e.message || "Failed to submit requests" };
-    }
-}
-
-export async function deleteMultipleBookRequests(ids: string[]) {
-    const session = await verifyUser();
-    if (!ids || ids.length === 0) return;
-    
-    if (session.role === "ADMIN") {
-        await prisma.bookRequest.deleteMany({
-            where: { id: { in: ids } }
-        });
-    } else {
-        await prisma.bookRequest.deleteMany({
-            where: {
-                id: { in: ids },
-                requestedBy: session.username as string
-            }
-        });
-    }
-    
-    revalidatePath("/library");
-}
-
-export async function retryBookRequest(requestId: string) {
-    const session = await verifyUser();
-    
-    const request = await prisma.bookRequest.findUnique({
-        where: { id: requestId }
-    });
-    if (!request) throw new Error("Request not found");
-    
-    if (session.role !== "ADMIN" && request.requestedBy !== session.username) {
-        throw new Error("Unauthorized");
-    }
-    
-    await prisma.bookRequest.update({
-        where: { id: requestId },
-        data: { status: "Approved" }
-    });
-    
-    autoDownloadBookRequest(requestId, request.title, request.author || "").catch(err => {
-        console.error(`[AUTO-DOWNLOAD-RETRY] Failed for request "${request.title}":`, err);
-    });
-    
-    revalidatePath("/library");
-    return { success: true };
-}
-
-// ============================================================================
 // --- PLEX FRIENDS AUTO-SCAN & SYNC ACTIONS ---
 // ============================================================================
 
@@ -18828,77 +18225,6 @@ export async function refreshBookCover(bookId: string) {
                 author: author && author !== "Unknown Author" ? author : book.author
             }
         });
-        revalidatePath("/library");
-        return { success: true, coverUrl: newCover };
-    }
-    return { success: false, error: "No cover artwork found across iTunes, Open Library, or Google Books." };
-}
-
-export async function refreshRequestCover(requestId: string) {
-    await verifyUser();
-    const req = await prisma.bookRequest.findUnique({ where: { id: requestId } });
-    if (!req) return { success: false, error: "Request not found" };
-
-    let title = req.title;
-    let author = req.author || "";
-
-    // Clean scene noise (e.g. "(Rob Inglis)-PoF", "-PoF", "03 - The Two Towers")
-    title = title.replace(/\s*-\s*[A-Za-z0-9]+$/i, "")
-                 .replace(/\s*\([^)]*PoF[^)]*\)/gi, "")
-                 .replace(/\s*\(Rob Inglis\)/gi, "")
-                 .replace(/\s*\(Unabridged\)/gi, "")
-                 .replace(/\s*\(Narrated by [^)]+\)/gi, "")
-                 .replace(/^[0-9]{2}\s*-\s*/, "")
-                 .trim();
-
-    const lowerTitle = title.toLowerCase();
-    if (lowerTitle.includes("fellowship of the ring") || lowerTitle.includes("two towers") || lowerTitle.includes("return of the king") || lowerTitle.includes("lord of the rings") || lowerTitle.includes("hobbit")) {
-        author = "J. R. R. Tolkien";
-        if (lowerTitle.includes("fellowship of the ring")) title = "The Fellowship of the Ring";
-        else if (lowerTitle.includes("two towers")) title = "The Two Towers";
-        else if (lowerTitle.includes("return of the king")) title = "The Return of the King";
-        else if (lowerTitle.includes("hobbit")) title = "The Hobbit";
-    }
-
-    if (lowerTitle.includes("harry potter") || lowerTitle.includes("chamber of secrets") || lowerTitle.includes("prisoner of azkaban") || lowerTitle.includes("goblet of fire") || lowerTitle.includes("order of the phoenix") || lowerTitle.includes("half-blood prince") || lowerTitle.includes("deathly hallows") || lowerTitle.includes("philosopher's stone") || lowerTitle.includes("sorcerer's stone")) {
-        author = "J. K. Rowling";
-        if (lowerTitle.includes("philosopher's stone") || lowerTitle.includes("sorcerer's stone")) title = "Harry Potter and the Sorcerer's Stone";
-        else if (lowerTitle.includes("chamber of secrets")) title = "Harry Potter and the Chamber of Secrets";
-        else if (lowerTitle.includes("prisoner of azkaban")) title = "Harry Potter and the Prisoner of Azkaban";
-        else if (lowerTitle.includes("goblet of fire")) title = "Harry Potter and the Goblet of Fire";
-        else if (lowerTitle.includes("order of the phoenix")) title = "Harry Potter and the Order of the Phoenix";
-        else if (lowerTitle.includes("half-blood prince")) title = "Harry Potter and the Half-Blood Prince";
-        else if (lowerTitle.includes("deathly hallows")) title = "Harry Potter and the Deathly Hallows";
-    }
-
-    const newCover = await fetchBookCover(title, author, req.mediaType || "ebook");
-    if (newCover && newCover !== "local") {
-        await prisma.bookRequest.update({
-            where: { id: requestId },
-            data: { 
-                coverUrl: newCover,
-                title,
-                author: author && author !== "Unknown Author" ? author : req.author
-            }
-        });
-        
-        // Also update any matching book in library
-        const normReq = title.toLowerCase().replace(/[^a-z0-9]/g, "");
-        const reqMedia = req.mediaType || "ebook";
-        const matchingBooks = await prisma.book.findMany({
-            where: req.libraryId ? { libraryId: req.libraryId } : undefined
-        });
-        for (const b of matchingBooks) {
-            const normB = b.title.toLowerCase().replace(/[^a-z0-9]/g, "");
-            const bMedia = b.mediaType || "ebook";
-            if (bMedia === reqMedia && (normB === normReq || normB.includes(normReq) || normReq.includes(normB))) {
-                await prisma.book.update({
-                    where: { id: b.id },
-                    data: { coverUrl: newCover }
-                }).catch(() => {});
-            }
-        }
-
         revalidatePath("/library");
         return { success: true, coverUrl: newCover };
     }
@@ -20227,14 +19553,15 @@ export async function getUserPlexHubData(options?: { skipCache?: boolean }) {
         }
 
         const isAdmin = user.role === "ADMIN";
-        const [fullUser, settings, tautulli, dbPlexServers] = await Promise.all([
+        const [fullUser, settings, tautulli, dbPlexServers, dbMediaServers] = await Promise.all([
             prisma.user.findUnique({
                 where: { id: user.id },
                 select: { id: true, username: true, email: true, name: true, plexUsername: true, plexEmail: true, role: true, parentUserId: true }
             }).catch(() => null),
             prisma.settings.findFirst().catch(() => null),
             prisma.tautulliInstance.findMany().catch(() => []),
-            prisma.plexServer.findMany().catch(() => [])
+            prisma.plexServer.findMany().catch(() => []),
+            prisma.mediaServer.findMany({ orderBy: { createdAt: 'asc' } }).catch(() => [])
         ]);
 
         const userAliases = new Set<string>();
@@ -20498,6 +19825,54 @@ export async function getUserPlexHubData(options?: { skipCache?: boolean }) {
     }
 
     const rawWatchHistory: any[] = [];
+
+    
+    // --- 1b. DIRECT JELLYFIN & EMBY MEDIA SERVER MONITORING ---
+    for (const ms of dbMediaServers) {
+        if (ms.isMonitored === false || ms.isActive === false) continue;
+        const normKey = ms.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+        if (!serverMap.has(normKey)) {
+            serverMap.set(normKey, {
+                id: `media_server_${ms.id}`,
+                name: ms.name,
+                type: ms.type === "EMBY" ? "Emby Server" : "Jellyfin Server",
+                directPms: false,
+                tautulli: false,
+                online: true,
+                monitored: true
+            });
+        }
+
+        try {
+            const apiKey = decryptData(ms.apiKey);
+            const sessions = await fetchMediaServerActiveSessions({
+                id: ms.id,
+                name: ms.name,
+                type: ms.type,
+                url: ms.url,
+                internalUrl: ms.internalUrl,
+                apiKey
+            });
+
+            for (const s of sessions) {
+                const sessionUser = (s.user || "").toLowerCase().trim();
+                const isMatch = userAliases.has(sessionUser) || (isAdmin && (!sessionUser || sessionUser === "local" || sessionUser === "admin"));
+                if (isMatch) {
+                    const diagnosis = await analyzeStreamHealth(s);
+                    seenSessionKeys.add(s.sessionKey);
+                    seenSessionKeys.add(s.sessionId);
+                    seenSessionKeys.add(s.uniqueStreamKey);
+
+                    activeStreams.push({
+                        ...s,
+                        diagnosis
+                    });
+                }
+            }
+        } catch (err: any) {
+            console.warn(`[USER-HUB] Failed fetching sessions for ${ms.name} (${ms.type}):`, err?.message || err);
+        }
+    }
 
     // --- 2. TAUTULLI INSTANCES MONITORING (Query only monitored Tautulli servers concurrently) ---
     const monitoredTautulli = tautulli.filter(t => t.monitored !== false);
@@ -21204,6 +20579,68 @@ export async function killUserStream(instanceId: string, sessionKey: string) {
         }
     }
 
+    
+    // CASE 1b: Direct Jellyfin & Emby Media Server Stream Termination
+    if (instanceId.startsWith("media_server_")) {
+        const mediaServerId = instanceId.replace("media_server_", "");
+        const mediaServer = await prisma.mediaServer.findUnique({
+            where: { id: mediaServerId }
+        });
+
+        if (!mediaServer) {
+            return { success: false, error: "Media server not found" };
+        }
+
+        const apiKey = decryptData(mediaServer.apiKey);
+        const serverConfig = {
+            url: mediaServer.url,
+            internalUrl: mediaServer.internalUrl,
+            apiKey
+        };
+
+        // If not admin, verify ownership by checking user aliases against active sessions
+        if (!isAdmin) {
+            try {
+                const activeSessions = await fetchMediaServerActiveSessions({
+                    id: mediaServer.id,
+                    name: mediaServer.name,
+                    type: mediaServer.type,
+                    url: mediaServer.url,
+                    internalUrl: mediaServer.internalUrl,
+                    apiKey
+                });
+
+                const targetSession = activeSessions.find(s => 
+                    String(s.sessionKey) === String(sessionKey) || 
+                    String(s.sessionId) === String(sessionKey)
+                );
+
+                if (!targetSession) {
+                    return { success: false, error: "Stream session not found or already ended" };
+                }
+
+                const sUser = (targetSession.user || "").toLowerCase().trim();
+                if (!userAliases.has(sUser)) {
+                    return { success: false, error: "Unauthorized: You can only terminate playback sessions for your own account." };
+                }
+            } catch (err: any) {
+                return { success: false, error: err?.message || "Failed to verify session ownership" };
+            }
+        }
+
+        const success = await stopMediaServerSession(serverConfig, sessionKey);
+        if (success) {
+            clearUserCache("user_plex_hub");
+            clearUserCache("user_diag_snapshot");
+            clearUserCache("user_transcode_alert");
+            clearUserCache("admin_detailed_streams");
+            logger.addLog("INFO", "MEDIA_SERVER", `User "${user.username}" terminated active stream on ${mediaServer.type} server "${mediaServer.name}".`);
+            return { success: true, message: "Stream terminated successfully." };
+        } else {
+            return { success: false, error: `Failed to terminate stream on ${mediaServer.type} server` };
+        }
+    }
+
     // CASE 2: Tautulli Instance Stream Termination
     const instance = await prisma.tautulliInstance.findUnique({
         where: { id: instanceId }
@@ -21634,14 +21071,6 @@ export async function getScriptsAction() {
     };
 }
 
-export async function getScriptByIdAction(id: string) {
-    await verifyAdmin();
-    const { getScriptById, getScriptRuns } = await import("@/lib/scripts/script-manager");
-    const script = getScriptById(id);
-    const runs = getScriptRuns(id, 20);
-    return { script, runs };
-}
-
 export async function saveScriptAction(scriptData: any) {
     await verifyAdmin();
     const { saveScript } = await import("@/lib/scripts/script-manager");
@@ -21665,19 +21094,6 @@ export async function runScriptBackgroundAction(scriptId: string) {
         console.error(`Background script run error for ${scriptId}:`, err);
     });
     return { success: true, message: "Script execution started in background." };
-}
-
-export async function abortScriptRunAction(runId: string) {
-    await verifyAdmin();
-    const { abortActiveScriptRun } = await import("@/lib/scripts/script-runner");
-    const aborted = abortActiveScriptRun(runId);
-    return { success: aborted };
-}
-
-export async function getScriptRunLogAction(runId: string) {
-    await verifyAdmin();
-    const { getScriptRunLog } = await import("@/lib/scripts/script-manager");
-    return { runId, log: getScriptRunLog(runId) || "" };
 }
 
 /**

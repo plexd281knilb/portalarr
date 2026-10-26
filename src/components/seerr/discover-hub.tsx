@@ -107,19 +107,40 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
     const [searchQuery, setSearchQuery] = useState("");
     const [debouncedQuery, setDebouncedQuery] = useState("");
     const [isSearching, setIsSearching] = useState(false);
-    const [searchResults, setSearchResults] = useState<TmdbMediaItem[]>([]);
-    const [searchAvailabilityMap, setSearchAvailabilityMap] = useState<Record<number, MediaAvailabilityStatus>>({});
-    const [bookSearchResults, setBookSearchResults] = useState<BookDiscoveryItem[]>([]);
+
+    // Individual category search loading states (loads in order: Movies -> TV -> Books -> Audiobooks)
+    const [isSearchingMovies, setIsSearchingMovies] = useState(false);
+    const [isSearchingTv, setIsSearchingTv] = useState(false);
+    const [isSearchingBooks, setIsSearchingBooks] = useState(false);
+    const [isSearchingAudiobooks, setIsSearchingAudiobooks] = useState(false);
+
+    // Category result arrays
+    const [movieResults, setMovieResults] = useState<TmdbMediaItem[]>([]);
+    const [movieAvailabilityMap, setMovieAvailabilityMap] = useState<Record<number, MediaAvailabilityStatus>>({});
+
+    const [tvResults, setTvResults] = useState<TmdbMediaItem[]>([]);
+    const [tvAvailabilityMap, setTvAvailabilityMap] = useState<Record<number, MediaAvailabilityStatus>>({});
+
+    const [bookResults, setBookResults] = useState<BookDiscoveryItem[]>([]);
     const [bookSearchAvailabilityMap, setBookSearchAvailabilityMap] = useState<Record<string, any>>({});
+
+    const [audiobookResults, setAudiobookResults] = useState<BookDiscoveryItem[]>([]);
+    const [audiobookAvailabilityMap, setAudiobookAvailabilityMap] = useState<Record<string, any>>({});
 
     // Debounce search by 350ms for snappy, fluid autocomplete
     useEffect(() => {
         const trimmed = searchQuery.trim();
         if (!trimmed) {
             setDebouncedQuery("");
-            setSearchResults([]);
-            setBookSearchResults([]);
+            setMovieResults([]);
+            setTvResults([]);
+            setBookResults([]);
+            setAudiobookResults([]);
             setIsSearching(false);
+            setIsSearchingMovies(false);
+            setIsSearchingTv(false);
+            setIsSearchingBooks(false);
+            setIsSearchingAudiobooks(false);
             return;
         }
 
@@ -131,10 +152,19 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
         return () => clearTimeout(timer);
     }, [searchQuery]);
 
-    // Execute search action once debouncedQuery is established (scoped to active category for speed)
+    // Execute search action once debouncedQuery is established.
+    // In Browse ("discover") or Requests mode: strictly search and load in order:
+    // 1. Movies first (loads immediately)
+    // 2. TV shows second (loads immediately)
+    // 3. Books third (loads immediately)
+    // 4. Audiobooks fourth (loads immediately)
     useEffect(() => {
         if (!debouncedQuery) {
             setIsSearching(false);
+            setIsSearchingMovies(false);
+            setIsSearchingTv(false);
+            setIsSearchingBooks(false);
+            setIsSearchingAudiobooks(false);
             return;
         }
 
@@ -142,40 +172,111 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
         const executeSearch = async () => {
             setIsSearching(true);
             try {
-                if (activeTab === "ebooks" || activeTab === "audiobooks") {
-                    const bookRes = await searchBooksAction(debouncedQuery, activeTab === "ebooks" ? "ebook" : "audiobook", section === "kids");
+                if (activeTab === "ebooks") {
+                    setIsSearchingBooks(true);
+                    setBookResults([]);
+                    const bookRes = await searchBooksAction(debouncedQuery, "ebook", section === "kids");
                     if (!isCancelled && bookRes.success && bookRes.items) {
-                        setBookSearchResults(bookRes.items);
+                        setBookResults(bookRes.items);
                         setBookSearchAvailabilityMap(bookRes.availabilityMap || {});
                     }
-                } else if (activeTab === "movies" || activeTab === "tv") {
-                    const mediaRes = await searchMediaAction(debouncedQuery, 1, section === "kids");
-                    if (!isCancelled && mediaRes.success && mediaRes.items) {
-                        const filtered = mediaRes.items.filter(item => activeTab === "movies" ? item.mediaType === "movie" : item.mediaType === "tv");
-                        setSearchResults(filtered);
-                        setSearchAvailabilityMap(mediaRes.availabilityMap || {});
+                    if (!isCancelled) setIsSearchingBooks(false);
+                } else if (activeTab === "audiobooks") {
+                    setIsSearchingAudiobooks(true);
+                    setAudiobookResults([]);
+                    const audioRes = await searchBooksAction(debouncedQuery, "audiobook", section === "kids");
+                    if (!isCancelled && audioRes.success && audioRes.items) {
+                        setAudiobookResults(audioRes.items);
+                        setAudiobookAvailabilityMap(audioRes.availabilityMap || {});
                     }
+                    if (!isCancelled) setIsSearchingAudiobooks(false);
+                } else if (activeTab === "movies") {
+                    setIsSearchingMovies(true);
+                    setMovieResults([]);
+                    const movieRes = await searchMediaAction(debouncedQuery, 1, section === "kids", "movie");
+                    if (!isCancelled && movieRes.success && movieRes.items) {
+                        setMovieResults(movieRes.items);
+                        setMovieAvailabilityMap(movieRes.availabilityMap || {});
+                    }
+                    if (!isCancelled) setIsSearchingMovies(false);
+                } else if (activeTab === "tv") {
+                    setIsSearchingTv(true);
+                    setTvResults([]);
+                    const tvRes = await searchMediaAction(debouncedQuery, 1, section === "kids", "tv");
+                    if (!isCancelled && tvRes.success && tvRes.items) {
+                        setTvResults(tvRes.items);
+                        setTvAvailabilityMap(tvRes.availabilityMap || {});
+                    }
+                    if (!isCancelled) setIsSearchingTv(false);
                 } else {
-                    const [mediaRes, bookRes] = await Promise.all([
-                        searchMediaAction(debouncedQuery, 1, section === "kids"),
-                        searchBooksAction(debouncedQuery, "all", section === "kids")
-                    ]);
+                    // BROWSE SECTION (activeTab === "discover" or general search):
+                    // Look at movies first, then tv shows, then books, then audiobooks, and load them in that order!
+                    setMovieResults([]);
+                    setTvResults([]);
+                    setBookResults([]);
+                    setAudiobookResults([]);
 
-                    if (!isCancelled) {
-                        if (mediaRes.success && mediaRes.items) {
-                            setSearchResults(mediaRes.items);
-                            setSearchAvailabilityMap(mediaRes.availabilityMap || {});
+                    setIsSearchingMovies(true);
+                    setIsSearchingTv(true);
+                    setIsSearchingBooks(true);
+                    setIsSearchingAudiobooks(true);
+
+                    // 1. LOOK AT MOVIES FIRST & LOAD IMMEDIATELY
+                    try {
+                        const movieRes = await searchMediaAction(debouncedQuery, 1, section === "kids", "movie");
+                        if (isCancelled) return;
+                        if (movieRes.success && movieRes.items) {
+                            setMovieResults(movieRes.items);
+                            setMovieAvailabilityMap(movieRes.availabilityMap || {});
                         }
+                    } catch (e) {}
+                    if (isCancelled) return;
+                    setIsSearchingMovies(false);
+
+                    // 2. THEN LOOK AT TV SHOWS & LOAD IMMEDIATELY
+                    try {
+                        const tvRes = await searchMediaAction(debouncedQuery, 1, section === "kids", "tv");
+                        if (isCancelled) return;
+                        if (tvRes.success && tvRes.items) {
+                            setTvResults(tvRes.items);
+                            setTvAvailabilityMap(tvRes.availabilityMap || {});
+                        }
+                    } catch (e) {}
+                    if (isCancelled) return;
+                    setIsSearchingTv(false);
+
+                    // 3. THEN LOOK AT BOOKS (EBOOKS) & LOAD IMMEDIATELY
+                    try {
+                        const bookRes = await searchBooksAction(debouncedQuery, "ebook", section === "kids");
+                        if (isCancelled) return;
                         if (bookRes.success && bookRes.items) {
-                            setBookSearchResults(bookRes.items);
+                            setBookResults(bookRes.items);
                             setBookSearchAvailabilityMap(bookRes.availabilityMap || {});
                         }
-                    }
+                    } catch (e) {}
+                    if (isCancelled) return;
+                    setIsSearchingBooks(false);
+
+                    // 4. THEN LOOK AT AUDIOBOOKS & LOAD IMMEDIATELY
+                    try {
+                        const audioRes = await searchBooksAction(debouncedQuery, "audiobook", section === "kids");
+                        if (isCancelled) return;
+                        if (audioRes.success && audioRes.items) {
+                            setAudiobookResults(audioRes.items);
+                            setAudiobookAvailabilityMap(audioRes.availabilityMap || {});
+                        }
+                    } catch (e) {}
+                    if (isCancelled) return;
+                    setIsSearchingAudiobooks(false);
                 }
             } catch (e) {
             } finally {
                 if (!isCancelled) {
                     setIsSearching(false);
+                    setIsSearchingMovies(false);
+                    setIsSearchingTv(false);
+                    setIsSearchingBooks(false);
+                    setIsSearchingAudiobooks(false);
                 }
             }
         };
@@ -186,7 +287,25 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
         };
     }, [debouncedQuery, activeTab, section]);
 
-    // Allow user to immediately execute search on Enter keypress without waiting for the 1s debounce
+    const handleClearSearch = () => {
+        setSearchQuery("");
+        setDebouncedQuery("");
+        setMovieResults([]);
+        setTvResults([]);
+        setBookResults([]);
+        setAudiobookResults([]);
+        setMovieAvailabilityMap({});
+        setTvAvailabilityMap({});
+        setBookSearchAvailabilityMap({});
+        setAudiobookAvailabilityMap({});
+        setIsSearching(false);
+        setIsSearchingMovies(false);
+        setIsSearchingTv(false);
+        setIsSearchingBooks(false);
+        setIsSearchingAudiobooks(false);
+    };
+
+    // Allow user to immediately execute search on Enter keypress without waiting for the 350ms debounce
     const handleImmediateSearch = () => {
         const trimmed = searchQuery.trim();
         if (trimmed && trimmed !== debouncedQuery) {
@@ -195,7 +314,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
     };
 
     // Selected item for Movie/TV Detail Modal
-    const [selectedMedia, setSelectedMedia] = useState<{ id: number; type: "movie" | "tv"; certification?: string } | null>(null);
+    const [selectedMedia, setSelectedMedia] = useState<{ id: number; type: "movie" | "tv"; certification?: string; item?: TmdbMediaItem } | null>(null);
 
     // Selected items for Book / Author / Series Modals
     const [selectedBook, setSelectedBook] = useState<BookDiscoveryItem | null>(null);
@@ -217,10 +336,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
     // Handle tab change and sync URL
     const handleTabChange = (tab: "discover" | "movies" | "tv" | "ebooks" | "audiobooks" | "requests") => {
         setActiveTab(tab);
-        setSearchQuery("");
-        setDebouncedQuery("");
-        setSearchResults([]);
-        setBookSearchResults([]);
+        handleClearSearch();
         if (typeof window !== "undefined") {
             const url = new URL(window.location.href);
             if (tab === "discover") {
@@ -240,10 +356,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
     // Handle section mode change and sync URL
     const handleSectionChange = (sec: "main" | "kids") => {
         setSection(sec);
-        setSearchQuery("");
-        setDebouncedQuery("");
-        setSearchResults([]);
-        setBookSearchResults([]);
+        handleClearSearch();
         if (typeof window !== "undefined") {
             const url = new URL(window.location.href);
             if (sec === "kids") {
@@ -432,26 +545,32 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                 seasons: item.mediaType === "tv" ? "all" : undefined
             });
             if (res.success) {
+                const updatedStatus: MediaAvailabilityStatus = {
+                    inLibrary: false,
+                    isRequested: true,
+                    requestStatus: res.request?.status || "APPROVED"
+                };
                 setAvailabilityMap(prev => {
                     const next = {
                         ...prev,
-                        [item.id]: {
-                            inLibrary: false,
-                            isRequested: true,
-                            requestStatus: res.request?.status || "APPROVED"
-                        }
+                        [item.id]: updatedStatus
                     };
                     if (tabCacheRef.current.home?.[section]) {
                         tabCacheRef.current.home[section].availabilityMap = next;
                     }
                     return next;
                 });
+                if (item.mediaType === "movie") {
+                    setMovieAvailabilityMap(prev => ({ ...prev, [item.id]: updatedStatus }));
+                } else {
+                    setTvAvailabilityMap(prev => ({ ...prev, [item.id]: updatedStatus }));
+                }
             }
         } catch (e) {}
     };
 
     const handlePlayTrailerFromHero = (item: TmdbMediaItem) => {
-        setSelectedMedia({ id: item.id, type: item.mediaType, certification: item.certification });
+        setSelectedMedia({ id: item.id, type: item.mediaType, certification: item.certification, item });
     };
 
     return (
@@ -619,12 +738,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                         <div className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
                     ) : searchQuery ? (
                         <button
-                            onClick={() => {
-                                setSearchQuery("");
-                                setDebouncedQuery("");
-                                setSearchResults([]);
-                                setBookSearchResults([]);
-                            }}
+                            onClick={handleClearSearch}
                             className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-xs p-1 rounded-full hover:bg-muted/40 transition-colors"
                             title="Clear search"
                         >
@@ -634,34 +748,55 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                 </div>
             </div>
 
-            {/* SEARCH RESULTS VIEW */}
+            {/* SEARCH RESULTS VIEW: Strictly loaded and displayed in order: Movies -> TV Shows -> Books -> Audiobooks */}
             {searchQuery.trim().length > 0 ? (
                 <div className="space-y-6">
-                    <div className="flex items-center justify-between px-1">
-                        <h2 className="text-base sm:text-lg font-bold text-foreground">
-                            Search Results for "{debouncedQuery || searchQuery}" ({searchResults.length + bookSearchResults.length})
-                        </h2>
+                    {/* Header bar */}
+                    <div className="flex items-center justify-between px-1 flex-wrap gap-2">
+                        <div className="flex items-center gap-2.5 flex-wrap">
+                            <h2 className="text-base sm:text-lg font-bold text-foreground">
+                                Search Results for "{debouncedQuery || searchQuery}" ({(movieResults.length + tvResults.length + bookResults.length + audiobookResults.length)})
+                            </h2>
+                            {(isSearching || isSearchingMovies || isSearchingTv || isSearchingBooks || isSearchingAudiobooks) && (
+                                <div className="flex items-center gap-1.5 text-xs text-primary bg-primary/10 border border-primary/20 px-2.5 py-0.5 rounded-full animate-pulse">
+                                    <div className="w-2.5 h-2.5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                                    <span>
+                                        {isSearchingMovies
+                                            ? "Looking for movies..."
+                                            : isSearchingTv
+                                            ? "Looking for TV shows..."
+                                            : isSearchingBooks
+                                            ? "Looking for books..."
+                                            : "Looking for audiobooks..."}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
                         <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => {
-                                setSearchQuery("");
-                                setDebouncedQuery("");
-                                setSearchResults([]);
-                                setBookSearchResults([]);
-                            }}
+                            onClick={handleClearSearch}
                             className="h-8 text-xs text-muted-foreground hover:text-foreground cursor-pointer"
                         >
                             Clear Search
                         </Button>
                     </div>
 
-                    {isSearching ? (
+                    {/* Progress loader if no results have arrived yet */}
+                    {(movieResults.length + tvResults.length + bookResults.length + audiobookResults.length) === 0 && (isSearching || isSearchingMovies || isSearchingTv || isSearchingBooks || isSearchingAudiobooks) ? (
                         <div className="p-16 text-center space-y-3">
                             <div className="w-8 h-8 border-3 border-primary/30 border-t-primary rounded-full animate-spin mx-auto" />
-                            <p className="text-xs text-muted-foreground animate-pulse">Searching media & book catalog...</p>
+                            <p className="text-xs text-muted-foreground animate-pulse">
+                                {isSearchingMovies
+                                    ? "Looking for movies..."
+                                    : isSearchingTv
+                                    ? "Looking for TV shows..."
+                                    : isSearchingBooks
+                                    ? "Looking for books..."
+                                    : "Looking for audiobooks..."}
+                            </p>
                         </div>
-                    ) : searchResults.length === 0 && bookSearchResults.length === 0 ? (
+                    ) : (movieResults.length + tvResults.length + bookResults.length + audiobookResults.length) === 0 && !(isSearching || isSearchingMovies || isSearchingTv || isSearchingBooks || isSearchingAudiobooks) ? (
                         <div className="p-12 text-center rounded-2xl bg-[#121218]/60 border border-dashed border-border/50 space-y-2">
                             <Search className="h-8 w-8 mx-auto text-muted-foreground opacity-40" />
                             <h3 className="text-sm font-bold text-foreground">No Titles Found</h3>
@@ -670,45 +805,140 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                             </p>
                         </div>
                     ) : (
-                        <div className="space-y-6">
-                            {/* Movie & TV Results */}
-                            {searchResults.length > 0 && (
-                                <div className="space-y-3">
-                                    <h3 className="text-sm font-bold text-muted-foreground flex items-center gap-1.5">
-                                        <Film className="h-4 w-4 text-blue-400" />
-                                        <span>Movies & TV Shows ({searchResults.length})</span>
-                                    </h3>
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 3xl:grid-cols-8 4xl:grid-cols-10 gap-3 sm:gap-4 lg:gap-5">
-                                        {searchResults.map((item) => (
-                                            <MediaCard
-                                                key={`${item.mediaType}-${item.id}`}
-                                                item={item}
-                                                availability={searchAvailabilityMap[item.id]}
-                                                onSelect={(selected) => setSelectedMedia({ id: selected.id, type: selected.mediaType, certification: selected.certification })}
-                                                onRequest={handleQuickRequest}
-                                            />
-                                        ))}
+                        <div className="space-y-8">
+                            {/* 1. MOVIES (LOADED FIRST) */}
+                            {(movieResults.length > 0 || (activeTab === "movies" && isSearchingMovies)) && (
+                                <div className="space-y-3 animate-in fade-in duration-300">
+                                    <div className="flex items-center justify-between">
+                                        <h3 className="text-sm font-bold text-muted-foreground flex items-center gap-1.5">
+                                            <Film className="h-4 w-4 text-blue-400" />
+                                            <span>Movies {movieResults.length > 0 && `(${movieResults.length})`}</span>
+                                        </h3>
+                                        {isSearchingMovies && (
+                                            <div className="flex items-center gap-1.5 text-xs text-blue-400">
+                                                <div className="w-3 h-3 border-2 border-blue-400/30 border-t-blue-400 rounded-full animate-spin" />
+                                                <span>Searching movies...</span>
+                                            </div>
+                                        )}
                                     </div>
+                                    {movieResults.length > 0 && (
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 3xl:grid-cols-8 4xl:grid-cols-10 gap-3 sm:gap-4 lg:gap-5">
+                                            {movieResults.map((item) => (
+                                                <MediaCard
+                                                    key={`movie-${item.id}`}
+                                                    item={item}
+                                                    availability={movieAvailabilityMap[item.id]}
+                                                    onSelect={(selected) => setSelectedMedia({ id: selected.id, type: selected.mediaType, certification: selected.certification, item: selected })}
+                                                    onRequest={handleQuickRequest}
+                                                />
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
-                            {/* Book & Audiobook Results */}
-                            {bookSearchResults.length > 0 && (
-                                <div className="space-y-3">
-                                    <h3 className="text-sm font-bold text-muted-foreground flex items-center gap-1.5">
-                                        <BookOpen className="h-4 w-4 text-purple-400" />
-                                        <span>Ebooks & Audiobooks ({bookSearchResults.length})</span>
-                                    </h3>
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 3xl:grid-cols-8 4xl:grid-cols-10 gap-3 sm:gap-4 lg:gap-5">
-                                        {bookSearchResults.map((book, idx) => (
-                                            <BookCard
-                                                key={idx}
-                                                item={book}
-                                                availability={bookSearchAvailabilityMap[`${book.title}:${book.author}`]}
-                                                onSelect={(selected) => setSelectedBook(selected)}
-                                            />
-                                        ))}
+                            {/* 2. TV SHOWS (LOADED SECOND) */}
+                            {(tvResults.length > 0 || (activeTab === "tv" && isSearchingTv)) && (
+                                <div className="space-y-3 animate-in fade-in duration-300">
+                                    <div className="flex items-center justify-between">
+                                        <h3 className="text-sm font-bold text-muted-foreground flex items-center gap-1.5">
+                                            <Tv className="h-4 w-4 text-cyan-400" />
+                                            <span>TV Shows {tvResults.length > 0 && `(${tvResults.length})`}</span>
+                                        </h3>
+                                        {isSearchingTv && (
+                                            <div className="flex items-center gap-1.5 text-xs text-cyan-400">
+                                                <div className="w-3 h-3 border-2 border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin" />
+                                                <span>Searching TV shows...</span>
+                                            </div>
+                                        )}
                                     </div>
+                                    {tvResults.length > 0 && (
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 3xl:grid-cols-8 4xl:grid-cols-10 gap-3 sm:gap-4 lg:gap-5">
+                                            {tvResults.map((item) => (
+                                                <MediaCard
+                                                    key={`tv-${item.id}`}
+                                                    item={item}
+                                                    availability={tvAvailabilityMap[item.id]}
+                                                    onSelect={(selected) => setSelectedMedia({ id: selected.id, type: selected.mediaType, certification: selected.certification, item: selected })}
+                                                    onRequest={handleQuickRequest}
+                                                />
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* 3. BOOKS (LOADED THIRD) */}
+                            {(bookResults.length > 0 || (activeTab === "ebooks" && isSearchingBooks)) && (
+                                <div className="space-y-3 animate-in fade-in duration-300">
+                                    <div className="flex items-center justify-between">
+                                        <h3 className="text-sm font-bold text-muted-foreground flex items-center gap-1.5">
+                                            <BookOpen className="h-4 w-4 text-purple-400" />
+                                            <span>Books {bookResults.length > 0 && `(${bookResults.length})`}</span>
+                                        </h3>
+                                        {isSearchingBooks && (
+                                            <div className="flex items-center gap-1.5 text-xs text-purple-400">
+                                                <div className="w-3 h-3 border-2 border-purple-400/30 border-t-purple-400 rounded-full animate-spin" />
+                                                <span>Searching books...</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    {bookResults.length > 0 && (
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 3xl:grid-cols-8 4xl:grid-cols-10 gap-3 sm:gap-4 lg:gap-5">
+                                            {bookResults.map((book, idx) => (
+                                                <BookCard
+                                                    key={`book-${idx}-${book.title}`}
+                                                    item={book}
+                                                    availability={bookSearchAvailabilityMap[`${book.title}:${book.author}`]}
+                                                    onSelect={(selected) => setSelectedBook(selected)}
+                                                />
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* 4. AUDIOBOOKS (LOADED FOURTH) */}
+                            {(audiobookResults.length > 0 || (activeTab === "audiobooks" && isSearchingAudiobooks)) && (
+                                <div className="space-y-3 animate-in fade-in duration-300">
+                                    <div className="flex items-center justify-between">
+                                        <h3 className="text-sm font-bold text-muted-foreground flex items-center gap-1.5">
+                                            <Headphones className="h-4 w-4 text-amber-400" />
+                                            <span>Audiobooks {audiobookResults.length > 0 && `(${audiobookResults.length})`}</span>
+                                        </h3>
+                                        {isSearchingAudiobooks && (
+                                            <div className="flex items-center gap-1.5 text-xs text-amber-400">
+                                                <div className="w-3 h-3 border-2 border-amber-400/30 border-t-amber-400 rounded-full animate-spin" />
+                                                <span>Searching audiobooks...</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    {audiobookResults.length > 0 && (
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 3xl:grid-cols-8 4xl:grid-cols-10 gap-3 sm:gap-4 lg:gap-5">
+                                            {audiobookResults.map((book, idx) => (
+                                                <BookCard
+                                                    key={`audiobook-${idx}-${book.title}`}
+                                                    item={book}
+                                                    availability={audiobookAvailabilityMap[`${book.title}:${book.author}`]}
+                                                    onSelect={(selected) => setSelectedBook(selected)}
+                                                />
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Subsequent categories loading indicator when early results are already visible */}
+                            {(isSearchingTv || isSearchingBooks || isSearchingAudiobooks) && (
+                                <div className="flex items-center gap-2 py-2 px-3.5 rounded-xl bg-muted/20 border border-border/30 text-xs text-muted-foreground animate-pulse w-fit">
+                                    <div className="w-3.5 h-3.5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                                    <span>
+                                        {isSearchingTv
+                                            ? "Loading TV shows..."
+                                            : isSearchingBooks
+                                            ? "Loading books..."
+                                            : "Loading audiobooks..."}
+                                    </span>
                                 </div>
                             )}
                         </div>
@@ -721,7 +951,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                         <HeroSpotlight
                             item={heroItem}
                             availability={availabilityMap[heroItem.id]}
-                            onSelect={(selected) => setSelectedMedia({ id: selected.id, type: selected.mediaType, certification: selected.certification })}
+                            onSelect={(selected) => setSelectedMedia({ id: selected.id, type: selected.mediaType, certification: selected.certification, item: selected })}
                             onRequest={handleQuickRequest}
                             onPlayTrailer={handlePlayTrailerFromHero}
                         />
@@ -742,7 +972,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                                     iconName={sec.icon}
                                     items={sec.items}
                                     availabilityMap={availabilityMap}
-                                    onSelect={(selected) => setSelectedMedia({ id: selected.id, type: selected.mediaType, certification: selected.certification })}
+                                    onSelect={(selected) => setSelectedMedia({ id: selected.id, type: selected.mediaType, certification: selected.certification, item: selected })}
                                     onRequest={handleQuickRequest}
                                 />
                             ))}
@@ -826,7 +1056,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                                     key={`${item.mediaType}-${item.id}`}
                                     item={item}
                                     availability={availabilityMap[item.id]}
-                                    onSelect={(selected) => setSelectedMedia({ id: selected.id, type: selected.mediaType, certification: selected.certification })}
+                                    onSelect={(selected) => setSelectedMedia({ id: selected.id, type: selected.mediaType, certification: selected.certification, item: selected })}
                                     onRequest={handleQuickRequest}
                                 />
                             ))}
@@ -887,7 +1117,8 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                     tmdbId={selectedMedia.id}
                     mediaType={selectedMedia.type}
                     isKids={section === "kids"}
-                    initialAvailability={availabilityMap[selectedMedia.id]}
+                    initialAvailability={availabilityMap[selectedMedia.id] || movieAvailabilityMap[selectedMedia.id] || tvAvailabilityMap[selectedMedia.id]}
+                    initialItem={selectedMedia.item}
                     onRequestSubmitted={() => {
                         if (activeTab === "discover") loadHomeData(section);
                     }}

@@ -5,7 +5,7 @@ import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { 
     getAppUsers, createAppUser, deleteAppUser, 
-    getSettings, saveSettings, saveAppUrlAction, savePlexSettingsAction, clearPlexSettings, saveJobSettings, clearSmtpSettings, sendTestEmailAction, syncPlexFriendsAction, autoLinkAdminPlexTokenAction,
+    getSettings, saveSettings, saveAppUrlAction, savePlexSettingsAction, clearPlexSettings, saveJobSettings, clearSmtpSettings, sendTestEmailAction, syncPlexFriendsAction, autoLinkAdminPlexTokenAction, getAdminNotificationEmailAction, updateCurrentUserPrimaryEmail,
     getPlexServersAction, addPlexServerAction, updatePlexServerAction, removePlexServerAction, setDefaultPlexServerAction, testPlexServerConfigAction, testPlexServerConnectionAction,
     testPlexDatabasePathAction, discoverPlexDatabasePathsAction, savePlexDatabasePathAction,
     togglePlexServerMonitoringAction, getDiscoveredPlexServersAction, importDiscoveredPlexServerAction,
@@ -206,6 +206,14 @@ function SettingsPageContent() {
     const [testEmailMsg, setTestEmailMsg] = useState("");
     const [testEmailErr, setTestEmailErr] = useState("");
 
+    // Admin Notification Email States
+    const [adminNotificationEmail, setAdminNotificationEmail] = useState("");
+    const [showAdminEmailModal, setShowAdminEmailModal] = useState(false);
+    const [newAdminEmailInput, setNewAdminEmailInput] = useState("");
+    const [adminEmailSaving, setAdminEmailSaving] = useState(false);
+    const [adminEmailModalMsg, setAdminEmailModalMsg] = useState("");
+    const [adminEmailModalErr, setAdminEmailModalErr] = useState("");
+
     // Connection Testing States
     const [testingAppId, setTestingAppId] = useState<string | null>(null);
     const [appTestResults, setAppTestResults] = useState<{ [id: string]: { success?: boolean, msg?: string, err?: string } }>({});
@@ -279,6 +287,16 @@ function SettingsPageContent() {
     const [smtpUserInput, setSmtpUserInput] = useState("");
     const [smtpPassInput, setSmtpPassInput] = useState("");
     const [smtpFromInput, setSmtpFromInput] = useState("");
+    const [emailProviderMode, setEmailProviderMode] = useState<"resend" | "custom">("resend");
+    // Dedicated decoupled state for Resend and Custom SMTP
+    const [resendApiKeyInput, setResendApiKeyInput] = useState("");
+    const [resendFromInput, setResendFromInput] = useState("notifications@domshomelab.com");
+    const [customSmtpHostInput, setCustomSmtpHostInput] = useState("smtp.gmail.com");
+    const [customSmtpPortInput, setCustomSmtpPortInput] = useState("587");
+    const [customSmtpUserInput, setCustomSmtpUserInput] = useState("");
+    const [customSmtpPassInput, setCustomSmtpPassInput] = useState("");
+    const [customSmtpFromInput, setCustomSmtpFromInput] = useState("");
+    const [showAdvancedSmtp, setShowAdvancedSmtp] = useState(false);
     const [mainPlexTokenInput, setMainPlexTokenInput] = useState("");
     const [mainPlexUrlInput, setMainPlexUrlInput] = useState("");
     const [autoSyncIntervalInput, setAutoSyncIntervalInput] = useState<number | string>(5);
@@ -482,12 +500,40 @@ function SettingsPageContent() {
         setTestEmailLoading(true);
         setTestEmailMsg("");
         setTestEmailErr("");
-        const res = await sendTestEmailAction();
+        const res = await sendTestEmailAction(emailProviderMode);
         setTestEmailLoading(false);
         if (res.success) {
             setTestEmailMsg(res.message || "Test email dispatched successfully!");
         } else {
             setTestEmailErr(res.error || "Failed to send test email.");
+        }
+    };
+
+    const handleSaveAdminEmail = async () => {
+        if (!newAdminEmailInput || !newAdminEmailInput.includes("@")) {
+            setAdminEmailModalErr("Please enter a valid email address.");
+            return;
+        }
+        setAdminEmailSaving(true);
+        setAdminEmailModalMsg("");
+        setAdminEmailModalErr("");
+        try {
+            const res = await updateCurrentUserPrimaryEmail(newAdminEmailInput);
+            if (res.success) {
+                setAdminEmailModalMsg(res.message || "Admin email updated successfully!");
+                setAdminNotificationEmail(newAdminEmailInput.trim().toLowerCase());
+                setTimeout(() => {
+                    setShowAdminEmailModal(false);
+                    setAdminEmailModalMsg("");
+                }, 1200);
+                loadAllData();
+            } else {
+                setAdminEmailModalErr(res.error || "Failed to update email.");
+            }
+        } catch (e: any) {
+            setAdminEmailModalErr(e.message || "Failed to update email.");
+        } finally {
+            setAdminEmailSaving(false);
         }
     };
 
@@ -978,7 +1024,7 @@ function SettingsPageContent() {
         }, 2500);
 
         try {
-            const [u, s, t, g, m, bt, bc, rt, ab, ai, ps] = await Promise.all([
+            const [u, s, t, g, m, bt, bc, rt, ab, ai, ps, adminEmailRes] = await Promise.all([
                 getAppUsers().catch(err => { console.error("getAppUsers error:", err); return []; }),
                 getSettings().catch(err => { console.error("getSettings error:", err); return {}; }),
                 getTautulliInstances().catch(err => { console.error("getTautulliInstances error:", err); return []; }),
@@ -989,10 +1035,14 @@ function SettingsPageContent() {
                 getRoadmapText().catch(() => ""),
                 getAlertBanner().catch(() => ({ enabled: false, text: "" })),
                 getAiAgentSettings().catch(() => null),
-                getPlexServersAction().catch(err => { console.error("getPlexServersAction error:", err); return []; })
+                getPlexServersAction().catch(err => { console.error("getPlexServersAction error:", err); return []; }),
+                getAdminNotificationEmailAction().catch(() => null)
             ]);
             setUsers(u || []);
             setSystemSettings(s || {});
+            if (adminEmailRes?.success && adminEmailRes.email) {
+                setAdminNotificationEmail(adminEmailRes.email);
+            }
             setPlexServers(ps || []);
             if (ps && ps.length > 0) {
                 setSnapshotTargetServerId(prev => {
@@ -1032,6 +1082,27 @@ function SettingsPageContent() {
             setSmtpUserInput(smtpUserVal);
             setSmtpPassInput(smtpPassVal);
             setSmtpFromInput(smtpFromVal);
+            const isResend = smtpHostVal.includes("resend") || smtpUserVal.toLowerCase() === "resend";
+            const effectiveMode = s?.emailProviderMode || (isResend || (!smtpHostVal && !smtpUserVal) ? "resend" : "custom");
+            setEmailProviderMode(effectiveMode);
+
+            // Populate decoupled Resend state
+            const rApiKey = s?.resendApiKey || (isResend && smtpPassVal.startsWith("re_") ? smtpPassVal : "");
+            setResendApiKeyInput(rApiKey);
+            const rFrom = s?.resendFrom || (isResend && smtpFromVal ? smtpFromVal : "notifications@domshomelab.com");
+            setResendFromInput(rFrom);
+
+            // Populate decoupled Custom SMTP state
+            const cHost = s?.customSmtpHost || (!isResend && smtpHostVal ? smtpHostVal : "smtp.gmail.com");
+            setCustomSmtpHostInput(cHost);
+            const cPort = s?.customSmtpPort || (!isResend && smtpPortVal ? smtpPortVal : "587");
+            setCustomSmtpPortInput(String(cPort));
+            const cUser = s?.customSmtpUser || (!isResend && smtpUserVal ? smtpUserVal : "");
+            setCustomSmtpUserInput(cUser);
+            const cPass = s?.customSmtpPass || (!isResend && smtpPassVal && !smtpPassVal.startsWith("re_") ? smtpPassVal : "");
+            setCustomSmtpPassInput(cPass);
+            const cFrom = s?.customSmtpFrom || (!isResend && smtpFromVal ? smtpFromVal : "");
+            setCustomSmtpFromInput(cFrom);
             setMainPlexTokenInput(mainPlexTokenVal);
             setMainPlexUrlInput(mainPlexUrlVal);
             setAutoSyncIntervalInput(autoSyncIntervalVal);
@@ -4852,9 +4923,13 @@ function SettingsPageContent() {
                                                     ● Unsaved Changes
                                                 </Badge>
                                             )}
-                                            {systemSettings?.smtpHost ? (
+                                            {systemSettings?.emailProviderMode === "resend" || systemSettings?.smtpHost?.includes("resend") ? (
+                                                <Badge className="bg-purple-500/15 text-purple-300 border border-purple-500/30 text-[10px] gap-1">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Active: Resend
+                                                </Badge>
+                                            ) : systemSettings?.smtpHost ? (
                                                 <Badge className="bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 text-[10px] gap-1">
-                                                    <CheckCircle2 className="h-3 w-3" /> SMTP Configured
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Active: Custom SMTP
                                                 </Badge>
                                             ) : (
                                                 <Badge variant="outline" className="bg-red-500/10 text-red-400 border-red-500/30 text-[10px]">
@@ -4879,11 +4954,28 @@ function SettingsPageContent() {
                                         onSubmit={async (e) => {
                                             e.preventDefault();
                                             const formData = new FormData();
-                                            formData.append("smtpHost", smtpHostInput);
-                                            formData.append("smtpPort", String(smtpPortInput));
-                                            formData.append("smtpUser", smtpUserInput);
-                                            formData.append("smtpPass", smtpPassInput);
-                                            formData.append("smtpFrom", smtpFromInput);
+                                            formData.append("emailProviderMode", emailProviderMode);
+                                            formData.append("resendApiKey", resendApiKeyInput);
+                                            formData.append("resendFrom", resendFromInput);
+                                            formData.append("customSmtpHost", customSmtpHostInput);
+                                            formData.append("customSmtpPort", String(customSmtpPortInput));
+                                            formData.append("customSmtpUser", customSmtpUserInput);
+                                            formData.append("customSmtpPass", customSmtpPassInput);
+                                            formData.append("customSmtpFrom", customSmtpFromInput);
+
+                                            if (emailProviderMode === "resend") {
+                                                formData.append("smtpHost", "smtp.resend.com");
+                                                formData.append("smtpPort", "465");
+                                                formData.append("smtpUser", "resend");
+                                                formData.append("smtpPass", resendApiKeyInput);
+                                                formData.append("smtpFrom", resendFromInput);
+                                            } else {
+                                                formData.append("smtpHost", customSmtpHostInput);
+                                                formData.append("smtpPort", String(customSmtpPortInput));
+                                                formData.append("smtpUser", customSmtpUserInput);
+                                                formData.append("smtpPass", customSmtpPassInput);
+                                                formData.append("smtpFrom", customSmtpFromInput);
+                                            }
                                             const res = await saveSettings(formData);
                                             if (res.success) {
                                                 setSaveSmtpMsg("SMTP settings saved successfully!");
@@ -4915,96 +5007,354 @@ function SettingsPageContent() {
                                             </div>
                                         )}
 
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="space-y-2">
-                                                <Label>SMTP Host</Label>
-                                                <Input 
-                                                    name="smtpHost" 
-                                                    value={smtpHostInput} 
-                                                    onChange={(e) => setSmtpHostInput(e.target.value)} 
-                                                    placeholder="smtp.gmail.com" 
-                                                    autoComplete="off" 
-                                                    data-1p-ignore="true" 
-                                                    data-lpignore="true"
-                                                />
+                                        {/* Provider Selector Switcher & Active Engine Selector */}
+                                        <div className="p-3 bg-background/80 rounded-xl border border-border/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                            <div className="space-y-0.5">
+                                                <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                                                    <Radio className="h-3.5 w-3.5 text-primary animate-pulse" /> Active Outbound Email Engine
+                                                </span>
+                                                <p className="text-[11px] text-muted-foreground">
+                                                    Click to choose which provider is active. Both can be configured independently without overwriting.
+                                                </p>
                                             </div>
-                                            <div className="space-y-2">
-                                                <Label>Port</Label>
-                                                <Input 
-                                                    name="smtpPort" 
-                                                    value={smtpPortInput} 
-                                                    onChange={(e) => setSmtpPortInput(e.target.value)} 
-                                                    placeholder="587" 
-                                                    autoComplete="off" 
-                                                    data-1p-ignore="true" 
-                                                    data-lpignore="true"
-                                                />
+                                            <div className="flex items-center gap-1.5 bg-black/40 p-1 rounded-xl border border-border/40 self-start sm:self-auto">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setEmailProviderMode("resend")}
+                                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                                                        emailProviderMode === "resend"
+                                                            ? "bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-900/30 border border-purple-400/40 ring-1 ring-purple-400/50"
+                                                            : "text-muted-foreground hover:text-foreground hover:bg-white/[0.04]"
+                                                    }`}
+                                                >
+                                                    <Zap className="h-3.5 w-3.5 text-amber-300" />
+                                                    <span>Resend</span>
+                                                    {emailProviderMode === "resend" ? (
+                                                        <span className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 rounded-full font-mono ml-0.5">
+                                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> ACTIVE
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-[10px] text-muted-foreground/60 ml-0.5">Standby</span>
+                                                    )}
+                                                </button>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setEmailProviderMode("custom")}
+                                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                                                        emailProviderMode === "custom"
+                                                            ? "bg-primary text-primary-foreground shadow-sm border border-primary/40 ring-1 ring-primary/50"
+                                                            : "text-muted-foreground hover:text-foreground hover:bg-white/[0.04]"
+                                                    }`}
+                                                >
+                                                    <Mail className="h-3.5 w-3.5" />
+                                                    <span>Custom SMTP</span>
+                                                    {emailProviderMode === "custom" ? (
+                                                        <span className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 rounded-full font-mono ml-0.5">
+                                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> ACTIVE
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-[10px] text-muted-foreground/60 ml-0.5">Standby</span>
+                                                    )}
+                                                </button>
                                             </div>
                                         </div>
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="space-y-2">
-                                                <Label>User / Email</Label>
-                                                <Input 
-                                                    name="smtpUser" 
-                                                    value={smtpUserInput} 
-                                                    onChange={(e) => setSmtpUserInput(e.target.value)} 
-                                                    placeholder="user@gmail.com" 
-                                                    autoComplete="off" 
-                                                    data-1p-ignore="true" 
-                                                    data-lpignore="true"
-                                                />
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label>Password</Label>
-                                                <div className="relative">
+
+                                        {emailProviderMode === "resend" ? (
+                                            <div className="p-4 rounded-xl bg-purple-950/20 border border-purple-500/30 space-y-4">
+                                                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                                                    <div className="space-y-0.5">
+                                                        <div className="text-sm font-extrabold text-foreground flex items-center gap-1.5">
+                                                            <Zap className="h-4 w-4 text-purple-400" /> Resend API Key & Outbound Delivery
+                                                        </div>
+                                                        <p className="text-xs text-muted-foreground leading-relaxed">
+                                                            Enter your Resend API Key below. Portalarr automatically routes emails through Resend's SMTP server (<code className="text-purple-300 font-mono text-[11px]">smtp.resend.com:465</code>) using your verified domain.
+                                                        </p>
+                                                    </div>
+                                                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                                                        {emailProviderMode === "resend" ? (
+                                                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Active Engine
+                                                            </span>
+                                                        ) : (
+                                                            <Button
+                                                                type="button"
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={() => setEmailProviderMode("resend")}
+                                                                className="text-xs h-7 px-3 gap-1.5 font-bold border-purple-500/40 text-purple-300 hover:bg-purple-500/20"
+                                                            >
+                                                                <CheckCircle2 className="h-3.5 w-3.5 text-purple-400" />
+                                                                <span>Set Active</span>
+                                                            </Button>
+                                                        )}
+                                                        <a
+                                                            href="https://resend.com/api-keys"
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="text-[11px] text-purple-400 hover:text-purple-300 flex items-center gap-1 font-medium underline underline-offset-2 ml-1"
+                                                        >
+                                                            Resend Dashboard <ExternalLink className="h-3 w-3" />
+                                                        </a>
+                                                    </div>
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs font-semibold flex items-center justify-between">
+                                                        <span>Resend API Key</span>
+                                                        <span className="text-[10px] text-muted-foreground font-normal">Starts with <code className="text-purple-300">re_</code></span>
+                                                    </Label>
+                                                    <div className="relative">
+                                                        <Input 
+                                                            name="resendApiKey" 
+                                                            type={showSmtpKey ? "text" : "password"} 
+                                                            value={resendApiKeyInput} 
+                                                            onChange={(e) => setResendApiKeyInput(e.target.value)} 
+                                                            className="pr-9 font-mono text-xs border-purple-500/30 focus-visible:ring-purple-500/40 bg-black/40"
+                                                            placeholder="re_123456789_abcdef..."
+                                                            autoComplete="new-password"
+                                                            data-1p-ignore="true"
+                                                            data-lpignore="true"
+                                                        />
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="absolute right-1 top-1 h-7 w-7 text-muted-foreground hover:text-foreground"
+                                                            onClick={() => setShowSmtpKey(!showSmtpKey)}
+                                                        >
+                                                            {showSmtpKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                                        </Button>
+                                                    </div>
+                                                    {resendApiKeyInput && !resendApiKeyInput.startsWith("re_") && (
+                                                        <div className="flex items-center gap-1.5 p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs mt-1.5">
+                                                            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" />
+                                                            <span>Resend API keys start with <code className="font-bold text-amber-200">re_</code>. This looks like a Gmail App Password. If using Resend, please paste your Resend API Key.</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs font-semibold">Sender Email Address (From)</Label>
                                                     <Input 
-                                                        name="smtpPass" 
-                                                        type={showSmtpKey ? "text" : "password"} 
-                                                        value={smtpPassInput} 
-                                                        onChange={(e) => setSmtpPassInput(e.target.value)} 
-                                                        className="pr-8"
-                                                        autoComplete="new-password"
-                                                        data-1p-ignore="true"
+                                                        name="resendFrom" 
+                                                        value={resendFromInput} 
+                                                        onChange={(e) => setResendFromInput(e.target.value)} 
+                                                        placeholder="notifications@domshomelab.com" 
+                                                        className="border-purple-500/30 font-mono text-xs bg-black/40"
+                                                        autoComplete="off" 
+                                                        data-1p-ignore="true" 
                                                         data-lpignore="true"
                                                     />
+                                                    {resendFromInput && (resendFromInput.toLowerCase().includes("@gmail.com") || resendFromInput.toLowerCase().includes("@yahoo.com") || resendFromInput.toLowerCase().includes("@outlook.com")) && (
+                                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs">
+                                                            <div className="flex items-center gap-1.5">
+                                                                <AlertTriangle className="h-4 w-4 shrink-0 text-rose-400" />
+                                                                <span>Resend error 550: Resend cannot send from public webmail (<code className="font-bold text-rose-200">{resendFromInput}</code>). Resend requires sending from your verified domain.</span>
+                                                            </div>
+                                                            <Button
+                                                                type="button"
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={() => setResendFromInput("notifications@domshomelab.com")}
+                                                                className="h-6 text-[10px] font-bold px-2 border-rose-500/40 text-rose-200 hover:bg-rose-500/20 shrink-0"
+                                                            >
+                                                                Set to notifications@domshomelab.com
+                                                            </Button>
+                                                        </div>
+                                                    )}
+                                                    <div className="text-[11px] text-muted-foreground bg-black/40 p-2.5 rounded-lg border border-purple-500/20 space-y-1">
+                                                        <div className="font-semibold text-purple-200 flex items-center gap-1">
+                                                            <Send className="h-3 w-3 text-purple-400" /> Send-to-Kindle Dispatch:
+                                                        </div>
+                                                        <div>Kindle deliveries are automatically sent from <code className="bg-black/60 text-purple-300 px-1 py-0.5 rounded font-mono font-bold">kindle@domshomelab.com</code>. Ensure this address is added to users' <strong>Amazon Approved Personal Document E-mail List</strong>.</div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="pt-1">
                                                     <Button
                                                         type="button"
                                                         variant="ghost"
-                                                        size="icon"
-                                                        className="absolute right-1 top-1 h-7 w-7 text-muted-foreground hover:text-foreground"
-                                                        onClick={() => setShowSmtpKey(!showSmtpKey)}
+                                                        size="sm"
+                                                        onClick={() => setShowAdvancedSmtp(!showAdvancedSmtp)}
+                                                        className="text-[11px] text-muted-foreground hover:text-foreground h-6 px-1 gap-1"
                                                     >
-                                                        {showSmtpKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                                        <Sliders className="h-3 w-3" />
+                                                        <span>{showAdvancedSmtp ? "Hide Advanced Connection Parameters" : "Show Advanced Connection Parameters"}</span>
                                                     </Button>
+                                                    {showAdvancedSmtp && (
+                                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 rounded-lg bg-black/50 border border-border/40 mt-2 text-xs">
+                                                            <div>
+                                                                <span className="text-[10px] text-muted-foreground block">Host:</span>
+                                                                <span className="font-mono text-[11px] text-foreground">smtp.resend.com</span>
+                                                            </div>
+                                                            <div>
+                                                                <span className="text-[10px] text-muted-foreground block">Port:</span>
+                                                                <span className="font-mono text-[11px] text-foreground">465 (SSL) / 587 (TLS)</span>
+                                                            </div>
+                                                            <div>
+                                                                <span className="text-[10px] text-muted-foreground block">Username:</span>
+                                                                <span className="font-mono text-[11px] text-foreground">resend</span>
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
-                                                <p className="text-[10px] text-muted-foreground leading-tight">
-                                                    For Gmail, <a href="https://myaccount.google.com/apppasswords" target="_blank" className="text-primary hover:underline">generate an App Password</a> and use it here instead of your actual password.
-                                                </p>
                                             </div>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label>Sender Email Address (From)</Label>
-                                            <Input 
-                                                name="smtpFrom" 
-                                                value={smtpFromInput} 
-                                                onChange={(e) => setSmtpFromInput(e.target.value)} 
-                                                placeholder="dom@domshomelab.com" 
-                                                autoComplete="off" 
-                                                data-1p-ignore="true" 
-                                                data-lpignore="true"
-                                            />
-                                            <div className="text-[11px] text-muted-foreground bg-muted/30 p-2.5 rounded-lg border border-muted/50 mt-1 space-y-1">
-                                                <div className="font-semibold text-foreground flex items-center gap-1">
-                                                    <Send className="h-3 w-3 text-amber-500" /> Send-to-Kindle Requirement:
+                                        ) : (
+                                            <div className="p-4 rounded-xl bg-slate-900/40 border border-border/50 space-y-4">
+                                                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                                                    <div className="space-y-0.5">
+                                                        <div className="text-sm font-extrabold text-foreground flex items-center gap-1.5">
+                                                            <Mail className="h-4 w-4 text-sky-400" /> Custom SMTP / Gmail Outbound Delivery
+                                                        </div>
+                                                        <p className="text-xs text-muted-foreground leading-relaxed">
+                                                            Connect your standard SMTP server (e.g. Gmail, Outlook, Amazon SES) to route platform emails.
+                                                        </p>
+                                                    </div>
+                                                    {emailProviderMode === "custom" ? (
+                                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shrink-0">
+                                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Active Engine
+                                                        </span>
+                                                    ) : (
+                                                        <Button
+                                                            type="button"
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={() => setEmailProviderMode("custom")}
+                                                            className="text-xs h-7 px-3 gap-1.5 font-bold border-sky-500/40 text-sky-300 hover:bg-sky-500/20 shrink-0"
+                                                        >
+                                                            <CheckCircle2 className="h-3.5 w-3.5 text-sky-400" />
+                                                            <span>Set Active</span>
+                                                        </Button>
+                                                    )}
                                                 </div>
-                                                <div>Add this Sender Email to your users' <strong>Amazon Approved Personal Document E-mail List</strong> under Amazon → Manage Your Content and Devices → Preferences.</div>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div className="space-y-2">
+                                                        <Label>SMTP Host</Label>
+                                                        <Input 
+                                                            name="customSmtpHost" 
+                                                            value={customSmtpHostInput} 
+                                                            onChange={(e) => setCustomSmtpHostInput(e.target.value)} 
+                                                            placeholder="smtp.gmail.com" 
+                                                            autoComplete="off" 
+                                                            data-1p-ignore="true" 
+                                                            data-lpignore="true"
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Label>Port</Label>
+                                                        <Input 
+                                                            name="customSmtpPort" 
+                                                            value={customSmtpPortInput} 
+                                                            onChange={(e) => setCustomSmtpPortInput(e.target.value)} 
+                                                            placeholder="587" 
+                                                            autoComplete="off" 
+                                                            data-1p-ignore="true" 
+                                                            data-lpignore="true"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div className="space-y-2">
+                                                        <Label>User / Email</Label>
+                                                        <Input 
+                                                            name="customSmtpUser" 
+                                                            value={customSmtpUserInput} 
+                                                            onChange={(e) => setCustomSmtpUserInput(e.target.value)} 
+                                                            placeholder="user@gmail.com" 
+                                                            autoComplete="off" 
+                                                            data-1p-ignore="true" 
+                                                            data-lpignore="true"
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Label>Password</Label>
+                                                        <div className="relative">
+                                                            <Input 
+                                                                name="customSmtpPass" 
+                                                                type={showSmtpKey ? "text" : "password"} 
+                                                                value={customSmtpPassInput} 
+                                                                onChange={(e) => setCustomSmtpPassInput(e.target.value)} 
+                                                                className="pr-8"
+                                                                autoComplete="new-password"
+                                                                data-1p-ignore="true"
+                                                                data-lpignore="true"
+                                                            />
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="absolute right-1 top-1 h-7 w-7 text-muted-foreground hover:text-foreground"
+                                                                onClick={() => setShowSmtpKey(!showSmtpKey)}
+                                                            >
+                                                                {showSmtpKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                                            </Button>
+                                                        </div>
+                                                        <p className="text-[10px] text-muted-foreground leading-tight">
+                                                            For Gmail, <a href="https://myaccount.google.com/apppasswords" target="_blank" className="text-primary hover:underline">generate an App Password</a> and use it here instead of your actual password.
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label>Sender Email Address (From)</Label>
+                                                    <Input 
+                                                        name="customSmtpFrom" 
+                                                        value={customSmtpFromInput} 
+                                                        onChange={(e) => setCustomSmtpFromInput(e.target.value)} 
+                                                        placeholder="PlexD281knilb@gmail.com" 
+                                                        autoComplete="off" 
+                                                        data-1p-ignore="true" 
+                                                        data-lpignore="true"
+                                                    />
+                                                    <div className="text-[11px] text-muted-foreground bg-muted/30 p-2.5 rounded-lg border border-muted/50 mt-1 space-y-1">
+                                                        <div className="font-semibold text-foreground flex items-center gap-1">
+                                                            <Send className="h-3 w-3 text-amber-500" /> Send-to-Kindle Requirement:
+                                                        </div>
+                                                        <div>Add this Sender Email to your users' <strong>Amazon Approved Personal Document E-mail List</strong> under Amazon → Manage Your Content and Devices → Preferences.</div>
+                                                    </div>
+                                                </div>
                                             </div>
+                                        )}
+
+                                        {/* Test Email & Admin Alerts Recipient Indicator */}
+                                        <div className="rounded-xl border border-border/50 bg-background/60 p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                <div className="h-8 w-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
+                                                    <MailCheck className="h-4 w-4" />
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <div className="text-[11px] text-muted-foreground font-medium flex items-center gap-1.5">
+                                                        <span>Test Emails & Admin Alerts Deliver To:</span>
+                                                        <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-mono text-primary border-primary/30">
+                                                            Administrator
+                                                        </Badge>
+                                                    </div>
+                                                    <div className="font-mono text-xs font-semibold text-foreground truncate mt-0.5">
+                                                        {adminNotificationEmail || (users.find(u => u.role === "ADMIN")?.email || "d281knilb@gmail.com")}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => {
+                                                    setNewAdminEmailInput(adminNotificationEmail || (users.find(u => u.role === "ADMIN")?.email || ""));
+                                                    setAdminEmailModalErr("");
+                                                    setAdminEmailModalMsg("");
+                                                    setShowAdminEmailModal(true);
+                                                }}
+                                                className="text-xs h-7 px-2.5 text-primary border-primary/30 hover:bg-primary/10 gap-1 font-semibold shrink-0"
+                                            >
+                                                <Pencil className="h-3 w-3" />
+                                                <span>Change Recipient Email</span>
+                                            </Button>
                                         </div>
 
                                         <div className="flex flex-wrap gap-2 pt-2">
                                             <Button type="submit" className="flex-1 font-bold hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all shadow-md">
                                                 <Mail className="h-4 w-4 mr-2"/> 
-                                                Save SMTP Settings
+                                                Save &amp; Activate {emailProviderMode === "resend" ? "Resend" : "Custom SMTP"}
                                             </Button>
 
                                             <Button 
@@ -5016,7 +5366,7 @@ function SettingsPageContent() {
                                                 title="Send a test email to your SMTP account"
                                             >
                                                 {testEmailLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MailCheck className="h-3.5 w-3.5" />}
-                                                Test Connection
+                                                Test Connection ({emailProviderMode === "resend" ? "Resend" : "Custom SMTP"})
                                             </Button>
                                             
                                             {systemSettings?.smtpHost && (
@@ -5039,6 +5389,71 @@ function SettingsPageContent() {
                                     </form>
                                 </CardContent>
                             </Card>
+
+                    {/* ADMIN NOTIFICATION EMAIL UPDATE MODAL */}
+                    <Dialog open={showAdminEmailModal} onOpenChange={setShowAdminEmailModal}>
+                        <DialogContent className="sm:max-w-[425px] bg-[#121218]/95 border-border/60">
+                            <DialogHeader>
+                                <DialogTitle className="flex items-center gap-2 text-base font-bold">
+                                    <Mail className="h-5 w-5 text-primary" />
+                                    Update Admin Notification Email
+                                </DialogTitle>
+                                <DialogDescription className="text-xs">
+                                    This email address receives SMTP connection test emails, media request alerts, account approvals, and support ticket notifications.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4 py-2">
+                                {adminEmailModalMsg && (
+                                    <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-2.5 rounded-lg flex items-center gap-2">
+                                        <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                        <span>{adminEmailModalMsg}</span>
+                                    </div>
+                                )}
+                                {adminEmailModalErr && (
+                                    <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-2.5 rounded-lg flex items-center gap-2">
+                                        <XCircle className="h-4 w-4 shrink-0" />
+                                        <span>{adminEmailModalErr}</span>
+                                    </div>
+                                )}
+                                <div className="space-y-2">
+                                    <Label className="text-xs font-semibold">Administrator Primary Email</Label>
+                                    <Input
+                                        type="email"
+                                        value={newAdminEmailInput}
+                                        onChange={(e) => setNewAdminEmailInput(e.target.value)}
+                                        placeholder="admin@domshomelab.com"
+                                        className="font-mono text-xs"
+                                        autoFocus
+                                    />
+                                    <p className="text-[11px] text-muted-foreground">
+                                        This updates your administrator primary email and all automated alert routing.
+                                    </p>
+                                </div>
+                            </div>
+                            <DialogFooter className="gap-2 sm:gap-0">
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setShowAdminEmailModal(false)}
+                                    disabled={adminEmailSaving}
+                                    className="text-xs"
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={handleSaveAdminEmail}
+                                    disabled={adminEmailSaving || !newAdminEmailInput.trim()}
+                                    className="text-xs font-bold gap-1.5"
+                                >
+                                    {adminEmailSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                                    Save Recipient Email
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
                         </div>
                     )}
 

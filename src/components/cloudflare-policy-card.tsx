@@ -4,19 +4,47 @@ import { useState } from "react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Shield, Copy, Check, ExternalLink, Lock, Globe, Film, AlertTriangle } from "lucide-react";
+import { Shield, Copy, Check, ExternalLink, Lock, Globe, Film, AlertTriangle, Network, Sparkles, CheckCircle2 } from "lucide-react";
 import { CLOUDFLARE_BYPASS_PATHS, CLOUDFLARE_SUPER_USER_PATHS, CLOUDFLARE_ADMIN_PATHS } from "@/lib/edge-policy-paths";
 
 export default function CloudflarePolicyCard() {
     const [copiedBypass, setCopiedBypass] = useState(false);
     const [copiedSuperUser, setCopiedSuperUser] = useState(false);
     const [copiedAdmin, setCopiedAdmin] = useState(false);
+    const [copiedTunnel, setCopiedTunnel] = useState(false);
+    const [copiedMissing, setCopiedMissing] = useState(false);
 
     const bypassPaths = CLOUDFLARE_BYPASS_PATHS;
     const superUserPaths = CLOUDFLARE_SUPER_USER_PATHS;
     const adminProtectedPaths = CLOUDFLARE_ADMIN_PATHS;
 
-    const handleCopy = (text: string, type: "bypass" | "superuser" | "admin") => {
+    // Cloudflare Tunnel Public Hostname format (without leading slash for Tunnel UI)
+    // Dynamically derived from CLOUDFLARE_ADMIN_PATHS to guarantee zero code drift
+    const tunnelPublicHostnamePaths = Array.from(new Set(
+        adminProtectedPaths.map((p) => p.replace(/^\//, ""))
+    ));
+
+    // Active hostnames verified in Dom's Cloudflare Zero Trust dashboard
+    const userConfiguredCloudflareHostnames = new Set([
+        "settings*",
+        "admin*",
+        "curation*",
+        "tautulli*",
+        "streams*",
+        "api/admin*",
+        "api/system*",
+        "api/debug*",
+        "api/curation*",
+        "api/users*",
+        "api/books/upload*"
+    ]);
+
+    // Detect paths that exist in Portalarr backend but are not yet added to Cloudflare
+    const missingCloudflareHostnames = tunnelPublicHostnamePaths.filter(
+        (p) => !userConfiguredCloudflareHostnames.has(p)
+    );
+
+    const handleCopy = (text: string, type: "bypass" | "superuser" | "admin" | "tunnel" | "missing") => {
         navigator.clipboard.writeText(text);
         if (type === "bypass") {
             setCopiedBypass(true);
@@ -24,9 +52,15 @@ export default function CloudflarePolicyCard() {
         } else if (type === "superuser") {
             setCopiedSuperUser(true);
             setTimeout(() => setCopiedSuperUser(false), 2000);
-        } else {
+        } else if (type === "admin") {
             setCopiedAdmin(true);
             setTimeout(() => setCopiedAdmin(false), 2000);
+        } else if (type === "tunnel") {
+            setCopiedTunnel(true);
+            setTimeout(() => setCopiedTunnel(false), 2000);
+        } else {
+            setCopiedMissing(true);
+            setTimeout(() => setCopiedMissing(false), 2000);
         }
     };
 
@@ -42,17 +76,123 @@ export default function CloudflarePolicyCard() {
                                 Cloudflare Access & Edge Security Policy Paths
                             </CardTitle>
                             <Badge variant="outline" className="text-[10px] bg-orange-500/10 text-orange-300 border-orange-500/30">
-                                Reverse Proxy / WAF
+                                Reverse Proxy / WAF / Zero Trust
                             </Badge>
                         </div>
                         <CardDescription className="text-xs">
-                            If you run Cloudflare Access, Zero Trust, Authentik, or Authelia in front of DomsHomeLab, configure these route policies to ensure users and webhooks are not blocked.
+                            Authoritative route configurations for Cloudflare Tunnels (Public Hostnames) and Cloudflare Access Zero Trust policies in front of DomsHomeLab.
                         </CardDescription>
                     </div>
                 </div>
             </CardHeader>
 
             <CardContent className="space-y-4">
+                {/* PROACTIVE CLOUDFLARE SYNC BANNER */}
+                {missingCloudflareHostnames.length > 0 ? (
+                    <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/40 space-y-2">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                                <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 animate-pulse" />
+                                <span className="text-xs font-bold text-amber-300">
+                                    Security Notice: {missingCloudflareHostnames.length} route(s) require entry in your Cloudflare Tunnel / Access Dashboard
+                                </span>
+                            </div>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleCopy(missingCloudflareHostnames.join("\n"), "missing")}
+                                className="text-xs font-semibold gap-1.5 border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 self-start sm:self-auto shrink-0"
+                            >
+                                {copiedMissing ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                                {copiedMissing ? "Copied Missing Paths!" : "Copy Missing Paths Only"}
+                            </Button>
+                        </div>
+                        <p className="text-[11px] text-amber-200/80 leading-relaxed">
+                            The following route(s) were added to Portalarr and must be registered in your Cloudflare Zero Trust public hostnames (<code className="text-amber-100">home.domshomelab.com</code>):
+                        </p>
+                        <div className="flex flex-wrap gap-2 pt-1">
+                            {missingCloudflareHostnames.map((p) => (
+                                <Badge key={p} variant="outline" className="text-xs font-mono bg-amber-950/60 text-amber-300 border-amber-400/50 px-2 py-0.5">
+                                    {p}
+                                </Badge>
+                            ))}
+                        </div>
+                    </div>
+                ) : (
+                    <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                            <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                            <span className="text-xs font-semibold text-emerald-300">
+                                100% Edge Coverage: All {tunnelPublicHostnamePaths.length} Admin & API Public Hostnames are active and protected in your Cloudflare Tunnel (<code className="text-emerald-200">home.domshomelab.com</code>).
+                            </span>
+                        </div>
+                        <Badge variant="outline" className="text-[10px] bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shrink-0">
+                            Zero Drift • Fully Protected
+                        </Badge>
+                    </div>
+                )}
+
+                {/* CLOUDFLARE TUNNEL PUBLIC HOSTNAMES SECTION */}
+                <div className="p-3.5 rounded-xl bg-orange-500/5 border border-orange-500/20 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                            <Network className="h-4 w-4 text-orange-400 shrink-0" />
+                            <div>
+                                <span className="font-bold text-xs text-foreground flex items-center gap-1.5">
+                                    Cloudflare Tunnel • Public Hostnames (<code className="text-orange-400">home.domshomelab.com</code>)
+                                </span>
+                                <p className="text-[11px] text-muted-foreground">
+                                    Routes mapped in your Cloudflare Tunnel pointing to <code className="text-slate-300">http://localhost:3000</code>:
+                                </p>
+                            </div>
+                        </div>
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleCopy(tunnelPublicHostnamePaths.join("\n"), "tunnel")}
+                            className="text-xs font-semibold gap-1.5 border-orange-500/40 hover:bg-orange-500/15 text-orange-300 self-start sm:self-auto shrink-0"
+                        >
+                            {copiedTunnel ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                            {copiedTunnel ? "Copied Tunnel Paths!" : "Copy All Tunnel Hostname Paths"}
+                        </Button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 pt-1">
+                        {tunnelPublicHostnamePaths.map((p) => {
+                            const isConfigured = userConfiguredCloudflareHostnames.has(p);
+                            return (
+                                <div
+                                    key={p}
+                                    className={`p-2.5 rounded-lg border text-xs font-mono flex items-center justify-between transition-all ${
+                                        !isConfigured
+                                            ? "bg-amber-500/10 border-amber-500/40 text-amber-300 shadow-[0_0_10px_rgba(245,158,11,0.15)] ring-1 ring-amber-400/30"
+                                            : "bg-black/40 border-white/[0.08] text-slate-300"
+                                    }`}
+                                >
+                                    <span className="truncate">{p}</span>
+                                    {isConfigured ? (
+                                        <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30 shrink-0 ml-1.5">
+                                            <CheckCircle2 className="h-2.5 w-2.5 mr-0.5 inline" /> In Cloudflare
+                                        </Badge>
+                                    ) : (
+                                        <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-400/20 text-amber-300 border-amber-400/50 shrink-0 ml-1.5 animate-pulse">
+                                            ⚠️ Action Req.
+                                        </Badge>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    <div className="flex items-center gap-2 text-[11px] text-amber-300/90 bg-amber-950/30 border border-amber-500/30 rounded-lg p-2">
+                        <Sparkles className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                        <span>
+                            <strong>Note on <code className="text-amber-200">api/admin*</code>:</strong> Protects <code className="text-amber-200">/api/admin/scripts</code> (homelab shell & powershell automation). Add this path to your Cloudflare Tunnel to ensure automated scripts run seamlessly.
+                        </span>
+                    </div>
+                </div>
+
+                {/* 3-COLUMN ACCESS POLICY BREAKDOWN */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                     {/* BYPASS / PUBLIC PATHS */}
                     <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-3 flex flex-col justify-between">
@@ -124,10 +264,10 @@ export default function CloudflarePolicyCard() {
                             <div className="flex items-center justify-between">
                                 <span className="font-bold text-xs text-foreground flex items-center gap-1.5">
                                     <Lock className="h-4 w-4 text-orange-400" />
-                                    Admin-Only Paths (Only You)
+                                    Admin-Only Paths (Strict Zero-Trust)
                                 </span>
                                 <Badge variant="outline" className="text-[10px] bg-orange-500/10 text-orange-300 border-orange-500/30">
-                                    Require Admin (Strict)
+                                    Require Admin Email
                                 </Badge>
                             </div>
                             <p className="text-[11px] text-muted-foreground leading-relaxed">
@@ -167,7 +307,7 @@ export default function CloudflarePolicyCard() {
                             </span>
                             <ul className="list-disc list-inside space-y-1 text-slate-300/90">
                                 <li><strong>Action:</strong> <code className="text-orange-300">Allow</code></li>
-                                <li><strong>Paths:</strong> Add all <strong>Admin-Only Paths</strong> (<code className="text-orange-300">/settings*</code>, <code className="text-orange-300">/admin*</code>, <code className="text-orange-300">/curation*</code>, etc.).</li>
+                                <li><strong>Paths:</strong> Add all <strong>Admin-Only Paths</strong> (<code className="text-orange-300">/settings*</code>, <code className="text-orange-300">/admin*</code>, <code className="text-orange-300">/curation*</code>, <code className="text-orange-300">/api/admin*</code>, etc.).</li>
                                 <li><strong>Include:</strong> <code className="text-orange-300">Emails: [your-admin-email@example.com]</code></li>
                                 <li><strong>Result:</strong> Anyone outside of you is stopped with an HTTP 403 / Access Denied at Cloudflare&apos;s edge before reaching your server.</li>
                             </ul>

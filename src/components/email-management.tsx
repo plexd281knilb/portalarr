@@ -60,6 +60,9 @@ interface EmailTemplate {
     description: string;
     triggerEvent?: string;
     category: "AUTH" | "REQUESTS" | "SUPPORT" | "KINDLE" | "TRIALS" | "PAYMENTS" | string;
+    senderCategory?: "kindle" | "payments" | "accounts" | "requests" | "support" | "notifications" | string;
+    senderEmail?: string;
+    senderFormatted?: string;
     subject: string;
     body: string;
     defaultSubject: string;
@@ -1425,6 +1428,17 @@ export default function EmailManagement() {
                                                         <span className="truncate" title={tpl.triggerEvent}>Trigger: {tpl.triggerEvent}</span>
                                                     </div>
                                                 )}
+                                                <div className="flex items-center justify-between gap-1.5 pt-1 text-[10px] text-muted-foreground font-mono border-t border-border/10">
+                                                    <span className="flex items-center gap-1 text-primary/80 truncate">
+                                                        <Mail className="h-2.5 w-2.5 text-primary shrink-0" />
+                                                        {tpl.senderEmail || "notifications@domshomelab.com"}
+                                                    </span>
+                                                    {tpl.senderCategory && (
+                                                        <span className="text-[9px] uppercase tracking-wider text-muted-foreground/70 shrink-0 font-sans font-semibold">
+                                                            {tpl.senderCategory}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </div>
                                         );
                                     })}
@@ -1466,6 +1480,28 @@ export default function EmailManagement() {
                                                 </TabsTrigger>
                                             </TabsList>
                                         </Tabs>
+                                    </div>
+
+                                    {/* DEDICATED SENDER ROUTING CALLOUT */}
+                                    <div className="mt-3 p-3 rounded-xl bg-primary/[0.07] border border-primary/25 flex flex-wrap items-center justify-between gap-2.5 text-xs animate-in fade-in">
+                                        <div className="flex items-center gap-2.5 min-w-0">
+                                            <div className="p-1.5 rounded-lg bg-primary/20 text-primary border border-primary/30 shrink-0">
+                                                <Mail className="h-4 w-4" />
+                                            </div>
+                                            <div className="space-y-0.5 min-w-0">
+                                                <div className="font-bold text-primary text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                                                    📧 Dedicated Outbound Sender Mailbox
+                                                </div>
+                                                <div className="flex items-center gap-2 pt-0.5">
+                                                    <code className="text-foreground font-mono text-xs font-semibold px-2 py-0.5 rounded bg-background/80 border border-primary/20 truncate">
+                                                        {currentTemplate.senderFormatted || (currentTemplate.senderEmail ? `"DomsHomeLab" <${currentTemplate.senderEmail}>` : "notifications@domshomelab.com")}
+                                                    </code>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <Badge variant="outline" className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 bg-primary/10 border-primary/30 text-primary shrink-0">
+                                            {currentTemplate.senderCategory || "general"} routing
+                                        </Badge>
                                     </div>
 
                                     {/* EXACT TRIGGER CONDITION CALLOUT */}

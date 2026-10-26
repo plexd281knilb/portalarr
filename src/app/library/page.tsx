@@ -40,7 +40,10 @@ import {
   diagnoseKindleHealth,
   toggleLibraryUserAccessAction,
   approveBookRequestAction,
+  getKindleSenderUpdateNoticeStatusAction,
+  acknowledgeKindleSenderUpdateAction,
 } from "@/app/actions";
+import { KindleSenderUpdateModal } from "@/components/kindle-sender-update-modal";
 import { isKidsLibrary } from "@/lib/books/book-rating";
 import { getSession, getCurrentUser } from "@/app/auth-actions";
 import { BookReaderModal } from "@/components/book-reader-modal";
@@ -472,6 +475,23 @@ function BookLibraryPageContent() {
   const [userKindleEmail, setUserKindleEmail] = useState("");
   const [skippedKindleGate, setSkippedKindleGate] = useState(false);
   const [serverSmtpFrom, setServerSmtpFrom] = useState("");
+  const [kindleNoticeOpen, setKindleNoticeOpen] = useState(false);
+  const [kindleNoticeData, setKindleNoticeData] = useState<{
+    hasKindleEmail: boolean;
+    kindleEmail: string | null;
+    needsNotice: boolean;
+    senderEmail: string;
+  } | null>(null);
+  const [pendingKindleAction, setPendingKindleAction] = useState<(() => Promise<void> | void) | null>(null);
+
+  const handleKindleNoticeAcknowledged = () => {
+    setKindleNoticeData((prev) => (prev ? { ...prev, needsNotice: false } : null));
+    if (pendingKindleAction) {
+      const action = pendingKindleAction;
+      setPendingKindleAction(null);
+      action();
+    }
+  };
   const [sendingToKindleId, setSendingToKindleId] = useState<string | null>(
     null,
   );
@@ -1385,7 +1405,7 @@ function BookLibraryPageContent() {
           setUserKindleEmail(profile.kindleEmail || "");
         }
 
-        const smtpFromEmail = await getPublicSmtpFromEmail();
+        const smtpFromEmail = await getPublicSmtpFromEmail("kindle");
         setServerSmtpFrom(smtpFromEmail || "");
 
         let libs = await getLibraries().catch(() => []);
@@ -1856,6 +1876,15 @@ function BookLibraryPageContent() {
   }
 
   async function handleSendToKindle(bookId: string) {
+    try {
+      const notice = await getKindleSenderUpdateNoticeStatusAction();
+      if (notice?.needsNotice) {
+        setKindleNoticeData(notice);
+        setPendingKindleAction(() => () => handleSendToKindle(bookId));
+        setKindleNoticeOpen(true);
+        return;
+      }
+    } catch {}
     setSendingToKindleId(bookId);
     try {
       const res = await sendBookToKindle(bookId);
@@ -2112,6 +2141,18 @@ function BookLibraryPageContent() {
         book.library?.mediaType === "audiobook"
           ? "audiobook"
           : "ebook";
+
+      if (detectedMediaType !== "audiobook") {
+        try {
+          const notice = await getKindleSenderUpdateNoticeStatusAction();
+          if (notice?.needsNotice) {
+            setKindleNoticeData(notice);
+            setPendingKindleAction(() => () => handleSearchAndReplaceRelease(book));
+            setKindleNoticeOpen(true);
+            return;
+          }
+        } catch {}
+      }
       let req = requests.find(
         (r: any) =>
           (r.title.toLowerCase().includes(book.title.toLowerCase()) ||
@@ -2191,6 +2232,18 @@ function BookLibraryPageContent() {
         book.library?.mediaType === "audiobook"
           ? "audiobook"
           : "ebook";
+
+      if (detectedMediaType !== "audiobook") {
+        try {
+          const notice = await getKindleSenderUpdateNoticeStatusAction();
+          if (notice?.needsNotice) {
+            setKindleNoticeData(notice);
+            setPendingKindleAction(() => () => handleAutoDownloadMissingBook(book));
+            setKindleNoticeOpen(true);
+            return;
+          }
+        } catch {}
+      }
 
       const fd = new FormData();
       fd.append("title", book.title);
@@ -4209,14 +4262,42 @@ function BookLibraryPageContent() {
                     silently discard your books.
                   </p>
 
+                  {/* Sender Address Update Notice Banner */}
+                  <div className="flex items-start gap-2.5 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs">
+                    <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400 mt-0.5" />
+                    <div className="space-y-1">
+                      <div className="font-bold text-amber-200">
+                        ⚡ Outbound Sender Updated to {serverSmtpFrom || "kindle@domshomelab.com"}
+                      </div>
+                      <p className="text-muted-foreground leading-relaxed">
+                        If you previously configured your Kindle settings with an older address, please update your Amazon Approved Personal Document E-mail List with <code className="bg-black/50 px-1 py-0.5 rounded font-mono text-amber-300 font-bold">{serverSmtpFrom || "kindle@domshomelab.com"}</code> so your wireless Kindle deliveries continue uninterrupted.
+                      </p>
+                    </div>
+                  </div>
+
                   <div className="bg-primary/5 border border-primary/20 p-4 rounded-lg space-y-2">
                     <span className="font-semibold text-primary block text-xs uppercase tracking-wider">
                       Your Server's Sending Address:
                     </span>
                     {serverSmtpFrom ? (
-                      <code className="text-sm font-mono font-bold bg-muted/60 px-2 py-1 rounded select-all text-foreground border border-muted">
-                        {serverSmtpFrom}
-                      </code>
+                      <div className="flex items-center gap-2">
+                        <code className="text-sm font-mono font-bold bg-muted/60 px-2 py-1 rounded select-all text-foreground border border-muted">
+                          {serverSmtpFrom}
+                        </code>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            navigator.clipboard.writeText(serverSmtpFrom);
+                            alert("Copied " + serverSmtpFrom + " to clipboard!");
+                          }}
+                          className="h-7 text-xs px-2 gap-1 border-primary/30"
+                        >
+                          <Copy className="h-3 w-3" />
+                          <span>Copy</span>
+                        </Button>
+                      </div>
                     ) : (
                       <span className="text-xs text-yellow-500 font-medium">
                         ⚠️ Server SMTP is not configured yet. Ask the
@@ -5502,6 +5583,15 @@ function BookLibraryPageContent() {
             handleScanLibrary(selectedLibrary.id);
           }
         }}
+      />
+
+      {/* Modal for existing Kindle users on sender update */}
+      <KindleSenderUpdateModal
+        open={kindleNoticeOpen}
+        onOpenChange={setKindleNoticeOpen}
+        userKindleEmail={kindleNoticeData?.kindleEmail || userKindleEmail}
+        senderEmail={kindleNoticeData?.senderEmail || serverSmtpFrom || "kindle@domshomelab.com"}
+        onAcknowledged={handleKindleNoticeAcknowledged}
       />
     </div>
   );

@@ -29,7 +29,7 @@ export async function resolveKindleImapConfig() {
     if (sources.length > 0) {
         const targetUser = (settings?.smtpUser || settings?.smtpFrom || "").toLowerCase();
         const matched = sources.find(s => s.user.toLowerCase() === targetUser);
-        const chosen = matched || sources[0];
+        const chosen = matched || sources.find(s => s.user.toLowerCase().includes("gmail") || s.user.toLowerCase().includes("domshomelab")) || sources[0];
         
         return {
             host: chosen.host,
@@ -82,7 +82,13 @@ export function parseAmazonBounceEmail(parsed: ParsedMail): AmazonBounceMatch | 
     const text = (parsed.text || "").toLowerCase();
 
     const isFromAmazon = from.includes("amazon") || from.includes("kindle") || from.includes("postmaster") || from.includes("mailer-daemon");
-    const hasAmazonKeywords = subject.includes("kindle") || subject.includes("personal document") || text.includes("kindle") || text.includes("personal document");
+    const hasAmazonKeywords = 
+        subject.includes("kindle") || 
+        subject.includes("personal document") || 
+        subject.includes("kindle@domshomelab.com") ||
+        text.includes("kindle") || 
+        text.includes("personal document") ||
+        text.includes("kindle@domshomelab.com");
 
     if (!isFromAmazon && !hasAmazonKeywords) {
         return null;
@@ -94,8 +100,10 @@ export function parseAmazonBounceEmail(parsed: ParsedMail): AmazonBounceMatch | 
         text.includes("approved personal document") ||
         text.includes("not on your approved") ||
         text.includes("not authorized to send documents") ||
+        text.includes("kindle@domshomelab.com") ||
         subject.includes("did not have an approved sender address") ||
-        subject.includes("not authorized");
+        subject.includes("not authorized") ||
+        subject.includes("kindle@domshomelab.com");
 
     const isFormatIssue = 
         text.includes("unsupported file format") ||
@@ -112,9 +120,9 @@ export function parseAmazonBounceEmail(parsed: ParsedMail): AmazonBounceMatch | 
 
     let reason = "Amazon rejected Kindle document delivery.";
     if (isNotApprovedSender) {
-        reason = "Sender address is not on your Amazon Approved Personal Document E-mail List. Add your server sender address in Amazon Manage Your Content and Devices > Preferences.";
+        reason = "Sender address (kindle@domshomelab.com) is not on your Amazon Approved Personal Document E-mail List. Add kindle@domshomelab.com in Amazon Manage Your Content and Devices > Preferences.";
     } else if (isFormatIssue) {
-        reason = "Amazon Send-to-Kindle rejected document format or structure.";
+        reason = "Amazon Send-to-Kindle rejected document format or structure (clean EPUB required).";
     } else if (parsed.text) {
         const cleaned = parsed.text.replace(/\s+/g, " ").trim();
         reason = cleaned.substring(0, 160) + (cleaned.length > 160 ? "..." : "");
