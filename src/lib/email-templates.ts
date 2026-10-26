@@ -43,7 +43,7 @@ export function getTemplateSenderCategory(templateId?: string): SenderCategory {
     const id = templateId.toLowerCase().trim();
 
     // Kindle Ebooks
-    if (id.startsWith("kindle_") || id === "kindle") {
+    if (id.startsWith("kindle_") || id.startsWith("book_") || id === "kindle") {
         return "kindle";
     }
 
@@ -409,6 +409,37 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         ]
     },
     {
+        id: "book_file_delivery",
+        name: "Direct Ebook / Audiobook File Delivery",
+        description: "Sent to members with requested book or audiobook files attached directly to their email for offline reading/listening.",
+        triggerEvent: "Triggered when a member or administrator requests a book file delivery to their personal email via the Book Management or Library view.",
+        category: "KINDLE",
+        senderCategory: "kindle",
+        defaultSubject: "📦 {portalName} Book Delivery: {title}",
+        defaultBody: `<h2>{itemTypeLabel} File Delivery 📦</h2>
+<p>Hi <strong>{username}</strong>,</p>
+<p>Here is your requested {itemTypeLabel} file for <strong>{title}</strong> by <em>{author}</em>.</p>
+
+<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 20px 0;">
+    <p style="margin: 0; font-size: 14px; color: #334155;"><strong>Title:</strong> {title}</p>
+    <p style="margin: 6px 0 0 0; font-size: 14px; color: #334155;"><strong>Author:</strong> {author}</p>
+    <p style="margin: 6px 0 0 0; font-size: 14px; color: #334155;"><strong>Format:</strong> {format}</p>
+</div>
+
+<p style="font-size: 13px; color: #64748b; line-height: 1.5;">
+    The media file is attached directly to this email so you can save or transfer it to your reading or audio player device.
+</p>`,
+        variables: [
+            { key: "{username}", description: "Recipient username", sampleValue: "alex_reader" },
+            { key: "{title}", description: "Title of the book or audiobook", sampleValue: "Project Hail Mary" },
+            { key: "{author}", description: "Author of the book", sampleValue: "Andy Weir" },
+            { key: "{format}", description: "File format (e.g. EPUB, MOBI, PDF, M4B)", sampleValue: "EPUB" },
+            { key: "{itemTypeLabel}", description: "Media type label (Ebook or Audiobook)", sampleValue: "Ebook" },
+            { key: "{portalName}", description: "Portal brand name", sampleValue: "DomsHomeLab" },
+            { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
+        ]
+    },
+    {
         id: "media_request_admin",
         name: "New Media Request Alert (Admins)",
         description: "Sent to administrators whenever a user submits a new book or audiobook request.",
@@ -508,6 +539,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{pageUrl}", description: "Page or route where error occurred", sampleValue: "/library?tab=audiobooks" },
             { key: "{errorTitle}", description: "Short error title", sampleValue: "Audio Stream Range Error" },
             { key: "{errorMessage}", description: "Full technical error stack trace or description", sampleValue: "ESTREAM: audio file lock failed" },
+            { key: "{userNoteBlock}", description: "Optional extra user notes block", sampleValue: "" },
             { key: "{ticketsUrl}", description: "Link to Admin Tickets panel", sampleValue: "https://portal.example.com/admin/tickets" },
             { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
         ]
@@ -1196,6 +1228,57 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         ]
     },
     {
+        id: "admin_approval",
+        name: "Action Requires Administrator Approval",
+        description: "Sent to administrators when an action is staged in the Action Approval Queue requiring manual review before affecting live servers or users.",
+        triggerEvent: "Triggered immediately when a system change, library deletion, user access change, or high-impact task is staged for administrator approval.",
+        category: "AUTH",
+        senderCategory: "accounts",
+        defaultSubject: "⚖️ [Approval Required] {actionTitle}",
+        defaultBody: `<h2>Action Requires Administrator Approval ⚖️</h2>
+<p>Hi <strong>{adminName}</strong>,</p>
+<p>An action has been staged in the <strong>Action Approval Queue</strong> on {portalName} and requires your explicit review before affecting live servers or users:</p>
+
+<div style="background-color: #fffbeb; border: 1px solid #fef3c7; border-left: 4px solid #f59e0b; padding: 16px; border-radius: 6px; margin: 20px 0;">
+    <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; width: 130px; color: #92400e;">Action Title:</td>
+            <td style="padding: 6px 0; font-weight: 700; color: #0f172a;">{actionTitle}</td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; color: #92400e;">Type:</td>
+            <td style="padding: 6px 0; color: #0f172a;">{actionType}</td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; color: #92400e;">Target:</td>
+            <td style="padding: 6px 0; color: #0f172a;"><code>{targetDisplay}</code></td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; color: #92400e;">Details:</td>
+            <td style="padding: 6px 0; color: #334155;">{details}</td>
+        </tr>
+    </table>
+</div>
+
+<div style="text-align: center; margin: 28px 0;">
+    <a href="{approvalsUrl}" style="background-color: #0284c7; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">Open Approval Queue &amp; Review</a>
+</div>
+
+<p style="font-size: 12px; color: #94a3b8; line-height: 1.4;">
+    You are receiving this automated alert because Action Approval Notifications are enabled in Governance Settings.
+</p>`,
+        variables: [
+            { key: "{adminName}", description: "Administrator username", sampleValue: "Admin" },
+            { key: "{actionTitle}", description: "Title of the staged action", sampleValue: "Delete TV Library from Server" },
+            { key: "{actionType}", description: "Category/Type of the staged action", sampleValue: "DESTRUCTIVE_TASK" },
+            { key: "{targetDisplay}", description: "Target entity or server", sampleValue: "Plex Server #1" },
+            { key: "{details}", description: "Parameters or details of the action", sampleValue: "Requested by operator via system maintenance console" },
+            { key: "{approvalsUrl}", description: "Direct link to the Action Approval Queue", sampleValue: "https://portal.example.com/settings/approvals" },
+            { key: "{portalName}", description: "Portal brand name", sampleValue: "DomsHomeLab" },
+            { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
+        ]
+    },
+    {
         id: "referral_reward_credited",
         name: "Referral Reward Credited (+1 Free Month)",
         description: "Sent to a member when an invited friend joins or is credited by an admin, confirming their +1 free month credit towards membership renewal.",
@@ -1523,10 +1606,17 @@ export function wrapInPortalarrEmailLayout(options: {
     title: string;
     contentHtml: string;
     appUrl?: string;
+    portalName?: string;
+    serverName?: string;
     actionButton?: { text: string; url: string; color?: string };
 }): string {
     const appUrl = options.appUrl || "https://home.domshomelab.com";
+    const portalName = options.portalName || "DomsHomeLab";
+    const serverName = options.serverName || "d281knilb";
     const currentYear = new Date().getFullYear();
+    const portalHeader = portalName.toLowerCase() === "domshomelab"
+        ? `DOMS<span style="color: #6366f1;">HOMELAB</span>`
+        : portalName.toUpperCase();
 
     return `
 <!DOCTYPE html>
@@ -1542,11 +1632,11 @@ export function wrapInPortalarrEmailLayout(options: {
         <div style="background: linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%); border-radius: 12px 12px 0 0; padding: 24px; border: 1px solid rgba(255, 255, 255, 0.1); border-bottom: none; text-align: center;">
             <div style="display: inline-flex; align-items: center; justify-content: center; gap: 8px;">
                 <span style="font-size: 24px; font-weight: 800; letter-spacing: -0.5px; color: #ffffff; text-shadow: 0 2px 4px rgba(0,0,0,0.5);">
-                    DOMS<span style="color: #6366f1;">HOMELAB</span>
+                    ${portalHeader}
                 </span>
             </div>
             <div style="font-size: 11px; color: #94a3b8; letter-spacing: 1px; text-transform: uppercase; margin-top: 4px;">
-                d281knilb Media Server & Dashboard
+                ${serverName} Media Server & Dashboard
             </div>
         </div>
 
@@ -1568,8 +1658,8 @@ export function wrapInPortalarrEmailLayout(options: {
 
             <!-- Footer -->
             <div style="text-align: center; font-size: 12px; color: #94a3b8; line-height: 1.5;">
-                <p style="margin: 0;">DomsHomeLab • d281knilb Media Server • <a href="${appUrl}" style="color: #6366f1; text-decoration: none; font-weight: 500;">Open Dashboard</a></p>
-                <p style="margin: 4px 0 0 0; font-size: 11px; color: #cbd5e1;">© ${currentYear} DomsHomeLab. All rights reserved.</p>
+                <p style="margin: 0;">${portalName} • ${serverName} Media Server • <a href="${appUrl}" style="color: #6366f1; text-decoration: none; font-weight: 500;">Open Dashboard</a></p>
+                <p style="margin: 4px 0 0 0; font-size: 11px; color: #cbd5e1;">© ${currentYear} ${portalName}. All rights reserved.</p>
             </div>
         </div>
     </div>
@@ -1636,6 +1726,8 @@ export async function renderEmailTemplate(
               title: subject,
               contentHtml: body,
               appUrl,
+              portalName: allVars.portalName,
+              serverName: allVars.serverName,
               actionButton: options?.actionButton
           })
         : body;

@@ -588,12 +588,49 @@ async function runTestSuite() {
             throw new Error("media_request_admin failed to render book metadata");
         }
 
+        // Test newly registered book_file_delivery template
+        const renderedBookDelivery = await renderEmailTemplate("book_file_delivery", {
+            username: "test_member",
+            title: "Project Hail Mary",
+            author: "Andy Weir",
+            format: "EPUB",
+            itemTypeLabel: "Ebook",
+            appUrl: "http://localhost:3000"
+        });
+        if (!renderedBookDelivery.subject.includes("Project Hail Mary") || !renderedBookDelivery.html.includes("Andy Weir") || !renderedBookDelivery.html.includes("EPUB")) {
+            throw new Error("book_file_delivery template rendering verification failed");
+        }
+
+        // Test admin_approval template
+        const renderedApproval = await renderEmailTemplate("admin_approval", {
+            adminName: "LeadAdmin",
+            actionTitle: "Clean Library Cache",
+            actionType: "SYSTEM_MAINTENANCE",
+            targetDisplay: "Main Media Server",
+            details: "Purging stale transcoding segments",
+            approvalsUrl: "http://localhost:3000/settings/approvals",
+            appUrl: "http://localhost:3000"
+        });
+        if (!renderedApproval.subject.includes("Clean Library Cache") || !renderedApproval.html.includes("LeadAdmin") || !renderedApproval.html.includes("Main Media Server")) {
+            throw new Error("admin_approval template rendering verification failed");
+        }
+
+        const { DEFAULT_EMAIL_TEMPLATES } = await import("../src/lib/email-templates");
+        if (DEFAULT_EMAIL_TEMPLATES.length < 33) {
+            throw new Error(`Expected at least 33 registered email templates, found: ${DEFAULT_EMAIL_TEMPLATES.length}`);
+        }
+
         // Category-specific email sender routing verification
         const { resolveSenderAddress, getTemplateSenderCategory } = await import("../src/lib/email-templates");
         
         const kindleSender = resolveSenderAddress("kindle_delivery", "notifications@domshomelab.com");
         if (kindleSender.email !== "kindle@domshomelab.com" || kindleSender.displayName !== "DomsHomeLab Kindle") {
             throw new Error(`Expected kindle_delivery sender to be kindle@domshomelab.com, got: ${kindleSender.formatted}`);
+        }
+
+        const bookSender = resolveSenderAddress("book_file_delivery", "notifications@domshomelab.com");
+        if (bookSender.email !== "kindle@domshomelab.com" || bookSender.displayName !== "DomsHomeLab Kindle") {
+            throw new Error(`Expected book_file_delivery sender to be kindle@domshomelab.com, got: ${bookSender.formatted}`);
         }
 
         const billingSender = resolveSenderAddress("payment_received", "notifications@domshomelab.com");

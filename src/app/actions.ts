@@ -6595,7 +6595,7 @@ export async function sendSubscriptionRenewalReminderAction(userId: string) {
             to: user.email,
             subject,
             html,
-            templateId: "subscription_renewal_reminder",
+            templateId,
             targetUser: user.username,
             userId: user.id
         });
@@ -15920,24 +15920,19 @@ export async function sendBookToPersonalEmail(bookId: string, targetUsername?: s
         const isAudio = book.mediaType === "audiobook";
         const itemTypeLabel = isAudio ? "Audiobook" : "Ebook";
 
+        const { subject: bookEmailSubject, html: bookEmailHtml } = await renderEmailTemplate("book_file_delivery", {
+            username: user.username,
+            title: book.title,
+            author: book.author || "Unknown Author",
+            format: ext.replace(".", "").toUpperCase(),
+            itemTypeLabel,
+            appUrl: await getAppUrl()
+        });
+
         const mailRes = await sendOrQueueEmail({
             to: user.email,
-            subject: `📦 DomsHomeLab Book Delivery: ${book.title}`,
-            html: `
-                <div style="font-family: sans-serif; padding: 24px; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
-                    <h2 style="color: #0f172a; margin-top: 0; font-size: 20px;">${itemTypeLabel} File Delivery</h2>
-                    <p style="font-size: 15px; color: #475569;">Hi <strong>${user.username}</strong>,</p>
-                    <p style="font-size: 15px; color: #475569;">Here is your requested ${itemTypeLabel.toLowerCase()} file for <strong>${book.title}</strong> by ${book.author || "Unknown Author"}.</p>
-                    
-                    <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 20px 0;">
-                        <p style="margin: 0; font-size: 14px; color: #334155;"><strong>Title:</strong> ${book.title}</p>
-                        <p style="margin: 4px 0 0 0; font-size: 14px; color: #334155;"><strong>Author:</strong> ${book.author || "Unknown Author"}</p>
-                        <p style="margin: 4px 0 0 0; font-size: 14px; color: #334155;"><strong>Format:</strong> ${ext.replace(".", "").toUpperCase()}</p>
-                    </div>
-
-                    <p style="font-size: 13px; color: #64748b;">The media file is attached directly to this email so you can save or transfer it to your device.</p>
-                </div>
-            `,
+            subject: bookEmailSubject,
+            html: bookEmailHtml,
             templateId: "book_file_delivery",
             targetUser: user.username,
             userId: user.id,

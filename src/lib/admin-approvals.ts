@@ -3,7 +3,7 @@ import { getAppUrl } from "@/lib/app-url";
 import { logger } from "@/lib/logger";
 import { decryptData } from "@/lib/encryption";
 import { postDiscordMessage, type DiscordEmbed } from "@/lib/discord/discord-bot";
-import { wrapInPortalarrEmailLayout, resolveSenderAddress, resolveEmailProviderConfig } from "@/lib/email-templates";
+import { wrapInPortalarrEmailLayout, renderEmailTemplate, resolveSenderAddress, resolveEmailProviderConfig } from "@/lib/email-templates";
 import nodemailer from "nodemailer";
 
 export interface ApprovalNotifyResult {
@@ -138,48 +138,15 @@ export async function notifyAdminsOnPendingApproval(approval: {
                 for (const admin of admins) {
                     if (!admin.email) continue;
 
-                    const emailContentHtml = `
-                        <h2 style="color: #d97706; margin-top: 0; font-size: 20px;">⚖️ Action Requires Administrator Approval</h2>
-                        <p style="font-size: 14px; color: #334155;">Hi <strong>${admin.username}</strong>,</p>
-                        <p style="font-size: 14px; color: #334155;">
-                            An action has been staged in the <strong>Action Approval Queue</strong> on DomsHomeLab and requires your explicit review before affecting live servers or users:
-                        </p>
-
-                        <div style="background-color: #fffbeb; border: 1px solid #fef3c7; border-left: 4px solid #f59e0b; padding: 16px; border-radius: 6px; margin: 20px 0;">
-                            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-                                <tr>
-                                    <td style="padding: 6px 0; font-weight: bold; width: 130px; color: #92400e;">Action Title:</td>
-                                    <td style="padding: 6px 0; font-weight: 700; color: #0f172a;">${approval.title}</td>
-                                </tr>
-                                <tr>
-                                    <td style="padding: 6px 0; font-weight: bold; color: #92400e;">Type:</td>
-                                    <td style="padding: 6px 0; color: #0f172a;">${typeBadge}</td>
-                                </tr>
-                                <tr>
-                                    <td style="padding: 6px 0; font-weight: bold; color: #92400e;">Target:</td>
-                                    <td style="padding: 6px 0; color: #0f172a;"><code>${targetDisplay}</code></td>
-                                </tr>
-                                <tr>
-                                    <td style="padding: 6px 0; font-weight: bold; color: #92400e;">Details:</td>
-                                    <td style="padding: 6px 0; color: #334155;">${approval.description || "No additional parameters"}</td>
-                                </tr>
-                            </table>
-                        </div>
-
-                        <div style="text-align: center; margin: 28px 0;">
-                            <a href="${approvalsUrl}" style="background-color: #0284c7; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">
-                                Open Approval Queue & Review
-                            </a>
-                        </div>
-                        <p style="font-size: 12px; color: #94a3b8; line-height: 1.4;">
-                            You are receiving this automated alert because Action Approval Notifications are enabled in Governance Settings.
-                        </p>
-                    `;
-
-                    const finalHtml = wrapInPortalarrEmailLayout({
-                        title: `Approval Required: ${approval.title}`,
-                        contentHtml: emailContentHtml,
-                        appUrl,
+                    const { subject: approvalSubject, html: finalHtml } = await renderEmailTemplate("admin_approval", {
+                        adminName: admin.username,
+                        actionTitle: approval.title,
+                        actionType: typeBadge,
+                        targetDisplay: targetDisplay,
+                        details: approval.description || "No additional parameters",
+                        approvalsUrl,
+                        appUrl
+                    }, {
                         actionButton: {
                             text: "Open Approval Queue",
                             url: approvalsUrl,
@@ -190,7 +157,7 @@ export async function notifyAdminsOnPendingApproval(approval: {
                     await transporter.sendMail({
                         from: senderEmail,
                         to: admin.email,
-                        subject: `⚖️ [Approval Required] ${approval.title}`,
+                        subject: approvalSubject,
                         html: finalHtml,
                         text: `Approval Required: ${approval.title} - ${approval.description || ""}\nReview at: ${approvalsUrl}`
                     }).catch(e => {
@@ -203,10 +170,10 @@ export async function notifyAdminsOnPendingApproval(approval: {
                                 recipient: admin.email,
                                 recipientName: admin.username,
                                 userId: admin.id,
-                                subject: `⚖️ [Approval Required] ${approval.title}`,
+                                subject: approvalSubject,
                                 bodyPreview: `Approval Required: ${approval.title} - ${approval.description || ""}`.slice(0, 300),
                                 html: finalHtml,
-                                templateId: "admin_approval_alert",
+                                templateId: "admin_approval",
                                 sendMode: "AUTOMATIC",
                                 status: "SENT",
                                 approvalId: approval.id,
