@@ -234,7 +234,7 @@ export default function FeatureVotingPoll({ isAdmin = false }: { isAdmin?: boole
                                 <span>Suggest Feature</span>
                             </Button>
                         </DialogTrigger>
-                        <DialogContent className="sm:max-w-lg bg-[#14141d] border-cyan-500/30 text-foreground">
+                        <DialogContent className="sm:max-w-lg bg-[#14141d] border-cyan-500/30 text-foreground max-h-[90vh] overflow-y-auto">
                             <DialogHeader>
                                 <DialogTitle className="text-xl font-bold flex items-center gap-2 text-cyan-400">
                                     💡 Suggest a New Feature
@@ -270,7 +270,7 @@ export default function FeatureVotingPoll({ isAdmin = false }: { isAdmin?: boole
 
                                 <div className="space-y-1.5">
                                     <label className="text-sm font-semibold text-foreground">Category</label>
-                                    <div className="grid grid-cols-4 sm:grid-cols-4 gap-2">
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                                         {["Live TV", "Audiobooks", "Plex", "Subtitles", "Notifications", "Stats", "Ebooks", "General"].map(cat => (
                                             <button
                                                 key={cat}
@@ -300,7 +300,7 @@ export default function FeatureVotingPoll({ isAdmin = false }: { isAdmin?: boole
                                     />
                                 </div>
 
-                                <DialogFooter className="pt-2 flex flex-col sm:flex-row gap-2">
+                                <DialogFooter className="pt-2 flex flex-col-reverse sm:flex-row justify-end gap-2">
                                     <Button
                                         type="button"
                                         variant="outline"

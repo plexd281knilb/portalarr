@@ -5426,8 +5426,8 @@ export function AgregarrStudio() {
                         </div>
                     </div>
 
-                    <DialogFooter className="pt-3 border-t border-slate-800 flex items-center justify-between">
-                        <Button type="button" variant="ghost" size="sm" onClick={() => setCreateModalOpen(false)}>
+                    <DialogFooter className="pt-3 border-t border-slate-800 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+                        <Button type="button" variant="ghost" size="sm" onClick={() => setCreateModalOpen(false)} className="w-full sm:w-auto">
                             Cancel
                         </Button>
                         <Button
@@ -5435,7 +5435,7 @@ export function AgregarrStudio() {
                             size="sm"
                             disabled={!newCollTitle.trim() || creatingCollection}
                             onClick={handleCreateCustomCollection}
-                            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs gap-1.5 shadow-md cursor-pointer"
+                            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs gap-1.5 shadow-md cursor-pointer w-full sm:w-auto shrink-0 whitespace-nowrap"
                         >
                             {creatingCollection ? <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-950" /> : <Plus className="h-3.5 w-3.5" />}
                             <span>Create &amp; Sync Collection</span>
@@ -6194,8 +6194,8 @@ export function AgregarrStudio() {
                         )}
                     </div>
 
-                    <DialogFooter className="pt-3 border-t border-slate-800 flex items-center justify-between">
-                        <Button type="button" variant="ghost" size="sm" onClick={() => setQuickLabelsModalOpen(false)}>
+                    <DialogFooter className="pt-3 border-t border-slate-800 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+                        <Button type="button" variant="ghost" size="sm" onClick={() => setQuickLabelsModalOpen(false)} className="w-full sm:w-auto">
                             Cancel
                         </Button>
                         <Button
@@ -6203,7 +6203,7 @@ export function AgregarrStudio() {
                             size="sm"
                             disabled={savingQuickLabels}
                             onClick={handleSaveQuickLabels}
-                            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs gap-1.5 shadow-md cursor-pointer"
+                            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs gap-1.5 shadow-md cursor-pointer w-full sm:w-auto shrink-0 whitespace-nowrap"
                         >
                             {savingQuickLabels ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                             <span>Save &amp; Sync to Plex</span>
@@ -6399,8 +6399,8 @@ export function AgregarrStudio() {
                         )}
                     </div>
 
-                    <DialogFooter className="pt-3 border-t border-slate-800 flex items-center justify-between">
-                        <Button type="button" variant="ghost" size="sm" onClick={() => setPlaceholderModalOpen(false)}>
+                    <DialogFooter className="pt-3 border-t border-slate-800 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+                        <Button type="button" variant="ghost" size="sm" onClick={() => setPlaceholderModalOpen(false)} className="w-full sm:w-auto">
                             Close
                         </Button>
                         <Button
@@ -6408,7 +6408,7 @@ export function AgregarrStudio() {
                             size="sm"
                             disabled={generatingPlaceholder}
                             onClick={handleCreatePlaceholder}
-                            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs gap-1.5 shadow-md cursor-pointer"
+                            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs gap-1.5 shadow-md cursor-pointer w-full sm:w-auto shrink-0 whitespace-nowrap"
                         >
                             {generatingPlaceholder ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Tag className="h-3.5 w-3.5" />}
                             <span>Create &amp; Deploy Card</span>
@@ -6628,25 +6628,25 @@ export function AgregarrStudio() {
                         </div>
                     </div>
 
-                    <DialogFooter className="pt-3 border-t border-slate-800 flex items-center justify-between sm:justify-between">
-                        <Button
-                            type="button"
-                            size="sm"
-                            disabled={deployingSmartHub !== null}
-                            onClick={handleDeployAllFilteredSmartHubs}
-                            className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-xs h-8 px-4 gap-1.5 shadow-md cursor-pointer"
-                        >
-                            {deployingSmartHub === "all" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
-                            <span>Deploy All Filtered Hubs in 1-Click</span>
-                        </Button>
+                    <DialogFooter className="pt-3 border-t border-slate-800 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
                         <Button
                             type="button"
                             variant="outline"
                             size="sm"
                             onClick={() => setFilteredHubsModalOpen(false)}
-                            className="border-slate-800 text-slate-300 hover:text-white"
+                            className="border-slate-800 text-slate-300 hover:text-white w-full sm:w-auto order-last sm:order-first"
                         >
                             Close
+                        </Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            disabled={deployingSmartHub !== null}
+                            onClick={handleDeployAllFilteredSmartHubs}
+                            className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-xs h-8 px-4 gap-1.5 shadow-md cursor-pointer w-full sm:w-auto shrink-0 whitespace-nowrap"
+                        >
+                            {deployingSmartHub === "all" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
+                            <span>Deploy All Filtered Hubs in 1-Click</span>
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -6729,14 +6729,14 @@ export function AgregarrStudio() {
                         )}
                     </div>
 
-                    <DialogFooter className="pt-3 border-t border-slate-800 flex items-center justify-between sm:justify-between">
+                    <DialogFooter className="pt-3 border-t border-slate-800 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
                         {dismissedHubsList.length > 0 ? (
                             <Button
                                 type="button"
                                 variant="outline"
                                 size="sm"
                                 onClick={handleClearAllDismissedHubs}
-                                className="border-rose-900/60 hover:bg-rose-950/50 text-rose-300 text-xs h-8 px-3 gap-1 cursor-pointer"
+                                className="border-rose-900/60 hover:bg-rose-950/50 text-rose-300 text-xs h-8 px-3 gap-1 cursor-pointer w-full sm:w-auto shrink-0 whitespace-nowrap"
                             >
                                 <Trash2 className="h-3.5 w-3.5 text-rose-400" />
                                 <span>Clear All Ignored</span>
@@ -6747,7 +6747,7 @@ export function AgregarrStudio() {
                             variant="outline"
                             size="sm"
                             onClick={() => setDismissedHubsModalOpen(false)}
-                            className="border-slate-800 text-slate-300 hover:text-white"
+                            className="border-slate-800 text-slate-300 hover:text-white w-full sm:w-auto"
                         >
                             Close
                         </Button>
@@ -6795,13 +6795,13 @@ export function AgregarrStudio() {
                         )}
                     </div>
 
-                    <DialogFooter className="pt-3 border-t border-slate-800 flex justify-end gap-2">
+                    <DialogFooter className="pt-3 border-t border-slate-800 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5">
                         <Button
                             type="button"
                             variant="outline"
                             size="sm"
                             onClick={() => setCookieModalOpen(false)}
-                            className="border-slate-800 text-slate-300 hover:text-white"
+                            className="border-slate-800 text-slate-300 hover:text-white w-full sm:w-auto"
                         >
                             Cancel
                         </Button>
@@ -6810,7 +6810,7 @@ export function AgregarrStudio() {
                             size="sm"
                             disabled={savingCookies || !cookieContent.trim()}
                             onClick={handleSaveCookies}
-                            className="bg-red-600 hover:bg-red-500 text-white font-bold text-xs gap-1.5 shadow-md cursor-pointer"
+                            className="bg-red-600 hover:bg-red-500 text-white font-bold text-xs gap-1.5 shadow-md cursor-pointer w-full sm:w-auto shrink-0 whitespace-nowrap"
                         >
                             {savingCookies ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                             <span>Save youtube-cookies.txt</span>
@@ -6929,12 +6929,12 @@ export function AgregarrStudio() {
                         })}
                     </div>
 
-                    <DialogFooter className="pt-2 border-t border-slate-800">
+                    <DialogFooter className="pt-2 border-t border-slate-800 flex justify-end">
                         <Button
                             type="button"
                             size="sm"
                             onClick={() => setManageLibrariesModalOpen(false)}
-                            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs"
+                            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs w-full sm:w-auto"
                         >
                             Done
                         </Button>

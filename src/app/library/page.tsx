@@ -44,6 +44,7 @@ import {
   acknowledgeKindleSenderUpdateAction,
 } from "@/app/actions";
 import { KindleSenderUpdateModal } from "@/components/kindle-sender-update-modal";
+import { KindleSetupGuideModal } from "@/components/kindle-setup-guide-modal";
 import KindleSenderUpdateBanner from "@/components/kindle-sender-update-banner";
 import { isKidsLibrary } from "@/lib/books/book-rating";
 import { getSession, getCurrentUser } from "@/app/auth-actions";
@@ -92,6 +93,7 @@ import {
   AlertTriangle,
   ArrowRight,
   Info,
+  ExternalLink,
   Headphones,
   Volume2,
   Play,
@@ -476,7 +478,9 @@ function BookLibraryPageContent() {
   const [userKindleEmail, setUserKindleEmail] = useState("");
   const [skippedKindleGate, setSkippedKindleGate] = useState(false);
   const [serverSmtpFrom, setServerSmtpFrom] = useState("");
+  const [copiedServerSmtp, setCopiedServerSmtp] = useState(false);
   const [kindleNoticeOpen, setKindleNoticeOpen] = useState(false);
+  const [kindleSetupOpen, setKindleSetupOpen] = useState(false);
   const [kindleNoticeData, setKindleNoticeData] = useState<{
     hasKindleEmail: boolean;
     kindleEmail: string | null;
@@ -484,6 +488,24 @@ function BookLibraryPageContent() {
     senderEmail: string;
   } | null>(null);
   const [pendingKindleAction, setPendingKindleAction] = useState<(() => Promise<void> | void) | null>(null);
+
+  const handleCopyServerSmtp = async () => {
+    const textToCopy = serverSmtpFrom || "kindle@domshomelab.com";
+    try {
+      await navigator.clipboard.writeText(textToCopy);
+      setCopiedServerSmtp(true);
+      setTimeout(() => setCopiedServerSmtp(false), 2500);
+    } catch {
+      const textarea = document.createElement("textarea");
+      textarea.value = textToCopy;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+      setCopiedServerSmtp(true);
+      setTimeout(() => setCopiedServerSmtp(false), 2500);
+    }
+  };
 
   const handleKindleNoticeAcknowledged = () => {
     setKindleNoticeData((prev) => (prev ? { ...prev, needsNotice: false } : null));
@@ -1891,6 +1913,11 @@ function BookLibraryPageContent() {
   async function handleSendToKindle(bookId: string) {
     try {
       const notice = await getKindleSenderUpdateNoticeStatusAction();
+      if (notice && !notice.hasKindleEmail) {
+        setKindleSetupOpen(true);
+        setPendingKindleAction(() => () => handleSendToKindle(bookId));
+        return;
+      }
       if (notice?.needsNotice) {
         setKindleNoticeData(notice);
         setPendingKindleAction(() => () => handleSendToKindle(bookId));
@@ -2597,24 +2624,59 @@ function BookLibraryPageContent() {
               </div>
 
               <div className="space-y-3 pt-2">
-                <div className="p-3.5 bg-red-500/15 border border-red-500/40 rounded-xl space-y-2 mb-4">
-                  <div className="flex items-center gap-2 text-red-400 font-bold text-sm">
-                    <AlertTriangle className="h-5 w-5" />
-                    CRITICAL: Amazon Approved Senders
+                <div className="p-3.5 bg-purple-500/10 border border-purple-500/30 rounded-xl space-y-2.5 mb-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-bold text-purple-300 flex items-center gap-1.5">
+                      <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" />
+                      Required: Authorize Sender on Amazon
+                    </span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      asChild
+                      className="text-[11px] h-7 px-2 border-purple-500/30 text-purple-300 hover:bg-purple-500/10"
+                    >
+                      <a
+                        href="https://www.amazon.com/hz/mycd/myx#/home/settings/payment"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1"
+                      >
+                        <span>Amazon Settings</span>
+                        <ExternalLink className="h-3 w-3 shrink-0" />
+                      </a>
+                    </Button>
                   </div>
-                  <p className="text-xs text-red-200 leading-relaxed">
-                    Amazon will silently delete your books unless you whitelist
-                    our server. You <strong>MUST</strong> add the DomsHomeLab (d281knilb)
-                    server email address to your Amazon "Approved Personal
-                    Document E-mail List" before saving.
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Amazon requires you to add our homelab server sending address to your Amazon{" "}
+                    <strong className="text-foreground">&quot;Approved Personal Document E-mail List&quot;</strong> before books can be delivered.
                   </p>
-                  <div className="bg-red-950/40 p-2 rounded text-[11px] font-mono text-red-300 border border-red-500/20 text-center select-all">
-                    {serverSmtpFrom || "Loading server email..."}
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 bg-black/60 p-2 rounded-lg text-xs font-mono font-bold text-white border border-purple-500/30 select-all truncate">
+                      {serverSmtpFrom || "kindle@domshomelab.com"}
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleCopyServerSmtp}
+                      className="h-9 px-3 gap-1.5 bg-purple-600 hover:bg-purple-700 text-white font-semibold shrink-0 shadow-md shadow-purple-900/30 cursor-pointer"
+                    >
+                      {copiedServerSmtp ? <Check className="h-3.5 w-3.5 text-emerald-300" /> : <Copy className="h-3.5 w-3.5" />}
+                      <span>{copiedServerSmtp ? "Copied!" : "Copy Email"}</span>
+                    </Button>
                   </div>
-                  <p className="text-[10px] text-red-300/80 mt-1">
-                    Go to: Amazon.com &gt; Account &gt; Content &amp; Devices
-                    &gt; Preferences &gt; Personal Document Settings &gt; Add a
-                    new approved e-mail address.
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Direct Amazon settings:{" "}
+                    <a
+                      href="https://www.amazon.com/hz/mycd/myx#/home/settings/payment"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-purple-400 underline hover:text-purple-300 inline-flex items-center gap-0.5 font-semibold"
+                    >
+                      <span>https://www.amazon.com/hz/mycd/myx#/home/settings/payment</span>
+                      <ExternalLink className="h-2.5 w-2.5 inline shrink-0" />
+                    </a>
                   </p>
                 </div>
 
@@ -2745,8 +2807,14 @@ function BookLibraryPageContent() {
         </div>
       </header>
 
-      {/* Outbound Sender Notice on Book Library for users with Send-to-Kindle */}
-      <KindleSenderUpdateBanner autoOpenModal={false} />
+      {/* Outbound Sender Notice / Setup Banner on Book Library */}
+      <KindleSenderUpdateBanner
+        autoOpenModal={false}
+        onKindleConfigured={(email) => {
+          setUserKindleEmail(email);
+          setSkippedKindleGate(true);
+        }}
+      />
 
       <Tabs
         value={activeTab}
@@ -5608,6 +5676,22 @@ function BookLibraryPageContent() {
         userKindleEmail={kindleNoticeData?.kindleEmail || userKindleEmail}
         senderEmail={kindleNoticeData?.senderEmail || serverSmtpFrom || "kindle@domshomelab.com"}
         onAcknowledged={handleKindleNoticeAcknowledged}
+      />
+
+      {/* Setup Guide Modal for users without Send-to-Kindle */}
+      <KindleSetupGuideModal
+        open={kindleSetupOpen}
+        onOpenChange={setKindleSetupOpen}
+        senderEmail={serverSmtpFrom || "kindle@domshomelab.com"}
+        onConfigured={(email) => {
+          setUserKindleEmail(email);
+          setSkippedKindleGate(true);
+          if (pendingKindleAction) {
+            const action = pendingKindleAction;
+            setPendingKindleAction(null);
+            action();
+          }
+        }}
       />
     </div>
   );

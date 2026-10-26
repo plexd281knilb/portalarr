@@ -550,8 +550,8 @@ export default function MyPlexHub() {
                             )}
                         </div>
 
-                        <DialogFooter className="border-t border-border/40 pt-3">
-                            <Button size="sm" onClick={() => setSelectedStreamForDiagnosis(null)} className="font-semibold text-xs">
+                        <DialogFooter className="border-t border-border/40 pt-3 flex justify-end">
+                            <Button size="sm" onClick={() => setSelectedStreamForDiagnosis(null)} className="font-semibold text-xs w-full sm:w-auto">
                                 Close Doctor
                             </Button>
                         </DialogFooter>
@@ -585,13 +585,13 @@ export default function MyPlexHub() {
                             )}
                         </div>
 
-                        <DialogFooter className="border-t border-border/40 pt-3 flex items-center justify-between">
+                        <DialogFooter className="border-t border-border/40 pt-3 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
                             <Button 
                                 variant="ghost" 
                                 size="sm" 
                                 onClick={() => setStreamToKill(null)}
                                 disabled={killingStream}
-                                className="text-xs"
+                                className="text-xs w-full sm:w-auto"
                             >
                                 Cancel
                             </Button>
@@ -600,7 +600,7 @@ export default function MyPlexHub() {
                                 size="sm" 
                                 onClick={handleKillStream}
                                 disabled={killingStream}
-                                className="text-xs font-semibold gap-1.5"
+                                className="text-xs font-semibold gap-1.5 w-full sm:w-auto shrink-0 whitespace-nowrap"
                             >
                                 {killingStream ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <XCircle className="h-3.5 w-3.5" />}
                                 Stop Stream Now
@@ -684,8 +684,8 @@ export default function MyPlexHub() {
                     })()}
                     </div>
 
-                    <DialogFooter className="border-t border-border/40 pt-3">
-                        <Button size="sm" onClick={() => setServersModalOpen(false)} className="font-semibold text-xs">
+                    <DialogFooter className="border-t border-border/40 pt-3 flex justify-end">
+                        <Button size="sm" onClick={() => setServersModalOpen(false)} className="font-semibold text-xs w-full sm:w-auto">
                             Close
                         </Button>
                     </DialogFooter>

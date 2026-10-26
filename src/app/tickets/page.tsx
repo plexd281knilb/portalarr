@@ -594,7 +594,7 @@ export default function TicketsPage() {
 
             {/* CREATE TICKET MODAL */}
             <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-                <DialogContent className="sm:max-w-md w-[95vw] bg-[#121218] border border-border/60 shadow-2xl text-foreground">
+                <DialogContent className="sm:max-w-md w-[95vw] max-h-[90vh] overflow-y-auto bg-[#121218] border border-border/60 shadow-2xl text-foreground">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2 text-base font-bold text-foreground">
                             <LifeBuoy className="h-5 w-5 text-amber-400" />
@@ -655,14 +655,14 @@ export default function TicketsPage() {
                                 />
                             </div>
 
-                            <DialogFooter className="gap-2 sm:gap-0 pt-2">
+                            <DialogFooter className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-2">
                                 <Button
                                     type="button"
                                     variant="outline"
                                     size="sm"
                                     onClick={() => setIsCreateOpen(false)}
                                     disabled={createLoading}
-                                    className="text-xs"
+                                    className="text-xs w-full sm:w-auto"
                                 >
                                     Cancel
                                 </Button>
@@ -670,7 +670,7 @@ export default function TicketsPage() {
                                     type="submit"
                                     size="sm"
                                     disabled={createLoading}
-                                    className="bg-amber-500 hover:bg-amber-600 text-black font-semibold text-xs gap-1.5"
+                                    className="bg-amber-500 hover:bg-amber-600 text-black font-semibold text-xs gap-1.5 w-full sm:w-auto shrink-0 whitespace-nowrap"
                                 >
                                     {createLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                                     Submit Ticket
@@ -683,7 +683,7 @@ export default function TicketsPage() {
 
             {/* PERMANENT DELETE CONFIRMATION DIALOG */}
             <Dialog open={!!ticketToDelete} onOpenChange={(open) => !open && setTicketToDelete(null)}>
-                <DialogContent className="sm:max-w-md w-[95vw] bg-[#121218] border-border/60 text-foreground">
+                <DialogContent className="sm:max-w-md w-[95vw] max-h-[90vh] overflow-y-auto bg-[#121218] border-border/60 text-foreground">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2 text-rose-400">
                             <Trash2 className="h-5 w-5" /> Permanently Delete Ticket?
@@ -692,13 +692,13 @@ export default function TicketsPage() {
                             Are you sure you want to permanently delete ticket <strong>#{ticketToDelete?.id}</strong> from <strong>{ticketToDelete?.name}</strong>? This action cannot be undone.
                         </DialogDescription>
                     </DialogHeader>
-                    <DialogFooter className="gap-2 sm:gap-0 mt-4">
+                    <DialogFooter className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 mt-4">
                         <Button
                             variant="outline"
                             size="sm"
                             onClick={() => setTicketToDelete(null)}
                             disabled={deleteLoading}
-                            className="cursor-pointer"
+                            className="cursor-pointer w-full sm:w-auto text-xs"
                         >
                             Cancel
                         </Button>
@@ -707,7 +707,7 @@ export default function TicketsPage() {
                             size="sm"
                             onClick={confirmDelete}
                             disabled={deleteLoading}
-                            className="bg-rose-600 hover:bg-rose-500 text-white font-semibold cursor-pointer gap-1.5"
+                            className="bg-rose-600 hover:bg-rose-500 text-white font-semibold cursor-pointer gap-1.5 w-full sm:w-auto shrink-0 whitespace-nowrap text-xs"
                         >
                             {deleteLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                             Delete Ticket

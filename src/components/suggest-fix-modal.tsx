@@ -430,14 +430,14 @@ export function SuggestFixModal({ open, onOpenChange, userRole = "USER", usernam
                 </div>
 
                 {!submittedTicketId && (
-                    <DialogFooter className="px-5 py-3 border-t border-border/40 bg-muted/10 flex flex-row items-center justify-between sm:justify-between gap-2">
+                    <DialogFooter className="px-5 py-3 border-t border-border/40 bg-muted/10 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
                         <Button 
                             type="button" 
                             variant="ghost" 
                             size="sm" 
                             onClick={handleClose}
                             disabled={submitting}
-                            className="text-xs"
+                            className="text-xs w-full sm:w-auto"
                         >
                             Cancel
                         </Button>
@@ -446,7 +446,7 @@ export function SuggestFixModal({ open, onOpenChange, userRole = "USER", usernam
                             form="suggest-fix-form"
                             size="sm"
                             disabled={submitting}
-                            className="gap-2 bg-gradient-to-r from-amber-600 via-purple-600 to-indigo-600 hover:from-amber-500 hover:via-purple-500 hover:to-indigo-500 text-white font-semibold text-xs h-9 shadow-md shadow-amber-950/40"
+                            className="gap-2 bg-gradient-to-r from-amber-600 via-purple-600 to-indigo-600 hover:from-amber-500 hover:via-purple-500 hover:to-indigo-500 text-white font-semibold text-xs h-9 shadow-md shadow-amber-950/40 w-full sm:w-auto shrink-0 whitespace-nowrap"
                         >
                             {submitting ? (
                                 <>

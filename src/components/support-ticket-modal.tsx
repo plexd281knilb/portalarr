@@ -62,7 +62,7 @@ export default function SupportTicketModal({ trigger }: SupportTicketModalProps 
             )}
 
             <Dialog open={open} onOpenChange={setOpen}>
-                <DialogContent className="sm:max-w-md bg-[#121218] border border-border/60 shadow-2xl">
+                <DialogContent className="sm:max-w-md bg-[#121218] border border-border/60 shadow-2xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2 text-base font-bold text-foreground">
                             <LifeBuoy className="h-5 w-5 text-primary" />
@@ -115,14 +115,14 @@ export default function SupportTicketModal({ trigger }: SupportTicketModalProps 
                                 />
                             </div>
 
-                            <DialogFooter className="pt-2">
+                            <DialogFooter className="pt-2 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2">
                                 <Button
                                     type="button"
                                     variant="outline"
                                     size="sm"
                                     onClick={() => setOpen(false)}
                                     disabled={loading}
-                                    className="text-xs"
+                                    className="text-xs w-full sm:w-auto"
                                 >
                                     Cancel
                                 </Button>
@@ -130,7 +130,7 @@ export default function SupportTicketModal({ trigger }: SupportTicketModalProps 
                                     type="submit"
                                     size="sm"
                                     disabled={loading}
-                                    className="text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5"
+                                    className="text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 w-full sm:w-auto shrink-0 whitespace-nowrap"
                                 >
                                     {loading ? (
                                         <>

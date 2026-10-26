@@ -234,7 +234,7 @@ export function BuildBadge({
 
             {/* Build & Workflow Diagnostics Modal (Admin Only) */}
             <Dialog open={open} onOpenChange={setOpen}>
-                <DialogContent className="max-w-md bg-[#101014] border-border/50 text-foreground p-6 shadow-2xl rounded-2xl">
+                <DialogContent className="max-w-md bg-[#101014] border-border/50 text-foreground p-6 shadow-2xl rounded-2xl max-h-[90vh] overflow-y-auto scrollbar-thin">
                     <DialogHeader className="space-y-1">
                         <div className="flex items-center gap-2">
                             <div className={`p-2 rounded-xl ${

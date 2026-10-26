@@ -5430,14 +5430,14 @@ function SettingsPageContent() {
                                     </p>
                                 </div>
                             </div>
-                            <DialogFooter className="gap-2 sm:gap-0">
+                            <DialogFooter className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2">
                                 <Button
                                     type="button"
                                     variant="ghost"
                                     size="sm"
                                     onClick={() => setShowAdminEmailModal(false)}
                                     disabled={adminEmailSaving}
-                                    className="text-xs"
+                                    className="text-xs w-full sm:w-auto"
                                 >
                                     Cancel
                                 </Button>
@@ -5446,7 +5446,7 @@ function SettingsPageContent() {
                                     size="sm"
                                     onClick={handleSaveAdminEmail}
                                     disabled={adminEmailSaving || !newAdminEmailInput.trim()}
-                                    className="text-xs font-bold gap-1.5"
+                                    className="text-xs font-bold gap-1.5 w-full sm:w-auto shrink-0 whitespace-nowrap"
                                 >
                                     {adminEmailSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                                     Save Recipient Email
@@ -5542,13 +5542,13 @@ function SettingsPageContent() {
                         </div>
                     </div>
 
-                    <DialogFooter className="flex-col sm:flex-row gap-2 pt-2">
+                    <DialogFooter className="flex flex-col-reverse sm:flex-row gap-2 pt-2">
                         <Button
                             type="button"
                             variant="outline"
                             size="sm"
                             onClick={() => { setLeaveModalOpen(false); setPendingNavigation(null); }}
-                            className="text-xs"
+                            className="text-xs w-full sm:w-auto"
                         >
                             Stay on Page
                         </Button>
@@ -5557,7 +5557,7 @@ function SettingsPageContent() {
                             variant="destructive"
                             size="sm"
                             onClick={handleConfirmDiscardAndLeave}
-                            className="text-xs bg-red-600 hover:bg-red-500"
+                            className="text-xs bg-red-600 hover:bg-red-500 w-full sm:w-auto"
                         >
                             Discard & Leave
                         </Button>
@@ -5566,7 +5566,7 @@ function SettingsPageContent() {
                             size="sm"
                             onClick={handleConfirmSaveAndLeave}
                             disabled={isSavingAll}
-                            className="text-xs font-bold bg-amber-500 hover:bg-amber-400 text-black gap-1"
+                            className="text-xs font-bold bg-amber-500 hover:bg-amber-400 text-black gap-1 w-full sm:w-auto shrink-0 whitespace-nowrap"
                         >
                             {isSavingAll ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                             Save & Continue

@@ -3265,13 +3265,13 @@ export default function UserProfilePage() {
                             />
                         </div>
 
-                        <DialogFooter className="pt-2 flex sm:justify-between gap-2 shrink-0">
+                        <DialogFooter className="pt-2 flex flex-col-reverse sm:flex-row sm:justify-between items-stretch sm:items-center gap-2 shrink-0">
                             <Button 
                                 type="button" 
                                 variant="ghost" 
                                 size="sm" 
                                 onClick={() => setUpgradeModalOpen(false)}
-                                className="text-xs"
+                                className="text-xs w-full sm:w-auto"
                             >
                                 Cancel
                             </Button>
@@ -3279,7 +3279,7 @@ export default function UserProfilePage() {
                                 type="submit" 
                                 size="sm" 
                                 disabled={submittingUpgrade}
-                                className="font-bold text-xs bg-indigo-600 hover:bg-indigo-500 text-white gap-1.5"
+                                className="font-bold text-xs bg-indigo-600 hover:bg-indigo-500 text-white gap-1.5 w-full sm:w-auto shrink-0 whitespace-nowrap"
                             >
                                 {submittingUpgrade ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                                 Submit Upgrade Request
@@ -3366,13 +3366,13 @@ export default function UserProfilePage() {
                             </p>
                         </div>
 
-                        <DialogFooter className="pt-2 flex sm:justify-between gap-2">
+                        <DialogFooter className="pt-2 flex flex-col-reverse sm:flex-row sm:justify-between items-stretch sm:items-center gap-2">
                             <Button 
                                 type="button" 
                                 variant="ghost" 
                                 size="sm" 
                                 onClick={() => setSubModalOpen(false)}
-                                className="text-xs"
+                                className="text-xs w-full sm:w-auto"
                             >
                                 Cancel
                             </Button>
@@ -3380,7 +3380,7 @@ export default function UserProfilePage() {
                                 type="submit" 
                                 size="sm" 
                                 disabled={savingSub}
-                                className="font-bold text-xs bg-purple-600 hover:bg-purple-500 text-white gap-1.5 cursor-pointer"
+                                className="font-bold text-xs bg-purple-600 hover:bg-purple-500 text-white gap-1.5 cursor-pointer w-full sm:w-auto shrink-0 whitespace-nowrap"
                             >
                                 {savingSub ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
                                 {subEditingId ? "Update Sub-Account" : "Create Sub-Account"}
@@ -3412,7 +3412,7 @@ export default function UserProfilePage() {
                             <span>{deleteSubErr}</span>
                         </div>
                     )}
-                    <DialogFooter className="pt-2 flex sm:justify-between gap-2 shrink-0">
+                    <DialogFooter className="pt-2 flex flex-col-reverse sm:flex-row sm:justify-between items-stretch sm:items-center gap-2 shrink-0">
                         <Button 
                             type="button" 
                             variant="ghost" 
@@ -3421,7 +3421,7 @@ export default function UserProfilePage() {
                                 setDeleteSubConfirmId(null);
                                 setDeleteSubErr("");
                             }}
-                            className="text-xs cursor-pointer"
+                            className="text-xs cursor-pointer w-full sm:w-auto"
                         >
                             Cancel
                         </Button>
@@ -3431,7 +3431,7 @@ export default function UserProfilePage() {
                             variant="destructive"
                             disabled={deletingSub}
                             onClick={() => deleteSubConfirmId && handleDeleteSubAccount(deleteSubConfirmId)}
-                            className="font-bold text-xs gap-1.5 cursor-pointer active:scale-95"
+                            className="font-bold text-xs gap-1.5 cursor-pointer active:scale-95 w-full sm:w-auto shrink-0 whitespace-nowrap"
                         >
                             {deletingSub ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                             Confirm Removal
@@ -3487,14 +3487,14 @@ export default function UserProfilePage() {
                             />
                         </div>
                     </div>
-                    <DialogFooter className="gap-2 sm:gap-0">
+                    <DialogFooter className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2">
                         <Button
                             type="button"
                             variant="ghost"
                             size="sm"
                             onClick={() => setShowEditEmailModal(false)}
                             disabled={editEmailLoading}
-                            className="text-xs"
+                            className="text-xs w-full sm:w-auto"
                         >
                             Cancel
                         </Button>
@@ -3503,7 +3503,7 @@ export default function UserProfilePage() {
                             size="sm"
                             onClick={handleSaveUserPrimaryEmail}
                             disabled={editEmailLoading || !editEmailInput.trim()}
-                            className="text-xs font-bold gap-1.5"
+                            className="text-xs font-bold gap-1.5 w-full sm:w-auto shrink-0 whitespace-nowrap"
                         >
                             {editEmailLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                             Save Email

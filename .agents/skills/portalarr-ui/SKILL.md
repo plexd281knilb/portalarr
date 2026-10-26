@@ -1340,16 +1340,23 @@ Before completing any task, execute:
   - Active provider mode synchronizes outbound SMTP parameters while leaving both credential sets permanently preserved.
 
 ### 42. Outbound Kindle Sender Update Notice & Ebooks Request Tab Banner (`KindleSenderNoticePopup`, `KindleSenderUpdateBanner`, `KindleSenderUpdateModal`)
-- **Global Auto-Popup (`KindleSenderNoticePopup`)**:
-  - Mounted globally in `src/components/layout-wrapper.tsx` for all authenticated members.
-  - Automatically queries `getKindleSenderUpdateNoticeStatusAction()`. If the user has a configured Send-to-Kindle email (`user.kindleEmail` contains `@` and is not `"DIRECT_DOWNLOAD"`) and has not yet acknowledged the outbound sender change (`user.kindleSenderUpdateAcknowledgedAt === null`), it automatically pops up on site visit until explicitly confirmed.
-  - "Remind Me Later" / backdrop close dismisses the notice temporarily for that browser session (`sessionStorage`), but reprompts on future visits until confirmed.
+- **Targeted Trigger Architecture (`KindleSenderUpdateBanner`)**:
+  - Rendered on the Ebooks request tab in Media Requests (`src/components/seerr/discover-hub.tsx` when `activeTab === "ebooks"`) and Book Library (`src/app/library/page.tsx`).
+  - For existing Kindle users whose accounts require the outbound sender update (`user.kindleSenderUpdateAcknowledgedAt === null`), automatically displays the action-required update banner and modal.
   - Confirming writes `user.kindleSenderUpdateAcknowledgedAt = new Date()` via `acknowledgeKindleSenderUpdateAction()`, permanently dismissing it.
-- **Ebooks Request Tab Banner (`KindleSenderUpdateBanner`)**:
-  - Rendered prominently on the Ebooks request tab in Media Requests (`src/components/seerr/discover-hub.tsx` when `activeTab === "ebooks"`) and in Request Manager (`src/components/seerr/request-manager.tsx` when `mediaTypeFilter === "book"`).
-  - Features action-required badge, copy email button, and 1-click confirmation button.
 - **Clickable Amazon Settings Link**:
-  - Displays `https://www.amazon.com/hz/mycd/myx#/home/settings/payment` as an active, clickable link (`target="_blank" rel="noopener noreferrer"`) in both the modal description, step-by-step instructions, and tab banner.
+  - Displays `https://www.amazon.com/hz/mycd/myx#/home/settings/payment` as an active, clickable link (`target="_blank" rel="noopener noreferrer"`) in modal descriptions, step-by-step instructions, and tab banners.
+
+### 43. Send-to-Kindle First-Time Setup Guide & Onboarding Architecture (`KindleSetupGuideModal`, `KindleSenderUpdateBanner`)
+- **Automatic Setup Detection**:
+  - Whenever a member without Send-to-Kindle configured (`!user.kindleEmail` or `user.kindleEmail === "DIRECT_DOWNLOAD"`) accesses the **Ebooks requests tab** in Media Requests (`/requests?tab=ebooks` or `/discover?tab=ebooks`), the **Book Library** (`/library`), or clicks **Request Ebook** on any book card (`book-detail-modal.tsx`), the system guides them through complete setup.
+- **Interactive 3-Step Setup Wizard (`KindleSetupGuideModal`)**:
+  1. **Step 1: Find Kindle Email**: Direct clickable link to Amazon Personal Document Settings (`https://www.amazon.com/hz/mycd/myx#/home/settings/payment`) to find their `@kindle.com` address.
+  2. **Step 2: Authorize Homelab Sender**: Shows `kindle@domshomelab.com` with 1-click clipboard copy (`copied ? "Copied!" : "Copy Email"`).
+  3. **Step 3: Direct In-Modal Save**: Inline input with real-time `@kindle.com` validation and a 1-click **"Save & Activate Kindle"** button calling `updateCurrentUserKindleEmail(cleanEmail)` to immediately activate wireless delivery without leaving the page.
+- **Full Viewport Responsive Modals & Footers**:
+  - Base `DialogContent` standardizes `max-h-[92vh] overflow-y-auto scrollbar-thin` to ensure no modal clips vertically in landscape orientation or on small mobile devices.
+  - Dialog footers strictly follow `flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5` with `w-full sm:w-auto shrink-0 whitespace-nowrap` on action buttons to prevent text wrapping or truncation on narrow screens (<375px).
 
 ---
 

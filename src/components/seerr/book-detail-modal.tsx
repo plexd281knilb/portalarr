@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { BookDiscoveryItem } from "@/lib/books/book-types";
 import { getKindleSenderUpdateNoticeStatusAction } from "@/app/actions";
 import { KindleSenderUpdateModal } from "@/components/kindle-sender-update-modal";
+import { KindleSetupGuideModal } from "@/components/kindle-setup-guide-modal";
 import { 
     submitBookOrAudiobookRequestAction, 
     getAccessibleBookLibrariesAction,
@@ -67,6 +68,7 @@ export function BookDetailModal({
     const [requestMessage, setRequestMessage] = useState<string | null>(null);
     const [requestError, setRequestError] = useState<string | null>(null);
     const [kindleNoticeOpen, setKindleNoticeOpen] = useState<boolean>(false);
+    const [kindleSetupOpen, setKindleSetupOpen] = useState<boolean>(false);
     const [kindleNoticeData, setKindleNoticeData] = useState<{
         hasKindleEmail: boolean;
         kindleEmail: string | null;
@@ -160,6 +162,17 @@ export function BookDetailModal({
         executeSubmitRequest();
     };
 
+    const handleKindleSetupCompleted = (configuredEmail: string) => {
+        setKindleNoticeData(prev => ({
+            hasKindleEmail: true,
+            kindleEmail: configuredEmail,
+            needsNotice: false,
+            senderEmail: prev?.senderEmail || "kindle@domshomelab.com"
+        }));
+        setKindleSetupOpen(false);
+        executeSubmitRequest();
+    };
+
     const handleRequest = async () => {
         if (!activeBook) return;
         if (activeBook.mediaType !== "audiobook" && sendToKindle) {
@@ -169,6 +182,10 @@ export function BookDetailModal({
                     notice = await getKindleSenderUpdateNoticeStatusAction();
                     if (notice) setKindleNoticeData(notice);
                 } catch {}
+            }
+            if (notice && !notice.hasKindleEmail) {
+                setKindleSetupOpen(true);
+                return;
             }
             if (notice?.needsNotice) {
                 setKindleNoticeOpen(true);
@@ -414,7 +431,19 @@ export function BookDetailModal({
                                                 <Send className="h-3 w-3 text-purple-400 shrink-0" />
                                                 <span className="truncate">Auto-Send to Kindle</span>
                                             </Label>
-                                            <p className="text-[10px] text-muted-foreground truncate">Mails EPUB to your Kindle when ready</p>
+                                            <p className="text-[10px] text-muted-foreground truncate">
+                                                {kindleNoticeData && !kindleNoticeData.hasKindleEmail ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setKindleSetupOpen(true)}
+                                                        className="text-purple-400 hover:text-purple-300 underline font-semibold cursor-pointer"
+                                                    >
+                                                        ⚡ Setup required • Click to configure
+                                                    </button>
+                                                ) : (
+                                                    "Mails EPUB to your Kindle when ready"
+                                                )}
+                                            </p>
                                         </div>
                                         <Switch 
                                             id="send-kindle"
@@ -627,6 +656,12 @@ export function BookDetailModal({
             userKindleEmail={kindleNoticeData?.kindleEmail}
             senderEmail={kindleNoticeData?.senderEmail || "kindle@domshomelab.com"}
             onAcknowledged={handleKindleNoticeAcknowledged}
+        />
+        <KindleSetupGuideModal
+            open={kindleSetupOpen}
+            onOpenChange={setKindleSetupOpen}
+            senderEmail={kindleNoticeData?.senderEmail || "kindle@domshomelab.com"}
+            onConfigured={handleKindleSetupCompleted}
         />
         </>
     );

@@ -222,13 +222,13 @@ export function UnsavedChangesPrompt({
                         </div>
                     )}
 
-                    <DialogFooter className="flex-col sm:flex-row gap-2 pt-2">
+                    <DialogFooter className="flex flex-col-reverse sm:flex-row gap-2 pt-2">
                         <Button
                             type="button"
                             variant="outline"
                             size="sm"
                             onClick={handleStayOnPage}
-                            className="text-xs"
+                            className="text-xs w-full sm:w-auto"
                         >
                             Stay on Page
                         </Button>
@@ -237,7 +237,7 @@ export function UnsavedChangesPrompt({
                             variant="destructive"
                             size="sm"
                             onClick={handleDiscardAndLeave}
-                            className="text-xs bg-red-600 hover:bg-red-500"
+                            className="text-xs bg-red-600 hover:bg-red-500 w-full sm:w-auto"
                         >
                             Discard & Leave
                         </Button>
@@ -246,7 +246,7 @@ export function UnsavedChangesPrompt({
                             size="sm"
                             onClick={handleSaveAndContinue}
                             disabled={savingActive}
-                            className="text-xs font-bold bg-amber-500 hover:bg-amber-400 text-black gap-1"
+                            className="text-xs font-bold bg-amber-500 hover:bg-amber-400 text-black gap-1 w-full sm:w-auto shrink-0 whitespace-nowrap"
                         >
                             {savingActive ? (
                                 <Loader2 className="h-3.5 w-3.5 animate-spin" />

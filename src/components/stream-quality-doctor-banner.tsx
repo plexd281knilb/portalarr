@@ -257,12 +257,12 @@ export default function StreamQualityDoctorBanner({ initialAlert }: StreamQualit
                         </div>
                     </div>
 
-                    <DialogFooter className="p-4 border-t border-slate-800 bg-slate-900/60 flex flex-row items-center justify-between gap-2">
+                    <DialogFooter className="p-4 border-t border-slate-800 bg-slate-900/60 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
                         <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => setShowGuideModal(false)}
-                            className="text-xs text-slate-400 hover:text-white"
+                            className="text-xs text-slate-400 hover:text-white w-full sm:w-auto"
                         >
                             Close
                         </Button>
@@ -273,7 +273,7 @@ export default function StreamQualityDoctorBanner({ initialAlert }: StreamQualit
                                 setShowGuideModal(false);
                                 handleDismiss();
                             }}
-                            className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-md"
+                            className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-md w-full sm:w-auto shrink-0 whitespace-nowrap"
                         >
                             <CheckCircle2 className="h-4 w-4" />
                             <span>I've Updated My Settings</span>

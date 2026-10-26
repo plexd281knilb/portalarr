@@ -4468,8 +4468,8 @@ export function PruneStudio() {
                         </div>
                     </div>
 
-                    <DialogFooter className="pt-3 border-t border-slate-800 flex items-center justify-between">
-                        <Button type="button" variant="ghost" size="sm" onClick={() => setManualFlagModalOpen(false)}>
+                    <DialogFooter className="pt-3 border-t border-slate-800 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+                        <Button type="button" variant="ghost" size="sm" onClick={() => setManualFlagModalOpen(false)} className="w-full sm:w-auto">
                             Cancel
                         </Button>
                         <Button
@@ -4477,7 +4477,7 @@ export function PruneStudio() {
                             size="sm"
                             disabled={flaggingItem || !manualTitle.trim() || !manualRatingKey.trim()}
                             onClick={handleManualFlag}
-                            className="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs gap-1.5"
+                            className="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs gap-1.5 w-full sm:w-auto shrink-0 whitespace-nowrap"
                         >
                             {flaggingItem ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <AlertTriangle className="h-3.5 w-3.5" />}
                             <span>Stage Item</span>
@@ -4557,8 +4557,8 @@ export function PruneStudio() {
                         </div>
                     </div>
 
-                    <DialogFooter className="pt-3 border-t border-slate-800 flex items-center justify-between">
-                        <Button type="button" variant="ghost" size="sm" onClick={() => setSaveCustomPresetModalOpen(false)}>
+                    <DialogFooter className="pt-3 border-t border-slate-800 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+                        <Button type="button" variant="ghost" size="sm" onClick={() => setSaveCustomPresetModalOpen(false)} className="w-full sm:w-auto">
                             Cancel
                         </Button>
                         <Button
@@ -4566,7 +4566,7 @@ export function PruneStudio() {
                             size="sm"
                             disabled={!newCustomPresetName.trim()}
                             onClick={handleSaveCustomRulePreset}
-                            className="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs gap-1.5 cursor-pointer"
+                            className="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs gap-1.5 cursor-pointer w-full sm:w-auto shrink-0 whitespace-nowrap"
                         >
                             <Save className="h-3.5 w-3.5" />
                             <span>Save Preset</span>
@@ -4685,12 +4685,12 @@ export function PruneStudio() {
                         })}
                     </div>
 
-                    <DialogFooter className="pt-2 border-t border-slate-800">
+                    <DialogFooter className="pt-2 border-t border-slate-800 flex justify-end">
                         <Button
                             type="button"
                             size="sm"
                             onClick={() => setManageLibrariesModalOpen(false)}
-                            className="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs"
+                            className="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs w-full sm:w-auto"
                         >
                             Done
                         </Button>
