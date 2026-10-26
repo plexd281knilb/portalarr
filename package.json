@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "npx tsx scripts/verify-all.ts",
-    "test:all": "npx tsc --noEmit && npx tsx scripts/verify-all.ts && next build"
+    "test:all": "npx tsc --noEmit && npx tsx scripts/verify-all.ts && next build",
+    "test:extended": "npx tsx scripts/verify-extended.ts"
   },
   "dependencies": {
     "@prisma/client": "6.2.1",

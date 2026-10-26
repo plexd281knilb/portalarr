@@ -70,6 +70,17 @@ To guarantee 100% reliability, quality control, and consistency, the following 5
    - **Staging, Verification & Push**:
      Inspect `git status` to verify all touched and new files, stage all changes (`git add -A`), commit with a clear, descriptive message adhering to conventional commit style that ALWAYS includes the freshly incremented active version from `package.json` at the FRONT in brackets (e.g. `[v1.1.0] feat(scope): descriptive message` or `[v1.1.0] fix(scope): fix bug`), and push strictly to `origin/main` (Beta preview environment). **CRITICAL RULE**: NEVER merge or push to `stable` / `origin/stable` unless the user explicitly instructs to push to `stable`! Automatic git hook enforcement via `scripts/git-commit-msg-hook.js` is verified in `npm test` and executed by Git on every commit to guarantee version prefixing.
 
+### 🛑 Mandatory Extended Build Verification for Stable Releases (`npm run test:extended`)
+
+Whenever the user instructs to merge or push to the `stable` branch (production release environment), you MUST execute the 7-tier Extended Build Verification suite via `cmd /c "npm run test:extended"` (`scripts/verify-extended.ts`). Pushing to `stable` is strictly blocked unless all 7 tiers are 100% green:
+1. **Tier 1: Strict TypeScript Type Integrity (`npx tsc --noEmit`)**: Validates complete type safety with zero compiler errors across the entire codebase.
+2. **Tier 2: Curation Presets & Schedule Validator (`scripts/test-all-presets.ts`)**: Audits all 49 curation presets, seasonal date ranges, and TMDb query definitions.
+3. **Tier 3: AI Server Assistant & Security Guardrails (`scripts/test-ai-agent.ts`)**: Audits all 30 security guardrails, cross-user stream termination blocks, query extraction, and diagnostic tools.
+4. **Tier 4: Payment Scraper Lookback & Financial Engine (`scripts/test-payment-lookback.ts`)**: Audits payment parsing, lookback retention, and settings synchronization (12 assertions).
+5. **Tier 5: Plex User Matching & Identity Resolution (`scripts/test-plex-lookup.ts`)**: Audits identity collision guards, alphanumeric tokens, and user aliases (7 assertions).
+6. **Tier 6: Core System & Architecture 22-Suite Battery (`scripts/verify-all.ts`)**: Full 22 integration suites (79 core assertions) covering DB schema, encryption, Cloudflare Access coverage, user accounts, Plex sync, billing, and subscriptions.
+7. **Tier 7: Production Turbopack Next.js Build (`next build`)**: 100% clean production compilation across all 40 static and dynamic routes.
+
 ## 🧠🤖 Multi-Tier Gemini Subagent Orchestration Architecture
 
 Portalarr leverages a strict, multi-tiered Google Gemini subagent architecture designed to maximize execution speed, eliminate quota exhaustion, prevent SQLite lockups, and ensure 100% code correctness:
