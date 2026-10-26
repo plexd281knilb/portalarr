@@ -2124,6 +2124,9 @@ async function runTestSuite() {
             if (!launchTpl || !launchTpl.defaultBody.includes("Suggest Fix") || !launchTpl.defaultBody.includes("Monthly") || !launchTpl.defaultBody.includes("Yearly")) {
                 throw new Error("new_site_launch missing Suggest Fix or Monthly/Yearly billing options");
             }
+            if (launchTpl.defaultBody.includes("#billing")) {
+                throw new Error("new_site_launch should not contain '#billing' fragment in paths");
+            }
         } finally {
             await prisma.sentEmailLog.deleteMany({
                 where: { id: { in: [autoEmail.id, approvedEmail.id] } }

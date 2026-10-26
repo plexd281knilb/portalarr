@@ -3665,7 +3665,7 @@ export async function expireDueTrialsAndSubscriptionsInternal() {
                             username: u.username,
                             email: u.email,
                             expirationDate: expirationDateFormatted,
-                            renewUrl: `${appUrl}/profile#billing`,
+                            renewUrl: `${appUrl}/settings/profile`,
                             appUrl
                         });
                         await sendOrQueueEmail({
@@ -6587,7 +6587,7 @@ export async function sendSubscriptionRenewalReminderAction(userId: string) {
             monthlyAlternativeText,
             referralNoticeDetails: summary.reminderNoticeText,
             paymentMemo: user.username,
-            billingUrl: `${appUrl}/profile#billing`,
+            billingUrl: `${appUrl}/settings/profile`,
             appUrl
         });
 

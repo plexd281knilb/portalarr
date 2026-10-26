@@ -1356,7 +1356,7 @@ export async function sendSubscriptionRenewalRemindersInternal(): Promise<{
                     monthlyAlternativeText,
                     referralNoticeDetails: summary.reminderNoticeText,
                     paymentMemo: member.username,
-                    billingUrl: `${appUrl}/profile#billing`,
+                    billingUrl: `${appUrl}/settings/profile`,
                     appUrl
                 });
 
@@ -1434,7 +1434,7 @@ export async function sendSubscriptionRenewalRemindersInternal(): Promise<{
                         email: tUser.email,
                         daysRemaining: String(daysLeft),
                         expirationDate: formattedExp,
-                        renewUrl: `${appUrl}/profile#billing`,
+                        renewUrl: `${appUrl}/settings/profile`,
                         appUrl
                     });
 

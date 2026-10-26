@@ -195,7 +195,7 @@ export default function TrialDashboardView({ user, quota, billing }: TrialDashbo
                                         </div>
                                         <div className="pt-2">
                                             <Button asChild size="sm" variant="outline" className="w-full text-xs font-semibold border-amber-500/30 hover:bg-amber-500/10 text-amber-300">
-                                                <Link href="/profile#billing">
+                                                <Link href="/settings/profile">
                                                     Payment Instructions
                                                 </Link>
                                             </Button>
@@ -222,7 +222,7 @@ export default function TrialDashboardView({ user, quota, billing }: TrialDashbo
                                         </div>
                                         <div className="pt-2">
                                             <Button asChild size="sm" className="w-full text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-black">
-                                                <Link href="/profile#billing">
+                                                <Link href="/settings/profile">
                                                     Activate Full Year
                                                 </Link>
                                             </Button>
