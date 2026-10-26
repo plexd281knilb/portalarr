@@ -93,6 +93,7 @@ import {
   AlertTriangle,
   ArrowRight,
   Info,
+  ExternalLink,
   Headphones,
   Volume2,
   Play,
