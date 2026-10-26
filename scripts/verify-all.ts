@@ -2120,6 +2120,10 @@ async function runTestSuite() {
             if (!testEmailHtml.includes("color-scheme: light dark")) {
                 throw new Error("wrapInPortalarrEmailLayout missing light/dark color-scheme meta/styles");
             }
+            const launchTpl = DEFAULT_EMAIL_TEMPLATES.find(t => t.id === "new_site_launch");
+            if (!launchTpl || !launchTpl.defaultBody.includes("Suggest Fix") || !launchTpl.defaultBody.includes("Monthly") || !launchTpl.defaultBody.includes("Yearly")) {
+                throw new Error("new_site_launch missing Suggest Fix or Monthly/Yearly billing options");
+            }
         } finally {
             await prisma.sentEmailLog.deleteMany({
                 where: { id: { in: [autoEmail.id, approvedEmail.id] } }
