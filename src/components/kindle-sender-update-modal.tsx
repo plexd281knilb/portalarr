@@ -177,24 +177,24 @@ export function KindleSenderUpdateModal({
                     </p>
                 </div>
 
-                <DialogFooter className="p-4 bg-muted/10 border-t border-border/30 flex flex-col sm:flex-row items-center justify-between gap-2">
+                <DialogFooter className="p-4 bg-muted/10 border-t border-border/30 flex flex-col sm:flex-row items-center justify-between gap-2.5">
                     <Button
                         type="button"
                         variant="ghost"
                         size="sm"
                         onClick={() => onOpenChange(false)}
-                        className="text-xs text-muted-foreground hover:text-foreground w-full sm:w-auto"
+                        className="text-xs text-muted-foreground hover:text-foreground w-full sm:w-auto order-last sm:order-first"
                     >
                         Remind Me Later
                     </Button>
 
-                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full sm:w-auto justify-end">
                         <Button
                             type="button"
                             variant="outline"
                             size="sm"
                             asChild
-                            className="text-xs gap-1 border-purple-500/30 text-purple-300 hover:bg-purple-500/10 w-full sm:w-auto"
+                            className="text-xs gap-1 border-purple-500/30 text-purple-300 hover:bg-purple-500/10 w-full sm:w-auto shrink-0 whitespace-nowrap"
                         >
                             <a
                                 href="https://www.amazon.com/hz/mycd/myx#/home/settings/payment"
@@ -202,7 +202,7 @@ export function KindleSenderUpdateModal({
                                 rel="noopener noreferrer"
                             >
                                 <span>Amazon Settings</span>
-                                <ExternalLink className="h-3 w-3" />
+                                <ExternalLink className="h-3 w-3 shrink-0" />
                             </a>
                         </Button>
                         <Button
@@ -210,10 +210,10 @@ export function KindleSenderUpdateModal({
                             size="sm"
                             onClick={handleConfirm}
                             disabled={acknowledging}
-                            className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs gap-1.5 shadow-lg shadow-purple-900/30 w-full sm:w-auto"
+                            className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs gap-1.5 shadow-lg shadow-purple-900/30 w-full sm:w-auto shrink-0 whitespace-nowrap"
                         >
-                            <Check className="h-3.5 w-3.5" />
-                            <span>{acknowledging ? "Updating..." : `I've Updated ${senderEmail} in Amazon`}</span>
+                            <Check className="h-3.5 w-3.5 shrink-0" />
+                            <span className="whitespace-nowrap">{acknowledging ? "Updating..." : "I've Updated on Amazon"}</span>
                         </Button>
                     </div>
                 </DialogFooter>

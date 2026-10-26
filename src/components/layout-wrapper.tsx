@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import ImpersonationBanner from "@/components/impersonation-banner";
 import FloatingAiLauncher from "@/components/floating-ai-launcher";
 import FloatingSuggestFixLauncher from "@/components/floating-suggest-fix-launcher";
-import KindleSenderNoticePopup from "@/components/kindle-sender-notice-popup";
 import { BuildBadge } from "@/components/build-badge";
 
 export default function LayoutWrapper({ children }: { children: React.ReactNode }) {
@@ -226,9 +225,6 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
       {isLoggedIn && !isTrial && (userRole === "ADMIN" || userRole === "SUPER_USER" || userRole === "USER") && (
         <FloatingSuggestFixLauncher userRole={userRole} username={username} />
       )}
-
-      {/* Automatic Kindle Outbound Sender Update Notice Popup (for users with configured Kindle email) */}
-      {isLoggedIn && <KindleSenderNoticePopup />}
     </div>
   );
 }

@@ -44,6 +44,7 @@ import {
   acknowledgeKindleSenderUpdateAction,
 } from "@/app/actions";
 import { KindleSenderUpdateModal } from "@/components/kindle-sender-update-modal";
+import KindleSenderUpdateBanner from "@/components/kindle-sender-update-banner";
 import { isKidsLibrary } from "@/lib/books/book-rating";
 import { getSession, getCurrentUser } from "@/app/auth-actions";
 import { BookReaderModal } from "@/components/book-reader-modal";
@@ -1408,6 +1409,18 @@ function BookLibraryPageContent() {
         const smtpFromEmail = await getPublicSmtpFromEmail("kindle");
         setServerSmtpFrom(smtpFromEmail || "");
 
+        // Check if user needs the Kindle Outbound Sender Update notice modal
+        try {
+          const notice = await getKindleSenderUpdateNoticeStatusAction();
+          if (notice?.needsNotice) {
+            setKindleNoticeData(notice);
+            const dismissedSession = sessionStorage.getItem("portalarr_kindle_notice_dismissed_session");
+            if (dismissedSession !== "true") {
+              setKindleNoticeOpen(true);
+            }
+          }
+        } catch {}
+
         let libs = await getLibraries().catch(() => []);
         if (!libs || libs.length === 0) {
           try {
@@ -2731,6 +2744,9 @@ function BookLibraryPageContent() {
           )}
         </div>
       </header>
+
+      {/* Outbound Sender Notice on Book Library for users with Send-to-Kindle */}
+      <KindleSenderUpdateBanner autoOpenModal={false} />
 
       <Tabs
         value={activeTab}

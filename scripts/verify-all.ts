@@ -2009,11 +2009,17 @@ async function runTestSuite() {
             throw new Error("src/app/page.tsx missing PaidThroughHeader or Paid Through indicator");
         }
 
-        // 8. Verify Kindle Outbound Sender Update Notice Popup in layout-wrapper.tsx
+        // 8. Verify Kindle Outbound Sender Update Notice strictly targeted to Book Library and Media Requests Ebooks tab (zero login popups)
         const layoutPath = path.join(process.cwd(), "src", "components", "layout-wrapper.tsx");
         const layoutContent = fs.readFileSync(layoutPath, "utf-8");
-        if (!layoutContent.includes("<KindleSenderNoticePopup") || !layoutContent.includes("KindleSenderNoticePopup")) {
-            throw new Error("layout-wrapper.tsx missing KindleSenderNoticePopup mount");
+        if (layoutContent.includes("<KindleSenderNoticePopup")) {
+            throw new Error("layout-wrapper.tsx should NOT mount KindleSenderNoticePopup to prevent popping up on login or dashboard");
+        }
+
+        const libraryPath = path.join(process.cwd(), "src", "app", "library", "page.tsx");
+        const libraryContent = fs.readFileSync(libraryPath, "utf-8");
+        if (!libraryContent.includes("<KindleSenderUpdateBanner") || !libraryContent.includes("getKindleSenderUpdateNoticeStatusAction")) {
+            throw new Error("library/page.tsx missing KindleSenderUpdateBanner or notice check on mount");
         }
 
         const modalPath = path.join(process.cwd(), "src", "components", "kindle-sender-update-modal.tsx");
@@ -2023,6 +2029,9 @@ async function runTestSuite() {
         }
         if (!modalContent.includes("https://www.amazon.com/hz/mycd/myx#/home/settings/payment")) {
             throw new Error("kindle-sender-update-modal.tsx missing clickable link to Amazon settings");
+        }
+        if (!modalContent.includes("I've Updated on Amazon")) {
+            throw new Error("kindle-sender-update-modal.tsx confirm button text must be 'I've Updated on Amazon' to avoid text cut-off");
         }
 
         // Verify KindleSenderUpdateBanner in Media Requests (Ebooks tab & RequestManager)
