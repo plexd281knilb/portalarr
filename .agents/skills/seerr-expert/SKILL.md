@@ -98,6 +98,12 @@ Portalarr's native Seerr engine unifies all media types into a single mission co
 - **Search Relevance & Typo Problem**: TMDb's default keyword searches return results primarily by raw token match and fail completely on misspellings (e.g. `oppenhiemer`, `gladiater`, `stranger thngs`, `breaking bag`, `interstelar` return 0 results). Obscure, low-vote international releases also frequently displace iconic US blockbusters.
 - **US Domestic & English Priority Algorithm** (`src/lib/curation/tmdb.ts`):
   Each search candidate is evaluated and sorted by a weighted score prioritizing US domestic releases:
+- **Strict Authoritative US Rating Precedence & International Isolation**:
+  Official US MPAA (`G`, `PG`, `PG-13`, `R`, `NC-17`) and US TV (`TV-Y`, `TV-Y7`, `TV-G`, `TV-PG`, `TV-14`, `TV-MA`) ratings are strictly authoritative in `mapTmdbMovie` and `mapTmdbTv`. International classification board ratings (e.g. Russia, Singapore) are strictly forbidden from overwriting an established US rating (preventing wholesome PG/family movies like *Overcomer* from being mislabeled as 18+). International ratings are evaluated strictly as a fallback only when zero US release ratings exist.
+- **Ordered Progressive Search Stream & Latency-Capped Availability Engine**:
+  Browse search executes and renders results progressively in strict order: 1. Movies -> 2. TV Shows -> 3. Books -> 4. Audiobooks. `batchCheckMediaAvailability` bounds Plex GUID and Arr index lookups with a 1.5s timeout (`Promise.race`), guaranteeing that cold Plex server library scans or offline hosts never block search results from appearing on screen within ~200ms.
+- **Zero-Latency Detail Modal Architecture (`MediaDetailModal`)**:
+  `MediaDetailModal` accepts `initialItem` and `initialAvailability` to instantly mount the hero backdrop, poster, title, rating, and synopsis in 0ms without waiting on full network waterfalls. Deep Radarr/Sonarr 1080p and 4K monitoring statuses resolve instantly via in-memory `getArrIndex()` Map lookups without downloading entire movie/series libraries over HTTP. Client-side `modalDetailsCache` retains viewed titles for instant navigation.
   - **US Domestic Boost (+300 pts)**: Awarded when `originCountry.includes("US")` or when `originalLanguage === "en"` with no foreign origin country.
   - **English Language Boost (+200 pts)**: Awarded when `originalLanguage === "en"`.
   - **US Certification Boost (+50 pts)**: Awarded for standard US MPAA/TV ratings (`G`, `PG`, `PG-13`, `R`, `NC-17`, `TV-14`, `TV-MA`).

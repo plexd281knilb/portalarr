@@ -314,7 +314,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
     };
 
     // Selected item for Movie/TV Detail Modal
-    const [selectedMedia, setSelectedMedia] = useState<{ id: number; type: "movie" | "tv"; certification?: string } | null>(null);
+    const [selectedMedia, setSelectedMedia] = useState<{ id: number; type: "movie" | "tv"; certification?: string; item?: TmdbMediaItem } | null>(null);
 
     // Selected items for Book / Author / Series Modals
     const [selectedBook, setSelectedBook] = useState<BookDiscoveryItem | null>(null);
@@ -570,7 +570,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
     };
 
     const handlePlayTrailerFromHero = (item: TmdbMediaItem) => {
-        setSelectedMedia({ id: item.id, type: item.mediaType, certification: item.certification });
+        setSelectedMedia({ id: item.id, type: item.mediaType, certification: item.certification, item });
     };
 
     return (
@@ -828,7 +828,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                                                     key={`movie-${item.id}`}
                                                     item={item}
                                                     availability={movieAvailabilityMap[item.id]}
-                                                    onSelect={(selected) => setSelectedMedia({ id: selected.id, type: selected.mediaType, certification: selected.certification })}
+                                                    onSelect={(selected) => setSelectedMedia({ id: selected.id, type: selected.mediaType, certification: selected.certification, item: selected })}
                                                     onRequest={handleQuickRequest}
                                                 />
                                             ))}
@@ -859,7 +859,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                                                     key={`tv-${item.id}`}
                                                     item={item}
                                                     availability={tvAvailabilityMap[item.id]}
-                                                    onSelect={(selected) => setSelectedMedia({ id: selected.id, type: selected.mediaType, certification: selected.certification })}
+                                                    onSelect={(selected) => setSelectedMedia({ id: selected.id, type: selected.mediaType, certification: selected.certification, item: selected })}
                                                     onRequest={handleQuickRequest}
                                                 />
                                             ))}
@@ -951,7 +951,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                         <HeroSpotlight
                             item={heroItem}
                             availability={availabilityMap[heroItem.id]}
-                            onSelect={(selected) => setSelectedMedia({ id: selected.id, type: selected.mediaType, certification: selected.certification })}
+                            onSelect={(selected) => setSelectedMedia({ id: selected.id, type: selected.mediaType, certification: selected.certification, item: selected })}
                             onRequest={handleQuickRequest}
                             onPlayTrailer={handlePlayTrailerFromHero}
                         />
@@ -972,7 +972,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                                     iconName={sec.icon}
                                     items={sec.items}
                                     availabilityMap={availabilityMap}
-                                    onSelect={(selected) => setSelectedMedia({ id: selected.id, type: selected.mediaType, certification: selected.certification })}
+                                    onSelect={(selected) => setSelectedMedia({ id: selected.id, type: selected.mediaType, certification: selected.certification, item: selected })}
                                     onRequest={handleQuickRequest}
                                 />
                             ))}
@@ -1056,7 +1056,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                                     key={`${item.mediaType}-${item.id}`}
                                     item={item}
                                     availability={availabilityMap[item.id]}
-                                    onSelect={(selected) => setSelectedMedia({ id: selected.id, type: selected.mediaType, certification: selected.certification })}
+                                    onSelect={(selected) => setSelectedMedia({ id: selected.id, type: selected.mediaType, certification: selected.certification, item: selected })}
                                     onRequest={handleQuickRequest}
                                 />
                             ))}
@@ -1117,7 +1117,8 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                     tmdbId={selectedMedia.id}
                     mediaType={selectedMedia.type}
                     isKids={section === "kids"}
-                    initialAvailability={availabilityMap[selectedMedia.id]}
+                    initialAvailability={availabilityMap[selectedMedia.id] || movieAvailabilityMap[selectedMedia.id] || tvAvailabilityMap[selectedMedia.id]}
+                    initialItem={selectedMedia.item}
                     onRequestSubmitted={() => {
                         if (activeTab === "discover") loadHomeData(section);
                     }}

@@ -468,28 +468,23 @@ export async function getMediaDetailsAction(tmdbId: number, mediaType: "movie" |
             return { success: false, error: "NC-17 and adult-rated titles are not permitted on this server." };
         }
 
-        // Run availability checks concurrently for maximum responsiveness
-        const [availability, recAvailability] = await Promise.all([
-            checkMediaAvailability(
-                tmdbId,
-                mediaType,
-                details.imdbId,
-                details.tvdbId,
-                details.title,
-                details.releaseDate ? details.releaseDate.split("-")[0] : undefined,
-                Boolean(isKids),
-                true // fetchDeepArrDetails
-            ),
-            details.recommendations && details.recommendations.length > 0
-                ? batchCheckMediaAvailability(details.recommendations, Boolean(isKids))
-                : Promise.resolve({})
-        ]);
+        // Run fast availability check for this media item (using in-memory indexed Arr and Plex lookups)
+        const availability = await checkMediaAvailability(
+            tmdbId,
+            mediaType,
+            details.imdbId,
+            details.tvdbId,
+            details.title,
+            details.releaseDate ? details.releaseDate.split("-")[0] : undefined,
+            Boolean(isKids),
+            true // fetchDeepArrDetails
+        );
 
         return {
             success: true,
             details,
             availability,
-            recAvailability
+            recAvailability: {}
         };
     } catch (e: any) {
         return { success: false, error: e.message };
