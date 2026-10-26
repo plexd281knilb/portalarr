@@ -128,7 +128,10 @@ Portalarr uses a **Modern Cinematic Dark Theme** powered by Tailwind CSS, Radix 
   - Automatically prewarmed during `prewarmUserSession` on login.
 - **Quick-Access Dashboard Launchpad ("Servers & Libraries")**:
   - Mounted on the user dashboard launchpad grid (`UserLaunchpad`) with blue accent branding (`text-blue-400`, `bg-blue-500/10 border-blue-500/30`) and `Access` badge.
-  - Links directly to `/settings/profile` for 1-click management of Plex/Jellyfin/Emby servers, libraries, and add-ons.
+  - Links directly to `/profile` for 1-click management of Plex/Jellyfin/Emby servers, libraries, and add-ons.
+- **Dashboard Paid Through Header (`PaidThroughHeader`)**:
+  - Positioned at the top of the user dashboard view (`isMember`) and as a compact pill in the System Dashboard title header.
+  - Renders active plan badge (`Annual Plan` / `Monthly Plan` / `Lifetime Pass`), pulsing indicator, exact `Paid Through: [MMMM d, yyyy]`, countdown days remaining, applied account credit, and 1-click direct link to `/profile` for renewal management.
 - **Discrete Invite Banner (`PlexInviteBanner`)**:
   - Positioned unobtrusively below the AI Assistant card rather than commanding top billing.
   - Designed as a sleek, low-profile card (`bg-[#121218]/60 border-border/40`) with inline copy input and collapsible guide.
@@ -205,7 +208,23 @@ See detailed reference: [form-and-input-patterns.md](./references/form-and-input
 
 ---
 
-### 4. Responsive Media Grids
+### 4. User Authentication, Deep Link Redirection & Frictionless Login UX
+- **Safe `returnTo` Deep Linking**:
+  - Whenever an unauthenticated user visits a protected route (e.g. `/requests?tab=books&query=dune`, `/library`, `/tickets`, `/profile`), `src/proxy.ts` preserves the destination path and search query via `?returnTo=${encodeURIComponent(pathname + search)}`.
+  - On both Password and Plex login, sanitize `returnTo` (ensure it starts with `/` and not `//` or `/\\` to prevent open redirects) and navigate directly to the intended destination instead of resetting users back to `/`.
+  - If an already-authenticated user navigates to `/login?returnTo=...`, `proxy` immediately routes them to their intended destination.
+- **Resilient Multi-Alias Account Matching**:
+  - Match user credentials against `username`, `email`, `plexUsername`, and `plexEmail` (case-insensitively and whitespace trimmed).
+  - Users auto-provisioned via Plex who do not remember their unique auto-generated local username/email can seamlessly sign in or reset passwords using their original Plex username or Plex email address.
+  - When resetting passwords for Plex-provisioned accounts, Portalarr dispatches the temporary password to their verified `plexEmail` and heals placeholder `@plex.local` addresses.
+- **Mobile Popup Blocker Fallback & CapsLock Detection**:
+  - If a mobile browser (iOS Safari, Android Chrome) or strict desktop setting blocks the Plex login popup, render an immediate 1-click fallback button (*"Popup blocked? Tap here to authorize on Plex.tv"*) opening the authorization URL in a new tab while continuing background PIN polling.
+  - Provide a 8-second grace period on `popup.closed` detection to prevent premature polling termination when users switch to password managers or 2FA authenticators.
+  - Include an interactive show/hide password toggle (`Eye` / `EyeOff`) and a real-time CapsLock detection badge (*"Caps Lock is ON"*) on all password fields.
+
+---
+
+### 5. Responsive Media Grids
 Use dynamic wrapping columns optimized across all screen breakpoints:
 ```tsx
 className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 3xl:grid-cols-8 gap-3 sm:gap-4 lg:gap-5"
@@ -373,7 +392,7 @@ Portalarr features an automated, real-time versioning, branch identification, an
 - **Zero Generic Branding Leakage in User Communications**:
   - Never allow internal/generic software names (e.g. "Portalarr") to appear in outgoing email subjects, email body text, email header banners, or user-facing UI views. Users must instantly recognize the communications as coming directly from their trusted server host to prevent confusion or spam reports.
   - Email header banner: `DOMS<span style="color: #6366f1;">HOMELAB</span>` with subtitle `d281knilb Media Server & Dashboard`.
-  - Email footer: `DomsHomeLab • d281knilb Media Server • Open Dashboard` and `© {year} DomsHomeLab. All rights reserved.`.
+  - Email footer: `DomsHomeLab • d281knilb Media Server` with high-contrast, theme-resilient `Open Dashboard →` action button (deep indigo `#4f46e5` / `#6366f1` and pure white text for guaranteed WCAG AA legibility across dark and light modes) and `© {year} DomsHomeLab. All rights reserved.`.
 - **Payment Reconciliation Memo Notes**:
   - Payment memo notes are cleanly formatted as the member's username (e.g. `johndoe`), making it simple and frictionless for members to include in transaction notes.
   - Payment scrapers retain backwards-compatible substring matching for plain usernames as well as legacy `#DOMSHOMELAB-`, `#D281KNILB-`, and `#PORTALARR-` tags.
@@ -1319,6 +1338,18 @@ Before completing any task, execute:
   - **Provider-Aware Test Connection (`sendTestEmailAction(emailProviderMode)`)**: When an administrator clicks `Test Connection (Resend)` or `Test Connection (Custom SMTP)`, the action tests the explicitly chosen provider mode rather than whatever was previously saved in the generic SMTP fields. Resend tests route strictly through `smtp.resend.com:465` with `notifications@domshomelab.com`, while Custom SMTP routes through the configured custom host/credentials.
   - Switching between provider tabs never mutates or overwrites the other provider's credentials, preventing API keys and passwords from overwriting each other.
   - Active provider mode synchronizes outbound SMTP parameters while leaving both credential sets permanently preserved.
+
+### 42. Outbound Kindle Sender Update Notice & Ebooks Request Tab Banner (`KindleSenderNoticePopup`, `KindleSenderUpdateBanner`, `KindleSenderUpdateModal`)
+- **Global Auto-Popup (`KindleSenderNoticePopup`)**:
+  - Mounted globally in `src/components/layout-wrapper.tsx` for all authenticated members.
+  - Automatically queries `getKindleSenderUpdateNoticeStatusAction()`. If the user has a configured Send-to-Kindle email (`user.kindleEmail` contains `@` and is not `"DIRECT_DOWNLOAD"`) and has not yet acknowledged the outbound sender change (`user.kindleSenderUpdateAcknowledgedAt === null`), it automatically pops up on site visit until explicitly confirmed.
+  - "Remind Me Later" / backdrop close dismisses the notice temporarily for that browser session (`sessionStorage`), but reprompts on future visits until confirmed.
+  - Confirming writes `user.kindleSenderUpdateAcknowledgedAt = new Date()` via `acknowledgeKindleSenderUpdateAction()`, permanently dismissing it.
+- **Ebooks Request Tab Banner (`KindleSenderUpdateBanner`)**:
+  - Rendered prominently on the Ebooks request tab in Media Requests (`src/components/seerr/discover-hub.tsx` when `activeTab === "ebooks"`) and in Request Manager (`src/components/seerr/request-manager.tsx` when `mediaTypeFilter === "book"`).
+  - Features action-required badge, copy email button, and 1-click confirmation button.
+- **Clickable Amazon Settings Link**:
+  - Displays `https://www.amazon.com/hz/mycd/myx#/home/settings/payment` as an active, clickable link (`target="_blank" rel="noopener noreferrer"`) in both the modal description, step-by-step instructions, and tab banner.
 
 ---
 

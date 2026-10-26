@@ -117,7 +117,7 @@ export function UserLaunchpad({ isSuperUser = false }: UserLaunchpadProps) {
                 </Link>
 
                 {/* Servers, Libraries & Add-ons */}
-                <Link href="/settings/profile" className="block group h-full">
+                <Link href="/profile" className="block group h-full">
                     <div className="h-full flex flex-col justify-between p-3 sm:p-3.5 rounded-xl border bg-blue-500/10 border-blue-500/30 text-blue-400 hover:border-blue-500/60 hover:bg-blue-500/15 transition-all duration-200 active:scale-98 shadow-sm hover:shadow-md">
                         <div className="flex items-center justify-between gap-1.5 mb-2">
                             <div className="p-2 rounded-lg bg-background/50 border border-border/40 shadow-xs">

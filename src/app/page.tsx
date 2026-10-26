@@ -33,6 +33,8 @@ import TrialDashboardView from "@/components/trial-dashboard-view";
 import SuperUserCard from "@/components/super-user-card";
 import SupportTicketModal from "@/components/support-ticket-modal";
 import { UserLaunchpad } from "@/components/dashboard/user-launchpad";
+import { PaidThroughHeader } from "@/components/dashboard/paid-through-header";
+import { format } from "date-fns";
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -43,7 +45,7 @@ import { cookies } from "next/headers";
 import { 
     ExternalLink, AlertTriangle, BookOpen, Sparkles, Compass, 
     Tv, Film, Zap, ArrowRight, Shield, Download, LifeBuoy, Settings, Wrench,
-    Activity, Layers
+    Activity, Layers, CreditCard
 } from "lucide-react"; 
 
 export const dynamic = "force-dynamic";
@@ -161,6 +163,14 @@ export default async function UserLandingPage() {
                                     Full Member
                                 </Badge>
                             )}
+                            {isMember && (
+                                <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-xs font-semibold gap-1.5 hidden sm:inline-flex shadow-xs">
+                                    <CreditCard className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                                    <span>
+                                        Paid Through: <strong className="text-foreground font-extrabold">{user?.subscriptionEndsAt && !isNaN(new Date(user.subscriptionEndsAt).getTime()) ? format(new Date(user.subscriptionEndsAt), "MMM d, yyyy") : "Lifetime"}</strong>
+                                    </span>
+                                </Badge>
+                            )}
                         </div>
                         <p className="text-muted-foreground text-xs sm:text-sm">
                             {isTrial 
@@ -217,6 +227,9 @@ export default async function UserLandingPage() {
                 {/* ========================================================================= */}
                 {isMember ? (
                     <div className="space-y-6">
+                        {/* 0. DEDICATED MEMBERSHIP & PAID THROUGH STATUS HEADER */}
+                        <PaidThroughHeader user={user} referralInfo={referralInfo} />
+
                         {/* 1. MODERN BUTTON-LED DASHBOARD LAUNCHPAD */}
                         <UserLaunchpad isSuperUser={isSuperUser} />
 

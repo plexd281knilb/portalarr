@@ -259,6 +259,64 @@ async function runTestSuite() {
             if (dupRes.success) {
                 throw new Error("Expected updateAppUserEmail to fail on duplicate email collision!");
             }
+
+            // Seamless Multi-Alias User Login & Identity Matching Test
+            const { hash } = await import("bcryptjs");
+            const { login, requestForgotPassword } = await import("../src/app/auth-actions");
+            const testPassword = "SeamlessPassword123!";
+            const hashedPassword = await hash(testPassword, 10);
+
+            const aliasUser = await prisma.user.create({
+                data: {
+                    username: `plex_local_${testId}`,
+                    email: `plex_local_${testId}@plex.local`,
+                    plexUsername: `PlexMaster_${testId}`,
+                    plexEmail: `plex_real_${testId}@gmail.com`,
+                    password: hashedPassword,
+                    role: "USER",
+                    status: "APPROVED"
+                }
+            });
+
+            try {
+                // Test login by Plex username (with mixed case and whitespace)
+                const formDataPlexUser = new FormData();
+                formDataPlexUser.append("username", `  plexmaster_${testId}  `);
+                formDataPlexUser.append("password", testPassword);
+                const loginByPlexUserRes = await login(formDataPlexUser);
+                if (!loginByPlexUserRes.success) {
+                    throw new Error(`Failed to login using Plex Username alias: ${JSON.stringify(loginByPlexUserRes)}`);
+                }
+
+                // Test login by Plex email (with mixed case and whitespace)
+                const formDataPlexEmail = new FormData();
+                formDataPlexEmail.append("username", `  PLEX_REAL_${testId}@GMAIL.COM  `);
+                formDataPlexEmail.append("password", testPassword);
+                const loginByPlexEmailRes = await login(formDataPlexEmail);
+                if (!loginByPlexEmailRes.success) {
+                    throw new Error(`Failed to login using Plex Email alias: ${JSON.stringify(loginByPlexEmailRes)}`);
+                }
+
+                // Test forgot password resolving real email instead of discarding @plex.local
+                const forgotFormData = new FormData();
+                forgotFormData.append("emailOrUsername", `plexmaster_${testId}`);
+                const forgotRes = await requestForgotPassword(forgotFormData);
+                if (!forgotRes.success && !forgotRes.error?.includes("SMTP")) {
+                    throw new Error(`Forgot password failed: ${JSON.stringify(forgotRes)}`);
+                }
+
+                // Test proxy preservation of returnTo deep links
+                const { proxy } = await import("../src/proxy");
+                const { NextRequest } = await import("next/server");
+                const unauthReq = new NextRequest(new Request("http://localhost:3000/requests?tab=books&query=dune"));
+                const proxyRedirectRes = await proxy(unauthReq);
+                const redirectLocation = proxyRedirectRes.headers.get("location");
+                if (!redirectLocation || !redirectLocation.includes("returnTo=%2Frequests%3Ftab%3Dbooks%26query%3Ddune")) {
+                    throw new Error(`Proxy failed to preserve returnTo parameter: ${redirectLocation}`);
+                }
+            } finally {
+                await prisma.user.delete({ where: { id: aliasUser.id } }).catch(() => {});
+            }
         } finally {
             delete process.env.PORTALARR_TEST_USER_ID;
             await prisma.user.deleteMany({ where: { id: { in: [adminUser.id, kidUser.id] } } });
@@ -530,12 +588,49 @@ async function runTestSuite() {
             throw new Error("media_request_admin failed to render book metadata");
         }
 
+        // Test newly registered book_file_delivery template
+        const renderedBookDelivery = await renderEmailTemplate("book_file_delivery", {
+            username: "test_member",
+            title: "Project Hail Mary",
+            author: "Andy Weir",
+            format: "EPUB",
+            itemTypeLabel: "Ebook",
+            appUrl: "http://localhost:3000"
+        });
+        if (!renderedBookDelivery.subject.includes("Project Hail Mary") || !renderedBookDelivery.html.includes("Andy Weir") || !renderedBookDelivery.html.includes("EPUB")) {
+            throw new Error("book_file_delivery template rendering verification failed");
+        }
+
+        // Test admin_approval template
+        const renderedApproval = await renderEmailTemplate("admin_approval", {
+            adminName: "LeadAdmin",
+            actionTitle: "Clean Library Cache",
+            actionType: "SYSTEM_MAINTENANCE",
+            targetDisplay: "Main Media Server",
+            details: "Purging stale transcoding segments",
+            approvalsUrl: "http://localhost:3000/settings/access?tab=approvals",
+            appUrl: "http://localhost:3000"
+        });
+        if (!renderedApproval.subject.includes("Clean Library Cache") || !renderedApproval.html.includes("LeadAdmin") || !renderedApproval.html.includes("Main Media Server")) {
+            throw new Error("admin_approval template rendering verification failed");
+        }
+
+        const { DEFAULT_EMAIL_TEMPLATES } = await import("../src/lib/email-templates");
+        if (DEFAULT_EMAIL_TEMPLATES.length < 33) {
+            throw new Error(`Expected at least 33 registered email templates, found: ${DEFAULT_EMAIL_TEMPLATES.length}`);
+        }
+
         // Category-specific email sender routing verification
         const { resolveSenderAddress, getTemplateSenderCategory } = await import("../src/lib/email-templates");
         
         const kindleSender = resolveSenderAddress("kindle_delivery", "notifications@domshomelab.com");
         if (kindleSender.email !== "kindle@domshomelab.com" || kindleSender.displayName !== "DomsHomeLab Kindle") {
             throw new Error(`Expected kindle_delivery sender to be kindle@domshomelab.com, got: ${kindleSender.formatted}`);
+        }
+
+        const bookSender = resolveSenderAddress("book_file_delivery", "notifications@domshomelab.com");
+        if (bookSender.email !== "kindle@domshomelab.com" || bookSender.displayName !== "DomsHomeLab Kindle") {
+            throw new Error(`Expected book_file_delivery sender to be kindle@domshomelab.com, got: ${bookSender.formatted}`);
         }
 
         const billingSender = resolveSenderAddress("payment_received", "notifications@domshomelab.com");
@@ -1887,7 +1982,7 @@ async function runTestSuite() {
         // 5. Verify User Launchpad has Servers & Libraries card pointing to /settings/profile
         const launchpadPath = path.join(process.cwd(), "src", "components", "dashboard", "user-launchpad.tsx");
         const launchpadContent = fs.readFileSync(launchpadPath, "utf-8");
-        if (!launchpadContent.includes("/settings/profile")) {
+        if (!launchpadContent.includes("/profile") && !launchpadContent.includes("/settings/profile")) {
             throw new Error("UserLaunchpad missing link to /settings/profile");
         }
         if (!launchpadContent.includes("Servers &amp; Libraries") && !launchpadContent.includes("Servers & Libraries")) {
@@ -1907,6 +2002,81 @@ async function runTestSuite() {
         }
         if (bannerIdx < launchpadIdx) {
             throw new Error("PlexInviteBanner should be positioned below UserLaunchpad for a discrete layout");
+        }
+
+        // 7. Verify PaidThroughHeader mount in page.tsx for members
+        if (!pageContent.includes("<PaidThroughHeader") || !pageContent.includes("Paid Through:")) {
+            throw new Error("src/app/page.tsx missing PaidThroughHeader or Paid Through indicator");
+        }
+
+        // 8. Verify Kindle Outbound Sender Update Notice Popup in layout-wrapper.tsx
+        const layoutPath = path.join(process.cwd(), "src", "components", "layout-wrapper.tsx");
+        const layoutContent = fs.readFileSync(layoutPath, "utf-8");
+        if (!layoutContent.includes("<KindleSenderNoticePopup") || !layoutContent.includes("KindleSenderNoticePopup")) {
+            throw new Error("layout-wrapper.tsx missing KindleSenderNoticePopup mount");
+        }
+
+        const modalPath = path.join(process.cwd(), "src", "components", "kindle-sender-update-modal.tsx");
+        const modalContent = fs.readFileSync(modalPath, "utf-8");
+        if (!modalContent.includes("⚡ Outbound Sender Updated to") || !modalContent.includes("Approved Personal Document E-mail List")) {
+            throw new Error("kindle-sender-update-modal.tsx missing required title or Amazon approved list instructions");
+        }
+        if (!modalContent.includes("https://www.amazon.com/hz/mycd/myx#/home/settings/payment")) {
+            throw new Error("kindle-sender-update-modal.tsx missing clickable link to Amazon settings");
+        }
+
+        // Verify KindleSenderUpdateBanner in Media Requests (Ebooks tab & RequestManager)
+        const bannerPath = path.join(process.cwd(), "src", "components", "kindle-sender-update-banner.tsx");
+        const bannerContent = fs.readFileSync(bannerPath, "utf-8");
+        if (!bannerContent.includes("https://www.amazon.com/hz/mycd/myx#/home/settings/payment") || !bannerContent.includes("⚡ Outbound Sender Updated to")) {
+            throw new Error("kindle-sender-update-banner.tsx missing clickable Amazon link or title");
+        }
+
+        const discoverHubPath = path.join(process.cwd(), "src", "components", "seerr", "discover-hub.tsx");
+        const discoverHubContent = fs.readFileSync(discoverHubPath, "utf-8");
+        if (!discoverHubContent.includes("<KindleSenderUpdateBanner") || !discoverHubContent.includes('activeTab === "ebooks"')) {
+            throw new Error("discover-hub.tsx missing KindleSenderUpdateBanner on ebooks request tab");
+        }
+
+        const reqMgrPath = path.join(process.cwd(), "src", "components", "seerr", "request-manager.tsx");
+        const reqMgrContent = fs.readFileSync(reqMgrPath, "utf-8");
+        if (!reqMgrContent.includes("<KindleSenderUpdateBanner") || !reqMgrContent.includes('mediaTypeFilter === "book"')) {
+            throw new Error("request-manager.tsx missing KindleSenderUpdateBanner on ebooks filter");
+        }
+
+        // Test DB update acknowledgment action
+        const { getKindleSenderUpdateNoticeStatusAction, acknowledgeKindleSenderUpdateAction } = await import("../src/app/actions");
+        const testUser = await prisma.user.findFirst({ where: { role: "ADMIN" } }) || await prisma.user.findFirst();
+        if (testUser) {
+            const originalKindle = testUser.kindleEmail;
+            const originalAck = testUser.kindleSenderUpdateAcknowledgedAt;
+            try {
+                // Set kindle email to test address and ack to null
+                await prisma.user.update({
+                    where: { id: testUser.id },
+                    data: { kindleEmail: "test_reader@kindle.com", kindleSenderUpdateAcknowledgedAt: null }
+                });
+                const statusBefore = await getKindleSenderUpdateNoticeStatusAction();
+                if (!statusBefore.needsNotice || statusBefore.kindleEmail !== "test_reader@kindle.com") {
+                    throw new Error(`Expected needsNotice=true for user with Kindle email, got ${statusBefore.needsNotice}`);
+                }
+
+                // Acknowledge the update
+                const ackRes = await acknowledgeKindleSenderUpdateAction();
+                if (!ackRes.success) {
+                    throw new Error(`Expected acknowledgeKindleSenderUpdateAction to succeed, got: ${ackRes.error}`);
+                }
+
+                const statusAfter = await getKindleSenderUpdateNoticeStatusAction();
+                if (statusAfter.needsNotice) {
+                    throw new Error("Expected needsNotice=false after acknowledging Kindle sender update");
+                }
+            } finally {
+                await prisma.user.update({
+                    where: { id: testUser.id },
+                    data: { kindleEmail: originalKindle, kindleSenderUpdateAcknowledgedAt: originalAck }
+                });
+            }
         }
     });
 
@@ -2005,6 +2175,63 @@ async function runTestSuite() {
             }
             if (!accessPageContent.includes("SentEmailAuditLog")) {
                 throw new Error("Access Control page.tsx missing SentEmailAuditLog component mount");
+            }
+
+            // 6. Verify Email Template text hygiene & dark/light mode Open Dashboard button
+            const { DEFAULT_EMAIL_TEMPLATES, wrapInPortalarrEmailLayout } = await import("../src/lib/email-templates");
+            for (const t of DEFAULT_EMAIL_TEMPLATES) {
+                if (t.defaultBody.includes("Cash App") || t.description.includes("Cash App")) {
+                    throw new Error(`Email template ${t.id} contains disallowed Cash App reference`);
+                }
+            }
+            const testEmailHtml = wrapInPortalarrEmailLayout({
+                title: "Test Layout",
+                contentHtml: "<p>Test Content</p>",
+                appUrl: "https://home.domshomelab.com"
+            });
+            if (!testEmailHtml.includes("open-dashboard-btn") || !testEmailHtml.includes("Open Dashboard")) {
+                throw new Error("wrapInPortalarrEmailLayout missing high-contrast Open Dashboard button");
+            }
+            if (!testEmailHtml.includes("color-scheme: light dark")) {
+                throw new Error("wrapInPortalarrEmailLayout missing light/dark color-scheme meta/styles");
+            }
+            const launchTpl = DEFAULT_EMAIL_TEMPLATES.find(t => t.id === "new_site_launch");
+            if (!launchTpl || !launchTpl.defaultBody.includes("Suggest Fix") || !launchTpl.defaultBody.includes("Monthly") || !launchTpl.defaultBody.includes("Yearly")) {
+                throw new Error("new_site_launch missing Suggest Fix or Monthly/Yearly billing options");
+            }
+            if (launchTpl.defaultBody.includes("#billing")) {
+                throw new Error("new_site_launch should not contain '#billing' fragment in paths");
+            }
+            if (!launchTpl.defaultBody.includes("{appUrl}/profile") || launchTpl.defaultBody.includes("settings/profile")) {
+                throw new Error("new_site_launch must use clean /profile route instead of /settings/profile");
+            }
+
+            // 7. Comprehensive audit: verify ALL user-facing email templates NEVER reference admin-isolated paths
+            const adminPrefixes = ["/settings", "/admin", "/curation", "/tautulli", "/streams"];
+            for (const tpl of DEFAULT_EMAIL_TEMPLATES) {
+                const isAdmin = tpl.category.includes("ADMIN") || 
+                                tpl.id.startsWith("admin_") || 
+                                tpl.name.includes("(Admins)") ||
+                                tpl.description.toLowerCase().includes("sent to administrators") ||
+                                tpl.id === "test_email";
+                if (!isAdmin) {
+                    const hrefs = [...tpl.defaultBody.matchAll(/href=["']([^"']+)["']/g)].map(m => m[1]);
+                    for (const h of hrefs) {
+                        for (const adminPre of adminPrefixes) {
+                            if (h.includes(adminPre) || h.includes(`{appUrl}${adminPre}`)) {
+                                throw new Error(`User-facing email template [${tpl.id}] contains admin-isolated path in href: "${h}"`);
+                            }
+                        }
+                    }
+                    const varUrls = (tpl.variables || []).filter(v => v.sampleValue && (v.sampleValue.startsWith("http") || v.sampleValue.startsWith("/")));
+                    for (const v of varUrls) {
+                        for (const adminPre of adminPrefixes) {
+                            if (v.sampleValue.includes(`example.com${adminPre}`) || v.sampleValue.startsWith(adminPre)) {
+                                throw new Error(`User-facing template [${tpl.id}] variable "${v.key}" sampleValue points to admin path: "${v.sampleValue}"`);
+                            }
+                        }
+                    }
+                }
             }
         } finally {
             await prisma.sentEmailLog.deleteMany({

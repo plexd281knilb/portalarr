@@ -43,7 +43,7 @@ export function getTemplateSenderCategory(templateId?: string): SenderCategory {
     const id = templateId.toLowerCase().trim();
 
     // Kindle Ebooks
-    if (id.startsWith("kindle_") || id === "kindle") {
+    if (id.startsWith("kindle_") || id.startsWith("book_") || id === "kindle") {
         return "kindle";
     }
 
@@ -409,6 +409,37 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         ]
     },
     {
+        id: "book_file_delivery",
+        name: "Direct Ebook / Audiobook File Delivery",
+        description: "Sent to members with requested book or audiobook files attached directly to their email for offline reading/listening.",
+        triggerEvent: "Triggered when a member or administrator requests a book file delivery to their personal email via the Book Management or Library view.",
+        category: "KINDLE",
+        senderCategory: "kindle",
+        defaultSubject: "📦 {portalName} Book Delivery: {title}",
+        defaultBody: `<h2>{itemTypeLabel} File Delivery 📦</h2>
+<p>Hi <strong>{username}</strong>,</p>
+<p>Here is your requested {itemTypeLabel} file for <strong>{title}</strong> by <em>{author}</em>.</p>
+
+<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 20px 0;">
+    <p style="margin: 0; font-size: 14px; color: #334155;"><strong>Title:</strong> {title}</p>
+    <p style="margin: 6px 0 0 0; font-size: 14px; color: #334155;"><strong>Author:</strong> {author}</p>
+    <p style="margin: 6px 0 0 0; font-size: 14px; color: #334155;"><strong>Format:</strong> {format}</p>
+</div>
+
+<p style="font-size: 13px; color: #64748b; line-height: 1.5;">
+    The media file is attached directly to this email so you can save or transfer it to your reading or audio player device.
+</p>`,
+        variables: [
+            { key: "{username}", description: "Recipient username", sampleValue: "alex_reader" },
+            { key: "{title}", description: "Title of the book or audiobook", sampleValue: "Project Hail Mary" },
+            { key: "{author}", description: "Author of the book", sampleValue: "Andy Weir" },
+            { key: "{format}", description: "File format (e.g. EPUB, MOBI, PDF, M4B)", sampleValue: "EPUB" },
+            { key: "{itemTypeLabel}", description: "Media type label (Ebook or Audiobook)", sampleValue: "Ebook" },
+            { key: "{portalName}", description: "Portal brand name", sampleValue: "DomsHomeLab" },
+            { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
+        ]
+    },
+    {
         id: "media_request_admin",
         name: "New Media Request Alert (Admins)",
         description: "Sent to administrators whenever a user submits a new book or audiobook request.",
@@ -508,6 +539,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{pageUrl}", description: "Page or route where error occurred", sampleValue: "/library?tab=audiobooks" },
             { key: "{errorTitle}", description: "Short error title", sampleValue: "Audio Stream Range Error" },
             { key: "{errorMessage}", description: "Full technical error stack trace or description", sampleValue: "ESTREAM: audio file lock failed" },
+            { key: "{userNoteBlock}", description: "Optional extra user notes block", sampleValue: "" },
             { key: "{ticketsUrl}", description: "Link to Admin Tickets panel", sampleValue: "https://portal.example.com/admin/tickets" },
             { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
         ]
@@ -702,7 +734,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{email}", description: "Email address of user", sampleValue: "jordan@example.com" },
             { key: "{daysRemaining}", description: "Number of days remaining in trial", sampleValue: "3" },
             { key: "{expirationDate}", description: "Date when trial expires", sampleValue: "October 15, 2026" },
-            { key: "{renewUrl}", description: "URL to renewal or profile page", sampleValue: "https://portal.example.com/profile#billing" },
+            { key: "{renewUrl}", description: "URL to renewal or profile page", sampleValue: "https://portal.example.com/profile" },
             { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
         ]
     },
@@ -727,7 +759,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{username}", description: "Username of user", sampleValue: "jordan_reader" },
             { key: "{email}", description: "Email address of user", sampleValue: "jordan@example.com" },
             { key: "{expirationDate}", description: "Date when trial concluded", sampleValue: "October 15, 2026" },
-            { key: "{renewUrl}", description: "URL to renewal page", sampleValue: "https://portal.example.com/profile#billing" },
+            { key: "{renewUrl}", description: "URL to renewal page", sampleValue: "https://portal.example.com/profile" },
             { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
         ]
     },
@@ -778,8 +810,8 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
     {
         id: "payment_received",
         name: "Payment Receipt & Membership Confirmation",
-        description: "Sent to the user anytime a payment is received and processed (via Venmo, PayPal, Cash App, Zelle, or manual attribution), confirming the amount paid, new expiration date, and active membership perks.",
-        triggerEvent: "Triggered automatically whenever an incoming payment (Venmo, PayPal, Cash App, Zelle) is matched and fulfilled by the automated IMAP email scraper or manually attributed by an administrator.",
+        description: "Sent to the user anytime a payment is received and processed (via Venmo, PayPal, Zelle, or manual attribution), confirming the amount paid, new expiration date, and active membership perks.",
+        triggerEvent: "Triggered automatically whenever an incoming payment (Venmo, PayPal, Zelle) is matched and fulfilled by the automated IMAP email scraper or manually attributed by an administrator.",
         category: "PAYMENTS",
         defaultSubject: "💳 Payment Received & Membership Confirmed ({amount})",
         defaultBody: `<h2>Payment Received! 💳</h2>
@@ -832,7 +864,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{username}", description: "Username of the payer", sampleValue: "jordan_reader" },
             { key: "{email}", description: "Email address of user", sampleValue: "jordan@example.com" },
             { key: "{amount}", description: "Payment amount received (e.g. 15.00 or 40.16)", sampleValue: "40.16" },
-            { key: "{provider}", description: "Payment provider (Venmo, PayPal, Cash App, Zelle)", sampleValue: "Venmo" },
+            { key: "{provider}", description: "Payment provider (Venmo, PayPal, Zelle)", sampleValue: "Venmo" },
             { key: "{paymentDate}", description: "Date payment was received", sampleValue: "October 10, 2026" },
             { key: "{periodGranted}", description: "Subscription period granted", sampleValue: "Rest of Year (through Dec 31, 2026)" },
             { key: "{validUntil}", description: "New membership expiration date", sampleValue: "December 31, 2026" },
@@ -895,7 +927,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{username}", description: "Username of the member", sampleValue: "alex_reader" },
             { key: "{amountPaid}", description: "Amount received in the latest transaction", sampleValue: "$15.00" },
             { key: "{accountCredit}", description: "Total available credit on the account", sampleValue: "$15.00" },
-            { key: "{provider}", description: "Payment provider (Venmo, PayPal, Cash App, Zelle)", sampleValue: "Venmo" },
+            { key: "{provider}", description: "Payment provider (Venmo, PayPal, Zelle)", sampleValue: "Venmo" },
             { key: "{paymentDate}", description: "Date payment was received", sampleValue: "October 9, 2026" },
             { key: "{planType}", description: "Target subscription plan (Monthly Plan or Annual Plan)", sampleValue: "Monthly Plan" },
             { key: "{targetPrice}", description: "Target plan price", sampleValue: "$17.50" },
@@ -908,8 +940,8 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
     {
         id: "admin_payment_received",
         name: "New Payment Alert (Admins)",
-        description: "Sent to administrators whenever an incoming payment is detected and recorded from Venmo, PayPal, Cash App, or Zelle.",
-        triggerEvent: "Triggered whenever an incoming payment is detected and recorded from Venmo, PayPal, Cash App, or Zelle, alerting administrators of received funds and whether it was auto-matched or requires manual review.",
+        description: "Sent to administrators whenever an incoming payment is detected and recorded from Venmo, PayPal, or Zelle.",
+        triggerEvent: "Triggered whenever an incoming payment is detected and recorded from Venmo, PayPal, or Zelle, alerting administrators of received funds and whether it was auto-matched or requires manual review.",
         category: "PAYMENTS",
         defaultSubject: "💰 Payment Received: {amount} via {provider} ({matchedUser})",
         defaultBody: `<h2>Incoming Payment Received 💰</h2>
@@ -1196,6 +1228,57 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         ]
     },
     {
+        id: "admin_approval",
+        name: "Action Requires Administrator Approval",
+        description: "Sent to administrators when an action is staged in the Action Approval Queue requiring manual review before affecting live servers or users.",
+        triggerEvent: "Triggered immediately when a system change, library deletion, user access change, or high-impact task is staged for administrator approval.",
+        category: "AUTH",
+        senderCategory: "accounts",
+        defaultSubject: "⚖️ [Approval Required] {actionTitle}",
+        defaultBody: `<h2>Action Requires Administrator Approval ⚖️</h2>
+<p>Hi <strong>{adminName}</strong>,</p>
+<p>An action has been staged in the <strong>Action Approval Queue</strong> on {portalName} and requires your explicit review before affecting live servers or users:</p>
+
+<div style="background-color: #fffbeb; border: 1px solid #fef3c7; border-left: 4px solid #f59e0b; padding: 16px; border-radius: 6px; margin: 20px 0;">
+    <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; width: 130px; color: #92400e;">Action Title:</td>
+            <td style="padding: 6px 0; font-weight: 700; color: #0f172a;">{actionTitle}</td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; color: #92400e;">Type:</td>
+            <td style="padding: 6px 0; color: #0f172a;">{actionType}</td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; color: #92400e;">Target:</td>
+            <td style="padding: 6px 0; color: #0f172a;"><code>{targetDisplay}</code></td>
+        </tr>
+        <tr>
+            <td style="padding: 6px 0; font-weight: bold; color: #92400e;">Details:</td>
+            <td style="padding: 6px 0; color: #334155;">{details}</td>
+        </tr>
+    </table>
+</div>
+
+<div style="text-align: center; margin: 28px 0;">
+    <a href="{approvalsUrl}" style="background-color: #0284c7; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">Open Approval Queue &amp; Review</a>
+</div>
+
+<p style="font-size: 12px; color: #94a3b8; line-height: 1.4;">
+    You are receiving this automated alert because Action Approval Notifications are enabled in Governance Settings.
+</p>`,
+        variables: [
+            { key: "{adminName}", description: "Administrator username", sampleValue: "Admin" },
+            { key: "{actionTitle}", description: "Title of the staged action", sampleValue: "Delete TV Library from Server" },
+            { key: "{actionType}", description: "Category/Type of the staged action", sampleValue: "DESTRUCTIVE_TASK" },
+            { key: "{targetDisplay}", description: "Target entity or server", sampleValue: "Plex Server #1" },
+            { key: "{details}", description: "Parameters or details of the action", sampleValue: "Requested by operator via system maintenance console" },
+            { key: "{approvalsUrl}", description: "Direct link to the Action Approval Queue", sampleValue: "https://portal.example.com/settings/access?tab=approvals" },
+            { key: "{portalName}", description: "Portal brand name", sampleValue: "DomsHomeLab" },
+            { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
+        ]
+    },
+    {
         id: "referral_reward_credited",
         name: "Referral Reward Credited (+1 Free Month)",
         description: "Sent to a member when an invited friend joins or is credited by an admin, confirming their +1 free month credit towards membership renewal.",
@@ -1292,7 +1375,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 </p>
 
 <p style="font-size: 13px; color: #475569; line-height: 1.5; margin-top: 16px;">
-    To renew your membership, send your payment via <strong>Venmo</strong>, <strong>Cash App</strong>, <strong>PayPal</strong>, or <strong>Zelle</strong> with your username <code>{paymentMemo}</code> in the payment note/memo.
+    To renew your membership, send your payment via <strong>Venmo</strong>, <strong>PayPal</strong>, or <strong>Zelle</strong> with your username <code>{paymentMemo}</code> in the payment note/memo.
 </p>
 
 <div style="text-align: center; margin: 28px 0;">
@@ -1309,7 +1392,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{monthlyAlternativeText}", description: "Delayed monthly payment terms", sampleValue: "$17.50/month starting February 1, 2027" },
             { key: "{referralNoticeDetails}", description: "Detailed referral credit explanation", sampleValue: "You earned 1 free month for referring @alex_cinephile! Your next annual payment is discounted by $15.00 ($165.00 total)." },
             { key: "{paymentMemo}", description: "Clean payment memo tag (member username)", sampleValue: "jordan_reader" },
-            { key: "{billingUrl}", description: "Link to user profile billing section", sampleValue: "https://portal.example.com/profile#billing" },
+            { key: "{billingUrl}", description: "Link to user profile billing section", sampleValue: "https://portal.example.com/profile" },
             { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
         ]
     },
@@ -1346,7 +1429,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 </div>
 
 <p style="font-size: 13px; color: #475569; line-height: 1.5;">
-    To maintain uninterrupted access to your Plex libraries and media downloads, please submit your payment via <strong>Venmo</strong>, <strong>Cash App</strong>, <strong>PayPal</strong>, or <strong>Zelle</strong> with your username <code>{paymentMemo}</code> in the payment note/memo.
+    To maintain uninterrupted access to your Plex libraries and media downloads, please submit your payment via <strong>Venmo</strong>, <strong>PayPal</strong>, or <strong>Zelle</strong> with your username <code>{paymentMemo}</code> in the payment note/memo.
 </p>
 
 <div style="text-align: center; margin: 28px 0;">
@@ -1360,7 +1443,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{basePrice}", description: "Standard monthly price", sampleValue: "$17.50 / month" },
             { key: "{amountDue}", description: "Net amount due", sampleValue: "$17.50" },
             { key: "{paymentMemo}", description: "Clean payment memo tag (member username)", sampleValue: "jordan_reader" },
-            { key: "{billingUrl}", description: "Link to user profile billing section", sampleValue: "https://portal.example.com/profile#billing" },
+            { key: "{billingUrl}", description: "Link to user profile billing section", sampleValue: "https://portal.example.com/profile" },
             { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
         ]
     },
@@ -1401,7 +1484,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 </p>
 
 <div style="text-align: center; margin: 28px 0;">
-    <a href="{appUrl}/profile#billing" style="background-color: #16a34a; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">View Payment Details & Memo</a>
+    <a href="{appUrl}/profile" style="background-color: #16a34a; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">View Payment Details & Memo</a>
 </div>
 <p style="font-size: 13px; color: #64748b;">Thank you for being a valued member of DomsHomeLab!</p>`,
         variables: [
@@ -1466,22 +1549,27 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 </div>
 
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px;">
-    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">⚙️ 5. Server &amp; Library Customization &amp; Streaming Preferences (<a href="{appUrl}/settings/profile" style="color: #4f46e5; text-decoration: none;">/settings/profile</a>)</p>
+    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">⚙️ 5. Server &amp; Library Customization &amp; Streaming Preferences (<a href="{appUrl}/profile" style="color: #4f46e5; text-decoration: none;">/profile</a>)</p>
     <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">Select which admin-whitelisted media servers and libraries you want active on your account (Plex, Jellyfin, and Emby), and customize your default streaming preferences, remote quality caps, and preferred audio and subtitle languages to match your home setup.</p>
 </div>
 
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px;">
-    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">💳 6. Membership Status &amp; Billing Details (<a href="{appUrl}/settings/profile" style="color: #4f46e5; text-decoration: none;">/settings/profile</a>)</p>
-    <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">Check your membership tier, active pass, renewal date, and preferred payment methods (Venmo, PayPal, Cash App, Zelle) anytime in your profile.</p>
+    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">💳 6. Flexible Billing Options &amp; Membership Status (<a href="{appUrl}/profile" style="color: #4f46e5; text-decoration: none;">/profile</a>)</p>
+    <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">We now offer both <strong>Monthly</strong> and <strong>Yearly</strong> billing options to best fit your viewing schedule! Visit your <a href="{appUrl}/profile" style="color: #4f46e5; font-weight: 600; text-decoration: underline;">Account Profile</a> to view the plan comparison, check your current membership tier, review your renewal date, and see accepted direct payment methods (Venmo, PayPal, Zelle).</p>
+</div>
+
+<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px;">
+    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">🛠️ 7. Instant "Suggest Fix" Feedback (Any Page)</p>
+    <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">Notice something acting up or have an idea to make the site better? Look for the floating <strong>"Suggest Fix"</strong> button in the bottom-right corner of any page. With 1 click, you can quickly report a bug, visual glitch, slow playback, or feature idea directly to the admin so any site issues can be addressed immediately.</p>
 </div>
 
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 20px;">
-    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">💬 7. Support Tickets &amp; Discord Integration (<a href="{appUrl}/tickets" style="color: #4f46e5; text-decoration: none;">/tickets</a>)</p>
-    <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">Link your Discord account in your profile for instant request notifications and community roles, or open a support ticket anytime at <a href="{appUrl}/tickets" style="color: #4f46e5; text-decoration: none;">{appUrl}/tickets</a> if you ever need a hand.</p>
+    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">💬 8. Support Tickets &amp; Discord Integration (<a href="{appUrl}/tickets" style="color: #4f46e5; text-decoration: none;">/tickets</a>)</p>
+    <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">Link your Discord account in your <a href="{appUrl}/profile" style="color: #4f46e5; font-weight: 600; text-decoration: underline;">profile</a> for instant request notifications and community roles, or open a support ticket anytime at <a href="{appUrl}/tickets" style="color: #4f46e5; text-decoration: none;">{appUrl}/tickets</a> if you ever need a hand.</p>
 </div>
 
 <div style="text-align: center; margin: 28px 0 18px 0;">
-    <a href="{loginUrl}" style="background-color: #4f46e5; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 800; font-size: 15px; display: inline-block; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);">Launch DomsHomeLab Portal &rarr;</a>
+    <a href="{appUrl}" style="background-color: #4f46e5; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 800; font-size: 15px; display: inline-block; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);">Launch DomsHomeLab Portal &rarr;</a>
 </div>
 
 <p style="font-size: 13px; color: #64748b; text-align: center; margin-top: 16px;">Bookmark <strong><a href="{appUrl}" style="color: #4f46e5; text-decoration: none;">{appUrl}</a></strong> on your phone and computer for quick access. Happy streaming &amp; reading!</p>`,
@@ -1523,10 +1611,17 @@ export function wrapInPortalarrEmailLayout(options: {
     title: string;
     contentHtml: string;
     appUrl?: string;
+    portalName?: string;
+    serverName?: string;
     actionButton?: { text: string; url: string; color?: string };
 }): string {
     const appUrl = options.appUrl || "https://home.domshomelab.com";
+    const portalName = options.portalName || "DomsHomeLab";
+    const serverName = options.serverName || "d281knilb";
     const currentYear = new Date().getFullYear();
+    const portalHeader = portalName.toLowerCase() === "domshomelab"
+        ? `DOMS<span style="color: #6366f1;">HOMELAB</span>`
+        : portalName.toUpperCase();
 
     return `
 <!DOCTYPE html>
@@ -1534,7 +1629,29 @@ export function wrapInPortalarrEmailLayout(options: {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light dark">
+    <meta name="supported-color-schemes" content="light dark">
     <title>${options.title}</title>
+    <style>
+        :root {
+            color-scheme: light dark;
+            supported-color-schemes: light dark;
+        }
+        @media (prefers-color-scheme: dark) {
+            body { background-color: #0b0c10 !important; }
+            .email-card { background-color: #13141f !important; border-color: #27273a !important; color: #e2e8f0 !important; }
+            .email-footer-text { color: #94a3b8 !important; }
+            .email-footer-copyright { color: #64748b !important; }
+            .open-dashboard-btn { background-color: #6366f1 !important; color: #ffffff !important; border: 1px solid rgba(255, 255, 255, 0.2) !important; }
+        }
+        @media (prefers-color-scheme: light) {
+            body { background-color: #f1f5f9 !important; }
+            .email-card { background-color: #ffffff !important; border-color: #e2e8f0 !important; color: #1e293b !important; }
+            .email-footer-text { color: #475569 !important; }
+            .email-footer-copyright { color: #64748b !important; }
+            .open-dashboard-btn { background-color: #4f46e5 !important; color: #ffffff !important; }
+        }
+    </style>
 </head>
 <body style="margin: 0; padding: 0; background-color: #0b0c10; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; color: #1e293b;">
     <div style="max-width: 600px; margin: 0 auto; padding: 32px 16px;">
@@ -1542,23 +1659,23 @@ export function wrapInPortalarrEmailLayout(options: {
         <div style="background: linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%); border-radius: 12px 12px 0 0; padding: 24px; border: 1px solid rgba(255, 255, 255, 0.1); border-bottom: none; text-align: center;">
             <div style="display: inline-flex; align-items: center; justify-content: center; gap: 8px;">
                 <span style="font-size: 24px; font-weight: 800; letter-spacing: -0.5px; color: #ffffff; text-shadow: 0 2px 4px rgba(0,0,0,0.5);">
-                    DOMS<span style="color: #6366f1;">HOMELAB</span>
+                    ${portalHeader}
                 </span>
             </div>
             <div style="font-size: 11px; color: #94a3b8; letter-spacing: 1px; text-transform: uppercase; margin-top: 4px;">
-                d281knilb Media Server & Dashboard
+                ${serverName} Media Server &amp; Dashboard
             </div>
         </div>
 
         <!-- Main Card Body -->
-        <div style="background-color: #ffffff; padding: 32px 28px; border-radius: 0 0 12px 12px; border: 1px solid #e2e8f0; border-top: none; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);">
+        <div class="email-card" style="background-color: #ffffff; padding: 32px 28px; border-radius: 0 0 12px 12px; border: 1px solid #e2e8f0; border-top: none; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);">
             <div style="font-size: 15px; line-height: 1.65; color: #334155;">
                 ${options.contentHtml}
             </div>
 
             ${options.actionButton ? `
                 <div style="text-align: center; margin: 32px 0 16px 0;">
-                    <a href="${options.actionButton.url}" style="background-color: ${options.actionButton.color || '#4f46e5'}; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);">
+                    <a href="${options.actionButton.url}" style="background-color: ${options.actionButton.color || '#4f46e5'}; color: #ffffff !important; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);">
                         ${options.actionButton.text}
                     </a>
                 </div>
@@ -1567,9 +1684,18 @@ export function wrapInPortalarrEmailLayout(options: {
             <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 32px 0 20px 0;" />
 
             <!-- Footer -->
-            <div style="text-align: center; font-size: 12px; color: #94a3b8; line-height: 1.5;">
-                <p style="margin: 0;">DomsHomeLab • d281knilb Media Server • <a href="${appUrl}" style="color: #6366f1; text-decoration: none; font-weight: 500;">Open Dashboard</a></p>
-                <p style="margin: 4px 0 0 0; font-size: 11px; color: #cbd5e1;">© ${currentYear} DomsHomeLab. All rights reserved.</p>
+            <div style="text-align: center; font-size: 12px; line-height: 1.6;">
+                <p class="email-footer-text" style="margin: 0 0 10px 0; font-weight: 600; color: #475569;">
+                    ${portalName} &bull; ${serverName} Media Server
+                </p>
+                <div style="margin: 8px 0 12px 0;">
+                    <a href="${appUrl}" class="open-dashboard-btn" style="background-color: #4f46e5; color: #ffffff !important; text-decoration: none; font-weight: 700; font-size: 12px; padding: 8px 18px; border-radius: 6px; display: inline-block; box-shadow: 0 2px 6px rgba(79, 70, 229, 0.25);">
+                        Open Dashboard &rarr;
+                    </a>
+                </div>
+                <p class="email-footer-copyright" style="margin: 8px 0 0 0; font-size: 11px; color: #64748b;">
+                    &copy; ${currentYear} ${portalName}. All rights reserved.
+                </p>
             </div>
         </div>
     </div>
@@ -1636,6 +1762,8 @@ export async function renderEmailTemplate(
               title: subject,
               contentHtml: body,
               appUrl,
+              portalName: allVars.portalName,
+              serverName: allVars.serverName,
               actionButton: options?.actionButton
           })
         : body;

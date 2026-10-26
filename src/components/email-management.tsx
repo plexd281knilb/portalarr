@@ -1197,46 +1197,51 @@ export default function EmailManagement() {
                                             </div>
                                         </div>
 
-                                        <div className="border border-border/60 rounded-xl overflow-hidden shadow-inner bg-[#0d0d12]">
+                                        <div className="border border-border/80 rounded-xl overflow-hidden shadow-inner bg-slate-100 dark:bg-[#0b0c10]">
                                             {/* Simulated Email Header */}
-                                            <div className="bg-[#181822] p-3 border-b border-border/40 space-y-1 text-xs font-sans">
-                                                <div className="flex items-center justify-between text-muted-foreground text-[11px]">
+                                            <div className="bg-slate-200/90 dark:bg-[#151722] p-3 border-b border-border/60 space-y-1 text-xs font-sans text-slate-700 dark:text-slate-300">
+                                                <div className="flex items-center justify-between text-slate-500 dark:text-muted-foreground text-[11px]">
                                                     <span><strong>From:</strong> DomsHomeLab (d281knilb) &lt;notifications@yourserver.com&gt;</span>
                                                     <span>Today, Just now</span>
                                                 </div>
-                                                <div className="text-foreground">
+                                                <div className="text-slate-900 dark:text-foreground">
                                                     <strong>To:</strong> {sampleUser.email || "user@example.com"}
                                                 </div>
-                                                <div className="text-foreground font-semibold pt-1 border-t border-border/20">
+                                                <div className="text-slate-900 dark:text-foreground font-semibold pt-1 border-t border-border/30">
                                                     <strong>Subject:</strong> {renderedBroadcastSubjectPreview}
                                                 </div>
                                             </div>
 
                                             {/* Simulated Email Body */}
-                                            <div className="p-6 text-foreground text-xs leading-relaxed max-h-[340px] overflow-y-auto">
-                                                <div className="max-w-[540px] mx-auto bg-[#14141d] border border-white/10 rounded-xl p-6 shadow-xl space-y-4">
-                                                    <div className="flex items-center gap-2 border-b border-white/10 pb-3">
-                                                        <div className="h-7 w-7 rounded-lg bg-primary/20 border border-primary/40 flex items-center justify-center font-bold text-primary text-xs">
+                                            <div className="p-6 text-xs leading-relaxed max-h-[380px] overflow-y-auto">
+                                                <div className="max-w-[560px] mx-auto bg-white dark:bg-[#13141f] border border-slate-200 dark:border-white/10 rounded-xl p-6 shadow-xl space-y-4 text-slate-800 dark:text-slate-200">
+                                                    <div className="flex items-center gap-2 border-b border-slate-200 dark:border-white/10 pb-3">
+                                                        <div className="h-7 w-7 rounded-lg bg-indigo-600/10 border border-indigo-600/30 dark:bg-indigo-500/20 dark:border-indigo-500/40 flex items-center justify-center font-black text-indigo-600 dark:text-indigo-400 text-xs">
                                                             D
                                                         </div>
-                                                        <span className="font-bold text-sm tracking-wide text-foreground">DOMSHOMELAB</span>
+                                                        <span className="font-bold text-sm tracking-wide text-slate-900 dark:text-white">
+                                                            DOMS<span className="text-indigo-600 dark:text-indigo-400">HOMELAB</span>
+                                                        </span>
                                                     </div>
 
-                                                    <h4 className="text-base font-bold text-foreground">{renderedBroadcastSubjectPreview}</h4>
+                                                    <h4 className="text-base font-bold text-slate-900 dark:text-white">{renderedBroadcastSubjectPreview}</h4>
 
                                                     <div 
-                                                        className="prose prose-invert prose-sm max-w-none text-xs leading-relaxed text-gray-300"
+                                                        className="prose dark:prose-invert prose-sm max-w-none text-xs leading-relaxed text-slate-700 dark:text-slate-300 [&_a]:text-indigo-600 dark:[&_a]:text-indigo-400 [&_code]:bg-slate-100 dark:[&_code]:bg-slate-800 [&_code]:text-indigo-600 dark:[&_code]:text-indigo-300 [&_table]:text-xs [&_td]:py-1.5 [&_th]:py-1.5"
                                                         dangerouslySetInnerHTML={{ __html: renderedBroadcastBodyPreview }}
                                                     />
 
-                                                    <div className="pt-4 border-t border-white/10 text-center">
+                                                    <div className="pt-4 border-t border-slate-200 dark:border-white/10 text-center space-y-2">
                                                         <a 
                                                             href="#" 
                                                             onClick={(e) => e.preventDefault()}
-                                                            className="inline-block bg-primary text-primary-foreground font-semibold text-xs px-4 py-2 rounded-lg shadow-md"
+                                                            className="inline-flex items-center justify-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-bold text-xs px-5 py-2.5 rounded-lg shadow-md transition-all cursor-pointer ring-2 ring-indigo-500/20"
                                                         >
-                                                            Open Dashboard
+                                                            Open Dashboard &rarr;
                                                         </a>
+                                                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                                                            DomsHomeLab • d281knilb Media Server
+                                                        </p>
                                                     </div>
                                                 </div>
                                             </div>
@@ -1674,39 +1679,44 @@ export default function EmailManagement() {
                                     ) : (
                                         /* LIVE TEMPLATE PREVIEW */
                                         <div className="space-y-3">
-                                            <div className="border border-border/60 rounded-xl overflow-hidden shadow-inner bg-[#0d0d12]">
+                                            <div className="border border-border/80 rounded-xl overflow-hidden shadow-inner bg-slate-100 dark:bg-[#0b0c10]">
                                                 {/* Email Header */}
-                                                <div className="bg-[#181822] p-3 border-b border-border/40 space-y-1 text-xs font-sans">
-                                                    <div className="text-muted-foreground text-[11px]">
+                                                <div className="bg-slate-200/90 dark:bg-[#151722] p-3 border-b border-border/60 space-y-1 text-xs font-sans text-slate-700 dark:text-slate-300">
+                                                    <div className="text-slate-900 dark:text-foreground font-semibold text-xs">
                                                         <strong>Subject:</strong> {renderedTemplateSubjectPreview}
                                                     </div>
                                                 </div>
 
                                                 {/* Email Card Frame */}
-                                                <div className="p-6 text-foreground text-xs leading-relaxed max-h-[340px] overflow-y-auto">
-                                                    <div className="max-w-[540px] mx-auto bg-[#14141d] border border-white/10 rounded-xl p-6 shadow-xl space-y-4">
-                                                        <div className="flex items-center gap-2 border-b border-white/10 pb-3">
-                                                            <div className="h-7 w-7 rounded-lg bg-primary/20 border border-primary/40 flex items-center justify-center font-bold text-primary text-xs">
+                                                <div className="p-6 text-xs leading-relaxed max-h-[380px] overflow-y-auto">
+                                                    <div className="max-w-[560px] mx-auto bg-white dark:bg-[#13141f] border border-slate-200 dark:border-white/10 rounded-xl p-6 shadow-xl space-y-4 text-slate-800 dark:text-slate-200">
+                                                        <div className="flex items-center gap-2 border-b border-slate-200 dark:border-white/10 pb-3">
+                                                            <div className="h-7 w-7 rounded-lg bg-indigo-600/10 border border-indigo-600/30 dark:bg-indigo-500/20 dark:border-indigo-500/40 flex items-center justify-center font-black text-indigo-600 dark:text-indigo-400 text-xs">
                                                                 D
                                                             </div>
-                                                            <span className="font-bold text-sm tracking-wide text-foreground">DOMSHOMELAB</span>
+                                                            <span className="font-bold text-sm tracking-wide text-slate-900 dark:text-white">
+                                                                DOMS<span className="text-indigo-600 dark:text-indigo-400">HOMELAB</span>
+                                                            </span>
                                                         </div>
 
-                                                        <h4 className="text-base font-bold text-foreground">{renderedTemplateSubjectPreview}</h4>
+                                                        <h4 className="text-base font-bold text-slate-900 dark:text-white">{renderedTemplateSubjectPreview}</h4>
 
                                                         <div 
-                                                            className="prose prose-invert prose-sm max-w-none text-xs leading-relaxed text-gray-300"
+                                                            className="prose dark:prose-invert prose-sm max-w-none text-xs leading-relaxed text-slate-700 dark:text-slate-300 [&_a]:text-indigo-600 dark:[&_a]:text-indigo-400 [&_code]:bg-slate-100 dark:[&_code]:bg-slate-800 [&_code]:text-indigo-600 dark:[&_code]:text-indigo-300 [&_table]:text-xs [&_td]:py-1.5 [&_th]:py-1.5"
                                                             dangerouslySetInnerHTML={{ __html: renderedTemplateBodyPreview }}
                                                         />
 
-                                                        <div className="pt-4 border-t border-white/10 text-center">
+                                                        <div className="pt-4 border-t border-slate-200 dark:border-white/10 text-center space-y-2">
                                                             <a 
                                                                 href="#" 
                                                                 onClick={(e) => e.preventDefault()}
-                                                                className="inline-block bg-primary text-primary-foreground font-semibold text-xs px-4 py-2 rounded-lg shadow-md"
+                                                                className="inline-flex items-center justify-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-bold text-xs px-5 py-2.5 rounded-lg shadow-md transition-all cursor-pointer ring-2 ring-indigo-500/20"
                                                             >
-                                                                Open Dashboard
+                                                                Open Dashboard &rarr;
                                                             </a>
+                                                            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                                                                DomsHomeLab • d281knilb Media Server
+                                                            </p>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -2318,7 +2328,7 @@ export default function EmailManagement() {
                                             <DollarSign className="h-4 w-4 text-emerald-400" /> Payment Receipts & Full Membership Activations
                                         </div>
                                         <p className="text-[11px] text-muted-foreground leading-tight">
-                                            Send automated confirmation receipts when an incoming payment is received (Venmo, PayPal, Cash App, Zelle) and when Full Membership is activated.
+                                            Send automated confirmation receipts when an incoming payment is received (Venmo, PayPal, Zelle) and when Full Membership is activated.
                                         </p>
                                     </div>
                                     <Switch

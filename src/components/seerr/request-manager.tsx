@@ -16,6 +16,7 @@ import {
 import { BookDetailModal } from "@/components/seerr/book-detail-modal";
 import { AuthorDetailModal } from "@/components/seerr/author-detail-modal";
 import { SeriesDetailModal } from "@/components/seerr/series-detail-modal";
+import KindleSenderUpdateBanner from "@/components/kindle-sender-update-banner";
 import { BookDiscoveryItem } from "@/lib/books/book-types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -540,6 +541,11 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                     )}
                 </div>
             </div>
+
+            {/* Outbound Sender Notice when Ebooks filter is active */}
+            {mediaTypeFilter === "book" && (
+                <KindleSenderUpdateBanner autoOpenModal={false} />
+            )}
 
             {/* STICKY / FLOATING BULK ACTIONS TOOLBAR */}
             {selectedIds.size > 0 && (

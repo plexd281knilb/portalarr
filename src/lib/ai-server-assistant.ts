@@ -1744,7 +1744,7 @@ I evaluated your reading history, previous requests, and server library catalog:
 
 * **Based On Your Taste:** ${authorsList}
 * **Your Previous Requests:** ${profile?.requestedBooksCount ? `${profile.requestedBooksCount} title(s) requested (${profile.requestedBooks.slice(0, 3).map((b: any) => `*${b.title}*`).join(", ")}${profile.requestedBooksCount > 3 ? "..." : ""})` : "Starting fresh with server favorites"}
-* **Kindle Delivery:** ${hasKindle ? `Active (\`${profile?.kindleEmail}\` linked - 1-Click Send-to-Kindle enabled)` : "Not linked (Use [Profile](/settings/profile) to enable 1-Click Send-to-Kindle)"}
+* **Kindle Delivery:** ${hasKindle ? `Active (\`${profile?.kindleEmail}\` linked - 1-Click Send-to-Kindle enabled)` : "Not linked (Use [Profile](/profile) to enable 1-Click Send-to-Kindle)"}
 
 ---
 
