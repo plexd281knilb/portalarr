@@ -1273,7 +1273,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{actionType}", description: "Category/Type of the staged action", sampleValue: "DESTRUCTIVE_TASK" },
             { key: "{targetDisplay}", description: "Target entity or server", sampleValue: "Plex Server #1" },
             { key: "{details}", description: "Parameters or details of the action", sampleValue: "Requested by operator via system maintenance console" },
-            { key: "{approvalsUrl}", description: "Direct link to the Action Approval Queue", sampleValue: "https://portal.example.com/settings/approvals" },
+            { key: "{approvalsUrl}", description: "Direct link to the Action Approval Queue", sampleValue: "https://portal.example.com/settings/access?tab=approvals" },
             { key: "{portalName}", description: "Portal brand name", sampleValue: "DomsHomeLab" },
             { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
         ]
@@ -1565,11 +1565,11 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 20px;">
     <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">💬 8. Support Tickets &amp; Discord Integration (<a href="{appUrl}/tickets" style="color: #4f46e5; text-decoration: none;">/tickets</a>)</p>
-    <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">Link your Discord account in your profile for instant request notifications and community roles, or open a support ticket anytime at <a href="{appUrl}/tickets" style="color: #4f46e5; text-decoration: none;">{appUrl}/tickets</a> if you ever need a hand.</p>
+    <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">Link your Discord account in your <a href="{appUrl}/profile" style="color: #4f46e5; font-weight: 600; text-decoration: underline;">profile</a> for instant request notifications and community roles, or open a support ticket anytime at <a href="{appUrl}/tickets" style="color: #4f46e5; text-decoration: none;">{appUrl}/tickets</a> if you ever need a hand.</p>
 </div>
 
 <div style="text-align: center; margin: 28px 0 18px 0;">
-    <a href="{loginUrl}" style="background-color: #4f46e5; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 800; font-size: 15px; display: inline-block; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);">Launch DomsHomeLab Portal &rarr;</a>
+    <a href="{appUrl}" style="background-color: #4f46e5; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 800; font-size: 15px; display: inline-block; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);">Launch DomsHomeLab Portal &rarr;</a>
 </div>
 
 <p style="font-size: 13px; color: #64748b; text-align: center; margin-top: 16px;">Bookmark <strong><a href="{appUrl}" style="color: #4f46e5; text-decoration: none;">{appUrl}</a></strong> on your phone and computer for quick access. Happy streaming &amp; reading!</p>`,

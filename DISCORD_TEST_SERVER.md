@@ -140,7 +140,7 @@ To ensure the Discord server seamlessly reflects all active features of the **Do
 - **Discord Action**:
   - Update the pinned guide in `#kindle-and-audiobooks` with step-by-step instructions:
     1. Add `kindle@domshomelab.com` to your Amazon Approved Personal Document E-mail List.
-    2. Enter your `@kindle.com` address in [Account Settings → Profile](https://domshomelab.org/settings/profile).
+    2. Enter your `@kindle.com` address in [Account Settings → Profile](https://domshomelab.org/profile).
     3. Click **Send to Kindle** on any book in the library for instantaneous Wi-Fi sync.
 
 ### 5. Maintainerr Retention Radar & 14-Day Grace Period (`#leaving-soon`)

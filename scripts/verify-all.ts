@@ -608,7 +608,7 @@ async function runTestSuite() {
             actionType: "SYSTEM_MAINTENANCE",
             targetDisplay: "Main Media Server",
             details: "Purging stale transcoding segments",
-            approvalsUrl: "http://localhost:3000/settings/approvals",
+            approvalsUrl: "http://localhost:3000/settings/access?tab=approvals",
             appUrl: "http://localhost:3000"
         });
         if (!renderedApproval.subject.includes("Clean Library Cache") || !renderedApproval.html.includes("LeadAdmin") || !renderedApproval.html.includes("Main Media Server")) {
@@ -2129,6 +2129,34 @@ async function runTestSuite() {
             }
             if (!launchTpl.defaultBody.includes("{appUrl}/profile") || launchTpl.defaultBody.includes("settings/profile")) {
                 throw new Error("new_site_launch must use clean /profile route instead of /settings/profile");
+            }
+
+            // 7. Comprehensive audit: verify ALL user-facing email templates NEVER reference admin-isolated paths
+            const adminPrefixes = ["/settings", "/admin", "/curation", "/tautulli", "/streams"];
+            for (const tpl of DEFAULT_EMAIL_TEMPLATES) {
+                const isAdmin = tpl.category.includes("ADMIN") || 
+                                tpl.id.startsWith("admin_") || 
+                                tpl.name.includes("(Admins)") ||
+                                tpl.description.toLowerCase().includes("sent to administrators") ||
+                                tpl.id === "test_email";
+                if (!isAdmin) {
+                    const hrefs = [...tpl.defaultBody.matchAll(/href=["']([^"']+)["']/g)].map(m => m[1]);
+                    for (const h of hrefs) {
+                        for (const adminPre of adminPrefixes) {
+                            if (h.includes(adminPre) || h.includes(`{appUrl}${adminPre}`)) {
+                                throw new Error(`User-facing email template [${tpl.id}] contains admin-isolated path in href: "${h}"`);
+                            }
+                        }
+                    }
+                    const varUrls = (tpl.variables || []).filter(v => v.sampleValue && (v.sampleValue.startsWith("http") || v.sampleValue.startsWith("/")));
+                    for (const v of varUrls) {
+                        for (const adminPre of adminPrefixes) {
+                            if (v.sampleValue.includes(`example.com${adminPre}`) || v.sampleValue.startsWith(adminPre)) {
+                                throw new Error(`User-facing template [${tpl.id}] variable "${v.key}" sampleValue points to admin path: "${v.sampleValue}"`);
+                            }
+                        }
+                    }
+                }
             }
         } finally {
             await prisma.sentEmailLog.deleteMany({

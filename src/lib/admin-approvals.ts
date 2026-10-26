@@ -45,7 +45,7 @@ export async function notifyAdminsOnPendingApproval(approval: {
         }
 
         const appUrl = await getAppUrl();
-        const approvalsUrl = `${appUrl}/settings/access`;
+        const approvalsUrl = `${appUrl}/settings/access?tab=approvals`;
 
         let typeBadge = "⚖️ Action Gate";
         if (approval.type === "EMAIL") {
