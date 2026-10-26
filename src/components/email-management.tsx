@@ -1020,7 +1020,7 @@ export default function EmailManagement() {
                                                 }
                                             }}
                                         >
-                                            🚀 New Site Launch &amp; Complete Feature Guide
+                                            New Site Launch &amp; Feature Guide
                                         </Button>
                                         <Button
                                             type="button"
@@ -1028,12 +1028,12 @@ export default function EmailManagement() {
                                             variant="outline"
                                             className="h-7 text-xs bg-black/40 border-white/10 hover:bg-white/10"
                                             onClick={() => {
-                                                setBroadcastSubject("📢 Important Update for {portalName} Members");
-                                                setBroadcastBody(`<h2 style="margin-top: 0; color: #0f172a;">Server Update 📢</h2>\n<p>Hi <strong>{username}</strong>,</p>\n<p>We wanted to share a quick update regarding <strong>{portalName}</strong>:</p>\n<ul>\n  <li>New movies, shows, and books have been added to the library.</li>\n  <li>Visit <a href="{appUrl}">{appUrl}</a> to request media, check stream quality, or send books to your Kindle.</li>\n</ul>\n<p>Happy streaming!</p>`);
+                                                setBroadcastSubject("Important Update for {portalName} Members");
+                                                setBroadcastBody(`<h2 style="margin-top: 0; color: #0f172a;">Server Update</h2>\n<p>Hi <strong>{username}</strong>,</p>\n<p>We wanted to share a quick update regarding <strong>{portalName}</strong>:</p>\n<ul>\n  <li>New movies, shows, and books have been added to the library.</li>\n  <li>Visit <a href="{appUrl}">{appUrl}</a> to request media, check stream quality, or send books to your Kindle.</li>\n</ul>\n<p>Happy streaming!</p>`);
                                                 setBroadcastIsHtml(false);
                                             }}
                                         >
-                                            📢 General Server Announcement
+                                            General Server Announcement
                                         </Button>
                                         <Button
                                             type="button"
@@ -1227,7 +1227,7 @@ export default function EmailManagement() {
                                                     <h4 className="text-base font-bold text-slate-900 dark:text-white">{renderedBroadcastSubjectPreview}</h4>
 
                                                     <div 
-                                                        className="prose dark:prose-invert prose-sm max-w-none text-xs leading-relaxed text-slate-700 dark:text-slate-300 [&_a]:text-indigo-600 dark:[&_a]:text-indigo-400 [&_code]:bg-slate-100 dark:[&_code]:bg-slate-800 [&_code]:text-indigo-600 dark:[&_code]:text-indigo-300 [&_table]:text-xs [&_td]:py-1.5 [&_th]:py-1.5"
+                                                        className="prose dark:prose-invert prose-sm max-w-none text-xs leading-relaxed text-slate-700 dark:text-slate-300 [&_a]:text-indigo-600 dark:[&_a]:text-indigo-400 [&_code]:bg-slate-100 dark:[&_code]:bg-slate-800 [&_code]:text-indigo-600 dark:[&_code]:text-indigo-300 [&_table]:text-xs [&_table]:w-full [&_table]:table-fixed [&_td]:py-1.5 [&_td]:break-words [&_th]:py-1.5 break-words [overflow-wrap:anywhere]"
                                                         dangerouslySetInnerHTML={{ __html: renderedBroadcastBodyPreview }}
                                                     />
 
@@ -1702,7 +1702,7 @@ export default function EmailManagement() {
                                                         <h4 className="text-base font-bold text-slate-900 dark:text-white">{renderedTemplateSubjectPreview}</h4>
 
                                                         <div 
-                                                            className="prose dark:prose-invert prose-sm max-w-none text-xs leading-relaxed text-slate-700 dark:text-slate-300 [&_a]:text-indigo-600 dark:[&_a]:text-indigo-400 [&_code]:bg-slate-100 dark:[&_code]:bg-slate-800 [&_code]:text-indigo-600 dark:[&_code]:text-indigo-300 [&_table]:text-xs [&_td]:py-1.5 [&_th]:py-1.5"
+                                                            className="prose dark:prose-invert prose-sm max-w-none text-xs leading-relaxed text-slate-700 dark:text-slate-300 [&_a]:text-indigo-600 dark:[&_a]:text-indigo-400 [&_code]:bg-slate-100 dark:[&_code]:bg-slate-800 [&_code]:text-indigo-600 dark:[&_code]:text-indigo-300 [&_table]:text-xs [&_table]:w-full [&_table]:table-fixed [&_td]:py-1.5 [&_td]:break-words [&_th]:py-1.5 break-words [overflow-wrap:anywhere]"
                                                             dangerouslySetInnerHTML={{ __html: renderedTemplateBodyPreview }}
                                                         />
 

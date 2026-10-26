@@ -292,8 +292,8 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         description: "Sent to users when an administrator approves their pending account request.",
         triggerEvent: "Triggered immediately when an administrator clicks 'Approve' on a pending account in Access Control (/settings/access) or when Plex friend auto-sync detects a newly approved friend.",
         category: "AUTH",
-        defaultSubject: "🎉 Your DomsHomeLab Account has been Approved!",
-        defaultBody: `<h2>Account Approved! 🎉</h2>
+        defaultSubject: "Your DomsHomeLab Account has been Approved",
+        defaultBody: `<h2>Account Approved</h2>
 <p>Hi <strong>{username}</strong>,</p>
 <p>Great news! Your account request for DomsHomeLab has been approved by the administrator.</p>
 <p>You can now sign in and explore media libraries, stream audiobooks, read books in your browser, and submit media requests.</p>
@@ -314,7 +314,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         description: "Sent to server administrators whenever a new user registers a pending account.",
         triggerEvent: "Triggered immediately when a visitor submits a new account registration on /login or /join, alerting all server administrators that approval is pending.",
         category: "AUTH",
-        defaultSubject: "👤 New Account Request: {username}",
+        defaultSubject: "New Account Request: {username}",
         defaultBody: `<h2>New Account Request</h2>
 <p>A new user has registered a temporary account and is awaiting administrator approval to access DomsHomeLab.</p>
 
@@ -353,7 +353,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         description: "Sent to users when they request a password reset or when an admin resets their password.",
         triggerEvent: "Triggered on demand when a user clicks 'Forgot password?' on /login or when an administrator clicks 'Reset Password' (🔑) in Access Control.",
         category: "AUTH",
-        defaultSubject: "🔑 Temporary Password for DomsHomeLab",
+        defaultSubject: "Temporary Password for DomsHomeLab",
         defaultBody: `<h2>Temporary Password Request</h2>
 <p>Hi <strong>{username}</strong>,</p>
 <p>We received a password reset request for your DomsHomeLab account. Here is your temporary password:</p>
@@ -380,8 +380,8 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         description: "Sent to users when their requested book or audiobook is successfully downloaded and added to the library.",
         triggerEvent: "Triggered automatically when a requested ebook or audiobook finishes downloading, passes scanner import checks, and is committed to the SQLite library database.",
         category: "REQUESTS",
-        defaultSubject: "🎉 Your {mediaLabel} is Ready: {title}",
-        defaultBody: `<h2>Your {mediaLabel} is Ready! 🎉</h2>
+        defaultSubject: "Your {mediaLabel} is Ready: {title}",
+        defaultBody: `<h2>Your {mediaLabel} is Ready</h2>
 <p>Hi <strong>{username}</strong>,</p>
 <p>Great news! The {mediaLabel} you requested has been downloaded and is now ready in the DomsHomeLab library.</p>
 
@@ -415,8 +415,8 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         triggerEvent: "Triggered when a member or administrator requests a book file delivery to their personal email via the Book Management or Library view.",
         category: "KINDLE",
         senderCategory: "kindle",
-        defaultSubject: "📦 {portalName} Book Delivery: {title}",
-        defaultBody: `<h2>{itemTypeLabel} File Delivery 📦</h2>
+        defaultSubject: "{portalName} Book Delivery: {title}",
+        defaultBody: `<h2>{itemTypeLabel} File Delivery</h2>
 <p>Hi <strong>{username}</strong>,</p>
 <p>Here is your requested {itemTypeLabel} file for <strong>{title}</strong> by <em>{author}</em>.</p>
 
@@ -446,7 +446,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         triggerEvent: "Triggered immediately when a user submits a book or audiobook request on /library or /discover, notifying administrators for download tracking.",
         category: "REQUESTS",
         defaultSubject: "{mediaLabel} Request: {title}",
-        defaultBody: `<h2>New {mediaLabel} Request 📚</h2>
+        defaultBody: `<h2>New {mediaLabel} Request</h2>
 <p>A new media request has been submitted by <strong>{requestedBy}</strong>:</p>
 
 <table style="width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px;">
@@ -519,8 +519,8 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         description: "Sent to administrators when a user submits a ticket or an automated system error report is logged.",
         triggerEvent: "Triggered automatically when an unhandled server error occurs or when a user clicks 'Report Error' / creates a ticket, providing full stack traces to admins.",
         category: "SUPPORT",
-        defaultSubject: "🚨 [{errorTitle}] Reported by {name}",
-        defaultBody: `<h2 style="color: #dc2626; margin-top: 0;">🚨 Automated Error Report Ticket</h2>
+        defaultSubject: "[{errorTitle}] Reported by {name}",
+        defaultBody: `<h2 style="color: #dc2626; margin-top: 0;">Automated Error Report Ticket</h2>
 <p><strong>User:</strong> {name} ({email})</p>
 <p><strong>Page:</strong> <code>{pageUrl}</code></p>
 
@@ -564,7 +564,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         description: "Sent to the user's personal email when delivery of an ebook to their Kindle email fails.",
         triggerEvent: "Triggered whenever an outbound SMTP Send-to-Kindle delivery is rejected by Amazon (e.g. sender email not in Amazon's Approved Personal Document list or file exceeds 50MB).",
         category: "KINDLE",
-        defaultSubject: "❌ Failed to Deliver Ebook to Kindle: {title}",
+        defaultSubject: "Failed to Deliver Ebook to Kindle: {title}",
         defaultBody: `<h2 style="color: #dc2626; margin-top: 0;">Kindle Delivery Failed</h2>
 <p>We attempted to send <strong>{title}</strong> to your Kindle address (<code>{kindleEmail}</code>), but the SMTP server rejected the delivery.</p>
 
@@ -603,8 +603,8 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         description: "Sent to user's personal email when an ebook is successfully dispatched to their Kindle device.",
         triggerEvent: "Triggered whenever an ebook file is successfully accepted and dispatched by the SMTP server to the user's @kindle.com email address.",
         category: "KINDLE",
-        defaultSubject: "📚 Ebook Delivered to Kindle: {title}",
-        defaultBody: `<h2>Ebook Sent to Kindle! 📚</h2>
+        defaultSubject: "Ebook Delivered to Kindle: {title}",
+        defaultBody: `<h2>Ebook Sent to Kindle</h2>
 <p>Hi <strong>{username}</strong>,</p>
 <p>Your requested ebook <strong>{title}</strong> by <em>{author}</em> has been successfully sent to your Kindle address (<code>{kindleEmail}</code>).</p>
 
@@ -630,7 +630,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         description: "Sent to administrators when a user requests access to a book or audiobook library.",
         triggerEvent: "Triggered when a user clicks 'Request Access' on a private or restricted library card from the /library page, alerting admins to update allowed users.",
         category: "REQUESTS",
-        defaultSubject: "🚨 Library Access Request from {username}",
+        defaultSubject: "Library Access Request from {username}",
         defaultBody: `<h2>Library Access Request</h2>
 <p>The user <strong>{username}</strong> has requested access to the Book & Audiobook Library.</p>
 
@@ -673,8 +673,8 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         description: "Sent to users when their free trial account is created or approved, detailing trial duration, expiration date, and library access.",
         triggerEvent: "Triggered immediately when a new user finishes the /join invitation wizard or when an administrator grants a trial period in Access Control.",
         category: "TRIALS",
-        defaultSubject: "🌟 Welcome to your {trialDays}-Day Free Trial on DomsHomeLab!",
-        defaultBody: `<h2>Welcome to Your Free Trial! 🌟</h2>
+        defaultSubject: "Welcome to your {trialDays}-Day Free Trial on DomsHomeLab",
+        defaultBody: `<h2>Welcome to Your Free Trial</h2>
 <p>Hi <strong>{username}</strong>,</p>
 <p>Your <strong>{trialDays}-Day Free Trial</strong> has been activated for DomsHomeLab (Plex server d281knilb). You now have full access to stream our movie and TV show collections on Plex!</p>
 
@@ -714,8 +714,8 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         description: "Sent to trial users a few days before their trial expires reminding them to renew or upgrade their access.",
         triggerEvent: "Triggered automatically by the background trial monitoring cron when an active trial has 3 or fewer days remaining before expiration.",
         category: "TRIALS",
-        defaultSubject: "⏳ Your DomsHomeLab Trial Ends Soon ({daysRemaining} days left)",
-        defaultBody: `<h2>Your Free Trial is Ending Soon ⏳</h2>
+        defaultSubject: "Your DomsHomeLab Trial Ends Soon ({daysRemaining} days left)",
+        defaultBody: `<h2>Your Free Trial is Ending Soon</h2>
 <p>Hi <strong>{username}</strong>,</p>
 <p>We hope you've been enjoying DomsHomeLab (d281knilb)! Just a quick heads up that your free trial access is scheduled to expire on <strong>{expirationDate}</strong> (in {daysRemaining} days).</p>
 
@@ -744,8 +744,8 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         description: "Sent to users when their trial period has concluded and their library access has paused.",
         triggerEvent: "Triggered automatically when a user's trial period concludes and grace period expires, pausing active Plex library shares.",
         category: "TRIALS",
-        defaultSubject: "⚠️ Your DomsHomeLab Trial Has Ended",
-        defaultBody: `<h2>Your Trial Period Has Ended ⚠️</h2>
+        defaultSubject: "Your DomsHomeLab Trial Has Ended",
+        defaultBody: `<h2>Your Trial Period Has Ended</h2>
 <p>Hi <strong>{username}</strong>,</p>
 <p>Your free trial access for DomsHomeLab (d281knilb) concluded on <strong>{expirationDate}</strong>. Your media and Plex library access has been temporarily paused.</p>
 
@@ -769,8 +769,8 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         description: "Sent to users when their account is upgraded from trial to Full Membership or when a subscription pass is granted.",
         triggerEvent: "Triggered when a user upgrades from a trial to Full Membership (Annual, Monthly, Rest-of-Year, or Permanent Pass), or when an administrator activates their full membership in Access Control.",
         category: "TRIALS",
-        defaultSubject: "👑 Welcome to Full Membership on DomsHomeLab!",
-        defaultBody: `<h2>Full Membership Activated! 👑</h2>
+        defaultSubject: "Welcome to Full Membership on DomsHomeLab",
+        defaultBody: `<h2>Full Membership Activated</h2>
 <p>Hi <strong>{username}</strong>,</p>
 <p>Congratulations! Your account has been upgraded to <strong>{planName}</strong>. You now have full, uninterrupted access to all media libraries on d281knilb and all premium perks.</p>
 
@@ -813,8 +813,8 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         description: "Sent to the user anytime a payment is received and processed (via Venmo, PayPal, Zelle, or manual attribution), confirming the amount paid, new expiration date, and active membership perks.",
         triggerEvent: "Triggered automatically whenever an incoming payment (Venmo, PayPal, Zelle) is matched and fulfilled by the automated IMAP email scraper or manually attributed by an administrator.",
         category: "PAYMENTS",
-        defaultSubject: "💳 Payment Received & Membership Confirmed ({amount})",
-        defaultBody: `<h2>Payment Received! 💳</h2>
+        defaultSubject: "Payment Received & Membership Confirmed ({amount})",
+        defaultBody: `<h2>Payment Received</h2>
 <p>Hi <strong>{username}</strong>,</p>
 <p>Thank you for your payment! We have received your payment of <strong>{amount}</strong> via <strong>{provider}</strong> and your DomsHomeLab membership has been updated.</p>
 
@@ -879,8 +879,8 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         description: "Sent to users when an incoming payment is received and credited to their balance, but falls short of the monthly or yearly subscription threshold.",
         triggerEvent: "Triggered automatically when an incoming payment is credited to a user's account balance, but remains below the required plan threshold (e.g. $15 or $16 sent for a $17.50 monthly plan, or $175 sent for a $180 annual plan).",
         category: "PAYMENTS",
-        defaultSubject: "💰 Payment Received: {amountPaid} Credited ({shortfall} Remaining for {planType})",
-        defaultBody: `<h2>Payment Received & Credited to Your Balance 💰</h2>
+        defaultSubject: "Payment Received: {amountPaid} Credited ({shortfall} Remaining for {planType})",
+        defaultBody: `<h2>Payment Received & Credited to Your Balance</h2>
 <p>Hi <strong>{username}</strong>,</p>
 <p>Thank you! We received your payment of <strong>{amountPaid}</strong> via <strong>{provider}</strong> on {paymentDate}.</p>
 <p>Your payment has been credited to your DomsHomeLab account balance. Your current available balance is <strong>{accountCredit}</strong>.</p>
@@ -943,8 +943,8 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         description: "Sent to administrators whenever an incoming payment is detected and recorded from Venmo, PayPal, or Zelle.",
         triggerEvent: "Triggered whenever an incoming payment is detected and recorded from Venmo, PayPal, or Zelle, alerting administrators of received funds and whether it was auto-matched or requires manual review.",
         category: "PAYMENTS",
-        defaultSubject: "💰 Payment Received: {amount} via {provider} ({matchedUser})",
-        defaultBody: `<h2>Incoming Payment Received 💰</h2>
+        defaultSubject: "Payment Received: {amount} via {provider} ({matchedUser})",
+        defaultBody: `<h2>Incoming Payment Received</h2>
 <p>An incoming payment has been processed and logged in DomsHomeLab:</p>
 
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin: 20px 0;">
@@ -997,8 +997,8 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         description: "Sent to administrators when a user submits a Movie or TV Show request that requires review.",
         triggerEvent: "Triggered when a user submits a Movie or TV Show request via Discover/Seerr that requires manual administrator approval.",
         category: "REQUESTS",
-        defaultSubject: "🎬 New {mediaLabel} Request: {title} ({releaseYear})",
-        defaultBody: `<h2>New Media Request 🎬</h2>
+        defaultSubject: "New {mediaLabel} Request: {title} ({releaseYear})",
+        defaultBody: `<h2>New Media Request</h2>
 <p>A new {mediaLabel} request has been submitted by <strong>{requestedBy}</strong>:</p>
 
 <table style="width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px;">
@@ -1047,8 +1047,8 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         description: "Sent to the requesting user when their Movie or TV Show request is automatically approved and queued for download.",
         triggerEvent: "Triggered immediately when a user's Movie or TV Show request satisfies auto-approval rules and is automatically dispatched to Radarr / Sonarr.",
         category: "REQUESTS",
-        defaultSubject: "🚀 Your Request is Auto-Approved: {title}",
-        defaultBody: `<h2>Request Auto-Approved! 🚀</h2>
+        defaultSubject: "Your Request is Auto-Approved: {title}",
+        defaultBody: `<h2>Request Auto-Approved</h2>
 <p>Hi <strong>{username}</strong>,</p>
 <p>Your request for <strong>{title} ({releaseYear})</strong> has been automatically approved and queued for download.</p>
 
@@ -1074,8 +1074,8 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         description: "Sent to the requesting user when an administrator reviews and approves their pending Movie or TV Show request.",
         triggerEvent: "Triggered when an administrator manually approves a pending Movie or TV Show request in the Request Engine (/requests).",
         category: "REQUESTS",
-        defaultSubject: "✅ Media Request Approved: {title}",
-        defaultBody: `<h2>Request Approved! ✅</h2>
+        defaultSubject: "Media Request Approved: {title}",
+        defaultBody: `<h2>Request Approved</h2>
 <p>Hi <strong>{username}</strong>,</p>
 <p>Great news! Your request for <strong>{title} ({releaseYear})</strong> has been reviewed and approved by the server administrator.</p>
 
@@ -1101,7 +1101,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         description: "Sent to the requesting user when an administrator declines their Movie or TV Show request, including the reason.",
         triggerEvent: "Triggered when an administrator rejects or declines a Movie or TV Show request in the Request Engine, transmitting the decline explanation.",
         category: "REQUESTS",
-        defaultSubject: "❌ Media Request Declined: {title}",
+        defaultSubject: "Media Request Declined: {title}",
         defaultBody: `<h2>Media Request Update</h2>
 <p>Hi <strong>{username}</strong>,</p>
 <p>Your request for <strong>{title} ({releaseYear})</strong> could not be fulfilled at this time.</p>
@@ -1127,8 +1127,8 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         description: "Sent to the requesting user when their requested Movie or TV Show is downloaded and ready to stream on Plex.",
         triggerEvent: "Triggered when Radarr or Sonarr finishes downloading a requested movie or episode and Plex library scanning detects the new file.",
         category: "REQUESTS",
-        defaultSubject: "🎉 Ready to Watch: {title} is Now on Plex!",
-        defaultBody: `<h2>Ready to Stream! 🎉</h2>
+        defaultSubject: "Ready to Watch: {title} is Now on Plex",
+        defaultBody: `<h2>Ready to Stream</h2>
 <p>Hi <strong>{username}</strong>,</p>
 <p>Great news! The {mediaLabel} you requested is now downloaded and ready to stream on Plex.</p>
 
@@ -1160,8 +1160,8 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         description: "Sent when a Movie or TV Show request encounters a download or dispatch error.",
         triggerEvent: "Triggered when a Movie or TV Show download fails, encounters indexer errors, or exceeds retry limits in Radarr / Sonarr.",
         category: "REQUESTS",
-        defaultSubject: "⚠️ Media Request Issue: {title}",
-        defaultBody: `<h2>Media Request Notice ⚠️</h2>
+        defaultSubject: "Media Request Issue: {title}",
+        defaultBody: `<h2>Media Request Notice</h2>
 <p>Hi <strong>{username}</strong>,</p>
 <p>We encountered an issue while processing your request for <strong>{title} ({releaseYear})</strong>.</p>
 
@@ -1186,8 +1186,8 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         description: "Sent to server administrators whenever a user's role is demoted or their access is expired, suspended, or revoked.",
         triggerEvent: "Triggered whenever an administrator changes a user's role or status, or when the trial monitor expires or suspends an account.",
         category: "AUTH",
-        defaultSubject: "⚠️ User Access / Role Update: {username} ({statusChange})",
-        defaultBody: `<h2>User Access / Role Update ⚠️</h2>
+        defaultSubject: "User Access / Role Update: {username} ({statusChange})",
+        defaultBody: `<h2>User Access / Role Update</h2>
 <p>An account access or role change has occurred for <strong>{username}</strong>:</p>
 
 <div style="background-color: #fffbeb; border: 1px solid #fef3c7; border-left: 4px solid #f59e0b; padding: 16px; border-radius: 6px; margin: 20px 0;">
@@ -1234,8 +1234,8 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         triggerEvent: "Triggered immediately when a system change, library deletion, user access change, or high-impact task is staged for administrator approval.",
         category: "AUTH",
         senderCategory: "accounts",
-        defaultSubject: "⚖️ [Approval Required] {actionTitle}",
-        defaultBody: `<h2>Action Requires Administrator Approval ⚖️</h2>
+        defaultSubject: "[Approval Required] {actionTitle}",
+        defaultBody: `<h2>Action Requires Administrator Approval</h2>
 <p>Hi <strong>{adminName}</strong>,</p>
 <p>An action has been staged in the <strong>Action Approval Queue</strong> on {portalName} and requires your explicit review before affecting live servers or users:</p>
 
@@ -1284,8 +1284,8 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         description: "Sent to a member when an invited friend joins or is credited by an admin, confirming their +1 free month credit towards membership renewal.",
         triggerEvent: "Triggered automatically when an invited friend joins and becomes an active member, or when an administrator credits a referral to the member's account.",
         category: "TRIALS",
-        defaultSubject: "🎁 You've Earned 1 Free Month! (@{friendUsername} Joined DomsHomeLab)",
-        defaultBody: `<h2>You've Earned 1 Free Month! 🎁</h2>
+        defaultSubject: "You've Earned 1 Free Month (@{friendUsername} Joined DomsHomeLab)",
+        defaultBody: `<h2>You've Earned 1 Free Month</h2>
 <p>Hi <strong>{username}</strong>,</p>
 <p>Awesome news! Your friend <strong>@{friendUsername}</strong> has joined DomsHomeLab (d281knilb) as a member.</p>
 
@@ -1336,8 +1336,8 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         description: "Sent to members on the Annual Plan ($180/yr) at multiple milestones (60, 30, 14, 3, and 1 days remaining) so they have advance notice before their annual amount comes due.",
         triggerEvent: "Triggered automatically at 60, 30, 14, 3, and 1 days before an annual subscription expires, detailing annual rate, referral reward discounts, monthly alternative ($17.50/mo), and payment methods.",
         category: "PAYMENTS",
-        defaultSubject: "🔔 Annual Membership Renewal Notice: {daysRemaining} Days Left ({amountDue})",
-        defaultBody: `<h2>Annual Membership Renewal Notice 🔔</h2>
+        defaultSubject: "Annual Membership Renewal Notice: {daysRemaining} Days Left ({amountDue})",
+        defaultBody: `<h2>Annual Membership Renewal Notice</h2>
 <p>Hi <strong>{username}</strong>,</p>
 <p>Your annual DomsHomeLab (d281knilb) membership is scheduled for renewal on <strong>{renewalDate}</strong> (<strong>{daysRemaining} days remaining</strong>).</p>
 
@@ -1402,8 +1402,8 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         description: "Sent to members on the Monthly Plan ($17.50/mo) at 7, 3, and 1 days remaining, alerting them of their upcoming monthly payment.",
         triggerEvent: "Triggered automatically at 7, 3, and 1 days before a monthly subscription renews, detailing renewal amount ($17.50/mo), payment memo, and payment instructions.",
         category: "PAYMENTS",
-        defaultSubject: "🔔 Monthly Membership Renewal Notice: {daysRemaining} Days Left ({amountDue})",
-        defaultBody: `<h2>Monthly Membership Renewal Notice 🔔</h2>
+        defaultSubject: "Monthly Membership Renewal Notice: {daysRemaining} Days Left ({amountDue})",
+        defaultBody: `<h2>Monthly Membership Renewal Notice</h2>
 <p>Hi <strong>{username}</strong>,</p>
 <p>Your monthly DomsHomeLab (d281knilb) membership is scheduled for renewal on <strong>{renewalDate}</strong> (<strong>{daysRemaining} days remaining</strong>).</p>
 
@@ -1453,8 +1453,8 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         description: "Sent to members before their annual or monthly subscription renews, including any referral reward credits and discounted totals.",
         triggerEvent: "Triggered prior to annual or monthly subscription renewal, detailing renewal amounts, applied referral credits, and payment methods.",
         category: "PAYMENTS",
-        defaultSubject: "🔔 Your DomsHomeLab Membership Renewal Notice ({renewalDate})",
-        defaultBody: `<h2>Membership Renewal Notice 🔔</h2>
+        defaultSubject: "Your DomsHomeLab Membership Renewal Notice ({renewalDate})",
+        defaultBody: `<h2>Membership Renewal Notice</h2>
 <p>Hi <strong>{username}</strong>,</p>
 <p>Your DomsHomeLab (d281knilb) membership is scheduled for renewal on <strong>{renewalDate}</strong>.</p>
 
@@ -1500,72 +1500,74 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
     },
     {
         id: "new_site_launch",
-        name: "🚀 New Site Launch & Complete Feature Guide",
+        name: "New Site Launch & Complete Feature Guide",
         description: "Comprehensive welcome broadcast introducing members to the new DomsHomeLab (d281knilb) portal, how to sign in, and every feature available.",
         triggerEvent: "Triggered when an administrator dispatches the New Site Launch & Feature Guide broadcast in Email Management (staged in the Admin Approval Queue for review before delivery).",
         category: "BROADCAST",
-        defaultSubject: "🚀 Welcome to the New DomsHomeLab (d281knilb) Portal — How to Log In & Everything You Can Do!",
-        defaultBody: `<h2 style="margin-top: 0; color: #0f172a;">Welcome to the New DomsHomeLab Portal, {username}! 🚀</h2>
+        defaultSubject: "Welcome to the New DomsHomeLab Portal — Login & Feature Guide",
+        defaultBody: `<h2 style="margin-top: 0; color: #0f172a;">Welcome to the New DomsHomeLab Portal, {username}!</h2>
 <p style="color: #334155; font-size: 14.5px; line-height: 1.6;">We have officially launched our brand-new, all-in-one <strong>DomsHomeLab (d281knilb)</strong> portal! Instead of juggling multiple links or messaging whenever a movie is missing or a stream buffers, you now have a single unified command center for movies, TV shows, e-books, audiobooks, live stream diagnostics, and account management.</p>
 
-<div style="background: linear-gradient(135deg, #eef2ff 0%, #f8fafc 100%); border: 1px solid #c7d2fe; border-left: 4px solid #4f46e5; padding: 18px 20px; border-radius: 10px; margin: 22px 0;">
-    <p style="margin: 0 0 8px 0; font-size: 13px; font-weight: 800; color: #4338ca; text-transform: uppercase; letter-spacing: 0.5px;">🔑 Step 1: How to Log In &amp; Get Started</p>
-    <table style="width: 100%; border-collapse: collapse; font-size: 14px; color: #1e293b;">
+<div style="background: linear-gradient(135deg, #eef2ff 0%, #f8fafc 100%); border: 1px solid #c7d2fe; border-left: 4px solid #4f46e5; padding: 18px 20px; border-radius: 10px; margin: 22px 0; box-sizing: border-box; word-break: break-word; overflow-wrap: anywhere;">
+    <p style="margin: 0 0 10px 0; font-size: 13px; font-weight: 800; color: #4338ca; text-transform: uppercase; letter-spacing: 0.5px;">Step 1: How to Log In &amp; Get Started</p>
+    <table style="width: 100%; border-collapse: collapse; font-size: 14px; color: #1e293b; margin-bottom: 12px; table-layout: fixed;">
         <tr>
-            <td style="padding: 4px 0; font-weight: 700; width: 140px; color: #475569;">Portal Website:</td>
-            <td style="padding: 4px 0;"><a href="{appUrl}" style="color: #4f46e5; font-weight: 700; text-decoration: none;">{appUrl}</a></td>
+            <td style="padding: 4px 0; font-weight: 700; width: 130px; color: #475569; vertical-align: top;">Portal Website:</td>
+            <td style="padding: 4px 0; word-break: break-all; overflow-wrap: anywhere;"><a href="{appUrl}" style="color: #4f46e5; font-weight: 700; text-decoration: none;">{appUrl}</a></td>
         </tr>
         <tr>
-            <td style="padding: 4px 0; font-weight: 700; color: #475569;">Your Username:</td>
-            <td style="padding: 4px 0;"><code style="background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-weight: 700; color: #0f172a;">{username}</code></td>
-        </tr>
-        <tr>
-            <td style="padding: 4px 0; font-weight: 700; color: #475569;">How to Sign In:</td>
-            <td style="padding: 4px 0;">Click <strong>"Sign In with Plex"</strong> for instant 1-click access using your existing Plex account, or sign in with your portal username &amp; password at <a href="{loginUrl}" style="color: #4f46e5; font-weight: 600;">{loginUrl}</a>.</td>
+            <td style="padding: 4px 0; font-weight: 700; width: 130px; color: #475569; vertical-align: top;">Your Username:</td>
+            <td style="padding: 4px 0; word-break: break-all; overflow-wrap: anywhere;"><code style="background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-weight: 700; color: #0f172a;">{username}</code></td>
         </tr>
     </table>
+    <div style="background-color: #ffffff; border: 1px solid #e0e7ff; border-radius: 8px; padding: 12px 14px; box-sizing: border-box; word-break: break-word; overflow-wrap: anywhere;">
+        <p style="margin: 0 0 4px 0; font-size: 13px; font-weight: 700; color: #1e293b;">How to Sign In:</p>
+        <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.55; word-break: break-word; overflow-wrap: anywhere;">
+            Click <strong>"Sign In with Plex"</strong> for instant 1-click access using your existing Plex account, or sign in with your portal username &amp; password at <a href="{loginUrl}" style="color: #4f46e5; font-weight: 600; text-decoration: underline; word-break: break-all;">{loginUrl}</a>.
+        </p>
+    </div>
 </div>
 
-<h3 style="color: #0f172a; font-size: 17px; margin: 26px 0 12px 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px;">✨ Everything You Can Do on the New Site</h3>
+<h3 style="color: #0f172a; font-size: 17px; margin: 26px 0 12px 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px;">Features Available on the New Site</h3>
 
-<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px;">
-    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">🎬 1. Request Any Movie or TV Show in 1 Click (<a href="{appUrl}/requests" style="color: #4f46e5; text-decoration: none;">/requests</a> &amp; <a href="{appUrl}/discover" style="color: #4f46e5; text-decoration: none;">/discover</a>)</p>
+<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px; box-sizing: border-box; word-break: break-word; overflow-wrap: anywhere;">
+    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">1. Request Any Movie or TV Show (<a href="{appUrl}/requests" style="color: #4f46e5; text-decoration: none;">Media Requests</a> &amp; <a href="{appUrl}/discover" style="color: #4f46e5; text-decoration: none;">Discover</a>)</p>
     <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">Can't find a movie or show on Plex? Search for any title or browse trending releases, click <strong>Request</strong>, and track its real-time status (<strong>Searching &rarr; Downloading &rarr; Available on Plex</strong>) right on the Media Requests page. You'll receive an automated notification alert as soon as it's ready to watch!</p>
 </div>
 
-<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px;">
-    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">📺 2. My Plex Hub, Stream Quality Doctor &amp; Speed Test (<a href="{appUrl}" style="color: #4f46e5; text-decoration: none;">Home Dashboard</a>)</p>
-    <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">See your active streams, personal watch stats, and which Plex servers you have access to. Run the built-in <strong>Server Speed Test</strong> and use the <strong>Stream Quality Doctor &amp; Device Setup Guides</strong> (Apple TV, Roku, Fire TV, Samsung/LG Smart TVs) to fix default 720p quality caps and unlock smooth <strong>1080p &amp; 4K Direct Play</strong> without buffering.</p>
+<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px; box-sizing: border-box; word-break: break-word; overflow-wrap: anywhere;">
+    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">2. My Plex Hub, Stream Quality Doctor &amp; Speed Test (<a href="{appUrl}" style="color: #4f46e5; text-decoration: none;">Home Dashboard</a>)</p>
+    <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">See your active streams, personal watch stats, and which Plex servers you have access to. Run the built-in <strong>Server Speed Test</strong> and use the <strong>Stream Quality Doctor &amp; Device Setup Guides</strong> (Apple TV, Roku, Fire TV, Samsung/LG Smart TVs) to optimize your client player settings for smooth <strong>Direct Play</strong> streaming without buffering.</p>
 </div>
 
-<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px;">
-    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">🤖 3. 24/7 AI Server Assistant &amp; Auto-Repair (<a href="{appUrl}" style="color: #4f46e5; text-decoration: none;">Home Dashboard</a>)</p>
-    <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">Having playback trouble? Use the 1-click quick chips right on the dashboard—<strong>⚡ Buffering</strong>, <strong>🔊 Quiet Dialogue</strong>, <strong>💬 Subtitles</strong>, <strong>📺 Unlock 4K/1080p</strong>, <strong>🎬 Missing Media</strong>, or <strong>📚 Book Recommendations</strong>. The AI Assistant inspects your live stream in real time and can even automatically replace a broken movie/episode file or prefill a support ticket for you.</p>
+<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px; box-sizing: border-box; word-break: break-word; overflow-wrap: anywhere;">
+    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">3. 24/7 AI Server Assistant &amp; Auto-Repair (<a href="{appUrl}" style="color: #4f46e5; text-decoration: none;">Home Dashboard</a>)</p>
+    <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">Having playback trouble? Use the 1-click diagnostic quick chips right on the dashboard—<strong>Buffering</strong>, <strong>Quiet Dialogue</strong>, <strong>Subtitles</strong>, <strong>Missing Media</strong>, or <strong>Book Recommendations</strong>. The AI Assistant inspects your live stream in real time and can even automatically replace a broken movie or episode file or prefill a support ticket for you.</p>
 </div>
 
-<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px;">
-    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">📚 4. E-Book &amp; Audiobook Library + 1-Click Send-to-Kindle (<a href="{appUrl}/library" style="color: #4f46e5; text-decoration: none;">/library</a>)</p>
-    <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">Browse and request e-books and audiobooks! Read directly in your browser using the <strong>Kindle Paperwhite Web Reader</strong> or send any e-book straight to your Kindle e-reader in 1 click. Audiobooks are available right inside your <strong>Plex app</strong>, companion audiobook players (<strong>Prologue</strong> on iOS, <strong>Chronicle</strong> on Android), or through the portal's built-in <strong>Web Audiobook Player</strong> with full chapter navigation and speed controls.</p>
+<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px; box-sizing: border-box; word-break: break-word; overflow-wrap: anywhere;">
+    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">4. E-Book &amp; Audiobook Library + 1-Click Send-to-Kindle (<a href="{appUrl}/library" style="color: #4f46e5; text-decoration: none;">Book &amp; Audiobook Library</a>)</p>
+    <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">Browse and request e-books and audiobooks! Read directly in your browser using the <strong>Kindle Paperwhite Web Reader</strong> or send any e-book straight to your Kindle e-reader in 1 click. Audiobooks are available directly inside your <strong>Plex app</strong> or through the portal's built-in <strong>Web Audiobook Player</strong> with full chapter navigation and speed controls.</p>
 </div>
 
-<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px;">
-    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">⚙️ 5. Server &amp; Library Customization &amp; Streaming Preferences (<a href="{appUrl}/profile" style="color: #4f46e5; text-decoration: none;">/profile</a>)</p>
+<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px; box-sizing: border-box; word-break: break-word; overflow-wrap: anywhere;">
+    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">5. Server &amp; Library Customization &amp; Streaming Preferences (<a href="{appUrl}/profile" style="color: #4f46e5; text-decoration: none;">Account Profile</a>)</p>
     <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">Select which admin-whitelisted media servers and libraries you want active on your account (Plex, Jellyfin, and Emby), and customize your default streaming preferences, remote quality caps, and preferred audio and subtitle languages to match your home setup.</p>
 </div>
 
-<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px;">
-    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">💳 6. Flexible Billing Options &amp; Membership Status (<a href="{appUrl}/profile" style="color: #4f46e5; text-decoration: none;">/profile</a>)</p>
-    <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">We now offer both <strong>Monthly</strong> and <strong>Yearly</strong> billing options to best fit your viewing schedule! Visit your <a href="{appUrl}/profile" style="color: #4f46e5; font-weight: 600; text-decoration: underline;">Account Profile</a> to view the plan comparison, check your current membership tier, review your renewal date, and see accepted direct payment methods (Venmo, PayPal, Zelle).</p>
+<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px; box-sizing: border-box; word-break: break-word; overflow-wrap: anywhere;">
+    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">6. Flexible Billing Options &amp; Membership Status (<a href="{appUrl}/profile" style="color: #4f46e5; text-decoration: none;">Account Profile</a>)</p>
+    <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">We now offer both <strong>Monthly</strong> and <strong>Yearly</strong> billing options to best fit your viewing schedule! Visit your <a href="{appUrl}/profile" style="color: #4f46e5; font-weight: 600; text-decoration: underline;">Account Profile</a> to view the plan comparison, review your renewal date, and see accepted direct payment methods (Venmo, PayPal, Zelle).</p>
 </div>
 
-<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px;">
-    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">🛠️ 7. Instant "Suggest Fix" Feedback (Any Page)</p>
+<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px; box-sizing: border-box; word-break: break-word; overflow-wrap: anywhere;">
+    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">7. Instant "Suggest Fix" Feedback (Any Page)</p>
     <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">Notice something acting up or have an idea to make the site better? Look for the floating <strong>"Suggest Fix"</strong> button in the bottom-right corner of any page. With 1 click, you can quickly report a bug, visual glitch, slow playback, or feature idea directly to the admin so any site issues can be addressed immediately.</p>
 </div>
 
-<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 20px;">
-    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">💬 8. Support Tickets &amp; Discord Integration (<a href="{appUrl}/tickets" style="color: #4f46e5; text-decoration: none;">/tickets</a>)</p>
-    <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">Link your Discord account in your <a href="{appUrl}/profile" style="color: #4f46e5; font-weight: 600; text-decoration: underline;">profile</a> for instant request notifications and community roles, or open a support ticket anytime at <a href="{appUrl}/tickets" style="color: #4f46e5; text-decoration: none;">{appUrl}/tickets</a> if you ever need a hand.</p>
+<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 20px; box-sizing: border-box; word-break: break-word; overflow-wrap: anywhere;">
+    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">8. Support Tickets &amp; Discord Integration (<a href="{appUrl}/tickets" style="color: #4f46e5; text-decoration: none;">Support Tickets</a>)</p>
+    <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">Link your Discord account in your <a href="{appUrl}/profile" style="color: #4f46e5; font-weight: 600; text-decoration: underline;">profile</a> for instant request notifications and community roles, or open a support ticket anytime at <a href="{appUrl}/tickets" style="color: #4f46e5; text-decoration: none;">Support Tickets</a> if you ever need a hand.</p>
 </div>
 
 <div style="text-align: center; margin: 28px 0 18px 0;">
@@ -1588,8 +1590,8 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         description: "Sent to all active members or filtered user groups when an administrator dispatches an announcement broadcast.",
         triggerEvent: "Triggered when an administrator dispatches a server-wide announcement or broadcast notification in Email Management.",
         category: "BROADCAST",
-        defaultSubject: "📢 Server Announcement: {subject}",
-        defaultBody: `<h2>Server Announcement 📢</h2><p>Hi <strong>{username}</strong>,</p><p>{message}</p>`,
+        defaultSubject: "Server Announcement: {subject}",
+        defaultBody: `<h2>Server Announcement</h2><p>Hi <strong>{username}</strong>,</p><p>{message}</p>`,
         variables: [
             { key: "{username}", description: "Recipient's username", sampleValue: "alex_stream" },
             { key: "{subject}", description: "Announcement topic", sampleValue: "Scheduled Maintenance" },
@@ -1651,12 +1653,16 @@ export function wrapInPortalarrEmailLayout(options: {
             .email-footer-copyright { color: #64748b !important; }
             .open-dashboard-btn { background-color: #4f46e5 !important; color: #ffffff !important; }
         }
+        @media only screen and (max-width: 600px) {
+            .email-wrapper { padding: 16px 8px !important; }
+            .email-card { padding: 22px 14px !important; }
+        }
     </style>
 </head>
 <body style="margin: 0; padding: 0; background-color: #0b0c10; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; color: #1e293b;">
-    <div style="max-width: 600px; margin: 0 auto; padding: 32px 16px;">
+    <div class="email-wrapper" style="max-width: 600px; width: 100%; margin: 0 auto; padding: 32px 16px; box-sizing: border-box;">
         <!-- Header Banner -->
-        <div style="background: linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%); border-radius: 12px 12px 0 0; padding: 24px; border: 1px solid rgba(255, 255, 255, 0.1); border-bottom: none; text-align: center;">
+        <div style="background: linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%); border-radius: 12px 12px 0 0; padding: 24px; border: 1px solid rgba(255, 255, 255, 0.1); border-bottom: none; text-align: center; box-sizing: border-box;">
             <div style="display: inline-flex; align-items: center; justify-content: center; gap: 8px;">
                 <span style="font-size: 24px; font-weight: 800; letter-spacing: -0.5px; color: #ffffff; text-shadow: 0 2px 4px rgba(0,0,0,0.5);">
                     ${portalHeader}
@@ -1668,8 +1674,8 @@ export function wrapInPortalarrEmailLayout(options: {
         </div>
 
         <!-- Main Card Body -->
-        <div class="email-card" style="background-color: #ffffff; padding: 32px 28px; border-radius: 0 0 12px 12px; border: 1px solid #e2e8f0; border-top: none; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);">
-            <div style="font-size: 15px; line-height: 1.65; color: #334155;">
+        <div class="email-card" style="background-color: #ffffff; padding: 32px 28px; border-radius: 0 0 12px 12px; border: 1px solid #e2e8f0; border-top: none; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3); box-sizing: border-box; word-break: break-word; overflow-wrap: anywhere;">
+            <div style="font-size: 15px; line-height: 1.65; color: #334155; word-break: break-word; overflow-wrap: anywhere;">
                 ${options.contentHtml}
             </div>
 
@@ -1743,6 +1749,7 @@ export async function renderEmailTemplate(
         serverName: "d281knilb",
         senderEmail: resolvedSender.email,
         senderFormatted: resolvedSender.formatted,
+        loginUrl: (variables.loginUrl as string) || `${appUrl}/login`,
         ...Object.fromEntries(
             Object.entries(variables).map(([k, v]) => [k, v !== undefined && v !== null ? String(v) : ""])
         )
