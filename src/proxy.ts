@@ -40,7 +40,9 @@ export async function proxy(req: NextRequest) {
         if (!isAdmin && (status === "PENDING" || status === "REJECTED" || status === "SUSPENDED" || status === "EXPIRED")) {
           return NextResponse.redirect(new URL("/pending", req.url));
         }
-        return NextResponse.redirect(new URL("/", req.url));
+        const returnTo = req.nextUrl.searchParams.get("returnTo");
+        const safeReturnTo = returnTo && returnTo.startsWith("/") && !returnTo.startsWith("//") && !returnTo.startsWith("/\\") && returnTo !== "/login" && !returnTo.startsWith("/login?") ? returnTo : "/";
+        return NextResponse.redirect(new URL(safeReturnTo, req.url));
       } catch (e) {
         // Invalid session, allow login page
       }
@@ -53,7 +55,12 @@ export async function proxy(req: NextRequest) {
     if (pathname.startsWith("/api")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    return NextResponse.redirect(new URL("/login", req.url));
+    const returnUrl = req.nextUrl.search ? `${pathname}${req.nextUrl.search}` : pathname;
+    const loginUrl = new URL("/login", req.url);
+    if (returnUrl && returnUrl !== "/" && returnUrl !== "/login" && returnUrl !== "/pending") {
+      loginUrl.searchParams.set("returnTo", returnUrl);
+    }
+    return NextResponse.redirect(loginUrl);
   }
 
   try {
@@ -165,7 +172,12 @@ export async function proxy(req: NextRequest) {
       response.cookies.delete("session");
       return response;
     }
-    const response = NextResponse.redirect(new URL("/login", req.url));
+    const returnUrl = req.nextUrl.search ? `${pathname}${req.nextUrl.search}` : pathname;
+    const loginUrl = new URL("/login", req.url);
+    if (returnUrl && returnUrl !== "/" && returnUrl !== "/login" && returnUrl !== "/pending") {
+      loginUrl.searchParams.set("returnTo", returnUrl);
+    }
+    const response = NextResponse.redirect(loginUrl);
     response.cookies.delete("session");
     return response;
   }

@@ -205,7 +205,23 @@ See detailed reference: [form-and-input-patterns.md](./references/form-and-input
 
 ---
 
-### 4. Responsive Media Grids
+### 4. User Authentication, Deep Link Redirection & Frictionless Login UX
+- **Safe `returnTo` Deep Linking**:
+  - Whenever an unauthenticated user visits a protected route (e.g. `/requests?tab=books&query=dune`, `/library`, `/tickets`, `/profile`), `src/proxy.ts` preserves the destination path and search query via `?returnTo=${encodeURIComponent(pathname + search)}`.
+  - On both Password and Plex login, sanitize `returnTo` (ensure it starts with `/` and not `//` or `/\\` to prevent open redirects) and navigate directly to the intended destination instead of resetting users back to `/`.
+  - If an already-authenticated user navigates to `/login?returnTo=...`, `proxy` immediately routes them to their intended destination.
+- **Resilient Multi-Alias Account Matching**:
+  - Match user credentials against `username`, `email`, `plexUsername`, and `plexEmail` (case-insensitively and whitespace trimmed).
+  - Users auto-provisioned via Plex who do not remember their unique auto-generated local username/email can seamlessly sign in or reset passwords using their original Plex username or Plex email address.
+  - When resetting passwords for Plex-provisioned accounts, Portalarr dispatches the temporary password to their verified `plexEmail` and heals placeholder `@plex.local` addresses.
+- **Mobile Popup Blocker Fallback & CapsLock Detection**:
+  - If a mobile browser (iOS Safari, Android Chrome) or strict desktop setting blocks the Plex login popup, render an immediate 1-click fallback button (*"Popup blocked? Tap here to authorize on Plex.tv"*) opening the authorization URL in a new tab while continuing background PIN polling.
+  - Provide a 8-second grace period on `popup.closed` detection to prevent premature polling termination when users switch to password managers or 2FA authenticators.
+  - Include an interactive show/hide password toggle (`Eye` / `EyeOff`) and a real-time CapsLock detection badge (*"Caps Lock is ON"*) on all password fields.
+
+---
+
+### 5. Responsive Media Grids
 Use dynamic wrapping columns optimized across all screen breakpoints:
 ```tsx
 className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 3xl:grid-cols-8 gap-3 sm:gap-4 lg:gap-5"

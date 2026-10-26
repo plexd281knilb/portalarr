@@ -259,6 +259,64 @@ async function runTestSuite() {
             if (dupRes.success) {
                 throw new Error("Expected updateAppUserEmail to fail on duplicate email collision!");
             }
+
+            // Seamless Multi-Alias User Login & Identity Matching Test
+            const { hash } = await import("bcryptjs");
+            const { login, requestForgotPassword } = await import("../src/app/auth-actions");
+            const testPassword = "SeamlessPassword123!";
+            const hashedPassword = await hash(testPassword, 10);
+
+            const aliasUser = await prisma.user.create({
+                data: {
+                    username: `plex_local_${testId}`,
+                    email: `plex_local_${testId}@plex.local`,
+                    plexUsername: `PlexMaster_${testId}`,
+                    plexEmail: `plex_real_${testId}@gmail.com`,
+                    password: hashedPassword,
+                    role: "USER",
+                    status: "APPROVED"
+                }
+            });
+
+            try {
+                // Test login by Plex username (with mixed case and whitespace)
+                const formDataPlexUser = new FormData();
+                formDataPlexUser.append("username", `  plexmaster_${testId}  `);
+                formDataPlexUser.append("password", testPassword);
+                const loginByPlexUserRes = await login(formDataPlexUser);
+                if (!loginByPlexUserRes.success) {
+                    throw new Error(`Failed to login using Plex Username alias: ${JSON.stringify(loginByPlexUserRes)}`);
+                }
+
+                // Test login by Plex email (with mixed case and whitespace)
+                const formDataPlexEmail = new FormData();
+                formDataPlexEmail.append("username", `  PLEX_REAL_${testId}@GMAIL.COM  `);
+                formDataPlexEmail.append("password", testPassword);
+                const loginByPlexEmailRes = await login(formDataPlexEmail);
+                if (!loginByPlexEmailRes.success) {
+                    throw new Error(`Failed to login using Plex Email alias: ${JSON.stringify(loginByPlexEmailRes)}`);
+                }
+
+                // Test forgot password resolving real email instead of discarding @plex.local
+                const forgotFormData = new FormData();
+                forgotFormData.append("emailOrUsername", `plexmaster_${testId}`);
+                const forgotRes = await requestForgotPassword(forgotFormData);
+                if (!forgotRes.success && !forgotRes.error?.includes("SMTP")) {
+                    throw new Error(`Forgot password failed: ${JSON.stringify(forgotRes)}`);
+                }
+
+                // Test proxy preservation of returnTo deep links
+                const { proxy } = await import("../src/proxy");
+                const { NextRequest } = await import("next/server");
+                const unauthReq = new NextRequest(new Request("http://localhost:3000/requests?tab=books&query=dune"));
+                const proxyRedirectRes = await proxy(unauthReq);
+                const redirectLocation = proxyRedirectRes.headers.get("location");
+                if (!redirectLocation || !redirectLocation.includes("returnTo=%2Frequests%3Ftab%3Dbooks%26query%3Ddune")) {
+                    throw new Error(`Proxy failed to preserve returnTo parameter: ${redirectLocation}`);
+                }
+            } finally {
+                await prisma.user.delete({ where: { id: aliasUser.id } }).catch(() => {});
+            }
         } finally {
             delete process.env.PORTALARR_TEST_USER_ID;
             await prisma.user.deleteMany({ where: { id: { in: [adminUser.id, kidUser.id] } } });

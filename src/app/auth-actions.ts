@@ -59,11 +59,21 @@ export async function login(formData: FormData) {
 
   const normalizedInput = input.toLowerCase();
 
-  // Support login by Username or Email (case-insensitive)
+  // Support login by Username, Email, Plex Username, or Plex Email (case-insensitive & trimmed)
   const allUsers = await prisma.user.findMany();
-  const user = allUsers.find(
-    (u) => u.username.toLowerCase() === normalizedInput || u.email.toLowerCase() === normalizedInput
-  );
+  const user = allUsers.find((u) => {
+    const dbUsername = u.username?.trim().toLowerCase();
+    const dbEmail = u.email?.trim().toLowerCase();
+    const dbPlexUser = u.plexUsername?.trim().toLowerCase();
+    const dbPlexEmail = u.plexEmail?.trim().toLowerCase();
+
+    return (
+      dbUsername === normalizedInput ||
+      dbEmail === normalizedInput ||
+      (dbPlexUser && dbPlexUser === normalizedInput) ||
+      (dbPlexEmail && dbPlexEmail === normalizedInput)
+    );
+  });
 
   if (!user) {
     return { error: "Invalid credentials" };
@@ -739,16 +749,36 @@ export async function requestForgotPassword(formData: FormData) {
 
   const normalizedInput = input.toLowerCase();
   const allUsers = await prisma.user.findMany();
-  const user = allUsers.find(
-    (u) => u.username.toLowerCase() === normalizedInput || u.email.toLowerCase() === normalizedInput
-  );
+  const user = allUsers.find((u) => {
+    const dbUsername = u.username?.trim().toLowerCase();
+    const dbEmail = u.email?.trim().toLowerCase();
+    const dbPlexUser = u.plexUsername?.trim().toLowerCase();
+    const dbPlexEmail = u.plexEmail?.trim().toLowerCase();
+
+    return (
+      dbUsername === normalizedInput ||
+      dbEmail === normalizedInput ||
+      (dbPlexUser && dbPlexUser === normalizedInput) ||
+      (dbPlexEmail && dbPlexEmail === normalizedInput)
+    );
+  });
 
   const genericResponse = {
     success: true,
     message: "If an account with that username/email exists, a temporary password has been sent to your email inbox."
   };
 
-  if (!user || !user.email || user.email.endsWith("@plex.local")) {
+  if (!user) {
+    return genericResponse;
+  }
+
+  // Resolve target email: prioritize real user email, or fall back to verified Plex email if email is a local placeholder
+  let targetEmail = user.email?.trim();
+  if ((!targetEmail || targetEmail.endsWith("@plex.local")) && user.plexEmail && !user.plexEmail.endsWith("@plex.local")) {
+    targetEmail = user.plexEmail.trim();
+  }
+
+  if (!targetEmail || targetEmail.endsWith("@plex.local")) {
     return genericResponse;
   }
 
@@ -764,16 +794,20 @@ export async function requestForgotPassword(formData: FormData) {
   const tempPassword = "DomsHomeLab-" + Math.random().toString(36).slice(-6) + "!";
   const hashedPassword = await hash(tempPassword, 10);
 
+  // Update password and heal placeholder email with real Plex email if applicable
   await prisma.user.update({
     where: { id: user.id },
-    data: { password: hashedPassword }
+    data: {
+      password: hashedPassword,
+      ...(user.email.endsWith("@plex.local") ? { email: targetEmail } : {})
+    }
   });
 
   try {
     const appUrl = await getAppUrl();
     const { subject, html } = await renderEmailTemplate("password_reset", {
       username: user.username,
-      email: user.email,
+      email: targetEmail,
       tempPassword,
       appUrl,
       loginUrl: `${appUrl}/login`
@@ -781,14 +815,14 @@ export async function requestForgotPassword(formData: FormData) {
 
     const { sendOrQueueEmail } = await import("./actions");
     await sendOrQueueEmail({
-      to: user.email,
+      to: targetEmail,
       subject,
       html,
       templateId: "password_reset",
       targetUser: user.username,
       userId: user.id
     });
-    console.log(`[AUTH] Sent or queued temporary password email to ${user.email} (${user.username})`);
+    console.log(`[AUTH] Sent or queued temporary password email to ${targetEmail} (${user.username})`);
   } catch (err: any) {
     console.error("[AUTH] Error sending temporary password email:", err);
     return { error: "Failed to send email. Please verify SMTP settings with your administrator." };
