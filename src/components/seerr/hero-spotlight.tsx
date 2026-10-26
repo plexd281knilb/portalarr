@@ -121,7 +121,9 @@ export function HeroSpotlight({
                         <Button
                             size="lg"
                             variant="secondary"
-                            className="h-10 sm:h-11 px-5 rounded-xl font-semibold bg-emerald-600/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-600/30 transition-all flex items-center gap-2 cursor-default"
+                            className="h-10 sm:h-11 px-5 rounded-xl font-semibold bg-emerald-600/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-600/30 transition-all flex items-center gap-2 cursor-pointer active:scale-95 shadow-md"
+                            onClick={() => onSelect(item)}
+                            title="View in Library & Details"
                         >
                             <CheckCircle2 className="h-4 w-4" />
                             <span>Available in Library</span>
@@ -132,7 +134,9 @@ export function HeroSpotlight({
                         <Button
                             size="lg"
                             variant="secondary"
-                            className="h-10 sm:h-11 px-5 rounded-xl font-semibold bg-blue-600/20 text-blue-300 border border-blue-500/40 hover:bg-blue-600/30 transition-all flex items-center gap-2 cursor-default"
+                            className="h-10 sm:h-11 px-5 rounded-xl font-semibold bg-blue-600/20 text-blue-300 border border-blue-500/40 hover:bg-blue-600/30 transition-all flex items-center gap-2 cursor-pointer active:scale-95 shadow-md"
+                            onClick={() => onSelect(item)}
+                            title="View Request Status & Details"
                         >
                             <Clock className="h-4 w-4" />
                             <span>Requested</span>

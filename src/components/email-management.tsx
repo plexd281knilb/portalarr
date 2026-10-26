@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/dialog";
 import { 
     Mail, Send, Megaphone, CheckCircle2, XCircle, 
-    Search, Users, Sparkles, RotateCcw, 
+    Search, Users, User, Sparkles, RotateCcw, 
     Loader2, Shield, Key, BookOpen, LifeBuoy, UserCheck, 
     Bell, BellOff, CheckSquare, Square, 
     Code, Eye, Check, Zap, DollarSign, CalendarClock,
@@ -146,6 +146,14 @@ export default function EmailManagement() {
         emailApprovalPolicy: {}
     });
     const [savingApprovalPolicy, setSavingApprovalPolicy] = useState(false);
+    const [policyRecipientFilter, setPolicyRecipientFilter] = useState<"ALL" | "USER" | "ADMIN" | "BOTH">("ALL");
+
+    const getTemplateRecipient = (tplId: string): "ADMIN" | "USER" | "BOTH" => {
+        const adminTpls = ["admin_new_user", "admin_user_access_revoked", "media_request_admin", "seerr_request_new_admin", "ticket_error_alert", "library_access_request"];
+        if (adminTpls.includes(tplId)) return "ADMIN";
+        if (tplId.startsWith("ticket_")) return "BOTH";
+        return "USER";
+    };
     const [approvalPolicyMsg, setApprovalPolicyMsg] = useState("");
 
     const handleRunRenewalSweep = async () => {
@@ -1029,7 +1037,7 @@ export default function EmailManagement() {
                                             className="h-7 text-xs bg-black/40 border-white/10 hover:bg-white/10"
                                             onClick={() => {
                                                 setBroadcastSubject("Important Update for {portalName} Members");
-                                                setBroadcastBody(`<h2 style="margin-top: 0; color: #0f172a;">Server Update</h2>\n<p>Hi <strong>{username}</strong>,</p>\n<p>We wanted to share a quick update regarding <strong>{portalName}</strong>:</p>\n<ul>\n  <li>New movies, shows, and books have been added to the library.</li>\n  <li>Visit <a href="{appUrl}">{appUrl}</a> to request media, check stream quality, or send books to your Kindle.</li>\n</ul>\n<p>Happy streaming!</p>`);
+                                                setBroadcastBody(`<h2 style="margin-top: 0; color: #0f172a;">Server Update</h2>\n<p>Hi <strong>{username}</strong>,</p>\n<p>I wanted to share a quick update regarding <strong>{portalName}</strong>:</p>\n<ul>\n  <li>New movies, shows, and books have been added to the library.</li>\n  <li>Visit <a href="{appUrl}">{appUrl}</a> to request media, check stream quality, or send books to your Kindle.</li>\n</ul>\n<p>Happy streaming!</p>`);
                                                 setBroadcastIsHtml(false);
                                             }}
                                         >
@@ -1177,7 +1185,7 @@ export default function EmailManagement() {
                                             rows={11}
                                             value={broadcastBody}
                                             onChange={(e) => setBroadcastBody(e.target.value)}
-                                            placeholder={`<p>Hi {username},</p>\n<p>We've just added new features and updated our server library. Check it out at <a href="{appUrl}">{portalName}</a>!</p>\n<p>Happy streaming and reading!</p>`}
+                                            placeholder={`<p>Hi {username},</p>\n<p>I've just added new features and updated my server library. Check it out at <a href="{appUrl}">{portalName}</a>!</p>\n<p>Happy streaming and reading!</p>`}
                                             className="font-mono text-xs leading-relaxed bg-black/40 border-white/10"
                                         />
                                         <p className="text-[10px] text-muted-foreground">
@@ -1230,6 +1238,15 @@ export default function EmailManagement() {
                                                         className="prose dark:prose-invert prose-sm max-w-none text-xs leading-relaxed text-slate-700 dark:text-slate-300 [&_a]:text-indigo-600 dark:[&_a]:text-indigo-400 [&_code]:bg-slate-100 dark:[&_code]:bg-slate-800 [&_code]:text-indigo-600 dark:[&_code]:text-indigo-300 [&_table]:text-xs [&_table]:w-full [&_table]:table-fixed [&_td]:py-1.5 [&_td]:break-words [&_th]:py-1.5 break-words [overflow-wrap:anywhere]"
                                                         dangerouslySetInnerHTML={{ __html: renderedBroadcastBodyPreview }}
                                                     />
+
+                                                    <div className="p-3 rounded-lg bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 border-l-4 border-l-indigo-600 text-[11px] leading-relaxed text-slate-600 dark:text-slate-400 text-left space-y-1">
+                                                        <div className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                                                            <span>📬 Note from Dominic:</span>
+                                                        </div>
+                                                        <p className="m-0">
+                                                            This is a real personal email sent directly from me (Dominic) through my self-hosted <strong>domshomelab.com</strong> server. Please mark emails from <strong>domshomelab.com</strong> as <em>"Not Spam"</em> so you don't miss important updates.
+                                                        </p>
+                                                    </div>
 
                                                     <div className="pt-4 border-t border-slate-200 dark:border-white/10 text-center space-y-2">
                                                         <a 
@@ -1438,11 +1455,21 @@ export default function EmailManagement() {
                                                         <Mail className="h-2.5 w-2.5 text-primary shrink-0" />
                                                         {tpl.senderEmail || "notifications@domshomelab.com"}
                                                     </span>
-                                                    {tpl.senderCategory && (
-                                                        <span className="text-[9px] uppercase tracking-wider text-muted-foreground/70 shrink-0 font-sans font-semibold">
-                                                            {tpl.senderCategory}
-                                                        </span>
-                                                    )}
+                                                    <div className="flex items-center gap-1 shrink-0">
+                                                        {getTemplateRecipient(tpl.id) === "ADMIN" ? (
+                                                            <Badge variant="outline" className="text-[8px] px-1 py-0 border-purple-500/40 text-purple-300 bg-purple-500/10 font-bold">
+                                                                TO: ADMIN
+                                                            </Badge>
+                                                        ) : getTemplateRecipient(tpl.id) === "BOTH" ? (
+                                                            <Badge variant="outline" className="text-[8px] px-1 py-0 border-cyan-500/40 text-cyan-300 bg-cyan-500/10 font-bold">
+                                                                TO: BOTH
+                                                            </Badge>
+                                                        ) : (
+                                                            <Badge variant="outline" className="text-[8px] px-1 py-0 border-blue-500/40 text-blue-300 bg-blue-500/10 font-bold">
+                                                                TO: USERS
+                                                            </Badge>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
                                         );
@@ -1462,6 +1489,19 @@ export default function EmailManagement() {
                                                 <CardTitle className="text-base text-foreground">
                                                     {currentTemplate.name}
                                                 </CardTitle>
+                                                {getTemplateRecipient(currentTemplate.id) === "ADMIN" ? (
+                                                    <Badge className="bg-purple-500/20 text-purple-300 border border-purple-500/40 text-[10px] font-bold gap-1 shrink-0">
+                                                        <Shield className="h-3 w-3 text-purple-400" /> TO: ADMIN
+                                                    </Badge>
+                                                ) : getTemplateRecipient(currentTemplate.id) === "BOTH" ? (
+                                                    <Badge className="bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 text-[10px] font-bold gap-1 shrink-0">
+                                                        <Users className="h-3 w-3 text-cyan-400" /> TO: ADMIN &amp; USERS
+                                                    </Badge>
+                                                ) : (
+                                                    <Badge className="bg-blue-500/20 text-blue-300 border border-blue-500/40 text-[10px] font-bold gap-1 shrink-0">
+                                                        <User className="h-3 w-3 text-blue-400" /> TO: USERS
+                                                    </Badge>
+                                                )}
                                                 {currentTemplate.isCustom ? (
                                                     <Badge className="bg-amber-500/15 text-amber-400 border border-amber-500/30 text-[10px]">
                                                         Custom Overrides Active
@@ -1706,6 +1746,15 @@ export default function EmailManagement() {
                                                             dangerouslySetInnerHTML={{ __html: renderedTemplateBodyPreview }}
                                                         />
 
+                                                        <div className="p-3 rounded-lg bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 border-l-4 border-l-indigo-600 text-[11px] leading-relaxed text-slate-600 dark:text-slate-400 text-left space-y-1">
+                                                            <div className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                                                                <span>📬 Note from Dominic:</span>
+                                                            </div>
+                                                            <p className="m-0">
+                                                                This is a real personal email sent directly from me (Dominic) through my self-hosted <strong>domshomelab.com</strong> server. Please mark emails from <strong>domshomelab.com</strong> as <em>"Not Spam"</em> so you don't miss important updates.
+                                                            </p>
+                                                        </div>
+
                                                         <div className="pt-4 border-t border-slate-200 dark:border-white/10 text-center space-y-2">
                                                             <a 
                                                                 href="#" 
@@ -1903,15 +1952,64 @@ export default function EmailManagement() {
                                     </Link>
                                 </div>
                             </div>
+
+                            {/* RECIPIENT AUDIENCE FILTER */} 
+                            <div className="flex flex-wrap items-center justify-between gap-2 pt-2.5 border-t border-border/20 text-xs">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-[11px] font-semibold text-muted-foreground mr-1">Recipient Audience:</span>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant={policyRecipientFilter === "ALL" ? "secondary" : "ghost"}
+                                        onClick={() => setPolicyRecipientFilter("ALL")}
+                                        className="h-6 text-[10px] px-2 font-semibold"
+                                    >
+                                        All Policies (12)
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant={policyRecipientFilter === "USER" ? "secondary" : "ghost"}
+                                        onClick={() => setPolicyRecipientFilter("USER")}
+                                        className="h-6 text-[10px] px-2 font-semibold text-blue-400 hover:text-blue-300"
+                                    >
+                                        <User className="h-2.5 w-2.5 mr-1" /> To Users (10)
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant={policyRecipientFilter === "ADMIN" ? "secondary" : "ghost"}
+                                        onClick={() => setPolicyRecipientFilter("ADMIN")}
+                                        className="h-6 text-[10px] px-2 font-semibold text-purple-400 hover:text-purple-300"
+                                    >
+                                        <Shield className="h-2.5 w-2.5 mr-1" /> To Admin (1)
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant={policyRecipientFilter === "BOTH" ? "secondary" : "ghost"}
+                                        onClick={() => setPolicyRecipientFilter("BOTH")}
+                                        className="h-6 text-[10px] px-2 font-semibold text-cyan-400 hover:text-cyan-300"
+                                    >
+                                        <Users className="h-2.5 w-2.5 mr-1" /> Admin &amp; Users (1)
+                                    </Button>
+                                </div>
+                                <div className="text-[10px] text-muted-foreground font-mono">
+                                    Outgoing Delivery Classification
+                                </div>
+                            </div>
                         </div>
 
                         <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 ${!emailSettings.emailNotificationsEnabled ? "opacity-50 pointer-events-none" : ""}`}>
                             {/* 1. User Account Approvals */}
-                            <div className="flex flex-col justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all gap-2.5">
+                            <div className={`flex flex-col justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all gap-2.5 ${policyRecipientFilter !== "ALL" && policyRecipientFilter !== "USER" ? "hidden" : ""}`}>
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="space-y-1 pr-1">
-                                        <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                        <div className="font-semibold text-xs text-foreground flex items-center gap-1.5 flex-wrap">
                                             <UserCheck className="h-4 w-4 text-emerald-400" /> User Account Approvals
+                                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-blue-500/10 text-blue-400 border-blue-500/30 font-bold shrink-0 flex items-center gap-1">
+                                                <User className="h-2.5 w-2.5" /> TO: USERS
+                                            </Badge>
                                         </div>
                                         <p className="text-[11px] text-muted-foreground leading-tight">
                                             Email users a welcome notification when their account request is approved by an admin.
@@ -1953,11 +2051,14 @@ export default function EmailManagement() {
                             </div>
 
                             {/* 2. Admin New Registration Alerts */}
-                            <div className="flex flex-col justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all gap-2.5">
+                            <div className={`flex flex-col justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all gap-2.5 ${policyRecipientFilter !== "ALL" && policyRecipientFilter !== "ADMIN" ? "hidden" : ""}`}>
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="space-y-1 pr-1">
-                                        <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                        <div className="font-semibold text-xs text-foreground flex items-center gap-1.5 flex-wrap">
                                             <Shield className="h-4 w-4 text-blue-400" /> New User Requests
+                                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-purple-500/10 text-purple-400 border-purple-500/30 font-bold shrink-0 flex items-center gap-1">
+                                                <Shield className="h-2.5 w-2.5" /> TO: ADMIN
+                                            </Badge>
                                         </div>
                                         <p className="text-[11px] text-muted-foreground leading-tight">
                                             Send alert emails to server administrators whenever a new user registers a pending account.
@@ -1999,11 +2100,14 @@ export default function EmailManagement() {
                             </div>
 
                             {/* 3. Password Resets */}
-                            <div className="flex flex-col justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all gap-2.5">
+                            <div className={`flex flex-col justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all gap-2.5 ${policyRecipientFilter !== "ALL" && policyRecipientFilter !== "USER" ? "hidden" : ""}`}>
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="space-y-1 pr-1">
-                                        <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                                        <div className="font-semibold text-xs text-foreground flex items-center gap-1.5 flex-wrap">
                                             <Key className="h-4 w-4 text-amber-400" /> Password Resets
+                                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-blue-500/10 text-blue-400 border-blue-500/30 font-bold shrink-0 flex items-center gap-1">
+                                                <User className="h-2.5 w-2.5" /> TO: USERS
+                                            </Badge>
                                         </div>
                                         <p className="text-[11px] text-muted-foreground leading-tight">
                                             Send temporary password emails for user forgot-password and admin reset actions.
@@ -2045,7 +2149,7 @@ export default function EmailManagement() {
                             </div>
 
                             {/* 4. Media & Book Requests */}
-                            <div className="flex flex-col justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all gap-2.5">
+                            <div className={`flex flex-col justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all gap-2.5 ${policyRecipientFilter !== "ALL" && policyRecipientFilter !== "USER" ? "hidden" : ""}`}>
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="space-y-1 pr-1">
                                         <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
@@ -2091,7 +2195,7 @@ export default function EmailManagement() {
                             </div>
 
                             {/* 5. Support Tickets */}
-                            <div className="flex flex-col justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all gap-2.5">
+                            <div className={`flex flex-col justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all gap-2.5 ${policyRecipientFilter !== "ALL" && policyRecipientFilter !== "BOTH" ? "hidden" : ""}`}>
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="space-y-1 pr-1">
                                         <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
@@ -2137,7 +2241,7 @@ export default function EmailManagement() {
                             </div>
 
                             {/* 6. Send-to-Kindle Deliveries */}
-                            <div className="flex flex-col justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all gap-2.5">
+                            <div className={`flex flex-col justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all gap-2.5 ${policyRecipientFilter !== "ALL" && policyRecipientFilter !== "USER" ? "hidden" : ""}`}>
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="space-y-1 pr-1">
                                         <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
@@ -2183,7 +2287,7 @@ export default function EmailManagement() {
                             </div>
 
                             {/* 7. Free Trial Welcome */}
-                            <div className="flex flex-col justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all gap-2.5">
+                            <div className={`flex flex-col justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all gap-2.5 ${policyRecipientFilter !== "ALL" && policyRecipientFilter !== "USER" ? "hidden" : ""}`}>
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="space-y-1 pr-1">
                                         <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
@@ -2229,7 +2333,7 @@ export default function EmailManagement() {
                             </div>
 
                             {/* 8. Trial & Subscription Expiration Reminders */}
-                            <div className="flex flex-col justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all gap-2.5">
+                            <div className={`flex flex-col justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all gap-2.5 ${policyRecipientFilter !== "ALL" && policyRecipientFilter !== "USER" ? "hidden" : ""}`}>
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="space-y-1 pr-1">
                                         <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
@@ -2275,7 +2379,7 @@ export default function EmailManagement() {
                             </div>
 
                             {/* 9. Account Access Paused / Expired Notices */}
-                            <div className="flex flex-col justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all gap-2.5">
+                            <div className={`flex flex-col justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all gap-2.5 ${policyRecipientFilter !== "ALL" && policyRecipientFilter !== "USER" ? "hidden" : ""}`}>
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="space-y-1 pr-1">
                                         <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
@@ -2321,7 +2425,7 @@ export default function EmailManagement() {
                             </div>
 
                             {/* 10. Payment Receipts & Full Membership Activation */}
-                            <div className="flex flex-col justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all gap-2.5">
+                            <div className={`flex flex-col justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all gap-2.5 ${policyRecipientFilter !== "ALL" && policyRecipientFilter !== "USER" ? "hidden" : ""}`}>
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="space-y-1 pr-1">
                                         <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
@@ -2367,7 +2471,7 @@ export default function EmailManagement() {
                             </div>
 
                             {/* 11. Referral Reward Credited */}
-                            <div className="flex flex-col justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all gap-2.5">
+                            <div className={`flex flex-col justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all gap-2.5 ${policyRecipientFilter !== "ALL" && policyRecipientFilter !== "USER" ? "hidden" : ""}`}>
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="space-y-1 pr-1">
                                         <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
@@ -2413,7 +2517,7 @@ export default function EmailManagement() {
                             </div>
 
                             {/* 12. Advance Subscription Renewal Reminders */}
-                            <div className="flex flex-col justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all gap-2.5">
+                            <div className={`flex flex-col justify-between p-3.5 rounded-xl border border-muted/50 bg-muted/20 hover:bg-muted/30 transition-all gap-2.5 ${policyRecipientFilter !== "ALL" && policyRecipientFilter !== "USER" ? "hidden" : ""}`}>
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="space-y-1 pr-1">
                                         <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">

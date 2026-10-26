@@ -85,6 +85,28 @@ export function SeriesDetailModal({
         }
     };
 
+    const handleSelectVolume = (vol: any) => {
+        onOpenChange(false);
+        if (onSelectVolume) {
+            onSelectVolume({
+                title: vol.title,
+                author: vol.author || authorName || "",
+                series: seriesTitle || undefined,
+                volumeNumber: vol.volumeNumber,
+                coverUrl: vol.coverUrl,
+                publishYear: vol.publishYear,
+                overview: vol.overview,
+                mediaType: vol.mediaType,
+                availability: {
+                    status: vol.status === "MISSING" ? "NOT_AVAILABLE" : vol.status,
+                    bookId: vol.bookId,
+                    requestId: vol.requestId,
+                    libraryId: vol.libraryId
+                }
+            });
+        }
+    };
+
     const handleToggleMonitor = async (val: boolean) => {
         if (!series?.id) return;
         setMonitored(val);
@@ -271,26 +293,7 @@ export function SeriesDetailModal({
                             {series.volumes.map((vol, idx) => (
                                 <div
                                     key={idx}
-                                    onClick={() => {
-                                        if (onSelectVolume) {
-                                            onSelectVolume({
-                                                title: vol.title,
-                                                author: vol.author || authorName || "",
-                                                series: seriesTitle,
-                                                volumeNumber: vol.volumeNumber,
-                                                coverUrl: vol.coverUrl,
-                                                publishYear: vol.publishYear,
-                                                overview: vol.overview,
-                                                mediaType: vol.mediaType,
-                                                availability: {
-                                                    status: vol.status === "MISSING" ? "NOT_AVAILABLE" : vol.status,
-                                                    bookId: vol.bookId,
-                                                    requestId: vol.requestId,
-                                                    libraryId: vol.libraryId
-                                                }
-                                            });
-                                        }
-                                    }}
+                                    onClick={() => handleSelectVolume(vol)}
                                     className="flex items-center justify-between gap-3 p-3 rounded-xl bg-card/60 border border-border/40 hover:border-primary/50 transition-all cursor-pointer group shadow-sm"
                                 >
                                     <div className="flex items-center gap-3 min-w-0">
@@ -340,7 +343,16 @@ export function SeriesDetailModal({
                                                 <span>Requested</span>
                                             </Badge>
                                         ) : (
-                                            <Button size="sm" variant="ghost" className="h-7 text-[11px] text-primary hover:text-primary/90 hover:bg-primary/10 gap-1 font-bold">
+                                            <Button 
+                                                size="sm" 
+                                                variant="ghost" 
+                                                className="h-7 text-[11px] text-primary hover:text-primary/90 hover:bg-primary/10 gap-1 font-bold cursor-pointer"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleSelectVolume(vol);
+                                                }}
+                                                title={`Request volume #${vol.volumeNumber} (${vol.title})`}
+                                            >
                                                 <Plus className="h-3 w-3" />
                                                 <span>Request</span>
                                             </Button>

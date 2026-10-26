@@ -184,6 +184,7 @@ export function AuthorDetailModal({
                                             item={book}
                                             availability={book.availability}
                                             onSelect={() => {
+                                                onOpenChange(false);
                                                 if (onSelectBook) onSelectBook(book);
                                             }}
                                         />

@@ -1982,9 +1982,54 @@ export async function saveEmailTemplateAction(id: string, subject: string, body:
             create: { id, name, description, subject: subject.trim(), body: body.trim() }
         });
 
-        logger.addLog("INFO", "EMAIL", `Saved customized email template "${name}" (${id})`);
+        // Actively verify and sync against Granular Outgoing Email Approval Policy
+        const settings = await getSettings();
+        let emailApprovalPolicy: Record<string, boolean> = {};
+        try {
+            if (settings?.emailApprovalPolicy) {
+                emailApprovalPolicy = JSON.parse(settings.emailApprovalPolicy);
+            }
+        } catch {}
+
+        const isAdminTemplate = [
+            "admin_new_user",
+            "admin_user_access_revoked",
+            "media_request_admin",
+            "seerr_request_new_admin",
+            "ticket_error_alert",
+            "library_access_request"
+        ].includes(id);
+
+        const recipientTarget = isAdminTemplate ? "Admin" : id.startsWith("ticket_") ? "Admin & Users" : "Users";
+        const globalApprovalEnabled = settings?.requireApprovalForEmails ?? true;
+
+        // If not explicitly set in policy, record it to enforce granular governance
+        let isApprovalRequired = true;
+        if (emailApprovalPolicy[id] !== undefined) {
+            isApprovalRequired = Boolean(emailApprovalPolicy[id]);
+        } else if (!globalApprovalEnabled) {
+            isApprovalRequired = false;
+        }
+
+        if (emailApprovalPolicy[id] === undefined) {
+            emailApprovalPolicy[id] = isApprovalRequired;
+            await prisma.settings.upsert({
+                where: { id: "global" },
+                update: { emailApprovalPolicy: JSON.stringify(emailApprovalPolicy) },
+                create: { id: "global", emailApprovalPolicy: JSON.stringify(emailApprovalPolicy) }
+            });
+        }
+
+        const policyStatusText = isApprovalRequired ? "🔒 Staged for Admin Review" : "⚡ Direct Auto-Send Dispatch";
+        logger.addLog("INFO", "EMAIL", `Saved email template "${name}" (${id}). Verified Granular Outgoing Email Approval Policy: ${policyStatusText} (Recipient: ${recipientTarget})`);
         revalidatePath("/settings");
-        return { success: true, message: `Template "${name}" saved successfully!` };
+        return { 
+            success: true, 
+            message: `Template "${name}" saved! Verified against Granular Outgoing Email Approval Policy: ${policyStatusText} (Recipient: ${recipientTarget}).`,
+            policyStatus: isApprovalRequired ? "STAGED" : "AUTO_SEND",
+            recipientTarget,
+            isApprovalRequired
+        };
     } catch (e: any) {
         logger.addLog("ERROR", "EMAIL", `Failed to save template ${id}: ${e.message}`);
         return { success: false, error: e.message || "Failed to save template" };
