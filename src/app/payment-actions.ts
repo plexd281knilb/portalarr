@@ -228,6 +228,7 @@ export async function scanPaymentEmailsAction(sourceId?: string, lookbackDays?: 
         revalidatePath("/settings");
         revalidatePath("/settings/access");
         revalidatePath("/settings/profile");
+        revalidatePath("/profile");
         return result;
     } catch (e: any) {
         return {
@@ -335,6 +336,7 @@ export async function manuallyAttributePaymentTransaction(transactionId: string,
         revalidatePath("/settings");
         revalidatePath("/settings/access");
         revalidatePath("/settings/profile");
+        revalidatePath("/profile");
 
         const updatedTarget = await prisma.user.findUnique({ where: { id: targetUser.id } });
         const expiryFormatted = updatedTarget?.subscriptionEndsAt 
@@ -421,6 +423,7 @@ export async function reprocessPaymentTransactionsAction() {
         revalidatePath("/settings");
         revalidatePath("/settings/access");
         revalidatePath("/settings/profile");
+        revalidatePath("/profile");
 
         return {
             success: true,
@@ -580,6 +583,7 @@ export async function deletePaymentTransactionAction(transactionId: string) {
         revalidatePath("/settings");
         revalidatePath("/settings/access");
         revalidatePath("/settings/profile");
+        revalidatePath("/profile");
 
         return {
             success: true,
@@ -604,6 +608,7 @@ export async function purgeUnmatchedPaymentTransactionsAction() {
         revalidatePath("/settings");
         revalidatePath("/settings/access");
         revalidatePath("/settings/profile");
+        revalidatePath("/profile");
 
         return {
             success: true,
@@ -788,6 +793,7 @@ export async function unmatchPaymentTransactionAction(transactionId: string) {
         revalidatePath("/settings");
         revalidatePath("/settings/access");
         revalidatePath("/settings/profile");
+        revalidatePath("/profile");
 
         return {
             success: true,
@@ -835,6 +841,7 @@ export async function unmatchMultiplePaymentTransactionsAction(transactionIds: s
         revalidatePath("/settings");
         revalidatePath("/settings/access");
         revalidatePath("/settings/profile");
+        revalidatePath("/profile");
 
         return {
             success: true,
@@ -925,6 +932,7 @@ export async function groupAndAttributePaymentsAction(transactionIds: string[], 
         revalidatePath("/settings");
         revalidatePath("/settings/access");
         revalidatePath("/settings/profile");
+        revalidatePath("/profile");
 
         const updatedUser = await prisma.user.findUnique({ where: { id: targetUser.id } });
         const expiryFormatted = updatedUser?.subscriptionEndsAt 
@@ -1038,6 +1046,7 @@ export async function splitPaymentTransactionAction(
         revalidatePath("/settings");
         revalidatePath("/settings/access");
         revalidatePath("/settings/profile");
+        revalidatePath("/profile");
 
         return {
             success: true,
@@ -1078,6 +1087,7 @@ export async function bulkDeletePaymentTransactionsAction(transactionIds: string
         revalidatePath("/settings");
         revalidatePath("/settings/access");
         revalidatePath("/settings/profile");
+        revalidatePath("/profile");
 
         return {
             success: true,
@@ -1135,6 +1145,7 @@ export async function recordManualPaymentAction(data: {
         revalidatePath("/settings");
         revalidatePath("/settings/access");
         revalidatePath("/settings/profile");
+        revalidatePath("/profile");
 
         return {
             success: true,
@@ -1171,6 +1182,7 @@ export async function updateUserSubscriptionCadenceAction(userId: string, cadenc
         revalidatePath("/settings");
         revalidatePath("/settings/access");
         revalidatePath("/settings/profile");
+        revalidatePath("/profile");
 
         const settings = await prisma.settings.findUnique({ where: { id: "global" } });
         const isTier2 = user.membershipTier === "TIER_2_VIP";
@@ -1356,7 +1368,7 @@ export async function sendSubscriptionRenewalRemindersInternal(): Promise<{
                     monthlyAlternativeText,
                     referralNoticeDetails: summary.reminderNoticeText,
                     paymentMemo: member.username,
-                    billingUrl: `${appUrl}/settings/profile`,
+                    billingUrl: `${appUrl}/profile`,
                     appUrl
                 });
 
@@ -1434,7 +1446,7 @@ export async function sendSubscriptionRenewalRemindersInternal(): Promise<{
                         email: tUser.email,
                         daysRemaining: String(daysLeft),
                         expirationDate: formattedExp,
-                        renewUrl: `${appUrl}/settings/profile`,
+                        renewUrl: `${appUrl}/profile`,
                         appUrl
                     });
 

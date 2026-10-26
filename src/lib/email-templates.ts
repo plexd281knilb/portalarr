@@ -734,7 +734,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{email}", description: "Email address of user", sampleValue: "jordan@example.com" },
             { key: "{daysRemaining}", description: "Number of days remaining in trial", sampleValue: "3" },
             { key: "{expirationDate}", description: "Date when trial expires", sampleValue: "October 15, 2026" },
-            { key: "{renewUrl}", description: "URL to renewal or profile page", sampleValue: "https://portal.example.com/settings/profile" },
+            { key: "{renewUrl}", description: "URL to renewal or profile page", sampleValue: "https://portal.example.com/profile" },
             { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
         ]
     },
@@ -759,7 +759,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{username}", description: "Username of user", sampleValue: "jordan_reader" },
             { key: "{email}", description: "Email address of user", sampleValue: "jordan@example.com" },
             { key: "{expirationDate}", description: "Date when trial concluded", sampleValue: "October 15, 2026" },
-            { key: "{renewUrl}", description: "URL to renewal page", sampleValue: "https://portal.example.com/settings/profile" },
+            { key: "{renewUrl}", description: "URL to renewal page", sampleValue: "https://portal.example.com/profile" },
             { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
         ]
     },
@@ -934,7 +934,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{shortfall}", description: "Remaining balance needed to complete the plan", sampleValue: "$2.50" },
             { key: "{yearlyOptionNote}", description: "Optional callout for switching to discounted annual plan", sampleValue: "" },
             { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" },
-            { key: "{profileUrl}", description: "Direct link to user profile settings", sampleValue: "https://portal.example.com/settings/profile" }
+            { key: "{profileUrl}", description: "Direct link to user profile settings", sampleValue: "https://portal.example.com/profile" }
         ]
     },
     {
@@ -1317,7 +1317,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 </ul>
 
 <div style="text-align: center; margin: 28px 0;">
-    <a href="{appUrl}/settings/profile" style="background-color: #7c3aed; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">View Referral Rewards</a>
+    <a href="{appUrl}/profile" style="background-color: #7c3aed; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">View Referral Rewards</a>
 </div>
 <p style="font-size: 13px; color: #64748b;">Keep sharing your personal invite link! You can earn an unlimited number of free months for each friend you invite.</p>`,
         variables: [
@@ -1392,7 +1392,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{monthlyAlternativeText}", description: "Delayed monthly payment terms", sampleValue: "$17.50/month starting February 1, 2027" },
             { key: "{referralNoticeDetails}", description: "Detailed referral credit explanation", sampleValue: "You earned 1 free month for referring @alex_cinephile! Your next annual payment is discounted by $15.00 ($165.00 total)." },
             { key: "{paymentMemo}", description: "Clean payment memo tag (member username)", sampleValue: "jordan_reader" },
-            { key: "{billingUrl}", description: "Link to user profile billing section", sampleValue: "https://portal.example.com/settings/profile" },
+            { key: "{billingUrl}", description: "Link to user profile billing section", sampleValue: "https://portal.example.com/profile" },
             { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
         ]
     },
@@ -1443,7 +1443,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             { key: "{basePrice}", description: "Standard monthly price", sampleValue: "$17.50 / month" },
             { key: "{amountDue}", description: "Net amount due", sampleValue: "$17.50" },
             { key: "{paymentMemo}", description: "Clean payment memo tag (member username)", sampleValue: "jordan_reader" },
-            { key: "{billingUrl}", description: "Link to user profile billing section", sampleValue: "https://portal.example.com/settings/profile" },
+            { key: "{billingUrl}", description: "Link to user profile billing section", sampleValue: "https://portal.example.com/profile" },
             { key: "{appUrl}", description: "Base URL of DomsHomeLab", sampleValue: "https://portal.example.com" }
         ]
     },
@@ -1484,7 +1484,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 </p>
 
 <div style="text-align: center; margin: 28px 0;">
-    <a href="{appUrl}/settings/profile" style="background-color: #16a34a; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">View Payment Details & Memo</a>
+    <a href="{appUrl}/profile" style="background-color: #16a34a; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">View Payment Details & Memo</a>
 </div>
 <p style="font-size: 13px; color: #64748b;">Thank you for being a valued member of DomsHomeLab!</p>`,
         variables: [
@@ -1549,13 +1549,13 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 </div>
 
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px;">
-    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">⚙️ 5. Server &amp; Library Customization &amp; Streaming Preferences (<a href="{appUrl}/settings/profile" style="color: #4f46e5; text-decoration: none;">/settings/profile</a>)</p>
+    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">⚙️ 5. Server &amp; Library Customization &amp; Streaming Preferences (<a href="{appUrl}/profile" style="color: #4f46e5; text-decoration: none;">/profile</a>)</p>
     <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">Select which admin-whitelisted media servers and libraries you want active on your account (Plex, Jellyfin, and Emby), and customize your default streaming preferences, remote quality caps, and preferred audio and subtitle languages to match your home setup.</p>
 </div>
 
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px;">
-    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">💳 6. Flexible Billing Options &amp; Membership Status (<a href="{appUrl}/settings/profile" style="color: #4f46e5; text-decoration: none;">/settings/profile</a>)</p>
-    <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">We now offer both <strong>Monthly</strong> and <strong>Yearly</strong> billing options to best fit your viewing schedule! Visit your <a href="{appUrl}/settings/profile" style="color: #4f46e5; font-weight: 600; text-decoration: underline;">Account Profile</a> to view the plan comparison, check your current membership tier, review your renewal date, and see accepted direct payment methods (Venmo, PayPal, Zelle).</p>
+    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">💳 6. Flexible Billing Options &amp; Membership Status (<a href="{appUrl}/profile" style="color: #4f46e5; text-decoration: none;">/profile</a>)</p>
+    <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">We now offer both <strong>Monthly</strong> and <strong>Yearly</strong> billing options to best fit your viewing schedule! Visit your <a href="{appUrl}/profile" style="color: #4f46e5; font-weight: 600; text-decoration: underline;">Account Profile</a> to view the plan comparison, check your current membership tier, review your renewal date, and see accepted direct payment methods (Venmo, PayPal, Zelle).</p>
 </div>
 
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px;">

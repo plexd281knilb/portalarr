@@ -3665,7 +3665,7 @@ export async function expireDueTrialsAndSubscriptionsInternal() {
                             username: u.username,
                             email: u.email,
                             expirationDate: expirationDateFormatted,
-                            renewUrl: `${appUrl}/settings/profile`,
+                            renewUrl: `${appUrl}/profile`,
                             appUrl
                         });
                         await sendOrQueueEmail({
@@ -4151,6 +4151,7 @@ export async function updateCurrentUserPrimaryEmail(newEmail: string) {
     try {
         revalidatePath("/settings");
         revalidatePath("/settings/profile");
+        revalidatePath("/profile");
         revalidatePath("/settings/access");
     } catch {}
     return { success: true, message: `Account email successfully updated to ${cleanEmail}!` };
@@ -4199,6 +4200,7 @@ export async function updateAppUserEmail(id: string, newEmail: string) {
     try {
         revalidatePath("/settings");
         revalidatePath("/settings/profile");
+        revalidatePath("/profile");
         revalidatePath("/settings/access");
     } catch {}
     return { success: true, message: `User email successfully updated to ${cleanEmail}!` };
@@ -5801,6 +5803,7 @@ export async function setUserTrialOrSubscription(
 
         revalidatePath("/settings/access");
         revalidatePath("/settings/profile");
+        revalidatePath("/profile");
         revalidatePath("/settings");
         return { success: true, message: `Updated access status for ${user.username} to ${status}.` };
     } catch (e: any) {
@@ -6136,6 +6139,7 @@ export async function restoreAllUsersPlexAccessAction() {
         revalidatePath("/settings");
         revalidatePath("/settings/access");
         revalidatePath("/settings/profile");
+        revalidatePath("/profile");
 
         logger.addLog("SUCCESS", "PLEX", `[RESTORE-ALL-ACCESS] Restored full Plex library access for ${restoredCount} users across ${serversWithSections.length} servers.`);
         return {
@@ -6402,6 +6406,7 @@ export async function creditUserReferralAction(params: {
 
         revalidatePath("/settings/access");
         revalidatePath("/settings/profile");
+        revalidatePath("/profile");
         revalidatePath("/settings");
 
         return {
@@ -6441,6 +6446,7 @@ export async function unlinkUserReferralAction(referredUserId: string) {
 
         revalidatePath("/settings/access");
         revalidatePath("/settings/profile");
+        revalidatePath("/profile");
         revalidatePath("/settings");
 
         return { success: true, message: `Successfully unlinked referral for @${user.username}.` };
@@ -6587,7 +6593,7 @@ export async function sendSubscriptionRenewalReminderAction(userId: string) {
             monthlyAlternativeText,
             referralNoticeDetails: summary.reminderNoticeText,
             paymentMemo: user.username,
-            billingUrl: `${appUrl}/settings/profile`,
+            billingUrl: `${appUrl}/profile`,
             appUrl
         });
 
@@ -6690,6 +6696,7 @@ export async function savePaymentAndTrialSettings(formData: FormData) {
         revalidatePath("/settings");
         revalidatePath("/settings/access");
         revalidatePath("/settings/profile");
+        revalidatePath("/profile");
         return {
             success: true,
             message: "Payment & Trial settings saved successfully!",
@@ -7413,6 +7420,7 @@ export async function updateUserMembershipTierAction(userId: string, membershipT
         syncUserRoleToDiscord(userId).catch(() => {});
         revalidatePath("/settings/access");
         revalidatePath("/settings/profile");
+        revalidatePath("/profile");
         return { success: true, message: `Updated ${updated.username} membership tier to ${cleanTier === "TIER_2_VIP" ? "Tier 2 (Managed Support)" : cleanTier === "TRIAL" ? "Trial Pass" : "Tier 1 (Regular Member)"}`, user: updated };
     } catch (e: any) {
         return { success: false, error: e.message || "Failed to update membership tier" };
@@ -7748,6 +7756,7 @@ export async function updateUserSelectedPlexLibrariesAction(selectedKeys: string
                     notifyAdminsOnPendingApproval(approval).catch(e => console.warn("[APPROVAL-NOTIFY-ERROR]:", e?.message || e));
                 }
                 revalidatePath("/settings/profile");
+                revalidatePath("/profile");
                 return {
                     success: true,
                     message: "Your library preference request has been submitted for admin approval!",
@@ -7769,6 +7778,7 @@ export async function updateUserSelectedPlexLibrariesAction(selectedKeys: string
         }
 
         revalidatePath("/settings/profile");
+        revalidatePath("/profile");
         return {
             success: true,
             message: "Your shared Plex library preferences have been updated!",
@@ -7941,6 +7951,7 @@ export async function createOrUpdateSubAccountAction(payload: {
             }
 
             revalidatePath("/settings/profile");
+            revalidatePath("/profile");
             revalidatePath("/settings/access");
             return { success: true, message: `Updated sub-account "${cleanLabel}" successfully!`, subAccount: updated };
         } else {
@@ -8055,6 +8066,7 @@ export async function createOrUpdateSubAccountAction(payload: {
             }
 
             revalidatePath("/settings/profile");
+            revalidatePath("/profile");
             revalidatePath("/settings/access");
             return { success: true, message: `Created sub-account "${cleanLabel}" for ${cleanPlexHandle}!`, subAccount: newSub };
         }
@@ -8089,6 +8101,7 @@ export async function deleteSubAccountAction(subAccountId: string) {
         await prisma.user.delete({ where: { id: subAccountId } });
 
         revalidatePath("/settings/profile");
+        revalidatePath("/profile");
         revalidatePath("/settings/access");
         return { success: true, message: `Deleted sub-account "${subAccount.subAccountLabel || subAccount.username}".` };
     } catch (e: any) {
@@ -8357,6 +8370,7 @@ export async function toggleFreeAddonAction(addonId: string, enabled: boolean) {
 
         try {
             revalidatePath("/settings/profile");
+            revalidatePath("/profile");
         } catch (_) {}
         return {
             success: true,
@@ -8416,6 +8430,7 @@ export async function toggleUserAddonAdminAction(userId: string, addonId: string
 
         revalidatePath("/settings/access");
         revalidatePath("/settings/profile");
+        revalidatePath("/profile");
         return {
             success: true,
             message: `Updated add-on preference for ${dbUser.username}`,
@@ -8473,6 +8488,7 @@ export async function toggleAdminAddonAvailabilityAction(addonId: string, isAvai
         revalidatePath("/settings");
         revalidatePath("/settings/access");
         revalidatePath("/settings/profile");
+        revalidatePath("/profile");
         return { success: true, message: `Add-on availability updated!`, catalog };
     } catch (e: any) {
         return { success: false, error: e.message || "Failed to update add-on availability" };
@@ -10387,6 +10403,7 @@ export async function updateUserKidsLibraryAccessAction(enable: boolean) {
         }
 
         revalidatePath("/settings/profile");
+        revalidatePath("/profile");
         revalidatePath("/library");
         revalidatePath("/discover");
 
@@ -10618,6 +10635,7 @@ export async function updateUserAudiobooksLibraryAccessAction(enable: boolean) {
         await syncAudiobooksPlexLibraryAccessForUser(dbUser.id, enable);
 
         revalidatePath("/settings/profile");
+        revalidatePath("/profile");
         revalidatePath("/library");
         revalidatePath("/discover");
 
@@ -10669,6 +10687,7 @@ export async function toggleLibraryUserAccessAction(libraryId: string, username:
         logger.addLog("INFO", "DATABASE", `Toggled user "${targetUser}" on library "${lib.name}": now "${newAllowedStr}"`);
         revalidatePath("/library");
         revalidatePath("/settings/profile");
+        revalidatePath("/profile");
 
         return { success: true, allowedUsers: newAllowedStr };
     } catch (e: any) {
@@ -15396,6 +15415,7 @@ export async function updateCurrentUserKindleEmail(kindleEmail: string) {
         }
 
         revalidatePath("/settings/profile");
+        revalidatePath("/profile");
         revalidatePath("/library");
 
         return {
@@ -16477,6 +16497,7 @@ export async function setupBookLibraryAccessAction(options: { kindleEmail?: stri
         revalidatePath("/");
         revalidatePath("/library");
         revalidatePath("/settings/profile");
+        revalidatePath("/profile");
 
         return { 
             success: true, 
@@ -16589,6 +16610,7 @@ export async function toggleSelfSuperUserAction() {
 
         revalidatePath("/");
         revalidatePath("/settings/profile");
+        revalidatePath("/profile");
 
         return { 
             success: true, 

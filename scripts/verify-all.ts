@@ -1982,7 +1982,7 @@ async function runTestSuite() {
         // 5. Verify User Launchpad has Servers & Libraries card pointing to /settings/profile
         const launchpadPath = path.join(process.cwd(), "src", "components", "dashboard", "user-launchpad.tsx");
         const launchpadContent = fs.readFileSync(launchpadPath, "utf-8");
-        if (!launchpadContent.includes("/settings/profile")) {
+        if (!launchpadContent.includes("/profile") && !launchpadContent.includes("/settings/profile")) {
             throw new Error("UserLaunchpad missing link to /settings/profile");
         }
         if (!launchpadContent.includes("Servers &amp; Libraries") && !launchpadContent.includes("Servers & Libraries")) {
@@ -2126,6 +2126,9 @@ async function runTestSuite() {
             }
             if (launchTpl.defaultBody.includes("#billing")) {
                 throw new Error("new_site_launch should not contain '#billing' fragment in paths");
+            }
+            if (!launchTpl.defaultBody.includes("{appUrl}/profile") || launchTpl.defaultBody.includes("settings/profile")) {
+                throw new Error("new_site_launch must use clean /profile route instead of /settings/profile");
             }
         } finally {
             await prisma.sentEmailLog.deleteMany({
