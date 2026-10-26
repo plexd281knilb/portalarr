@@ -5994,13 +5994,13 @@ export function KometaStudio() {
                             </div>
                         )}
 
-                        <DialogFooter className="pt-2">
-                            <Button type="button" variant="ghost" size="sm" onClick={() => setBadgeUploadModalOpen(false)}>Cancel</Button>
+                        <DialogFooter className="pt-2 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2">
+                            <Button type="button" variant="ghost" size="sm" onClick={() => setBadgeUploadModalOpen(false)} className="w-full sm:w-auto">Cancel</Button>
                             <Button
                                 type="submit"
                                 size="sm"
                                 disabled={uploadingBadge || !badgeUploadFile}
-                                className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs"
+                                className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs w-full sm:w-auto shrink-0 whitespace-nowrap"
                             >
                                 {uploadingBadge ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
                                 <span>Upload &amp; Install Badge</span>
@@ -6121,14 +6121,14 @@ export function KometaStudio() {
                         )}
                     </div>
 
-                    <DialogFooter className="pt-3 border-t border-slate-800 flex items-center justify-between">
-                        <Button type="button" variant="ghost" size="sm" onClick={() => setGithubModalOpen(false)}>Close</Button>
+                    <DialogFooter className="pt-3 border-t border-slate-800 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+                        <Button type="button" variant="ghost" size="sm" onClick={() => setGithubModalOpen(false)} className="w-full sm:w-auto">Close</Button>
                         <Button
                             type="button"
                             size="sm"
                             disabled={importingBadges || selectedBadgeIds.length === 0}
                             onClick={handleImportGitHubBadges}
-                            className="bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs gap-1.5"
+                            className="bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs gap-1.5 w-full sm:w-auto shrink-0 whitespace-nowrap"
                         >
                             {importingBadges ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <DownloadCloud className="h-3.5 w-3.5" />}
                             <span>Import {selectedBadgeIds.length} Selected Badges</span>
@@ -6451,13 +6451,14 @@ export function KometaStudio() {
                         </div>
                     </div>
 
-                    <DialogFooter className="pt-3 border-t border-slate-800">
+                    <DialogFooter className="pt-3 border-t border-slate-800 flex justify-end">
                         <Button
                             type="button"
                             variant="ghost"
                             size="sm"
                             disabled={purgingBadges}
                             onClick={() => setBulkDeleteModalOpen(false)}
+                            className="w-full sm:w-auto"
                         >
                             Cancel
                         </Button>
@@ -6586,13 +6587,13 @@ export function KometaStudio() {
                         )}
                     </div>
 
-                    <DialogFooter className="pt-3 border-t border-slate-800 flex items-center justify-end gap-2">
+                    <DialogFooter className="pt-3 border-t border-slate-800 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5">
                         <Button
                             type="button"
                             variant="ghost"
                             size="sm"
                             onClick={() => setRevertConfirmModalOpen(false)}
-                            className="text-xs text-slate-400 hover:text-white"
+                            className="text-xs text-slate-400 hover:text-white w-full sm:w-auto"
                         >
                             Cancel
                         </Button>
@@ -6601,7 +6602,7 @@ export function KometaStudio() {
                             size="sm"
                             disabled={revertingOverlays}
                             onClick={() => executeRevertOverlays(revertScope)}
-                            className={revertScope === "server" ? "bg-rose-600 hover:bg-rose-500 text-white text-xs h-8 px-3" : "bg-amber-600 hover:bg-amber-500 text-white text-xs h-8 px-3"}
+                            className={(revertScope === "server" ? "bg-rose-600 hover:bg-rose-500 text-white text-xs h-8 px-3" : "bg-amber-600 hover:bg-amber-500 text-white text-xs h-8 px-3") + " w-full sm:w-auto shrink-0 whitespace-nowrap"}
                         >
                             {revertingOverlays ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <RotateCcw className="h-3.5 w-3.5 mr-1.5" />}
                             <span>Restore {revertScope === "section" ? "Section" : "All Libraries"}</span>
@@ -6706,12 +6707,12 @@ export function KometaStudio() {
                         })}
                     </div>
 
-                    <DialogFooter className="pt-2 border-t border-slate-800">
+                    <DialogFooter className="pt-2 border-t border-slate-800 flex justify-end">
                         <Button
                             type="button"
                             size="sm"
                             onClick={() => setManageLibrariesModalOpen(false)}
-                            className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs"
+                            className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs w-full sm:w-auto"
                         >
                             Done
                         </Button>

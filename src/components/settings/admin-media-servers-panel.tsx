@@ -688,7 +688,7 @@ export function AdminMediaServersPanel({ onDirtyChange }: AdminMediaServersPanel
 
             {/* Add / Edit Media Server Modal */}
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-                <DialogContent className="sm:max-w-md bg-[#121218] border-border/60">
+                <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto bg-[#121218] border-border/60">
                     <DialogHeader>
                         <DialogTitle className="text-base font-bold text-foreground flex items-center gap-2">
                             {editingServer ? (
@@ -832,13 +832,13 @@ export function AdminMediaServersPanel({ onDirtyChange }: AdminMediaServersPanel
                         </div>
                     </div>
 
-                    <DialogFooter className="gap-2">
+                    <DialogFooter className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2">
                         <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => setDialogOpen(false)}
                             disabled={savingServer}
-                            className="h-8 text-xs"
+                            className="h-8 text-xs w-full sm:w-auto"
                         >
                             Cancel
                         </Button>
@@ -846,7 +846,7 @@ export function AdminMediaServersPanel({ onDirtyChange }: AdminMediaServersPanel
                             size="sm"
                             onClick={handleSaveServer}
                             disabled={savingServer}
-                            className="h-8 text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5"
+                            className="h-8 text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 w-full sm:w-auto shrink-0 whitespace-nowrap"
                         >
                             {savingServer ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
                             <span>{editingServer ? "Update Server" : "Save Server"}</span>

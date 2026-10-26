@@ -78,7 +78,7 @@ export function KindleSenderUpdateModal({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-lg bg-[#0e0e15]/95 backdrop-blur-xl border border-purple-500/30 shadow-2xl p-0 overflow-hidden text-foreground">
+            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto bg-[#0e0e15]/95 backdrop-blur-xl border border-purple-500/30 shadow-2xl p-0 text-foreground scrollbar-thin">
                 {/* Glowing Top Banner */}
                 <div className="bg-gradient-to-r from-purple-950/80 via-indigo-950/60 to-purple-950/80 border-b border-purple-500/20 p-5 pb-4">
                     <div className="flex items-center gap-2 mb-2">
@@ -188,7 +188,7 @@ export function KindleSenderUpdateModal({
                         Remind Me Later
                     </Button>
 
-                    <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full sm:w-auto justify-end">
+                    <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto justify-end">
                         <Button
                             type="button"
                             variant="outline"

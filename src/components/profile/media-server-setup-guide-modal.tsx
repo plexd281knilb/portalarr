@@ -547,11 +547,11 @@ export function MediaServerSetupGuideModal({
                 </div>
 
                 {/* Footer */}
-                <DialogFooter className="p-4 border-t border-border/40 bg-white/[0.01] flex items-center justify-between sm:justify-between">
+                <DialogFooter className="p-4 border-t border-border/40 bg-white/[0.01] flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
                     <p className="text-[11px] text-muted-foreground">
                         Need help? Open a <a href="/tickets" className="text-primary hover:underline">Support Ticket</a> anytime.
                     </p>
-                    <Button onClick={onClose} size="sm" className="font-semibold text-xs px-5 cursor-pointer">
+                    <Button onClick={onClose} size="sm" className="font-semibold text-xs px-5 cursor-pointer w-full sm:w-auto">
                         Got It
                     </Button>
                 </DialogFooter>

@@ -2012,12 +2012,12 @@ export function TaggingStudio() {
                         })}
                     </div>
 
-                    <DialogFooter className="pt-2 border-t border-slate-800">
+                    <DialogFooter className="pt-2 border-t border-slate-800 flex justify-end">
                         <Button
                             type="button"
                             size="sm"
                             onClick={() => setManageLibrariesModalOpen(false)}
-                            className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs"
+                            className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs w-full sm:w-auto"
                         >
                             Done
                         </Button>

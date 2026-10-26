@@ -1283,7 +1283,7 @@ export default function EmailManagement() {
 
             {/* CONFIRM BROADCAST MODAL */}
             <Dialog open={showConfirmModal} onOpenChange={setShowConfirmModal}>
-                <DialogContent className="sm:max-w-[500px] bg-[#121218] border-border/60 text-foreground">
+                <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto bg-[#121218] border-border/60 text-foreground">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2 text-foreground">
                             <Megaphone className="h-5 w-5 text-primary" />
@@ -1325,8 +1325,8 @@ export default function EmailManagement() {
                         </div>
                     </div>
 
-                    <DialogFooter className="gap-2 sm:gap-0">
-                        <Button variant="ghost" size="sm" onClick={() => setShowConfirmModal(false)} disabled={broadcasting}>
+                    <DialogFooter className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2">
+                        <Button variant="ghost" size="sm" onClick={() => setShowConfirmModal(false)} disabled={broadcasting} className="w-full sm:w-auto">
                             Cancel
                         </Button>
                         <Button 
@@ -1334,7 +1334,7 @@ export default function EmailManagement() {
                             size="sm" 
                             onClick={handleExecuteBroadcast} 
                             disabled={broadcasting}
-                            className="font-bold bg-primary text-primary-foreground gap-1.5"
+                            className="font-bold bg-primary text-primary-foreground gap-1.5 w-full sm:w-auto shrink-0 whitespace-nowrap"
                         >
                             {broadcasting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                             {broadcasting

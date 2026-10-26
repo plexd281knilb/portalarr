@@ -594,7 +594,7 @@ export function DiscordMemberManagerModal({
                 </div>
 
                 {/* FOOTER */}
-                <DialogFooter className="shrink-0 pt-2 border-t border-border/40 flex sm:justify-between items-center gap-2">
+                <DialogFooter className="shrink-0 pt-2.5 border-t border-border/40 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2.5">
                     <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
                         <Shield className="h-3.5 w-3.5 text-emerald-400" />
                         Role assignments strictly conceal internal tiers into a unified <strong>⭐ Member</strong> role.
@@ -604,7 +604,7 @@ export function DiscordMemberManagerModal({
                         variant="ghost"
                         size="sm"
                         onClick={onClose}
-                        className="text-xs font-semibold cursor-pointer"
+                        className="text-xs font-semibold cursor-pointer w-full sm:w-auto"
                     >
                         Done
                     </Button>

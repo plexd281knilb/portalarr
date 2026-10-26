@@ -88,7 +88,7 @@ export function CurationLibraryGuardModal({
             if (!val && onCancel) onCancel();
             onOpenChange(val);
         }}>
-            <DialogContent className="max-w-xl bg-slate-900 border-amber-500/40 text-slate-100 shadow-2xl p-6 sm:p-7">
+            <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto bg-slate-900 border-amber-500/40 text-slate-100 shadow-2xl p-6 sm:p-7">
                 <DialogHeader className="space-y-3">
                     <div className="flex items-center gap-3">
                         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400">

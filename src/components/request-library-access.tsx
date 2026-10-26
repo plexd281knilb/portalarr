@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { BookOpen, X, Loader2, Check, ShieldAlert, Download, Mail } from "lucide-react";
+import { BookOpen, X, Loader2, Check, ShieldAlert, Download, Mail, ExternalLink } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 export default function RequestLibraryAccess() {
@@ -151,7 +151,16 @@ export default function RequestLibraryAccess() {
                                             className="bg-black/40 border-border/60 text-xs h-9"
                                         />
                                         <p className="text-[11px] text-muted-foreground leading-relaxed">
-                                            Find your Send-to-Kindle address in Amazon Account → Manage Devices.
+                                            Find your Send-to-Kindle address in Amazon&apos;s Personal Document Settings:{" "}
+                                            <a
+                                                href="https://www.amazon.com/hz/mycd/myx#/home/settings/payment"
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="text-emerald-400 hover:text-emerald-300 underline font-semibold break-all inline-flex items-center gap-0.5"
+                                            >
+                                                <span>https://www.amazon.com/hz/mycd/myx#/home/settings/payment</span>
+                                                <ExternalLink className="h-2.5 w-2.5 inline shrink-0" />
+                                            </a>
                                         </p>
                                     </div>
 
