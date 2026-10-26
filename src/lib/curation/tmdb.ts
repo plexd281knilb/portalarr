@@ -799,15 +799,51 @@ export async function enrichItemsWithCertifications(items: TmdbMediaItem[]): Pro
 /**
  * Search TMDb by title and release year for movie matching
  */
-export async function searchTmdbMovie(title: string, year?: number): Promise<TmdbMediaItem[]> {
+export async function searchTmdbMovie(
+    title: string,
+    year?: number,
+    page = 1,
+    isKids = false
+): Promise<TmdbMediaItem[]> {
     try {
-        const params: Record<string, string | number> = { query: title };
+        const cleanTitle = (title || "").trim();
+        if (!cleanTitle) return [];
+        const params: Record<string, string | number> = {
+            query: cleanTitle,
+            page,
+            include_adult: "false"
+        };
         if (year) params.primary_release_year = year;
         const data = await tmdbFetch("/search/movie", params);
-        const mapped = (data?.results || []).map(mapTmdbMovie);
-        const enriched = await enrichItemsWithCertifications(mapped);
-        const allowed = filterAllowedMedia(enriched);
-        return rankMediaByDownloadLikelihood(allowed, title);
+        let rawResults = data?.results || [];
+
+        // If no results on first page, attempt fast spelling correction fallback
+        if (rawResults.length === 0 && page === 1) {
+            try {
+                const suggestion = await getSpellingSuggestion(cleanTitle);
+                if (suggestion && suggestion.toLowerCase() !== cleanTitle.toLowerCase()) {
+                    const altData = await tmdbFetch("/search/movie", {
+                        query: suggestion,
+                        page: 1,
+                        include_adult: "false"
+                    });
+                    if (altData?.results && altData.results.length > 0) {
+                        rawResults = altData.results;
+                    }
+                }
+            } catch {}
+        }
+
+        const mapped = rawResults.map(mapTmdbMovie);
+        // Enrich top 12 items with certification ratings for fast response
+        const toEnrich = mapped.slice(0, 12);
+        const enriched = await enrichItemsWithCertifications(toEnrich);
+        const combined = [...enriched, ...mapped.slice(12)];
+        let allowed = filterAllowedMedia(combined);
+        if (isKids) {
+            allowed = filterKidsSafeMedia(allowed);
+        }
+        return rankMediaByDownloadLikelihood(allowed, cleanTitle);
     } catch {
         return [];
     }
@@ -816,15 +852,51 @@ export async function searchTmdbMovie(title: string, year?: number): Promise<Tmd
 /**
  * Search TMDb for TV show matching
  */
-export async function searchTmdbTv(title: string, year?: number): Promise<TmdbMediaItem[]> {
+export async function searchTmdbTv(
+    title: string,
+    year?: number,
+    page = 1,
+    isKids = false
+): Promise<TmdbMediaItem[]> {
     try {
-        const params: Record<string, string | number> = { query: title };
+        const cleanTitle = (title || "").trim();
+        if (!cleanTitle) return [];
+        const params: Record<string, string | number> = {
+            query: cleanTitle,
+            page,
+            include_adult: "false"
+        };
         if (year) params.first_air_date_year = year;
         const data = await tmdbFetch("/search/tv", params);
-        const mapped = (data?.results || []).map(mapTmdbTv);
-        const enriched = await enrichItemsWithCertifications(mapped);
-        const allowed = filterAllowedMedia(enriched);
-        return rankMediaByDownloadLikelihood(allowed, title);
+        let rawResults = data?.results || [];
+
+        // If no results on first page, attempt fast spelling correction fallback
+        if (rawResults.length === 0 && page === 1) {
+            try {
+                const suggestion = await getSpellingSuggestion(cleanTitle);
+                if (suggestion && suggestion.toLowerCase() !== cleanTitle.toLowerCase()) {
+                    const altData = await tmdbFetch("/search/tv", {
+                        query: suggestion,
+                        page: 1,
+                        include_adult: "false"
+                    });
+                    if (altData?.results && altData.results.length > 0) {
+                        rawResults = altData.results;
+                    }
+                }
+            } catch {}
+        }
+
+        const mapped = rawResults.map(mapTmdbTv);
+        // Enrich top 12 items with certification ratings for fast response
+        const toEnrich = mapped.slice(0, 12);
+        const enriched = await enrichItemsWithCertifications(toEnrich);
+        const combined = [...enriched, ...mapped.slice(12)];
+        let allowed = filterAllowedMedia(combined);
+        if (isKids) {
+            allowed = filterKidsSafeMedia(allowed);
+        }
+        return rankMediaByDownloadLikelihood(allowed, cleanTitle);
     } catch {
         return [];
     }

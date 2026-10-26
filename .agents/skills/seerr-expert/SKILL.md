@@ -131,6 +131,12 @@ To achieve sub-second page loads and eliminate blank-screen flashing on tab chan
   - Race Condition Guards: Tracks `activeTabRef` to ensure that fast switching between "Movies" and "TV Shows" never allows older in-flight promises to overwrite the active tab's grid items.
   - Switching between tabs instantly displays cached data with `0ms` latency (zero loading spinner, zero screen flicker), then revalidates in the background if older than 2 minutes.
   - Search debounce is optimized to `350ms` for fluid responsiveness. Searches on `movies` and `tv` tabs strictly query TMDb media without firing redundant book APIs, while `ebooks` and `audiobooks` tabs strictly query book registries.
+  - **Sequential Progressive Search Pipeline (Browse Mode)**: In Browse (`discover`) mode, searches strictly execute and stream in order:
+    1. **Movies first** (`searchMediaAction(..., "movie")`) -> renders movies immediately (~150-250ms).
+    2. **TV Shows second** (`searchMediaAction(..., "tv")`) -> renders TV shows below movies.
+    3. **Books third** (`searchBooksAction(..., "ebook")`) -> renders ebooks below TV shows.
+    4. **Audiobooks fourth** (`searchBooksAction(..., "audiobook")`) -> renders audiobooks below books.
+    This guarantees instantaneous first-result rendering without waiting for all media forms to complete simultaneously. Search results are rendered in 4 dedicated, cleanly separated sections matching this exact order.
 - **Request Manager Module-Level Cache**:
   - `RequestManager` initializes from `cachedRequests` to render previous request listings instantly when switching between Discover and Requests tabs.
   - `filteredRequests` and status `counts` are memoized via `useMemo` for lag-free typing in large request catalogs.

@@ -25,6 +25,8 @@ import {
     getDisneyTrending,
     getNetflixTrending,
     searchTmdbMulti,
+    searchTmdbMovie,
+    searchTmdbTv,
     rankMediaByDownloadLikelihood,
     getTmdbMovieDetailsFull,
     getTmdbTvDetailsFull,
@@ -369,7 +371,12 @@ export async function getDiscoverMediaAction(
  * Search across Movies & TV Shows with instant availability lookup
  * Supports filtering out mature ratings in Kids mode
  */
-export async function searchMediaAction(query: string, page = 1, isKids = false) {
+export async function searchMediaAction(
+    query: string,
+    page = 1,
+    isKids = false,
+    mediaType: "all" | "movie" | "tv" = "all"
+) {
     try {
         if (!query || !query.trim()) {
             return { success: true, items: [], availabilityMap: {} };
@@ -380,7 +387,7 @@ export async function searchMediaAction(query: string, page = 1, isKids = false)
             return { success: true, items: [], availabilityMap: {} };
         }
 
-        const cacheKey = `${cleanQuery.toLowerCase()}:${page}:${Boolean(isKids)}`;
+        const cacheKey = `${cleanQuery.toLowerCase()}:${page}:${Boolean(isKids)}:${mediaType}`;
         const cached = mediaSearchCache.get(cacheKey);
         let items: TmdbMediaItem[] = [];
 
@@ -390,11 +397,17 @@ export async function searchMediaAction(query: string, page = 1, isKids = false)
             items = await getOrFetchMediaCache<TmdbMediaItem[]>(
                 `search:${cacheKey}`,
                 async () => {
-                    let results = await searchTmdbMulti(cleanQuery, page);
-                    if (isKids) {
-                        results = filterKidsSafeMedia(results);
+                    if (mediaType === "movie") {
+                        return await searchTmdbMovie(cleanQuery, undefined, page, Boolean(isKids));
+                    } else if (mediaType === "tv") {
+                        return await searchTmdbTv(cleanQuery, undefined, page, Boolean(isKids));
+                    } else {
+                        let results = await searchTmdbMulti(cleanQuery, page);
+                        if (isKids) {
+                            results = filterKidsSafeMedia(results);
+                        }
+                        return results;
                     }
-                    return results;
                 },
                 { ttlMs: TTL_MEDIA_SEARCH, staleTtlMs: STALE_MEDIA_SEARCH }
             );

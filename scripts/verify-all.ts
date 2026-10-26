@@ -585,6 +585,29 @@ async function runTestSuite() {
             throw new Error(`Expected joinConfig kindleSenderEmail to be kindle@domshomelab.com, got: ${joinConfig.config?.kindleSenderEmail}`);
         }
 
+        // Progressive Sequential Search Verification (Movies, TV Shows, Books, Audiobooks)
+        const { searchMediaAction } = await import("../src/app/seerr-actions");
+        const emptySearch = await searchMediaAction("");
+        if (!emptySearch.success || emptySearch.items.length !== 0) {
+            throw new Error("Expected empty query to return empty items immediately");
+        }
+
+        const movieSearch = await searchMediaAction("Inception", 1, false, "movie");
+        if (!movieSearch.success || !Array.isArray(movieSearch.items)) {
+            throw new Error("Expected movie search to succeed");
+        }
+        if (movieSearch.items.length > 0 && movieSearch.items.some(i => i.mediaType !== "movie")) {
+            throw new Error("Expected movie search to only return movies");
+        }
+
+        const tvSearch = await searchMediaAction("Breaking Bad", 1, false, "tv");
+        if (!tvSearch.success || !Array.isArray(tvSearch.items)) {
+            throw new Error("Expected tv search to succeed");
+        }
+        if (tvSearch.items.length > 0 && tvSearch.items.some(i => i.mediaType !== "tv")) {
+            throw new Error("Expected tv search to only return tv shows");
+        }
+
         await prisma.mediaRequest.delete({ where: { id: testReq.id } });
     });
 
