@@ -87,7 +87,7 @@ export function KindleSenderUpdateBanner({
                     <div className="space-y-1.5 flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                             <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5">
-                                <Send className="h-3 w-3 mr-1 inline" /> Ebooks Request Notice
+                                <Send className="h-3 w-3 mr-1 inline" /> Send-to-Kindle Notice
                             </Badge>
                             <Badge variant="outline" className="border-amber-500/40 text-amber-400 bg-amber-500/10 text-[10px]">
                                 Action Required
@@ -129,7 +129,7 @@ export function KindleSenderUpdateBanner({
                             size="sm"
                             variant="outline"
                             asChild
-                            className="text-xs border-purple-500/40 text-purple-300 hover:bg-purple-500/10 h-8 sm:h-9"
+                            className="text-xs border-purple-500/40 text-purple-300 hover:bg-purple-500/10 h-8 sm:h-9 shrink-0 whitespace-nowrap"
                         >
                             <a
                                 href="https://www.amazon.com/hz/mycd/myx#/home/settings/payment"
@@ -147,10 +147,10 @@ export function KindleSenderUpdateBanner({
                             size="sm"
                             variant="secondary"
                             onClick={() => setModalOpen(true)}
-                            className="text-xs bg-purple-950/60 hover:bg-purple-900/60 text-purple-200 border border-purple-500/30 h-8 sm:h-9 gap-1"
+                            className="text-xs bg-purple-950/60 hover:bg-purple-900/60 text-purple-200 border border-purple-500/30 h-8 sm:h-9 gap-1 shrink-0 whitespace-nowrap"
                         >
-                            <BookOpen className="h-3.5 w-3.5" />
-                            <span>View Guide</span>
+                            <BookOpen className="h-3.5 w-3.5 shrink-0" />
+                            <span className="whitespace-nowrap">View Guide</span>
                         </Button>
 
                         <Button
@@ -158,10 +158,10 @@ export function KindleSenderUpdateBanner({
                             size="sm"
                             onClick={handleAcknowledge}
                             disabled={acknowledging}
-                            className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs gap-1.5 shadow-md shadow-purple-900/30 h-8 sm:h-9"
+                            className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs gap-1.5 shadow-md shadow-purple-900/30 h-8 sm:h-9 shrink-0 whitespace-nowrap"
                         >
-                            <Check className="h-3.5 w-3.5" />
-                            <span>{acknowledging ? "Saving..." : "I've Updated My Settings on Amazon"}</span>
+                            <Check className="h-3.5 w-3.5 shrink-0" />
+                            <span className="whitespace-nowrap">{acknowledging ? "Saving..." : "I've Updated on Amazon"}</span>
                         </Button>
                     </div>
                 </div>
