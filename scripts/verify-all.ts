@@ -2008,6 +2008,76 @@ async function runTestSuite() {
         if (!pageContent.includes("<PaidThroughHeader") || !pageContent.includes("Paid Through:")) {
             throw new Error("src/app/page.tsx missing PaidThroughHeader or Paid Through indicator");
         }
+
+        // 8. Verify Kindle Outbound Sender Update Notice Popup in layout-wrapper.tsx
+        const layoutPath = path.join(process.cwd(), "src", "components", "layout-wrapper.tsx");
+        const layoutContent = fs.readFileSync(layoutPath, "utf-8");
+        if (!layoutContent.includes("<KindleSenderNoticePopup") || !layoutContent.includes("KindleSenderNoticePopup")) {
+            throw new Error("layout-wrapper.tsx missing KindleSenderNoticePopup mount");
+        }
+
+        const modalPath = path.join(process.cwd(), "src", "components", "kindle-sender-update-modal.tsx");
+        const modalContent = fs.readFileSync(modalPath, "utf-8");
+        if (!modalContent.includes("⚡ Outbound Sender Updated to") || !modalContent.includes("Approved Personal Document E-mail List")) {
+            throw new Error("kindle-sender-update-modal.tsx missing required title or Amazon approved list instructions");
+        }
+        if (!modalContent.includes("https://www.amazon.com/hz/mycd/myx#/home/settings/payment")) {
+            throw new Error("kindle-sender-update-modal.tsx missing clickable link to Amazon settings");
+        }
+
+        // Verify KindleSenderUpdateBanner in Media Requests (Ebooks tab & RequestManager)
+        const bannerPath = path.join(process.cwd(), "src", "components", "kindle-sender-update-banner.tsx");
+        const bannerContent = fs.readFileSync(bannerPath, "utf-8");
+        if (!bannerContent.includes("https://www.amazon.com/hz/mycd/myx#/home/settings/payment") || !bannerContent.includes("⚡ Outbound Sender Updated to")) {
+            throw new Error("kindle-sender-update-banner.tsx missing clickable Amazon link or title");
+        }
+
+        const discoverHubPath = path.join(process.cwd(), "src", "components", "seerr", "discover-hub.tsx");
+        const discoverHubContent = fs.readFileSync(discoverHubPath, "utf-8");
+        if (!discoverHubContent.includes("<KindleSenderUpdateBanner") || !discoverHubContent.includes('activeTab === "ebooks"')) {
+            throw new Error("discover-hub.tsx missing KindleSenderUpdateBanner on ebooks request tab");
+        }
+
+        const reqMgrPath = path.join(process.cwd(), "src", "components", "seerr", "request-manager.tsx");
+        const reqMgrContent = fs.readFileSync(reqMgrPath, "utf-8");
+        if (!reqMgrContent.includes("<KindleSenderUpdateBanner") || !reqMgrContent.includes('mediaTypeFilter === "book"')) {
+            throw new Error("request-manager.tsx missing KindleSenderUpdateBanner on ebooks filter");
+        }
+
+        // Test DB update acknowledgment action
+        const { getKindleSenderUpdateNoticeStatusAction, acknowledgeKindleSenderUpdateAction } = await import("../src/app/actions");
+        const testUser = await prisma.user.findFirst({ where: { role: "ADMIN" } }) || await prisma.user.findFirst();
+        if (testUser) {
+            const originalKindle = testUser.kindleEmail;
+            const originalAck = testUser.kindleSenderUpdateAcknowledgedAt;
+            try {
+                // Set kindle email to test address and ack to null
+                await prisma.user.update({
+                    where: { id: testUser.id },
+                    data: { kindleEmail: "test_reader@kindle.com", kindleSenderUpdateAcknowledgedAt: null }
+                });
+                const statusBefore = await getKindleSenderUpdateNoticeStatusAction();
+                if (!statusBefore.needsNotice || statusBefore.kindleEmail !== "test_reader@kindle.com") {
+                    throw new Error(`Expected needsNotice=true for user with Kindle email, got ${statusBefore.needsNotice}`);
+                }
+
+                // Acknowledge the update
+                const ackRes = await acknowledgeKindleSenderUpdateAction();
+                if (!ackRes.success) {
+                    throw new Error(`Expected acknowledgeKindleSenderUpdateAction to succeed, got: ${ackRes.error}`);
+                }
+
+                const statusAfter = await getKindleSenderUpdateNoticeStatusAction();
+                if (statusAfter.needsNotice) {
+                    throw new Error("Expected needsNotice=false after acknowledging Kindle sender update");
+                }
+            } finally {
+                await prisma.user.update({
+                    where: { id: testUser.id },
+                    data: { kindleEmail: originalKindle, kindleSenderUpdateAcknowledgedAt: originalAck }
+                });
+            }
+        }
     });
 
     // =========================================================================

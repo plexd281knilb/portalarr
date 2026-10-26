@@ -24,6 +24,7 @@ import { BookDetailModal } from "@/components/seerr/book-detail-modal";
 import { AuthorDetailModal } from "@/components/seerr/author-detail-modal";
 import { SeriesDetailModal } from "@/components/seerr/series-detail-modal";
 import { RequestManager } from "@/components/seerr/request-manager";
+import KindleSenderUpdateBanner from "@/components/kindle-sender-update-banner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -747,6 +748,13 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                     ) : null}
                 </div>
             </div>
+
+            {/* Outbound Sender Notice on Ebooks tab for users with Send-to-Kindle */}
+            {activeTab === "ebooks" && (
+                <div className="mb-4">
+                    <KindleSenderUpdateBanner autoOpenModal={true} />
+                </div>
+            )}
 
             {/* SEARCH RESULTS VIEW: Strictly loaded and displayed in order: Movies -> TV Shows -> Books -> Audiobooks */}
             {searchQuery.trim().length > 0 ? (

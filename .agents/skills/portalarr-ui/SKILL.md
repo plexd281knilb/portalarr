@@ -1339,6 +1339,18 @@ Before completing any task, execute:
   - Switching between provider tabs never mutates or overwrites the other provider's credentials, preventing API keys and passwords from overwriting each other.
   - Active provider mode synchronizes outbound SMTP parameters while leaving both credential sets permanently preserved.
 
+### 42. Outbound Kindle Sender Update Notice & Ebooks Request Tab Banner (`KindleSenderNoticePopup`, `KindleSenderUpdateBanner`, `KindleSenderUpdateModal`)
+- **Global Auto-Popup (`KindleSenderNoticePopup`)**:
+  - Mounted globally in `src/components/layout-wrapper.tsx` for all authenticated members.
+  - Automatically queries `getKindleSenderUpdateNoticeStatusAction()`. If the user has a configured Send-to-Kindle email (`user.kindleEmail` contains `@` and is not `"DIRECT_DOWNLOAD"`) and has not yet acknowledged the outbound sender change (`user.kindleSenderUpdateAcknowledgedAt === null`), it automatically pops up on site visit until explicitly confirmed.
+  - "Remind Me Later" / backdrop close dismisses the notice temporarily for that browser session (`sessionStorage`), but reprompts on future visits until confirmed.
+  - Confirming writes `user.kindleSenderUpdateAcknowledgedAt = new Date()` via `acknowledgeKindleSenderUpdateAction()`, permanently dismissing it.
+- **Ebooks Request Tab Banner (`KindleSenderUpdateBanner`)**:
+  - Rendered prominently on the Ebooks request tab in Media Requests (`src/components/seerr/discover-hub.tsx` when `activeTab === "ebooks"`) and in Request Manager (`src/components/seerr/request-manager.tsx` when `mediaTypeFilter === "book"`).
+  - Features action-required badge, copy email button, and 1-click confirmation button.
+- **Clickable Amazon Settings Link**:
+  - Displays `https://www.amazon.com/hz/mycd/myx#/home/settings/payment` as an active, clickable link (`target="_blank" rel="noopener noreferrer"`) in both the modal description, step-by-step instructions, and tab banner.
+
 ---
 
 As the Portalarr frontend evolves or new design decisions are finalized:

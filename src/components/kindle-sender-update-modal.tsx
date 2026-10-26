@@ -16,13 +16,12 @@ import {
     Copy,
     Check,
     ExternalLink,
-    AlertTriangle,
     Send,
     CheckCircle2
 } from "lucide-react";
 import { acknowledgeKindleSenderUpdateAction } from "@/app/actions";
 
-interface KindleSenderUpdateModalProps {
+export interface KindleSenderUpdateModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     userKindleEmail?: string | null;
@@ -91,11 +90,20 @@ export function KindleSenderUpdateModal({
                         </Badge>
                     </div>
                     <DialogTitle className="text-lg sm:text-xl font-extrabold tracking-tight text-white flex items-center gap-2">
-                        <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0" />
-                        Update Your Amazon Kindle Settings
+                        <span>⚡ Outbound Sender Updated to {senderEmail}</span>
                     </DialogTitle>
-                    <DialogDescription className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                        Our server's outbound email address for wireless Kindle delivery has changed. Please authorize the new sender on Amazon to ensure your books deliver smoothly.
+                    <DialogDescription className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+                        If you previously configured your Kindle settings with an older address, please update your Amazon Approved Personal Document E-mail List with <span className="font-mono font-bold text-purple-300 bg-purple-500/10 px-1 py-0.5 rounded border border-purple-500/20">{senderEmail}</span> at{" "}
+                        <a
+                            href="https://www.amazon.com/hz/mycd/myx#/home/settings/payment"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-purple-400 hover:text-purple-300 underline font-semibold break-all inline-flex items-center gap-0.5"
+                        >
+                            <span>https://www.amazon.com/hz/mycd/myx#/home/settings/payment</span>
+                            <ExternalLink className="h-2.5 w-2.5 inline shrink-0" />
+                        </a>{" "}
+                        so your wireless Kindle deliveries continue uninterrupted.
                     </DialogDescription>
                 </div>
 
@@ -139,16 +147,17 @@ export function KindleSenderUpdateModal({
                         <h4 className="font-bold text-foreground text-xs flex items-center gap-1.5">
                             <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> How to Update on Amazon in 30 Seconds:
                         </h4>
-                        <ol className="list-decimal list-inside space-y-1.5 pl-1 text-muted-foreground text-[11px] leading-relaxed">
+                        <ol className="list-decimal list-inside space-y-2 pl-1 text-muted-foreground text-[11px] leading-relaxed">
                             <li>
-                                Open Amazon's{" "}
+                                Open Amazon's Personal Document Settings:{" "}
                                 <a
                                     href="https://www.amazon.com/hz/mycd/myx#/home/settings/payment"
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="text-purple-400 hover:text-purple-300 underline font-semibold inline-flex items-center gap-0.5"
+                                    className="text-purple-400 hover:text-purple-300 underline font-semibold break-all inline-flex items-center gap-1"
                                 >
-                                    Personal Document Settings <ExternalLink className="h-2.5 w-2.5" />
+                                    <span>https://www.amazon.com/hz/mycd/myx#/home/settings/payment</span>
+                                    <ExternalLink className="h-3 w-3 shrink-0" />
                                 </a>
                             </li>
                             <li>
@@ -204,7 +213,7 @@ export function KindleSenderUpdateModal({
                             className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs gap-1.5 shadow-lg shadow-purple-900/30 w-full sm:w-auto"
                         >
                             <Check className="h-3.5 w-3.5" />
-                            <span>{acknowledging ? "Updating..." : "I've Updated My Settings"}</span>
+                            <span>{acknowledging ? "Updating..." : `I've Updated ${senderEmail} in Amazon`}</span>
                         </Button>
                     </div>
                 </DialogFooter>
@@ -212,3 +221,5 @@ export function KindleSenderUpdateModal({
         </Dialog>
     );
 }
+
+export default KindleSenderUpdateModal;
