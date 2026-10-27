@@ -149,7 +149,7 @@ export default function EmailManagement() {
     const [policyRecipientFilter, setPolicyRecipientFilter] = useState<"ALL" | "USER" | "ADMIN" | "BOTH">("ALL");
 
     const getTemplateRecipient = (tplId: string): "ADMIN" | "USER" | "BOTH" => {
-        const adminTpls = ["admin_new_user", "admin_user_access_revoked", "media_request_admin", "seerr_request_new_admin", "ticket_error_alert", "library_access_request"];
+        const adminTpls = ["admin_new_user", "admin_user_access_revoked", "admin_payment_received", "admin_approval", "media_request_admin", "seerr_request_new_admin", "ticket_error_alert", "library_access_request"];
         if (adminTpls.includes(tplId)) return "ADMIN";
         if (tplId.startsWith("ticket_")) return "BOTH";
         return "USER";

@@ -1994,6 +1994,8 @@ export async function saveEmailTemplateAction(id: string, subject: string, body:
         const isAdminTemplate = [
             "admin_new_user",
             "admin_user_access_revoked",
+            "admin_payment_received",
+            "admin_approval",
             "media_request_admin",
             "seerr_request_new_admin",
             "ticket_error_alert",
@@ -4861,6 +4863,8 @@ export async function sendOrQueueEmail(options: {
         const ADMIN_ALERT_TEMPLATES = new Set([
             "admin_new_user",
             "admin_user_access_revoked",
+            "admin_payment_received",
+            "admin_approval",
             "media_request_admin",
             "seerr_request_new_admin",
             "ticket_error_alert",

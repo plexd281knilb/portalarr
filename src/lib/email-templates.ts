@@ -1552,7 +1552,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px; box-sizing: border-box; word-break: break-word; overflow-wrap: anywhere;">
     <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">5. Media Server &amp; Library Customization (<a href="{appUrl}/profile" style="color: #4f46e5; text-decoration: none;">Account Profile</a>)</p>
-    <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">Select which admin-whitelisted media servers and libraries you want active on your account across Plex, Jellyfin, and Emby. Easily choose which movie, TV show, or specialty libraries to display for your account.</p>
+    <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">Select which admin-whitelisted media servers and libraries you want active on your account across Plex and Jellyfin. Easily choose which movie, TV show, or specialty libraries to display for your account.</p>
 </div>
 
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px; box-sizing: border-box; word-break: break-word; overflow-wrap: anywhere;">
