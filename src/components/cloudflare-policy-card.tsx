@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Shield, Copy, Check, ExternalLink, Lock, Globe, Film, AlertTriangle, Network, Sparkles, CheckCircle2 } from "lucide-react";
+import { Shield, Copy, Check, Lock, Globe, Film, AlertTriangle, Network, Sparkles, CheckCircle2, Server, ShieldCheck } from "lucide-react";
 import { CLOUDFLARE_BYPASS_PATHS, CLOUDFLARE_SUPER_USER_PATHS, CLOUDFLARE_ADMIN_PATHS } from "@/lib/edge-policy-paths";
 
 export default function CloudflarePolicyCard() {
@@ -76,7 +76,7 @@ export default function CloudflarePolicyCard() {
                                 Cloudflare Access & Edge Security Policy Paths
                             </CardTitle>
                             <Badge variant="outline" className="text-[10px] bg-orange-500/10 text-orange-300 border-orange-500/30">
-                                Reverse Proxy / WAF / Zero Trust
+                                Strict Admin-Only Edge Lockdown
                             </Badge>
                         </div>
                         <CardDescription className="text-xs">
@@ -142,7 +142,7 @@ export default function CloudflarePolicyCard() {
                                     Cloudflare Tunnel • Public Hostnames (<code className="text-orange-400">home.domshomelab.com</code>)
                                 </span>
                                 <p className="text-[11px] text-muted-foreground">
-                                    Routes mapped in your Cloudflare Tunnel pointing to <code className="text-slate-300">http://localhost:3000</code>:
+                                    The 11 administrative paths routed through your Cloudflare Tunnel to <code className="text-slate-300">http://localhost:3000</code>:
                                 </p>
                             </div>
                         </div>
@@ -194,20 +194,52 @@ export default function CloudflarePolicyCard() {
 
                 {/* 3-COLUMN ACCESS POLICY BREAKDOWN */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                    {/* BYPASS / PUBLIC PATHS */}
+                    {/* ADMIN ONLY PATHS */}
+                    <div className="p-3.5 rounded-xl bg-orange-950/10 border border-orange-500/30 space-y-3 flex flex-col justify-between">
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                                <span className="font-bold text-xs text-orange-300 flex items-center gap-1.5">
+                                    <Lock className="h-4 w-4 text-orange-400" />
+                                    Admin-Only Paths (Strict Edge Block)
+                                </span>
+                                <Badge variant="outline" className="text-[10px] bg-orange-500/20 text-orange-300 border-orange-500/40">
+                                    Require Admin Email
+                                </Badge>
+                            </div>
+                            <p className="text-[11px] text-muted-foreground leading-relaxed">
+                                Cloudflare Access strictly locks down these 11 paths to <strong>your admin email only</strong>. Unauthorized external visitors are blocked at the Cloudflare edge with HTTP 403 before ever touching your local server:
+                            </p>
+
+                            <pre className="p-2.5 rounded-lg bg-black/60 border border-orange-500/20 font-mono text-[11px] text-orange-300/90 whitespace-pre overflow-x-auto max-h-48">
+                                {adminProtectedPaths.join("\n")}
+                            </pre>
+                        </div>
+
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleCopy(adminProtectedPaths.join("\n"), "admin")}
+                            className="w-full text-xs font-semibold gap-1.5 border-orange-500/40 hover:bg-orange-500/15 text-orange-300"
+                        >
+                            {copiedAdmin ? <Check className="h-3.5 w-3.5 text-orange-400" /> : <Copy className="h-3.5 w-3.5" />}
+                            {copiedAdmin ? "Copied Admin Paths!" : "Copy Admin-Only Paths"}
+                        </Button>
+                    </div>
+
+                    {/* OPEN EDGE: MEMBER & PUBLIC PATHS */}
                     <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-3 flex flex-col justify-between">
                         <div className="space-y-2">
                             <div className="flex items-center justify-between">
                                 <span className="font-bold text-xs text-foreground flex items-center gap-1.5">
                                     <Globe className="h-4 w-4 text-emerald-400" />
-                                    End-User & Public Paths
+                                    End-User & Member Routes (Open Edge)
                                 </span>
                                 <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
-                                    Rule: Bypass / Allow
+                                    Native Session Gated
                                 </Badge>
                             </div>
                             <p className="text-[11px] text-muted-foreground leading-relaxed">
-                                Add these paths to your Cloudflare Access <strong>Bypass</strong> or <strong>Allow Everyone</strong> policy so friends and family can sign in, request media, and stream audiobooks without encountering Cloudflare login walls:
+                                These routes are <strong>open at Cloudflare&apos;s edge</strong> so friends and family never see Cloudflare login barriers. Security is enforced natively by DomsHomeLab&apos;s built-in session cookies at origin:
                             </p>
 
                             <pre className="p-2.5 rounded-lg bg-black/50 border border-white/10 font-mono text-[11px] text-emerald-300/90 whitespace-pre overflow-x-auto max-h-48">
@@ -222,24 +254,24 @@ export default function CloudflarePolicyCard() {
                             className="w-full text-xs font-semibold gap-1.5 border-emerald-500/30 hover:bg-emerald-500/10 text-emerald-400"
                         >
                             {copiedBypass ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
-                            {copiedBypass ? "Copied Bypass Paths!" : "Copy Bypass Paths"}
+                            {copiedBypass ? "Copied Member Paths!" : "Copy Member Routes"}
                         </Button>
                     </div>
 
-                    {/* SUPER USER & ADMIN PATHS (MEDIA APPS) */}
+                    {/* OPEN EDGE: SUPER USER MEDIA APPS */}
                     <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-3 flex flex-col justify-between">
                         <div className="space-y-2">
                             <div className="flex items-center justify-between">
                                 <span className="font-bold text-xs text-foreground flex items-center gap-1.5">
                                     <Film className="h-4 w-4 text-purple-400" />
-                                    Media Apps (Super Users & Admin)
+                                    Media Apps (Open Edge • Role Gated)
                                 </span>
                                 <Badge variant="outline" className="text-[10px] bg-purple-500/10 text-purple-300 border-purple-500/30">
-                                    Super Users & Admin
+                                    SUPER_USER &amp; ADMIN
                                 </Badge>
                             </div>
                             <p className="text-[11px] text-muted-foreground leading-relaxed">
-                                These routes provide movie and TV show library management (Radarr & Sonarr). Super Users (trusted power members) and Administrators have access to these services:
+                                Radarr &amp; Sonarr pass through Cloudflare directly to DomsHomeLab. The built-in session engine strictly restricts access to <code className="text-purple-300">SUPER_USER</code> and <code className="text-purple-300">ADMIN</code> roles:
                             </p>
 
                             <pre className="p-2.5 rounded-lg bg-black/50 border border-white/10 font-mono text-[11px] text-purple-300/90 whitespace-pre overflow-x-auto max-h-48">
@@ -257,91 +289,57 @@ export default function CloudflarePolicyCard() {
                             {copiedSuperUser ? "Copied Media Apps Paths!" : "Copy Media Apps Paths"}
                         </Button>
                     </div>
-
-                    {/* ADMIN ONLY PATHS */}
-                    <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-3 flex flex-col justify-between">
-                        <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                                <span className="font-bold text-xs text-foreground flex items-center gap-1.5">
-                                    <Lock className="h-4 w-4 text-orange-400" />
-                                    Admin-Only Paths (Strict Zero-Trust)
-                                </span>
-                                <Badge variant="outline" className="text-[10px] bg-orange-500/10 text-orange-300 border-orange-500/30">
-                                    Require Admin Email
-                                </Badge>
-                            </div>
-                            <p className="text-[11px] text-muted-foreground leading-relaxed">
-                                These routes contain administrative consoles, database diagnostics, curation studios, user permissions, and API secrets. Cloudflare Access must require YOUR admin email only:
-                            </p>
-
-                            <pre className="p-2.5 rounded-lg bg-black/50 border border-white/10 font-mono text-[11px] text-orange-300/90 whitespace-pre overflow-x-auto max-h-48">
-                                {adminProtectedPaths.join("\n")}
-                            </pre>
-                        </div>
-
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleCopy(adminProtectedPaths.join("\n"), "admin")}
-                            className="w-full text-xs font-semibold gap-1.5 border-orange-500/30 hover:bg-orange-500/10 text-orange-400"
-                        >
-                            {copiedAdmin ? <Check className="h-3.5 w-3.5 text-orange-400" /> : <Copy className="h-3.5 w-3.5" />}
-                            {copiedAdmin ? "Copied Admin Paths!" : "Copy Admin-Only Paths"}
-                        </Button>
-                    </div>
                 </div>
 
                 {/* ZERO TRUST CONFIGURATION INSTRUCTIONS & BEST PRACTICES */}
                 <div className="p-3.5 rounded-xl bg-orange-950/20 border border-orange-500/30 space-y-2.5">
                     <div className="flex items-center gap-2">
-                        <Shield className="h-4 w-4 text-orange-400 shrink-0" />
+                        <ShieldCheck className="h-4 w-4 text-orange-400 shrink-0" />
                         <span className="font-bold text-xs text-orange-300">
-                            Cloudflare Zero Trust Setup Guide (Role & Path Isolation)
+                            Cloudflare Zero Trust Architecture (Single Admin-Only Application)
                         </span>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-[11px] text-muted-foreground leading-relaxed">
                         <div className="p-2.5 rounded-lg bg-black/40 border border-white/[0.06] space-y-1.5">
                             <span className="font-semibold text-orange-300 flex items-center gap-1">
                                 <Lock className="h-3 w-3 text-orange-400" />
-                                1. Admin Only (Priority 1 / Highest)
+                                1. Single Access Application
                             </span>
                             <ul className="list-disc list-inside space-y-1 text-slate-300/90">
+                                <li><strong>Application Domain:</strong> <code className="text-orange-300">home.domshomelab.com</code></li>
+                                <li><strong>Path Rules:</strong> Add all <strong>11 Admin-Only Paths</strong> (<code className="text-orange-300">settings*</code>, <code className="text-orange-300">admin*</code>, <code className="text-orange-300">curation*</code>, <code className="text-orange-300">api/admin*</code>, etc.).</li>
                                 <li><strong>Action:</strong> <code className="text-orange-300">Allow</code></li>
-                                <li><strong>Paths:</strong> Add all <strong>Admin-Only Paths</strong> (<code className="text-orange-300">/settings*</code>, <code className="text-orange-300">/admin*</code>, <code className="text-orange-300">/curation*</code>, <code className="text-orange-300">/api/admin*</code>, etc.).</li>
                                 <li><strong>Include:</strong> <code className="text-orange-300">Emails: [your-admin-email@example.com]</code></li>
-                                <li><strong>Result:</strong> Anyone outside of you is stopped with an HTTP 403 / Access Denied at Cloudflare&apos;s edge before reaching your server.</li>
-                            </ul>
-                        </div>
-
-                        <div className="p-2.5 rounded-lg bg-black/40 border border-white/[0.06] space-y-1.5">
-                            <span className="font-semibold text-purple-300 flex items-center gap-1">
-                                <Film className="h-3 w-3 text-purple-400" />
-                                2. Super Users & Admin (Priority 2)
-                            </span>
-                            <ul className="list-disc list-inside space-y-1 text-slate-300/90">
-                                <li><strong>Action:</strong> <code className="text-purple-300">Allow</code></li>
-                                <li><strong>Paths:</strong> Add <code className="text-purple-300">/radarr*</code> and <code className="text-purple-300">/sonarr*</code>.</li>
-                                <li><strong>Include:</strong> <code className="text-purple-300">Emails: [your-email, superuser-emails]</code></li>
-                                <li><strong>Note:</strong> If Super Users authenticate via DomsHomeLab native login, you can include Radarr/Sonarr in Bypass; DomsHomeLab&apos;s built-in session strictly gates them to <code className="text-purple-300">SUPER_USER</code> &amp; <code className="text-purple-300">ADMIN</code>.</li>
                             </ul>
                         </div>
 
                         <div className="p-2.5 rounded-lg bg-black/40 border border-white/[0.06] space-y-1.5">
                             <span className="font-semibold text-emerald-300 flex items-center gap-1">
                                 <Globe className="h-3 w-3 text-emerald-400" />
-                                3. Public & Family Bypass (Priority 3)
+                                2. Zero Bypass Rules Required
                             </span>
                             <ul className="list-disc list-inside space-y-1 text-slate-300/90">
-                                <li><strong>Action:</strong> <code className="text-emerald-300">Bypass</code></li>
-                                <li><strong>Paths:</strong> Add all <strong>End-User &amp; Public Paths</strong>.</li>
-                                <li><strong>Include:</strong> <code className="text-emerald-300">Everyone</code></li>
-                                <li><strong>Result:</strong> Friends &amp; family can freely stream, request media, and manage their account profile (<code className="text-emerald-300">/profile</code>) without seeing Cloudflare login barriers.</li>
+                                <li><strong>Edge Status:</strong> All non-admin routes are <strong>open at the Cloudflare edge</strong> by default.</li>
+                                <li><strong>No Bypass Lists:</strong> You do NOT need to create bypass or allow rules for member or public routes in Cloudflare.</li>
+                                <li><strong>Result:</strong> Traffic to <code className="text-emerald-300">/profile</code>, <code className="text-emerald-300">/discover</code>, <code className="text-emerald-300">/requests</code>, and <code className="text-emerald-300">/library</code> flows directly to DomsHomeLab with zero edge prompts.</li>
+                            </ul>
+                        </div>
+
+                        <div className="p-2.5 rounded-lg bg-black/40 border border-white/[0.06] space-y-1.5">
+                            <span className="font-semibold text-purple-300 flex items-center gap-1">
+                                <Server className="h-3 w-3 text-purple-400" />
+                                3. Native Origin Session &amp; RBAC
+                            </span>
+                            <ul className="list-disc list-inside space-y-1 text-slate-300/90">
+                                <li><strong>Origin Security:</strong> DomsHomeLab&apos;s built-in JWT session engine gates all requests at origin.</li>
+                                <li><strong>Media Management:</strong> <code className="text-purple-300">/radarr*</code> and <code className="text-purple-300">/sonarr*</code> require a valid session with <code className="text-purple-300">SUPER_USER</code> or <code className="text-purple-300">ADMIN</code> role.</li>
+                                <li><strong>Defense-in-Depth:</strong> Admin routes have dual protection: Cloudflare edge blocks plus origin admin checks.</li>
                             </ul>
                         </div>
                     </div>
                     <div className="text-[10px] text-slate-400 flex items-center gap-1.5 pt-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-                        <span><strong>Account Profile Route:</strong> Member account profile and preferences are located at <code className="text-emerald-300">/profile</code> (covered by Rule 3 Bypass). System settings (<code className="text-slate-300">/settings*</code>) and Access Control remain strictly admin-only under Rule 1.</span>
+                        <span><strong>Strict Path Isolation &amp; Zero-Collision Guarantee:</strong> Member account profile and preferences are located at <code className="text-emerald-300">/profile</code> (outside <code className="text-slate-300">/settings*</code>, guaranteeing members never hit Cloudflare edge blocks). System administration (<code className="text-orange-300">/settings*</code>) remains strictly locked to your admin email.</span>
                     </div>
                 </div>
             </CardContent>

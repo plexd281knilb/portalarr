@@ -4,6 +4,12 @@
  * Single authoritative source of truth for reverse proxy, WAF, Zero Trust,
  * and Cloudflare Access route rules across Portalarr / DomsHomeLab.
  * 
+ * ARCHITECTURE:
+ * - Admin-Only Paths (11 paths): Explicitly locked down in Cloudflare Access to Dom's admin email.
+ * - Open Edge Paths (Bypass / Member / Media Apps): Kept open at Cloudflare's edge with zero
+ *   edge barriers; security and role-based permissions (USER, TRIAL, SUPER_USER, ADMIN) are
+ *   enforced natively at origin by DomsHomeLab's JWT session middleware and server actions.
+ * 
  * ⚠️ MANDATORY RULE: Whenever a new page route (src/app/.../page.tsx) or API route
  * (src/app/api/.../route.ts) is added, moved, or deleted, update these arrays
  * and verify with scripts/verify-all.ts.
@@ -55,9 +61,9 @@ export const CLOUDFLARE_ADMIN_PATHS: string[] = [
 ];
 
 /**
- * Test whether a given route path is covered by Cloudflare Bypass policy.
- * Strict Zero-Trust Guard: If a path matches any admin protected route,
- * it is NEVER bypassed.
+ * Test whether a given route path is open at Cloudflare's Edge (bypasses edge blocks)
+ * and handled natively by DomsHomeLab session auth.
+ * Strict Zero-Trust Guard: If a path matches any admin-protected route, it is NEVER bypassed/open.
  */
 export function matchesCloudflareBypass(path: string): boolean {
     if (matchesCloudflareAdmin(path)) {
@@ -76,7 +82,7 @@ export function matchesCloudflareBypass(path: string): boolean {
 }
 
 /**
- * Test whether a given route path is covered by Cloudflare Super User (Media Apps) policy
+ * Test whether a given route path is covered by Super User (Media Apps) policy (open at edge, role-gated at origin).
  */
 export function matchesCloudflareSuperUser(path: string): boolean {
     const cleanPath = path.split("?")[0].replace(/\/$/, "") || "/";
@@ -91,7 +97,7 @@ export function matchesCloudflareSuperUser(path: string): boolean {
 }
 
 /**
- * Test whether a given route path is covered by Cloudflare Admin Protected policy
+ * Test whether a given route path is strictly locked down at Cloudflare's Edge (Admin Protected).
  */
 export function matchesCloudflareAdmin(path: string): boolean {
     const cleanPath = path.split("?")[0].replace(/\/$/, "") || "/";
@@ -104,5 +110,3 @@ export function matchesCloudflareAdmin(path: string): boolean {
         return false;
     });
 }
-
-

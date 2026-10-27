@@ -18,6 +18,7 @@ import {
     MediaServerLibrary,
     MediaServerConnectionResult
 } from "@/lib/media-servers";
+export type { MediaServerLibrary, MediaServerConnectionResult } from "@/lib/media-servers";
 import { getPlexServerLibrarySections, getUserPlexSharedLibraries, PlexSharedServerItem } from "@/lib/plex";
 import { syncUserPlexShareInternal } from "@/app/actions";
 import { notifyAdminsOnPendingApproval } from "@/lib/admin-approvals";
