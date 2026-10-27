@@ -1241,17 +1241,18 @@ export default function EmailManagement() {
 
                                                     <div className="p-3 rounded-lg bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 border-l-4 border-l-indigo-600 text-[11px] leading-relaxed text-slate-600 dark:text-slate-400 text-left space-y-1">
                                                         <div className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                                                            <span>📬 Note from Dominic:</span>
+                                                            <span>📬 Quick Note from Dominic:</span>
                                                         </div>
                                                         <p className="m-0">
-                                                            This is a real personal email sent directly from me (Dominic) through my self-hosted <strong>domshomelab.com</strong> server. Please mark emails from <strong>domshomelab.com</strong> as <em>"Not Spam"</em> so you don't miss important updates.
+                                                            To make sure you receive media request alerts, library updates, and account notifications, please add <strong>dominic@domshomelab.com</strong> to your contacts or mark this sender as trusted.
                                                         </p>
                                                     </div>
 
                                                     <div className="pt-4 border-t border-slate-200 dark:border-white/10 text-center space-y-2">
                                                         <a 
-                                                            href="#" 
-                                                            onClick={(e) => e.preventDefault()}
+                                                            href={typeof window !== "undefined" ? window.location.origin : "/"}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
                                                             className="inline-flex items-center justify-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-bold text-xs px-5 py-2.5 rounded-lg shadow-md transition-all cursor-pointer ring-2 ring-indigo-500/20"
                                                         >
                                                             Open Dashboard &rarr;
@@ -1748,17 +1749,18 @@ export default function EmailManagement() {
 
                                                         <div className="p-3 rounded-lg bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 border-l-4 border-l-indigo-600 text-[11px] leading-relaxed text-slate-600 dark:text-slate-400 text-left space-y-1">
                                                             <div className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                                                                <span>📬 Note from Dominic:</span>
+                                                                <span>📬 Quick Note from Dominic:</span>
                                                             </div>
                                                             <p className="m-0">
-                                                                This is a real personal email sent directly from me (Dominic) through my self-hosted <strong>domshomelab.com</strong> server. Please mark emails from <strong>domshomelab.com</strong> as <em>"Not Spam"</em> so you don't miss important updates.
+                                                                To make sure you receive media request alerts, library updates, and account notifications, please add <strong>dominic@domshomelab.com</strong> to your contacts or mark this sender as trusted.
                                                             </p>
                                                         </div>
 
                                                         <div className="pt-4 border-t border-slate-200 dark:border-white/10 text-center space-y-2">
                                                             <a 
-                                                                href="#" 
-                                                                onClick={(e) => e.preventDefault()}
+                                                                href={typeof window !== "undefined" ? window.location.origin : "/"}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
                                                                 className="inline-flex items-center justify-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-bold text-xs px-5 py-2.5 rounded-lg shadow-md transition-all cursor-pointer ring-2 ring-indigo-500/20"
                                                             >
                                                                 Open Dashboard &rarr;

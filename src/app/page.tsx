@@ -234,7 +234,7 @@ export default async function UserLandingPage() {
                         <UserLaunchpad isSuperUser={isSuperUser} />
 
                         {/* 2. PROMINENT 24/7 AI SERVER ASSISTANT WITH SUPPORT TICKET BUTTON */}
-                        <div className="space-y-2">
+                        <div id="ai-assistant" className="space-y-2 scroll-mt-6">
                             <AiServerAssistant />
                             <div className="flex justify-end pt-1">
                                 <SupportTicketModal />

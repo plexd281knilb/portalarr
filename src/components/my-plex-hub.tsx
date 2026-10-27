@@ -34,6 +34,9 @@ export default function MyPlexHub() {
             const res = await getUserPlexHubData();
             if (res && res.success) {
                 setData(res);
+                if (res.activeStreams && res.activeStreams.length > 0) {
+                    setShowActiveStreams(true);
+                }
             }
         } catch (e) {
             console.error("Failed to load user Plex hub data:", e);
@@ -45,11 +48,22 @@ export default function MyPlexHub() {
 
     useEffect(() => {
         loadData();
+        const checkHash = () => {
+            if (typeof window !== "undefined" && (window.location.hash === "#my-plex-hub" || window.location.hash === "#streams")) {
+                setShowActiveStreams(true);
+            }
+        };
+        checkHash();
+        window.addEventListener("hashchange", checkHash);
+
         // Polling interval: every 10 seconds for real-time active stream updates
         const interval = setInterval(() => {
             loadData();
         }, 10000);
-        return () => clearInterval(interval);
+        return () => {
+            clearInterval(interval);
+            window.removeEventListener("hashchange", checkHash);
+        };
     }, []);
 
     const handleKillStream = async () => {

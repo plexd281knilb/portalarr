@@ -726,7 +726,7 @@ function FeatureTopicRenderer({ topicId }: { topicId: FeatureGuideId }) {
     const getQuickLink = () => {
         switch (topicId) {
             case "ai-assistant":
-                return { href: "/#ai-assistant", label: "Launch AI Assistant" };
+                return { href: "/?openAssistant=true#ai-assistant", label: "Launch AI Assistant" };
             case "movies-tv":
             case "requests-pipeline":
                 return { href: "/discover", label: "Browse & Request Titles" };

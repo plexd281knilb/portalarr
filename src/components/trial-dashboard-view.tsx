@@ -236,12 +236,12 @@ export default function TrialDashboardView({ user, quota, billing }: TrialDashbo
             </div>
 
             {/* --- PROMINENT 24/7 AI SERVER ASSISTANT --- */}
-            <div className="w-full">
+            <div id="ai-assistant" className="w-full scroll-mt-6">
                 <AiServerAssistant />
             </div>
 
             {/* --- MY PLEX HUB --- */}
-            <div className="w-full">
+            <div id="my-plex-hub" className="w-full scroll-mt-6">
                 <MyPlexHub />
             </div>
         </div>
