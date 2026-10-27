@@ -32,116 +32,132 @@ function simpleHash(str: string): string {
     return hash.toString();
 }
 
-function filterRoadmapByRole(markdown: string, role?: string): string {
-    if (!markdown || !role || role === "ADMIN") return markdown;
+export function filterRoadmapByRole(markdown: string, role?: string): string {
+    if (!markdown) return "";
+    const effectiveRole = role || "USER";
+    const isAdmin = effectiveRole === "ADMIN";
+    const isSuperUser = effectiveRole === "SUPER_USER";
+    const isTrial = effectiveRole === "TRIAL";
 
-    const isSuperUser = role === "SUPER_USER";
-    const isTrial = role === "TRIAL";
+    // Administrators have full visibility into all releases and operational tools
+    if (isAdmin) {
+        return markdown;
+    }
 
-    // Technical / Admin-only jargon terms that regular members should never see
-    const technicalJargonTerms = [
-        "admin telemetry",
-        "telemetry gating",
-        "dry architecture",
-        "commit inspection",
-        "schema migration",
-        "cloudflare zero trust",
-        "cloudflare security",
-        "admin edge proxy",
-        "payment scraping",
-        "imap payment",
-        "database fallback",
-        "sqlite lock",
-        "admin only",
-        "patch highlights",
-        "v1.0.1 patch",
-        "backend api"
+    // Technical / Admin-only jargon and administrative sections regular members should never see
+    const adminOnlyPatterns = [
+        /\(admin\)/i,
+        /admin only/i,
+        /action approval queue/i,
+        /email audit log/i,
+        /outbound communications ledger/i,
+        /admin telemetry/i,
+        /telemetry gating/i,
+        /dry architecture/i,
+        /commit inspection/i,
+        /schema migration/i,
+        /cloudflare zero trust/i,
+        /cloudflare security/i,
+        /admin edge proxy/i,
+        /payment scraping/i,
+        /imap payment/i,
+        /database fallback/i,
+        /sqlite lock/i,
+        /patch highlights/i,
+        /v1\.0\.1 patch/i,
+        /backend api/i,
+    ];
+
+    const superUserOnlyPatterns = [
+        /\(super users?\)/i,
+        /super user access/i,
+        /radarr/i,
+        /sonarr/i,
+    ];
+
+    const trialExcludedPatterns = [
+        /ebooks? & audiobooks? subsystem/i,
+        /in-browser reader/i,
+        /send-to-kindle/i,
+        /audiobook player/i,
+        /jellyfin/i,
+        /emby/i,
+        /multi-platform media servers/i,
+        /family sub-profile/i,
+        /enhanced curation & poster badge/i,
+        /leaving soon/i,
+        /live tv/i,
+        /channel activation/i,
+        /cross-device watchlist & reading sync/i,
+        /payment formula/i,
     ];
 
     const lines = markdown.split("\n");
     const filtered: string[] = [];
-    let skippingSection = false;
+    let skippingParentLevel = -1;
 
     for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        const trimmed = line.trim().toLowerCase();
+        let line = lines[i];
+        const trimmed = line.trim();
+        const lower = trimmed.toLowerCase();
 
-        // Check for header boundaries
-        if (line.startsWith("#")) {
-            skippingSection = false;
-            if (isTrial) {
-                if (
-                    trimmed.includes("book") || 
-                    trimmed.includes("audiobook") || 
-                    trimmed.includes("kindle") ||
-                    trimmed.includes("radarr") ||
-                    trimmed.includes("sonarr") ||
-                    trimmed.includes("curation") ||
-                    trimmed.includes("admin") ||
-                    trimmed.includes("payment") ||
-                    trimmed.includes("kometa") ||
-                    trimmed.includes("maintainerr") ||
-                    trimmed.includes("jellyfin") ||
-                    trimmed.includes("emby") ||
-                    trimmed.includes("family sub-profile")
-                ) {
-                    skippingSection = true;
-                    continue;
-                }
-            } else if (!isSuperUser) {
-                if (trimmed.includes("radarr") || trimmed.includes("sonarr")) {
-                    skippingSection = true;
-                    continue;
-                }
-            }
+        // Calculate leading whitespace indentation for nested bullet hierarchy
+        const indentMatch = line.match(/^(\s*)/);
+        const indentLength = indentMatch ? indentMatch[1].length : 0;
 
-            if (
-                trimmed.includes("admin only") ||
-                trimmed.includes("payment scraping") ||
-                trimmed.includes("schema migration") ||
-                trimmed.includes("zero trust")
-            ) {
-                skippingSection = true;
-                continue;
+        // Reset child skipping if we return to or above the parent's indentation level
+        if (skippingParentLevel !== -1) {
+            if (trimmed === "" || indentLength > skippingParentLevel) {
+                continue; // Skip nested child lines under an excluded parent
+            } else {
+                skippingParentLevel = -1; // Reset skipping
             }
         }
 
-        if (skippingSection) continue;
-
-        // Skip any developer / admin jargon lines
-        if (technicalJargonTerms.some(term => trimmed.includes(term))) {
+        // 1. Admin Gating (Strict 100% removal for non-admins)
+        if (adminOnlyPatterns.some((pattern) => pattern.test(line))) {
+            if (trimmed.startsWith("-") || trimmed.startsWith("*")) {
+                skippingParentLevel = indentLength;
+            }
             continue;
         }
 
-        // Filter out Radarr & Sonarr for standard users & trial accounts
-        if (!isSuperUser && role !== "ADMIN") {
-            if (trimmed.includes("radarr") || trimmed.includes("sonarr")) {
+        // 2. Super User Gating
+        if (!isSuperUser && superUserOnlyPatterns.some((pattern) => pattern.test(line))) {
+            if (trimmed.startsWith("-") || trimmed.startsWith("*")) {
+                skippingParentLevel = indentLength;
+            }
+            continue;
+        }
+
+        // 3. Trial Gating
+        if (isTrial) {
+            // For Unified Media Requests, smoothly adapt bullet so trial users see Movies & TV Shows
+            if (lower.includes("unified media requests") && lower.includes("audiobook")) {
+                line = line.replace(/\(movies, tv shows, ebooks & audiobooks\)/i, "(Movies & TV Shows)");
+            } else if (trialExcludedPatterns.some((pattern) => pattern.test(line))) {
+                if (trimmed.startsWith("-") || trimmed.startsWith("*")) {
+                    skippingParentLevel = indentLength;
+                }
                 continue;
             }
         }
 
-        // Filter out trial-ineligible features
-        if (isTrial) {
-            if (
-                trimmed.includes("book library") ||
-                trimmed.includes("send-to-kindle") ||
-                trimmed.includes("in-browser reader") ||
-                trimmed.includes("audiobook") ||
-                trimmed.includes("jellyfin") ||
-                trimmed.includes("emby") ||
-                trimmed.includes("multi-platform") ||
-                trimmed.includes("family sub-profile") ||
-                trimmed.includes("curation") ||
-                trimmed.includes("payment formula")
-            ) {
-                continue;
-            }
-        }
+        // 4. Jargon Sanitation Pass for all member views
+        line = line
+            .replace(/\bDirect Play\b/gi, "Original Quality")
+            .replace(/\bplayback telemetry\b/gi, "stream health stats")
+            .replace(/\btelemetry\b/gi, "stream diagnostics")
+            .replace(/\bQuality Doctor\b/gi, "Stream Diagnostics")
+            .replace(/\bhomelab streaming\b/gi, "media streaming")
+            .replace(/\bcentral homelab\b/gi, "central media and entertainment hub")
+            .replace(/\bDispatcharr\b/gi, "Live TV")
+            .replace(/\bdormancy cleanup\b/gi, "inactive channel cleanup");
 
         filtered.push(line);
     }
 
-    const result = filtered.join("\n").trim();
+    const result = filtered.join("\n").replace(/\n{3,}/g, "\n\n").trim();
     return result || "> 🚀 **Welcome to DomsHomeLab!** Check out our latest media discovery and high-performance streaming features.";
 }
 

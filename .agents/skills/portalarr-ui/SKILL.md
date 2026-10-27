@@ -1419,3 +1419,16 @@ Detailed guide on updating: [updating-this-skill.md](./references/updating-this-
 - [Form & Input Patterns](./references/form-and-input-patterns.md)
 - [Theme & Color Tokens](./references/theme-and-color-tokens.md)
 - [Updating This Skill](./references/updating-this-skill.md)
+### 46. "What's New in DomsHomeLab" Role-Based Gating & Zero-Jargon Protocol
+- **Source of Truth (`roadmap.md`)**:
+  - Maintained with clean, approachable, plain-English release highlights and coming soon items.
+  - Features designated for administrators must be marked with `(Admin)` so they are programmatically excluded for all non-admins.
+  - Features designated for super users must be marked with `(Super Users)` so they are excluded for standard users and trial accounts.
+  - Zero raw jargon: strictly replace "Direct Play" with "Original Quality (Zero Buffering)", "Quality Doctor" with "Stream Diagnostics", "playback telemetry" with "stream health stats", and avoid daemon/tool names ("Radarr", "Sonarr", "Dispatcharr").
+- **Dynamic Role Filtering (`filterRoadmapByRole` in `src/components/whats-new-modal.tsx`)**:
+  - **Administrator View (`role === "ADMIN"`)**: Full visibility into all features, administrative auditing tools, and operational roadmaps.
+  - **Super User View (`role === "SUPER_USER"`)**: Excludes any administrative items, action approval queues, or outbound audit logs, but retains power-user queue and release management.
+  - **Standard User View (`role === "USER"`)**: Retains full member perks (Ebooks & Audiobooks subsystem with reading/Kindle features, multi-platform media servers, family sub-profiles, poster curation badges, and Live TV preview) while excluding admin tools and super user management.
+  - **Trial Account View (`role === "TRIAL"`)**: Excludes full-member exclusive features (Ebooks & Audiobooks subsystem including indented child items, multi-platform media servers, family profiles, poster curation badges, and Live TV) and smoothly adapts Unified Media Requests to `(Movies & TV Shows)`.
+  - **Automatic Jargon Sanitation Pass**: Automatically translates any residual technical jargon ("Direct Play", "Quality Doctor", "playback telemetry", "homelab streaming", "Dispatcharr") into clean, friendly plain English.
+  - **Mandatory Pre-Push Audit**: Verified automatically in Suite 22 of `scripts/verify-all.ts` across all 4 role views before every deployment push.
