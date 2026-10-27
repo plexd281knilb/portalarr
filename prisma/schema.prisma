@@ -790,7 +790,7 @@ model UserNotificationPreference {
   user                       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   emailRequestApproved       Boolean  @default(true)
   emailMediaReady            Boolean  @default(true)
-  emailNewContent            Boolean  @default(false)
+  emailNewContent            Boolean  @default(true)
   emailAnnouncements         Boolean  @default(true)
   emailSupportTickets        Boolean  @default(true)
   emailSubscriptionReminders  Boolean  @default(true)

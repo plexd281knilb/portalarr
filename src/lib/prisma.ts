@@ -1364,7 +1364,7 @@ export async function ensureSchemaColumns(): Promise<void> {
                     "userId" TEXT NOT NULL UNIQUE,
                     "emailRequestApproved" BOOLEAN NOT NULL DEFAULT 1,
                     "emailMediaReady" BOOLEAN NOT NULL DEFAULT 1,
-                    "emailNewContent" BOOLEAN NOT NULL DEFAULT 0,
+                    "emailNewContent" BOOLEAN NOT NULL DEFAULT 1,
                     "emailAnnouncements" BOOLEAN NOT NULL DEFAULT 1,
                     "emailSupportTickets" BOOLEAN NOT NULL DEFAULT 1,
                     "emailSubscriptionReminders" BOOLEAN NOT NULL DEFAULT 1,
@@ -1384,6 +1384,15 @@ export async function ensureSchemaColumns(): Promise<void> {
                 if (!notifCols.includes("emailRequestApproved")) {
                     await prisma.$executeRawUnsafe(`ALTER TABLE "UserNotificationPreference" ADD COLUMN "emailRequestApproved" BOOLEAN NOT NULL DEFAULT 1;`);
                 }
+                // Ensure all default notification preferences are set to 1 (opt-out model) for legacy records
+                await prisma.$executeRawUnsafe(`
+                    UPDATE "UserNotificationPreference" 
+                    SET "emailMediaReady" = 1,
+                        "emailNewContent" = 1,
+                        "emailAnnouncements" = 1,
+                        "emailRequestApproved" = 1
+                    WHERE "emailMediaReady" = 0 AND "emailAnnouncements" = 0 AND "emailNewContent" = 0;
+                `).catch(() => {});
             } catch (notifErr: any) {
                 console.warn("[DB-SCHEMA-AUTOFIX] UserNotificationPreference migration check:", notifErr.message || notifErr);
             }
