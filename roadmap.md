@@ -3,14 +3,15 @@
 ### ✨ What's New
 
 - **🚀 Button-Led Mission Control:** Sleek 1-click launchpad across mobile and desktop for instant access to Media Requests, Books, My Streams, Server Speed Test, and Setup Guides.
-- **🍿 Unified Media Requests (Movies, TV Shows, Ebooks & Audiobooks):** A single 1-click request hub with live remaining quota badges and real-time status tracking.
+- **🍿 Unified Media Requests (Movies, TV Shows & Books):** A single 1-click request hub with live remaining quota badges and real-time status tracking.
 - **📺 Multi-Platform Media Servers (Plex, Jellyfin & Emby):** Flexible streaming choice across your favorite client apps (Plex, Swiftfin, official Jellyfin/Emby) with tailored step-by-step setup guides and TV Quick Connect code authorization.
 - **🤖 24/7 AI Server Assistant & Book Recommendations:** Your in-app conversational helper for instant playback diagnostic fixes, device optimization, personalized book & media recommendations, and 1-click support ticket escalation.
-- **📚 Ebooks & Audiobooks Subsystem:**
+- **📚 Ebooks & Send-to-Kindle Subsystem:**
   - **In-Browser Reader:** Built-in reading experience with custom typography, customizable margins, color themes, and persistent reading progress.
   - **1-Click Send-to-Kindle:** Dispatch any book directly to your Amazon Kindle devices and apps in seconds with zero manual configuration.
-  - **Floating Audiobook Player:** Interactive player featuring chapter selection, continuous background autoplay, and playback speed controls.
+- **🎧 Audiobooks Library Access:** Stream narrated audiobooks, series collections, and spoken-word media directly in your library and Plex player apps.
 - **⚡ Live Streams & Stream Diagnostics:** Real-time stream health stats, buffering diagnostics, in-browser server speed test, and tailored device fix checklists to unlock 1080p and 4K Original Studio Quality.
+- **📖 Step-by-Step Device Setup Guides:** Tailored walkthroughs for Apple TV, Roku, Fire TV, Samsung & LG Smart TVs, Android TV, iOS, and Web players.
 - **⚡ Advanced Queue & Release Management (Super Users):** Advanced queue and release management for authorized power users to monitor downloads, inspect releases, and manage queue priorities.
 - **📬 Outbound Communications & Email Audit (Admin):** Complete outbound communications ledger tracking messages sent automatically by system workflows versus those vetted and approved via the Action Approval Queue.
 
@@ -18,6 +19,7 @@
 
 ### 🚀 Coming Soon
 
+- **🎵 Persistent Floating Audiobook Player:** Interactive player with chapter navigation, background playback across pages, and playback speed controls.
 - **🎨 Enhanced Curation & Poster Badges:** High-definition 4K HDR badges, Dolby Vision ribbons, and "Leaving Soon" countdown alerts on movie and TV posters.
 - **🎁 Member Referral Rewards:** Share your personal referral link (`/join?ref=CODE`) with friends to earn discounts on your annual pass or free bonus streaming months.
 - **🛡️ Family Sub-Profiles (Kids & Living Room TV):** Dedicated sub-profiles with child-safe library filtering, age rating limits, and secure PIN protection.

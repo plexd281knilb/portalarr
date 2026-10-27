@@ -76,10 +76,11 @@ export function filterRoadmapByRole(markdown: string, role?: string): string {
     ];
 
     const trialExcludedPatterns = [
+        /ebooks? & send-to-kindle/i,
         /ebooks? & audiobooks? subsystem/i,
         /in-browser reader/i,
         /send-to-kindle/i,
-        /audiobook player/i,
+        /audiobook/i,
         /jellyfin/i,
         /emby/i,
         /multi-platform media servers/i,
@@ -135,8 +136,10 @@ export function filterRoadmapByRole(markdown: string, role?: string): string {
         // 3. Trial Gating
         if (isTrial) {
             // For Unified Media Requests, smoothly adapt bullet so trial users see Movies & TV Shows
-            if (lower.includes("unified media requests") && lower.includes("audiobook")) {
-                line = line.replace(/\(movies, tv shows, ebooks & audiobooks\)/i, "(Movies & TV Shows)");
+            if (lower.includes("unified media requests") && (lower.includes("books") || lower.includes("audiobook"))) {
+                line = line
+                    .replace(/\(movies, tv shows & books\)/i, "(Movies & TV Shows)")
+                    .replace(/\(movies, tv shows, ebooks & audiobooks\)/i, "(Movies & TV Shows)");
             } else if (trialExcludedPatterns.some((pattern) => pattern.test(line))) {
                 if (trimmed.startsWith("-") || trimmed.startsWith("*")) {
                     skippingParentLevel = indentLength;
