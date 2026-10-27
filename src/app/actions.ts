@@ -10700,7 +10700,7 @@ export async function getUserAudiobooksLibraryAccessAction() {
         const session: any = await verifyUser();
         const dbUser = await prisma.user.findUnique({
             where: { id: session.id },
-            select: { id: true, username: true, email: true, enabledAddons: true, selectedPlexLibrarySectionIds: true, plexLibrarySectionIds: true, status: true, role: true }
+            select: { id: true, username: true, email: true, enabledAddons: true, selectedPlexLibrarySectionIds: true, plexLibrarySectionIds: true, status: true, role: true, plexUsername: true, plexEmail: true }
         });
         if (!dbUser) return { success: false, error: "User not found", hasAudiobooksAccess: false, audiobookLibraries: [] };
 
@@ -10721,25 +10721,42 @@ export async function getUserAudiobooksLibraryAccessAction() {
         }
         const hasAddon = userAddons.includes("audiobooks") || userAddons.includes("books_audiobooks");
 
+        let hasPlexAudiobooksAccess = false;
         let audiobookPlexLibs: any[] = [];
         if (adminToken) {
             try {
-                const srvSections = await getPlexServerLibrarySections(adminToken, settings?.mainPlexUrl || undefined);
+                const [srvSections, liveShareRes] = await Promise.all([
+                    getPlexServerLibrarySections(adminToken, settings?.mainPlexUrl || undefined),
+                    getUserPlexSharedLibraries(adminToken, dbUser)
+                ]);
+                const livePlexShareKeys = liveShareRes.selectedKeys || [];
+                const liveHasShare = liveShareRes.hasPlexShare;
+
+                const userSelectedPlexKeys = (dbUser.selectedPlexLibrarySectionIds || "").split(",").map(s => s.trim()).filter(Boolean);
+                const userAllowedPlexKeys = (dbUser.plexLibrarySectionIds || "").split(",").map(s => s.trim()).filter(Boolean);
+
                 for (const srv of srvSections) {
                     for (const sec of srv.sections || []) {
                         const titleLower = (sec.title || "").toLowerCase();
                         const isAudiobook = titleLower.includes("audiobook") || titleLower.includes("audio book") || (sec.type === "music" && titleLower.includes("audio"));
                         if (isAudiobook) {
                             const uKey = `${srv.serverId}:${sec.id}`;
-                            const isSelected = (dbUser.selectedPlexLibrarySectionIds || "").split(",").map(s => s.trim()).includes(uKey) ||
-                                              (dbUser.selectedPlexLibrarySectionIds || "").split(",").map(s => s.trim()).includes(String(sec.id));
+                            const isSharedOnPlex = liveHasShare 
+                                ? (livePlexShareKeys.includes(uKey) || livePlexShareKeys.includes(String(sec.id)))
+                                : (userSelectedPlexKeys.includes(uKey) || userSelectedPlexKeys.includes(String(sec.id)) || userAllowedPlexKeys.includes(uKey) || userAllowedPlexKeys.includes(String(sec.id)));
+
+                            const isAllowed = hasAddon || isSharedOnPlex;
+                            if (isAllowed) {
+                                hasPlexAudiobooksAccess = true;
+                            }
+
                             audiobookPlexLibs.push({
                                 serverId: srv.serverId,
                                 serverName: srv.serverName,
                                 sectionId: sec.id,
                                 title: sec.title,
                                 uniqueKey: uKey,
-                                isAllowed: hasAddon || isSelected
+                                isAllowed
                             });
                         }
                     }
@@ -10749,14 +10766,18 @@ export async function getUserAudiobooksLibraryAccessAction() {
             }
         }
 
-        // Also check local libraries
+        // Also check if user has local audiobook library access (explicitly granted by username, not public wildcard)
+        let hasLocalAudiobooksExplicit = false;
         try {
             const localLibs = await prisma.library.findMany();
             const audioLocal = localLibs.filter(l => l.mediaType === "audiobook" || l.name.toLowerCase().includes("audiobook"));
             for (const al of audioLocal) {
                 const rawAllowed = (al.allowedUsers || "").trim();
                 const allowed = rawAllowed.split(",").map(u => u.trim().toLowerCase()).filter(Boolean);
-                const isAllowed = rawAllowed === "*" || allowed.includes("*") || (dbUser.username && allowed.includes(dbUser.username.toLowerCase()));
+                const isExplicitlyAllowed = Boolean(dbUser.username && allowed.includes(dbUser.username.toLowerCase()));
+                if (isExplicitlyAllowed) {
+                    hasLocalAudiobooksExplicit = true;
+                }
                 if (!audiobookPlexLibs.some(l => l.title.toLowerCase() === al.name.toLowerCase())) {
                     audiobookPlexLibs.push({
                         serverId: "local",
@@ -10764,13 +10785,14 @@ export async function getUserAudiobooksLibraryAccessAction() {
                         sectionId: al.id,
                         title: al.name,
                         uniqueKey: al.id,
-                        isAllowed: hasAddon || isAllowed
+                        isAllowed: hasAddon || isExplicitlyAllowed
                     });
                 }
             }
         } catch (_) {}
 
-        const hasAccess = hasAddon || (audiobookPlexLibs.length > 0 && audiobookPlexLibs.some(l => l.isAllowed));
+        // Crucial: hasAudiobooksAccess is true ONLY if user has the add-on, OR has explicit Plex/local audiobooks granted
+        const hasAccess = hasAddon || hasPlexAudiobooksAccess || hasLocalAudiobooksExplicit;
 
         return {
             success: true,

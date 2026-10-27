@@ -1392,6 +1392,14 @@ To ensure Portalarr remains approachable for non-technical family members, trial
   - Standardize streaming terminology: "Direct Play" ➔ **"Original Studio Quality"** / **"Original Quality"**.
   - Diagnostic references: "Stream Quality Doctor" ➔ **"Stream Diagnostics & Device Setup Guides"**.
 
+### 45. User Media Server & Library Access Verification Standards (Zero False-Positive Permissions)
+To prevent confusing false positives on user settings and profile pages:
+- **Audiobooks Plex Library Access Gating (`getUserAudiobooksLibraryAccessAction`)**:
+  - Must strictly verify whether the user actually has the Plex Audiobooks library granted via `dbUser.enabledAddons`, `dbUser.selectedPlexLibrarySectionIds`, `dbUser.plexLibrarySectionIds`, or live Plex share.
+  - Local web bookshelf libraries (`prisma.library`) with wildcard `allowedUsers: "*"` must NEVER cause "Plex Library Granted" or switch check to report true.
+- **Multi-Platform Media Servers & Libraries (`getUserMediaServersAndLibrariesAction`)**:
+  - Secondary media platforms (Jellyfin and Emby) must never default to `isServerSelected: true` or have libraries checked for users who have not opted in, been granted explicit access (`allowedServerKeys`), enabled the add-on (`jellyfin_access`), or been provisioned on the remote server.
+  - When a server is unselected/disabled, its individual libraries must evaluate to `isSelected: false` with zero selections returned in `selectedMediaLibraryKeys`.
 
 ---
 
