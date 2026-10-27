@@ -83,7 +83,7 @@ Portalarr uses a **Modern Cinematic Dark Theme** powered by Tailwind CSS, Radix 
   - **Centralized Trial Safe Pool Governance**: Trial member library access is governed 100% centrally in `/settings/access` under Onboarding (`defaultTrialPlexLibraries` / "Trial Safe Pool / Restricted Shelf"). Per-server trial toggles are avoided to prevent fragmented or conflicting access rules.
   - When whitelisting specific libraries, render interactive checkbox pills for each discovered virtual folder or PMS section with high-contrast text and clean allowed counts.
 - **User Self-Selection & Tier Capabilities**:
-  - In User Profile (`UserMediaServersManager`), render an informative Tier Capabilities Banner highlighting Full Member privileges (unlimited library selection, playback quality caps, audio/subtitle language preferences, email digests).
+  - In User Profile (`UserMediaServersManager`), render an informative Tier Capabilities Banner highlighting Full Member privileges (unlimited media server and library self-selection across Plex, Jellyfin, and Emby, book library access, uncapped requests, and household sub-accounts).
   - Enforce server-side whitelist validation: any client tampering attempting to select unauthorized servers or hidden libraries is strictly filtered out before database persistence and API policy sync.
 - **Strict Full-Member Gating for Jellyfin & Emby**:
   - Emby and Jellyfin server options and add-ons (`jellyfin_access`, `emby_access`) are **strictly restricted to Full Members** (and Super Users / Admins).

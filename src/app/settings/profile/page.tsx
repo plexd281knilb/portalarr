@@ -2127,17 +2127,7 @@ export default function UserProfilePage() {
                                         />
                                     </div>
 
-                                    <div className="flex items-center justify-between pt-1 border-t border-border/30">
-                                        <Label htmlFor="notif-new-content" className="text-xs cursor-pointer">
-                                            <span>New Library Content</span>
-                                            <p className="text-[10px] text-muted-foreground">Weekly digests of newly added movies & shows</p>
-                                        </Label>
-                                        <Switch 
-                                            id="notif-new-content"
-                                            checked={notifPrefs.emailNewContent} 
-                                            onCheckedChange={(val) => setNotifPrefs({ ...notifPrefs, emailNewContent: val })} 
-                                        />
-                                    </div>
+
 
                                     <div className="flex items-center justify-between pt-1 border-t border-border/30">
                                         <Label htmlFor="notif-announcements" className="text-xs cursor-pointer">
