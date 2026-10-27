@@ -303,7 +303,14 @@ export function UserMediaServersManager({
                                     Ready to unlock unlimited requests, 4K HDR streams, audiobooks, and household sub-accounts?
                                 </span>
                             </div>
-                            <Button size="sm" asChild className="h-8 text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 shrink-0">
+                            <Button 
+                                size="sm" 
+                                asChild 
+                                className="h-8 text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 shrink-0 cursor-pointer"
+                                onClick={() => {
+                                    document.getElementById("billing")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                                }}
+                            >
                                 <a href="#billing">Upgrade Account</a>
                             </Button>
                         </div>
@@ -362,7 +369,14 @@ export function UserMediaServersManager({
                                     <strong>Jellyfin &amp; Emby multi-platform streaming</strong> is exclusively available for Full Members. Upgrade your membership pass to unlock.
                                 </span>
                             </div>
-                            <Button size="sm" asChild className="h-7 text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white shrink-0 cursor-pointer">
+                            <Button 
+                                size="sm" 
+                                asChild 
+                                className="h-7 text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white shrink-0 cursor-pointer"
+                                onClick={() => {
+                                    document.getElementById("billing")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                                }}
+                            >
                                 <a href="#billing">Upgrade Pass</a>
                             </Button>
                         </div>

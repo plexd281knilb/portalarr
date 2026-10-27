@@ -222,6 +222,10 @@ See detailed reference: [form-and-input-patterns.md](./references/form-and-input
   - Provide a 8-second grace period on `popup.closed` detection to prevent premature polling termination when users switch to password managers or 2FA authenticators.
   - Include an interactive show/hide password toggle (`Eye` / `EyeOff`) and a real-time CapsLock detection badge (*"Caps Lock is ON"*) on all password fields.
 
+- **Semantic Subtab & Hash Navigation Standards**:
+  - **Two-Tier Hub & Subtab Resolution**: When nesting sub-panels (e.g. in `src/app/settings/page.tsx` and `src/app/settings/access/page.tsx`), parent tab resolvers must never drop child subtab parameters to `""`. Inter-tab jump buttons (e.g. jumping from PMS tokens to Media Servers fleet) must call explicit subtab transition handlers (`handleSubTabChange("servers", "fleet")`) rather than generic hub changes to eliminate silent self-referential no-ops.
+  - **Post-Loading DOM Hash Jump Guard**: On pages that render conditionally during data fetching (such as `/profile` or `/settings/access` displaying full-page loaders), browser-native hash jumps fail on initial mount because the target elements do not yet exist in the DOM. Always mount a `useEffect` that listens for `!loading` and triggers `document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "start" })`, paired with a `window.addEventListener("hashchange", ...)` listener so that deep links (`/profile#kindle`, `/profile#referral`, `/profile#billing`, `/settings/access?tab=onboarding#trial-safe-pool`) always scroll cleanly into view.
+
 ---
 
 ### 5. Responsive Media Grids

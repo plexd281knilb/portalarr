@@ -140,7 +140,16 @@ export function UserLaunchpad({ isSuperUser = false }: UserLaunchpadProps) {
                 </Link>
 
                 {/* 5. My Streams */}
-                <a href="#my-plex-hub" className="block group h-full">
+                <a 
+                    href="#my-plex-hub" 
+                    onClick={() => {
+                        const el = document.getElementById("my-plex-hub");
+                        if (el) {
+                            el.scrollIntoView({ behavior: "smooth", block: "start" });
+                        }
+                    }}
+                    className="block group h-full cursor-pointer"
+                >
                     <div className="h-full flex flex-col justify-between p-3 sm:p-3.5 rounded-xl border bg-cyan-500/10 border-cyan-500/30 text-cyan-400 hover:border-cyan-500/60 hover:bg-cyan-500/15 transition-all duration-200 active:scale-98 shadow-sm hover:shadow-md">
                         <div className="flex items-center justify-between gap-1.5 mb-2">
                             <div className="p-2 rounded-lg bg-background/50 border border-border/40 shadow-xs">

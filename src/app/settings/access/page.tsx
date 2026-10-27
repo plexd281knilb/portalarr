@@ -83,8 +83,13 @@ import PaymentEmailManager from "@/components/payment-email-manager";
 import SentEmailAuditLog from "@/components/sent-email-audit-log";
 import CloudflarePolicyCard from "@/components/cloudflare-policy-card";
 
-export default function AccessSettingsPage() {
-    const [activeTab, setActiveTab] = useState("users");
+interface AccessSettingsPageProps {
+    initialTab?: string;
+    onTabChange?: (tab: string) => void;
+}
+
+export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSettingsPageProps = {}) {
+    const [activeTab, setActiveTab] = useState(initialTab || "users");
     const [users, setUsers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [syncingPlex, setSyncingPlex] = useState(false);
@@ -822,20 +827,45 @@ export default function AccessSettingsPage() {
             const params = new URLSearchParams(window.location.search);
             const search = params.get("search");
             if (search) setSearchQuery(search);
-            const tab = params.get("tab");
-            if (tab && ["users", "referrals", "onboarding", "scraper", "approvals", "sent-emails"].includes(tab)) {
-                setActiveTab(tab);
+            const requestedTab = params.get("subtab") || params.get("subTab") || params.get("tab") || (window.location.hash === "#trial-safe-pool" ? "onboarding" : null);
+            const validTabs = ["users", "referrals", "onboarding", "scraper", "approvals", "sent-emails", "cloudflare"];
+            if (requestedTab && validTabs.includes(requestedTab)) {
+                setActiveTab(requestedTab);
+                onTabChange?.(requestedTab);
                 if (window.location.hash) {
                     setTimeout(() => {
                         const target = document.querySelector(window.location.hash);
                         if (target) {
                             target.scrollIntoView({ behavior: "smooth", block: "start" });
                         }
-                    }, 300);
+                    }, 350);
                 }
             }
         }
+
+        const handleHashChange = () => {
+            if (typeof window !== "undefined" && window.location.hash === "#trial-safe-pool") {
+                setActiveTab("onboarding");
+                onTabChange?.("onboarding");
+                setTimeout(() => {
+                    const target = document.getElementById("trial-safe-pool");
+                    if (target) {
+                        target.scrollIntoView({ behavior: "smooth", block: "start" });
+                    }
+                }, 200);
+            }
+        };
+        window.addEventListener("hashchange", handleHashChange);
+        return () => {
+            window.removeEventListener("hashchange", handleHashChange);
+        };
     }, []);
+
+    useEffect(() => {
+        if (initialTab && initialTab !== activeTab) {
+            setActiveTab(initialTab);
+        }
+    }, [initialTab]);
 
     useEffect(() => {
         if (activeTab === "approvals") {
@@ -1656,12 +1686,14 @@ export default function AccessSettingsPage() {
                 onDiscardAndProceed: () => {
                     handleDiscardAll();
                     setActiveTab(newTab);
+                    onTabChange?.(newTab);
                     setCustomPendingNav(null);
                 },
                 onSaveAndProceed: async () => {
                     const ok = await handleSaveOnboardingDirect();
                     if (ok) {
                         setActiveTab(newTab);
+                        onTabChange?.(newTab);
                         setCustomPendingNav(null);
                     }
                 }
@@ -1669,6 +1701,12 @@ export default function AccessSettingsPage() {
             return;
         }
         setActiveTab(newTab);
+        onTabChange?.(newTab);
+        if (typeof window !== "undefined" && window.location.pathname.endsWith("/access")) {
+            const params = new URLSearchParams(window.location.search);
+            params.set("tab", newTab);
+            window.history.replaceState(null, "", `${window.location.pathname}?${params.toString()}${window.location.hash}`);
+        }
     };
 
     const pendingUsersCount = users.filter(u => u.status === "PENDING").length;

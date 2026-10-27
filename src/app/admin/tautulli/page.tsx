@@ -46,6 +46,17 @@ export default function StreamIntelligencePage() {
     const [historyFilter, setHistoryFilter] = useState<string>("all");
     const [killingSessionKey, setKillingSessionKey] = useState<string | null>(null);
 
+    useEffect(() => {
+        if (typeof window !== "undefined") {
+            const params = new URLSearchParams(window.location.search);
+            const tabParam = params.get("tab")?.toLowerCase();
+            const valid = ["activity", "history", "users", "audit", "analytics", "backfill"];
+            if (tabParam && valid.includes(tabParam)) {
+                setSelectedTab(tabParam);
+            }
+        }
+    }, []);
+
     // Live Activity sort state with localStorage persistence
     const [streamSort, setStreamSort] = useState<string>("user_asc");
 
@@ -679,7 +690,18 @@ export default function StreamIntelligencePage() {
             </div>
 
             {/* --- MAIN TABS NAVIGATION --- */}
-            <Tabs value={selectedTab} onValueChange={setSelectedTab} className="space-y-4">
+            <Tabs 
+                value={selectedTab} 
+                onValueChange={(v) => {
+                    setSelectedTab(v);
+                    if (typeof window !== "undefined") {
+                        const params = new URLSearchParams(window.location.search);
+                        params.set("tab", v);
+                        window.history.replaceState(null, "", `${window.location.pathname}?${params.toString()}`);
+                    }
+                }} 
+                className="space-y-4"
+            >
                 <TabsList className="bg-slate-900/90 border border-slate-800 p-1 rounded-xl w-full sm:w-auto flex flex-wrap h-auto gap-1">
                     <TabsTrigger 
                         value="activity" 

@@ -589,6 +589,28 @@ export default function UserProfilePage() {
         fetchProfile();
     }, []);
 
+    // Scroll to target hash once profile data finishes loading and cards mount into DOM
+    useEffect(() => {
+        if (!loading && typeof window !== "undefined") {
+            const handleHashScroll = () => {
+                const hash = window.location.hash;
+                if (!hash) return;
+                const targetId = hash.replace(/^#/, "");
+                const el = document.getElementById(targetId);
+                if (el) {
+                    el.scrollIntoView({ behavior: "smooth", block: "start" });
+                }
+            };
+
+            const t = setTimeout(handleHashScroll, 200);
+            window.addEventListener("hashchange", handleHashScroll);
+            return () => {
+                clearTimeout(t);
+                window.removeEventListener("hashchange", handleHashScroll);
+            };
+        }
+    }, [loading]);
+
     // --- LIBRARY PREFERENCE HANDLERS ---
     const handleToggleLibrary = (sec: any, server?: any) => {
         const isSelected = isSectionSelected(sec, server);
