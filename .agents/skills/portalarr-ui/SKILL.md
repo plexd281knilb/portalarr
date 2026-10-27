@@ -86,7 +86,7 @@ Portalarr uses a **Modern Cinematic Dark Theme** powered by Tailwind CSS, Radix 
   - In User Profile (`UserMediaServersManager`), render an informative Tier Capabilities Banner highlighting Full Member privileges (unlimited media server and library self-selection across Plex, Jellyfin, and Emby, book library access, uncapped requests, and household sub-accounts).
   - Enforce server-side whitelist validation: any client tampering attempting to select unauthorized servers or hidden libraries is strictly filtered out before database persistence and API policy sync.
 - **Strict Full-Member Gating for Jellyfin & Emby**:
-  - Emby and Jellyfin server options and add-ons (`jellyfin_access`, `emby_access`) are **strictly restricted to Full Members** (and Super Users / Admins).
+  - Emby and Jellyfin server options and add-ons (`jellyfin_access`, `emby_access`) are **strictly restricted to Full Members** (and Super Users / Admins). Note: `emby_access` is marked unavailable (`isAvailable: false`) and filtered from the user account add-ons catalog until Emby streaming is actively deployed.
   - For Trial Members (`isTrialUser`), Jellyfin and Emby switches are locked/disabled (`checked={false} disabled={true}`) with a `Full Members Only` lock badge and a prominent locked informational banner: "Jellyfin & Emby multi-platform streaming is exclusively available for Full Members. Upgrade your membership pass to unlock."
   - Backend enforcement in `updateUserMediaServersAndLibrariesAction` and `toggleFreeAddonAction` strictly blocks and strips Jellyfin/Emby selections for trial users.
 - **Interactive Step-by-Step Setup Guides (`MediaServerSetupGuideModal` & `PlexSetupGuides`)**:

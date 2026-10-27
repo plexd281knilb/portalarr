@@ -355,6 +355,9 @@ async function runTestSuite() {
         if (!embyAddon || embyAddon.icon !== "server" || embyAddon.isFree !== true) {
             throw new Error(`Expected emby_access in DEFAULT_ADDONS_CATALOG, got: ${JSON.stringify(embyAddon)}`);
         }
+        if (embyAddon.isAvailable !== false) {
+            throw new Error(`Expected emby_access to be unavailable (isAvailable: false), got: ${JSON.stringify(embyAddon)}`);
+        }
 
         // Household sub-accounts should be locked as coming soon until implemented
         const kidsProfileAddon = defaultCatalog.find((a: any) => a.id === "extra_kid_profile");

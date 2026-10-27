@@ -1923,7 +1923,7 @@ export default function UserProfilePage() {
                             </Badge>
                         ) : (
                             <Badge variant="outline" className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-xs w-fit">
-                                {userEnabledAddons.filter((id) => addonsCatalog.filter((a) => a.isAvailable !== false && !a.comingSoon && a.status !== "coming_soon").some((a) => a.id === id)).length} of {addonsCatalog.filter((a) => a.isAvailable !== false && !a.comingSoon && a.status !== "coming_soon").length} Enabled
+                                {userEnabledAddons.filter((id) => addonsCatalog.filter((a) => a.isAvailable !== false && !a.comingSoon && a.status !== "coming_soon" && a.id !== "emby_access").some((a) => a.id === id)).length} of {addonsCatalog.filter((a) => a.isAvailable !== false && !a.comingSoon && a.status !== "coming_soon" && a.id !== "emby_access").length} Enabled
                             </Badge>
                         )}
                     </div>
@@ -1944,7 +1944,7 @@ export default function UserProfilePage() {
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                         {addonsCatalog
-                            .filter((addon) => addon.isAvailable !== false && !addon.comingSoon && addon.status !== "coming_soon")
+                            .filter((addon) => addon.isAvailable !== false && !addon.comingSoon && addon.status !== "coming_soon" && addon.id !== "emby_access")
                             .map((addon) => {
                                 const isEnabled = userEnabledAddons.includes(addon.id);
                                 const isToggling = togglingAddonId === addon.id;
@@ -2009,13 +2009,13 @@ export default function UserProfilePage() {
                                                     <span>Inactive</span>
                                                 )}
                                             </span>
-                                            {(addon.id === "jellyfin_access" || addon.id === "emby_access") && (
+                                            {addon.id === "jellyfin_access" && (
                                                 <Button
                                                     type="button"
                                                     size="sm"
                                                     variant="outline"
                                                     onClick={() => {
-                                                        setAddonGuideType(addon.id === "jellyfin_access" ? "JELLYFIN" : "EMBY");
+                                                        setAddonGuideType("JELLYFIN");
                                                         setAddonGuideModalOpen(true);
                                                     }}
                                                     className="h-6 text-[10px] px-2 font-semibold gap-1 border-purple-500/40 text-purple-300 hover:bg-purple-500/10 cursor-pointer"

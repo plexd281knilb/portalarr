@@ -8242,7 +8242,7 @@ const DEFAULT_ADDONS_CATALOG = [
         description: "Access the unified Emby media server with official Emby apps across Apple TV, Roku, Fire TV, and Smart TVs.",
         price: 0,
         isFree: true,
-        isAvailable: true,
+        isAvailable: false,
         icon: "server",
         tag: "Servers"
     }
@@ -8269,7 +8269,7 @@ export async function getAvailableAddonsAction() {
                     const parsedMap = new Map(parsed.map((item: any) => [item.id, item]));
                     catalog = DEFAULT_ADDONS_CATALOG.map(def => {
                         const existing = parsedMap.get(def.id);
-                        if (def.id === "extra_kid_profile" || def.id === "extra_living_room") {
+                        if (def.id === "extra_kid_profile" || def.id === "extra_living_room" || def.id === "emby_access") {
                             // Enforce locked coming-soon status for unbuilt household sub-accounts
                             return { ...def, isAvailable: false };
                         }
@@ -8334,7 +8334,7 @@ export async function toggleFreeAddonAction(addonId: string, enabled: boolean) {
                     const parsedMap = new Map(parsed.map((item: any) => [item.id, item]));
                     catalog = DEFAULT_ADDONS_CATALOG.map(def => {
                         const existing = parsedMap.get(def.id);
-                        if (def.id === "extra_kid_profile" || def.id === "extra_living_room") {
+                        if (def.id === "extra_kid_profile" || def.id === "extra_living_room" || def.id === "emby_access") {
                             // Enforce locked coming-soon status for unbuilt household sub-accounts
                             return { ...def, isAvailable: false };
                         }
@@ -8354,14 +8354,6 @@ export async function toggleFreeAddonAction(addonId: string, enabled: boolean) {
         const targetAddon = catalog.find(a => a.id === addonId);
         if (!targetAddon) return { success: false, error: "Add-on not found" };
 
-        if (targetAddon.isAvailable === false) {
-            return { success: false, error: `${targetAddon.name} is currently not available yet or under maintenance.` };
-        }
-
-        if (!targetAddon.isFree && targetAddon.price > 0) {
-            return { success: false, error: "This is a paid add-on. Please contact your server administrator to activate." };
-        }
-
         const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
         if (!dbUser) return { success: false, error: "User not found" };
 
@@ -8377,6 +8369,14 @@ export async function toggleFreeAddonAction(addonId: string, enabled: boolean) {
                 success: false,
                 error: "Optional add-ons unlock upon upgrading to full membership."
             };
+        }
+
+        if (targetAddon.isAvailable === false || addonId === "emby_access") {
+            return { success: false, error: `${targetAddon.name} is currently not available yet or under maintenance.` };
+        }
+
+        if (!targetAddon.isFree && targetAddon.price > 0) {
+            return { success: false, error: "This is a paid add-on. Please contact your server administrator to activate." };
         }
 
         let enabledList: string[] = [];
@@ -8504,7 +8504,7 @@ export async function toggleAdminAddonAvailabilityAction(addonId: string, isAvai
                     const parsedMap = new Map(parsed.map((item: any) => [item.id, item]));
                     catalog = DEFAULT_ADDONS_CATALOG.map(def => {
                         const existing = parsedMap.get(def.id);
-                        if (def.id === "extra_kid_profile" || def.id === "extra_living_room") {
+                        if (def.id === "extra_kid_profile" || def.id === "extra_living_room" || def.id === "emby_access") {
                             // Enforce locked coming-soon status for unbuilt household sub-accounts
                             return { ...def, isAvailable: false };
                         }
