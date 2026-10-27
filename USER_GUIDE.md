@@ -17,7 +17,7 @@ Welcome to **DomsHomeLab (d281knilb)**! This comprehensive guide walks you throu
 10. [Troubleshooting, Request Tracking & 1-Click Import](#10-troubleshooting-request-tracking--1-click-import)
 11. [🎬 Native Movie & TV Show Requests (Seerr Engine & Episode Guides)](#11-native-movie--tv-show-requests-seerr-engine--episode-guides)
 12. [🎨 Curation Studio Suite (Kometa, Agregarr, Maintainerr, Tagging)](#12-curation-studio-suite-kometa-agregarr-maintainerr-tagging)
-13. [💳 Subscriptions, Referral Rewards & Family Profiles](#13-subscriptions-referral-rewards--family-profiles)
+13. [💳 Subscriptions, Payments & Upcoming Member Perks](#13-subscriptions-payments--upcoming-member-perks)
 14. [👁️ Admin Tools: Impersonation & Approval Governance](#14-admin-tools-impersonation--approval-governance)
 15. [Need Help or Technical Support?](#15-need-help-or-technical-support)
 
@@ -35,7 +35,7 @@ Welcome to **DomsHomeLab (d281knilb)**! This comprehensive guide walks you throu
      - 🧒 **Dedicated Kids & Living Room Profiles:** Child-safe managed accounts with custom PIN protection and age rating filters.
      - 📚 **Full Digital Book & Audiobook Library:** In-browser Kindle Paperwhite reading mode, floating HTML5 audiobook player, and wireless Send-to-Kindle delivery.
      - ⚡ **Priority Server Bandwidth:** Dedicated high-priority streaming and transcode allocation.
-     - 🎁 **Discord VIP & Referral Rewards:** Live server downtime alerts, member chat, and earn **1 free month ($15.00 discount)** for every friend referred.
+     - 🎁 **Discord VIP & Referral Rewards (Coming Soon):** Live server downtime alerts, member chat, and upcoming referral reward discounts.
 4. Once logged in, your session remains securely active for 30 days with sliding automatic renewal.
 
 ---
@@ -309,7 +309,7 @@ Administrators can curate Plex libraries natively without external scripts or ex
 
 ---
 
-## 💳 13. Subscriptions, Referral Rewards & Family Profiles
+## 💳 13. Subscriptions, Payments & Upcoming Member Perks
 
 ### 📅 Flexible Membership Plans
 When upgrading from your free trial pass to full membership, choose the cadence that fits you best:
@@ -319,7 +319,8 @@ When upgrading from your free trial pass to full membership, choose the cadence 
   - Remaining months: `remaining full months * $15`
   - *Example:* Upgrading on October 10th covers 21 days in October ($10.16) + November ($15) + December ($15) = **$40.16** for the remainder of the year.
 
-### 🎁 Referral Rewards: Earn 1 Free Month Per Friend
+### 🎁 Member Referral Rewards (Coming Soon)
+*(Upcoming Feature — Currently in Development)*
 - Invite your friends to join DomsHomeLab using your personal invite link (`/join?ref=YOUR_CODE`).
 - When an invited friend joins and becomes an active member:
   - **Annual Subscribers:** Earn **$15.00 off** your next annual renewal (e.g. $180 - $15 = **$165.00** with 1 referral; $180 - $30 = **$150.00** with 2 referrals; 12 referrals makes the entire upcoming year **100% FREE**).
@@ -331,7 +332,8 @@ When upgrading from your free trial pass to full membership, choose the cadence 
 - **Instant Payment Receipts:** Whenever your payment is processed, DomsHomeLab automatically dispatches a branded HTML payment confirmation receipt (`payment_received`) confirming the amount received, date, new expiration date, and active perks.
 - **Full Membership Activation Alerts:** Upgrading from trial to full membership dispatches a welcome email (`subscription_activated`) highlighting all unlocked features.
 
-### 🧒 Family & Living Room TV Profiles
+### 🧒 Family Sub-Profiles (Kids & Living Room TV) (Coming Soon)
+*(Upcoming Feature — Currently in Development)*
 - **Living Room TV Profiles:** Managed profiles configured with content safety tags to filter out explicit content for family viewing areas.
 - **Kids Profiles:** Curated child-safe profiles locked strictly to G and PG-rated movies and TV animations with optional PIN protection.
 - *Access Security:* Trial accounts are strictly restricted to primary server libraries; Kids and backup servers remain isolated until upgrading to full membership.
