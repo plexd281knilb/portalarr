@@ -4203,6 +4203,7 @@ export async function updateCurrentUserPrimaryEmail(newEmail: string) {
     logger.addLog("INFO", "AUTH", `User "${currentUser?.username || userId}" updated primary email to "${cleanEmail}"`);
     try {
         revalidatePath("/settings");
+        revalidatePath("/profile");
         revalidatePath("/settings/profile");
         revalidatePath("/profile");
         revalidatePath("/settings/access");
@@ -4252,6 +4253,7 @@ export async function updateAppUserEmail(id: string, newEmail: string) {
     logger.addLog("INFO", "AUTH", `Admin updated email for user "${targetUser?.username || id}" to "${cleanEmail}"`);
     try {
         revalidatePath("/settings");
+        revalidatePath("/profile");
         revalidatePath("/settings/profile");
         revalidatePath("/profile");
         revalidatePath("/settings/access");
@@ -5977,6 +5979,7 @@ export async function setUserTrialOrSubscription(
         }
 
         revalidatePath("/settings/access");
+        revalidatePath("/profile");
         revalidatePath("/settings/profile");
         revalidatePath("/profile");
         revalidatePath("/settings");
@@ -6313,6 +6316,7 @@ export async function restoreAllUsersPlexAccessAction() {
 
         revalidatePath("/settings");
         revalidatePath("/settings/access");
+        revalidatePath("/profile");
         revalidatePath("/settings/profile");
         revalidatePath("/profile");
 
@@ -6580,6 +6584,7 @@ export async function creditUserReferralAction(params: {
         }
 
         revalidatePath("/settings/access");
+        revalidatePath("/profile");
         revalidatePath("/settings/profile");
         revalidatePath("/profile");
         revalidatePath("/settings");
@@ -6620,6 +6625,7 @@ export async function unlinkUserReferralAction(referredUserId: string) {
         logger.addLog("INFO", "AUTH", `[REFERRAL-UNLINK] Admin unlinked referral for "${user.username}" (previously referred by "${prevReferrer || 'N/A'}").`);
 
         revalidatePath("/settings/access");
+        revalidatePath("/profile");
         revalidatePath("/settings/profile");
         revalidatePath("/profile");
         revalidatePath("/settings");
@@ -6870,6 +6876,7 @@ export async function savePaymentAndTrialSettings(formData: FormData) {
 
         revalidatePath("/settings");
         revalidatePath("/settings/access");
+        revalidatePath("/profile");
         revalidatePath("/settings/profile");
         revalidatePath("/profile");
         return {
@@ -7598,6 +7605,7 @@ export async function updateUserMembershipTierAction(userId: string, membershipT
 
         syncUserRoleToDiscord(userId).catch(() => {});
         revalidatePath("/settings/access");
+        revalidatePath("/profile");
         revalidatePath("/settings/profile");
         revalidatePath("/profile");
         return { success: true, message: `Updated ${updated.username} membership tier to ${cleanTier === "TIER_2_VIP" ? "Tier 2 (Managed Support)" : cleanTier === "TRIAL" ? "Trial Pass" : "Tier 1 (Regular Member)"}`, user: updated };
@@ -7934,6 +7942,7 @@ export async function updateUserSelectedPlexLibrariesAction(selectedKeys: string
                     logger.addLog("INFO", "APPROVAL", `Plex library preference update for "${dbUser.username}" staged in Admin Approval Queue (ID: ${approval.id}).`);
                     notifyAdminsOnPendingApproval(approval).catch(e => console.warn("[APPROVAL-NOTIFY-ERROR]:", e?.message || e));
                 }
+                revalidatePath("/profile");
                 revalidatePath("/settings/profile");
                 revalidatePath("/profile");
                 return {
@@ -7956,6 +7965,7 @@ export async function updateUserSelectedPlexLibrariesAction(selectedKeys: string
             }
         }
 
+        revalidatePath("/profile");
         revalidatePath("/settings/profile");
         revalidatePath("/profile");
         return {
@@ -8129,6 +8139,7 @@ export async function createOrUpdateSubAccountAction(payload: {
                 }
             }
 
+            revalidatePath("/profile");
             revalidatePath("/settings/profile");
             revalidatePath("/profile");
             revalidatePath("/settings/access");
@@ -8244,6 +8255,7 @@ export async function createOrUpdateSubAccountAction(payload: {
                 }
             }
 
+            revalidatePath("/profile");
             revalidatePath("/settings/profile");
             revalidatePath("/profile");
             revalidatePath("/settings/access");
@@ -8279,6 +8291,7 @@ export async function deleteSubAccountAction(subAccountId: string) {
         // Delete from DB
         await prisma.user.delete({ where: { id: subAccountId } });
 
+        revalidatePath("/profile");
         revalidatePath("/settings/profile");
         revalidatePath("/profile");
         revalidatePath("/settings/access");
@@ -8548,6 +8561,7 @@ export async function toggleFreeAddonAction(addonId: string, enabled: boolean) {
         }
 
         try {
+            revalidatePath("/profile");
             revalidatePath("/settings/profile");
             revalidatePath("/profile");
         } catch (_) {}
@@ -8608,6 +8622,7 @@ export async function toggleUserAddonAdminAction(userId: string, addonId: string
         }
 
         revalidatePath("/settings/access");
+        revalidatePath("/profile");
         revalidatePath("/settings/profile");
         revalidatePath("/profile");
         return {
@@ -8666,6 +8681,7 @@ export async function toggleAdminAddonAvailabilityAction(addonId: string, isAvai
 
         revalidatePath("/settings");
         revalidatePath("/settings/access");
+        revalidatePath("/profile");
         revalidatePath("/settings/profile");
         revalidatePath("/profile");
         return { success: true, message: `Add-on availability updated!`, catalog };
@@ -10581,6 +10597,7 @@ export async function updateUserKidsLibraryAccessAction(enable: boolean) {
             }
         }
 
+        revalidatePath("/profile");
         revalidatePath("/settings/profile");
         revalidatePath("/profile");
         revalidatePath("/library");
@@ -10855,6 +10872,7 @@ export async function updateUserAudiobooksLibraryAccessAction(enable: boolean) {
 
         await syncAudiobooksPlexLibraryAccessForUser(dbUser.id, enable);
 
+        revalidatePath("/profile");
         revalidatePath("/settings/profile");
         revalidatePath("/profile");
         revalidatePath("/library");
@@ -10907,6 +10925,7 @@ export async function toggleLibraryUserAccessAction(libraryId: string, username:
 
         logger.addLog("INFO", "DATABASE", `Toggled user "${targetUser}" on library "${lib.name}": now "${newAllowedStr}"`);
         revalidatePath("/library");
+        revalidatePath("/profile");
         revalidatePath("/settings/profile");
         revalidatePath("/profile");
 
@@ -15690,6 +15709,7 @@ export async function updateCurrentUserKindleEmail(kindleEmail: string) {
             });
         }
 
+        revalidatePath("/profile");
         revalidatePath("/settings/profile");
         revalidatePath("/profile");
         revalidatePath("/library");
@@ -16772,6 +16792,7 @@ export async function setupBookLibraryAccessAction(options: { kindleEmail?: stri
         clearUserCache("user_lib_access");
         revalidatePath("/");
         revalidatePath("/library");
+        revalidatePath("/profile");
         revalidatePath("/settings/profile");
         revalidatePath("/profile");
 
@@ -16885,6 +16906,7 @@ export async function toggleSelfSuperUserAction() {
         await createSession(user.id, user.username, newRole, user.status, user.trialEndsAt, user.subscriptionEndsAt);
 
         revalidatePath("/");
+        revalidatePath("/profile");
         revalidatePath("/settings/profile");
         revalidatePath("/profile");
 
