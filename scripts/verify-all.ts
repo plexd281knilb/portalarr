@@ -2263,6 +2263,76 @@ async function runTestSuite() {
                     }
                 }
             }
+
+            // 8. User-Level Email Preference Second Gate Verification
+            const { sendOrQueueEmail: testSendOrQueueEmail } = await import("../src/app/actions");
+            const testOptOutUser = await prisma.user.create({
+                data: {
+                    username: `optout_${testId}`,
+                    email: `optout_${testId}@example.com`,
+                    password: "mockpassword",
+                    role: "USER",
+                    status: "APPROVED"
+                }
+            });
+            await prisma.userNotificationPreference.create({
+                data: {
+                    userId: testOptOutUser.id,
+                    emailRequestApproved: false, // Opted out of request approvals
+                    emailMediaReady: false,       // Opted out of media ready
+                    emailAnnouncements: true,
+                    emailSupportTickets: true,
+                    emailSubscriptionReminders: true,
+                    emailReferralRewards: true
+                }
+            });
+
+            try {
+                // Test 8a: Media Request Approved email to opted-out user must be dropped by second gate
+                const optOutRes = await testSendOrQueueEmail({
+                    to: testOptOutUser.email,
+                    targetUser: testOptOutUser.username,
+                    userId: testOptOutUser.id,
+                    subject: "Your Request is Approved",
+                    html: "<p>Approved</p>",
+                    templateId: "seerr_request_approved"
+                });
+                if (!optOutRes.success || optOutRes.queued || optOutRes.sent) {
+                    throw new Error(`Expected opted-out request approval email to be dropped by Second Gate, got: ${JSON.stringify(optOutRes)}`);
+                }
+
+                // Test 8b: Media Ready email to opted-out user must be dropped by second gate
+                const optOutMediaRes = await testSendOrQueueEmail({
+                    to: testOptOutUser.email,
+                    targetUser: testOptOutUser.username,
+                    userId: testOptOutUser.id,
+                    subject: "Your Media is Ready",
+                    html: "<p>Ready</p>",
+                    templateId: "media_ready"
+                });
+                if (!optOutMediaRes.success || optOutMediaRes.queued || optOutMediaRes.sent) {
+                    throw new Error(`Expected opted-out media ready email to be dropped by Second Gate, got: ${JSON.stringify(optOutMediaRes)}`);
+                }
+
+                // Test 8c: Announcements (opted-in) email must proceed through to admin gate or send
+                const optInAnnounceRes = await testSendOrQueueEmail({
+                    to: testOptOutUser.email,
+                    targetUser: testOptOutUser.username,
+                    userId: testOptOutUser.id,
+                    subject: "Important Server Maintenance",
+                    html: "<p>Announcement</p>",
+                    templateId: "broadcast"
+                });
+                if (!optInAnnounceRes.success) {
+                    throw new Error(`Expected announcement email to succeed through user gate, got: ${JSON.stringify(optInAnnounceRes)}`);
+                }
+                if (optInAnnounceRes.approvalId) {
+                    await prisma.adminApproval.delete({ where: { id: optInAnnounceRes.approvalId } }).catch(() => {});
+                }
+            } finally {
+                await prisma.userNotificationPreference.deleteMany({ where: { userId: testOptOutUser.id } });
+                await prisma.user.delete({ where: { id: testOptOutUser.id } });
+            }
         } finally {
             await prisma.sentEmailLog.deleteMany({
                 where: { id: { in: [autoEmail.id, approvedEmail.id] } }

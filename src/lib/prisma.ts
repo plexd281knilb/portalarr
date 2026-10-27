@@ -1362,9 +1362,10 @@ export async function ensureSchemaColumns(): Promise<void> {
                 CREATE TABLE IF NOT EXISTS "UserNotificationPreference" (
                     "id" TEXT PRIMARY KEY,
                     "userId" TEXT NOT NULL UNIQUE,
-                    "emailMediaReady" BOOLEAN NOT NULL DEFAULT 0,
+                    "emailRequestApproved" BOOLEAN NOT NULL DEFAULT 1,
+                    "emailMediaReady" BOOLEAN NOT NULL DEFAULT 1,
                     "emailNewContent" BOOLEAN NOT NULL DEFAULT 0,
-                    "emailAnnouncements" BOOLEAN NOT NULL DEFAULT 0,
+                    "emailAnnouncements" BOOLEAN NOT NULL DEFAULT 1,
                     "emailSupportTickets" BOOLEAN NOT NULL DEFAULT 1,
                     "emailSubscriptionReminders" BOOLEAN NOT NULL DEFAULT 1,
                     "emailReferralRewards" BOOLEAN NOT NULL DEFAULT 1,
@@ -1376,6 +1377,16 @@ export async function ensureSchemaColumns(): Promise<void> {
                     CONSTRAINT "UserNotificationPreference_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
                 );
             `);
+
+            try {
+                const notifTableInfo: any[] = await prisma.$queryRawUnsafe(`PRAGMA table_info("UserNotificationPreference");`);
+                const notifCols = notifTableInfo.map((c: any) => c.name);
+                if (!notifCols.includes("emailRequestApproved")) {
+                    await prisma.$executeRawUnsafe(`ALTER TABLE "UserNotificationPreference" ADD COLUMN "emailRequestApproved" BOOLEAN NOT NULL DEFAULT 1;`);
+                }
+            } catch (notifErr: any) {
+                console.warn("[DB-SCHEMA-AUTOFIX] UserNotificationPreference migration check:", notifErr.message || notifErr);
+            }
         } catch (e: any) {
             console.error("[DB-SCHEMA-AUTOFIX] Failed to create User Preferences tables:", e.message || e);
         }

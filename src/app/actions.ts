@@ -4824,6 +4824,75 @@ export async function updateUserPlexLibraries(
     }
 }
 
+function getNotificationCategoryForTemplate(templateId?: string): {
+    field: "emailRequestApproved" | "emailMediaReady" | "emailSubscriptionReminders" | "emailAnnouncements" | "emailSupportTickets" | "emailReferralRewards";
+    label: string;
+} | null {
+    if (!templateId) return null;
+
+    // 1. Media Request Approvals & Status Updates
+    if (
+        templateId === "seerr_request_approved" ||
+        templateId === "seerr_request_auto_approved" ||
+        templateId === "seerr_request_declined" ||
+        templateId === "media_request_approved" ||
+        templateId === "request_approved" ||
+        templateId === "book_request_approved"
+    ) {
+        return { field: "emailRequestApproved", label: "Media Request Approvals" };
+    }
+
+    // 2. Media Available & Ready to Stream
+    if (
+        templateId === "seerr_request_available" ||
+        templateId === "media_ready" ||
+        templateId === "book_ready"
+    ) {
+        return { field: "emailMediaReady", label: "Media Available & Ready to Stream" };
+    }
+
+    // 3. Subscription & Renewal Reminders
+    if (
+        templateId.startsWith("subscription_renewal_reminder") ||
+        templateId === "trial_expiring_soon" ||
+        templateId === "trial_expired" ||
+        templateId === "subscription_expired" ||
+        templateId === "payment_reminder"
+    ) {
+        return { field: "emailSubscriptionReminders", label: "Subscription & Renewal Reminders" };
+    }
+
+    // 4. Server Announcements & Maintenance
+    if (
+        templateId === "broadcast" ||
+        templateId === "new_site_launch" ||
+        templateId === "maintenance_announcement" ||
+        templateId === "server_update"
+    ) {
+        return { field: "emailAnnouncements", label: "Server Announcements & Maintenance" };
+    }
+
+    // 5. Support Ticket Updates
+    if (
+        templateId === "ticket_update" ||
+        templateId === "ticket_reply" ||
+        templateId === "support_ticket_update"
+    ) {
+        return { field: "emailSupportTickets", label: "Support Ticket Responses" };
+    }
+
+    // 6. Referral Rewards & Credits
+    if (
+        templateId === "referral_reward_credited" ||
+        templateId === "referral_bonus" ||
+        templateId === "referral_invite"
+    ) {
+        return { field: "emailReferralRewards", label: "Referral Rewards & Community Credits" };
+    }
+
+    return null;
+}
+
 export async function sendOrQueueEmail(options: {
     to: string | string[];
     subject: string;
@@ -4883,6 +4952,57 @@ export async function sendOrQueueEmail(options: {
             logger.addLog("INFO", "EMAIL", `Email notifications globally disabled in settings. Skipping email "${options.subject}" to ${recipientStr}`);
             console.log(`[EMAIL-GATE] Email notifications globally disabled. Skipping email: "${options.subject}"`);
             return { success: true, sent: false, queued: false };
+        }
+
+        // ==========================================
+        // SECOND GATE: User-Level Notification Preferences
+        // ==========================================
+        // Evaluates whether the targeted recipient user has opted out of this specific notification category.
+        // Admin alerts (isToAdminOnly), 1:1 manual admin emails (manual_email), and security notices are never blocked.
+        if (!isToAdminOnly && options.templateId && options.templateId !== "manual_email") {
+            const notifCategory = getNotificationCategoryForTemplate(options.templateId);
+            if (notifCategory) {
+                let targetUserRecord: any = null;
+                if (options.userId) {
+                    targetUserRecord = await prisma.user.findUnique({
+                        where: { id: options.userId },
+                        include: { notificationPreference: true }
+                    }).catch(() => null);
+                }
+                if (!targetUserRecord && options.targetUser) {
+                    targetUserRecord = await prisma.user.findFirst({
+                        where: { username: options.targetUser },
+                        include: { notificationPreference: true }
+                    }).catch(() => null);
+                }
+                if (!targetUserRecord && options.to) {
+                    const toEmail = Array.isArray(options.to) ? options.to[0] : options.to;
+                    if (toEmail && typeof toEmail === "string") {
+                        targetUserRecord = await prisma.user.findFirst({
+                            where: {
+                                OR: [
+                                    { email: toEmail.trim().toLowerCase() },
+                                    { plexEmail: toEmail.trim().toLowerCase() }
+                                ]
+                            },
+                            include: { notificationPreference: true }
+                        }).catch(() => null);
+                    }
+                }
+
+                if (targetUserRecord?.notificationPreference) {
+                    const isPrefEnabled = (targetUserRecord.notificationPreference as any)[notifCategory.field];
+                    if (isPrefEnabled === false) {
+                        logger.addLog(
+                            "INFO",
+                            "EMAIL",
+                            `[USER-PREFERENCE-GATE] User "${targetUserRecord.username}" opted out of ${notifCategory.label} emails. Skipping "${options.subject}" (template: ${options.templateId}).`
+                        );
+                        console.log(`[USER-PREFERENCE-GATE] User "${targetUserRecord.username}" opted out of ${notifCategory.label}. Skipping email "${options.subject}"`);
+                        return { success: true, sent: false, queued: false };
+                    }
+                }
+            }
         }
 
         // Evaluate whether this email requires approval:
@@ -7251,7 +7371,8 @@ export async function getUserNotificationPreferencesAction() {
             pref = await prisma.userNotificationPreference.create({
                 data: {
                     userId: user.id,
-                    emailMediaReady: false,
+                    emailRequestApproved: true,
+                    emailMediaReady: true,
                     emailNewContent: false,
                     emailAnnouncements: true,
                     emailSupportTickets: true,
@@ -7271,6 +7392,7 @@ export async function getUserNotificationPreferencesAction() {
 }
 
 export async function updateUserNotificationPreferencesAction(data: {
+    emailRequestApproved?: boolean;
     emailMediaReady?: boolean;
     emailNewContent?: boolean;
     emailAnnouncements?: boolean;
@@ -7288,19 +7410,21 @@ export async function updateUserNotificationPreferencesAction(data: {
         const updated = await prisma.userNotificationPreference.upsert({
             where: { userId: user.id },
             update: {
-                emailMediaReady: data.emailMediaReady ?? false,
-                emailNewContent: data.emailNewContent ?? false,
-                emailAnnouncements: data.emailAnnouncements ?? true,
-                emailSupportTickets: data.emailSupportTickets ?? true,
-                emailSubscriptionReminders: data.emailSubscriptionReminders ?? true,
-                emailReferralRewards: data.emailReferralRewards ?? true,
-                discordMediaReady: Boolean(data.discordMediaReady),
-                discordAnnouncements: Boolean(data.discordAnnouncements),
-                discordWebhookUrl: data.discordWebhookUrl?.trim() || null
+                ...(data.emailRequestApproved !== undefined && { emailRequestApproved: data.emailRequestApproved }),
+                ...(data.emailMediaReady !== undefined && { emailMediaReady: data.emailMediaReady }),
+                ...(data.emailNewContent !== undefined && { emailNewContent: data.emailNewContent }),
+                ...(data.emailAnnouncements !== undefined && { emailAnnouncements: data.emailAnnouncements }),
+                ...(data.emailSupportTickets !== undefined && { emailSupportTickets: data.emailSupportTickets }),
+                ...(data.emailSubscriptionReminders !== undefined && { emailSubscriptionReminders: data.emailSubscriptionReminders }),
+                ...(data.emailReferralRewards !== undefined && { emailReferralRewards: data.emailReferralRewards }),
+                ...(data.discordMediaReady !== undefined && { discordMediaReady: Boolean(data.discordMediaReady) }),
+                ...(data.discordAnnouncements !== undefined && { discordAnnouncements: Boolean(data.discordAnnouncements) }),
+                ...(data.discordWebhookUrl !== undefined && { discordWebhookUrl: data.discordWebhookUrl?.trim() || null })
             },
             create: {
                 userId: user.id,
-                emailMediaReady: data.emailMediaReady ?? false,
+                emailRequestApproved: data.emailRequestApproved ?? true,
+                emailMediaReady: data.emailMediaReady ?? true,
                 emailNewContent: data.emailNewContent ?? false,
                 emailAnnouncements: data.emailAnnouncements ?? true,
                 emailSupportTickets: data.emailSupportTickets ?? true,
@@ -10777,6 +10901,10 @@ export async function approveBookRequestAction(requestId: string) {
             console.error(`[BOOK-REQUEST-APPROVAL] Auto-download error for "${request.title}":`, err);
         });
 
+        sendRequestApprovalNotification(request).catch(err => {
+            console.error(`[BOOK-REQUEST-APPROVAL] Notification error for "${request.title}":`, err);
+        });
+
         revalidatePath("/library");
         revalidatePath("/requests");
         return { success: true, message: `Approved request for "${request.title}". Searching indexers...` };
@@ -11166,6 +11294,57 @@ export async function getBookRequests() {
     } catch (e) {}
 
     return requests;
+}
+
+export async function sendRequestApprovalNotification(requestIdOrBook: any) {
+    try {
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        if (!isEmailDeliveryConfigured(settings) || settings?.emailNotificationsEnabled === false) {
+            return;
+        }
+
+        let request: any = null;
+        if (typeof requestIdOrBook === "string") {
+            request = await prisma.bookRequest.findUnique({ where: { id: requestIdOrBook } });
+        } else if (requestIdOrBook && requestIdOrBook.title) {
+            request = requestIdOrBook;
+        }
+
+        if (!request) return;
+
+        const requester = await prisma.user.findFirst({
+            where: { username: request.requestedBy }
+        });
+
+        if (!requester || !requester.email) {
+            return;
+        }
+
+        const isAudiobook = request.mediaType === "audiobook";
+        const mediaLabel = isAudiobook ? "Audiobook" : "Book";
+        const appUrl = await getAppUrl();
+
+        const { subject, html } = await renderEmailTemplate("seerr_request_approved", {
+            username: requester.username,
+            title: request.title,
+            releaseYear: request.publishYear || new Date().getFullYear().toString(),
+            mediaLabel,
+            quality: "Digital Master",
+            appUrl
+        });
+
+        await sendOrQueueEmail({
+            to: requester.email,
+            subject,
+            html,
+            templateId: "seerr_request_approved",
+            targetUser: requester.username,
+            userId: requester.id
+        });
+        logger.addLog("INFO", "EMAIL", `Dispatched request approval notice to ${requester.email} for "${request.title}"`);
+    } catch (e: any) {
+        logger.addLog("ERROR", "EMAIL", `Failed to send request approval notice: ${e.message || e}`);
+    }
 }
 
 export async function sendRequestCompletionNotification(requestIdOrBook: any, matchedBook?: any) {

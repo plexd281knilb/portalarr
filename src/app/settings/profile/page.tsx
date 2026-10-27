@@ -108,7 +108,8 @@ export default function UserProfilePage() {
 
     // Notification Preferences State
     const [notifPrefs, setNotifPrefs] = useState({
-        emailMediaReady: false,
+        emailRequestApproved: true,
+        emailMediaReady: true,
         emailNewContent: false,
         emailAnnouncements: true,
         emailSupportTickets: true,
@@ -227,8 +228,12 @@ export default function UserProfilePage() {
     ));
 
     const isNotifDirty = Boolean(initialProfileRef.current && (
+        notifPrefs.emailRequestApproved !== initialProfileRef.current.notifPrefs.emailRequestApproved ||
+        notifPrefs.emailMediaReady !== initialProfileRef.current.notifPrefs.emailMediaReady ||
         notifPrefs.emailSubscriptionReminders !== initialProfileRef.current.notifPrefs.emailSubscriptionReminders ||
-        notifPrefs.emailAnnouncements !== initialProfileRef.current.notifPrefs.emailAnnouncements
+        notifPrefs.emailAnnouncements !== initialProfileRef.current.notifPrefs.emailAnnouncements ||
+        notifPrefs.emailSupportTickets !== initialProfileRef.current.notifPrefs.emailSupportTickets ||
+        notifPrefs.emailReferralRewards !== initialProfileRef.current.notifPrefs.emailReferralRewards
     ));
 
     const isContentDirty = false;
@@ -477,9 +482,10 @@ export default function UserProfilePage() {
                 // Load Notification Preferences
                 if (d.notifPrefs) {
                     setNotifPrefs({
-                        emailMediaReady: Boolean(d.notifPrefs.emailMediaReady),
+                        emailRequestApproved: Boolean(d.notifPrefs.emailRequestApproved ?? true),
+                        emailMediaReady: Boolean(d.notifPrefs.emailMediaReady ?? true),
                         emailNewContent: Boolean(d.notifPrefs.emailNewContent),
-                        emailAnnouncements: Boolean(d.notifPrefs.emailAnnouncements),
+                        emailAnnouncements: Boolean(d.notifPrefs.emailAnnouncements ?? true),
                         emailSupportTickets: Boolean(d.notifPrefs.emailSupportTickets ?? true),
                         emailSubscriptionReminders: Boolean(d.notifPrefs.emailSubscriptionReminders ?? true),
                         emailReferralRewards: Boolean(d.notifPrefs.emailReferralRewards ?? true),
@@ -527,9 +533,10 @@ export default function UserProfilePage() {
                     kindleEmail: u?.kindleEmail === "DIRECT_DOWNLOAD" ? "" : (u?.kindleEmail || ""),
                     bypassKindle: u?.kindleEmail === "DIRECT_DOWNLOAD",
                     notifPrefs: {
-                        emailMediaReady: Boolean(d.notifPrefs?.emailMediaReady),
+                        emailRequestApproved: Boolean(d.notifPrefs?.emailRequestApproved ?? true),
+                        emailMediaReady: Boolean(d.notifPrefs?.emailMediaReady ?? true),
                         emailNewContent: Boolean(d.notifPrefs?.emailNewContent),
-                        emailAnnouncements: Boolean(d.notifPrefs?.emailAnnouncements),
+                        emailAnnouncements: Boolean(d.notifPrefs?.emailAnnouncements ?? true),
                         emailSupportTickets: Boolean(d.notifPrefs?.emailSupportTickets ?? true),
                         emailSubscriptionReminders: Boolean(d.notifPrefs?.emailSubscriptionReminders ?? true),
                         emailReferralRewards: Boolean(d.notifPrefs?.emailReferralRewards ?? true),
@@ -1922,16 +1929,46 @@ export default function UserProfilePage() {
                         )}
 
                         <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-4 max-w-2xl">
-                            <div className="flex items-center gap-2 font-bold text-xs text-foreground uppercase tracking-wider">
-                                <Mail className="h-4 w-4 text-cyan-400" />
-                                <span>Email Notifications</span>
+                            <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 font-bold text-xs text-foreground uppercase tracking-wider">
+                                    <Mail className="h-4 w-4 text-cyan-400" />
+                                    <span>Automated Email Notifications</span>
+                                </div>
+                                <span className="text-[10px] text-muted-foreground font-medium">Personal Opt-In Second Gate</span>
                             </div>
 
                             <div className="space-y-3.5 text-xs">
+                                {/* 1. Media Request Approvals */}
                                 <div className="flex items-center justify-between gap-4">
+                                    <Label htmlFor="notif-req-approved" className="text-xs cursor-pointer">
+                                        <span className="font-semibold text-foreground">Media Request Approvals</span>
+                                        <p className="text-[11px] text-muted-foreground mt-0.5">Receive email notices when your requested movie, series, or book is approved by an administrator.</p>
+                                    </Label>
+                                    <Switch 
+                                        id="notif-req-approved"
+                                        checked={notifPrefs.emailRequestApproved} 
+                                        onCheckedChange={(val) => setNotifPrefs({ ...notifPrefs, emailRequestApproved: val })} 
+                                    />
+                                </div>
+
+                                {/* 2. Media Available & Ready to Stream */}
+                                <div className="flex items-center justify-between gap-4 pt-3 border-t border-border/30">
+                                    <Label htmlFor="notif-media-ready" className="text-xs cursor-pointer">
+                                        <span className="font-semibold text-foreground">Media Available & Ready to Stream</span>
+                                        <p className="text-[11px] text-muted-foreground mt-0.5">Receive an email alert the moment your requested media finishes downloading and is ready on Plex.</p>
+                                    </Label>
+                                    <Switch 
+                                        id="notif-media-ready"
+                                        checked={notifPrefs.emailMediaReady} 
+                                        onCheckedChange={(val) => setNotifPrefs({ ...notifPrefs, emailMediaReady: val })} 
+                                    />
+                                </div>
+
+                                {/* 3. Subscription & Renewal Reminders */}
+                                <div className="flex items-center justify-between gap-4 pt-3 border-t border-border/30">
                                     <Label htmlFor="notif-sub-reminders" className="text-xs cursor-pointer">
                                         <span className="font-semibold text-foreground">Subscription & Renewal Reminders</span>
-                                        <p className="text-[11px] text-muted-foreground mt-0.5">Receive email notices before your annual or monthly subscription passes renew or expire.</p>
+                                        <p className="text-[11px] text-muted-foreground mt-0.5">Receive advance email notices before your annual or monthly subscription passes renew or expire.</p>
                                     </Label>
                                     <Switch 
                                         id="notif-sub-reminders"
@@ -1940,15 +1977,42 @@ export default function UserProfilePage() {
                                     />
                                 </div>
 
+                                {/* 4. Server Announcements & Maintenance */}
                                 <div className="flex items-center justify-between gap-4 pt-3 border-t border-border/30">
                                     <Label htmlFor="notif-announcements" className="text-xs cursor-pointer">
                                         <span className="font-semibold text-foreground">Server Announcements & Maintenance</span>
-                                        <p className="text-[11px] text-muted-foreground mt-0.5">Scheduled maintenance downtime notices, domain changes, and important server announcements.</p>
+                                        <p className="text-[11px] text-muted-foreground mt-0.5">Scheduled maintenance downtime notices, domain changes, and important homelab announcements.</p>
                                     </Label>
                                     <Switch 
                                         id="notif-announcements"
                                         checked={notifPrefs.emailAnnouncements} 
                                         onCheckedChange={(val) => setNotifPrefs({ ...notifPrefs, emailAnnouncements: val })} 
+                                    />
+                                </div>
+
+                                {/* 5. Support Ticket Responses */}
+                                <div className="flex items-center justify-between gap-4 pt-3 border-t border-border/30">
+                                    <Label htmlFor="notif-support-tickets" className="text-xs cursor-pointer">
+                                        <span className="font-semibold text-foreground">Support Ticket Responses</span>
+                                        <p className="text-[11px] text-muted-foreground mt-0.5">Receive email updates whenever an administrator replies to or resolves your support tickets.</p>
+                                    </Label>
+                                    <Switch 
+                                        id="notif-support-tickets"
+                                        checked={notifPrefs.emailSupportTickets} 
+                                        onCheckedChange={(val) => setNotifPrefs({ ...notifPrefs, emailSupportTickets: val })} 
+                                    />
+                                </div>
+
+                                {/* 6. Referral Rewards & Credits */}
+                                <div className="flex items-center justify-between gap-4 pt-3 border-t border-border/30">
+                                    <Label htmlFor="notif-referral-rewards" className="text-xs cursor-pointer">
+                                        <span className="font-semibold text-foreground">Referral Rewards & Community Credits</span>
+                                        <p className="text-[11px] text-muted-foreground mt-0.5">Receive email alerts when friends join using your referral code or monthly subscription bonuses are awarded.</p>
+                                    </Label>
+                                    <Switch 
+                                        id="notif-referral-rewards"
+                                        checked={notifPrefs.emailReferralRewards} 
+                                        onCheckedChange={(val) => setNotifPrefs({ ...notifPrefs, emailReferralRewards: val })} 
                                     />
                                 </div>
                             </div>
