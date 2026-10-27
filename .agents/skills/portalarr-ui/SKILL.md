@@ -85,6 +85,10 @@ Portalarr uses a **Modern Cinematic Dark Theme** powered by Tailwind CSS, Radix 
 - **User Self-Selection & Tier Capabilities**:
   - In User Profile (`UserMediaServersManager`), render an informative Tier Capabilities Banner highlighting Full Member privileges (unlimited media server and library self-selection across Plex, Jellyfin, and Emby, book library access, uncapped requests, and household sub-accounts).
   - Enforce server-side whitelist validation: any client tampering attempting to select unauthorized servers or hidden libraries is strictly filtered out before database persistence and API policy sync.
+- **Profile Page Clean Minimal Cards & Coming Soon Gating**:
+  - **Household Sub-Accounts & Profiles** and **Content Safety & Family Profile** are cleanly rendered as "Coming Soon • Beta" cards while library metadata tagging and parental rating filters remain in active development.
+  - **Notification Preferences**: Focused strictly on functional email controls (Subscription & Renewal Reminders, and Server Announcements & Maintenance wired to broadcast opt-outs), with fake Discord webhook fields and dummy toggles removed.
+  - **Kids & Audiobooks Library Access Cards**: Excluded internal backend library dumps ("Managed Family Libraries" and "Detected Audiobook Libraries") to maintain member privacy and prevent empty badge artifacts.
 - **Strict Full-Member Gating for Jellyfin & Emby**:
   - Emby and Jellyfin server options and add-ons (`jellyfin_access`, `emby_access`) are **strictly restricted to Full Members** (and Super Users / Admins). Note: `emby_access` is marked unavailable (`isAvailable: false`) and filtered from the user account add-ons catalog until Emby streaming is actively deployed.
   - For Trial Members (`isTrialUser`), Jellyfin and Emby switches are locked/disabled (`checked={false} disabled={true}`) with a `Full Members Only` lock badge and a prominent locked informational banner: "Jellyfin & Emby multi-platform streaming is exclusively available for Full Members. Upgrade your membership pass to unlock."

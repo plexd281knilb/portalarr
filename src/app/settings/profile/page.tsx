@@ -110,7 +110,7 @@ export default function UserProfilePage() {
     const [notifPrefs, setNotifPrefs] = useState({
         emailMediaReady: false,
         emailNewContent: false,
-        emailAnnouncements: false,
+        emailAnnouncements: true,
         emailSupportTickets: true,
         emailSubscriptionReminders: true,
         emailReferralRewards: true,
@@ -227,30 +227,11 @@ export default function UserProfilePage() {
     ));
 
     const isNotifDirty = Boolean(initialProfileRef.current && (
-        notifPrefs.emailMediaReady !== initialProfileRef.current.notifPrefs.emailMediaReady ||
-        notifPrefs.emailNewContent !== initialProfileRef.current.notifPrefs.emailNewContent ||
-        notifPrefs.emailAnnouncements !== initialProfileRef.current.notifPrefs.emailAnnouncements ||
-        notifPrefs.emailSupportTickets !== initialProfileRef.current.notifPrefs.emailSupportTickets ||
         notifPrefs.emailSubscriptionReminders !== initialProfileRef.current.notifPrefs.emailSubscriptionReminders ||
-        notifPrefs.emailReferralRewards !== initialProfileRef.current.notifPrefs.emailReferralRewards ||
-        notifPrefs.discordMediaReady !== initialProfileRef.current.notifPrefs.discordMediaReady ||
-        notifPrefs.discordAnnouncements !== initialProfileRef.current.notifPrefs.discordAnnouncements ||
-        (notifPrefs.discordWebhookUrl || "").trim() !== (initialProfileRef.current.notifPrefs.discordWebhookUrl || "").trim()
+        notifPrefs.emailAnnouncements !== initialProfileRef.current.notifPrefs.emailAnnouncements
     ));
 
-    const isContentDirty = Boolean(
-        initialSafetyPrefsRef.current &&
-        initialSafetyPrefsRef.current.targetUserId === (selectedSafetyUserId || user?.id) &&
-        (
-            contentPrefs.maxContentRating !== initialSafetyPrefsRef.current.prefs.maxContentRating ||
-            contentPrefs.hideLeavingSoon !== initialSafetyPrefsRef.current.prefs.hideLeavingSoon ||
-            contentPrefs.hideHorror !== initialSafetyPrefsRef.current.prefs.hideHorror ||
-            contentPrefs.hideNsfw !== initialSafetyPrefsRef.current.prefs.hideNsfw ||
-            contentPrefs.hideGore !== initialSafetyPrefsRef.current.prefs.hideGore ||
-            !areProfileArraysEqual(contentPrefs.excludedGenresList, initialSafetyPrefsRef.current.prefs.excludedGenresList) ||
-            !areProfileArraysEqual(contentPrefs.excludedTagsList, initialSafetyPrefsRef.current.prefs.excludedTagsList)
-        )
-    );
+    const isContentDirty = false;
 
     const isSectionAllowed = (sec: any, server?: any) => {
         if (isTrial) {
@@ -1697,207 +1678,41 @@ export default function UserProfilePage() {
                                 <Users className="h-5 w-5 text-purple-400" /> Household Sub-Accounts & Profiles
                             </CardTitle>
                             <CardDescription className="text-xs">
-                                Create secondary Plex profiles for your Living Room TV or Kids' tablets. Sub-accounts are nested under your membership with zero extra billing.
+                                Create secondary Plex profiles for your Living Room TV or Kids' tablets with zero extra billing.
                             </CardDescription>
                         </div>
-                        {isTrial ? (
-                            <Badge variant="outline" className="bg-purple-500/20 text-purple-300 border-purple-500/40 text-xs w-fit flex items-center gap-1">
-                                <Sparkles className="h-3 w-3 text-purple-300" /> Full Member Perk
-                            </Badge>
-                        ) : (
-                            <Badge variant="outline" className="bg-purple-500/20 text-purple-300 border-purple-500/40 text-xs w-fit">
-                                {subAccounts.length} / {subLimits.includedLivingRooms + subLimits.includedKids} Profiles Configured
-                            </Badge>
-                        )}
+                        <Badge variant="outline" className="bg-purple-500/15 text-purple-300 border-purple-500/40 text-xs w-fit flex items-center gap-1 font-semibold">
+                            <Sparkles className="h-3 w-3 text-purple-300" /> Coming Soon • Beta
+                        </Badge>
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {/* LIVING ROOM PROFILES COLUMN */}
-                        <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-3 flex flex-col justify-between">
-                            <div className="space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <span className="font-bold text-xs text-foreground uppercase tracking-wider flex items-center gap-1.5">
-                                        <Monitor className="h-4 w-4 text-indigo-400" /> Living Room TV
-                                    </span>
-                                    <Badge variant="outline" className="text-[10px] text-indigo-300 border-indigo-500/30 bg-indigo-500/10">
-                                        Nudity Filtered
-                                    </Badge>
-                                </div>
-                                <p className="text-[11px] text-muted-foreground leading-relaxed">
-                                    Shares the same libraries as your main account, but automatically filters out content with IMDb Severe Nudity tags for family room viewing.
-                                </p>
-
-                                {isTrial ? (
-                                    <div className="p-3 rounded-lg bg-indigo-500/5 border border-indigo-500/15 text-center space-y-1">
-                                        <p className="text-[11px] font-medium text-foreground">Dedicated Living Room Profile</p>
-                                        <p className="text-[10px] text-muted-foreground">Keep shared family screens clean with automated severe nudity filtering.</p>
-                                    </div>
-                                ) : (
-                                    /* EXISTING LIVING ROOM SUBS */
-                                    <div className="space-y-2">
-                                        {subAccounts.filter(s => s.accountType === "LIVING_ROOM").map(sub => (
-                                            <div key={sub.id} className="p-2.5 rounded-lg bg-indigo-950/20 border border-indigo-500/30 flex items-center justify-between gap-2">
-                                                <div className="space-y-0.5 min-w-0">
-                                                    <div className="flex items-center gap-1.5">
-                                                        <span className="text-xs font-bold text-foreground truncate">{sub.subAccountLabel || "Living Room TV"}</span>
-                                                        <Badge variant="outline" className="text-[9px] bg-emerald-500/15 text-emerald-400 border-emerald-500/30 shrink-0">Active</Badge>
-                                                    </div>
-                                                    <p className="text-[11px] font-mono text-muted-foreground truncate">{sub.plexUsername || sub.plexEmail}</p>
-                                                    <span className="inline-flex items-center text-[10px] text-indigo-300/90 font-medium">
-                                                        🚫 Severe Nudity Excluded
-                                                    </span>
-                                                </div>
-                                                <div className="flex items-center gap-1 shrink-0">
-                                                    <Button
-                                                        type="button"
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        onClick={() => handleOpenEditSubAccount(sub)}
-                                                        className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground cursor-pointer"
-                                                        title="Edit Profile"
-                                                    >
-                                                        <Edit2 className="h-3.5 w-3.5" />
-                                                    </Button>
-                                                    <Button
-                                                        type="button"
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        onClick={() => setDeleteSubConfirmId(sub.id)}
-                                                        className="h-7 w-7 p-0 text-muted-foreground hover:text-red-400 cursor-pointer"
-                                                        title="Remove Sub-Account"
-                                                    >
-                                                        <Trash2 className="h-3.5 w-3.5" />
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-
-                            <div className="pt-2">
-                                {isTrial ? (
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => {
-                                            document.getElementById("billing")?.scrollIntoView({ behavior: "smooth" });
-                                        }}
-                                        className="w-full text-xs font-semibold bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border-indigo-500/30 gap-1.5 h-8 transition-all active:scale-95 cursor-pointer"
-                                    >
-                                        <Sparkles className="h-3.5 w-3.5 text-indigo-400" /> Unlocks with Full Membership
-                                    </Button>
-                                ) : subAccounts.filter(s => s.accountType === "LIVING_ROOM").length < subLimits.includedLivingRooms ? (
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handleOpenAddSubAccount("LIVING_ROOM")}
-                                        className="w-full text-xs font-semibold bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border-indigo-500/30 gap-1.5 h-8 transition-all active:scale-95 cursor-pointer"
-                                    >
-                                        <Plus className="h-3.5 w-3.5" /> Add Living Room TV Profile
-                                    </Button>
-                                ) : (
-                                    <div className="text-[10px] text-muted-foreground italic text-center">
-                                        Included slot in use. Enable extra living room add-on for more.
-                                    </div>
-                                )}
-                            </div>
+                    <div className="p-4 rounded-xl bg-purple-950/20 border border-purple-500/30 space-y-3">
+                        <div className="flex items-center gap-2">
+                            <Badge className="bg-purple-500/20 text-purple-300 border border-purple-500/40 text-[11px] font-semibold">
+                                Feature in Active Development
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">Tagging & Filtering Beta</span>
                         </div>
-
-                        {/* KIDS PROFILES COLUMN */}
-                        <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-3 flex flex-col justify-between">
-                            <div className="space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <span className="font-bold text-xs text-foreground uppercase tracking-wider flex items-center gap-1.5">
-                                        <Baby className="h-4 w-4 text-purple-400" /> Kids Account
-                                    </span>
-                                    <Badge variant="outline" className="text-[10px] text-purple-300 border-purple-500/30 bg-purple-500/10">
-                                        PG Safe • Curated
-                                    </Badge>
+                        <p className="text-xs text-muted-foreground leading-relaxed">
+                            Household Sub-Accounts (dedicated Kids tablet profiles and Living Room family screens) are currently coming soon while our automated content safety and IMDb/TMDb metadata tagging engine is calibrated. Once released, you will be able to provision dedicated child-safe and family-friendly profiles nested under your membership with zero extra billing.
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                            <div className="p-3 rounded-lg bg-black/30 border border-white/5 space-y-1">
+                                <div className="flex items-center gap-2 text-xs font-bold text-foreground">
+                                    <Monitor className="h-4 w-4 text-indigo-400 shrink-0" /> Living Room TV Profile
                                 </div>
-                                <p className="text-[11px] text-muted-foreground leading-relaxed">
-                                    Automatically limited to Kids-only server libraries, enforcing a strict PG rating ceiling with adult, horror, and violent content hidden.
+                                <p className="text-[11px] text-muted-foreground">
+                                    Shared household viewing that automatically filters out severe nudity and explicit content for living room screens.
                                 </p>
-
-                                {isTrial ? (
-                                    <div className="p-3 rounded-lg bg-purple-500/5 border border-purple-500/15 text-center space-y-1">
-                                        <p className="text-[11px] font-medium text-foreground">Dedicated Kids Profile</p>
-                                        <p className="text-[10px] text-muted-foreground">Curated kids-safe environment with PG rating ceiling and mature content blocked.</p>
-                                    </div>
-                                ) : (
-                                    /* EXISTING KIDS SUBS */
-                                    <div className="space-y-2">
-                                        {subAccounts.filter(s => s.accountType === "KID").map(sub => (
-                                            <div key={sub.id} className="p-2.5 rounded-lg bg-purple-950/20 border border-purple-500/30 flex items-center justify-between gap-2">
-                                                <div className="space-y-0.5 min-w-0">
-                                                    <div className="flex items-center gap-1.5">
-                                                        <span className="text-xs font-bold text-foreground truncate">{sub.subAccountLabel || "Kids Account"}</span>
-                                                        <Badge variant="outline" className="text-[9px] bg-emerald-500/15 text-emerald-400 border-emerald-500/30 shrink-0">Active</Badge>
-                                                    </div>
-                                                    <p className="text-[11px] font-mono text-muted-foreground truncate">{sub.plexUsername || sub.plexEmail}</p>
-                                                    <span className="inline-flex items-center text-[10px] text-purple-300/90 font-medium">
-                                                        👶 PG Safe • Kids Only Server
-                                                    </span>
-                                                </div>
-                                                <div className="flex items-center gap-1 shrink-0">
-                                                    <Button
-                                                        type="button"
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        onClick={() => handleOpenEditSubAccount(sub)}
-                                                        className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground cursor-pointer"
-                                                        title="Edit Profile"
-                                                    >
-                                                        <Edit2 className="h-3.5 w-3.5" />
-                                                    </Button>
-                                                    <Button
-                                                        type="button"
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        onClick={() => setDeleteSubConfirmId(sub.id)}
-                                                        className="h-7 w-7 p-0 text-muted-foreground hover:text-red-400 cursor-pointer"
-                                                        title="Remove Sub-Account"
-                                                    >
-                                                        <Trash2 className="h-3.5 w-3.5" />
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
                             </div>
-
-                            <div className="pt-2">
-                                {isTrial ? (
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => {
-                                            document.getElementById("billing")?.scrollIntoView({ behavior: "smooth" });
-                                        }}
-                                        className="w-full text-xs font-semibold bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border-purple-500/30 gap-1.5 h-8 transition-all active:scale-95 cursor-pointer"
-                                    >
-                                        <Sparkles className="h-3.5 w-3.5 text-purple-400" /> Unlocks with Full Membership
-                                    </Button>
-                                ) : subAccounts.filter(s => s.accountType === "KID").length < subLimits.includedKids ? (
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handleOpenAddSubAccount("KID")}
-                                        className="w-full text-xs font-semibold bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border-purple-500/30 gap-1.5 h-8 transition-all active:scale-95 cursor-pointer"
-                                    >
-                                        <Plus className="h-3.5 w-3.5" /> Add Kids Profile
-                                    </Button>
-                                ) : (
-                                    <div className="text-[10px] text-muted-foreground italic text-center">
-                                        Included slot in use. Enable extra kids profile add-on for more.
-                                    </div>
-                                )}
+                            <div className="p-3 rounded-lg bg-black/30 border border-white/5 space-y-1">
+                                <div className="flex items-center gap-2 text-xs font-bold text-foreground">
+                                    <Baby className="h-4 w-4 text-purple-400 shrink-0" /> Kids Tablet Profile
+                                </div>
+                                <p className="text-[11px] text-muted-foreground">
+                                    Dedicated child-safe profile restricted strictly to G/PG ratings and animated kids libraries.
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -2083,11 +1898,11 @@ export default function UserProfilePage() {
                                 )}
                             </CardTitle>
                             <CardDescription className="text-xs">
-                                Choose which updates you want to receive via Email and Discord webhook alerts.
+                                Choose which automated email notices and server updates you receive.
                             </CardDescription>
                         </div>
                         <Badge variant="outline" className="bg-cyan-500/20 text-cyan-300 border-cyan-500/40 text-xs w-fit">
-                            Live Alerts
+                            Email Alerts
                         </Badge>
                     </div>
                 </CardHeader>
@@ -2106,117 +1921,36 @@ export default function UserProfilePage() {
                             </div>
                         )}
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            {/* EMAIL PREFERENCES */}
-                            <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-3">
-                                <div className="flex items-center gap-2 font-bold text-xs text-foreground uppercase tracking-wider">
-                                    <Mail className="h-4 w-4 text-primary" />
-                                    <span>Email Notifications</span>
-                                </div>
-
-                                <div className="space-y-2.5 text-xs">
-                                    <div className="flex items-center justify-between">
-                                        <Label htmlFor="notif-media-ready" className="text-xs cursor-pointer">
-                                            <span>Media Ready & Downloaded</span>
-                                            <p className="text-[10px] text-muted-foreground">When your movie/show/book request is ready</p>
-                                        </Label>
-                                        <Switch 
-                                            id="notif-media-ready"
-                                            checked={notifPrefs.emailMediaReady} 
-                                            onCheckedChange={(val) => setNotifPrefs({ ...notifPrefs, emailMediaReady: val })} 
-                                        />
-                                    </div>
-
-
-
-                                    <div className="flex items-center justify-between pt-1 border-t border-border/30">
-                                        <Label htmlFor="notif-announcements" className="text-xs cursor-pointer">
-                                            <span>Server Announcements</span>
-                                            <p className="text-[10px] text-muted-foreground">Maintenance notices and feature releases</p>
-                                        </Label>
-                                        <Switch 
-                                            id="notif-announcements"
-                                            checked={notifPrefs.emailAnnouncements} 
-                                            onCheckedChange={(val) => setNotifPrefs({ ...notifPrefs, emailAnnouncements: val })} 
-                                        />
-                                    </div>
-
-                                    <div className="flex items-center justify-between pt-1 border-t border-border/30">
-                                        <Label htmlFor="notif-sub-reminders" className="text-xs cursor-pointer">
-                                            <span>Subscription Reminders</span>
-                                            <p className="text-[10px] text-muted-foreground">Annual renewal & expiration notices</p>
-                                        </Label>
-                                        <Switch 
-                                            id="notif-sub-reminders"
-                                            checked={notifPrefs.emailSubscriptionReminders} 
-                                            onCheckedChange={(val) => setNotifPrefs({ ...notifPrefs, emailSubscriptionReminders: val })} 
-                                        />
-                                    </div>
-
-                                    <div className="flex items-center justify-between pt-1 border-t border-border/30">
-                                        <Label htmlFor="notif-referral" className="text-xs cursor-pointer">
-                                            <span>Referral Rewards</span>
-                                            <p className="text-[10px] text-muted-foreground">Alerts when invited friends join or subscribe</p>
-                                        </Label>
-                                        <Switch 
-                                            id="notif-referral"
-                                            checked={notifPrefs.emailReferralRewards} 
-                                            onCheckedChange={(val) => setNotifPrefs({ ...notifPrefs, emailReferralRewards: val })} 
-                                        />
-                                    </div>
-                                </div>
+                        <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-4 max-w-2xl">
+                            <div className="flex items-center gap-2 font-bold text-xs text-foreground uppercase tracking-wider">
+                                <Mail className="h-4 w-4 text-cyan-400" />
+                                <span>Email Notifications</span>
                             </div>
 
-                            {/* DISCORD WEBHOOK ALERTS */}
-                            <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-3 flex flex-col justify-between">
-                                <div className="space-y-3">
-                                    <div className="flex items-center gap-2 font-bold text-xs text-foreground uppercase tracking-wider">
-                                        <MessageSquare className="h-4 w-4 text-indigo-400" />
-                                        <span>Discord Webhook Alerts</span>
-                                    </div>
-
-                                    <div className="space-y-2.5 text-xs">
-                                        <div className="flex items-center justify-between">
-                                            <Label htmlFor="notif-discord-ready" className="text-xs cursor-pointer">
-                                                <span>Discord Media Ready Alerts</span>
-                                                <p className="text-[10px] text-muted-foreground">Send to your personal Discord channel</p>
-                                            </Label>
-                                            <Switch 
-                                                id="notif-discord-ready"
-                                                checked={notifPrefs.discordMediaReady} 
-                                                onCheckedChange={(val) => setNotifPrefs({ ...notifPrefs, discordMediaReady: val })} 
-                                            />
-                                        </div>
-
-                                        <div className="flex items-center justify-between pt-1 border-t border-border/30">
-                                            <Label htmlFor="notif-discord-announcements" className="text-xs cursor-pointer">
-                                                <span>Discord Server News</span>
-                                                <p className="text-[10px] text-muted-foreground">Channel alerts for major server updates</p>
-                                            </Label>
-                                            <Switch 
-                                                id="notif-discord-announcements"
-                                                checked={notifPrefs.discordAnnouncements} 
-                                                onCheckedChange={(val) => setNotifPrefs({ ...notifPrefs, discordAnnouncements: val })} 
-                                            />
-                                        </div>
-
-                                        <div className="space-y-1.5 pt-1 border-t border-border/30">
-                                            <Label htmlFor="notif-webhook-url" className="text-xs font-semibold">Discord Webhook URL (Optional)</Label>
-                                            <Input 
-                                                id="notif-webhook-url"
-                                                type="url"
-                                                placeholder="https://discord.com/api/webhooks/..." 
-                                                value={notifPrefs.discordWebhookUrl}
-                                                onChange={(e) => setNotifPrefs({ ...notifPrefs, discordWebhookUrl: e.target.value })}
-                                                className="bg-background/80 text-xs font-mono"
-                                            />
-                                        </div>
-                                    </div>
+                            <div className="space-y-3.5 text-xs">
+                                <div className="flex items-center justify-between gap-4">
+                                    <Label htmlFor="notif-sub-reminders" className="text-xs cursor-pointer">
+                                        <span className="font-semibold text-foreground">Subscription & Renewal Reminders</span>
+                                        <p className="text-[11px] text-muted-foreground mt-0.5">Receive email notices before your annual or monthly subscription passes renew or expire.</p>
+                                    </Label>
+                                    <Switch 
+                                        id="notif-sub-reminders"
+                                        checked={notifPrefs.emailSubscriptionReminders} 
+                                        onCheckedChange={(val) => setNotifPrefs({ ...notifPrefs, emailSubscriptionReminders: val })} 
+                                    />
                                 </div>
 
-                                <p className="text-[10px] text-muted-foreground italic pt-2">
-                                    Create a webhook in Discord: Server Settings &gt; Integrations &gt; Webhooks.
-                                </p>
+                                <div className="flex items-center justify-between gap-4 pt-3 border-t border-border/30">
+                                    <Label htmlFor="notif-announcements" className="text-xs cursor-pointer">
+                                        <span className="font-semibold text-foreground">Server Announcements & Maintenance</span>
+                                        <p className="text-[11px] text-muted-foreground mt-0.5">Scheduled maintenance downtime notices, domain changes, and important server announcements.</p>
+                                    </Label>
+                                    <Switch 
+                                        id="notif-announcements"
+                                        checked={notifPrefs.emailAnnouncements} 
+                                        onCheckedChange={(val) => setNotifPrefs({ ...notifPrefs, emailAnnouncements: val })} 
+                                    />
+                                </div>
                             </div>
                         </div>
 
@@ -2414,207 +2148,61 @@ export default function UserProfilePage() {
             </Card>
 
             {/* CONTENT SAFETY & FAMILY PROFILE CARD */}
-            <Card id="safety" className={`transition-all duration-300 bg-[#121218]/80 backdrop-blur-md relative overflow-hidden scroll-mt-6 ${isContentDirty ? "border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]" : "border-amber-500/30 shadow-sm"}`}>
+            <Card id="safety" className="border-amber-500/30 bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden scroll-mt-6">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-3xl -z-10 pointer-events-none" />
                 <CardHeader className="pb-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
                             <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
                                 <Shield className="h-5 w-5 text-amber-400" /> Content Safety & Family Profile
-                                {isContentDirty && (
-                                    <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-400 border-amber-500/30 font-medium ml-2 animate-in fade-in">
-                                        ● Unsaved Changes
-                                    </Badge>
-                                )}
                             </CardTitle>
                             <CardDescription className="text-xs">
                                 Configure parental rating ceilings, genre exclusions, and child-safe viewing filters.
                             </CardDescription>
                         </div>
-                        <Badge variant="outline" className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-xs w-fit">
-                            Parental Control
+                        <Badge variant="outline" className="bg-amber-500/15 text-amber-300 border-amber-500/40 text-xs w-fit flex items-center gap-1 font-semibold">
+                            <Sparkles className="h-3 w-3 text-amber-300" /> Coming Soon • Beta
                         </Badge>
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    {/* ACCOUNT SELECTOR BAR */}
-                    <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.08] space-y-2.5">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                            <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                                <Users className="h-3.5 w-3.5 text-amber-400" />
-                                Select Account to Configure:
-                            </Label>
-                            {loadingSafetyPrefs && (
-                                <span className="text-[11px] text-amber-400 flex items-center gap-1">
-                                    <Loader2 className="h-3 w-3 animate-spin" /> Loading profile rules...
-                                </span>
-                            )}
+                    <div className="p-4 rounded-xl bg-amber-950/20 border border-amber-500/30 space-y-3">
+                        <div className="flex items-center gap-2">
+                            <Badge className="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[11px] font-semibold">
+                                Tagging Engine in Beta
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">Metadata Calibration</span>
                         </div>
-
-                        <div className="flex flex-wrap gap-2">
-                            {/* Primary Account Button */}
-                            <button
-                                type="button"
-                                onClick={() => handleSelectSafetyAccount(user?.id)}
-                                disabled={loadingSafetyPrefs}
-                                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
-                                    (!selectedSafetyUserId || selectedSafetyUserId === user?.id)
-                                        ? "bg-amber-500/20 text-amber-300 border-amber-500/60 shadow-sm ring-1 ring-amber-500/40"
-                                        : "bg-background/70 text-muted-foreground border-border/40 hover:text-foreground hover:bg-background"
-                                }`}
-                            >
-                                <Crown className="h-4 w-4 text-amber-400 shrink-0" />
-                                <div className="text-left">
-                                    <div>{user?.username || "My Account"} <span className="text-[10px] opacity-75 font-normal">(Primary)</span></div>
+                        <p className="text-xs text-muted-foreground leading-relaxed">
+                            Content safety controls, rating ceilings, and explicit genre exclusion filters (IMDb &amp; TMDb content advisories) are currently coming soon while our automated library metadata tagging engine is in beta. Once tagging verification is finalized across media servers, you will be able to customize parental ceilings and genre exclusions per profile directly from this panel.
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                            <div className="p-3 rounded-lg bg-black/30 border border-white/5 space-y-1">
+                                <div className="text-xs font-bold text-foreground">
+                                    🔞 Rating Ceilings
                                 </div>
-                            </button>
-
-                            {/* Sub-Accounts Buttons */}
-                            {subAccounts.map((sub) => {
-                                const isSelected = selectedSafetyUserId === sub.id;
-                                const isKid = sub.accountType === "KID";
-                                return (
-                                    <button
-                                        key={sub.id}
-                                        type="button"
-                                        onClick={() => handleSelectSafetyAccount(sub.id)}
-                                        disabled={loadingSafetyPrefs}
-                                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
-                                            isSelected
-                                                ? isKid
-                                                    ? "bg-purple-500/20 text-purple-300 border-purple-500/60 shadow-sm ring-1 ring-purple-500/40"
-                                                    : "bg-blue-500/20 text-blue-300 border-blue-500/60 shadow-sm ring-1 ring-blue-500/40"
-                                                : "bg-background/70 text-muted-foreground border-border/40 hover:text-foreground hover:bg-background"
-                                        }`}
-                                    >
-                                        {isKid ? (
-                                            <Baby className="h-4 w-4 text-purple-400 shrink-0" />
-                                        ) : (
-                                            <Tv className="h-4 w-4 text-blue-400 shrink-0" />
-                                        )}
-                                        <div className="text-left">
-                                            <div>
-                                                {sub.subAccountLabel || (isKid ? "Kids Account" : "Living Room")}
-                                                <span className="text-[10px] opacity-75 font-normal ml-1">
-                                                    ({isKid ? "Kids" : "Living Room"})
-                                                </span>
-                                            </div>
-                                            {(sub.plexUsername || sub.plexEmail) && (
-                                                <div className="text-[10px] font-mono text-muted-foreground font-normal">
-                                                    {sub.plexUsername || sub.plexEmail}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </button>
-                                );
-                            })}
-                        </div>
-
-                        {subAccounts.length === 0 && (
-                            <div className="text-[11px] text-muted-foreground flex items-center gap-1.5 pt-0.5">
-                                <AlertCircle className="h-3 w-3 text-amber-400 shrink-0" />
-                                <span>
-                                    Currently configuring primary account. You can create separate <strong>Kids</strong> and <strong>Living Room</strong> profiles in the <a href="#subaccounts" className="text-amber-400 underline underline-offset-2 hover:text-amber-300">Household Sub-Accounts</a> section below to configure independent parental restrictions.
-                                </span>
+                                <p className="text-[11px] text-muted-foreground">
+                                    Enforce TV-Y, PG, PG-13, or R rating caps that hide titles exceeding your chosen ceiling.
+                                </p>
                             </div>
-                        )}
+                            <div className="p-3 rounded-lg bg-black/30 border border-white/5 space-y-1">
+                                <div className="text-xs font-bold text-foreground">
+                                    🚫 Explicit Filtering
+                                </div>
+                                <p className="text-[11px] text-muted-foreground">
+                                    One-click exclusion filters for severe nudity, extreme gore, and horror genres.
+                                </p>
+                            </div>
+                            <div className="p-3 rounded-lg bg-black/30 border border-white/5 space-y-1">
+                                <div className="text-xs font-bold text-foreground">
+                                    👥 Per-Profile Safety
+                                </div>
+                                <p className="text-[11px] text-muted-foreground">
+                                    Apply independent safety rules across your primary and household sub-accounts.
+                                </p>
+                            </div>
+                        </div>
                     </div>
-
-                    <form onSubmit={handleSaveContentSafety} className="space-y-4">
-                        {contentMsg && (
-                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
-                                <CheckCircle2 className="h-4 w-4 shrink-0" />
-                                <span>{contentMsg}</span>
-                            </div>
-                        )}
-                        {contentErr && (
-                            <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
-                                <XCircle className="h-4 w-4 shrink-0" />
-                                <span>{contentErr}</span>
-                            </div>
-                        )}
-
-                        <div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 transition-opacity ${loadingSafetyPrefs ? "opacity-40 pointer-events-none" : "opacity-100"}`}>
-                            <div className="space-y-1.5">
-                                <Label className="text-xs font-semibold">Maximum Content Rating Ceiling</Label>
-                                <Select 
-                                    value={contentPrefs.maxContentRating} 
-                                    onValueChange={(val) => setContentPrefs({ ...contentPrefs, maxContentRating: val })}
-                                >
-                                    <SelectTrigger className="bg-background/80 text-xs">
-                                        <SelectValue placeholder="Rating limit" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="ALL">ALL (No Content Rating Filter)</SelectItem>
-                                        <SelectItem value="G">G / TV-Y / TV-G (Young Children)</SelectItem>
-                                        <SelectItem value="PG">PG / TV-PG (Parental Guidance)</SelectItem>
-                                        <SelectItem value="PG-13">PG-13 / TV-14 (Teens 13+)</SelectItem>
-                                        <SelectItem value="R">R / TV-MA (Mature 17+)</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                <p className="text-[11px] text-muted-foreground">Titles exceeding this rating are hidden from discovery and search for this profile.</p>
-                            </div>
-
-                            <div className="space-y-2 p-3 rounded-xl bg-white/[0.02] border border-white/[0.06]">
-                                <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Explicit Content Filters</span>
-                                
-                                <div className="space-y-2 text-xs">
-                                    <div className="flex items-center justify-between">
-                                        <Label htmlFor="safety-hide-horror" className="text-xs cursor-pointer">
-                                            <span>Hide Horror Genre</span>
-                                        </Label>
-                                        <Switch 
-                                            id="safety-hide-horror"
-                                            checked={contentPrefs.hideHorror} 
-                                            onCheckedChange={(val) => setContentPrefs({ ...contentPrefs, hideHorror: val })} 
-                                        />
-                                    </div>
-
-                                    <div className="flex items-center justify-between pt-1 border-t border-border/30">
-                                        <Label htmlFor="safety-hide-nsfw" className="text-xs cursor-pointer">
-                                            <span>Hide Adult / NSFW Content</span>
-                                        </Label>
-                                        <Switch 
-                                            id="safety-hide-nsfw"
-                                            checked={contentPrefs.hideNsfw} 
-                                            onCheckedChange={(val) => setContentPrefs({ ...contentPrefs, hideNsfw: val })} 
-                                        />
-                                    </div>
-
-                                    <div className="flex items-center justify-between pt-1 border-t border-border/30">
-                                        <Label htmlFor="safety-hide-gore" className="text-xs cursor-pointer">
-                                            <span>Hide Extreme Gore / Violence</span>
-                                        </Label>
-                                        <Switch 
-                                            id="safety-hide-gore"
-                                            checked={contentPrefs.hideGore} 
-                                            onCheckedChange={(val) => setContentPrefs({ ...contentPrefs, hideGore: val })} 
-                                        />
-                                    </div>
-
-                                    <div className="flex items-center justify-between pt-1 border-t border-border/30">
-                                        <Label htmlFor="safety-hide-leaving" className="text-xs cursor-pointer">
-                                            <span>Hide Leaving Soon Badges</span>
-                                        </Label>
-                                        <Switch 
-                                            id="safety-hide-leaving"
-                                            checked={contentPrefs.hideLeavingSoon} 
-                                            onCheckedChange={(val) => setContentPrefs({ ...contentPrefs, hideLeavingSoon: val })} 
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <Button
-                            type="submit"
-                            disabled={savingContent || loadingSafetyPrefs}
-                            className="w-full sm:w-auto font-bold text-xs h-9 bg-amber-600 hover:bg-amber-500 text-white gap-2 transition-all hover:ring-2 hover:ring-amber-400/40 active:scale-95"
-                        >
-                            {savingContent ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shield className="h-4 w-4" />}
-                            Save Content Safety Settings
-                        </Button>
-                    </form>
                 </CardContent>
             </Card>
 
@@ -2876,31 +2464,7 @@ export default function UserProfilePage() {
                                 />
                             </div>
 
-                            {kidsLibraries.length > 0 && (
-                                <div className="p-3 rounded-lg bg-background/50 border border-border/40 space-y-1.5">
-                                    <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
-                                        Managed Family Libraries
-                                    </span>
-                                    <div className="flex flex-wrap gap-2">
-                                        {kidsLibraries.map((kl: any) => (
-                                            <div
-                                                key={kl.id}
-                                                className={`text-xs px-2.5 py-1 rounded-md border flex items-center gap-1.5 font-mono ${
-                                                    kl.isAllowed 
-                                                        ? "bg-emerald-950/30 border-emerald-500/30 text-emerald-400" 
-                                                        : "bg-muted/20 border-border text-muted-foreground"
-                                                }`}
-                                            >
-                                                <Baby className="h-3 w-3" />
-                                                <span>{kl.name}</span>
-                                                <Badge variant="outline" className={`text-[9px] px-1 py-0 h-3.5 border-0 ${kl.isAllowed ? "text-emerald-400" : "text-muted-foreground"}`}>
-                                                    {kl.isAllowed ? "Access Granted" : "Not In List"}
-                                                </Badge>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
+                            
                         </div>
                     )}
                 </CardContent>
@@ -2977,31 +2541,7 @@ export default function UserProfilePage() {
                                 />
                             </div>
 
-                            {audiobookLibraries.length > 0 && (
-                                <div className="p-3 rounded-lg bg-background/50 border border-border/40 space-y-1.5">
-                                    <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
-                                        Detected Audiobook Libraries
-                                    </span>
-                                    <div className="flex flex-wrap gap-2">
-                                        {audiobookLibraries.map((al: any) => (
-                                            <div
-                                                key={al.id}
-                                                className={`text-xs px-2.5 py-1 rounded-md border flex items-center gap-1.5 font-mono ${
-                                                    al.isAllowed || hasAudiobooksAccess
-                                                        ? "bg-purple-950/30 border-purple-500/30 text-purple-400" 
-                                                        : "bg-muted/20 border-border text-muted-foreground"
-                                                }`}
-                                            >
-                                                <Headphones className="h-3 w-3" />
-                                                <span>{al.name}</span>
-                                                <Badge variant="outline" className={`text-[9px] px-1 py-0 h-3.5 border-0 ${al.isAllowed || hasAudiobooksAccess ? "text-purple-400" : "text-muted-foreground"}`}>
-                                                    {al.isAllowed || hasAudiobooksAccess ? "Access Granted" : "Not In List"}
-                                                </Badge>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
+                            
                         </div>
                     )}
                 </CardContent>

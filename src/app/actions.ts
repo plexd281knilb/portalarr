@@ -2224,7 +2224,8 @@ export async function sendBroadcastEmailAction(payload: {
     }
 
     const users = await prisma.user.findMany({
-        where: { id: { in: payload.userIds } }
+        where: { id: { in: payload.userIds } },
+        include: { notificationPreference: true }
     });
 
     if (users.length === 0) {
@@ -2244,6 +2245,11 @@ export async function sendBroadcastEmailAction(payload: {
         if (!user.email || !user.email.includes("@")) {
             failCount++;
             failures.push({ username: user.username, email: user.email || "(no email)", error: "Missing or invalid email address" });
+            continue;
+        }
+
+        // Respect member opt-out for announcements during mass broadcasts
+        if (payload.userIds.length > 1 && user.notificationPreference && user.notificationPreference.emailAnnouncements === false) {
             continue;
         }
 
@@ -7243,7 +7249,7 @@ export async function getUserNotificationPreferencesAction() {
                     userId: user.id,
                     emailMediaReady: false,
                     emailNewContent: false,
-                    emailAnnouncements: false,
+                    emailAnnouncements: true,
                     emailSupportTickets: true,
                     emailSubscriptionReminders: true,
                     emailReferralRewards: true,
@@ -7280,7 +7286,7 @@ export async function updateUserNotificationPreferencesAction(data: {
             update: {
                 emailMediaReady: data.emailMediaReady ?? false,
                 emailNewContent: data.emailNewContent ?? false,
-                emailAnnouncements: data.emailAnnouncements ?? false,
+                emailAnnouncements: data.emailAnnouncements ?? true,
                 emailSupportTickets: data.emailSupportTickets ?? true,
                 emailSubscriptionReminders: data.emailSubscriptionReminders ?? true,
                 emailReferralRewards: data.emailReferralRewards ?? true,
@@ -7292,7 +7298,7 @@ export async function updateUserNotificationPreferencesAction(data: {
                 userId: user.id,
                 emailMediaReady: data.emailMediaReady ?? false,
                 emailNewContent: data.emailNewContent ?? false,
-                emailAnnouncements: data.emailAnnouncements ?? false,
+                emailAnnouncements: data.emailAnnouncements ?? true,
                 emailSupportTickets: data.emailSupportTickets ?? true,
                 emailSubscriptionReminders: data.emailSubscriptionReminders ?? true,
                 emailReferralRewards: data.emailReferralRewards ?? true,
@@ -21451,7 +21457,7 @@ export async function getUserProfileBootstrapAction(bypassCache = false): Promis
             : {
                 emailMediaReady: false,
                 emailNewContent: false,
-                emailAnnouncements: false,
+                emailAnnouncements: true,
                 emailSupportTickets: true,
                 emailSubscriptionReminders: true,
                 emailReferralRewards: true,
