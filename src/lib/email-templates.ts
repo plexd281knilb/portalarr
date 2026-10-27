@@ -1557,7 +1557,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px; box-sizing: border-box; word-break: break-word; overflow-wrap: anywhere;">
     <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">6. Flexible Billing Options &amp; Membership Status (<a href="{appUrl}/profile" style="color: #4f46e5; text-decoration: none;">Account Profile</a>)</p>
-    <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">I now offer both <strong>Monthly</strong> and <strong>Yearly</strong> billing options to best fit your viewing schedule! Visit your <a href="{appUrl}/profile" style="color: #4f46e5; font-weight: 600; text-decoration: underline;">Account Profile</a> to view the plan comparison, review your renewal date, and see accepted direct payment methods (Venmo, PayPal, Zelle).</p>
+    <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">I now offer both <strong>Monthly</strong> and <strong>Yearly</strong> billing options so you can choose what works best for you! Visit your <a href="{appUrl}/profile" style="color: #4f46e5; font-weight: 600; text-decoration: underline;">Account Profile</a> to view the plan comparison, review your renewal date, and see accepted direct payment methods (Venmo, PayPal, Zelle).</p>
 </div>
 
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px; box-sizing: border-box; word-break: break-word; overflow-wrap: anywhere;">
