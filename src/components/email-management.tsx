@@ -1241,10 +1241,10 @@ export default function EmailManagement() {
 
                                                     <div className="p-3 rounded-lg bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 border-l-4 border-l-indigo-600 text-[11px] leading-relaxed text-slate-600 dark:text-slate-400 text-left space-y-1">
                                                         <div className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                                                            <span>📬 Quick Note from Dominic:</span>
+                                                            <span>📬 Note from Dominic:</span>
                                                         </div>
                                                         <p className="m-0">
-                                                            To make sure you receive media request alerts, library updates, and account notifications, please add <strong>dominic@domshomelab.com</strong> to your contacts or mark this sender as trusted.
+                                                            To ensure you receive media request alerts, library updates, and account notifications, please add this sender to your contacts or mark emails from <strong>domshomelab.com</strong> as trusted.
                                                         </p>
                                                     </div>
 
@@ -1749,10 +1749,10 @@ export default function EmailManagement() {
 
                                                         <div className="p-3 rounded-lg bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 border-l-4 border-l-indigo-600 text-[11px] leading-relaxed text-slate-600 dark:text-slate-400 text-left space-y-1">
                                                             <div className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                                                                <span>📬 Quick Note from Dominic:</span>
+                                                                <span>📬 Note from Dominic:</span>
                                                             </div>
                                                             <p className="m-0">
-                                                                To make sure you receive media request alerts, library updates, and account notifications, please add <strong>dominic@domshomelab.com</strong> to your contacts or mark this sender as trusted.
+                                                                To ensure you receive media request alerts, library updates, and account notifications, please add this sender to your contacts or mark emails from <strong>domshomelab.com</strong> as trusted.
                                                             </p>
                                                         </div>
 

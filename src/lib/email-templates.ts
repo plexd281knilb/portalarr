@@ -1689,13 +1689,13 @@ export function wrapInPortalarrEmailLayout(options: {
                 </div>
             ` : ""}
 
-            <!-- Personal Delivery & Safe Sender Notice -->
+            <!-- Safe Sender Delivery Notice -->
             <div class="safe-sender-box" style="margin: 28px 0 16px 0; padding: 14px 16px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #6366f1; border-radius: 8px; font-size: 12px; line-height: 1.55; color: #475569;">
                 <div class="safe-sender-title" style="font-weight: 700; color: #1e293b; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
-                    <span>📬 Quick Note from Dominic:</span>
+                    <span>📬 Note from Dominic:</span>
                 </div>
                 <div style="margin: 0;">
-                    To make sure you receive media request alerts, library updates, and account notifications, please add <strong>dominic@domshomelab.com</strong> to your contacts or mark this sender as trusted.
+                    To ensure you receive media request alerts, library updates, and account notifications, please add this sender to your contacts or mark emails from <strong>domshomelab.com</strong> as trusted.
                 </div>
             </div>
 
