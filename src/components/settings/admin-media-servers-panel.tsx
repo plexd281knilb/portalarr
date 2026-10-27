@@ -39,6 +39,7 @@ interface AdminMediaServersPanelProps {
 
 export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServersPanelProps = {}) {
     const [servers, setServers] = useState<DiscoveredServerInfo[]>([]);
+    const [initialServers, setInitialServers] = useState<DiscoveredServerInfo[]>([]);
     const initialServersRef = useRef<DiscoveredServerInfo[]>([]);
     const [isSavingAll, setIsSavingAll] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -74,7 +75,9 @@ export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServers
             const res = await getAdminMediaServersAction();
             if (res.success) {
                 setServers(res.servers);
-                initialServersRef.current = JSON.parse(JSON.stringify(res.servers));
+                const deepCopy = JSON.parse(JSON.stringify(res.servers));
+                setInitialServers(deepCopy);
+                initialServersRef.current = deepCopy;
             } else {
                 setError(res.error || "Failed to load media servers");
             }
@@ -92,9 +95,10 @@ export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServers
 
     // Unsaved changes tracking across server access rules
     const dirtySections: string[] = [];
-    if (initialServersRef.current.length > 0) {
+    const baseline = initialServers.length > 0 ? initialServers : initialServersRef.current;
+    if (baseline.length > 0) {
         for (const srv of servers) {
-            const initial = initialServersRef.current.find(s => s.id === srv.id);
+            const initial = baseline.find(s => s.id === srv.id);
             if (!initial) continue;
             const rulesChanged = 
                 srv.allowUserSelfSelect !== initial.allowUserSelfSelect ||
@@ -111,7 +115,7 @@ export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServers
     const hasUnsavedChanges = dirtySections.length > 0;
 
     useEffect(() => {
-        if (!loading && initialServersRef.current.length > 0) {
+        if (!loading && baseline.length > 0) {
             onDirtyChange?.(hasUnsavedChanges, dirtySections);
         }
     }, [hasUnsavedChanges, dirtySections.join(",")]);
@@ -123,8 +127,9 @@ export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServers
     }, []);
 
     const handleDiscard = () => {
-        if (initialServersRef.current.length > 0) {
-            setServers(JSON.parse(JSON.stringify(initialServersRef.current)));
+        const baseline = initialServers.length > 0 ? initialServers : initialServersRef.current;
+        if (baseline.length > 0) {
+            setServers(JSON.parse(JSON.stringify(baseline)));
             onDirtyChange?.(false, []);
         }
     };
@@ -133,8 +138,9 @@ export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServers
         setIsSavingAll(true);
         let allSuccess = true;
         try {
+            const baseline = initialServers.length > 0 ? initialServers : initialServersRef.current;
             for (const srv of servers) {
-                const initial = initialServersRef.current.find(s => s.id === srv.id);
+                const initial = baseline.find(s => s.id === srv.id);
                 if (!initial) continue;
                 const rulesChanged = srv.allowUserSelfSelect !== initial.allowUserSelfSelect || srv.allowTrialAccess !== initial.allowTrialAccess;
                 const srvAllowed = (srv.allowedLibraryIds || []).slice().sort().join(",");
@@ -145,7 +151,9 @@ export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServers
                 }
             }
             if (allSuccess) {
-                initialServersRef.current = JSON.parse(JSON.stringify(servers));
+                const updated = JSON.parse(JSON.stringify(servers));
+                setInitialServers(updated);
+                initialServersRef.current = updated;
                 onDirtyChange?.(false, []);
             }
             return allSuccess;
@@ -270,10 +278,11 @@ export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServers
         setServers(prev => prev.map(s => {
             if (s.id !== srvId) return s;
             const libraries = s.cachedLibraries || [];
-            const isCustom = s.allowedLibraryIds && (s.allowedLibraryIds.length > 0 || s.allowedLibraryIds.includes("__none__"));
-            const current = isCustom 
-                ? s.allowedLibraryIds!.filter(id => id !== "__none__")
-                : libraries.map(l => l.id);
+            const isNoneExplicit = s.allowedLibraryIds?.includes("__none__");
+            const hasCustomList = s.allowedLibraryIds && s.allowedLibraryIds.length > 0 && !isNoneExplicit;
+            const current = hasCustomList 
+                ? s.allowedLibraryIds!
+                : (isNoneExplicit ? [] : libraries.map(l => l.id));
             const next = current.includes(libId)
                 ? current.filter(id => id !== libId)
                 : [...current, libId];
@@ -296,21 +305,27 @@ export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServers
     const handleSaveRules = async (srv: DiscoveredServerInfo): Promise<boolean> => {
         setSavingRulesMap(prev => ({ ...prev, [srv.id]: true }));
         try {
-            const cleanAllowed = (srv.allowedLibraryIds || []).filter(id => id !== "__none__");
+            // Retain ["__none__"] if empty or explicitly none so that 0 allowed persists
+            const allowedToSend = (srv.allowedLibraryIds && srv.allowedLibraryIds.length > 0)
+                ? srv.allowedLibraryIds
+                : ["__none__"];
+
             const res = await updateServerAccessRulesAction({
                 serverType: srv.type,
                 serverId: srv.id,
                 allowUserSelfSelect: srv.allowUserSelfSelect,
                 allowTrialAccess: srv.allowTrialAccess,
-                allowedLibraryIds: cleanAllowed
+                allowedLibraryIds: allowedToSend
             });
 
             if (res.success) {
                 setSuccessMsg(`Access rules updated for ${srv.name}`);
                 setTimeout(() => setSuccessMsg(""), 4000);
-                initialServersRef.current = initialServersRef.current.map(s => 
-                    s.id === srv.id ? JSON.parse(JSON.stringify(srv)) : s
-                );
+                setInitialServers(prev => {
+                    const next = prev.map(s => s.id === srv.id ? JSON.parse(JSON.stringify(srv)) : s);
+                    initialServersRef.current = next;
+                    return next;
+                });
                 return true;
             } else {
                 setError(res.error || "Failed to update access rules");
@@ -603,10 +618,16 @@ export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServers
                                     <div className="space-y-2">
                                         {(() => {
                                             const isNoneExplicit = srv.allowedLibraryIds?.includes("__none__");
-                                            const hasCustomList = srv.allowedLibraryIds && (srv.allowedLibraryIds.length > 0 || isNoneExplicit);
-                                            const allowedCount = isNoneExplicit 
-                                                ? 0 
-                                                : (hasCustomList ? srv.allowedLibraryIds!.length : libraries.length);
+                                            const hasCustomList = srv.allowedLibraryIds && srv.allowedLibraryIds.length > 0 && !isNoneExplicit;
+                                            const isLibAllowed = (lib: MediaServerLibrary) => {
+                                                if (isNoneExplicit) return false;
+                                                if (hasCustomList) {
+                                                    return srv.allowedLibraryIds!.includes(lib.id) || 
+                                                           srv.allowedLibraryIds!.some(x => x.toLowerCase() === lib.title.toLowerCase());
+                                                }
+                                                return true; // Default unconfigured: all allowed
+                                            };
+                                            const allowedCount = libraries.filter(isLibAllowed).length;
 
                                             return (
                                                 <>
@@ -650,9 +671,7 @@ export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServers
                                                     ) : (
                                                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
                                                             {libraries.map(lib => {
-                                                                const isAllowed = isNoneExplicit 
-                                                                    ? false 
-                                                                    : (hasCustomList ? srv.allowedLibraryIds!.includes(lib.id) : true);
+                                                                const isAllowed = isLibAllowed(lib);
 
                                                                 return (
                                                                     <button

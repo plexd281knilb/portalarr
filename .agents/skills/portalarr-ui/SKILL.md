@@ -900,11 +900,13 @@ Portalarr features an automated, real-time versioning, branch identification, an
   - Covers movie and TV show library management (`/radarr*`, `/sonarr*`).
   - Allowed for `ADMIN` and `SUPER_USER` roles in both `src/proxy.ts` and `src/app/arr-actions.ts`.
   - In Cloudflare Zero Trust, Rule 2 permits both Admin and Super User emails, or can be bypassed at the edge while strictly guarded by Portalarr session authentication.
-- **Zero-Conflict End-User Routing (`/profile*`)**:
-  - `/settings*` is 100% strictly Admin-Only. End-users manage profile settings, Kindle email, preferences, and subscription billing exclusively at `/profile` (eliminating `/settings/profile` bypass conflicts).
-  - All email notifications (renewal notices, trial expiration alerts) dispatch links with `{billingUrl}` = `/profile#billing`.
+- **Dual End-User Routing (`/profile*` & `/settings/profile*`)**:
+  - End-users can manage profile settings, Kindle email, preferences, and subscription billing seamlessly at both `/profile` and `/settings/profile`.
+  - In `src/proxy.ts`, `/settings/profile*` is explicitly exempted from the admin-only redirect to `/profile`, allowing direct bookmarking and navigation to `/settings/profile`.
+  - In `src/lib/edge-policy-paths.ts`, `/settings/profile*` is included in `CLOUDFLARE_BYPASS_PATHS` and excluded from `matchesCloudflareAdmin()`, guaranteeing friends and family are never blocked by Cloudflare Zero Trust login walls when visiting `/settings/profile`.
+  - All email notifications dispatch links with `{billingUrl}` = `/profile#billing`.
 - **Strict Non-Bypassable Admin Guard (`matchesCloudflareBypass`)**:
-  - `matchesCloudflareBypass()` explicitly verifies that if `matchesCloudflareAdmin(path)` is true, the route is NEVER bypassed, guaranteeing zero leakage or path collisions.
+  - `matchesCloudflareBypass()` explicitly verifies that if `matchesCloudflareAdmin(path)` is true and the path is not `/settings/profile`, the route is NEVER bypassed, guaranteeing zero leakage or path collisions.
 - **Three-Rule Cloudflare Zero Trust Setup**:
   - **Rule 1 (Admin Only - High Priority)**: Action = `Allow`, Selector = `CLOUDFLARE_ADMIN_PATHS`, Include = `Emails: [your-admin-email@example.com]`. Blocks all outsiders with HTTP 403 at Cloudflare's edge before requests reach the server.
   - **Rule 2 (Super Users & Admin - Priority 2)**: Action = `Allow`, Selector = `CLOUDFLARE_SUPER_USER_PATHS` (`/radarr*`, `/sonarr*`), Include = `Emails: [your-email, superuser-emails]`.

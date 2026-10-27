@@ -335,13 +335,13 @@ export default function CloudflarePolicyCard() {
                                 <li><strong>Action:</strong> <code className="text-emerald-300">Bypass</code></li>
                                 <li><strong>Paths:</strong> Add all <strong>End-User &amp; Public Paths</strong>.</li>
                                 <li><strong>Include:</strong> <code className="text-emerald-300">Everyone</code></li>
-                                <li><strong>Result:</strong> Friends &amp; family can freely stream, request media, and manage their account profile (<code className="text-emerald-300">/profile</code>) without seeing Cloudflare login barriers.</li>
+                                <li><strong>Result:</strong> Friends &amp; family can freely stream, request media, and manage their account profile (<code className="text-emerald-300">/profile</code> or <code className="text-emerald-300">/settings/profile</code>) without seeing Cloudflare login barriers.</li>
                             </ul>
                         </div>
                     </div>
                     <div className="text-[10px] text-slate-400 flex items-center gap-1.5 pt-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-                        <span><strong>Zero-Leakage Architecture:</strong> <code className="text-slate-300">/settings*</code> is 100% admin-only. User profile, Kindle email, and billing settings are accessed via <code className="text-slate-300">/profile</code> to guarantee zero policy conflicts.</span>
+                        <span><strong>Dual Profile Access:</strong> User account profile and preferences are accessible to all authenticated members at both <code className="text-emerald-300">/profile</code> and <code className="text-emerald-300">/settings/profile</code>. System settings (<code className="text-slate-300">/settings</code>) and Access Control (<code className="text-slate-300">/settings/access</code>) remain strictly admin-only.</span>
                     </div>
                 </div>
             </CardContent>

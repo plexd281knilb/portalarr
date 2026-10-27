@@ -22,6 +22,34 @@ import { getPlexServerLibrarySections, getUserPlexSharedLibraries, PlexSharedSer
 import { syncUserPlexShareInternal } from "@/app/actions";
 import { notifyAdminsOnPendingApproval } from "@/lib/admin-approvals";
 
+/**
+ * Helper to match a library section against the admin-configured whitelist.
+ * Matches flexibly against Cloud Section ID, PMS Directory Key, or Library Title.
+ */
+function isLibInWhitelist(
+    rawAllowedList: string[] | null | undefined, 
+    sec: { id: string | number; key?: string | number; title?: string }
+): boolean {
+    if (!rawAllowedList || rawAllowedList.length === 0) {
+        return true; // Unconfigured whitelist allows all libraries
+    }
+    if (rawAllowedList.includes("__none__")) {
+        return false; // Explicitly no libraries allowed
+    }
+    const secIdStr = String(sec.id || "").trim();
+    const secKeyStr = String(sec.key || "").trim();
+    const secTitleLower = (sec.title || "").trim().toLowerCase();
+
+    return rawAllowedList.some(item => {
+        const clean = String(item).trim();
+        if (!clean || clean === "__none__") return false;
+        if (clean === secIdStr) return true;
+        if (secKeyStr && clean === secKeyStr) return true;
+        if (secTitleLower && clean.toLowerCase() === secTitleLower) return true;
+        return false;
+    });
+}
+
 function safeRevalidate(path: string) {
     try {
         revalidatePath(path);
@@ -476,23 +504,62 @@ export async function updateServerAccessRulesAction(params: {
         const allowedStr = JSON.stringify(params.allowedLibraryIds);
 
         if (params.serverType === "PLEX") {
-            await prisma.plexServer.update({
-                where: { id: params.serverId },
-                data: {
-                    allowUserSelfSelect: params.allowUserSelfSelect,
-                    allowTrialAccess: params.allowTrialAccess,
-                    allowedLibraryIds: allowedStr
+            let existing = await prisma.plexServer.findFirst({
+                where: {
+                    OR: [
+                        { id: params.serverId },
+                        { clientIdentifier: params.serverId },
+                        { name: params.serverId }
+                    ]
                 }
             });
+
+            if (existing) {
+                await prisma.plexServer.update({
+                    where: { id: existing.id },
+                    data: {
+                        allowUserSelfSelect: params.allowUserSelfSelect,
+                        allowTrialAccess: params.allowTrialAccess,
+                        allowedLibraryIds: allowedStr
+                    }
+                });
+            } else {
+                const fallback = await prisma.plexServer.findFirst({ orderBy: { isDefault: "desc" } });
+                if (fallback) {
+                    await prisma.plexServer.update({
+                        where: { id: fallback.id },
+                        data: {
+                            allowUserSelfSelect: params.allowUserSelfSelect,
+                            allowTrialAccess: params.allowTrialAccess,
+                            allowedLibraryIds: allowedStr
+                        }
+                    });
+                } else {
+                    return { success: false, error: `Plex server "${params.serverId}" not found in database.` };
+                }
+            }
         } else {
-            await prisma.mediaServer.update({
-                where: { id: params.serverId },
-                data: {
-                    allowUserSelfSelect: params.allowUserSelfSelect,
-                    allowTrialAccess: params.allowTrialAccess,
-                    allowedLibraryIds: allowedStr
+            let existing = await prisma.mediaServer.findFirst({
+                where: {
+                    OR: [
+                        { id: params.serverId },
+                        { name: params.serverId }
+                    ]
                 }
             });
+
+            if (existing) {
+                await prisma.mediaServer.update({
+                    where: { id: existing.id },
+                    data: {
+                        allowUserSelfSelect: params.allowUserSelfSelect,
+                        allowTrialAccess: params.allowTrialAccess,
+                        allowedLibraryIds: allowedStr
+                    }
+                });
+            } else {
+                return { success: false, error: `${params.serverType} server "${params.serverId}" not found in database.` };
+            }
         }
 
         safeRevalidate("/settings");
@@ -677,12 +744,19 @@ export async function getUserMediaServersAndLibrariesAction(bypassCache = false)
                 try { cachedLibs = JSON.parse(p.cachedLibraries); } catch {}
             }
 
-            const sectionsPool: Array<{ id: string; title: string; type: string }> = liveSections.length > 0 
-                ? liveSections.map((s: any) => ({ id: String(s.id || s.key), title: s.title, type: s.type || "mixed" }))
-                : (cachedLibs.length > 0 ? cachedLibs : [
-                    { id: "1", title: "Movies", type: "movie" },
-                    { id: "2", title: "TV Shows", type: "show" }
-                ]);
+            const sectionsPool: Array<{ id: string; key: string; title: string; type: string }> = liveSections.length > 0 
+                ? liveSections.map((s: any) => ({ 
+                    id: String(s.id || s.key || ""), 
+                    key: String(s.key || s.id || ""), 
+                    title: s.title || "Untitled Library", 
+                    type: s.type || "mixed" 
+                  }))
+                : (cachedLibs.length > 0 
+                    ? cachedLibs.map(l => ({ id: String(l.id), key: String(l.id), title: l.title, type: l.type }))
+                    : [
+                        { id: "1", key: "1", title: "Movies", type: "movie" },
+                        { id: "2", key: "2", title: "TV Shows", type: "show" }
+                    ]);
 
             // Find live share on Plex for this server
             const liveShare = livePlexShareRes.matchedShares.find(s => 
@@ -729,8 +803,8 @@ export async function getUserMediaServersAndLibrariesAction(bypassCache = false)
 
             const allowedLibraries = sectionsPool
                 .filter(sec => {
-                    // Check Admin server whitelist
-                    if (rawAllowedList && rawAllowedList.length > 0 && !rawAllowedList.includes(sec.id)) {
+                    // Check Admin server whitelist flexibly matching key, cloud id, or title
+                    if (!isLibInWhitelist(rawAllowedList, sec)) {
                         return false;
                     }
                     const libKey = `plex:${p.id}:${sec.id}`;
@@ -843,7 +917,7 @@ export async function getUserMediaServersAndLibrariesAction(bypassCache = false)
 
             const allowedLibraries = cachedLibs
                 .filter(sec => {
-                    if (rawAllowedList && rawAllowedList.length > 0 && !rawAllowedList.includes(sec.id)) {
+                    if (!isLibInWhitelist(rawAllowedList, sec)) {
                         return false;
                     }
                     const libKey = `${serverType.toLowerCase()}:${m.id}:${sec.id}`;

@@ -120,7 +120,12 @@ export async function proxy(req: NextRequest) {
       return NextResponse.redirect(new URL("/", req.url));
     }
 
-    if (pathname.startsWith("/settings") && payload.role !== "ADMIN") {
+    if (
+      pathname.startsWith("/settings") &&
+      pathname !== "/settings/profile" &&
+      !pathname.startsWith("/settings/profile/") &&
+      payload.role !== "ADMIN"
+    ) {
       if (pathname.startsWith("/api")) {
         return NextResponse.json({ error: "Forbidden: Admin access required" }, { status: 403 });
       }

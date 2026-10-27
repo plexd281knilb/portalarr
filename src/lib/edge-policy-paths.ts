@@ -21,6 +21,7 @@ export const CLOUDFLARE_BYPASS_PATHS: string[] = [
     "/library*",
     "/guides*",
     "/profile*",
+    "/settings/profile*",
     "/tickets*",
     "/beta*",
     "/api/books*",
@@ -95,6 +96,10 @@ export function matchesCloudflareSuperUser(path: string): boolean {
  */
 export function matchesCloudflareAdmin(path: string): boolean {
     const cleanPath = path.split("?")[0].replace(/\/$/, "") || "/";
+    // User profile is accessible to all authenticated members at both /profile and /settings/profile
+    if (cleanPath === "/settings/profile" || cleanPath.startsWith("/settings/profile/")) {
+        return false;
+    }
     return CLOUDFLARE_ADMIN_PATHS.some((pattern) => {
         if (pattern === cleanPath) return true;
         if (pattern.endsWith("*")) {

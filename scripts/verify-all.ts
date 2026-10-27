@@ -163,7 +163,8 @@ async function runTestSuite() {
         if (!matchesCloudflareBypass("/library")) throw new Error("/library must match bypass");
         if (!matchesCloudflareBypass("/profile")) throw new Error("/profile must match bypass");
         if (!matchesCloudflareAdmin("/settings")) throw new Error("/settings must match admin");
-        if (!matchesCloudflareAdmin("/settings/profile")) throw new Error("/settings/profile must match admin (isolated)");
+        if (!matchesCloudflareAdmin("/settings/access")) throw new Error("/settings/access must match admin");
+        if (!matchesCloudflareBypass("/settings/profile")) throw new Error("/settings/profile must match bypass for all users");
         if (!matchesCloudflareAdmin("/admin/monitoring")) throw new Error("/admin/monitoring must match admin");
         if (!matchesCloudflareAdmin("/admin/scripts")) throw new Error("/admin/scripts must match admin");
         if (!matchesCloudflareAdmin("/admin/streams")) throw new Error("/admin/streams must match admin");
