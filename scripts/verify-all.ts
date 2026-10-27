@@ -370,6 +370,16 @@ async function runTestSuite() {
             throw new Error(`Expected extra_living_room to be locked (isAvailable: false), got: ${JSON.stringify(livingRoomProfileAddon)}`);
         }
 
+        const musicAddon = defaultCatalog.find((a: any) => a.id === "music_streaming");
+        if (!musicAddon || musicAddon.isAvailable !== false) {
+            throw new Error(`Expected music_streaming to be locked (isAvailable: false), got: ${JSON.stringify(musicAddon)}`);
+        }
+
+        const priorityAddon = defaultCatalog.find((a: any) => a.id === "priority_requests");
+        if (!priorityAddon || priorityAddon.isAvailable !== false) {
+            throw new Error(`Expected priority_requests to be locked (isAvailable: false), got: ${JSON.stringify(priorityAddon)}`);
+        }
+
         // 2. Live Audiobooks Library Access Sync & Addons Catalog Verification
         const testUser = await prisma.user.create({
             data: {
@@ -413,6 +423,14 @@ async function runTestSuite() {
             const kidsCatalogItem = availableRes.catalog.find((a: any) => a.id === "extra_kid_profile");
             if (kidsCatalogItem && kidsCatalogItem.isAvailable !== false) {
                 throw new Error("extra_kid_profile should be locked (isAvailable: false) in getAvailableAddonsAction");
+            }
+            const musicCatalogItem = availableRes.catalog.find((a: any) => a.id === "music_streaming");
+            if (musicCatalogItem && musicCatalogItem.isAvailable !== false) {
+                throw new Error("music_streaming should be locked (isAvailable: false) in getAvailableAddonsAction");
+            }
+            const priorityCatalogItem = availableRes.catalog.find((a: any) => a.id === "priority_requests");
+            if (priorityCatalogItem && priorityCatalogItem.isAvailable !== false) {
+                throw new Error("priority_requests should be locked (isAvailable: false) in getAvailableAddonsAction");
             }
         } finally {
             // Restore settings

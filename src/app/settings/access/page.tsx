@@ -4235,7 +4235,8 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                     </p>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
                                         {adminAddonsCatalog.map((addon) => {
-                                            const isAvail = addon.isAvailable !== false;
+                                            const isLocked = ["extra_kid_profile", "extra_living_room", "iptv_livetv", "emby_access", "music_streaming", "priority_requests"].includes(addon.id);
+                                            const isAvail = !isLocked && addon.isAvailable !== false;
                                             const isToggling = togglingAdminAddonId === addon.id;
                                             return (
                                                 <div 
@@ -4279,13 +4280,13 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
 
                                                     <div className="pt-2 flex items-center justify-between border-t border-border/30 text-xs">
                                                         <span className={`text-[10px] font-semibold ${isAvail ? "text-emerald-400" : "text-muted-foreground"}`}>
-                                                            {isAvail ? "✅ Available to Users" : "🔒 Disabled / Coming Soon"}
+                                                            {isAvail ? "✅ Available to Users" : isLocked ? "🔒 In Development" : "🔒 Disabled / Coming Soon"}
                                                         </span>
                                                         <div className="flex items-center gap-2">
                                                             {isToggling && <Loader2 className="h-3 w-3 animate-spin text-primary" />}
                                                             <Switch 
                                                                 checked={isAvail}
-                                                                disabled={isToggling}
+                                                                disabled={isToggling || isLocked}
                                                                 onCheckedChange={(checked) => handleToggleAdminAddonAvailability(addon.id, checked)}
                                                             />
                                                         </div>
@@ -4308,17 +4309,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                     />
                                 </div>
 
-                                {/* MEMBERSHIP TIERS SWITCH */}
-                                <div className="pt-2 border-t border-border/40 flex items-center justify-between">
-                                    <div className="space-y-0.5">
-                                        <Label className="text-xs font-bold text-foreground">Enable Membership Tiers & Add-ons</Label>
-                                        <p className="text-[11px] text-muted-foreground">Enables 4K dedicated transcode tiers, VIP IPTV access, and family kid profiles.</p>
-                                    </div>
-                                    <Switch 
-                                        checked={paymentSettings.membershipTiersEnabled ?? true}
-                                        onCheckedChange={(checked) => setPaymentSettings({ ...paymentSettings, membershipTiersEnabled: checked })}
-                                    />
-                                </div>
+                                {/* MEMBERSHIP TIERS SWITCH (CLEANED UP DUMMY CONTROL) */}
 
                                 <Button 
                                     type="submit" 
