@@ -566,7 +566,7 @@ export function AiServerAssistant() {
                                 }`}
                             >
                                 <Radio className="h-3.5 w-3.5" />
-                                <span>Live Telemetry</span>
+                                <span>Live Stream Stats</span>
                                 {activeStream ? (
                                     <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
                                 ) : (
@@ -584,7 +584,7 @@ export function AiServerAssistant() {
                                 }`}
                             >
                                 <Activity className="h-3.5 w-3.5" />
-                                <span>Server Disk &amp; Probes</span>
+                                <span>Server Health Check</span>
                                 <span className={`text-[10px] px-1.5 py-0 rounded-full font-mono font-bold ${activeTab === "probes" ? "bg-purple-950/80 text-purple-200" : "bg-slate-800 text-slate-300"}`}>
                                     {snapshot?.serversOnlineCount || snapshot?.serverNodes?.length || 4}
                                 </span>
@@ -686,7 +686,7 @@ export function AiServerAssistant() {
                                         <div className="max-w-md space-y-1.5">
                                             <h3 className="text-base sm:text-lg font-bold text-white">How can I assist your media playback today?</h3>
                                             <p className="text-xs text-muted-foreground leading-relaxed">
-                                                I am connected directly to your Plex streaming telemetry, storage read drives, and media indexers. Ask me anything below.
+                                                I can diagnose your active playback stream, check server health, and help you request movies, TV shows, and books.
                                             </p>
                                         </div>
 
@@ -1091,7 +1091,7 @@ export function AiServerAssistant() {
                                             </Badge>
                                             {activeStream.transcodeHwRequested && (
                                                 <Badge variant="outline" className="text-xs px-2 py-0.5 bg-cyan-950/60 text-cyan-300 border-cyan-500/40 font-mono">
-                                                    NVENC HW
+                                                    GPU Accelerated
                                                 </Badge>
                                             )}
                                         </div>
@@ -1100,13 +1100,13 @@ export function AiServerAssistant() {
                                     {/* Stream Telemetry Grid */}
                                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
                                         <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 space-y-0.5">
-                                            <span className="text-[10px] text-slate-500 uppercase font-mono block">Video Codec</span>
+                                            <span className="text-[10px] text-slate-500 uppercase font-mono block">Video Format</span>
                                             <span className="font-bold text-slate-200">{activeStream.videoCodec?.toUpperCase() || "N/A"}</span>
                                             <span className="text-[10px] text-slate-400 block">{activeStream.videoResolution || "1080p"}</span>
                                         </div>
 
                                         <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 space-y-0.5">
-                                            <span className="text-[10px] text-slate-500 uppercase font-mono block">Audio Codec</span>
+                                            <span className="text-[10px] text-slate-500 uppercase font-mono block">Audio Format</span>
                                             <span className="font-bold text-slate-200">{activeStream.audioCodec?.toUpperCase() || "N/A"}</span>
                                             <span className="text-[10px] text-slate-400 block">{activeStream.streamAudioCodec ? `Stream: ${activeStream.streamAudioCodec}` : "Pass-through"}</span>
                                         </div>
@@ -1120,7 +1120,7 @@ export function AiServerAssistant() {
                                         </div>
 
                                         <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 space-y-0.5">
-                                            <span className="text-[10px] text-slate-500 uppercase font-mono block">Transcode Speed</span>
+                                            <span className="text-[10px] text-slate-500 uppercase font-mono block">Processing Speed</span>
                                             <span className="font-bold text-emerald-400">{activeStream.transcodeSpeed || "1.0x (Direct)"}</span>
                                             <span className="text-[10px] text-slate-400 block">{activeStream.serverName || "Main Server"}</span>
                                         </div>
@@ -1250,7 +1250,7 @@ export function AiServerAssistant() {
                                         <span>Physical Disk Read &amp; Server Diagnostics</span>
                                     </h3>
                                     <p className="text-xs text-slate-400">
-                                        Direct synthetic probes testing actual byte-range file reads, SQLite latency, and GPU transcoding.
+                                        Live diagnostic tests measuring drive read performance, server responsiveness, and media streaming health.
                                     </p>
                                 </div>
                                 <Button
@@ -1262,7 +1262,7 @@ export function AiServerAssistant() {
                                     className="h-8 px-3 text-xs bg-purple-600 hover:bg-purple-500 text-white font-semibold gap-1.5 cursor-pointer"
                                 >
                                     <Sparkles className="h-3.5 w-3.5" />
-                                    <span>Run Probe Test</span>
+                                    <span>Test Server Health</span>
                                 </Button>
                             </div>
 

@@ -65,7 +65,7 @@ export default function PlexSetupGuides({ trigger }: PlexSetupGuidesProps = {}) 
                         Plex Device Setup & Quality Optimization Guide
                     </DialogTitle>
                     <DialogDescription className="text-xs text-muted-foreground">
-                        Configure your devices for 100% Direct Play to eliminate buffering and stream in original studio quality.
+                        Configure your devices for Original Quality (Direct Play) to eliminate buffering and stream in studio-master quality.
                     </DialogDescription>
                 </DialogHeader>
 

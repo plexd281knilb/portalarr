@@ -125,21 +125,10 @@ export function BuildBadge({
                         <Workflow className="h-3.5 w-3.5 text-amber-400 shrink-0" />
                     )}
                     <span className="font-bold tracking-tight">
-                        {isBeta ? "BETA (main)" : isStable ? "PROD (stable)" : "DEV"}
+                        {isBeta ? "Beta Preview" : isStable ? "Production" : "Development"}
                     </span>
                     <span className="opacity-40">•</span>
                     <span className="font-mono text-[11px]">v{telemetry.version}</span>
-                    {telemetry.commitShortSha && telemetry.commitShortSha !== "dev" && telemetry.commitShortSha !== "latest" && (
-                        <>
-                            <span className="opacity-40">•</span>
-                            <span className="font-mono text-[11px] opacity-75">[{telemetry.commitShortSha}]</span>
-                        </>
-                    )}
-                    {telemetry.buildNumber && (
-                        <Badge variant="outline" className="text-[10px] h-4.5 px-1.5 font-mono bg-white/5 border-white/20">
-                            build #{telemetry.buildNumber}
-                        </Badge>
-                    )}
                 </div>
             );
         }

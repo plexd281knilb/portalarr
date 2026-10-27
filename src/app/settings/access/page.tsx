@@ -83,8 +83,13 @@ import PaymentEmailManager from "@/components/payment-email-manager";
 import SentEmailAuditLog from "@/components/sent-email-audit-log";
 import CloudflarePolicyCard from "@/components/cloudflare-policy-card";
 
-export default function AccessSettingsPage() {
-    const [activeTab, setActiveTab] = useState("users");
+interface AccessSettingsPageProps {
+    initialTab?: string;
+    onTabChange?: (tab: string) => void;
+}
+
+export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSettingsPageProps = {}) {
+    const [activeTab, setActiveTab] = useState(initialTab || "users");
     const [users, setUsers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [syncingPlex, setSyncingPlex] = useState(false);
@@ -822,20 +827,45 @@ export default function AccessSettingsPage() {
             const params = new URLSearchParams(window.location.search);
             const search = params.get("search");
             if (search) setSearchQuery(search);
-            const tab = params.get("tab");
-            if (tab && ["users", "referrals", "onboarding", "scraper", "approvals", "sent-emails"].includes(tab)) {
-                setActiveTab(tab);
+            const requestedTab = params.get("subtab") || params.get("subTab") || params.get("tab") || (window.location.hash === "#trial-safe-pool" ? "onboarding" : null);
+            const validTabs = ["users", "referrals", "onboarding", "scraper", "approvals", "sent-emails", "cloudflare"];
+            if (requestedTab && validTabs.includes(requestedTab)) {
+                setActiveTab(requestedTab);
+                onTabChange?.(requestedTab);
                 if (window.location.hash) {
                     setTimeout(() => {
                         const target = document.querySelector(window.location.hash);
                         if (target) {
                             target.scrollIntoView({ behavior: "smooth", block: "start" });
                         }
-                    }, 300);
+                    }, 350);
                 }
             }
         }
+
+        const handleHashChange = () => {
+            if (typeof window !== "undefined" && window.location.hash === "#trial-safe-pool") {
+                setActiveTab("onboarding");
+                onTabChange?.("onboarding");
+                setTimeout(() => {
+                    const target = document.getElementById("trial-safe-pool");
+                    if (target) {
+                        target.scrollIntoView({ behavior: "smooth", block: "start" });
+                    }
+                }, 200);
+            }
+        };
+        window.addEventListener("hashchange", handleHashChange);
+        return () => {
+            window.removeEventListener("hashchange", handleHashChange);
+        };
     }, []);
+
+    useEffect(() => {
+        if (initialTab && initialTab !== activeTab) {
+            setActiveTab(initialTab);
+        }
+    }, [initialTab]);
 
     useEffect(() => {
         if (activeTab === "approvals") {
@@ -1656,12 +1686,14 @@ export default function AccessSettingsPage() {
                 onDiscardAndProceed: () => {
                     handleDiscardAll();
                     setActiveTab(newTab);
+                    onTabChange?.(newTab);
                     setCustomPendingNav(null);
                 },
                 onSaveAndProceed: async () => {
                     const ok = await handleSaveOnboardingDirect();
                     if (ok) {
                         setActiveTab(newTab);
+                        onTabChange?.(newTab);
                         setCustomPendingNav(null);
                     }
                 }
@@ -1669,6 +1701,12 @@ export default function AccessSettingsPage() {
             return;
         }
         setActiveTab(newTab);
+        onTabChange?.(newTab);
+        if (typeof window !== "undefined" && window.location.pathname.endsWith("/access")) {
+            const params = new URLSearchParams(window.location.search);
+            params.set("tab", newTab);
+            window.history.replaceState(null, "", `${window.location.pathname}?${params.toString()}${window.location.hash}`);
+        }
     };
 
     const pendingUsersCount = users.filter(u => u.status === "PENDING").length;
@@ -4197,7 +4235,8 @@ export default function AccessSettingsPage() {
                                     </p>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
                                         {adminAddonsCatalog.map((addon) => {
-                                            const isAvail = addon.isAvailable !== false;
+                                            const isLocked = ["extra_kid_profile", "extra_living_room", "iptv_livetv", "emby_access", "music_streaming", "priority_requests"].includes(addon.id);
+                                            const isAvail = !isLocked && addon.isAvailable !== false;
                                             const isToggling = togglingAdminAddonId === addon.id;
                                             return (
                                                 <div 
@@ -4241,13 +4280,13 @@ export default function AccessSettingsPage() {
 
                                                     <div className="pt-2 flex items-center justify-between border-t border-border/30 text-xs">
                                                         <span className={`text-[10px] font-semibold ${isAvail ? "text-emerald-400" : "text-muted-foreground"}`}>
-                                                            {isAvail ? "✅ Available to Users" : "🔒 Disabled / Coming Soon"}
+                                                            {isAvail ? "✅ Available to Users" : isLocked ? "🔒 In Development" : "🔒 Disabled / Coming Soon"}
                                                         </span>
                                                         <div className="flex items-center gap-2">
                                                             {isToggling && <Loader2 className="h-3 w-3 animate-spin text-primary" />}
                                                             <Switch 
                                                                 checked={isAvail}
-                                                                disabled={isToggling}
+                                                                disabled={isToggling || isLocked}
                                                                 onCheckedChange={(checked) => handleToggleAdminAddonAvailability(addon.id, checked)}
                                                             />
                                                         </div>
@@ -4270,17 +4309,7 @@ export default function AccessSettingsPage() {
                                     />
                                 </div>
 
-                                {/* MEMBERSHIP TIERS SWITCH */}
-                                <div className="pt-2 border-t border-border/40 flex items-center justify-between">
-                                    <div className="space-y-0.5">
-                                        <Label className="text-xs font-bold text-foreground">Enable Membership Tiers & Add-ons</Label>
-                                        <p className="text-[11px] text-muted-foreground">Enables 4K dedicated transcode tiers, VIP IPTV access, and family kid profiles.</p>
-                                    </div>
-                                    <Switch 
-                                        checked={paymentSettings.membershipTiersEnabled ?? true}
-                                        onCheckedChange={(checked) => setPaymentSettings({ ...paymentSettings, membershipTiersEnabled: checked })}
-                                    />
-                                </div>
+                                {/* MEMBERSHIP TIERS SWITCH (CLEANED UP DUMMY CONTROL) */}
 
                                 <Button 
                                     type="submit" 

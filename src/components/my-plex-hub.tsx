@@ -34,6 +34,9 @@ export default function MyPlexHub() {
             const res = await getUserPlexHubData();
             if (res && res.success) {
                 setData(res);
+                if (res.activeStreams && res.activeStreams.length > 0) {
+                    setShowActiveStreams(true);
+                }
             }
         } catch (e) {
             console.error("Failed to load user Plex hub data:", e);
@@ -45,11 +48,22 @@ export default function MyPlexHub() {
 
     useEffect(() => {
         loadData();
+        const checkHash = () => {
+            if (typeof window !== "undefined" && (window.location.hash === "#my-plex-hub" || window.location.hash === "#streams")) {
+                setShowActiveStreams(true);
+            }
+        };
+        checkHash();
+        window.addEventListener("hashchange", checkHash);
+
         // Polling interval: every 10 seconds for real-time active stream updates
         const interval = setInterval(() => {
             loadData();
         }, 10000);
-        return () => clearInterval(interval);
+        return () => {
+            clearInterval(interval);
+            window.removeEventListener("hashchange", checkHash);
+        };
     }, []);
 
     const handleKillStream = async () => {
@@ -452,7 +466,7 @@ export default function MyPlexHub() {
                         <DialogHeader className="pb-3 border-b border-border/40 shrink-0">
                             <DialogTitle className="flex items-center gap-2 text-base sm:text-lg font-bold text-foreground">
                                 <Stethoscope className="h-5 w-5 text-primary shrink-0" />
-                                Stream Health & Transcode Doctor
+                                Stream Quality & Playback Diagnostics
                             </DialogTitle>
                             <DialogDescription className="text-xs text-muted-foreground">
                                 Detailed technical breakdown and optimization advice for your active playback session.
@@ -520,15 +534,15 @@ export default function MyPlexHub() {
                                 </div>
 
                                 <div className="p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.05] space-y-0.5">
-                                    <div className="text-[10px] text-muted-foreground uppercase font-semibold">Hardware Accel & Power</div>
+                                    <div className="text-[10px] text-muted-foreground uppercase font-semibold">Server Processing</div>
                                     <div className="font-bold text-foreground">
                                         {selectedStreamForDiagnosis.videoDecision === "transcode"
-                                            ? (selectedStreamForDiagnosis.transcodeHwEncoding || selectedStreamForDiagnosis.transcodeHwDecoding ? "GPU Accel (Low Power)" : "CPU (Software • High Power)")
-                                            : "None (Direct Play)"}
+                                            ? (selectedStreamForDiagnosis.transcodeHwEncoding || selectedStreamForDiagnosis.transcodeHwDecoding ? "Optimized via Hardware Acceleration" : "Server Transcoding Active")
+                                            : "Original Quality (Direct Play)"}
                                     </div>
                                     <div className="text-[10px] text-muted-foreground font-mono">
-                                        Speed: {selectedStreamForDiagnosis.videoDecision === "transcode" ? `${selectedStreamForDiagnosis.transcodeSpeed || "1.0"}x` : "1.0x (Raw)"}
-                                        {selectedStreamForDiagnosis.transcodeThrottled ? " (Throttled • Buffer Ahead)" : ""}
+                                        Processing Speed: {selectedStreamForDiagnosis.videoDecision === "transcode" ? `${selectedStreamForDiagnosis.transcodeSpeed || "1.0"}x` : "1.0x (Direct)"}
+                                        {selectedStreamForDiagnosis.transcodeThrottled ? " (Buffer Ahead • Smooth Playback)" : ""}
                                     </div>
                                 </div>
                             </div>
@@ -619,7 +633,7 @@ export default function MyPlexHub() {
                             Connected Media Servers
                         </DialogTitle>
                         <DialogDescription className="text-xs text-muted-foreground">
-                            All active Plex Media Servers and Tautulli monitors linked to your portal.
+                            All active Plex Media Servers and stream monitors linked to your portal.
                         </DialogDescription>
                     </DialogHeader>
 
@@ -655,12 +669,12 @@ export default function MyPlexHub() {
                                             <div className="flex items-center gap-1 shrink-0">
                                                 {srv.directPms && (
                                                     <Badge variant="outline" className="text-[9px] font-semibold bg-primary/10 text-primary border-primary/30">
-                                                        Direct PMS
+                                                        Plex Server
                                                     </Badge>
                                                 )}
                                                 {srv.tautulli && (
                                                     <Badge variant="outline" className="text-[9px] font-semibold bg-purple-500/10 text-purple-400 border-purple-500/30">
-                                                        Tautulli
+                                                        Stream Monitor
                                                     </Badge>
                                                 )}
                                             </div>
@@ -668,10 +682,10 @@ export default function MyPlexHub() {
 
                                     <p className="text-[11px] text-muted-foreground/80 leading-normal pl-9">
                                         {srv.directPms && srv.tautulli 
-                                            ? "Direct playback control, transcode diagnostics, and continuous watch history tracking."
+                                            ? "Direct playback control, stream diagnostics, and continuous watch history tracking."
                                             : srv.directPms 
                                                 ? "Direct playback control, stream health diagnostics, and session management."
-                                                : "Telemetry monitor, watch history aggregation, and playback analytics."
+                                                : "Playback status, watch history tracking, and stream analytics."
                                         }
                                     </p>
                                 </div>

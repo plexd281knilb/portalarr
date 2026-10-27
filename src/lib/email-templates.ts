@@ -356,7 +356,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         defaultSubject: "Temporary Password for DomsHomeLab",
         defaultBody: `<h2>Temporary Password Request</h2>
 <p>Hi <strong>{username}</strong>,</p>
-<p>We received a password reset request for your DomsHomeLab account. Here is your temporary password:</p>
+<p>I received a password reset request for your DomsHomeLab account. Here is your temporary password:</p>
 
 <div style="background-color: #f1f5f9; border: 1px solid #cbd5e1; padding: 18px; border-radius: 8px; font-family: monospace; font-size: 22px; font-weight: bold; text-align: center; letter-spacing: 2px; color: #0f172a; margin: 24px 0;">
     {tempPassword}
@@ -566,7 +566,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         category: "KINDLE",
         defaultSubject: "Failed to Deliver Ebook to Kindle: {title}",
         defaultBody: `<h2 style="color: #dc2626; margin-top: 0;">Kindle Delivery Failed</h2>
-<p>We attempted to send <strong>{title}</strong> to your Kindle address (<code>{kindleEmail}</code>), but the SMTP server rejected the delivery.</p>
+<p>I attempted to send <strong>{title}</strong> to your Kindle address (<code>{kindleEmail}</code>), but Amazon's email service rejected the delivery.</p>
 
 <div style="background-color: #f8fafc; border-left: 4px solid #ef4444; padding: 12px; margin: 18px 0; font-family: monospace; font-size: 13px; color: #b91c1c;">
     <strong>Error:</strong> {errorMessage}
@@ -575,7 +575,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 <h3 style="color: #0f172a; margin-bottom: 8px;">Troubleshooting Checklist:</h3>
 <ol style="line-height: 1.6; padding-left: 20px;">
     <li>
-        <strong>Approve Sender Address:</strong> Amazon will reject emails from addresses they don't recognize. Add our server address:
+        <strong>Approve Sender Address:</strong> Amazon will reject emails from addresses they don't recognize. Add my server address:
         <br />
         <code style="background-color: #f1f5f9; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 14px; display: inline-block; margin-top: 4px; color: #0f172a;">{senderEmail}</code>
         <br />
@@ -676,7 +676,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         defaultSubject: "Welcome to your {trialDays}-Day Free Trial on DomsHomeLab",
         defaultBody: `<h2>Welcome to Your Free Trial</h2>
 <p>Hi <strong>{username}</strong>,</p>
-<p>Your <strong>{trialDays}-Day Free Trial</strong> has been activated for DomsHomeLab (Plex server d281knilb). You now have full access to stream our movie and TV show collections on Plex!</p>
+<p>Your <strong>{trialDays}-Day Free Trial</strong> has been activated for DomsHomeLab (Plex server d281knilb). You now have full access to stream my movie and TV show collections on Plex!</p>
 
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 18px; border-radius: 8px; margin: 20px 0;">
     <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
@@ -717,7 +717,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         defaultSubject: "Your DomsHomeLab Trial Ends Soon ({daysRemaining} days left)",
         defaultBody: `<h2>Your Free Trial is Ending Soon</h2>
 <p>Hi <strong>{username}</strong>,</p>
-<p>We hope you've been enjoying DomsHomeLab (d281knilb)! Just a quick heads up that your free trial access is scheduled to expire on <strong>{expirationDate}</strong> (in {daysRemaining} days).</p>
+<p>I hope you've been enjoying DomsHomeLab (d281knilb)! Just a quick heads up that your free trial access is scheduled to expire on <strong>{expirationDate}</strong> (in {daysRemaining} days).</p>
 
 <div style="background-color: #fefce8; border: 1px solid #fef08a; padding: 18px; border-radius: 8px; margin: 20px 0;">
     <p style="margin: 0; font-size: 14px; color: #854d0e;">
@@ -754,7 +754,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 <div style="text-align: center; margin: 28px 0;">
     <a href="{renewUrl}" style="background-color: #4f46e5; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">Reactivate & Upgrade Account</a>
 </div>
-<p style="font-size: 13px; color: #64748b;">Thank you for trying DomsHomeLab! If you have any feedback or questions, let us know.</p>`,
+<p style="font-size: 13px; color: #64748b;">Thank you for trying DomsHomeLab! If you have any feedback or questions, let me know.</p>`,
         variables: [
             { key: "{username}", description: "Username of user", sampleValue: "jordan_reader" },
             { key: "{email}", description: "Email address of user", sampleValue: "jordan@example.com" },
@@ -789,10 +789,10 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 
 <h3 style="color: #0f172a; margin: 20px 0 8px 0;">Your Unlocked Membership Perks:</h3>
 <ul style="line-height: 1.7; padding-left: 20px; font-size: 14px; color: #334155;">
-    <li>🎬 <strong>Unlimited Streaming:</strong> 100% Direct Play Original Studio Quality (4K HDR, Dolby Atmos).</li>
+    <li>🎬 <strong>Unlimited Streaming:</strong> Original Studio Quality (4K HDR, Dolby Atmos with zero quality loss).</li>
     <li>🧒 <strong>Dedicated Kids & Living Room Profiles:</strong> Child-safe accounts with custom PIN protection and age rating filters.</li>
     <li>📚 <strong>Digital Ebook & Audiobook Library:</strong> In-browser Kindle Paperwhite reader, floating audio player, & Send-to-Kindle delivery.</li>
-    <li>⚡ <strong>Priority Bandwidth:</strong> Dedicated high-priority streaming & transcoding allocation.</li>
+    <li>⚡ <strong>Priority Bandwidth:</strong> High-priority dedicated streaming allocation for smooth playback anywhere.</li>
     <li>🎁 <strong>Discord VIP & Referral Rewards:</strong> Real-time server status alerts, direct support, and earn +1 free month per friend referred.</li>
 </ul>
 
@@ -816,7 +816,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         defaultSubject: "Payment Received & Membership Confirmed ({amount})",
         defaultBody: `<h2>Payment Received</h2>
 <p>Hi <strong>{username}</strong>,</p>
-<p>Thank you for your payment! We have received your payment of <strong>{amount}</strong> via <strong>{provider}</strong> and your DomsHomeLab membership has been updated.</p>
+<p>Thank you for your payment! I have received your payment of <strong>{amount}</strong> via <strong>{provider}</strong> and your DomsHomeLab membership has been updated.</p>
 
 <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; padding: 18px; border-radius: 8px; margin: 20px 0;">
     <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
@@ -849,10 +849,10 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 
 <h3 style="color: #0f172a; margin: 20px 0 8px 0;">Your Full Membership Perks:</h3>
 <ul style="line-height: 1.7; padding-left: 20px; font-size: 14px; color: #334155;">
-    <li>🎬 <strong>Unlimited Streaming:</strong> 100% Direct Play Original Studio Quality (4K HDR, Dolby Atmos).</li>
+    <li>🎬 <strong>Unlimited Streaming:</strong> Original Studio Quality (4K HDR, Dolby Atmos with zero quality loss).</li>
     <li>🧒 <strong>Dedicated Kids & Living Room Profiles:</strong> Child-safe accounts with custom PIN protection.</li>
     <li>📚 <strong>Digital Ebook & Audiobook Library:</strong> In-browser Kindle Paperwhite mode, audio player, & Send-to-Kindle.</li>
-    <li>⚡ <strong>Priority Bandwidth:</strong> Dedicated high-priority streaming & transcoding allocation.</li>
+    <li>⚡ <strong>Priority Bandwidth:</strong> High-priority dedicated streaming allocation for smooth playback anywhere.</li>
     <li>🎁 <strong>Referral Rewards:</strong> Earn +1 free month for every friend you refer to the server!</li>
 </ul>
 
@@ -882,7 +882,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         defaultSubject: "Payment Received: {amountPaid} Credited ({shortfall} Remaining for {planType})",
         defaultBody: `<h2>Payment Received & Credited to Your Balance</h2>
 <p>Hi <strong>{username}</strong>,</p>
-<p>Thank you! We received your payment of <strong>{amountPaid}</strong> via <strong>{provider}</strong> on {paymentDate}.</p>
+<p>Thank you! I received your payment of <strong>{amountPaid}</strong> via <strong>{provider}</strong> on {paymentDate}.</p>
 <p>Your payment has been credited to your DomsHomeLab account balance. Your current available balance is <strong>{accountCredit}</strong>.</p>
 
 <div style="background-color: #fffbeb; border: 1px solid #fef3c7; border-left: 4px solid #f59e0b; padding: 16px; border-radius: 8px; margin: 20px 0;">
@@ -1085,7 +1085,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
     <p style="margin: 0; font-size: 13px; color: #2563eb;"><strong>Status:</strong> Approved & Downloading</p>
 </div>
 
-<p style="font-size: 13px; color: #64748b;">We will email you once it's available to watch on Plex.</p>`,
+<p style="font-size: 13px; color: #64748b;">I will email you once it's available to watch on Plex.</p>`,
         variables: [
             { key: "{username}", description: "Username of the requester", sampleValue: "alex_reader" },
             { key: "{title}", description: "Title of requested media", sampleValue: "House of the Dragon" },
@@ -1163,14 +1163,14 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         defaultSubject: "Media Request Issue: {title}",
         defaultBody: `<h2>Media Request Notice</h2>
 <p>Hi <strong>{username}</strong>,</p>
-<p>We encountered an issue while processing your request for <strong>{title} ({releaseYear})</strong>.</p>
+<p>I encountered an issue while processing your request for <strong>{title} ({releaseYear})</strong>.</p>
 
 <div style="background-color: #fef2f2; border-left: 4px solid #dc2626; border-radius: 4px; padding: 14px; margin: 20px 0;">
     <h4 style="margin: 0 0 6px 0; color: #991b1b;">Error Details:</h4>
     <p style="margin: 0; font-size: 13px; color: #7f1d1d; font-family: monospace;">{errorMessage}</p>
 </div>
 
-<p style="font-size: 13px; color: #64748b;">The system or administrator will retry this request automatically when indexers or sources become available.</p>`,
+<p style="font-size: 13px; color: #64748b;">The system or administrator will retry this request automatically when new releases or sources become available.</p>`,
         variables: [
             { key: "{username}", description: "Username of the requester", sampleValue: "alex_reader" },
             { key: "{title}", description: "Title of requested media", sampleValue: "Fallout" },
@@ -1506,7 +1506,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         category: "BROADCAST",
         defaultSubject: "Welcome to the New DomsHomeLab Portal — Login & Feature Guide",
         defaultBody: `<h2 style="margin-top: 0; color: #0f172a;">Welcome to the New DomsHomeLab Portal, {username}!</h2>
-<p style="color: #334155; font-size: 14.5px; line-height: 1.6;">We have officially launched our brand-new, all-in-one <strong>DomsHomeLab (d281knilb)</strong> portal! Instead of juggling multiple links or messaging whenever a movie is missing or a stream buffers, you now have a single unified command center for movies, TV shows, e-books, audiobooks, live stream diagnostics, and account management.</p>
+<p style="color: #334155; font-size: 14.5px; line-height: 1.6;">I have officially launched my brand-new, all-in-one <strong>DomsHomeLab (d281knilb)</strong> portal! Instead of juggling multiple links or messaging whenever a movie is missing or a stream buffers, you now have a single unified command center for movies, TV shows, e-books, audiobooks, live stream diagnostics, and account management.</p>
 
 <div style="background: linear-gradient(135deg, #eef2ff 0%, #f8fafc 100%); border: 1px solid #c7d2fe; border-left: 4px solid #4f46e5; padding: 18px 20px; border-radius: 10px; margin: 22px 0; box-sizing: border-box; word-break: break-word; overflow-wrap: anywhere;">
     <p style="margin: 0 0 10px 0; font-size: 13px; font-weight: 800; color: #4338ca; text-transform: uppercase; letter-spacing: 0.5px;">Step 1: How to Log In &amp; Get Started</p>
@@ -1536,8 +1536,8 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 </div>
 
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px; box-sizing: border-box; word-break: break-word; overflow-wrap: anywhere;">
-    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">2. My Plex Hub, Stream Quality Doctor &amp; Speed Test (<a href="{appUrl}" style="color: #4f46e5; text-decoration: none;">Home Dashboard</a>)</p>
-    <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">See your active streams, personal watch stats, and which Plex servers you have access to. Run the built-in <strong>Server Speed Test</strong> and use the <strong>Stream Quality Doctor &amp; Device Setup Guides</strong> (Apple TV, Roku, Fire TV, Samsung/LG Smart TVs) to optimize your client player settings for smooth <strong>Direct Play</strong> streaming without buffering.</p>
+    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">2. My Plex Hub, Stream Diagnostics &amp; Speed Test (<a href="{appUrl}" style="color: #4f46e5; text-decoration: none;">Home Dashboard</a>)</p>
+    <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">See your active streams, personal watch stats, and which Plex servers you have access to. Run the built-in <strong>Server Speed Test</strong> and use the <strong>Stream Diagnostics &amp; Device Setup Guides</strong> (Apple TV, Roku, Fire TV, Samsung/LG Smart TVs) to optimize your player settings for smooth <strong>Original Quality</strong> streaming without buffering.</p>
 </div>
 
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px; box-sizing: border-box; word-break: break-word; overflow-wrap: anywhere;">
@@ -1551,13 +1551,13 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 </div>
 
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px; box-sizing: border-box; word-break: break-word; overflow-wrap: anywhere;">
-    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">5. Server &amp; Library Customization &amp; Streaming Preferences (<a href="{appUrl}/profile" style="color: #4f46e5; text-decoration: none;">Account Profile</a>)</p>
-    <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">Select which admin-whitelisted media servers and libraries you want active on your account (Plex, Jellyfin, and Emby), and customize your default streaming preferences, remote quality caps, and preferred audio and subtitle languages to match your home setup.</p>
+    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">5. Media Server &amp; Library Customization (<a href="{appUrl}/profile" style="color: #4f46e5; text-decoration: none;">Account Profile</a>)</p>
+    <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">Select which admin-whitelisted media servers and libraries you want active on your account across Plex and Jellyfin. Easily choose which movie, TV show, or specialty libraries to display for your account.</p>
 </div>
 
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px; box-sizing: border-box; word-break: break-word; overflow-wrap: anywhere;">
     <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">6. Flexible Billing Options &amp; Membership Status (<a href="{appUrl}/profile" style="color: #4f46e5; text-decoration: none;">Account Profile</a>)</p>
-    <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">We now offer both <strong>Monthly</strong> and <strong>Yearly</strong> billing options to best fit your viewing schedule! Visit your <a href="{appUrl}/profile" style="color: #4f46e5; font-weight: 600; text-decoration: underline;">Account Profile</a> to view the plan comparison, review your renewal date, and see accepted direct payment methods (Venmo, PayPal, Zelle).</p>
+    <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">I now offer both <strong>Monthly</strong> and <strong>Yearly</strong> billing options so you can choose what works best for you! Visit your <a href="{appUrl}/profile" style="color: #4f46e5; font-weight: 600; text-decoration: underline;">Account Profile</a> to view the plan comparison, review your renewal date, and see accepted direct payment methods (Venmo, PayPal, Zelle).</p>
 </div>
 
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px; box-sizing: border-box; word-break: break-word; overflow-wrap: anywhere;">
@@ -1645,6 +1645,8 @@ export function wrapInPortalarrEmailLayout(options: {
             .email-footer-text { color: #94a3b8 !important; }
             .email-footer-copyright { color: #64748b !important; }
             .open-dashboard-btn { background-color: #6366f1 !important; color: #ffffff !important; border: 1px solid rgba(255, 255, 255, 0.2) !important; }
+            .safe-sender-box { background-color: #1a1c29 !important; border-color: #27273a !important; border-left-color: #6366f1 !important; color: #94a3b8 !important; }
+            .safe-sender-title { color: #f1f5f9 !important; }
         }
         @media (prefers-color-scheme: light) {
             body { background-color: #f1f5f9 !important; }
@@ -1687,7 +1689,17 @@ export function wrapInPortalarrEmailLayout(options: {
                 </div>
             ` : ""}
 
-            <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 32px 0 20px 0;" />
+            <!-- Safe Sender Delivery Notice -->
+            <div class="safe-sender-box" style="margin: 28px 0 16px 0; padding: 14px 16px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #6366f1; border-radius: 8px; font-size: 12px; line-height: 1.55; color: #475569;">
+                <div class="safe-sender-title" style="font-weight: 700; color: #1e293b; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                    <span>📬 Note from Dominic:</span>
+                </div>
+                <div style="margin: 0;">
+                    To ensure you receive media request alerts, library updates, and account notifications, please add this sender to your contacts or mark emails from <strong>domshomelab.com</strong> as trusted.
+                </div>
+            </div>
+
+            <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 24px 0 20px 0;" />
 
             <!-- Footer -->
             <div style="text-align: center; font-size: 12px; line-height: 1.6;">

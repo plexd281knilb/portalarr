@@ -1982,9 +1982,56 @@ export async function saveEmailTemplateAction(id: string, subject: string, body:
             create: { id, name, description, subject: subject.trim(), body: body.trim() }
         });
 
-        logger.addLog("INFO", "EMAIL", `Saved customized email template "${name}" (${id})`);
+        // Actively verify and sync against Granular Outgoing Email Approval Policy
+        const settings = await getSettings();
+        let emailApprovalPolicy: Record<string, boolean> = {};
+        try {
+            if (settings?.emailApprovalPolicy) {
+                emailApprovalPolicy = JSON.parse(settings.emailApprovalPolicy);
+            }
+        } catch {}
+
+        const isAdminTemplate = [
+            "admin_new_user",
+            "admin_user_access_revoked",
+            "admin_payment_received",
+            "admin_approval",
+            "media_request_admin",
+            "seerr_request_new_admin",
+            "ticket_error_alert",
+            "library_access_request"
+        ].includes(id);
+
+        const recipientTarget = isAdminTemplate ? "Admin" : id.startsWith("ticket_") ? "Admin & Users" : "Users";
+        const globalApprovalEnabled = settings?.requireApprovalForEmails ?? true;
+
+        // If not explicitly set in policy, record it to enforce granular governance
+        let isApprovalRequired = true;
+        if (emailApprovalPolicy[id] !== undefined) {
+            isApprovalRequired = Boolean(emailApprovalPolicy[id]);
+        } else if (!globalApprovalEnabled) {
+            isApprovalRequired = false;
+        }
+
+        if (emailApprovalPolicy[id] === undefined) {
+            emailApprovalPolicy[id] = isApprovalRequired;
+            await prisma.settings.upsert({
+                where: { id: "global" },
+                update: { emailApprovalPolicy: JSON.stringify(emailApprovalPolicy) },
+                create: { id: "global", emailApprovalPolicy: JSON.stringify(emailApprovalPolicy) }
+            });
+        }
+
+        const policyStatusText = isApprovalRequired ? "🔒 Staged for Admin Review" : "⚡ Direct Auto-Send Dispatch";
+        logger.addLog("INFO", "EMAIL", `Saved email template "${name}" (${id}). Verified Granular Outgoing Email Approval Policy: ${policyStatusText} (Recipient: ${recipientTarget})`);
         revalidatePath("/settings");
-        return { success: true, message: `Template "${name}" saved successfully!` };
+        return { 
+            success: true, 
+            message: `Template "${name}" saved! Verified against Granular Outgoing Email Approval Policy: ${policyStatusText} (Recipient: ${recipientTarget}).`,
+            policyStatus: isApprovalRequired ? "STAGED" : "AUTO_SEND",
+            recipientTarget,
+            isApprovalRequired
+        };
     } catch (e: any) {
         logger.addLog("ERROR", "EMAIL", `Failed to save template ${id}: ${e.message}`);
         return { success: false, error: e.message || "Failed to save template" };
@@ -2179,7 +2226,8 @@ export async function sendBroadcastEmailAction(payload: {
     }
 
     const users = await prisma.user.findMany({
-        where: { id: { in: payload.userIds } }
+        where: { id: { in: payload.userIds } },
+        include: { notificationPreference: true }
     });
 
     if (users.length === 0) {
@@ -2199,6 +2247,11 @@ export async function sendBroadcastEmailAction(payload: {
         if (!user.email || !user.email.includes("@")) {
             failCount++;
             failures.push({ username: user.username, email: user.email || "(no email)", error: "Missing or invalid email address" });
+            continue;
+        }
+
+        // Respect member opt-out for announcements during mass broadcasts
+        if (payload.userIds.length > 1 && user.notificationPreference && user.notificationPreference.emailAnnouncements === false) {
             continue;
         }
 
@@ -4771,6 +4824,75 @@ export async function updateUserPlexLibraries(
     }
 }
 
+function getNotificationCategoryForTemplate(templateId?: string): {
+    field: "emailRequestApproved" | "emailMediaReady" | "emailSubscriptionReminders" | "emailAnnouncements" | "emailSupportTickets" | "emailReferralRewards";
+    label: string;
+} | null {
+    if (!templateId) return null;
+
+    // 1. Media Request Approvals & Status Updates
+    if (
+        templateId === "seerr_request_approved" ||
+        templateId === "seerr_request_auto_approved" ||
+        templateId === "seerr_request_declined" ||
+        templateId === "media_request_approved" ||
+        templateId === "request_approved" ||
+        templateId === "book_request_approved"
+    ) {
+        return { field: "emailRequestApproved", label: "Media Request Approvals" };
+    }
+
+    // 2. Media Available & Ready to Stream
+    if (
+        templateId === "seerr_request_available" ||
+        templateId === "media_ready" ||
+        templateId === "book_ready"
+    ) {
+        return { field: "emailMediaReady", label: "Media Available & Ready to Stream" };
+    }
+
+    // 3. Subscription & Renewal Reminders
+    if (
+        templateId.startsWith("subscription_renewal_reminder") ||
+        templateId === "trial_expiring_soon" ||
+        templateId === "trial_expired" ||
+        templateId === "subscription_expired" ||
+        templateId === "payment_reminder"
+    ) {
+        return { field: "emailSubscriptionReminders", label: "Subscription & Renewal Reminders" };
+    }
+
+    // 4. Server Announcements & Maintenance
+    if (
+        templateId === "broadcast" ||
+        templateId === "new_site_launch" ||
+        templateId === "maintenance_announcement" ||
+        templateId === "server_update"
+    ) {
+        return { field: "emailAnnouncements", label: "Server Announcements & Maintenance" };
+    }
+
+    // 5. Support Ticket Updates
+    if (
+        templateId === "ticket_update" ||
+        templateId === "ticket_reply" ||
+        templateId === "support_ticket_update"
+    ) {
+        return { field: "emailSupportTickets", label: "Support Ticket Responses" };
+    }
+
+    // 6. Referral Rewards & Credits
+    if (
+        templateId === "referral_reward_credited" ||
+        templateId === "referral_bonus" ||
+        templateId === "referral_invite"
+    ) {
+        return { field: "emailReferralRewards", label: "Referral Rewards & Community Credits" };
+    }
+
+    return null;
+}
+
 export async function sendOrQueueEmail(options: {
     to: string | string[];
     subject: string;
@@ -4810,6 +4932,8 @@ export async function sendOrQueueEmail(options: {
         const ADMIN_ALERT_TEMPLATES = new Set([
             "admin_new_user",
             "admin_user_access_revoked",
+            "admin_payment_received",
+            "admin_approval",
             "media_request_admin",
             "seerr_request_new_admin",
             "ticket_error_alert",
@@ -4828,6 +4952,57 @@ export async function sendOrQueueEmail(options: {
             logger.addLog("INFO", "EMAIL", `Email notifications globally disabled in settings. Skipping email "${options.subject}" to ${recipientStr}`);
             console.log(`[EMAIL-GATE] Email notifications globally disabled. Skipping email: "${options.subject}"`);
             return { success: true, sent: false, queued: false };
+        }
+
+        // ==========================================
+        // SECOND GATE: User-Level Notification Preferences
+        // ==========================================
+        // Evaluates whether the targeted recipient user has opted out of this specific notification category.
+        // Admin alerts (isToAdminOnly), 1:1 manual admin emails (manual_email), and security notices are never blocked.
+        if (!isToAdminOnly && options.templateId && options.templateId !== "manual_email") {
+            const notifCategory = getNotificationCategoryForTemplate(options.templateId);
+            if (notifCategory) {
+                let targetUserRecord: any = null;
+                if (options.userId) {
+                    targetUserRecord = await prisma.user.findUnique({
+                        where: { id: options.userId },
+                        include: { notificationPreference: true }
+                    }).catch(() => null);
+                }
+                if (!targetUserRecord && options.targetUser) {
+                    targetUserRecord = await prisma.user.findFirst({
+                        where: { username: options.targetUser },
+                        include: { notificationPreference: true }
+                    }).catch(() => null);
+                }
+                if (!targetUserRecord && options.to) {
+                    const toEmail = Array.isArray(options.to) ? options.to[0] : options.to;
+                    if (toEmail && typeof toEmail === "string") {
+                        targetUserRecord = await prisma.user.findFirst({
+                            where: {
+                                OR: [
+                                    { email: toEmail.trim().toLowerCase() },
+                                    { plexEmail: toEmail.trim().toLowerCase() }
+                                ]
+                            },
+                            include: { notificationPreference: true }
+                        }).catch(() => null);
+                    }
+                }
+
+                if (targetUserRecord?.notificationPreference) {
+                    const isPrefEnabled = (targetUserRecord.notificationPreference as any)[notifCategory.field];
+                    if (isPrefEnabled === false) {
+                        logger.addLog(
+                            "INFO",
+                            "EMAIL",
+                            `[USER-PREFERENCE-GATE] User "${targetUserRecord.username}" opted out of ${notifCategory.label} emails. Skipping "${options.subject}" (template: ${options.templateId}).`
+                        );
+                        console.log(`[USER-PREFERENCE-GATE] User "${targetUserRecord.username}" opted out of ${notifCategory.label}. Skipping email "${options.subject}"`);
+                        return { success: true, sent: false, queued: false };
+                    }
+                }
+            }
         }
 
         // Evaluate whether this email requires approval:
@@ -7196,9 +7371,10 @@ export async function getUserNotificationPreferencesAction() {
             pref = await prisma.userNotificationPreference.create({
                 data: {
                     userId: user.id,
-                    emailMediaReady: false,
-                    emailNewContent: false,
-                    emailAnnouncements: false,
+                    emailRequestApproved: true,
+                    emailMediaReady: true,
+                    emailNewContent: true,
+                    emailAnnouncements: true,
                     emailSupportTickets: true,
                     emailSubscriptionReminders: true,
                     emailReferralRewards: true,
@@ -7216,6 +7392,7 @@ export async function getUserNotificationPreferencesAction() {
 }
 
 export async function updateUserNotificationPreferencesAction(data: {
+    emailRequestApproved?: boolean;
     emailMediaReady?: boolean;
     emailNewContent?: boolean;
     emailAnnouncements?: boolean;
@@ -7233,21 +7410,23 @@ export async function updateUserNotificationPreferencesAction(data: {
         const updated = await prisma.userNotificationPreference.upsert({
             where: { userId: user.id },
             update: {
-                emailMediaReady: data.emailMediaReady ?? false,
-                emailNewContent: data.emailNewContent ?? false,
-                emailAnnouncements: data.emailAnnouncements ?? false,
-                emailSupportTickets: data.emailSupportTickets ?? true,
-                emailSubscriptionReminders: data.emailSubscriptionReminders ?? true,
-                emailReferralRewards: data.emailReferralRewards ?? true,
-                discordMediaReady: Boolean(data.discordMediaReady),
-                discordAnnouncements: Boolean(data.discordAnnouncements),
-                discordWebhookUrl: data.discordWebhookUrl?.trim() || null
+                ...(data.emailRequestApproved !== undefined && { emailRequestApproved: data.emailRequestApproved }),
+                ...(data.emailMediaReady !== undefined && { emailMediaReady: data.emailMediaReady }),
+                ...(data.emailNewContent !== undefined && { emailNewContent: data.emailNewContent }),
+                ...(data.emailAnnouncements !== undefined && { emailAnnouncements: data.emailAnnouncements }),
+                ...(data.emailSupportTickets !== undefined && { emailSupportTickets: data.emailSupportTickets }),
+                ...(data.emailSubscriptionReminders !== undefined && { emailSubscriptionReminders: data.emailSubscriptionReminders }),
+                ...(data.emailReferralRewards !== undefined && { emailReferralRewards: data.emailReferralRewards }),
+                ...(data.discordMediaReady !== undefined && { discordMediaReady: Boolean(data.discordMediaReady) }),
+                ...(data.discordAnnouncements !== undefined && { discordAnnouncements: Boolean(data.discordAnnouncements) }),
+                ...(data.discordWebhookUrl !== undefined && { discordWebhookUrl: data.discordWebhookUrl?.trim() || null })
             },
             create: {
                 userId: user.id,
-                emailMediaReady: data.emailMediaReady ?? false,
-                emailNewContent: data.emailNewContent ?? false,
-                emailAnnouncements: data.emailAnnouncements ?? false,
+                emailRequestApproved: data.emailRequestApproved ?? true,
+                emailMediaReady: data.emailMediaReady ?? true,
+                emailNewContent: data.emailNewContent ?? true,
+                emailAnnouncements: data.emailAnnouncements ?? true,
                 emailSupportTickets: data.emailSupportTickets ?? true,
                 emailSubscriptionReminders: data.emailSubscriptionReminders ?? true,
                 emailReferralRewards: data.emailReferralRewards ?? true,
@@ -8127,7 +8306,7 @@ const DEFAULT_ADDONS_CATALOG = [
         description: "Unlimited high-fidelity lossless FLAC & audio streaming with Plexamp support, curated artist playlists, and offline caching.",
         price: 0,
         isFree: true,
-        isAvailable: true,
+        isAvailable: false,
         icon: "music",
         tag: "Audio"
     },
@@ -8177,7 +8356,7 @@ const DEFAULT_ADDONS_CATALOG = [
         description: "Jump to the front of the download queue with fast-tracked automated grabs for newly requested releases.",
         price: 0,
         isFree: true,
-        isAvailable: true,
+        isAvailable: false,
         icon: "sparkles",
         tag: "Requests"
     },
@@ -8197,7 +8376,7 @@ const DEFAULT_ADDONS_CATALOG = [
         description: "Access the unified Emby media server with official Emby apps across Apple TV, Roku, Fire TV, and Smart TVs.",
         price: 0,
         isFree: true,
-        isAvailable: true,
+        isAvailable: false,
         icon: "server",
         tag: "Servers"
     }
@@ -8224,7 +8403,7 @@ export async function getAvailableAddonsAction() {
                     const parsedMap = new Map(parsed.map((item: any) => [item.id, item]));
                     catalog = DEFAULT_ADDONS_CATALOG.map(def => {
                         const existing = parsedMap.get(def.id);
-                        if (def.id === "extra_kid_profile" || def.id === "extra_living_room") {
+                        if (def.id === "extra_kid_profile" || def.id === "extra_living_room" || def.id === "emby_access" || def.id === "music_streaming" || def.id === "priority_requests") {
                             // Enforce locked coming-soon status for unbuilt household sub-accounts
                             return { ...def, isAvailable: false };
                         }
@@ -8289,7 +8468,7 @@ export async function toggleFreeAddonAction(addonId: string, enabled: boolean) {
                     const parsedMap = new Map(parsed.map((item: any) => [item.id, item]));
                     catalog = DEFAULT_ADDONS_CATALOG.map(def => {
                         const existing = parsedMap.get(def.id);
-                        if (def.id === "extra_kid_profile" || def.id === "extra_living_room") {
+                        if (def.id === "extra_kid_profile" || def.id === "extra_living_room" || def.id === "emby_access" || def.id === "music_streaming" || def.id === "priority_requests") {
                             // Enforce locked coming-soon status for unbuilt household sub-accounts
                             return { ...def, isAvailable: false };
                         }
@@ -8309,14 +8488,6 @@ export async function toggleFreeAddonAction(addonId: string, enabled: boolean) {
         const targetAddon = catalog.find(a => a.id === addonId);
         if (!targetAddon) return { success: false, error: "Add-on not found" };
 
-        if (targetAddon.isAvailable === false) {
-            return { success: false, error: `${targetAddon.name} is currently not available yet or under maintenance.` };
-        }
-
-        if (!targetAddon.isFree && targetAddon.price > 0) {
-            return { success: false, error: "This is a paid add-on. Please contact your server administrator to activate." };
-        }
-
         const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
         if (!dbUser) return { success: false, error: "User not found" };
 
@@ -8332,6 +8503,14 @@ export async function toggleFreeAddonAction(addonId: string, enabled: boolean) {
                 success: false,
                 error: "Optional add-ons unlock upon upgrading to full membership."
             };
+        }
+
+        if (targetAddon.isAvailable === false || addonId === "emby_access" || addonId === "music_streaming" || addonId === "priority_requests") {
+            return { success: false, error: `${targetAddon.name} is currently not available yet or under maintenance.` };
+        }
+
+        if (!targetAddon.isFree && targetAddon.price > 0) {
+            return { success: false, error: "This is a paid add-on. Please contact your server administrator to activate." };
         }
 
         let enabledList: string[] = [];
@@ -8459,7 +8638,7 @@ export async function toggleAdminAddonAvailabilityAction(addonId: string, isAvai
                     const parsedMap = new Map(parsed.map((item: any) => [item.id, item]));
                     catalog = DEFAULT_ADDONS_CATALOG.map(def => {
                         const existing = parsedMap.get(def.id);
-                        if (def.id === "extra_kid_profile" || def.id === "extra_living_room") {
+                        if (def.id === "extra_kid_profile" || def.id === "extra_living_room" || def.id === "emby_access" || def.id === "music_streaming" || def.id === "priority_requests") {
                             // Enforce locked coming-soon status for unbuilt household sub-accounts
                             return { ...def, isAvailable: false };
                         }
@@ -10722,6 +10901,10 @@ export async function approveBookRequestAction(requestId: string) {
             console.error(`[BOOK-REQUEST-APPROVAL] Auto-download error for "${request.title}":`, err);
         });
 
+        sendRequestApprovalNotification(request).catch(err => {
+            console.error(`[BOOK-REQUEST-APPROVAL] Notification error for "${request.title}":`, err);
+        });
+
         revalidatePath("/library");
         revalidatePath("/requests");
         return { success: true, message: `Approved request for "${request.title}". Searching indexers...` };
@@ -11111,6 +11294,57 @@ export async function getBookRequests() {
     } catch (e) {}
 
     return requests;
+}
+
+export async function sendRequestApprovalNotification(requestIdOrBook: any) {
+    try {
+        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        if (!isEmailDeliveryConfigured(settings) || settings?.emailNotificationsEnabled === false) {
+            return;
+        }
+
+        let request: any = null;
+        if (typeof requestIdOrBook === "string") {
+            request = await prisma.bookRequest.findUnique({ where: { id: requestIdOrBook } });
+        } else if (requestIdOrBook && requestIdOrBook.title) {
+            request = requestIdOrBook;
+        }
+
+        if (!request) return;
+
+        const requester = await prisma.user.findFirst({
+            where: { username: request.requestedBy }
+        });
+
+        if (!requester || !requester.email) {
+            return;
+        }
+
+        const isAudiobook = request.mediaType === "audiobook";
+        const mediaLabel = isAudiobook ? "Audiobook" : "Book";
+        const appUrl = await getAppUrl();
+
+        const { subject, html } = await renderEmailTemplate("seerr_request_approved", {
+            username: requester.username,
+            title: request.title,
+            releaseYear: request.publishYear || new Date().getFullYear().toString(),
+            mediaLabel,
+            quality: "Digital Master",
+            appUrl
+        });
+
+        await sendOrQueueEmail({
+            to: requester.email,
+            subject,
+            html,
+            templateId: "seerr_request_approved",
+            targetUser: requester.username,
+            userId: requester.id
+        });
+        logger.addLog("INFO", "EMAIL", `Dispatched request approval notice to ${requester.email} for "${request.title}"`);
+    } catch (e: any) {
+        logger.addLog("ERROR", "EMAIL", `Failed to send request approval notice: ${e.message || e}`);
+    }
 }
 
 export async function sendRequestCompletionNotification(requestIdOrBook: any, matchedBook?: any) {
@@ -21406,7 +21640,7 @@ export async function getUserProfileBootstrapAction(bypassCache = false): Promis
             : {
                 emailMediaReady: false,
                 emailNewContent: false,
-                emailAnnouncements: false,
+                emailAnnouncements: true,
                 emailSupportTickets: true,
                 emailSubscriptionReminders: true,
                 emailReferralRewards: true,

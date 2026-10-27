@@ -104,7 +104,7 @@ export default function TrialDashboardView({ user, quota, billing }: TrialDashbo
                                             <ArrowRight className="h-3.5 w-3.5 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all shrink-0" />
                                         </h3>
                                         <p className="text-[11px] text-muted-foreground line-clamp-1 sm:line-clamp-2 leading-tight">
-                                            100% Direct Play configuration
+                                            Original Quality (Zero Buffering)
                                         </p>
                                     </div>
                                 </button>
@@ -131,7 +131,7 @@ export default function TrialDashboardView({ user, quota, billing }: TrialDashbo
                                             <ArrowRight className="h-3.5 w-3.5 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all shrink-0" />
                                         </h3>
                                         <p className="text-[11px] text-muted-foreground line-clamp-1 sm:line-clamp-2 leading-tight">
-                                            Verify bandwidth &amp; direct play
+                                            Verify streaming speed &amp; quality
                                         </p>
                                     </div>
                                 </button>
@@ -236,12 +236,12 @@ export default function TrialDashboardView({ user, quota, billing }: TrialDashbo
             </div>
 
             {/* --- PROMINENT 24/7 AI SERVER ASSISTANT --- */}
-            <div className="w-full">
+            <div id="ai-assistant" className="w-full scroll-mt-6">
                 <AiServerAssistant />
             </div>
 
             {/* --- MY PLEX HUB --- */}
-            <div className="w-full">
+            <div id="my-plex-hub" className="w-full scroll-mt-6">
                 <MyPlexHub />
             </div>
         </div>

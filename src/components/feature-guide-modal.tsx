@@ -398,7 +398,7 @@ export const GUIDE_TOPICS: Record<FeatureGuideId, GuideTopic> = {
             },
             {
                 title: "2. Membership Plans & Cadences",
-                desc: "Choose the cadence that fits your viewing habits:",
+                desc: "Choose the plan and cadence that works best for you:",
                 bullets: [
                     "Rest-of-Year Annual Pass ($180/year): Best value ($15.00/month base). Prorated to only charge for remaining days and full months in the current year.",
                     "Flexible Monthly Plan ($17.50/month): Flexible pay-as-you-go month-to-month access with zero long-term commitment."

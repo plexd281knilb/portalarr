@@ -104,10 +104,11 @@ function SettingsPageContent() {
         if (t === "servers" || t === "fleet") return { hub: "servers", subTab: subTabParam || "fleet" };
         if (t === "plex" || t === "plex-admin") return { hub: "servers", subTab: "plex-admin" };
         if (t === "plex-cluster") return { hub: "servers", subTab: "plex-cluster" };
-        if (t === "telemetry" || t === "tautulli" || t === "glances") return { hub: "servers", subTab: "telemetry" };
+        if (t === "telemetry" || t === "tautulli" || t === "glances" || t === "docker") return { hub: "servers", subTab: "telemetry" };
 
-        if (t === "access" || t === "users" || t === "referrals" || t === "onboarding" || t === "scraper" || t === "approvals") {
-            return { hub: "access", subTab: "" };
+        if (t === "access") return { hub: "access", subTab: subTabParam || "users" };
+        if (t === "users" || t === "referrals" || t === "onboarding" || t === "scraper" || t === "approvals" || t === "sent-emails" || t === "cloudflare") {
+            return { hub: "access", subTab: t };
         }
 
         if (t === "integrations" || t === "servarr" || t === "arr" || t === "monitoring") {
@@ -116,10 +117,12 @@ function SettingsPageContent() {
         if (t === "requests" || t === "seerr") return { hub: "integrations", subTab: "requests" };
         if (t === "ai" || t === "curation" || t === "googlebooks") return { hub: "integrations", subTab: "ai" };
 
-        if (t === "communications" || t === "emails" || t === "smtp") {
+        if (t === "communications" || t === "smtp") {
             return { hub: "communications", subTab: subTabParam || "smtp" };
         }
-        if (t === "broadcast" || t === "templates") return { hub: "communications", subTab: "broadcast" };
+        if (t === "broadcast" || t === "templates" || t === "emails" || t === "email") {
+            return { hub: "communications", subTab: "broadcast" };
+        }
         if (t === "discord") return { hub: "communications", subTab: "discord" };
 
         return { hub: "general", subTab: "platform" };
@@ -129,6 +132,7 @@ function SettingsPageContent() {
         switch (hub) {
             case "general": return "platform";
             case "servers": return "fleet";
+            case "access": return "users";
             case "integrations": return "servarr";
             case "communications": return "smtp";
             default: return "";
@@ -139,6 +143,7 @@ function SettingsPageContent() {
     const [hubSubTabs, setHubSubTabs] = useState<Record<string, string>>({
         general: "platform",
         servers: "fleet",
+        access: "users",
         integrations: "servarr",
         communications: "smtp",
     });
@@ -150,7 +155,7 @@ function SettingsPageContent() {
 
         setHubSubTabs(prev => {
             const next = { ...prev };
-            ["general", "servers", "integrations", "communications"].forEach(h => {
+            ["general", "servers", "access", "integrations", "communications"].forEach(h => {
                 const savedSub = localStorage.getItem(`settings-subtab-${h}`);
                 if (savedSub) next[h] = savedSub;
             });
@@ -2275,7 +2280,7 @@ function SettingsPageContent() {
                                             type="button"
                                             variant="outline"
                                             size="sm"
-                                            onClick={() => handleTabChange("servers")}
+                                            onClick={() => handleSubTabChange("servers", "fleet")}
                                             className="h-7 text-xs font-semibold gap-1.5 border-blue-500/40 text-blue-400 hover:bg-blue-500/15 shrink-0"
                                         >
                                             Media Servers Tab &rarr;
@@ -3743,7 +3748,10 @@ function SettingsPageContent() {
                 {/* HUB 3: ACCESS CONTROL & MEMBERS                                           */}
                 {/* ========================================================================= */}
                 <TabsContent value="access" className="space-y-4">
-                    <AccessSettingsPage />
+                    <AccessSettingsPage 
+                        initialTab={hubSubTabs.access || "users"} 
+                        onTabChange={(tab) => handleSubTabChange("access", tab)} 
+                    />
                 </TabsContent>
 
                 {/* ========================================================================= */}
@@ -4940,7 +4948,10 @@ function SettingsPageContent() {
                                                 type="button"
                                                 variant="outline"
                                                 size="sm"
-                                                onClick={() => handleTabChange("emails")}
+                                                onClick={() => {
+                                                    setActiveTab("communications");
+                                                    handleSubTabChange("communications", "broadcast");
+                                                }}
                                                 className="text-xs h-6 px-2 gap-1 border-primary/30 text-primary hover:bg-primary/10 cursor-pointer ml-1"
                                             >
                                                 <Bell className="h-3 w-3" /> Broadcast & Templates &rarr;

@@ -13,7 +13,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
     Server, Tv, Film, Music, Check, CheckSquare, Square, 
     CheckCircle2, XCircle, Loader2, Shield, FolderCheck, 
@@ -39,11 +38,8 @@ export function UserMediaServersManager({
 }: UserMediaServersManagerProps) {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [savingPrefs, setSavingPrefs] = useState(false);
     const [msg, setMsg] = useState("");
     const [err, setErr] = useState("");
-    const [prefsMsg, setPrefsMsg] = useState("");
-    const [prefsErr, setPrefsErr] = useState("");
 
     const [isTrial, setIsTrial] = useState(false);
     const [servers, setServers] = useState<UserAvailableServer[]>([]);
@@ -51,25 +47,13 @@ export function UserMediaServersManager({
     const [selectedMediaLibraryKeys, setSelectedMediaLibraryKeys] = useState<string[]>([]);
     const [jellyfinUsername, setJellyfinUsername] = useState("");
     const [embyUsername, setEmbyUsername] = useState("");
-
-    // Extended Account Preferences State
-    const [qualityProfile, setQualityProfile] = useState("direct_play");
-    const [audioLanguage, setAudioLanguage] = useState("en");
-    const [subtitleLanguage, setSubtitleLanguage] = useState("en");
-    const [autoSubtitles, setAutoSubtitles] = useState("foreign");
-    const [transcodeAlertsEnabled, setTranscodeAlertsEnabled] = useState(true);
-    const [hideFromLeaderboards, setHideFromLeaderboards] = useState(false);
-    const [weeklyDigestEnabled, setWeeklyDigestEnabled] = useState(true);
-    const [autoSyncWatchlist, setAutoSyncWatchlist] = useState(true);
-
     const [isDirty, setIsDirty] = useState(false);
     const [guideServer, setGuideServer] = useState<UserAvailableServer | null>(null);
     const [guideModalOpen, setGuideModalOpen] = useState(false);
-    const [isPrefsDirty, setIsPrefsDirty] = useState(false);
 
     useEffect(() => {
-        onDirtyChange?.(isDirty || isPrefsDirty);
-    }, [isDirty, isPrefsDirty, onDirtyChange]);
+        onDirtyChange?.(isDirty);
+    }, [isDirty, onDirtyChange]);
 
     const loadData = async () => {
         setLoading(true);
@@ -82,19 +66,6 @@ export function UserMediaServersManager({
                 setSelectedMediaLibraryKeys(res.selectedMediaLibraryKeys);
                 setJellyfinUsername(res.jellyfinUsername || username);
                 setEmbyUsername(res.embyUsername || username);
-
-                // Populate account preferences
-                if (res.accountPreferences) {
-                    const p = res.accountPreferences;
-                    if (p.qualityProfile) setQualityProfile(p.qualityProfile);
-                    if (p.audioLanguage) setAudioLanguage(p.audioLanguage);
-                    if (p.subtitleLanguage) setSubtitleLanguage(p.subtitleLanguage);
-                    if (p.autoSubtitles) setAutoSubtitles(p.autoSubtitles);
-                    if (p.transcodeAlertsEnabled !== undefined) setTranscodeAlertsEnabled(p.transcodeAlertsEnabled);
-                    if (p.hideFromLeaderboards !== undefined) setHideFromLeaderboards(p.hideFromLeaderboards);
-                    if (p.weeklyDigestEnabled !== undefined) setWeeklyDigestEnabled(p.weeklyDigestEnabled);
-                    if (p.autoSyncWatchlist !== undefined) setAutoSyncWatchlist(p.autoSyncWatchlist);
-                }
             } else {
                 setErr(res.error || "Failed to load media servers");
             }
@@ -174,35 +145,6 @@ export function UserMediaServersManager({
             setErr(e.message || "Failed to save preferences");
         } finally {
             setSaving(false);
-        }
-    };
-
-    const handleSavePrefs = async () => {
-        setSavingPrefs(true);
-        setPrefsMsg("");
-        setPrefsErr("");
-        try {
-            const res = await updateUserAccountPreferencesAction({
-                qualityProfile,
-                audioLanguage,
-                subtitleLanguage,
-                autoSubtitles,
-                transcodeAlertsEnabled,
-                hideFromLeaderboards,
-                weeklyDigestEnabled,
-                autoSyncWatchlist
-            });
-            if (res.success) {
-                setPrefsMsg("Your streaming and playback preferences have been saved!");
-                setIsPrefsDirty(false);
-                setTimeout(() => setPrefsMsg(""), 5000);
-            } else {
-                setPrefsErr(res.error || "Failed to update preferences");
-            }
-        } catch (e: any) {
-            setPrefsErr(e.message || "Failed to update preferences");
-        } finally {
-            setSavingPrefs(false);
         }
     };
 
@@ -303,7 +245,14 @@ export function UserMediaServersManager({
                                     Ready to unlock unlimited requests, 4K HDR streams, audiobooks, and household sub-accounts?
                                 </span>
                             </div>
-                            <Button size="sm" asChild className="h-8 text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 shrink-0">
+                            <Button 
+                                size="sm" 
+                                asChild 
+                                className="h-8 text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 shrink-0 cursor-pointer"
+                                onClick={() => {
+                                    document.getElementById("billing")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                                }}
+                            >
                                 <a href="#billing">Upgrade Account</a>
                             </Button>
                         </div>
@@ -362,7 +311,14 @@ export function UserMediaServersManager({
                                     <strong>Jellyfin &amp; Emby multi-platform streaming</strong> is exclusively available for Full Members. Upgrade your membership pass to unlock.
                                 </span>
                             </div>
-                            <Button size="sm" asChild className="h-7 text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white shrink-0 cursor-pointer">
+                            <Button 
+                                size="sm" 
+                                asChild 
+                                className="h-7 text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white shrink-0 cursor-pointer"
+                                onClick={() => {
+                                    document.getElementById("billing")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                                }}
+                            >
                                 <a href="#billing">Upgrade Pass</a>
                             </Button>
                         </div>
@@ -597,191 +553,6 @@ export function UserMediaServersManager({
                     serverUrl={guideServer.serverUrl}
                     username={guideServer.serverType === "EMBY" ? (embyUsername || username) : (jellyfinUsername || username)}
                 />
-            )}
-
-            {/* ========================================================================= */}
-            {/* 3. STREAMING, PLAYBACK & ACCOUNT PREFERENCES (FULL MEMBERS) */}
-            {/* ========================================================================= */}
-            {!isTrialUser && (
-                <Card id="playback-preferences" className={`transition-all duration-300 bg-[#121218]/90 backdrop-blur-md relative overflow-hidden scroll-mt-6 ${isPrefsDirty ? "border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]" : "border-border/50 shadow-sm"}`}>
-                    <CardHeader className="pb-3 border-b border-border/30">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                            <div className="space-y-0.5">
-                                <div className="flex items-center gap-2">
-                                    <Sliders className="h-5 w-5 text-purple-400" />
-                                    <CardTitle className="text-base sm:text-lg font-bold text-foreground">
-                                        Streaming, Playback &amp; Account Preferences
-                                    </CardTitle>
-                                    {isPrefsDirty && (
-                                        <Badge variant="outline" className="text-[10px] bg-amber-500/15 text-amber-400 border-amber-500/30 font-bold ml-1 animate-pulse">
-                                            ● Unsaved Changes
-                                        </Badge>
-                                    )}
-                                </div>
-                                <CardDescription className="text-xs">
-                                    Tailor your default playback resolution, preferred audio/subtitle languages, and privacy options.
-                                </CardDescription>
-                            </div>
-                        </div>
-                    </CardHeader>
-
-                    <CardContent className="pt-4 space-y-4">
-                        {prefsMsg && (
-                            <div className="p-3 text-xs bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 rounded-lg flex items-center gap-2">
-                                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
-                                <span>{prefsMsg}</span>
-                            </div>
-                        )}
-                        {prefsErr && (
-                            <div className="p-3 text-xs bg-red-950/40 border border-red-500/40 text-red-300 rounded-lg flex items-center gap-2">
-                                <XCircle className="h-4 w-4 shrink-0 text-red-400" />
-                                <span>{prefsErr}</span>
-                            </div>
-                        )}
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-                            <div className="space-y-1.5">
-                                <Label className="text-xs font-semibold">Default Quality Profile</Label>
-                                <Select value={qualityProfile} onValueChange={v => { setQualityProfile(v); setIsPrefsDirty(true); }}>
-                                    <SelectTrigger className="h-9 text-xs">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="direct_play">Original 4K HDR (Direct Play)</SelectItem>
-                                        <SelectItem value="1080p_high">1080p High (20 Mbps)</SelectItem>
-                                        <SelectItem value="1080p_balanced">1080p Balanced (10 Mbps)</SelectItem>
-                                        <SelectItem value="720p_saver">720p Data Saver (4 Mbps)</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="space-y-1.5">
-                                <Label className="text-xs font-semibold">Preferred Audio Track</Label>
-                                <Select value={audioLanguage} onValueChange={v => { setAudioLanguage(v); setIsPrefsDirty(true); }}>
-                                    <SelectTrigger className="h-9 text-xs">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="en">English (Default)</SelectItem>
-                                        <SelectItem value="es">Spanish</SelectItem>
-                                        <SelectItem value="fr">French</SelectItem>
-                                        <SelectItem value="ja">Japanese (Anime)</SelectItem>
-                                        <SelectItem value="de">German</SelectItem>
-                                        <SelectItem value="original">Original Audio Track</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="space-y-1.5">
-                                <Label className="text-xs font-semibold">Preferred Subtitle Language</Label>
-                                <Select value={subtitleLanguage} onValueChange={v => { setSubtitleLanguage(v); setIsPrefsDirty(true); }}>
-                                    <SelectTrigger className="h-9 text-xs">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="en">English</SelectItem>
-                                        <SelectItem value="es">Spanish</SelectItem>
-                                        <SelectItem value="fr">French</SelectItem>
-                                        <SelectItem value="ja">Japanese</SelectItem>
-                                        <SelectItem value="off">None / Disabled</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="space-y-1.5">
-                                <Label className="text-xs font-semibold">Auto-Subtitle Mode</Label>
-                                <Select value={autoSubtitles} onValueChange={v => { setAutoSubtitles(v); setIsPrefsDirty(true); }}>
-                                    <SelectTrigger className="h-9 text-xs">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="foreign">Foreign Audio Only</SelectItem>
-                                        <SelectItem value="always">Always Display Subtitles</SelectItem>
-                                        <SelectItem value="off">Manual Only (Off)</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </div>
-
-                        {/* Privacy & Automation Switches */}
-                        <div className="pt-2 grid grid-cols-1 sm:grid-cols-2 gap-3 border-t border-border/30">
-                            <div className="p-3 rounded-xl bg-white/[0.02] border border-border/40 flex items-center justify-between gap-3">
-                                <div className="space-y-0.5">
-                                    <Label className="text-xs font-semibold text-foreground">
-                                        Transcode Doctor Alert Banner
-                                    </Label>
-                                    <p className="text-[11px] text-muted-foreground">
-                                        Proactively show 30-second fix guides when playback is capped.
-                                    </p>
-                                </div>
-                                <Switch
-                                    checked={transcodeAlertsEnabled}
-                                    onCheckedChange={v => { setTranscodeAlertsEnabled(v); setIsPrefsDirty(true); }}
-                                />
-                            </div>
-
-                            <div className="p-3 rounded-xl bg-white/[0.02] border border-border/40 flex items-center justify-between gap-3">
-                                <div className="space-y-0.5">
-                                    <Label className="text-xs font-semibold text-foreground">
-                                        Watch History Leaderboard Privacy
-                                    </Label>
-                                    <p className="text-[11px] text-muted-foreground">
-                                        Hide your username from public community streaming leaderboards.
-                                    </p>
-                                </div>
-                                <Switch
-                                    checked={hideFromLeaderboards}
-                                    onCheckedChange={v => { setHideFromLeaderboards(v); setIsPrefsDirty(true); }}
-                                />
-                            </div>
-
-                            <div className="p-3 rounded-xl bg-white/[0.02] border border-border/40 flex items-center justify-between gap-3">
-                                <div className="space-y-0.5">
-                                    <Label className="text-xs font-semibold text-foreground">
-                                        Plex Watchlist Auto-Sync
-                                    </Label>
-                                    <p className="text-[11px] text-muted-foreground">
-                                        Automatically submit requests when you add movies to your Plex Watchlist.
-                                    </p>
-                                </div>
-                                <Switch
-                                    checked={autoSyncWatchlist}
-                                    onCheckedChange={v => { setAutoSyncWatchlist(v); setIsPrefsDirty(true); }}
-                                />
-                            </div>
-
-                            <div className="p-3 rounded-xl bg-white/[0.02] border border-border/40 flex items-center justify-between gap-3">
-                                <div className="space-y-0.5">
-                                    <Label className="text-xs font-semibold text-foreground">
-                                        Weekly Newly Added Digest
-                                    </Label>
-                                    <p className="text-[11px] text-muted-foreground">
-                                        Receive a weekly summary email of new releases added to your libraries.
-                                    </p>
-                                </div>
-                                <Switch
-                                    checked={weeklyDigestEnabled}
-                                    onCheckedChange={v => { setWeeklyDigestEnabled(v); setIsPrefsDirty(true); }}
-                                />
-                            </div>
-                        </div>
-                    </CardContent>
-
-                    <CardFooter className="pt-3 pb-4 px-4 bg-white/[0.01] border-t border-border/30 flex items-center justify-between">
-                        <span className="text-[11px] text-muted-foreground">
-                            Custom preferences apply immediately to your streaming profile.
-                        </span>
-                        <Button
-                            type="button"
-                            onClick={handleSavePrefs}
-                            disabled={savingPrefs}
-                            className="font-bold text-xs h-9 bg-purple-600 hover:bg-purple-500 text-white gap-2 transition-all hover:ring-2 hover:ring-purple-400/40 active:scale-95 cursor-pointer shadow-sm"
-                        >
-                            {savingPrefs ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                            <span>Save Playback Preferences</span>
-                        </Button>
-                    </CardFooter>
-                </Card>
             )}
         </div>
     );

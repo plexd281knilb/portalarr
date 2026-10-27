@@ -57,7 +57,7 @@ export function UserLaunchpad({ isSuperUser = false }: UserLaunchpadProps) {
                             </div>
                             <div className="space-y-0.5">
                                 <h3 className="text-xs sm:text-sm font-bold text-foreground group-hover:text-amber-300 transition-colors flex items-center justify-between">
-                                    <span>Radarr Movies</span>
+                                    <span>Movie Manager (Radarr)</span>
                                     <ArrowRight className="h-3.5 w-3.5 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all shrink-0" />
                                 </h3>
                                 <p className="text-[11px] text-muted-foreground line-clamp-1 sm:line-clamp-2 leading-tight">
@@ -82,7 +82,7 @@ export function UserLaunchpad({ isSuperUser = false }: UserLaunchpadProps) {
                             </div>
                             <div className="space-y-0.5">
                                 <h3 className="text-xs sm:text-sm font-bold text-foreground group-hover:text-sky-300 transition-colors flex items-center justify-between">
-                                    <span>Sonarr TV</span>
+                                    <span>TV Manager (Sonarr)</span>
                                     <ArrowRight className="h-3.5 w-3.5 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all shrink-0" />
                                 </h3>
                                 <p className="text-[11px] text-muted-foreground line-clamp-1 sm:line-clamp-2 leading-tight">
@@ -140,7 +140,16 @@ export function UserLaunchpad({ isSuperUser = false }: UserLaunchpadProps) {
                 </Link>
 
                 {/* 5. My Streams */}
-                <a href="#my-plex-hub" className="block group h-full">
+                <a 
+                    href="#my-plex-hub" 
+                    onClick={() => {
+                        const el = document.getElementById("my-plex-hub");
+                        if (el) {
+                            el.scrollIntoView({ behavior: "smooth", block: "start" });
+                        }
+                    }}
+                    className="block group h-full cursor-pointer"
+                >
                     <div className="h-full flex flex-col justify-between p-3 sm:p-3.5 rounded-xl border bg-cyan-500/10 border-cyan-500/30 text-cyan-400 hover:border-cyan-500/60 hover:bg-cyan-500/15 transition-all duration-200 active:scale-98 shadow-sm hover:shadow-md">
                         <div className="flex items-center justify-between gap-1.5 mb-2">
                             <div className="p-2 rounded-lg bg-background/50 border border-border/40 shadow-xs">
@@ -181,7 +190,7 @@ export function UserLaunchpad({ isSuperUser = false }: UserLaunchpadProps) {
                                         <ArrowRight className="h-3.5 w-3.5 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all shrink-0" />
                                     </h3>
                                     <p className="text-[11px] text-muted-foreground line-clamp-1 sm:line-clamp-2 leading-tight">
-                                        Direct play &amp; connection test
+                                        Streaming quality &amp; speed test
                                     </p>
                                 </div>
                             </button>

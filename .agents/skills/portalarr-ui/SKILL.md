@@ -48,7 +48,7 @@ Portalarr uses a **Modern Cinematic Dark Theme** powered by Tailwind CSS, Radix 
      - `ai`: AI Agent & Curation Keys (Google Gemini API keys, OpenAI tokens, Kometa, Agregarr, Maintainerr curation webhooks).
   5. **Communications & Alerts (`communications`)**:
      - `smtp`: Global SMTP & Kindle Delivery (Outbound mail server, SMTP credentials, TLS/SSL, Amazon Send-to-Kindle address, live test email dispatches, and Admin Recipient indicator with 1-click Change Recipient modal).
-     - `broadcast`: Broadcasts & Notification Templates (12 granular notification templates, Markdown editor, test email dispatches).
+     - `broadcast`: Broadcasts, Notification Templates & Granular Outgoing Email Approval Policy (12 granular notification templates, Markdown editor, test email dispatches, distinct "To: Users" vs "To: Admin" audience badges, interactive recipient filtering, Dominic personal sender anti-spam notices, and automated policy verification on template edit/save).
      - `discord`: Discord Bot & Automation (Bot token, Guild ID, channel mappings for alerts/status/requests, role assignments).
 
 - **Sub-Tab Switcher Pattern & URL Synchronization**:
@@ -83,10 +83,14 @@ Portalarr uses a **Modern Cinematic Dark Theme** powered by Tailwind CSS, Radix 
   - **Centralized Trial Safe Pool Governance**: Trial member library access is governed 100% centrally in `/settings/access` under Onboarding (`defaultTrialPlexLibraries` / "Trial Safe Pool / Restricted Shelf"). Per-server trial toggles are avoided to prevent fragmented or conflicting access rules.
   - When whitelisting specific libraries, render interactive checkbox pills for each discovered virtual folder or PMS section with high-contrast text and clean allowed counts.
 - **User Self-Selection & Tier Capabilities**:
-  - In User Profile (`UserMediaServersManager`), render an informative Tier Capabilities Banner highlighting Full Member privileges (unlimited library selection, playback quality caps, audio/subtitle language preferences, email digests).
+  - In User Profile (`UserMediaServersManager`), render an informative Tier Capabilities Banner highlighting Full Member privileges (unlimited media server and library self-selection across Plex, Jellyfin, and Emby, book library access, uncapped requests, and household sub-accounts).
   - Enforce server-side whitelist validation: any client tampering attempting to select unauthorized servers or hidden libraries is strictly filtered out before database persistence and API policy sync.
+- **Profile Page Clean Minimal Cards & Coming Soon Gating**:
+  - **Household Sub-Accounts & Profiles** and **Content Safety & Family Profile** are cleanly rendered as "Coming Soon • Beta" cards while library metadata tagging and parental rating filters remain in active development.
+  - **Notification Preferences (User Opt-In Second Gate)**: Full granular control over user-targeted automated email categories (`emailRequestApproved`, `emailMediaReady`, `emailSubscriptionReminders`, `emailAnnouncements`, `emailSupportTickets`, `emailReferralRewards`). Acts as an authoritative second gate: even when an email passes global server settings and the admin approval queue, if the member has opted out of that notification category, it is automatically dropped and skipped with audit logging.
+  - **Kids & Audiobooks Library Access Cards**: Excluded internal backend library dumps ("Managed Family Libraries" and "Detected Audiobook Libraries") to maintain member privacy and prevent empty badge artifacts.
 - **Strict Full-Member Gating for Jellyfin & Emby**:
-  - Emby and Jellyfin server options and add-ons (`jellyfin_access`, `emby_access`) are **strictly restricted to Full Members** (and Super Users / Admins).
+  - Emby and Jellyfin server options and add-ons (`jellyfin_access`, `emby_access`) are **strictly restricted to Full Members** (and Super Users / Admins). Note: `emby_access`, `music_streaming`, and `priority_requests` are marked unavailable (`isAvailable: false`) and filtered from the user account add-ons catalog until real backend integrations are deployed.
   - For Trial Members (`isTrialUser`), Jellyfin and Emby switches are locked/disabled (`checked={false} disabled={true}`) with a `Full Members Only` lock badge and a prominent locked informational banner: "Jellyfin & Emby multi-platform streaming is exclusively available for Full Members. Upgrade your membership pass to unlock."
   - Backend enforcement in `updateUserMediaServersAndLibrariesAction` and `toggleFreeAddonAction` strictly blocks and strips Jellyfin/Emby selections for trial users.
 - **Interactive Step-by-Step Setup Guides (`MediaServerSetupGuideModal` & `PlexSetupGuides`)**:
@@ -221,6 +225,10 @@ See detailed reference: [form-and-input-patterns.md](./references/form-and-input
   - If a mobile browser (iOS Safari, Android Chrome) or strict desktop setting blocks the Plex login popup, render an immediate 1-click fallback button (*"Popup blocked? Tap here to authorize on Plex.tv"*) opening the authorization URL in a new tab while continuing background PIN polling.
   - Provide a 8-second grace period on `popup.closed` detection to prevent premature polling termination when users switch to password managers or 2FA authenticators.
   - Include an interactive show/hide password toggle (`Eye` / `EyeOff`) and a real-time CapsLock detection badge (*"Caps Lock is ON"*) on all password fields.
+
+- **Semantic Subtab & Hash Navigation Standards**:
+  - **Two-Tier Hub & Subtab Resolution**: When nesting sub-panels (e.g. in `src/app/settings/page.tsx` and `src/app/settings/access/page.tsx`), parent tab resolvers must never drop child subtab parameters to `""`. Inter-tab jump buttons (e.g. jumping from PMS tokens to Media Servers fleet) must call explicit subtab transition handlers (`handleSubTabChange("servers", "fleet")`) rather than generic hub changes to eliminate silent self-referential no-ops.
+  - **Post-Loading DOM Hash Jump Guard**: On pages that render conditionally during data fetching (such as `/profile` or `/settings/access` displaying full-page loaders), browser-native hash jumps fail on initial mount because the target elements do not yet exist in the DOM. Always mount a `useEffect` that listens for `!loading` and triggers `document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "start" })`, paired with a `window.addEventListener("hashchange", ...)` listener so that deep links (`/profile#kindle`, `/profile#referral`, `/profile#billing`, `/settings/access?tab=onboarding#trial-safe-pool`) always scroll cleanly into view.
 
 ---
 
@@ -1357,6 +1365,33 @@ Before completing any task, execute:
 - **Full Viewport Responsive Modals & Footers**:
   - Base `DialogContent` standardizes `max-h-[92vh] overflow-y-auto scrollbar-thin` to ensure no modal clips vertically in landscape orientation or on small mobile devices.
   - Dialog footers strictly follow `flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5` with `w-full sm:w-auto shrink-0 whitespace-nowrap` on action buttons to prevent text wrapping or truncation on narrow screens (<375px).
+
+### 44. End-User Plain-English Terminology Standards (Zero Jargon Policy)
+To ensure Portalarr remains approachable for non-technical family members, trial accounts, and casual users, user-facing views must strictly adhere to plain-English replacements:
+- **Build & Branch Telemetry (`BuildBadge`)**: Non-admins seeing `variant="full"` are shown `Beta Preview • v<version>` or `Production • v<version>`. Git branch names (`(main)`, `(stable)`), commit short hashes (`[90fb926]`), and workflow run badges are strictly restricted to administrators.
+- **Streaming Quality vs Direct Play**:
+  - Replace "100% Direct Play" with **"Original Quality (Zero Buffering)"** or **"Maximum Quality"**. Plex device apps label their setting "Maximum / Original Quality", so users cannot find a setting called "Direct Play".
+  - Replace "4K Remux Ready" with **"Maximum 4K HDR Quality"**.
+  - Replace "1080p High Bitrate Ready" with **"Crisp 1080p Full HD"**.
+- **Server Processing vs Transcode Doctor**:
+  - Transcode Doctor modal is presented to members as **"Stream Quality & Playback Diagnostics"**.
+  - Server transcode decisions are presented as **"Original Quality (Direct Play)"**, **"Optimized via Hardware Acceleration"**, or **"Server Transcoding Active"** under a clean **"Server Processing"** header.
+- **AI Assistant Labels**:
+  - Live Telemetry tab ➔ **"Live Stream Stats"**.
+  - Server Disk & Probes tab ➔ **"Server Health Check"**.
+  - NVENC HW badge ➔ **"GPU Accelerated"**.
+  - Video/Audio Codec ➔ **"Video Format"** / **"Audio Format"**.
+  - Synthetic probes / byte-range reads ➔ **"Live diagnostic tests measuring drive read performance and streaming health"**.
+- **Daemon & Backend App Names**:
+  - In media requests and detail modals, avoid surfacing raw *Arr names ("Sonarr", "Radarr", "Prowlarr", "Tautulli"). Use **"Movie Manager"**, **"TV Manager"**, **"Stream Monitor"**, and **"Online Catalogs / Release Sources"**.
+  - Button text: "Re-Search Movie in Radarr" ➔ **"Re-Search Releases"**.
+- **System Email Notices & Templates**:
+  - Replace raw protocol names: "SMTP server rejected the delivery" ➔ **"Amazon's email service rejected the delivery"**.
+  - Replace Usenet/torrent indexer terms: "when indexers or sources become available" ➔ **"when new releases or sources become available"**.
+  - Replace homelab terms: "transcoding allocation" ➔ **"high-priority dedicated streaming allocation for smooth playback anywhere"**.
+  - Standardize streaming terminology: "Direct Play" ➔ **"Original Studio Quality"** / **"Original Quality"**.
+  - Diagnostic references: "Stream Quality Doctor" ➔ **"Stream Diagnostics & Device Setup Guides"**.
+
 
 ---
 

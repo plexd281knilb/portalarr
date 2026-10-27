@@ -194,7 +194,7 @@ function SidebarNavContent({ onItemClick }: SidebarNavContentProps) {
                     AI Assistant
                   </span>
                   <span className="text-[10px] text-purple-300/70 font-medium leading-tight mt-1 truncate">
-                    24/7 Homelab AI
+                    24/7 Server Assistant
                   </span>
                 </div>
               </div>

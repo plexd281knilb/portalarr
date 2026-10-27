@@ -447,7 +447,7 @@ export function MediaDetailModal({
             });
 
             if (res.success) {
-                setEpisodeSuccessMsg(`Episode S${seasonNum}E${episodeNum} requested in Sonarr!`);
+                setEpisodeSuccessMsg(`Episode S${seasonNum}E${episodeNum} requested successfully! Scheduled for download.`);
                 if (res.arrMonitoring) {
                     setAvailability(prev => prev ? {
                         ...prev,
@@ -565,7 +565,7 @@ export function MediaDetailModal({
                     <div className="flex flex-col items-center justify-center p-20 space-y-4">
                         <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
                         <p className="text-sm font-semibold text-muted-foreground animate-pulse">
-                            Loading metadata & Radarr/Sonarr monitoring status...
+                            Checking server availability and download status...
                         </p>
                     </div>
                 ) : (
@@ -980,7 +980,7 @@ export function MediaDetailModal({
                                                         Fully Monitored in 1080p & 4K UHD
                                                     </h4>
                                                     <p className="text-[11px] text-cyan-300/80">
-                                                        Actively monitored across {arrDetails?.app1080pName || "Radarr/Sonarr"} and {arrDetails?.app4kName || "4K Instance"}.
+                                                        Already scheduled for download in 1080p and 4K UHD.
                                                     </p>
                                                 </div>
                                             </div>
@@ -993,14 +993,14 @@ export function MediaDetailModal({
                                                 </div>
                                                 <div>
                                                     <h4 className="text-xs sm:text-sm font-bold text-blue-200">
-                                                        {canRequest4k ? `Monitored in 1080p (${arrDetails?.app1080pName || (isTv ? "Sonarr" : "Radarr")})` : `Monitored in ${arrDetails?.app1080pName || (isTv ? "Sonarr" : "Radarr")}`}
+                                                        {canRequest4k ? "Monitored in 1080p (Standard HD)" : "Monitored for Download"}
                                                     </h4>
                                                     <p className="text-[11px] text-blue-300/80">
                                                         {canRequest4k
                                                             ? `This title is already monitored for 1080p. You can still request a dedicated 4K UHD version below!`
                                                             : isTv
-                                                            ? `This series is actively monitored in Sonarr. You can manage or request specific seasons and episodes below.`
-                                                            : `This movie is actively monitored in Radarr and will download automatically once available.`}
+                                                            ? `This series is actively tracked by the server. You can manage or request specific seasons and episodes below.`
+                                                            : `This movie is already scheduled to download automatically once released.`}
                                                     </p>
                                                 </div>
                                             </div>
@@ -1210,12 +1210,12 @@ export function MediaDetailModal({
                                             ) : !isTv && isCurrentQualityMonitored ? (
                                                 <>
                                                     <RefreshCw className="h-4 w-4" />
-                                                    <span>Re-Search {canRequest4k ? (is4k ? "4K UHD " : "1080p ") : ""}Movie in Radarr</span>
+                                                    <span>Re-Search {canRequest4k ? (is4k ? "4K UHD " : "1080p ") : ""}Releases</span>
                                                 </>
                                             ) : isTv && allSelectedSeasonsMonitored ? (
                                                 <>
                                                     <RefreshCw className="h-4 w-4" />
-                                                    <span>Re-Search {selectedSeasons.length} Monitored Season(s) in Sonarr</span>
+                                                    <span>Re-Search {selectedSeasons.length} Monitored Season(s)</span>
                                                 </>
                                             ) : (
                                                 <>

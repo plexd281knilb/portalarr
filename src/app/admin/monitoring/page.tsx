@@ -107,6 +107,20 @@ export default function AdminFleetMonitoringPage() {
     const [refreshing, setRefreshing] = useState(false);
     const [isPending, startTransition] = useTransition();
 
+    useEffect(() => {
+        if (typeof window !== "undefined") {
+            const params = new URLSearchParams(window.location.search);
+            const tabParam = params.get("tab")?.toLowerCase();
+            if (tabParam === "containers" || tabParam === "docker" || tabParam === "fleet") {
+                setActiveTab("containers");
+            } else if (tabParam === "incidents" || tabParam === "outages" || tabParam === "alerts") {
+                setActiveTab("incidents");
+            } else if (tabParam === "systems" || tabParam === "services") {
+                setActiveTab("systems");
+            }
+        }
+    }, []);
+
     // Data state
     const [services, setServices] = useState<ServiceUptimeSummary[]>([]);
     const [containers, setContainers] = useState<DockerContainerItem[]>([]);
@@ -472,7 +486,18 @@ export default function AdminFleetMonitoringPage() {
             </div>
 
             {/* TABBED MONITORING COCKPIT */}
-            <Tabs value={activeTab} onValueChange={(v: any) => setActiveTab(v)} className="w-full space-y-5">
+            <Tabs 
+                value={activeTab} 
+                onValueChange={(v: any) => {
+                    setActiveTab(v);
+                    if (typeof window !== "undefined") {
+                        const params = new URLSearchParams(window.location.search);
+                        params.set("tab", v);
+                        window.history.replaceState(null, "", `${window.location.pathname}?${params.toString()}`);
+                    }
+                }} 
+                className="w-full space-y-5"
+            >
                 {/* HIGH-CONTRAST TAB SWITCHER */}
                 <TabsList className="bg-[#121218] border border-white/[0.08] p-1 rounded-xl w-full sm:w-auto grid grid-cols-3 gap-1 h-auto">
                     {/* TAB 1: SYSTEMS */}
