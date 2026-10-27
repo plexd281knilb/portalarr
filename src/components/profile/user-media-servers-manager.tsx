@@ -97,11 +97,15 @@ export function UserMediaServersManager({
         }
 
         setIsDirty(true);
-        setSelectedServerKeys(prev => 
-            prev.includes(server.serverKey) 
-                ? prev.filter(k => k !== server.serverKey && k !== server.serverId) 
-                : [...prev, server.serverKey]
-        );
+        if (isCurrentlyActive) {
+            const serverLibKeys = new Set(server.allowedLibraries.map(l => l.libraryKey));
+            setSelectedServerKeys(prev => prev.filter(k => k !== server.serverKey && k !== server.serverId));
+            setSelectedMediaLibraryKeys(prev => prev.filter(k => !serverLibKeys.has(k)));
+        } else {
+            const serverLibKeys = server.allowedLibraries.map(l => l.libraryKey);
+            setSelectedServerKeys(prev => [...prev, server.serverKey]);
+            setSelectedMediaLibraryKeys(prev => Array.from(new Set([...prev, ...serverLibKeys])));
+        }
     };
 
     const handleToggleLibrary = (libKey: string) => {

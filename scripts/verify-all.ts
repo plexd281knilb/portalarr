@@ -2338,6 +2338,108 @@ async function runTestSuite() {
                 where: { id: { in: [autoEmail.id, approvedEmail.id] } }
             });
         }
+
+        // 9. What's New & Roadmap Role Gating and Jargon Elimination Verification
+        const { filterRoadmapByRole } = await import("../src/components/whats-new-modal");
+        const roadmapPath = path.join(process.cwd(), "roadmap.md");
+        const rawRoadmap = fs.readFileSync(roadmapPath, "utf8");
+
+        // 9a. Admin Verification
+        const adminText = filterRoadmapByRole(rawRoadmap, "ADMIN");
+        if (!adminText.includes("(Admin)") && !adminText.includes("Outbound Communications")) {
+            throw new Error("Expected Admin roadmap to include (Admin) features");
+        }
+        if (!adminText.includes("Super Users")) {
+            throw new Error("Expected Admin roadmap to include Super User features");
+        }
+
+        // 9b. Super User Verification
+        const superUserText = filterRoadmapByRole(rawRoadmap, "SUPER_USER");
+        if (superUserText.includes("(Admin)") || superUserText.includes("Outbound Communications")) {
+            throw new Error("Admin features leaked into Super User roadmap");
+        }
+        if (!superUserText.includes("Super Users")) {
+            throw new Error("Expected Super User roadmap to include Super User features");
+        }
+
+        // 9c. Standard User Verification
+        const userText = filterRoadmapByRole(rawRoadmap, "USER");
+        if (userText.includes("(Admin)") || userText.includes("Outbound Communications")) {
+            throw new Error("Admin features leaked into regular User roadmap");
+        }
+        if (userText.includes("(Super Users)") || userText.includes("Super User Access")) {
+            throw new Error("Super User features leaked into regular User roadmap");
+        }
+        if (!userText.includes("Ebooks & Send-to-Kindle") || !userText.includes("In-Browser Reader") || !userText.includes("Send-to-Kindle") || !userText.includes("Audiobooks Library Access")) {
+            throw new Error("Full member Ebooks/Audiobooks features missing from User roadmap");
+        }
+
+        // 9d. Trial Account Verification
+        const trialText = filterRoadmapByRole(rawRoadmap, "TRIAL");
+        if (trialText.includes("(Admin)") || trialText.includes("Outbound Communications")) {
+            throw new Error("Admin features leaked into Trial roadmap");
+        }
+        if (trialText.includes("(Super Users)") || trialText.includes("Super User Access")) {
+            throw new Error("Super User features leaked into Trial roadmap");
+        }
+        if (trialText.includes("Ebooks & Send-to-Kindle") || trialText.includes("Send-to-Kindle") || trialText.includes("In-Browser Reader") || trialText.includes("Audiobooks")) {
+            throw new Error("Ebooks & Audiobooks leaked into Trial roadmap");
+        }
+        if (trialText.includes("Multi-Platform Media Servers") || trialText.includes("Jellyfin & Emby")) {
+            throw new Error("Multi-Platform servers leaked into Trial roadmap");
+        }
+        if (trialText.includes("Family Sub-Profiles") || trialText.includes("Live TV") || trialText.includes("Channel Activation") || trialText.includes("Referral Rewards") || trialText.includes("Enhanced Curation")) {
+            throw new Error("Full member features (Family/Live TV/Referral/Curation) leaked into Trial roadmap");
+        }
+
+        // 9f. Section Placement Verification: Curation Badges, Referral Rewards, Family Sub-Profiles, Floating Player must be in Coming Soon
+        const whatsNewSection = rawRoadmap.split("### 🚀 Coming Soon")[0];
+        const comingSoonSection = rawRoadmap.split("### 🚀 Coming Soon")[1] || "";
+
+        if (whatsNewSection.includes("Enhanced Curation & Poster Badges") || 
+            whatsNewSection.includes("Member Referral Rewards") || 
+            whatsNewSection.includes("Family Sub-Profiles") ||
+            whatsNewSection.includes("Floating Audiobook Player")) {
+            throw new Error("Coming Soon features (Curation Badges, Referral Rewards, Family Sub-Profiles, Floating Audiobook Player) were incorrectly placed in What's New section");
+        }
+
+        if (!comingSoonSection.includes("Enhanced Curation & Poster Badges") || 
+            !comingSoonSection.includes("Member Referral Rewards") || 
+            !comingSoonSection.includes("Family Sub-Profiles") ||
+            !comingSoonSection.includes("Floating Audiobook Player")) {
+            throw new Error("Expected Curation Badges, Referral Rewards, Family Sub-Profiles, and Floating Audiobook Player to be located in Coming Soon section");
+        }
+        if (!trialText.includes("Unified Media Requests (Movies & TV Shows)")) {
+            throw new Error("Expected adapted Unified Media Requests (Movies & TV Shows) in Trial roadmap");
+        }
+
+        // 9e. Jargon Elimination Across All Non-Admin Views & Source File
+        const forbiddenJargon = [
+            "Direct Play",
+            "direct play",
+            "Quality Doctor",
+            "quality doctor",
+            "playback telemetry",
+            "central homelab",
+            "homelab streaming",
+            "Dispatcharr",
+            "dormancy cleanup"
+        ];
+
+        for (const r of ["USER", "TRIAL", "SUPER_USER"] as const) {
+            const roleView = filterRoadmapByRole(rawRoadmap, r);
+            for (const jargon of forbiddenJargon) {
+                if (roleView.includes(jargon)) {
+                    throw new Error(`Jargon "${jargon}" found in roadmap view for role "${r}"`);
+                }
+            }
+        }
+
+        for (const jargon of forbiddenJargon) {
+            if (rawRoadmap.includes(jargon)) {
+                throw new Error(`Forbidden jargon "${jargon}" detected in source roadmap.md`);
+            }
+        }
     });
 
 

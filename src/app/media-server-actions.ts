@@ -588,6 +588,18 @@ export async function getUserMediaServersAndLibrariesAction(bypassCache = false)
             try { accountPreferences = JSON.parse(user.accountPreferences); } catch {}
         }
 
+        // Parse user enabled add-ons
+        let userAddons: string[] = [];
+        if (user.enabledAddons) {
+            try { userAddons = JSON.parse(user.enabledAddons); } catch {}
+        }
+        const hasJellyfinAddon = userAddons.includes("jellyfin_access");
+        const hasEmbyAddon = userAddons.includes("emby_access");
+        const hasAudiobooksAddon = userAddons.includes("audiobooks") || userAddons.includes("books_audiobooks");
+
+        const hasExplicitSelectedServers = selectedServerKeys.length > 0;
+        const hasExplicitSelectedLibs = selectedMediaLibraryKeys.length > 0;
+
         // Fetch all servers
         const [plexServers, mediaServers] = await Promise.all([
             prisma.plexServer.findMany({ orderBy: { name: "asc" } }),
@@ -658,6 +670,19 @@ export async function getUserMediaServersAndLibrariesAction(bypassCache = false)
                     { id: "2", title: "TV Shows", type: "show" }
                 ]);
 
+            // Determine if this Plex server is selected:
+            let isServerSelected = false;
+            if (hasExplicitSelectedServers) {
+                isServerSelected = selectedServerKeys.includes(serverKey) || selectedServerKeys.includes(p.id);
+            } else {
+                // If user has not yet customized server selections:
+                // Primary PMS (or first PMS) is selected by default for approved full users, trials, and admins.
+                // Backup/kids servers require explicit admin whitelist or selection.
+                const isExplicitlyAllowed = Boolean(userAllowedServerKeys?.includes(serverKey) || userAllowedServerKeys?.includes(p.id));
+                const isPrimaryServer = (!p.clientIdentifier || p.clientIdentifier === plexServers[0]?.clientIdentifier || plexServers[0]?.id === p.id);
+                isServerSelected = Boolean(isExplicitlyAllowed || isPrimaryServer || user.role === "ADMIN");
+            }
+
             const allowedLibraries = sectionsPool
                 .filter(sec => {
                     // Check Admin server whitelist
@@ -675,9 +700,17 @@ export async function getUserMediaServersAndLibrariesAction(bypassCache = false)
                 })
                 .map(sec => {
                     const libKey = `plex:${p.id}:${sec.id}`;
-                    const isSelected = selectedMediaLibraryKeys.length > 0 
-                        ? selectedMediaLibraryKeys.includes(libKey) || selectedMediaLibraryKeys.includes(sec.id)
-                        : true; // Default selected if user has not yet customized
+                    let isSelected = false;
+                    if (isServerSelected) {
+                        if (hasExplicitSelectedLibs) {
+                            isSelected = selectedMediaLibraryKeys.includes(libKey) || selectedMediaLibraryKeys.includes(sec.id);
+                        } else {
+                            // If user has not customized library selections, default to allowed libraries,
+                            // but exclude audiobooks if user does not have audiobooks add-on
+                            const isAudiobook = sec.title.toLowerCase().includes("audiobook") || sec.title.toLowerCase().includes("audio book");
+                            isSelected = isAudiobook ? hasAudiobooksAddon : true;
+                        }
+                    }
                     return {
                         libraryKey: libKey,
                         id: sec.id,
@@ -686,10 +719,6 @@ export async function getUserMediaServersAndLibrariesAction(bypassCache = false)
                         isSelected
                     };
                 });
-
-            const isServerSelected = selectedServerKeys.length > 0 
-                ? selectedServerKeys.includes(serverKey) || selectedServerKeys.includes(p.id)
-                : true;
 
             resultServers.push({
                 serverKey,
@@ -737,6 +766,24 @@ export async function getUserMediaServersAndLibrariesAction(bypassCache = false)
                 ];
             }
 
+            // Determine if the server is actively granted/selected for this user:
+            let isServerSelected = false;
+            if (!isLockedForTrial) {
+                if (hasExplicitSelectedServers) {
+                    isServerSelected = selectedServerKeys.includes(serverKey) || selectedServerKeys.includes(m.id);
+                } else {
+                    // Check if user has explicit access to this Jellyfin/Emby server:
+                    // 1. Admin per-user allowed server keys
+                    const isExplicitlyAllowed = Boolean(userAllowedServerKeys?.includes(serverKey) || userAllowedServerKeys?.includes(m.id));
+                    // 2. User has jellyfin_access or emby_access add-on enabled
+                    const hasServerAddon = (serverType === "JELLYFIN" && hasJellyfinAddon) || (serverType === "EMBY" && hasEmbyAddon);
+                    // 3. User already has a provisioned remote user ID
+                    const hasRemoteUserId = Boolean(serverType === "JELLYFIN" ? user.jellyfinUserId : user.embyUserId);
+
+                    isServerSelected = Boolean(isExplicitlyAllowed || hasServerAddon || hasRemoteUserId || (user.role === "ADMIN"));
+                }
+            }
+
             const allowedLibraries = cachedLibs
                 .filter(sec => {
                     if (rawAllowedList && rawAllowedList.length > 0 && !rawAllowedList.includes(sec.id)) {
@@ -753,9 +800,14 @@ export async function getUserMediaServersAndLibrariesAction(bypassCache = false)
                 })
                 .map(sec => {
                     const libKey = `${serverType.toLowerCase()}:${m.id}:${sec.id}`;
-                    const isSelected = selectedMediaLibraryKeys.length > 0 
-                        ? selectedMediaLibraryKeys.includes(libKey) || selectedMediaLibraryKeys.includes(sec.id)
-                        : true;
+                    let isSelected = false;
+                    if (isServerSelected) {
+                        if (hasExplicitSelectedLibs) {
+                            isSelected = selectedMediaLibraryKeys.includes(libKey) || selectedMediaLibraryKeys.includes(sec.id);
+                        } else {
+                            isSelected = true;
+                        }
+                    }
                     return {
                         libraryKey: libKey,
                         id: sec.id,
@@ -764,10 +816,6 @@ export async function getUserMediaServersAndLibrariesAction(bypassCache = false)
                         isSelected
                     };
                 });
-
-            const isServerSelected = !isLockedForTrial && (selectedServerKeys.length > 0 
-                ? selectedServerKeys.includes(serverKey) || selectedServerKeys.includes(m.id)
-                : true);
 
             resultServers.push({
                 serverKey,
@@ -781,14 +829,15 @@ export async function getUserMediaServersAndLibrariesAction(bypassCache = false)
             });
         }
 
+        const activeServerKeys = resultServers.filter(s => s.isSelected).map(s => s.serverKey);
+        const activeLibraryKeys = resultServers.flatMap(s => s.allowedLibraries.filter(l => l.isSelected).map(l => l.libraryKey));
+
         return {
             success: true,
             isTrial,
             servers: resultServers,
-            selectedServerKeys: selectedServerKeys.length > 0 ? selectedServerKeys : resultServers.map(s => s.serverKey),
-            selectedMediaLibraryKeys: selectedMediaLibraryKeys.length > 0 
-                ? selectedMediaLibraryKeys 
-                : resultServers.flatMap(s => s.allowedLibraries.map(l => l.libraryKey)),
+            selectedServerKeys: activeServerKeys,
+            selectedMediaLibraryKeys: activeLibraryKeys,
             jellyfinUsername: user.jellyfinUsername || user.username,
             embyUsername: user.embyUsername || user.username,
             plexUsername: user.plexUsername || "",

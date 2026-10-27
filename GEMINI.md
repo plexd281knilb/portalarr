@@ -8,7 +8,7 @@ Portalarr is a centralized, self-hosted dashboard designed to manage a media ser
 
 Portalarr adheres to strict Semantic Versioning (`MAJOR.MINOR.PATCH`):
 - **Released Baseline**: `v1.0.0` is the production milestone baseline release.
-- **Active Feature Release**: `v1.3.59` is the current active release.
+- **Active Feature Release**: `v1.3.63` is the current active release.
 - **Strict SemVer Policy**:
   - **PATCH increments (`1.3.22` ➔ `1.3.23`)**: Bug fixes, security patches, styling polish, telemetry adjustments, and non-breaking corrections.
   - **MINOR increments (`1.1.2` ➔ `1.2.0`)**: Backwards-compatible new features, new curation studios, new third-party integrations, or major enhancements.
@@ -54,8 +54,8 @@ Personalized watch time and media statistics in `MyPlexHub` (`getUserPlexHubData
 
 To guarantee 100% reliability, quality control, and consistency, the following 5-step protocol MUST be executed at the end of every task or feature change before considering the work complete:
 
-1. **Full Integration Testing:**
-   Execute `cmd /c "npm test"` to run the Portalarr verification suite (`scripts/verify-all.ts`). All tests must pass (0 failures). Add new test cases whenever adding new actions or core calculations.
+1. **Full Integration Testing & What's New Jargon/Gate Audit:**
+   Execute `cmd /c "npm test"` to run the Portalarr verification suite (`scripts/verify-all.ts`). All tests must pass (0 failures). Always verify that `What's New in DomsHomeLab` (`roadmap.md` and `filterRoadmapByRole`) adheres strictly to Section 44 plain-English zero-jargon standards across all 4 account tiers (`USER`, `TRIAL`, `SUPER_USER`, `ADMIN`), with administrative features strictly stripped for non-admins and full-member perks stripped for trial accounts. Add new test cases whenever adding new actions or core calculations.
 2. **Production Build Verification:**
    Execute `cmd /c "npm run build"`. Ensure 100% clean compilation, zero TypeScript errors, and zero Turbopack runtime errors.
 3. **Mandatory Edge Security & Cloudflare Policy Audit:**
