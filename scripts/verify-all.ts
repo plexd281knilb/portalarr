@@ -1839,6 +1839,20 @@ async function runTestSuite() {
             if (invalidCodeRes.success) {
                 throw new Error("Expected empty Quick Connect code to be rejected");
             }
+
+            // 11b. Verify real Plex server selection detection & audiobooks gating
+            const { getUserAudiobooksLibraryAccessAction } = await import("../src/app/actions");
+            const audioStatus = await getUserAudiobooksLibraryAccessAction();
+            if (audioStatus.hasAudiobooksAccess) {
+                throw new Error("Expected memberUser without Plex audiobook library share to have hasAudiobooksAccess = false");
+            }
+
+            // Verify member user server discovery properly reflects permitted servers and unprovisioned Jellyfin is disabled
+            const memberServersData = await getUserMediaServersAndLibrariesAction();
+            const memberJellyfin = memberServersData.servers.find(s => s.serverType === "JELLYFIN");
+            if (memberJellyfin && memberJellyfin.isSelected && !memberUser.jellyfinUserId && !refreshedUser?.selectedServerKeys?.includes(memberJellyfin.serverKey)) {
+                throw new Error("Unprovisioned Jellyfin server without explicit selection must evaluate to isSelected: false");
+            }
             delete process.env.PORTALARR_TEST_USER_ID;
 
             // 12. Test Jellyfin/Emby Active Playback Session Normalization & Stream Termination

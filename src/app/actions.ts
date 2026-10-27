@@ -10647,11 +10647,31 @@ export async function syncAudiobooksPlexLibraryAccessForUser(userId: string, ena
     const updatedSelectedStr = Array.from(new Set(currentSelected)).join(",");
     const updatedAllowedStr = currentAllowed.length > 0 ? Array.from(new Set(currentAllowed)).join(",") : dbUser.plexLibrarySectionIds;
 
+    let currentMediaLibs: string[] = [];
+    if (dbUser.selectedMediaLibraryKeys) {
+        try { currentMediaLibs = JSON.parse(dbUser.selectedMediaLibraryKeys); } catch {}
+    }
+    if (enable) {
+        for (const k of discoveredAudiobookKeys) {
+            if (k.includes(":")) {
+                const parts = k.split(":");
+                const mLibKey = `plex:${parts[0]}:${parts[1]}`;
+                if (!currentMediaLibs.includes(mLibKey)) currentMediaLibs.push(mLibKey);
+            }
+        }
+    } else {
+        currentMediaLibs = currentMediaLibs.filter(k => {
+            const parts = k.split(":");
+            return !discoveredAudiobookKeys.includes(parts[2]) && !discoveredAudiobookKeys.includes(`${parts[1]}:${parts[2]}`);
+        });
+    }
+
     const updatedUser = await prisma.user.update({
         where: { id: dbUser.id },
         data: {
             selectedPlexLibrarySectionIds: updatedSelectedStr,
-            plexLibrarySectionIds: updatedAllowedStr
+            plexLibrarySectionIds: updatedAllowedStr,
+            selectedMediaLibraryKeys: currentMediaLibs.length > 0 ? JSON.stringify(currentMediaLibs) : dbUser.selectedMediaLibraryKeys
         }
     });
 
@@ -10745,7 +10765,7 @@ export async function getUserAudiobooksLibraryAccessAction() {
                                 ? (livePlexShareKeys.includes(uKey) || livePlexShareKeys.includes(String(sec.id)))
                                 : (userSelectedPlexKeys.includes(uKey) || userSelectedPlexKeys.includes(String(sec.id)) || userAllowedPlexKeys.includes(uKey) || userAllowedPlexKeys.includes(String(sec.id)));
 
-                            const isAllowed = hasAddon || isSharedOnPlex;
+                            const isAllowed = Boolean(isSharedOnPlex);
                             if (isAllowed) {
                                 hasPlexAudiobooksAccess = true;
                             }
@@ -10785,14 +10805,14 @@ export async function getUserAudiobooksLibraryAccessAction() {
                         sectionId: al.id,
                         title: al.name,
                         uniqueKey: al.id,
-                        isAllowed: hasAddon || isExplicitlyAllowed
+                        isAllowed: isExplicitlyAllowed
                     });
                 }
             }
         } catch (_) {}
 
-        // Crucial: hasAudiobooksAccess is true ONLY if user has the add-on, OR has explicit Plex/local audiobooks granted
-        const hasAccess = hasAddon || hasPlexAudiobooksAccess || hasLocalAudiobooksExplicit;
+        // Crucial: hasAudiobooksAccess is true ONLY if user actually has Plex or local audiobooks granted
+        const hasAccess = Boolean(hasPlexAudiobooksAccess || hasLocalAudiobooksExplicit);
 
         return {
             success: true,

@@ -1395,11 +1395,14 @@ To ensure Portalarr remains approachable for non-technical family members, trial
 ### 45. User Media Server & Library Access Verification Standards (Zero False-Positive Permissions)
 To prevent confusing false positives on user settings and profile pages:
 - **Audiobooks Plex Library Access Gating (`getUserAudiobooksLibraryAccessAction`)**:
-  - Must strictly verify whether the user actually has the Plex Audiobooks library granted via `dbUser.enabledAddons`, `dbUser.selectedPlexLibrarySectionIds`, `dbUser.plexLibrarySectionIds`, or live Plex share.
+  - Must strictly verify whether the user actually has the Plex Audiobooks library granted via active live Plex share (`livePlexShareKeys`) or explicit local library access.
+  - The presence of the `audiobooks` add-on in `enabledAddons` alone must NEVER cause "Plex Library Granted" or the toggle switch to report true if Plex has not actually granted the library.
   - Local web bookshelf libraries (`prisma.library`) with wildcard `allowedUsers: "*"` must NEVER cause "Plex Library Granted" or switch check to report true.
 - **Multi-Platform Media Servers & Libraries (`getUserMediaServersAndLibrariesAction`)**:
-  - Secondary media platforms (Jellyfin and Emby) must never default to `isServerSelected: true` or have libraries checked for users who have not opted in, been granted explicit access (`allowedServerKeys`), enabled the add-on (`jellyfin_access`), or been provisioned on the remote server.
+  - Automatically queries live Plex friend shares (`getUserPlexSharedLibraries`) to match per-server shares so all active servers (e.g. Main Server, Kids Server) and their exact shared sections properly evaluate to `isSelected: true`, completely eliminating single-server alphabetical fallback bugs.
+  - Secondary media platforms (Jellyfin and Emby) must never default to `isServerSelected: true` or have libraries checked for users who have not opted in, been granted explicit access (`allowedServerKeys`), or been provisioned on the remote server (`jellyfinUserId` / `embyUserId`).
   - When a server is unselected/disabled, its individual libraries must evaluate to `isSelected: false` with zero selections returned in `selectedMediaLibraryKeys`.
+  - On update (`updateUserMediaServersAndLibrariesAction`), preserves per-server machine identifiers (`${srvMachineId}:${secId}`) when dispatching to `syncUserPlexShareInternal` to ensure multi-server shares are never overwritten or collapsed onto a single server.
 
 ---
 

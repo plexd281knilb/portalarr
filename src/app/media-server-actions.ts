@@ -18,7 +18,7 @@ import {
     MediaServerLibrary,
     MediaServerConnectionResult
 } from "@/lib/media-servers";
-import { getPlexServerLibrarySections } from "@/lib/plex";
+import { getPlexServerLibrarySections, getUserPlexSharedLibraries, PlexSharedServerItem } from "@/lib/plex";
 import { syncUserPlexShareInternal } from "@/app/actions";
 import { notifyAdminsOnPendingApproval } from "@/lib/admin-approvals";
 
@@ -615,13 +615,27 @@ export async function getUserMediaServersAndLibrariesAction(bypassCache = false)
             adminPlexToken = process.env.PLEX_TOKEN || process.env.MAIN_PLEX_TOKEN || "";
         }
 
-        // Discover Plex sections
+        // Discover Plex sections & live user shares
         let plexDiscoveredSections: any[] = [];
+        let livePlexShareRes: { matchedShares: PlexSharedServerItem[]; selectedKeys: string[]; hasPlexShare: boolean } = {
+            matchedShares: [],
+            selectedKeys: [],
+            hasPlexShare: false
+        };
+
         if (adminPlexToken) {
             try {
-                plexDiscoveredSections = await getPlexServerLibrarySections(adminPlexToken, settings?.mainPlexUrl || undefined);
+                const [discovered, shareRes] = await Promise.all([
+                    getPlexServerLibrarySections(adminPlexToken, settings?.mainPlexUrl || undefined).catch(() => []),
+                    getUserPlexSharedLibraries(adminPlexToken, user).catch(() => ({ matchedShares: [], selectedKeys: [], hasPlexShare: false }))
+                ]);
+                plexDiscoveredSections = discovered || [];
+                livePlexShareRes = shareRes || { matchedShares: [], selectedKeys: [], hasPlexShare: false };
             } catch {}
         }
+
+        const userSavedPlexSectionIds = (user.selectedPlexLibrarySectionIds || "").split(",").map((s: string) => s.trim()).filter(Boolean);
+        const userPlexSectionIds = (user.plexLibrarySectionIds || "").split(",").map((s: string) => s.trim()).filter(Boolean);
 
         const resultServers: UserAvailableServer[] = [];
 
@@ -670,17 +684,47 @@ export async function getUserMediaServersAndLibrariesAction(bypassCache = false)
                     { id: "2", title: "TV Shows", type: "show" }
                 ]);
 
+            // Find live share on Plex for this server
+            const liveShare = livePlexShareRes.matchedShares.find(s => 
+                (s.serverId && p.clientIdentifier && s.serverId.toLowerCase() === p.clientIdentifier.toLowerCase()) ||
+                (s.serverName && p.name && s.serverName.toLowerCase() === p.name.toLowerCase()) ||
+                (s.serverId && p.id && s.serverId.toLowerCase() === p.id.toLowerCase())
+            );
+            const hasLiveShareOnServer = Boolean(liveShare);
+
+            // Check if user has saved sections in DB for this server
+            const hasSavedSectionsOnServer = sectionsPool.some(sec => {
+                const uKey = `${p.clientIdentifier || p.id}:${sec.id}`;
+                const pKey = `plex:${p.id}:${sec.id}`;
+                return userSavedPlexSectionIds.includes(uKey) || 
+                       userSavedPlexSectionIds.includes(String(sec.id)) ||
+                       userPlexSectionIds.includes(uKey) ||
+                       userPlexSectionIds.includes(String(sec.id)) ||
+                       selectedMediaLibraryKeys.includes(pKey);
+            });
+
             // Determine if this Plex server is selected:
             let isServerSelected = false;
-            if (hasExplicitSelectedServers) {
-                isServerSelected = selectedServerKeys.includes(serverKey) || selectedServerKeys.includes(p.id);
+            if (livePlexShareRes.hasPlexShare) {
+                // Live ground truth from Plex Cloud:
+                // If user is actively shared on this PMS in Plex, it is selected!
+                if (hasLiveShareOnServer) {
+                    isServerSelected = true;
+                } else if (hasExplicitSelectedServers) {
+                    isServerSelected = selectedServerKeys.includes(serverKey) || selectedServerKeys.includes(p.id);
+                } else {
+                    const isExplicitlyAllowed = Boolean(userAllowedServerKeys?.includes(serverKey) || userAllowedServerKeys?.includes(p.id));
+                    isServerSelected = Boolean(isExplicitlyAllowed || user.role === "ADMIN");
+                }
             } else {
-                // If user has not yet customized server selections:
-                // Primary PMS (or first PMS) is selected by default for approved full users, trials, and admins.
-                // Backup/kids servers require explicit admin whitelist or selection.
-                const isExplicitlyAllowed = Boolean(userAllowedServerKeys?.includes(serverKey) || userAllowedServerKeys?.includes(p.id));
-                const isPrimaryServer = (!p.clientIdentifier || p.clientIdentifier === plexServers[0]?.clientIdentifier || plexServers[0]?.id === p.id);
-                isServerSelected = Boolean(isExplicitlyAllowed || isPrimaryServer || user.role === "ADMIN");
+                // Offline / fallback when live Plex Cloud share list is unavailable
+                if (hasExplicitSelectedServers) {
+                    isServerSelected = selectedServerKeys.includes(serverKey) || selectedServerKeys.includes(p.id) || hasSavedSectionsOnServer;
+                } else {
+                    const isExplicitlyAllowed = Boolean(userAllowedServerKeys?.includes(serverKey) || userAllowedServerKeys?.includes(p.id));
+                    const isMainServer = p.name.toLowerCase().includes("main") || (settings?.mainPlexUrl && p.url === settings.mainPlexUrl) || (plexServers.length === 1);
+                    isServerSelected = Boolean(hasSavedSectionsOnServer || isExplicitlyAllowed || isMainServer || user.role === "ADMIN");
+                }
             }
 
             const allowedLibraries = sectionsPool
@@ -701,16 +745,31 @@ export async function getUserMediaServersAndLibrariesAction(bypassCache = false)
                 .map(sec => {
                     const libKey = `plex:${p.id}:${sec.id}`;
                     let isSelected = false;
+
                     if (isServerSelected) {
-                        if (hasExplicitSelectedLibs) {
-                            isSelected = selectedMediaLibraryKeys.includes(libKey) || selectedMediaLibraryKeys.includes(sec.id);
+                        const isAudiobook = sec.title.toLowerCase().includes("audiobook") || sec.title.toLowerCase().includes("audio book");
+                        if (liveShare) {
+                            if (liveShare.allLibraries) {
+                                isSelected = isAudiobook ? hasAudiobooksAddon : true;
+                            } else {
+                                const secIdNum = parseInt(sec.id, 10);
+                                const secKeyNum = (sec as any).key ? parseInt((sec as any).key, 10) : NaN;
+                                const isSharedInPlex = liveShare.librarySectionIds.includes(secIdNum) ||
+                                    (!isNaN(secKeyNum) && liveShare.librarySectionIds.includes(secKeyNum)) ||
+                                    liveShare.librarySectionIds.some(id => String(id) === String(sec.id) || String(id) === String((sec as any).key));
+                                isSelected = isSharedInPlex;
+                            }
+                        } else if (hasExplicitSelectedLibs) {
+                            const uKey = `${p.clientIdentifier || p.id}:${sec.id}`;
+                            isSelected = selectedMediaLibraryKeys.includes(libKey) || 
+                                         selectedMediaLibraryKeys.includes(sec.id) ||
+                                         userSavedPlexSectionIds.includes(uKey) ||
+                                         userSavedPlexSectionIds.includes(String(sec.id));
                         } else {
-                            // If user has not customized library selections, default to allowed libraries,
-                            // but exclude audiobooks if user does not have audiobooks add-on
-                            const isAudiobook = sec.title.toLowerCase().includes("audiobook") || sec.title.toLowerCase().includes("audio book");
                             isSelected = isAudiobook ? hasAudiobooksAddon : true;
                         }
                     }
+
                     return {
                         libraryKey: libKey,
                         id: sec.id,
@@ -775,12 +834,10 @@ export async function getUserMediaServersAndLibrariesAction(bypassCache = false)
                     // Check if user has explicit access to this Jellyfin/Emby server:
                     // 1. Admin per-user allowed server keys
                     const isExplicitlyAllowed = Boolean(userAllowedServerKeys?.includes(serverKey) || userAllowedServerKeys?.includes(m.id));
-                    // 2. User has jellyfin_access or emby_access add-on enabled
-                    const hasServerAddon = (serverType === "JELLYFIN" && hasJellyfinAddon) || (serverType === "EMBY" && hasEmbyAddon);
-                    // 3. User already has a provisioned remote user ID
+                    // 2. User already has a provisioned remote user ID
                     const hasRemoteUserId = Boolean(serverType === "JELLYFIN" ? user.jellyfinUserId : user.embyUserId);
 
-                    isServerSelected = Boolean(isExplicitlyAllowed || hasServerAddon || hasRemoteUserId || (user.role === "ADMIN"));
+                    isServerSelected = Boolean(isExplicitlyAllowed || hasRemoteUserId || (user.role === "ADMIN"));
                 }
             }
 
@@ -902,21 +959,31 @@ export async function updateUserMediaServersAndLibrariesAction(payload: {
             ? payload.selectedMediaLibraryKeys
             : payload.selectedMediaLibraryKeys.filter(k => validLibraryKeySet.has(k) || Array.from(validLibraryKeySet).some(vk => vk.endsWith(`:${k}`)));
 
-        // Extract legacy Plex section IDs for backwards compatibility
-        const plexSections: string[] = [];
+        // Extract Plex target keys with server machine identifiers to preserve multi-server integrity
+        const allPlexServers = await prisma.plexServer.findMany();
+        const plexServerMap = new Map(allPlexServers.map(s => [s.id, s.clientIdentifier || s.id]));
+
+        const plexTargetKeys: string[] = [];
+        const legacyPlexSectionIds: string[] = [];
+
         for (const libKey of filteredLibraries) {
             const parts = libKey.split(":");
             if (parts[0] === "plex" && parts[2]) {
-                plexSections.push(parts[2]);
+                const srvPrismaId = parts[1];
+                const secId = parts[2];
+                const srvMachineId = plexServerMap.get(srvPrismaId) || srvPrismaId;
+                plexTargetKeys.push(`${srvMachineId}:${secId}`);
+                legacyPlexSectionIds.push(secId);
             } else if (!libKey.includes(":")) {
-                plexSections.push(libKey);
+                plexTargetKeys.push(libKey);
+                legacyPlexSectionIds.push(libKey);
             }
         }
 
         const updateData: any = {
             selectedServerKeys: JSON.stringify(filteredServers),
             selectedMediaLibraryKeys: JSON.stringify(filteredLibraries),
-            selectedPlexLibrarySectionIds: Array.from(new Set(plexSections)).join(",")
+            selectedPlexLibrarySectionIds: Array.from(new Set([...plexTargetKeys, ...legacyPlexSectionIds])).join(",")
         };
         if (payload.jellyfinUsername) updateData.jellyfinUsername = payload.jellyfinUsername.trim();
         if (payload.embyUsername) updateData.embyUsername = payload.embyUsername.trim();
@@ -930,7 +997,7 @@ export async function updateUserMediaServersAndLibrariesAction(payload: {
         const settings = await prisma.settings.findUnique({ where: { id: "global" } });
         const requireApproval = (settings?.requireApprovalForPlexChanges !== false) && user.role !== "ADMIN";
 
-        if (requireApproval && plexSections.length > 0) {
+        if (requireApproval && plexTargetKeys.length > 0) {
             const approval = await prisma.adminApproval.create({
                 data: {
                     type: "PLEX_ACCESS_GRANT",
@@ -944,8 +1011,8 @@ export async function updateUserMediaServersAndLibrariesAction(payload: {
                         userId: user.id,
                         selectedServerKeys: filteredServers,
                         selectedMediaLibraryKeys: filteredLibraries,
-                        selectedPlexSections: plexSections,
-                        selectedKeys: plexSections
+                        selectedPlexSections: plexTargetKeys,
+                        selectedKeys: plexTargetKeys
                     })
                 }
             });
@@ -961,7 +1028,7 @@ export async function updateUserMediaServersAndLibrariesAction(payload: {
                 adminPlexToken = process.env.PLEX_TOKEN || process.env.MAIN_PLEX_TOKEN || "";
             }
             if (adminPlexToken) {
-                syncUserPlexShareInternal(adminPlexToken, user, plexSections).catch(e => 
+                syncUserPlexShareInternal(adminPlexToken, user, plexTargetKeys).catch(e => 
                     console.warn("[PLEX-SYNC-BG-ERROR]:", e?.message || e)
                 );
             }

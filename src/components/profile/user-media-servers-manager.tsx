@@ -141,6 +141,7 @@ export function UserMediaServersManager({
             if (res.success) {
                 setMsg(res.message || "Your media server preferences have been saved!");
                 setIsDirty(false);
+                await loadData();
                 setTimeout(() => setMsg(""), 5000);
             } else {
                 setErr(res.error || "Failed to save preferences");
