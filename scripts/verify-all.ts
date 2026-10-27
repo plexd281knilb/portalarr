@@ -2388,8 +2388,24 @@ async function runTestSuite() {
         if (trialText.includes("Multi-Platform Media Servers") || trialText.includes("Jellyfin & Emby")) {
             throw new Error("Multi-Platform servers leaked into Trial roadmap");
         }
-        if (trialText.includes("Family Sub-Profiles") || trialText.includes("Live TV") || trialText.includes("Channel Activation")) {
-            throw new Error("Full member features (Family/Live TV) leaked into Trial roadmap");
+        if (trialText.includes("Family Sub-Profiles") || trialText.includes("Live TV") || trialText.includes("Channel Activation") || trialText.includes("Referral Rewards") || trialText.includes("Enhanced Curation")) {
+            throw new Error("Full member features (Family/Live TV/Referral/Curation) leaked into Trial roadmap");
+        }
+
+        // 9f. Section Placement Verification: Curation Badges, Referral Rewards, Family Sub-Profiles must be in Coming Soon
+        const whatsNewSection = rawRoadmap.split("### 🚀 Coming Soon")[0];
+        const comingSoonSection = rawRoadmap.split("### 🚀 Coming Soon")[1] || "";
+
+        if (whatsNewSection.includes("Enhanced Curation & Poster Badges") || 
+            whatsNewSection.includes("Member Referral Rewards") || 
+            whatsNewSection.includes("Family Sub-Profiles")) {
+            throw new Error("Coming Soon features (Curation Badges, Referral Rewards, Family Sub-Profiles) were incorrectly placed in What's New section");
+        }
+
+        if (!comingSoonSection.includes("Enhanced Curation & Poster Badges") || 
+            !comingSoonSection.includes("Member Referral Rewards") || 
+            !comingSoonSection.includes("Family Sub-Profiles")) {
+            throw new Error("Expected Curation Badges, Referral Rewards, and Family Sub-Profiles to be located in Coming Soon section");
         }
         if (!trialText.includes("Unified Media Requests (Movies & TV Shows)")) {
             throw new Error("Expected adapted Unified Media Requests (Movies & TV Shows) in Trial roadmap");

@@ -11,9 +11,6 @@
   - **1-Click Send-to-Kindle:** Dispatch any book directly to your Amazon Kindle devices and apps in seconds with zero manual configuration.
   - **Floating Audiobook Player:** Interactive player featuring chapter selection, continuous background autoplay, and playback speed controls.
 - **⚡ Live Streams & Stream Diagnostics:** Real-time stream health stats, buffering diagnostics, in-browser server speed test, and tailored device fix checklists to unlock 1080p and 4K Original Studio Quality.
-- **🎨 Enhanced Curation & Poster Badges:** High-definition 4K HDR badges, Dolby Vision ribbons, and "Leaving Soon" countdown alerts on movie and TV posters.
-- **🎁 Member Referral Rewards:** Share your personal referral link (`/join?ref=CODE`) with friends to earn discounts on your annual pass or free bonus streaming months.
-- **🛡️ Family Sub-Profiles (Kids & Living Room TV):** Dedicated sub-profiles with child-safe library filtering, age rating limits, and secure PIN protection.
 - **⚡ Advanced Queue & Release Management (Super Users):** Advanced queue and release management for authorized power users to monitor downloads, inspect releases, and manage queue priorities.
 - **📬 Outbound Communications & Email Audit (Admin):** Complete outbound communications ledger tracking messages sent automatically by system workflows versus those vetted and approved via the Action Approval Queue.
 
@@ -21,6 +18,9 @@
 
 ### 🚀 Coming Soon
 
+- **🎨 Enhanced Curation & Poster Badges:** High-definition 4K HDR badges, Dolby Vision ribbons, and "Leaving Soon" countdown alerts on movie and TV posters.
+- **🎁 Member Referral Rewards:** Share your personal referral link (`/join?ref=CODE`) with friends to earn discounts on your annual pass or free bonus streaming months.
+- **🛡️ Family Sub-Profiles (Kids & Living Room TV):** Dedicated sub-profiles with child-safe library filtering, age rating limits, and secure PIN protection.
 - **📺 On-Demand Live TV & Self-Service Channel Activation:** Watch live sports, news, and events seamlessly within your Plex, Jellyfin, or Emby apps. Activate custom channels from a master catalog with 1-click self-service, backed by automated channel provisioning, Live TV stream health checks, and automatic inactive channel cleanup.
 - **💬 1-Click Subtitle Search & Auto-Sync:** Search, download, and auto-align missing or out-of-sync external subtitles directly from your active stream card.
 - **📊 Personal Year-in-Review ("DomsHomeLab Wrapped"):** Interactive annual streaming recaps showcasing your top-watched genres, directors, actors, total hours streamed, and reading milestones.

@@ -86,6 +86,8 @@ export function filterRoadmapByRole(markdown: string, role?: string): string {
         /family sub-profile/i,
         /enhanced curation & poster badge/i,
         /leaving soon/i,
+        /referral rewards/i,
+        /member referral rewards/i,
         /live tv/i,
         /channel activation/i,
         /cross-device watchlist & reading sync/i,
