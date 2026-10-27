@@ -344,11 +344,11 @@ function JoinWizardContent() {
                                         </li>
                                         <li className="flex items-start gap-2 text-muted-foreground">
                                             <BookOpen className="h-4 w-4 text-purple-400 shrink-0 mt-0.5" />
-                                            <span><strong className="text-foreground">Digital Ebook & Audiobook Library:</strong> Read in-browser with Kindle Paperwhite mode, listen in audio player, or Send-to-Kindle.</span>
+                                            <span><strong className="text-foreground">Digital Ebook & Audiobook Library:</strong> Read in-browser with Kindle Paperwhite mode, stream on Plex, or Send-to-Kindle.</span>
                                         </li>
                                         <li className="flex items-start gap-2 text-muted-foreground">
                                             <Users className="h-4 w-4 text-purple-400 shrink-0 mt-0.5" />
-                                            <span><strong className="text-foreground">Dedicated Kids & Living Room Profiles:</strong> Managed sub-accounts with custom age ratings, PIN safety, and kid-safe library curation.</span>
+                                            <span><strong className="text-foreground">Dedicated Kids & Living Room Profiles (Coming Soon):</strong> Managed sub-accounts with custom age ratings, PIN safety, and kid-safe library curation.</span>
                                         </li>
                                         <li className="flex items-start gap-2 text-muted-foreground">
                                             <Sparkles className="h-4 w-4 text-purple-400 shrink-0 mt-0.5" />
@@ -356,7 +356,7 @@ function JoinWizardContent() {
                                         </li>
                                         <li className="flex items-start gap-2 text-muted-foreground">
                                             <Gift className="h-4 w-4 text-purple-400 shrink-0 mt-0.5" />
-                                            <span><strong className="text-foreground">Discord VIP & Referral Rewards:</strong> Real-time server status alerts, direct support, and earn +1 free month per friend referred.</span>
+                                            <span><strong className="text-foreground">Discord VIP & Referral Rewards (Coming Soon):</strong> Real-time server status alerts, direct support, and upcoming referral reward discounts.</span>
                                         </li>
                                     </ul>
                                 </div>
@@ -370,7 +370,7 @@ function JoinWizardContent() {
                                 <div className="space-y-0.5">
                                     <h4 className="font-bold text-purple-200">The Trial is Just the Preview</h4>
                                     <p className="text-[11px] text-muted-foreground leading-relaxed">
-                                        Your free trial gives you full access to test out our movies and TV shows streaming. When you upgrade to full membership, you unlock all the premium perks — including dedicated Kids profiles, our complete digital Ebook & Audiobook collection, and community rewards!
+                                        Your free trial gives you full access to test out our movies and TV shows streaming. When you upgrade to full membership, you unlock all the premium perks — including our complete digital Ebook & Audiobook collection, priority bandwidth, and upcoming community rewards!
                                     </p>
                                 </div>
                             </div>

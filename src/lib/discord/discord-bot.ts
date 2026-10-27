@@ -754,7 +754,7 @@ export function generateDiscordEmbed(
                     },
                     {
                         name: "4. Audiobooks & Mobile Listening Apps",
-                        value: "• **In-Browser Web Player:** Listen right inside DomsHomeLab with the floating audio player, chapter selector, and variable speed (0.75x–2.5x).\n• **Plexamp (iOS & Android):** Best for mobile listening with audio caching and CarPlay/Android Auto.\n• **Prologue (iOS):** Premium dedicated audiobook player connecting directly to our server."
+                        value: "• **Plexamp (iOS & Android):** Best for mobile listening with audio caching and CarPlay/Android Auto.\n• **Prologue (iOS):** Premium dedicated audiobook player connecting directly to our server.\n• **In-Browser Web Player (Coming Soon):** Pinned audio player with background playback and speed controls."
                     },
                     {
                         name: "📚 AI Book Recommendations & Discovery",
@@ -772,8 +772,8 @@ export function generateDiscordEmbed(
                 color: 0x06B6D4, // Cyan
                 fields: [
                     {
-                        name: "🎵 In-Browser Web Player",
-                        value: "Listen right inside DomsHomeLab with the floating audio player, chapter selector, variable speed controls (0.75x to 2.5x), and sleep timer."
+                        name: "🎵 In-Browser Web Player (Coming Soon)",
+                        value: "*(Upcoming Feature)* Listen right inside DomsHomeLab with the upcoming floating audio player, chapter selector, variable speed controls (0.75x to 2.5x), and sleep timer."
                     },
                     {
                         name: "📱 Recommended Mobile Apps",
