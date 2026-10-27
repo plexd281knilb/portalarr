@@ -1385,6 +1385,13 @@ To ensure Portalarr remains approachable for non-technical family members, trial
 - **Daemon & Backend App Names**:
   - In media requests and detail modals, avoid surfacing raw *Arr names ("Sonarr", "Radarr", "Prowlarr", "Tautulli"). Use **"Movie Manager"**, **"TV Manager"**, **"Stream Monitor"**, and **"Online Catalogs / Release Sources"**.
   - Button text: "Re-Search Movie in Radarr" ➔ **"Re-Search Releases"**.
+- **System Email Notices & Templates**:
+  - Replace raw protocol names: "SMTP server rejected the delivery" ➔ **"Amazon's email service rejected the delivery"**.
+  - Replace Usenet/torrent indexer terms: "when indexers or sources become available" ➔ **"when new releases or sources become available"**.
+  - Replace homelab terms: "transcoding allocation" ➔ **"high-priority dedicated streaming allocation for smooth playback anywhere"**.
+  - Standardize streaming terminology: "Direct Play" ➔ **"Original Studio Quality"** / **"Original Quality"**.
+  - Diagnostic references: "Stream Quality Doctor" ➔ **"Stream Diagnostics & Device Setup Guides"**.
+
 
 ---
 

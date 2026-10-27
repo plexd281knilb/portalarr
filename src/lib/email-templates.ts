@@ -566,7 +566,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         category: "KINDLE",
         defaultSubject: "Failed to Deliver Ebook to Kindle: {title}",
         defaultBody: `<h2 style="color: #dc2626; margin-top: 0;">Kindle Delivery Failed</h2>
-<p>I attempted to send <strong>{title}</strong> to your Kindle address (<code>{kindleEmail}</code>), but the SMTP server rejected the delivery.</p>
+<p>I attempted to send <strong>{title}</strong> to your Kindle address (<code>{kindleEmail}</code>), but Amazon's email service rejected the delivery.</p>
 
 <div style="background-color: #f8fafc; border-left: 4px solid #ef4444; padding: 12px; margin: 18px 0; font-family: monospace; font-size: 13px; color: #b91c1c;">
     <strong>Error:</strong> {errorMessage}
@@ -789,10 +789,10 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 
 <h3 style="color: #0f172a; margin: 20px 0 8px 0;">Your Unlocked Membership Perks:</h3>
 <ul style="line-height: 1.7; padding-left: 20px; font-size: 14px; color: #334155;">
-    <li>🎬 <strong>Unlimited Streaming:</strong> 100% Direct Play Original Studio Quality (4K HDR, Dolby Atmos).</li>
+    <li>🎬 <strong>Unlimited Streaming:</strong> Original Studio Quality (4K HDR, Dolby Atmos with zero quality loss).</li>
     <li>🧒 <strong>Dedicated Kids & Living Room Profiles:</strong> Child-safe accounts with custom PIN protection and age rating filters.</li>
     <li>📚 <strong>Digital Ebook & Audiobook Library:</strong> In-browser Kindle Paperwhite reader, floating audio player, & Send-to-Kindle delivery.</li>
-    <li>⚡ <strong>Priority Bandwidth:</strong> Dedicated high-priority streaming & transcoding allocation.</li>
+    <li>⚡ <strong>Priority Bandwidth:</strong> High-priority dedicated streaming allocation for smooth playback anywhere.</li>
     <li>🎁 <strong>Discord VIP & Referral Rewards:</strong> Real-time server status alerts, direct support, and earn +1 free month per friend referred.</li>
 </ul>
 
@@ -849,10 +849,10 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 
 <h3 style="color: #0f172a; margin: 20px 0 8px 0;">Your Full Membership Perks:</h3>
 <ul style="line-height: 1.7; padding-left: 20px; font-size: 14px; color: #334155;">
-    <li>🎬 <strong>Unlimited Streaming:</strong> 100% Direct Play Original Studio Quality (4K HDR, Dolby Atmos).</li>
+    <li>🎬 <strong>Unlimited Streaming:</strong> Original Studio Quality (4K HDR, Dolby Atmos with zero quality loss).</li>
     <li>🧒 <strong>Dedicated Kids & Living Room Profiles:</strong> Child-safe accounts with custom PIN protection.</li>
     <li>📚 <strong>Digital Ebook & Audiobook Library:</strong> In-browser Kindle Paperwhite mode, audio player, & Send-to-Kindle.</li>
-    <li>⚡ <strong>Priority Bandwidth:</strong> Dedicated high-priority streaming & transcoding allocation.</li>
+    <li>⚡ <strong>Priority Bandwidth:</strong> High-priority dedicated streaming allocation for smooth playback anywhere.</li>
     <li>🎁 <strong>Referral Rewards:</strong> Earn +1 free month for every friend you refer to the server!</li>
 </ul>
 
@@ -1170,7 +1170,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
     <p style="margin: 0; font-size: 13px; color: #7f1d1d; font-family: monospace;">{errorMessage}</p>
 </div>
 
-<p style="font-size: 13px; color: #64748b;">The system or administrator will retry this request automatically when indexers or sources become available.</p>`,
+<p style="font-size: 13px; color: #64748b;">The system or administrator will retry this request automatically when new releases or sources become available.</p>`,
         variables: [
             { key: "{username}", description: "Username of the requester", sampleValue: "alex_reader" },
             { key: "{title}", description: "Title of requested media", sampleValue: "Fallout" },
@@ -1536,8 +1536,8 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 </div>
 
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px; box-sizing: border-box; word-break: break-word; overflow-wrap: anywhere;">
-    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">2. My Plex Hub, Stream Quality Doctor &amp; Speed Test (<a href="{appUrl}" style="color: #4f46e5; text-decoration: none;">Home Dashboard</a>)</p>
-    <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">See your active streams, personal watch stats, and which Plex servers you have access to. Run the built-in <strong>Server Speed Test</strong> and use the <strong>Stream Quality Doctor &amp; Device Setup Guides</strong> (Apple TV, Roku, Fire TV, Samsung/LG Smart TVs) to optimize your client player settings for smooth <strong>Direct Play</strong> streaming without buffering.</p>
+    <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">2. My Plex Hub, Stream Diagnostics &amp; Speed Test (<a href="{appUrl}" style="color: #4f46e5; text-decoration: none;">Home Dashboard</a>)</p>
+    <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">See your active streams, personal watch stats, and which Plex servers you have access to. Run the built-in <strong>Server Speed Test</strong> and use the <strong>Stream Diagnostics &amp; Device Setup Guides</strong> (Apple TV, Roku, Fire TV, Samsung/LG Smart TVs) to optimize your player settings for smooth <strong>Original Quality</strong> streaming without buffering.</p>
 </div>
 
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px; box-sizing: border-box; word-break: break-word; overflow-wrap: anywhere;">
