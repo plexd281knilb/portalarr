@@ -61,8 +61,8 @@ type MainNavCategory =
     | "manual";
 
 const NAV_ITEMS: { id: MainNavCategory; label: string; icon: any; badge?: string }[] = [
-    { id: "devices", label: "Streaming Devices", icon: Tv, badge: "Direct Play" },
-    { id: "ai-assistant", label: "AI Support & Probes", icon: Bot, badge: "Diagnostic" },
+    { id: "devices", label: "Streaming Devices", icon: Tv, badge: "Original Quality" },
+    { id: "ai-assistant", label: "AI Support & Assistant", icon: Bot, badge: "Diagnostic" },
     { id: "movies-tv", label: "Movies & TV Requests", icon: Film },
     { id: "ebooks", label: "Ebooks & Kindle", icon: BookOpen },
     { id: "audiobooks", label: "Audiobooks & Chapters", icon: Headphones },

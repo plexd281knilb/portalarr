@@ -67,7 +67,7 @@ export default function ActiveDownloads() {
                         <CardTitle className="flex items-center gap-2 text-base sm:text-lg font-bold">
                             <Download className="h-5 w-5 text-primary"/> Active Downloads
                         </CardTitle>
-                        <CardDescription className="text-xs">Real-time torrent and Usenet download queue.</CardDescription>
+                        <CardDescription className="text-xs">Real-time movie, TV, and book download queue.</CardDescription>
                     </div>
                     <Badge variant={allQueueItems.length > 0 ? "default" : "secondary"} className="text-xs px-2.5 py-0.5 shrink-0">
                         {allQueueItems.length} in Queue

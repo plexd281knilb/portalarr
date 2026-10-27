@@ -176,7 +176,7 @@ export default async function UserLandingPage() {
                             {isTrial 
                                 ? "Your curated media server dashboard, content requests, and playback diagnostics."
                                 : isSuperUser
-                                ? "Tech-savvy management dashboard with direct Radarr & Sonarr controls."
+                                ? "Advanced self-service dashboard with direct movie and TV show release controls."
                                 : isAdmin
                                 ? "Administrative monitoring, live stream diagnostics, and server performance."
                                 : "Real-time status, media requests, book library access, and community voting."}
@@ -305,13 +305,13 @@ export default async function UserLandingPage() {
                                             <div key={ombiApp.id} className="p-2.5 rounded-xl bg-white/[0.02] border border-amber-500/20 flex items-center justify-between gap-3 text-xs">
                                                 <div className="space-y-0.5 min-w-0">
                                                     <div className="font-semibold text-foreground flex items-center gap-1.5 flex-wrap">
-                                                        <span>{ombiApp.name || "Ombi Requests"}</span>
+                                                        <span>{ombiApp.name || "Alternative Media Requests"}</span>
                                                         <Badge variant="outline" className="text-[9px] bg-amber-500/10 text-amber-400 border-amber-500/30">
                                                              Support Ending Soon
                                                         </Badge>
                                                     </div>
                                                     <p className="text-[11px] text-muted-foreground">
-                                                        Legacy request engine. Please use the built-in request tool above for immediate auto-approval.
+                                                        Older request tool (retiring soon). Please use the built-in media requests above for immediate auto-approval.
                                                     </p>
                                                 </div>
                                                 <Button asChild size="sm" variant="ghost" className="h-8 text-xs shrink-0 text-muted-foreground hover:text-foreground">

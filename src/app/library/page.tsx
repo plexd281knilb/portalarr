@@ -2139,7 +2139,7 @@ function BookLibraryPageContent() {
       setRequests(reqs || []);
       setActiveRequestForSearch(null);
       setCustomSearchQuery("");
-      alert("Release successfully pushed to download client!");
+      alert("Book release selected! It has been added to the download queue.");
     } catch (e: any) {
       showErrorModal(
         e.message || "Failed to send release to client.",
@@ -4935,7 +4935,7 @@ function BookLibraryPageContent() {
                 <div className="flex flex-col items-center justify-center p-12 space-y-4">
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
                   <p className="text-sm text-muted-foreground">
-                    Searching Usenet and Torrent indexers via Prowlarr...
+                    Searching digital book catalogs and release sources...
                   </p>
                 </div>
               ) : searchProwlarrError ? (
@@ -4950,7 +4950,7 @@ function BookLibraryPageContent() {
                     onClick={() =>
                       showErrorModal(
                         searchProwlarrError,
-                        "Indexer Search Error",
+                        "Catalog Search Error",
                       )
                     }
                   >
@@ -4959,7 +4959,7 @@ function BookLibraryPageContent() {
                 </div>
               ) : prowlarrResults.length === 0 ? (
                 <div className="p-12 text-center text-sm text-muted-foreground italic">
-                  No matching releases found on your indexers.
+                  No matching releases found in online catalogs.
                 </div>
               ) : (
                 <div className="divide-y divide-muted/50">
@@ -5014,7 +5014,7 @@ function BookLibraryPageContent() {
                               <span className="font-medium text-foreground">
                                 {(release.size / (1024 * 1024)).toFixed(1)} MB
                               </span>
-                              <span>Indexer: <span className="text-foreground font-medium">{release.indexer}</span></span>
+                              <span>Source: <span className="text-foreground font-medium">{release.indexer}</span></span>
                             </div>
                           </div>
                           <Button

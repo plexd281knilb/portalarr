@@ -105,20 +105,20 @@ export default function ServerSpeedTest({ trigger }: ServerSpeedTestProps = {}) 
     const getPlaybackTier = (mbps: number) => {
         if (mbps >= 50) {
             return {
-                title: "4K HDR Remux Ready",
+                title: "Maximum 4K HDR Quality",
                 color: "text-emerald-400 border-emerald-500/40 bg-emerald-500/10",
                 badge: "Excellent",
                 badgeColor: "bg-emerald-600 text-white",
-                desc: "Your connection can smoothly Direct Play uncompressed 4K HDR / Dolby Vision remuxes without buffering."
+                desc: "Your connection can smoothly stream 4K HDR and Dolby Vision in original studio quality without buffering."
             };
         }
         if (mbps >= 20) {
             return {
-                title: "1080p High Bitrate Ready",
+                title: "Crisp 1080p Full HD",
                 color: "text-cyan-400 border-cyan-500/40 bg-cyan-500/10",
                 badge: "Great",
                 badgeColor: "bg-cyan-600 text-white",
-                desc: "Your connection can Direct Play 1080p Blu-ray quality and compressed 4K streams."
+                desc: "Your connection can stream high-definition 1080p Blu-ray quality and compressed 4K streams smoothly."
             };
         }
         if (mbps >= 8) {
@@ -127,11 +127,11 @@ export default function ServerSpeedTest({ trigger }: ServerSpeedTestProps = {}) 
                 color: "text-amber-400 border-amber-500/40 bg-amber-500/10",
                 badge: "Moderate",
                 badgeColor: "bg-amber-600 text-white",
-                desc: "Adequate for 1080p standard and 720p HD streaming. High bitrate 4K may require video transcoding."
+                desc: "Adequate for 1080p standard and 720p HD streaming. 4K movies may be compressed to avoid buffering."
             };
         }
         return {
-            title: "Transcoding Recommended",
+            title: "Lower Resolution Recommended",
             color: "text-rose-400 border-rose-500/40 bg-rose-500/10",
             badge: "Low Speed",
             badgeColor: "bg-rose-600 text-white",
@@ -157,7 +157,7 @@ export default function ServerSpeedTest({ trigger }: ServerSpeedTestProps = {}) 
                 <DialogHeader className="pb-3 border-b border-border/40">
                     <DialogTitle className="flex items-center gap-2 text-lg font-bold text-foreground">
                         <Gauge className="h-5 w-5 text-primary" />
-                        Server Bandwidth & Direct Play Test
+                        Server Connection & Streaming Speed Test
                     </DialogTitle>
                     <DialogDescription className="text-xs text-muted-foreground">
                         Test your device's connection directly to this media server to verify playback quality limits.

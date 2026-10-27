@@ -810,7 +810,7 @@ export default function UserProfilePage() {
             setKindleErr(res.error);
         } else if (res?.success) {
             setKindleMsg(bypassKindle 
-                ? "Direct download & browser reading bypass unlocked! Book Library access granted."
+                ? "Direct download & in-browser reading selected! Book Library access granted."
                 : (res.message || "Your Send-to-Kindle email address has been updated successfully!"));
             setUser((prev: any) => ({ ...prev, kindleEmail: targetEmail }));
             if (!bypassKindle) {
@@ -2397,7 +2397,7 @@ export default function UserProfilePage() {
                         <div className="p-3 rounded-xl bg-white/[0.02] border border-border/50 space-y-2">
                             <div className="flex items-center justify-between">
                                 <Label htmlFor="bypassKindleToggle" className="text-xs font-semibold cursor-pointer">
-                                    <span>Bypass Kindle (Direct Phone/PC Download & Browser Reading)</span>
+                                    <span>I don't use a Kindle (Direct Download & In-Browser Reader)</span>
                                     <p className="text-[10px] text-muted-foreground">Don't have an Amazon Kindle? Enable this to download books directly or stream audiobooks without a Kindle email.</p>
                                 </Label>
                                 <Switch 
@@ -2453,7 +2453,7 @@ export default function UserProfilePage() {
                         ) : (
                             <div className="p-3 rounded-lg bg-emerald-950/20 border border-emerald-500/30 text-xs text-emerald-300 flex items-center gap-2">
                                 <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
-                                <span>Direct download & browser reading bypass is selected. Click Save to unlock full Book & Audiobook Library access.</span>
+                                <span>In-browser reading & direct download selected. Click Save to unlock full Book & Audiobook Library access.</span>
                             </div>
                         )}
 
@@ -2698,7 +2698,7 @@ export default function UserProfilePage() {
                             <Lock className="h-4 w-4" /> Super User Access (Requires Active Membership)
                         </CardTitle>
                         <CardDescription className="text-xs">
-                            Super user access (Radarr/Sonarr integration, manual release fixes) is reserved for active full members and is unavailable during the free trial.
+                            Advanced self-service tools (direct movie & TV release management) are reserved for active full members and are unavailable during the free trial.
                         </CardDescription>
                     </CardHeader>
                 </Card>
@@ -2721,7 +2721,7 @@ export default function UserProfilePage() {
                             <div className="font-semibold text-base flex items-center gap-2 text-foreground">
                                 <span>{user?.username || "Unknown"}</span>
                                 <Badge variant={user?.role === "ADMIN" ? "default" : "secondary"} className="text-[10px] font-bold">
-                                    {user?.role || "USER"}
+                                    {user?.role === "ADMIN" ? "Administrator" : user?.role === "SUPER_USER" ? "Power User" : "Full Member"}
                                 </Badge>
                             </div>
                         </div>

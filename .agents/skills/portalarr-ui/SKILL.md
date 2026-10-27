@@ -1366,6 +1366,26 @@ Before completing any task, execute:
   - Base `DialogContent` standardizes `max-h-[92vh] overflow-y-auto scrollbar-thin` to ensure no modal clips vertically in landscape orientation or on small mobile devices.
   - Dialog footers strictly follow `flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5` with `w-full sm:w-auto shrink-0 whitespace-nowrap` on action buttons to prevent text wrapping or truncation on narrow screens (<375px).
 
+### 44. End-User Plain-English Terminology Standards (Zero Jargon Policy)
+To ensure Portalarr remains approachable for non-technical family members, trial accounts, and casual users, user-facing views must strictly adhere to plain-English replacements:
+- **Build & Branch Telemetry (`BuildBadge`)**: Non-admins seeing `variant="full"` are shown `Beta Preview • v<version>` or `Production • v<version>`. Git branch names (`(main)`, `(stable)`), commit short hashes (`[90fb926]`), and workflow run badges are strictly restricted to administrators.
+- **Streaming Quality vs Direct Play**:
+  - Replace "100% Direct Play" with **"Original Quality (Zero Buffering)"** or **"Maximum Quality"**. Plex device apps label their setting "Maximum / Original Quality", so users cannot find a setting called "Direct Play".
+  - Replace "4K Remux Ready" with **"Maximum 4K HDR Quality"**.
+  - Replace "1080p High Bitrate Ready" with **"Crisp 1080p Full HD"**.
+- **Server Processing vs Transcode Doctor**:
+  - Transcode Doctor modal is presented to members as **"Stream Quality & Playback Diagnostics"**.
+  - Server transcode decisions are presented as **"Original Quality (Direct Play)"**, **"Optimized via Hardware Acceleration"**, or **"Server Transcoding Active"** under a clean **"Server Processing"** header.
+- **AI Assistant Labels**:
+  - Live Telemetry tab ➔ **"Live Stream Stats"**.
+  - Server Disk & Probes tab ➔ **"Server Health Check"**.
+  - NVENC HW badge ➔ **"GPU Accelerated"**.
+  - Video/Audio Codec ➔ **"Video Format"** / **"Audio Format"**.
+  - Synthetic probes / byte-range reads ➔ **"Live diagnostic tests measuring drive read performance and streaming health"**.
+- **Daemon & Backend App Names**:
+  - In media requests and detail modals, avoid surfacing raw *Arr names ("Sonarr", "Radarr", "Prowlarr", "Tautulli"). Use **"Movie Manager"**, **"TV Manager"**, **"Stream Monitor"**, and **"Online Catalogs / Release Sources"**.
+  - Button text: "Re-Search Movie in Radarr" ➔ **"Re-Search Releases"**.
+
 ---
 
 As the Portalarr frontend evolves or new design decisions are finalized:

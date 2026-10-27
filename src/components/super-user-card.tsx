@@ -66,8 +66,8 @@ export default function SuperUserCard({ initialRole = "USER" }: SuperUserCardPro
                         </div>
                         <CardDescription className="text-xs">
                             {isSuper
-                                ? "You have direct self-service access to Radarr and Sonarr to resolve missing episodes, trigger searches, and manage downloads instantly."
-                                : "Don't want to wait for the server admin to fix your issue? Super users get direct access to Radarr and Sonarr to fix missing episodes, adjust search indexers, and help manage downloads directly."}
+                                ? "You have direct access to movie and TV management tools (Radarr & Sonarr) to resolve missing episodes, trigger release re-scans, and manage downloads instantly."
+                                : "Power users get direct tools to fix missing episodes, select alternative release versions, and manage downloads without waiting for the administrator."}
                         </CardDescription>
                     </div>
 
