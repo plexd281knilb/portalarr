@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useImperativeHandle } from "react";
 import { UnsavedChangesPrompt } from "@/components/ui/unsaved-changes-prompt";
 import {
     getDiscordBotSettingsAction,
@@ -24,11 +24,17 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 
+export interface DiscordSettingsPanelHandle {
+    saveAllDirty: () => Promise<boolean>;
+    discardAllDirty: () => void;
+}
+
 interface DiscordSettingsPanelProps {
+    ref?: React.Ref<DiscordSettingsPanelHandle>;
     onDirtyChange?: (isDirty: boolean, dirtySections: string[]) => void;
 }
 
-export default function DiscordSettingsPanel({ onDirtyChange }: DiscordSettingsPanelProps = {}) {
+export default function DiscordSettingsPanel({ onDirtyChange, ref }: DiscordSettingsPanelProps = {}) {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [testing, setTesting] = useState(false);
@@ -131,6 +137,12 @@ export default function DiscordSettingsPanel({ onDirtyChange }: DiscordSettingsP
         }
     }, [hasUnsavedChanges, dirtySections.join(",")]);
 
+    useEffect(() => {
+        return () => {
+            onDirtyChange?.(false, []);
+        };
+    }, []);
+
     const handleDiscard = () => {
         if (!initialSettingsRef.current) return;
         setBotToken(initialSettingsRef.current.botToken);
@@ -141,10 +153,11 @@ export default function DiscordSettingsPanel({ onDirtyChange }: DiscordSettingsP
         setRequestsChannelId(initialSettingsRef.current.requestsChannelId);
         setAnnouncementsChannelId(initialSettingsRef.current.announcementsChannelId);
         setInviteUrl(initialSettingsRef.current.inviteUrl);
+        onDirtyChange?.(false, []);
     };
 
 
-    const handleSave = async () => {
+    const handleSave = async (): Promise<boolean> => {
         setSaving(true);
         setBannerMsg(null);
         try {
@@ -162,15 +175,23 @@ export default function DiscordSettingsPanel({ onDirtyChange }: DiscordSettingsP
             if (res.success) {
                 setBannerMsg({ type: "success", text: "Discord bot settings saved successfully!" });
                 await loadSettings();
+                return true;
             } else {
                 setBannerMsg({ type: "error", text: res.error || "Failed to save Discord settings." });
+                return false;
             }
         } catch (e: any) {
             setBannerMsg({ type: "error", text: e.message || "Network error saving settings." });
+            return false;
         } finally {
             setSaving(false);
         }
     };
+
+    useImperativeHandle(ref, () => ({
+        saveAllDirty: handleSave,
+        discardAllDirty: handleDiscard
+    }));
 
     const handleTestConnection = async () => {
         setTesting(true);

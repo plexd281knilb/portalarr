@@ -55,7 +55,7 @@ import FeatureGuideModal from "@/components/feature-guide-modal";
 import PlexSetupGuides from "@/components/plex-setup-guides";
 import SuperUserCard from "@/components/super-user-card";
 import { PaymentMethodsGrid } from "@/components/payment-methods-grid";
-import { UserMediaServersManager } from "@/components/profile/user-media-servers-manager";
+import { UserMediaServersManager, UserMediaServersManagerHandle } from "@/components/profile/user-media-servers-manager";
 import { format, differenceInDays } from "date-fns";
 
 function safeFormatDate(dateVal: any, formatPattern: string, fallback = ""): string {
@@ -105,6 +105,7 @@ export default function UserProfilePage() {
     const [kindleMsg, setKindleMsg] = useState("");
     const [kindleErr, setKindleErr] = useState("");
     const [isMediaServersDirty, setIsMediaServersDirty] = useState(false);
+    const mediaServersManagerRef = useRef<UserMediaServersManagerHandle>(null);
 
     // Notification Preferences State
     const [notifPrefs, setNotifPrefs] = useState({
@@ -351,6 +352,10 @@ export default function UserProfilePage() {
     const hasUnsavedChanges = unsavedSections.length > 0;
 
     const handleDiscardAll = () => {
+        if (mediaServersManagerRef.current) {
+            mediaServersManagerRef.current.discardAllDirty();
+        }
+        setIsMediaServersDirty(false);
         if (!initialProfileRef.current) return;
         const init = initialProfileRef.current;
         setKindleEmail(init.kindleEmail);
@@ -1115,6 +1120,9 @@ export default function UserProfilePage() {
             if (isLibrariesDirty) promises.push(handleSaveLibrariesDirect());
             if (isNotifDirty) promises.push(handleSaveNotificationsDirect());
             if (isContentDirty) promises.push(handleSaveContentSafetyDirect());
+            if (isMediaServersDirty && mediaServersManagerRef.current) {
+                promises.push(mediaServersManagerRef.current.saveAllDirty());
+            }
             await Promise.all(promises);
         } finally {
             setSavingAllDirty(false);
@@ -1668,6 +1676,7 @@ export default function UserProfilePage() {
 
             {/* MULTI-PLATFORM MEDIA SERVERS & LIBRARIES (PLEX • JELLYFIN • EMBY) */}
             <UserMediaServersManager 
+                ref={mediaServersManagerRef}
                 userRole={user?.role} 
                 userStatus={user?.status} 
                 membershipTier={user?.membershipTier} 

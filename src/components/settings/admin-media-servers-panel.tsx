@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useImperativeHandle } from "react";
 import Link from "next/link";
 import { UnsavedChangesPrompt } from "@/components/ui/unsaved-changes-prompt";
 import { 
@@ -27,11 +27,17 @@ import {
     Eye, EyeOff, Copy, Users, Globe, Network
 } from "lucide-react";
 
+export interface AdminMediaServersPanelHandle {
+    saveAllDirty: () => Promise<boolean>;
+    discardAllDirty: () => void;
+}
+
 interface AdminMediaServersPanelProps {
+    ref?: React.Ref<AdminMediaServersPanelHandle>;
     onDirtyChange?: (isDirty: boolean, dirtySections: string[]) => void;
 }
 
-export function AdminMediaServersPanel({ onDirtyChange }: AdminMediaServersPanelProps = {}) {
+export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServersPanelProps = {}) {
     const [servers, setServers] = useState<DiscoveredServerInfo[]>([]);
     const initialServersRef = useRef<DiscoveredServerInfo[]>([]);
     const [isSavingAll, setIsSavingAll] = useState(false);
@@ -110,14 +116,22 @@ export function AdminMediaServersPanel({ onDirtyChange }: AdminMediaServersPanel
         }
     }, [hasUnsavedChanges, dirtySections.join(",")]);
 
+    useEffect(() => {
+        return () => {
+            onDirtyChange?.(false, []);
+        };
+    }, []);
+
     const handleDiscard = () => {
         if (initialServersRef.current.length > 0) {
             setServers(JSON.parse(JSON.stringify(initialServersRef.current)));
+            onDirtyChange?.(false, []);
         }
     };
 
-    const handleSaveAllDirty = async () => {
+    const handleSaveAllDirty = async (): Promise<boolean> => {
         setIsSavingAll(true);
+        let allSuccess = true;
         try {
             for (const srv of servers) {
                 const initial = initialServersRef.current.find(s => s.id === srv.id);
@@ -126,14 +140,27 @@ export function AdminMediaServersPanel({ onDirtyChange }: AdminMediaServersPanel
                 const srvAllowed = (srv.allowedLibraryIds || []).slice().sort().join(",");
                 const initAllowed = (initial.allowedLibraryIds || []).slice().sort().join(",");
                 if (rulesChanged || srvAllowed !== initAllowed) {
-                    await handleSaveRules(srv);
+                    const ok = await handleSaveRules(srv);
+                    if (!ok) allSuccess = false;
                 }
             }
-            initialServersRef.current = JSON.parse(JSON.stringify(servers));
+            if (allSuccess) {
+                initialServersRef.current = JSON.parse(JSON.stringify(servers));
+                onDirtyChange?.(false, []);
+            }
+            return allSuccess;
+        } catch (err) {
+            console.error("[SAVE-ALL-SERVERS-ERROR]:", err);
+            return false;
         } finally {
             setIsSavingAll(false);
         }
     };
+
+    useImperativeHandle(ref, () => ({
+        saveAllDirty: handleSaveAllDirty,
+        discardAllDirty: handleDiscard
+    }));
 
 
     const handleOpenAdd = () => {
@@ -266,7 +293,7 @@ export function AdminMediaServersPanel({ onDirtyChange }: AdminMediaServersPanel
         setServers(prev => prev.map(s => s.id === srvId ? { ...s, allowedLibraryIds: ["__none__"] } : s));
     };
 
-    const handleSaveRules = async (srv: DiscoveredServerInfo) => {
+    const handleSaveRules = async (srv: DiscoveredServerInfo): Promise<boolean> => {
         setSavingRulesMap(prev => ({ ...prev, [srv.id]: true }));
         try {
             const cleanAllowed = (srv.allowedLibraryIds || []).filter(id => id !== "__none__");
@@ -281,11 +308,17 @@ export function AdminMediaServersPanel({ onDirtyChange }: AdminMediaServersPanel
             if (res.success) {
                 setSuccessMsg(`Access rules updated for ${srv.name}`);
                 setTimeout(() => setSuccessMsg(""), 4000);
+                initialServersRef.current = initialServersRef.current.map(s => 
+                    s.id === srv.id ? JSON.parse(JSON.stringify(srv)) : s
+                );
+                return true;
             } else {
                 setError(res.error || "Failed to update access rules");
+                return false;
             }
         } catch (err: any) {
             setError(err.message || "Failed to update access rules");
+            return false;
         } finally {
             setSavingRulesMap(prev => ({ ...prev, [srv.id]: false }));
         }
