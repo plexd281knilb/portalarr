@@ -66,7 +66,7 @@ const NAV_ITEMS: { id: MainNavCategory; label: string; icon: any; badge?: string
     { id: "movies-tv", label: "Movies & TV Requests", icon: Film },
     { id: "ebooks", label: "Ebooks & Kindle", icon: BookOpen },
     { id: "audiobooks", label: "Audiobooks & Chapters", icon: Headphones },
-    { id: "referral-rewards", label: "Memberships & Referrals", icon: Gift, badge: "$15/Mo Off" },
+    { id: "referral-rewards", label: "Memberships & Referrals", icon: Gift, badge: "Plans & Perks" },
     { id: "curation-studio", label: "Server Curation Suite", icon: Sliders },
     { id: "manual", label: "Full System Manual", icon: FileText, badge: "Complete Docs" }
 ];

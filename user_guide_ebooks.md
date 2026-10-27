@@ -8,7 +8,7 @@ Welcome to the comprehensive user guide for **DomsHomeLab's (d281knilb) Ebooks a
 1. [Getting Started & Navigation](#1-getting-started--navigation)
 2. [Ebook & Comic In-Browser Reading](#2-ebook--comic-in-browser-reading)
 3. [Send-to-Kindle Wireless Delivery & Failure Diagnostics](#3-send-to-kindle-wireless-delivery--failure-diagnostics)
-4. [Audiobooks & Floating Audio Player](#4-audiobooks--floating-audio-player)
+4. [Audiobooks & Plex Streaming](#4-audiobooks--plex-streaming)
 5. [Chapter Management & Track Reordering on Disk](#5-chapter-management--track-reordering-on-disk)
 6. [Discovering & Requesting Books (The Unified Hub)](#6-discovering--requesting-books-the-unified-hub)
 7. [Series Tracking, Missing Books & 1-Click Auto-Grab](#7-series-tracking-missing-books--1-click-auto-grab)
@@ -23,14 +23,14 @@ Welcome to the comprehensive user guide for **DomsHomeLab's (d281knilb) Ebooks a
 
 DomsHomeLab offers dedicated views for your digital reading and listening collection:
 - **📖 Ebooks Shelf (`/library`):** Browse clean, standardized EPUB, PDF, and comic files across public and user-restricted shelves with series grouping and quick filters.
-- **🎧 Audiobooks Shelf (`/library`):** Browse single-file and multi-track audiobooks with duration stats, cover art, chapter track listings, and floating player playback.
+- **🎧 Audiobooks Shelf (`/library`):** Browse single-file and multi-track audiobooks with duration stats, cover art, chapter track listings, and Plex library streaming.
 - **🔍 Media Discovery Hub (`/discover`):** Unified discovery center for trending books, popular audiobooks, author bibliographies, and missing series installments with 1-click request buttons.
 - **📨 Request Manager (`/requests`):** Track all active book and audiobook grabs with real-time download progress, release selection, retry tools, and completed download imports alongside movies and TV shows.
 - **⚙️ Kindle Settings Tab (`/library`):** Configure your Send-to-Kindle email, enable automatic delivery on download completion, run pre-flight diagnostics, and view outbound delivery transaction logs.
 - **📚 Manage Shelves Tab (`/library` - Admins):** Create and manage custom public or user-restricted library shelves with granular user access rules.
 - **❓ Help & Guide Tab (`/library`):** This in-app guide, keeping you up-to-date with all the latest features.
 
-> 💡 **Full Membership Perk:** The digital Ebook & Audiobook Library is an exclusive perk of Full Membership. While free trial passes provide full movie and TV streaming on Plex, upgrading to full membership unlocks our complete digital book library, wireless Send-to-Kindle delivery, floating audio player, and 1-click book requests!
+> 💡 **Full Membership Perk:** The digital Ebook & Audiobook Library is an exclusive perk of Full Membership. While free trial passes provide full movie and TV streaming on Plex, upgrading to full membership unlocks our complete digital book library, wireless Send-to-Kindle delivery, Plex audiobook streaming, and 1-click book requests!
 
 ---
 
@@ -103,15 +103,14 @@ Send books wirelessly to your Kindle e-reader in seconds with end-to-end deliver
 
 ---
 
-## 🎧 4. Audiobooks & Floating Audio Player
+## 🎧 4. Audiobooks & Plex Streaming
 
-DomsHomeLab delivers an Audible-quality audiobook experience right in your web browser:
+DomsHomeLab provides full audiobook support across Plex and your connected players:
 
-- **Floating Web Player:** Pinned audio controls at the bottom of your screen let you listen uninterrupted while browsing other libraries and tabs.
-- **Continuous Autoplay:** Seamlessly transitions to the next chapter track when the current chapter finishes.
-- **HTTP Range Streaming:** Fast scrubbing and instant seeking without waiting for the full audio file to download.
-- **Playback Speed & Volume Memory:** Remembers your volume, playback speed (1.0x, 1.25x, 1.5x, 2.0x), and current track position across sessions.
+- **Plex Audiobook Streaming:** Stream audiobooks with chapter memory and progress tracking on any device using the Plex app, Plexamp, or Prologue.
 - **Multi-Disc & Multi-Track Auto-Consolidation:** Folder structures with chapter tracks (`01 Intro.mp3`, `02 Chapter 1.mp3`) or multi-disc subdirectories (`Disc 01/`, `Disc 02/`) are automatically merged into a single audiobook card displaying total duration and consolidated size.
+- **Interactive Chapter Inspection:** Click **Listen & Chapters** on any audiobook card to view chapter lists, track lengths, and file details.
+- **🎵 Persistent Floating Web Audio Player (Coming Soon):** *(Upcoming Feature — Currently in Development)* Pinned browser audio player with continuous autoplay, playback speed memory (1.0x, 1.25x, 1.5x, 2.0x), and background tab playback.
 
 ---
 

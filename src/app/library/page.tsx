@@ -1493,19 +1493,13 @@ function BookLibraryPageContent() {
         }
         setRequests(reqs || []);
 
-        let ulist = await getAppUsers().catch(() => []);
-        if (!ulist || ulist.length === 0) {
-          try {
-            const res = await fetch("/api/users");
-            if (res.ok) {
-              const data = await res.json();
-              if (data.users && data.users.length > 0) {
-                ulist = data.users;
-              }
-            }
-          } catch (e) {}
+        // Only admins manage shelves or need the full user list; non-admins must never probe /api/users
+        if (session?.role === "ADMIN" || profile?.role === "ADMIN") {
+          const ulist = await getAppUsers().catch(() => []);
+          setAllUsers(ulist || []);
+        } else {
+          setAllUsers([]);
         }
-        setAllUsers(ulist || []);
 
         try {
           const guide = await getEbooksUserGuide();

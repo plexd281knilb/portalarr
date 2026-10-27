@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useImperativeHandle } from "react";
 import { useRouter } from "next/navigation";
 import { UnsavedChangesPrompt } from "@/components/ui/unsaved-changes-prompt";
 import { 
@@ -62,12 +62,18 @@ interface ArrAppData {
     folders: ArrAppFolder[];
 }
 
+export interface SeerrSettingsPanelHandle {
+    saveAllDirty: () => Promise<boolean>;
+    discardAllDirty: () => void;
+}
+
 interface SeerrSettingsPanelProps {
+    ref?: React.Ref<SeerrSettingsPanelHandle>;
     onNavigateTab?: (tab: string) => void;
     onDirtyChange?: (isDirty: boolean, dirtySections: string[]) => void;
 }
 
-export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange }: SeerrSettingsPanelProps = {}) {
+export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrSettingsPanelProps = {}) {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -290,7 +296,14 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange }: SeerrSettin
         setKidsTv4kAppId(init.kidsTv4kAppId);
         setKidsTv4kProfileId(init.kidsTv4kProfileId);
         setKidsTv4kRootFolder(init.kidsTv4kRootFolder);
+        onDirtyChange?.(false, []);
     };
+
+    useEffect(() => {
+        return () => {
+            onDirtyChange?.(false, []);
+        };
+    }, []);
 
     useEffect(() => {
         loadSettings();
@@ -480,7 +493,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange }: SeerrSettin
         }
     };
 
-    const handleSave = async () => {
+    const handleSave = async (): Promise<boolean> => {
         setSaving(true);
         setSuccessMsg(null);
         setErrorMsg(null);
@@ -573,15 +586,23 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange }: SeerrSettin
                     kidsTvAppId, kidsTvProfileId, kidsTvRootFolder,
                     kidsTv4kAppId, kidsTv4kProfileId, kidsTv4kRootFolder
                 };
+                return true;
             } else {
                 setErrorMsg(res.error || "Failed to save settings.");
+                return false;
             }
         } catch (e: any) {
             setErrorMsg(e.message || "An unexpected error occurred.");
+            return false;
         } finally {
             setSaving(false);
         }
     };
+
+    useImperativeHandle(ref, () => ({
+        saveAllDirty: handleSave,
+        discardAllDirty: handleDiscard
+    }));
 
     /**
      * Reusable Arr slot selector card with live Quality Profile and Root Folder dropdowns

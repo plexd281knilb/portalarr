@@ -51,10 +51,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import AccessSettingsPage from "@/app/settings/access/page";
 import SystemLogsViewer from "@/components/system-logs-viewer";
 import EmailManagement from "@/components/email-management";
-import { SeerrSettingsPanel } from "@/components/seerr/seerr-settings-panel";
-import DiscordSettingsPanel from "@/components/discord/discord-settings-panel";
+import { SeerrSettingsPanel, SeerrSettingsPanelHandle } from "@/components/seerr/seerr-settings-panel";
+import DiscordSettingsPanel, { DiscordSettingsPanelHandle } from "@/components/discord/discord-settings-panel";
 import CloudflarePolicyCard from "@/components/cloudflare-policy-card";
-import { AdminMediaServersPanel } from "@/components/settings/admin-media-servers-panel";
+import { AdminMediaServersPanel, AdminMediaServersPanelHandle } from "@/components/settings/admin-media-servers-panel";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
@@ -341,6 +341,10 @@ function SettingsPageContent() {
     const [syncPlexFriendsMsg, setSyncPlexFriendsMsg] = useState("");
     const [syncPlexFriendsErr, setSyncPlexFriendsErr] = useState("");
 
+    const mediaServersPanelRef = useRef<AdminMediaServersPanelHandle>(null);
+    const seerrPanelRef = useRef<SeerrSettingsPanelHandle>(null);
+    const discordPanelRef = useRef<DiscordSettingsPanelHandle>(null);
+
     // Baseline snapshot for tracking unsaved changes
     const initialDataRef = useRef<{
         alertBannerEnabled: boolean;
@@ -351,6 +355,14 @@ function SettingsPageContent() {
         smtpUser: string;
         smtpPass: string;
         smtpFrom: string;
+        emailProviderMode: "resend" | "custom";
+        resendApiKey: string;
+        resendFrom: string;
+        customSmtpHost: string;
+        customSmtpPort: string;
+        customSmtpUser: string;
+        customSmtpPass: string;
+        customSmtpFrom: string;
         mainPlexToken: string;
         mainPlexUrl: string;
         autoSyncInterval: number | string;
@@ -385,11 +397,17 @@ function SettingsPageContent() {
     ) : false;
 
     const isSmtpDirty = initialDataRef.current ? (
-        smtpHostInput !== initialDataRef.current.smtpHost ||
-        String(smtpPortInput) !== String(initialDataRef.current.smtpPort) ||
-        smtpUserInput !== initialDataRef.current.smtpUser ||
-        smtpPassInput !== initialDataRef.current.smtpPass ||
-        smtpFromInput !== initialDataRef.current.smtpFrom
+        emailProviderMode !== initialDataRef.current.emailProviderMode ||
+        (emailProviderMode === "resend" ? (
+            resendApiKeyInput !== initialDataRef.current.resendApiKey ||
+            resendFromInput !== initialDataRef.current.resendFrom
+        ) : (
+            customSmtpHostInput !== initialDataRef.current.customSmtpHost ||
+            String(customSmtpPortInput) !== String(initialDataRef.current.customSmtpPort) ||
+            customSmtpUserInput !== initialDataRef.current.customSmtpUser ||
+            customSmtpPassInput !== initialDataRef.current.customSmtpPass ||
+            customSmtpFromInput !== initialDataRef.current.customSmtpFrom
+        ))
     ) : false;
 
     const isPlexDirty = initialDataRef.current ? (
@@ -1160,6 +1178,14 @@ function SettingsPageContent() {
                 smtpUser: smtpUserVal,
                 smtpPass: smtpPassVal,
                 smtpFrom: smtpFromVal,
+                emailProviderMode: effectiveMode,
+                resendApiKey: rApiKey,
+                resendFrom: rFrom,
+                customSmtpHost: cHost,
+                customSmtpPort: String(cPort),
+                customSmtpUser: cUser,
+                customSmtpPass: cPass,
+                customSmtpFrom: cFrom,
                 mainPlexToken: mainPlexTokenVal,
                 mainPlexUrl: mainPlexUrlVal,
                 autoSyncInterval: autoSyncIntervalVal,
@@ -1251,11 +1277,28 @@ function SettingsPageContent() {
 
             if (isSmtpDirty) {
                 const formData = new FormData();
-                formData.append("smtpHost", smtpHostInput);
-                formData.append("smtpPort", String(smtpPortInput));
-                formData.append("smtpUser", smtpUserInput);
-                formData.append("smtpPass", smtpPassInput);
-                formData.append("smtpFrom", smtpFromInput);
+                formData.append("emailProviderMode", emailProviderMode);
+                formData.append("resendApiKey", resendApiKeyInput);
+                formData.append("resendFrom", resendFromInput);
+                formData.append("customSmtpHost", customSmtpHostInput);
+                formData.append("customSmtpPort", String(customSmtpPortInput));
+                formData.append("customSmtpUser", customSmtpUserInput);
+                formData.append("customSmtpPass", customSmtpPassInput);
+                formData.append("customSmtpFrom", customSmtpFromInput);
+
+                if (emailProviderMode === "resend") {
+                    formData.append("smtpHost", "smtp.resend.com");
+                    formData.append("smtpPort", "465");
+                    formData.append("smtpUser", "resend");
+                    formData.append("smtpPass", resendApiKeyInput);
+                    formData.append("smtpFrom", resendFromInput);
+                } else {
+                    formData.append("smtpHost", customSmtpHostInput);
+                    formData.append("smtpPort", String(customSmtpPortInput));
+                    formData.append("smtpUser", customSmtpUserInput);
+                    formData.append("smtpPass", customSmtpPassInput);
+                    formData.append("smtpFrom", customSmtpFromInput);
+                }
                 promises.push(saveSettings(formData));
             }
 
@@ -1315,6 +1358,18 @@ function SettingsPageContent() {
                 promises.push(handleSaveSnapshotPath());
             }
 
+            if (isMediaServersDirty && mediaServersPanelRef.current) {
+                promises.push(mediaServersPanelRef.current.saveAllDirty());
+            }
+
+            if (isSeerrDirty && seerrPanelRef.current) {
+                promises.push(seerrPanelRef.current.saveAllDirty());
+            }
+
+            if (isDiscordDirty && discordPanelRef.current) {
+                promises.push(discordPanelRef.current.saveAllDirty());
+            }
+
             await Promise.all(promises);
             setSaveAllSuccessMsg("All changes saved successfully!");
             setTimeout(() => setSaveAllSuccessMsg(""), 4000);
@@ -1340,6 +1395,14 @@ function SettingsPageContent() {
         setSmtpUserInput(init.smtpUser);
         setSmtpPassInput(init.smtpPass);
         setSmtpFromInput(init.smtpFrom);
+        if (init.emailProviderMode) setEmailProviderMode(init.emailProviderMode);
+        if (init.resendApiKey !== undefined) setResendApiKeyInput(init.resendApiKey);
+        if (init.resendFrom !== undefined) setResendFromInput(init.resendFrom);
+        if (init.customSmtpHost !== undefined) setCustomSmtpHostInput(init.customSmtpHost);
+        if (init.customSmtpPort !== undefined) setCustomSmtpPortInput(init.customSmtpPort);
+        if (init.customSmtpUser !== undefined) setCustomSmtpUserInput(init.customSmtpUser);
+        if (init.customSmtpPass !== undefined) setCustomSmtpPassInput(init.customSmtpPass);
+        if (init.customSmtpFrom !== undefined) setCustomSmtpFromInput(init.customSmtpFrom);
         setMainPlexTokenInput(init.mainPlexToken);
         setMainPlexUrlInput(init.mainPlexUrl);
         setAutoSyncIntervalInput(init.autoSyncInterval);
@@ -1359,6 +1422,23 @@ function SettingsPageContent() {
         if (targetSnapshotServer) {
             setPlexServerFormDatabasePath(targetSnapshotServer.databasePath || "");
         }
+        if (mediaServersPanelRef.current) {
+            mediaServersPanelRef.current.discardAllDirty();
+        }
+        setIsMediaServersDirty(false);
+        setMediaServersDirtySections([]);
+
+        if (seerrPanelRef.current) {
+            seerrPanelRef.current.discardAllDirty();
+        }
+        setIsSeerrDirty(false);
+        setSeerrDirtySections([]);
+
+        if (discordPanelRef.current) {
+            discordPanelRef.current.discardAllDirty();
+        }
+        setIsDiscordDirty(false);
+        setDiscordDirtySections([]);
     };
 
     const handleConfirmDiscardAndLeave = () => {
@@ -2227,14 +2307,15 @@ function SettingsPageContent() {
                         </button>
                     </div>
 
-                    {hubSubTabs.servers === "fleet" && (
+                    <div className={hubSubTabs.servers === "fleet" ? "space-y-6" : "hidden"}>
                         <AdminMediaServersPanel 
+                            ref={mediaServersPanelRef}
                             onDirtyChange={(dirty, sections) => {
                                 setIsMediaServersDirty(dirty);
                                 setMediaServersDirtySections(sections);
                             }}
                         />
-                    )}
+                    </div>
 
                     {hubSubTabs.servers === "plex-admin" && (
                         <div className="space-y-6">
@@ -4107,17 +4188,16 @@ function SettingsPageContent() {
                         </div>
                     )}
 
-                    {hubSubTabs.integrations === "requests" && (
-                        <div className="space-y-6">
-                            <SeerrSettingsPanel 
-                                onNavigateTab={handleTabChange} 
-                                onDirtyChange={(dirty, sections) => {
-                                    setIsSeerrDirty(dirty);
-                                    setSeerrDirtySections(sections);
-                                }}
-                            />
-                        </div>
-                    )}
+                    <div className={hubSubTabs.integrations === "requests" ? "space-y-6" : "hidden"}>
+                        <SeerrSettingsPanel 
+                            ref={seerrPanelRef}
+                            onNavigateTab={handleTabChange} 
+                            onDirtyChange={(dirty, sections) => {
+                                setIsSeerrDirty(dirty);
+                                setSeerrDirtySections(sections);
+                            }}
+                        />
+                    </div>
 
                     {hubSubTabs.integrations === "ai" && (
                         <div className="space-y-6">
@@ -5474,16 +5554,15 @@ function SettingsPageContent() {
                         </div>
                     )}
 
-                    {hubSubTabs.communications === "discord" && (
-                        <div className="space-y-4">
-                            <DiscordSettingsPanel 
-                                onDirtyChange={(dirty, sections) => {
-                                    setIsDiscordDirty(dirty);
-                                    setDiscordDirtySections(sections);
-                                }}
-                            />
-                        </div>
-                    )}
+                    <div className={hubSubTabs.communications === "discord" ? "space-y-4" : "hidden"}>
+                        <DiscordSettingsPanel 
+                            ref={discordPanelRef}
+                            onDirtyChange={(dirty, sections) => {
+                                setIsDiscordDirty(dirty);
+                                setDiscordDirtySections(sections);
+                            }}
+                        />
+                    </div>
                 </TabsContent>
             </Tabs>
 

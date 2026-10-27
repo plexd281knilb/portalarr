@@ -227,6 +227,7 @@ export async function scanPaymentEmailsAction(sourceId?: string, lookbackDays?: 
         const result = await scanPaymentEmailsInternal(sourceId, effectiveLookback);
         revalidatePath("/settings");
         revalidatePath("/settings/access");
+        revalidatePath("/profile");
         revalidatePath("/settings/profile");
         revalidatePath("/profile");
         return result;
@@ -335,6 +336,7 @@ export async function manuallyAttributePaymentTransaction(transactionId: string,
 
         revalidatePath("/settings");
         revalidatePath("/settings/access");
+        revalidatePath("/profile");
         revalidatePath("/settings/profile");
         revalidatePath("/profile");
 
@@ -422,6 +424,7 @@ export async function reprocessPaymentTransactionsAction() {
 
         revalidatePath("/settings");
         revalidatePath("/settings/access");
+        revalidatePath("/profile");
         revalidatePath("/settings/profile");
         revalidatePath("/profile");
 
@@ -582,6 +585,7 @@ export async function deletePaymentTransactionAction(transactionId: string) {
 
         revalidatePath("/settings");
         revalidatePath("/settings/access");
+        revalidatePath("/profile");
         revalidatePath("/settings/profile");
         revalidatePath("/profile");
 
@@ -607,6 +611,7 @@ export async function purgeUnmatchedPaymentTransactionsAction() {
 
         revalidatePath("/settings");
         revalidatePath("/settings/access");
+        revalidatePath("/profile");
         revalidatePath("/settings/profile");
         revalidatePath("/profile");
 
@@ -792,6 +797,7 @@ export async function unmatchPaymentTransactionAction(transactionId: string) {
 
         revalidatePath("/settings");
         revalidatePath("/settings/access");
+        revalidatePath("/profile");
         revalidatePath("/settings/profile");
         revalidatePath("/profile");
 
@@ -840,6 +846,7 @@ export async function unmatchMultiplePaymentTransactionsAction(transactionIds: s
 
         revalidatePath("/settings");
         revalidatePath("/settings/access");
+        revalidatePath("/profile");
         revalidatePath("/settings/profile");
         revalidatePath("/profile");
 
@@ -931,6 +938,7 @@ export async function groupAndAttributePaymentsAction(transactionIds: string[], 
 
         revalidatePath("/settings");
         revalidatePath("/settings/access");
+        revalidatePath("/profile");
         revalidatePath("/settings/profile");
         revalidatePath("/profile");
 
@@ -1045,6 +1053,7 @@ export async function splitPaymentTransactionAction(
 
         revalidatePath("/settings");
         revalidatePath("/settings/access");
+        revalidatePath("/profile");
         revalidatePath("/settings/profile");
         revalidatePath("/profile");
 
@@ -1086,6 +1095,7 @@ export async function bulkDeletePaymentTransactionsAction(transactionIds: string
 
         revalidatePath("/settings");
         revalidatePath("/settings/access");
+        revalidatePath("/profile");
         revalidatePath("/settings/profile");
         revalidatePath("/profile");
 
@@ -1144,6 +1154,7 @@ export async function recordManualPaymentAction(data: {
 
         revalidatePath("/settings");
         revalidatePath("/settings/access");
+        revalidatePath("/profile");
         revalidatePath("/settings/profile");
         revalidatePath("/profile");
 
@@ -1181,6 +1192,7 @@ export async function updateUserSubscriptionCadenceAction(userId: string, cadenc
 
         revalidatePath("/settings");
         revalidatePath("/settings/access");
+        revalidatePath("/profile");
         revalidatePath("/settings/profile");
         revalidatePath("/profile");
 

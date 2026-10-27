@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useImperativeHandle } from "react";
 import { 
     getUserMediaServersAndLibrariesAction,
     updateUserMediaServersAndLibrariesAction,
@@ -21,7 +21,13 @@ import {
 } from "lucide-react";
 import { MediaServerSetupGuideModal } from "./media-server-setup-guide-modal";
 
+export interface UserMediaServersManagerHandle {
+    saveAllDirty: () => Promise<boolean>;
+    discardAllDirty: () => void;
+}
+
 interface UserMediaServersManagerProps {
+    ref?: React.Ref<UserMediaServersManagerHandle>;
     userRole?: string;
     userStatus?: string;
     membershipTier?: string;
@@ -34,7 +40,8 @@ export function UserMediaServersManager({
     userStatus = "APPROVED",
     membershipTier = "STANDARD",
     username = "",
-    onDirtyChange
+    onDirtyChange,
+    ref
 }: UserMediaServersManagerProps) {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -48,12 +55,24 @@ export function UserMediaServersManager({
     const [jellyfinUsername, setJellyfinUsername] = useState("");
     const [embyUsername, setEmbyUsername] = useState("");
     const [isDirty, setIsDirty] = useState(false);
+    const initialDataRef = useRef<{
+        selectedServerKeys: string[];
+        selectedMediaLibraryKeys: string[];
+        jellyfinUsername: string;
+        embyUsername: string;
+    } | null>(null);
     const [guideServer, setGuideServer] = useState<UserAvailableServer | null>(null);
     const [guideModalOpen, setGuideModalOpen] = useState(false);
 
     useEffect(() => {
         onDirtyChange?.(isDirty);
     }, [isDirty, onDirtyChange]);
+
+    useEffect(() => {
+        return () => {
+            onDirtyChange?.(false);
+        };
+    }, []);
 
     const loadData = async () => {
         setLoading(true);
@@ -66,6 +85,12 @@ export function UserMediaServersManager({
                 setSelectedMediaLibraryKeys(res.selectedMediaLibraryKeys);
                 setJellyfinUsername(res.jellyfinUsername || username);
                 setEmbyUsername(res.embyUsername || username);
+                initialDataRef.current = {
+                    selectedServerKeys: [...res.selectedServerKeys],
+                    selectedMediaLibraryKeys: [...res.selectedMediaLibraryKeys],
+                    jellyfinUsername: res.jellyfinUsername || username,
+                    embyUsername: res.embyUsername || username
+                };
             } else {
                 setErr(res.error || "Failed to load media servers");
             }
@@ -127,7 +152,17 @@ export function UserMediaServersManager({
         setSelectedMediaLibraryKeys(prev => prev.filter(k => !serverLibKeys.has(k)));
     };
 
-    const handleSaveServers = async () => {
+    const handleDiscard = () => {
+        if (!initialDataRef.current) return;
+        setSelectedServerKeys([...initialDataRef.current.selectedServerKeys]);
+        setSelectedMediaLibraryKeys([...initialDataRef.current.selectedMediaLibraryKeys]);
+        setJellyfinUsername(initialDataRef.current.jellyfinUsername);
+        setEmbyUsername(initialDataRef.current.embyUsername);
+        setIsDirty(false);
+        onDirtyChange?.(false);
+    };
+
+    const handleSaveServers = async (): Promise<boolean> => {
         setSaving(true);
         setMsg("");
         setErr("");
@@ -141,16 +176,32 @@ export function UserMediaServersManager({
             if (res.success) {
                 setMsg(res.message || "Your media server preferences have been saved!");
                 setIsDirty(false);
+                onDirtyChange?.(false);
+                initialDataRef.current = {
+                    selectedServerKeys: [...selectedServerKeys],
+                    selectedMediaLibraryKeys: [...selectedMediaLibraryKeys],
+                    jellyfinUsername,
+                    embyUsername
+                };
+                await loadData();
                 setTimeout(() => setMsg(""), 5000);
+                return true;
             } else {
                 setErr(res.error || "Failed to save preferences");
+                return false;
             }
         } catch (e: any) {
             setErr(e.message || "Failed to save preferences");
+            return false;
         } finally {
             setSaving(false);
         }
     };
+
+    useImperativeHandle(ref, () => ({
+        saveAllDirty: handleSaveServers,
+        discardAllDirty: handleDiscard
+    }));
 
     const isAdmin = userRole === "ADMIN";
     const isSuperUser = userRole === "SUPER_USER";

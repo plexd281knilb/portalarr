@@ -12,12 +12,12 @@ Welcome to **DomsHomeLab (d281knilb)**! This comprehensive guide walks you throu
 5. [Wireless Send-to-Kindle Setup (For E-Readers)](#5-wireless-send-to-kindle-setup-for-e-readers)
 6. [Browsing & Accessing Media (Ebooks & Audiobooks)](#6-browsing--accessing-media-ebooks--audiobooks)
 7. [In-Browser Kindle Paperwhite & Comic Readers](#7-in-browser-kindle-paperwhite--comic-readers)
-8. [Audiobooks, Floating Web Player & Chapter Track Studio](#8-audiobooks-floating-web-player--chapter-track-studio)
+8. [🎧 Audiobooks & Spoken Word Media](#8-audiobooks--spoken-word-media)
 9. [Requesting New Books & Audiobooks (Unified Discover Hub)](#9-requesting-new-books--audiobooks-unified-discover-hub)
 10. [Troubleshooting, Request Tracking & 1-Click Import](#10-troubleshooting-request-tracking--1-click-import)
 11. [🎬 Native Movie & TV Show Requests (Seerr Engine & Episode Guides)](#11-native-movie--tv-show-requests-seerr-engine--episode-guides)
 12. [🎨 Curation Studio Suite (Kometa, Agregarr, Maintainerr, Tagging)](#12-curation-studio-suite-kometa-agregarr-maintainerr-tagging)
-13. [💳 Subscriptions, Referral Rewards & Family Profiles](#13-subscriptions-referral-rewards--family-profiles)
+13. [💳 Subscriptions, Payments & Upcoming Member Perks](#13-subscriptions-payments--upcoming-member-perks)
 14. [👁️ Admin Tools: Impersonation & Approval Governance](#14-admin-tools-impersonation--approval-governance)
 15. [Need Help or Technical Support?](#15-need-help-or-technical-support)
 
@@ -32,10 +32,10 @@ Welcome to **DomsHomeLab (d281knilb)**! This comprehensive guide walks you throu
    - **Free Trial Pass:** New members receive a complimentary all-access trial pass with **zero payment required up front** to preview movies and TV shows in pristine 4K HDR and 1080p studio master quality on Plex.
    - **Upgrading to Full Membership:** Upgrading unlocks all premium community perks:
      - 🎬 **Unrestricted 4K HDR Direct Play:** Original studio bitrates with zero transcoding lag.
-     - 🧒 **Dedicated Kids & Living Room Profiles:** Child-safe managed accounts with custom PIN protection and age rating filters.
-     - 📚 **Full Digital Book & Audiobook Library:** In-browser Kindle Paperwhite reading mode, floating HTML5 audiobook player, and wireless Send-to-Kindle delivery.
+     - 🧒 **Dedicated Kids & Living Room Profiles (Coming Soon):** Child-safe managed accounts with custom PIN protection and age rating filters (currently in active development).
+     - 📚 **Full Digital Book & Audiobook Library:** In-browser Kindle Paperwhite reading mode, Plex audiobook library streaming (in-browser floating player coming soon), and wireless Send-to-Kindle delivery.
      - ⚡ **Priority Server Bandwidth:** Dedicated high-priority streaming and transcode allocation.
-     - 🎁 **Discord VIP & Referral Rewards:** Live server downtime alerts, member chat, and earn **1 free month ($15.00 discount)** for every friend referred.
+     - 🎁 **Discord VIP & Referral Rewards (Coming Soon):** Live server downtime alerts, member chat, and upcoming referral reward discounts.
 4. Once logged in, your session remains securely active for 30 days with sliding automatic renewal.
 
 ---
@@ -204,18 +204,16 @@ Click **`Read`** or **`Resume (X%)`** on any EPUB book card to launch the reader
 
 ---
 
-## 🎧 8. Audiobooks, Floating Web Player & Chapter Track Studio
+## 🎧 8. Audiobooks & Spoken Word Media
 
-DomsHomeLab delivers an Audible-quality audiobook experience right in your web browser:
+DomsHomeLab organizes and streams your spoken word audiobooks across your media ecosystem:
 
-- **Floating Web Player:** Pinned audio controls at the bottom of your screen let you listen uninterrupted while browsing other libraries and tabs.
-- **Continuous Autoplay:** Seamlessly transitions to the next chapter track when the current chapter finishes.
-- **HTTP Range Streaming:** Fast scrubbing and instant seeking without waiting for the full audio file to download.
-- **Playback Speed & Volume Memory:** Remembers your volume, playback speed (1.0x, 1.25x, 1.5x, 2.0x), and current track position across sessions.
-- **Multi-Disc & Multi-Track Auto-Consolidation:** Folder structures with chapter tracks (`01 Intro.mp3`, `02 Chapter 1.mp3`) or multi-disc subdirectories (`Disc 01/`, `Disc 02/`) are automatically merged into a single audiobook card displaying total duration and consolidated size.
-- **Interactive Chapter Selector:** Click **Listen & Chapters** on any audiobook card to open the Chapter Selector Modal, jump to any specific chapter, or view file details.
+- **Plex & Spoken Word Streaming:** Listen directly on Plex mobile apps, desktop players, and home audio devices with full resume state and track position tracking.
+- **Unified Cataloging & Chapter Inspection:** Folder structures with chapter tracks (`01 Intro.mp3`, `02 Chapter 1.mp3`) or multi-disc subdirectories (`Disc 01/`, `Disc 02/`) are automatically merged into a single audiobook entry displaying total duration and consolidated size.
+- **Interactive Chapter Selector:** Click **Listen & Chapters** on any audiobook card to open the Chapter Selector Modal, inspect chapters, or view file details.
 - **Reorder & Edit Chapters:** Click **✏️ Reorder & Edit Chapters** in the Chapter Selector Modal to change chapter numbers or click ⬆️ / ⬇️ buttons. Click **Save** to rename track files on disk so your custom order is permanent for all users!
 - **✨ AI Chapter Track Analysis:** Click **Analyze with AI** to automatically inspect raw audio tracks, infer official chapter boundaries and titles, and auto-populate metadata.
+- **🎵 Persistent Floating Web Audio Player (Coming Soon):** *(Upcoming Feature — Currently in Development)* Pinned browser audio player with continuous autoplay, playback speed memory (1.0x, 1.25x, 1.5x, 2.0x), and background tab playback.
 
 ---
 
@@ -302,14 +300,14 @@ DomsHomeLab includes a built-in media discovery and request engine directly conn
 Administrators can curate Plex libraries natively without external scripts or extra docker containers via the **Curation Studio (`/curation`)**:
 
 - **⚡ Direct Plex SQLite Snapshot & Delta-Sync Engine (Zero PMS Lock Architecture):** High-speed, lock-free SQLite snapshot subsystem (`plex-snapshot-engine.ts`) that creates atomic WAL snapshots of local Plex databases (`com.plexapp.plugins.library.db`) and runs multi-database queries in `<20ms` via native `node:sqlite`. Compares items against Portalarr's target state and strictly restricts HTTP mutations to genuine deltas—preventing Plex 500 errors or SQLite lockups during heavy sweeps.
-- **✨ Kometa Overlays Studio:** Apply high-definition ribbons, 4K HDR badges, Dolby Vision/Atmos labels, audio codecs, and custom user overlays to movie and TV posters with live canvas previews and hardware-accelerated SVG-to-JPEG rendering.
+- **✨ Kometa Overlays Studio:** Apply high-definition ribbons, 4K HDR badges, Dolby Vision/Atmos labels, audio codecs, and custom user overlays to movie and TV posters with live canvas previews and hardware-accelerated SVG-to-JPEG rendering *(Note: Dynamic badges on member media cards are an upcoming feature currently in admin preview)*.
 - **🎬 Agregarr Hubs:** Generate dynamic trending hubs, smart collections, placeholder stubs for missing items, and discovery rows linked directly with Trakt, TMDb, MDBList, Letterboxd, MyAnimeList, and IMDb charts across multi-Plex clusters with per-endpoint `machineIdentifier` verification.
 - **🧹 Maintainerr Prune:** Set disk quota rules, identify unwatched media using a 3-tier watch status engine (local `WatchHistory` `<1ms` lookup + batch session check), and safely prune media to recover storage automatically with Leaving Soon staging collections and poster countdown badges.
 - **🏷️ Parental Guide & Tagging Studio:** Tag movies, shows, and parental guide labels across Plex libraries with IMDb / Common Sense Media content advisory severity ratings (`Violence`, `Sex/Nudity`, `Profanity`, `Alcohol/Drugs`, `Frightening`) to power user-level customizable shelf filters.
 
 ---
 
-## 💳 13. Subscriptions, Referral Rewards & Family Profiles
+## 💳 13. Subscriptions, Payments & Upcoming Member Perks
 
 ### 📅 Flexible Membership Plans
 When upgrading from your free trial pass to full membership, choose the cadence that fits you best:
@@ -319,7 +317,8 @@ When upgrading from your free trial pass to full membership, choose the cadence 
   - Remaining months: `remaining full months * $15`
   - *Example:* Upgrading on October 10th covers 21 days in October ($10.16) + November ($15) + December ($15) = **$40.16** for the remainder of the year.
 
-### 🎁 Referral Rewards: Earn 1 Free Month Per Friend
+### 🎁 Member Referral Rewards (Coming Soon)
+*(Upcoming Feature — Currently in Development)*
 - Invite your friends to join DomsHomeLab using your personal invite link (`/join?ref=YOUR_CODE`).
 - When an invited friend joins and becomes an active member:
   - **Annual Subscribers:** Earn **$15.00 off** your next annual renewal (e.g. $180 - $15 = **$165.00** with 1 referral; $180 - $30 = **$150.00** with 2 referrals; 12 referrals makes the entire upcoming year **100% FREE**).
@@ -331,7 +330,8 @@ When upgrading from your free trial pass to full membership, choose the cadence 
 - **Instant Payment Receipts:** Whenever your payment is processed, DomsHomeLab automatically dispatches a branded HTML payment confirmation receipt (`payment_received`) confirming the amount received, date, new expiration date, and active perks.
 - **Full Membership Activation Alerts:** Upgrading from trial to full membership dispatches a welcome email (`subscription_activated`) highlighting all unlocked features.
 
-### 🧒 Family & Living Room TV Profiles
+### 🧒 Family Sub-Profiles (Kids & Living Room TV) (Coming Soon)
+*(Upcoming Feature — Currently in Development)*
 - **Living Room TV Profiles:** Managed profiles configured with content safety tags to filter out explicit content for family viewing areas.
 - **Kids Profiles:** Curated child-safe profiles locked strictly to G and PG-rated movies and TV animations with optional PIN protection.
 - *Access Security:* Trial accounts are strictly restricted to primary server libraries; Kids and backup servers remain isolated until upgrading to full membership.

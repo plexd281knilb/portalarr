@@ -191,7 +191,7 @@ See detailed reference: [card-and-poster-patterns.md](./references/card-and-post
     1. **Docked Floating Save Bar**: Fixed at `bottom-6 right-6 z-50` with pulsating amber indicator, modified sections summary (`● Unsaved Settings (N)`), Discard button, and primary Save button.
     2. **In-App Navigation Interception Guard**: Intercepts link clicks (e.g. sidebar navigation, header logo, in-app redirects) using capturing `document.addEventListener("click", handleLinkClick, true)` and displays an interactive modal dialog offering `Stay on Page`, `Discard & Leave`, and `Save & Continue`.
     3. **Browser Tab Close & Reload Guard**: Listens on `window.beforeunload` whenever `hasUnsavedChanges === true` to prevent accidental tab closing or page refresh.
-  - **Embedded Sub-Panel Dirty Protocol**: Child panels mounted within parent settings hubs (e.g. `SeerrSettingsPanel`, `DiscordSettingsPanel`, `AdminMediaServersPanel`) accept `onDirtyChange?: (isDirty: boolean, dirtySections: string[]) => void`. When mounted in a parent hub like `src/app/settings/page.tsx`, they propagate dirty state upwards to trigger hub pulsating amber dots and master page save bars; when mounted standalone, they automatically render `<UnsavedChangesPrompt />` directly.
+  - **Embedded Sub-Panel Dirty & Imperative Save/Discard Protocol**: Child panels mounted within parent settings hubs (e.g. `SeerrSettingsPanel`, `DiscordSettingsPanel`, `AdminMediaServersPanel`, `UserMediaServersManager`) accept `onDirtyChange?: (isDirty: boolean, dirtySections?: string[]) => void` and expose an imperative handle (`ref?: React.Ref<{ saveAllDirty: () => Promise<boolean>; discardAllDirty: () => void; }>`). Parent pages retain these panels in the DOM using CSS class toggling (`className={subTab === "active" ? "space-y-6" : "hidden"}`) rather than unmounting conditionally, ensuring in-progress form inputs and imperative refs remain intact across subtab switches. When the parent master floating save bar triggers "Save All Changes" or "Discard", it imperatively executes `panelRef.current.saveAllDirty()` or `panelRef.current.discardAllDirty()`, while saving single cards immediately updates baseline snapshots to clear dirty state.
   - **100% Page Coverage**:
     - **System Settings Hub (`src/app/settings/page.tsx`)**: Dirty tracking for General, Public URL, SMTP, Plex server tokens, Direct SQLite DB snapshot presets/paths, Servarr/Requests (`SeerrSettingsPanel`), Media Server Fleet (`AdminMediaServersPanel`), Discord Bot (`DiscordSettingsPanel`), Curation keys, and Roadmap/Beta text.
     - **Access Control (`src/app/settings/access/page.tsx`)**: Full `<UnsavedChangesPrompt />` tracking onboarding gates, role permissions, trial quotas, and Discord role mappings.
@@ -900,11 +900,13 @@ Portalarr features an automated, real-time versioning, branch identification, an
   - Covers movie and TV show library management (`/radarr*`, `/sonarr*`).
   - Allowed for `ADMIN` and `SUPER_USER` roles in both `src/proxy.ts` and `src/app/arr-actions.ts`.
   - In Cloudflare Zero Trust, Rule 2 permits both Admin and Super User emails, or can be bypassed at the edge while strictly guarded by Portalarr session authentication.
-- **Zero-Conflict End-User Routing (`/profile*`)**:
-  - `/settings*` is 100% strictly Admin-Only. End-users manage profile settings, Kindle email, preferences, and subscription billing exclusively at `/profile` (eliminating `/settings/profile` bypass conflicts).
-  - All email notifications (renewal notices, trial expiration alerts) dispatch links with `{billingUrl}` = `/profile#billing`.
+- **Dual End-User Routing (`/profile*` & `/settings/profile*`)**:
+  - End-users can manage profile settings, Kindle email, preferences, and subscription billing seamlessly at both `/profile` and `/settings/profile`.
+  - In `src/proxy.ts`, `/settings/profile*` is explicitly exempted from the admin-only redirect to `/profile`, allowing direct bookmarking and navigation to `/settings/profile`.
+  - In `src/lib/edge-policy-paths.ts`, `/settings/profile*` is included in `CLOUDFLARE_BYPASS_PATHS` and excluded from `matchesCloudflareAdmin()`, guaranteeing friends and family are never blocked by Cloudflare Zero Trust login walls when visiting `/settings/profile`.
+  - All email notifications dispatch links with `{billingUrl}` = `/profile#billing`.
 - **Strict Non-Bypassable Admin Guard (`matchesCloudflareBypass`)**:
-  - `matchesCloudflareBypass()` explicitly verifies that if `matchesCloudflareAdmin(path)` is true, the route is NEVER bypassed, guaranteeing zero leakage or path collisions.
+  - `matchesCloudflareBypass()` explicitly verifies that if `matchesCloudflareAdmin(path)` is true and the path is not `/settings/profile`, the route is NEVER bypassed, guaranteeing zero leakage or path collisions.
 - **Three-Rule Cloudflare Zero Trust Setup**:
   - **Rule 1 (Admin Only - High Priority)**: Action = `Allow`, Selector = `CLOUDFLARE_ADMIN_PATHS`, Include = `Emails: [your-admin-email@example.com]`. Blocks all outsiders with HTTP 403 at Cloudflare's edge before requests reach the server.
   - **Rule 2 (Super Users & Admin - Priority 2)**: Action = `Allow`, Selector = `CLOUDFLARE_SUPER_USER_PATHS` (`/radarr*`, `/sonarr*`), Include = `Emails: [your-email, superuser-emails]`.
@@ -1395,11 +1397,14 @@ To ensure Portalarr remains approachable for non-technical family members, trial
 ### 45. User Media Server & Library Access Verification Standards (Zero False-Positive Permissions)
 To prevent confusing false positives on user settings and profile pages:
 - **Audiobooks Plex Library Access Gating (`getUserAudiobooksLibraryAccessAction`)**:
-  - Must strictly verify whether the user actually has the Plex Audiobooks library granted via `dbUser.enabledAddons`, `dbUser.selectedPlexLibrarySectionIds`, `dbUser.plexLibrarySectionIds`, or live Plex share.
+  - Must strictly verify whether the user actually has the Plex Audiobooks library granted via active live Plex share (`livePlexShareKeys`) or explicit local library access.
+  - The presence of the `audiobooks` add-on in `enabledAddons` alone must NEVER cause "Plex Library Granted" or the toggle switch to report true if Plex has not actually granted the library.
   - Local web bookshelf libraries (`prisma.library`) with wildcard `allowedUsers: "*"` must NEVER cause "Plex Library Granted" or switch check to report true.
 - **Multi-Platform Media Servers & Libraries (`getUserMediaServersAndLibrariesAction`)**:
-  - Secondary media platforms (Jellyfin and Emby) must never default to `isServerSelected: true` or have libraries checked for users who have not opted in, been granted explicit access (`allowedServerKeys`), enabled the add-on (`jellyfin_access`), or been provisioned on the remote server.
+  - Automatically queries live Plex friend shares (`getUserPlexSharedLibraries`) to match per-server shares so all active servers (e.g. Main Server, Kids Server) and their exact shared sections properly evaluate to `isSelected: true`, completely eliminating single-server alphabetical fallback bugs.
+  - Secondary media platforms (Jellyfin and Emby) must never default to `isServerSelected: true` or have libraries checked for users who have not opted in, been granted explicit access (`allowedServerKeys`), or been provisioned on the remote server (`jellyfinUserId` / `embyUserId`).
   - When a server is unselected/disabled, its individual libraries must evaluate to `isSelected: false` with zero selections returned in `selectedMediaLibraryKeys`.
+  - On update (`updateUserMediaServersAndLibrariesAction`), preserves per-server machine identifiers (`${srvMachineId}:${secId}`) when dispatching to `syncUserPlexShareInternal` to ensure multi-server shares are never overwritten or collapsed onto a single server.
 
 ---
 
@@ -1432,3 +1437,12 @@ Detailed guide on updating: [updating-this-skill.md](./references/updating-this-
   - **Trial Account View (`role === "TRIAL"`)**: Excludes full-member exclusive features (Ebooks & Audiobooks subsystem including indented child items, multi-platform media servers, family profiles, poster curation badges, and Live TV) and smoothly adapts Unified Media Requests to `(Movies & TV Shows)`.
   - **Automatic Jargon Sanitation Pass**: Automatically translates any residual technical jargon ("Direct Play", "Quality Doctor", "playback telemetry", "homelab streaming", "Dispatcharr") into clean, friendly plain English.
   - **Mandatory Pre-Push Audit**: Verified automatically in Suite 22 of `scripts/verify-all.ts` across all 4 role views before every deployment push.
+
+### 47. Guide Surfaces & Coming Soon Alignment Standard
+- **Zero Misrepresentation Policy**: All user-facing documentation surfaces (`USER_GUIDE.md`, `user_guide_ebooks.md`, `src/app/guides/page.tsx`, `src/components/feature-guide-modal.tsx`, `src/app/join/page.tsx`, `src/lib/discord/discord-bot.ts`, `src/lib/email-templates.ts`) must strictly mirror the roadmap's Coming Soon status for upcoming platform features (e.g. Member Referral Rewards, Family Sub-Profiles, Persistent Floating Web Audio Player, Enhanced Curation & Poster Badges).
+- **Mandatory (Coming Soon) Tagging**: Upcoming features must always be labeled with `(Coming Soon)` or `*(Upcoming Feature — Currently in Development)*`, ensuring members and visitors are never misled into believing an in-development feature is already operational.
+
+### 48. Cloudflare Zero Trust Strict Admin Path Isolation
+- **Admin-Only Blocking Architecture**: Cloudflare Zero Trust blocks access strictly to designated Admin-Only paths (`/settings*`, `/admin*`, `/curation*`, `/tautulli*`, `/streams*`, `/api/admin*`, `/api/system*`, `/api/debug*`, `/api/curation*`, `/api/users*`, `/api/books/upload*`). All other paths are open at the edge and handled by Portalarr's native JWT session management.
+- **Strict Prohibition of User/Super User Features Under Admin Prefixes**: No user-facing or super-user-facing page, button, link, or API fetch may ever target an admin-only path.
+- **Canonical `/profile` Route**: User profile, server selection, and password management reside strictly at `/profile`. Any legacy hits to `/settings/profile` are automatically redirected to `/profile` on the server. Non-admins must never fetch `/api/users` on `/library` or any other view.

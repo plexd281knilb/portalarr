@@ -226,41 +226,45 @@ export const GUIDE_TOPICS: Record<FeatureGuideId, GuideTopic> = {
     },
     "audiobooks": {
         id: "audiobooks",
-        title: "Audiobooks & Chapter Studio",
-        subtitle: "Built-in floating web player, interactive chapter selection, and physical disk track reordering.",
+        title: "Audiobooks & Spoken Word Media",
+        subtitle: "Stream audiobooks in Plex and digital libraries, with upcoming in-browser background playback.",
         category: "Audiobooks",
         badgeColor: "bg-indigo-500/10 text-indigo-400 border-indigo-500/30",
         icon: Headphones,
         highlights: [
-            "Floating web player pinned at the bottom of the screen",
-            "Continuous autoplay next chapter with speed memory",
-            "Interactive Chapter Selector modal",
-            "Reorder and rename audio tracks directly on disk"
+            "Plex Audiobooks library streaming & permission auto-sync",
+            "Audiobook discovery and 1-click requests via /discover",
+            "Narrator & author metadata with chapter breakdown",
+            "Coming Soon: Persistent floating web audio player"
         ],
         sections: [
             {
-                title: "1. Floating Web Audio Player",
-                desc: "Click Play on any audiobook to begin streaming immediately:",
+                title: "1. Audiobooks Library Access & Plex Streaming",
+                desc: "Stream narrated audiobooks, series collections, and spoken-word media directly in your player apps:",
                 bullets: [
-                    "Pinned Bottom Bar: Listen uninterrupted while browsing other libraries, requests, and settings.",
-                    "Continuous Autoplay: Automatically advances to the next chapter track when the current track finishes.",
-                    "HTTP Range Streaming: Scrub and seek instantly without downloading multi-gigabyte audio files.",
-                    "Speed & Volume Memory: Remembers your preferred playback speed (1.0x, 1.25x, 1.5x, 2.0x) and volume."
+                    "Plex Library Granted: Opt into the Audiobooks section on your profile to stream seamlessly across all your devices.",
+                    "Narrator & Author Metadata: High-fidelity cover art, author biographies, and chapter structure.",
+                    "Playback Position Sync: Automatically preserves your listening progress across mobile and TV players."
                 ]
             },
             {
-                title: "2. Interactive Chapter Selector",
-                desc: "Click 'Listen & Chapters' on any audiobook card to view all detected chapter tracks, jump directly to any track, or view duration and bitrates."
+                title: "2. Audiobooks Discovery & Requests",
+                desc: "Browse trending titles and request upcoming audiobooks directly through the request hub:",
+                bullets: [
+                    "Unified Search: Search for titles, authors, and series collections in /discover.",
+                    "1-Click Auto-Grab: Request titles directly to the audiobooks download pipeline.",
+                    "Status Notifications: Receive automatic alerts when newly requested audiobooks are ready to stream."
+                ]
             },
             {
-                title: "3. Reorder & Edit Chapters on Disk",
-                desc: "Need to correct track numbering or chapter sequence?",
+                title: "3. Persistent Floating Web Audio Player (Coming Soon)",
+                desc: "Upcoming continuous audio player currently in development for web browser playback:",
                 bullets: [
-                    "Click '✏️ Reorder & Edit Chapters' inside the Chapter Selector Modal.",
-                    "Use Up / Down buttons or edit track numbers directly.",
-                    "Click 'Save Order' to physically rename and synchronize track files on disk for all users."
+                    "Pinned Bottom Bar: Listen uninterrupted while browsing other libraries, requests, and settings.",
+                    "Playback Controls: 15-second skip backward/forward, 0.75x–2.0x variable speed controls, and volume slider.",
+                    "Sleep Timer: Set 15m, 30m, 45m, or end-of-chapter automatic sleep countdowns."
                 ],
-                proTip: "Multi-disc audiobooks (e.g. Disc 01/, Disc 02/) and multi-track chapters are automatically consolidated into a single card with total duration."
+                proTip: "This feature is currently in active development and will be released in an upcoming platform update."
             }
         ]
     },
@@ -375,42 +379,53 @@ export const GUIDE_TOPICS: Record<FeatureGuideId, GuideTopic> = {
     },
     "referral-rewards": {
         id: "referral-rewards",
-        title: "Memberships & Referral Rewards",
-        subtitle: "Earn 1 free month per friend referred, annual vs monthly pricing, and managed family profiles.",
+        title: "Memberships, Plans & Payment Guide",
+        subtitle: "Annual vs monthly plan pricing, zero-fee direct P2P payments, and upcoming member perks.",
         category: "Membership",
         badgeColor: "bg-amber-500/10 text-amber-400 border-amber-500/30",
         icon: Gift,
         highlights: [
-            "Earn 1 free month ($15.00 discount) per friend who joins",
             "Annual Pass ($180/yr) vs Flexible Monthly ($17.50/mo)",
-            "P2P payments (Venmo, PayPal, Zelle)",
-            "Living Room TV & Kids PG-curated profiles"
+            "P2P direct renewal (Venmo, PayPal, Zelle)",
+            "Manage servers & library preferences on /profile",
+            "Coming Soon: Referral Rewards & Family Sub-Profiles"
         ],
         sections: [
             {
-                title: "1. Referral Rewards: Earn 1 Free Month Per Friend",
-                desc: "Share your personal invite link (/join?ref=YOUR_CODE) with friends and family:",
-                bullets: [
-                    "Annual Subscribers: Receive $15.00 off your upcoming annual renewal per friend ($180 - $15 = $165.00 for 1 friend; $180 - $30 = $150.00 for 2 friends; 12 friends = 100% FREE YEAR).",
-                    "Monthly Subscribers: Your monthly billing is delayed by +1 full month per converted friend.",
-                    "Live Statement Preview: View exact calculated renewal discounts directly on your Profile page."
-                ]
-            },
-            {
-                title: "2. Membership Plans & Cadences",
+                title: "1. Membership Plans & Cadences",
                 desc: "Choose the plan and cadence that works best for you:",
                 bullets: [
-                    "Rest-of-Year Annual Pass ($180/year): Best value ($15.00/month base). Prorated to only charge for remaining days and full months in the current year.",
+                    "Rest-of-Year Annual Pass ($180/year): Best value ($15.00/month base rate). Prorated to only charge for remaining calendar days and full months in the current year.",
                     "Flexible Monthly Plan ($17.50/month): Flexible pay-as-you-go month-to-month access with zero long-term commitment."
                 ]
             },
             {
-                title: "3. Direct P2P Payments & Automatic Matching",
-                desc: "Renew seamlessly via Venmo, PayPal, or Zelle with zero processing fees. Include your username in the payment note/memo for instant automatic matching."
+                title: "2. Direct P2P Payments & Automatic Matching",
+                desc: "Renew seamlessly via Venmo, PayPal, or Zelle with zero processing fees:",
+                bullets: [
+                    "Instant Automatic Matching: Include your username in the payment note/memo for instant automatic recognition.",
+                    "Automated Receipts: System generates an automated email confirmation receipt with updated paid-through dates.",
+                    "Live Statement: View your paid-through date and renewal details directly on /profile."
+                ]
             },
             {
-                title: "4. Managed Living Room & Kids Profiles",
-                desc: "Unlock dedicated sub-profiles for your household: Living Room TV profile with content safety filters, and Kids profile locked strictly to G/PG ratings."
+                title: "3. Member Referral Rewards (Coming Soon)",
+                desc: "Upcoming reward program for active members to earn bonus months by sharing personal invite links:",
+                bullets: [
+                    "Personal Invite Link: Share your link (/join?ref=YOUR_CODE) with friends and family.",
+                    "Annual Subscribers: Earn $15.00 off your upcoming renewal per friend (12 friends = 100% free year).",
+                    "Monthly Subscribers: Monthly billing delayed by +1 full month per converted friend.",
+                    "Live Status: This feature is currently in development and will launch in an upcoming release."
+                ]
+            },
+            {
+                title: "4. Family Sub-Profiles (Coming Soon)",
+                desc: "Upcoming household management feature currently in development:",
+                bullets: [
+                    "Living Room TV Profile: Content safety filters for shared family viewing areas.",
+                    "Kids Profile: Curated child-safe library filtering locked strictly to G/PG ratings with optional PIN protection.",
+                    "Live Status: This feature is currently in development and will launch in an upcoming release."
+                ]
             }
         ]
     },

@@ -790,10 +790,10 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 <h3 style="color: #0f172a; margin: 20px 0 8px 0;">Your Unlocked Membership Perks:</h3>
 <ul style="line-height: 1.7; padding-left: 20px; font-size: 14px; color: #334155;">
     <li>🎬 <strong>Unlimited Streaming:</strong> Original Studio Quality (4K HDR, Dolby Atmos with zero quality loss).</li>
-    <li>🧒 <strong>Dedicated Kids & Living Room Profiles:</strong> Child-safe accounts with custom PIN protection and age rating filters.</li>
-    <li>📚 <strong>Digital Ebook & Audiobook Library:</strong> In-browser Kindle Paperwhite reader, floating audio player, & Send-to-Kindle delivery.</li>
+    <li>🧒 <strong>Dedicated Kids & Living Room Profiles (Coming Soon):</strong> Child-safe accounts with custom PIN protection and age rating filters.</li>
+    <li>📚 <strong>Digital Ebook & Audiobook Library:</strong> In-browser Kindle Paperwhite reader, Plex audiobook streaming (in-browser player coming soon), & Send-to-Kindle delivery.</li>
     <li>⚡ <strong>Priority Bandwidth:</strong> High-priority dedicated streaming allocation for smooth playback anywhere.</li>
-    <li>🎁 <strong>Discord VIP & Referral Rewards:</strong> Real-time server status alerts, direct support, and earn +1 free month per friend referred.</li>
+    <li>🎁 <strong>Discord VIP & Referral Rewards (Coming Soon):</strong> Real-time server status alerts, direct support, and upcoming referral reward discounts.</li>
 </ul>
 
 <div style="text-align: center; margin: 28px 0;">
@@ -850,10 +850,10 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 <h3 style="color: #0f172a; margin: 20px 0 8px 0;">Your Full Membership Perks:</h3>
 <ul style="line-height: 1.7; padding-left: 20px; font-size: 14px; color: #334155;">
     <li>🎬 <strong>Unlimited Streaming:</strong> Original Studio Quality (4K HDR, Dolby Atmos with zero quality loss).</li>
-    <li>🧒 <strong>Dedicated Kids & Living Room Profiles:</strong> Child-safe accounts with custom PIN protection.</li>
-    <li>📚 <strong>Digital Ebook & Audiobook Library:</strong> In-browser Kindle Paperwhite mode, audio player, & Send-to-Kindle.</li>
+    <li>🧒 <strong>Dedicated Kids & Living Room Profiles (Coming Soon):</strong> Child-safe accounts with custom PIN protection.</li>
+    <li>📚 <strong>Digital Ebook & Audiobook Library:</strong> In-browser Kindle Paperwhite mode, Plex audiobooks, & Send-to-Kindle.</li>
     <li>⚡ <strong>Priority Bandwidth:</strong> High-priority dedicated streaming allocation for smooth playback anywhere.</li>
-    <li>🎁 <strong>Referral Rewards:</strong> Earn +1 free month for every friend you refer to the server!</li>
+    <li>🎁 <strong>Referral Rewards (Coming Soon):</strong> Earn +1 free month for every friend you refer to the server!</li>
 </ul>
 
 <div style="text-align: center; margin: 28px 0;">
@@ -1547,7 +1547,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px; box-sizing: border-box; word-break: break-word; overflow-wrap: anywhere;">
     <p style="margin: 0 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">4. E-Book &amp; Audiobook Library + 1-Click Send-to-Kindle (<a href="{appUrl}/library" style="color: #4f46e5; text-decoration: none;">Book &amp; Audiobook Library</a>)</p>
-    <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">Browse and request e-books and audiobooks! Read directly in your browser using the <strong>Kindle Paperwhite Web Reader</strong> or send any e-book straight to your Kindle e-reader in 1 click. Audiobooks are available directly inside your <strong>Plex app</strong> or through the portal's built-in <strong>Web Audiobook Player</strong> with full chapter navigation and speed controls.</p>
+    <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">Browse and request e-books and audiobooks! Read directly in your browser using the <strong>Kindle Paperwhite Web Reader</strong> or send any e-book straight to your Kindle e-reader in 1 click. Audiobooks are available directly inside your <strong>Plex app</strong> (with a dedicated in-browser web player coming soon) with chapter track inspection and speed controls.</p>
 </div>
 
 <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px; box-sizing: border-box; word-break: break-word; overflow-wrap: anywhere;">
