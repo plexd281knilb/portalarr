@@ -2250,6 +2250,26 @@ async function runTestSuite() {
             if (!launchTpl.defaultBody.includes("{appUrl}/profile") || launchTpl.defaultBody.includes("settings/profile")) {
                 throw new Error("new_site_launch must use clean /profile route instead of /settings/profile");
             }
+            if (launchTpl.defaultBody.includes("Step 1")) {
+                throw new Error("new_site_launch should not contain 'Step 1' header since there is no Step 2");
+            }
+            if (!launchTpl.defaultBody.includes("one site to rule them all") || !launchTpl.defaultBody.includes("troubleshoot")) {
+                throw new Error("new_site_launch missing problem-solution-outcome opening");
+            }
+            if (!launchTpl.defaultBody.includes("open-dashboard-btn") || !launchTpl.defaultBody.includes("Open Dashboard")) {
+                throw new Error("new_site_launch missing inline Open Dashboard button under login section");
+            }
+
+            // Test layout deduplication: inline dashboard button prevents duplicate footer button
+            const customLayoutHtml = wrapInPortalarrEmailLayout({
+                title: "Custom Inline Layout",
+                contentHtml: '<div class="open-dashboard-btn">Open Dashboard</div>',
+                appUrl: "https://home.domshomelab.com"
+            });
+            const occurrences = (customLayoutHtml.match(/Open Dashboard/g) || []).length;
+            if (occurrences !== 1) {
+                throw new Error(`wrapInPortalarrEmailLayout should not duplicate Open Dashboard button when present inline (found ${occurrences} occurrences)`);
+            }
 
             // 7. Comprehensive audit: verify ALL user-facing email templates NEVER reference admin-isolated paths
             const adminPrefixes = ["/settings", "/admin", "/curation", "/tautulli", "/streams"];

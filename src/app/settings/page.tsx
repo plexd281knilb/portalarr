@@ -36,7 +36,7 @@ import {
     AlertTriangle, PlaySquare, Activity, Sliders, Megaphone, Beaker, 
     CheckCircle2, XCircle, MailCheck, RefreshCw, Mail, FolderCheck, 
     Radio, ExternalLink, FileCode, Check, Bot, Sparkles, Key, Cpu, Eye, EyeOff, Terminal, Zap, Tv,
-    Bell, BellOff, UserCheck, BookOpen, LifeBuoy, Save, RotateCcw, Star, Globe, Compass, MessageSquare, History, Search, Server
+    Bell, BellOff, UserCheck, BookOpen, LifeBuoy, Save, RotateCcw, Star, Globe, Compass, MessageSquare, History, Search, Server, ArrowUpRight
 } from "lucide-react";
 import { 
     Dialog, 
@@ -53,7 +53,7 @@ import SystemLogsViewer from "@/components/system-logs-viewer";
 import EmailManagement from "@/components/email-management";
 import { SeerrSettingsPanel, SeerrSettingsPanelHandle } from "@/components/seerr/seerr-settings-panel";
 import DiscordSettingsPanel, { DiscordSettingsPanelHandle } from "@/components/discord/discord-settings-panel";
-import CloudflarePolicyCard from "@/components/cloudflare-policy-card";
+
 import { AdminMediaServersPanel, AdminMediaServersPanelHandle } from "@/components/settings/admin-media-servers-panel";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -1992,7 +1992,35 @@ function SettingsPageContent() {
                                 </CardContent>
                             </Card>
 
-                            <CloudflarePolicyCard />
+                            {/* CLOUDFLARE EDGE SECURITY SHORTCUT BANNER */}
+                            <div className="p-4 rounded-xl bg-gradient-to-r from-orange-500/10 via-amber-500/5 to-transparent border border-orange-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
+                                <div className="flex items-center gap-3 min-w-0">
+                                    <div className="h-10 w-10 rounded-xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-center shrink-0">
+                                        <Shield className="h-5 w-5 text-orange-400" />
+                                    </div>
+                                    <div className="min-w-0 space-y-0.5">
+                                        <div className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                                            <span>Cloudflare Access & Edge Security Policy Paths</span>
+                                            <Badge variant="outline" className="text-[10px] bg-orange-500/10 text-orange-300 border-orange-500/30">
+                                                Access Control Tab
+                                            </Badge>
+                                        </div>
+                                        <p className="text-[11px] text-muted-foreground truncate">
+                                            Configure Zero Trust Tunnel hostnames, Admin-only edge blocks, and inspect open member routes.
+                                        </p>
+                                    </div>
+                                </div>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => navigateToTab("cloudflare")}
+                                    className="text-xs font-semibold gap-1.5 border-orange-500/40 text-orange-300 hover:bg-orange-500/10 shrink-0 self-start sm:self-auto cursor-pointer"
+                                >
+                                    <span>Open Cloudflare Access</span>
+                                    <ArrowUpRight className="h-3.5 w-3.5" />
+                                </Button>
+                            </div>
                         </div>
                     )}
 
