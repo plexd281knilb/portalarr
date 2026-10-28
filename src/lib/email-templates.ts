@@ -1506,10 +1506,15 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         category: "BROADCAST",
         defaultSubject: "Welcome to the New DomsHomeLab Portal — Login & Feature Guide",
         defaultBody: `<h2 style="margin-top: 0; color: #0f172a;">Welcome to the New DomsHomeLab Portal, {username}!</h2>
-<p style="color: #334155; font-size: 14.5px; line-height: 1.6;">I have officially launched my brand-new, all-in-one <strong>DomsHomeLab (d281knilb)</strong> portal! Instead of juggling multiple links or messaging whenever a movie is missing or a stream buffers, you now have a single unified command center for movies, TV shows, e-books, audiobooks, live stream diagnostics, and account management.</p>
 
-<div style="background: linear-gradient(135deg, #eef2ff 0%, #f8fafc 100%); border: 1px solid #c7d2fe; border-left: 4px solid #4f46e5; padding: 18px 20px; border-radius: 10px; margin: 22px 0; box-sizing: border-box; word-break: break-word; overflow-wrap: anywhere;">
-    <p style="margin: 0 0 10px 0; font-size: 13px; font-weight: 800; color: #4338ca; text-transform: uppercase; letter-spacing: 0.5px;">Step 1: How to Log In &amp; Get Started</p>
+<p style="color: #334155; font-size: 14.5px; line-height: 1.6; margin-bottom: 14px;">I wanted to reach out personally because I know how frustrating and disjointed things have felt at times. Between juggling multiple different links, trying to navigate completely separate interfaces, getting scattered emails from different sources, and never really knowing where to go or who to contact when a stream buffers or something isn't working—it was clunky, and I truly care about giving you a smooth, effortless experience.</p>
+
+<p style="color: #334155; font-size: 14.5px; line-height: 1.6; margin-bottom: 14px;">To solve this once and for all, I built one site to rule them all: <strong>DomsHomeLab (d281knilb)</strong>.</p>
+
+<p style="color: #334155; font-size: 14.5px; line-height: 1.6; margin-bottom: 22px;">This site was built specifically for you as your all-in-one home base. Now, whenever you need to request a movie or show, troubleshoot or auto-repair playback issues, explore new features and add-ons (like our full e-book &amp; audiobook library), or easily customize your email notification preferences, you have a single dedicated place to go.</p>
+
+<div style="background: linear-gradient(135deg, #eef2ff 0%, #f8fafc 100%); border: 1px solid #c7d2fe; border-left: 4px solid #4f46e5; padding: 18px 20px; border-radius: 10px; margin: 22px 0 24px 0; box-sizing: border-box; word-break: break-word; overflow-wrap: anywhere;">
+    <p style="margin: 0 0 10px 0; font-size: 13px; font-weight: 800; color: #4338ca; text-transform: uppercase; letter-spacing: 0.5px;">How to Log In &amp; Get Started</p>
     <table style="width: 100%; border-collapse: collapse; font-size: 14px; color: #1e293b; margin-bottom: 12px; table-layout: fixed;">
         <tr>
             <td style="padding: 4px 0; font-weight: 700; width: 130px; color: #475569; vertical-align: top;">Portal Website:</td>
@@ -1520,11 +1525,14 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
             <td style="padding: 4px 0; word-break: break-all; overflow-wrap: anywhere;"><code style="background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-weight: 700; color: #0f172a;">{username}</code></td>
         </tr>
     </table>
-    <div style="background-color: #ffffff; border: 1px solid #e0e7ff; border-radius: 8px; padding: 12px 14px; box-sizing: border-box; word-break: break-word; overflow-wrap: anywhere;">
+    <div style="background-color: #ffffff; border: 1px solid #e0e7ff; border-radius: 8px; padding: 12px 14px; box-sizing: border-box; word-break: break-word; overflow-wrap: anywhere; margin-bottom: 14px;">
         <p style="margin: 0 0 4px 0; font-size: 13px; font-weight: 700; color: #1e293b;">How to Sign In:</p>
         <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.55; word-break: break-word; overflow-wrap: anywhere;">
             Click <strong>"Sign In with Plex"</strong> for instant 1-click access using your existing Plex account, or sign in with your portal username &amp; password at <a href="{loginUrl}" style="color: #4f46e5; font-weight: 600; text-decoration: underline; word-break: break-all;">{loginUrl}</a>.
         </p>
+    </div>
+    <div style="text-align: center; margin-top: 14px;">
+        <a href="{appUrl}" class="open-dashboard-btn" style="background-color: #4f46e5; color: #ffffff !important; text-decoration: none; font-weight: 800; font-size: 14px; padding: 12px 28px; border-radius: 8px; display: inline-block; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);">Open Dashboard &rarr;</a>
     </div>
 </div>
 
@@ -1570,11 +1578,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
     <p style="margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;">Link your Discord account in your <a href="{appUrl}/profile" style="color: #4f46e5; font-weight: 600; text-decoration: underline;">profile</a> for instant request notifications and community roles, or open a support ticket anytime at <a href="{appUrl}/tickets" style="color: #4f46e5; text-decoration: none;">Support Tickets</a> if you ever need a hand.</p>
 </div>
 
-<div style="text-align: center; margin: 28px 0 18px 0;">
-    <a href="{appUrl}" style="background-color: #4f46e5; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 800; font-size: 15px; display: inline-block; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);">Launch DomsHomeLab Portal &rarr;</a>
-</div>
-
-<p style="font-size: 13px; color: #64748b; text-align: center; margin-top: 16px;">Bookmark <strong><a href="{appUrl}" style="color: #4f46e5; text-decoration: none;">{appUrl}</a></strong> on your phone and computer for quick access. Happy streaming &amp; reading!</p>`,
+<p style="font-size: 13.5px; color: #64748b; text-align: center; margin-top: 24px;">Bookmark <strong><a href="{appUrl}" style="color: #4f46e5; text-decoration: none;">{appUrl}</a></strong> on your phone and computer for quick access. Happy streaming &amp; reading!</p>`,
         variables: [
             { key: "{username}", description: "Recipient's username", sampleValue: "alex_stream" },
             { key: "{email}", description: "Recipient's email address", sampleValue: "alex@example.com" },
@@ -1706,11 +1710,13 @@ export function wrapInPortalarrEmailLayout(options: {
                 <p class="email-footer-text" style="margin: 0 0 10px 0; font-weight: 600; color: #475569;">
                     ${portalName} &bull; ${serverName} Media Server
                 </p>
+                ${!options.contentHtml.includes("Open Dashboard") && !options.contentHtml.includes("open-dashboard-btn") ? `
                 <div style="margin: 8px 0 12px 0;">
                     <a href="${appUrl}" class="open-dashboard-btn" style="background-color: #4f46e5; color: #ffffff !important; text-decoration: none; font-weight: 700; font-size: 12px; padding: 8px 18px; border-radius: 6px; display: inline-block; box-shadow: 0 2px 6px rgba(79, 70, 229, 0.25);">
                         Open Dashboard &rarr;
                     </a>
                 </div>
+                ` : ""}
                 <p class="email-footer-copyright" style="margin: 8px 0 0 0; font-size: 11px; color: #64748b;">
                     &copy; ${currentYear} ${portalName}. All rights reserved.
                 </p>

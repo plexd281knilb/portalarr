@@ -1249,14 +1249,16 @@ export default function EmailManagement() {
                                                     </div>
 
                                                     <div className="pt-4 border-t border-slate-200 dark:border-white/10 text-center space-y-2">
-                                                        <a 
-                                                            href={typeof window !== "undefined" ? window.location.origin : "/"}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="inline-flex items-center justify-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-bold text-xs px-5 py-2.5 rounded-lg shadow-md transition-all cursor-pointer ring-2 ring-indigo-500/20"
-                                                        >
-                                                            Open Dashboard &rarr;
-                                                        </a>
+                                                        {(!broadcastBody.includes("Open Dashboard") && !broadcastBody.includes("open-dashboard-btn")) && (
+                                                            <a 
+                                                                href={typeof window !== "undefined" ? window.location.origin : "/"}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="inline-flex items-center justify-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-bold text-xs px-5 py-2.5 rounded-lg shadow-md transition-all cursor-pointer ring-2 ring-indigo-500/20"
+                                                            >
+                                                                Open Dashboard &rarr;
+                                                            </a>
+                                                        )}
                                                         <p className="text-[11px] text-slate-500 dark:text-slate-400">
                                                             DomsHomeLab • d281knilb Media Server
                                                         </p>
@@ -1757,14 +1759,16 @@ export default function EmailManagement() {
                                                         </div>
 
                                                         <div className="pt-4 border-t border-slate-200 dark:border-white/10 text-center space-y-2">
-                                                            <a 
-                                                                href={typeof window !== "undefined" ? window.location.origin : "/"}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                                className="inline-flex items-center justify-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-bold text-xs px-5 py-2.5 rounded-lg shadow-md transition-all cursor-pointer ring-2 ring-indigo-500/20"
-                                                            >
-                                                                Open Dashboard &rarr;
-                                                            </a>
+                                                            {(!renderedTemplateBodyPreview.includes("Open Dashboard") && !renderedTemplateBodyPreview.includes("open-dashboard-btn")) && (
+                                                                <a 
+                                                                    href={typeof window !== "undefined" ? window.location.origin : "/"}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="inline-flex items-center justify-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-bold text-xs px-5 py-2.5 rounded-lg shadow-md transition-all cursor-pointer ring-2 ring-indigo-500/20"
+                                                                >
+                                                                    Open Dashboard &rarr;
+                                                                </a>
+                                                            )}
                                                             <p className="text-[11px] text-slate-500 dark:text-slate-400">
                                                                 DomsHomeLab • d281knilb Media Server
                                                             </p>
