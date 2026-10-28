@@ -61,7 +61,7 @@ import {
     UserCheck, Trash2, UserPlus, Shield, User, Mail, MailCheck, CheckCircle2, XCircle, 
     Clock, Play, RefreshCw, Loader2, KeyRound, Search, CheckCheck, Send, Edit2,
     Layers, Timer, Gift, Trophy, DollarSign, CreditCard, Sparkles, AlertTriangle,
-    FolderCheck, ShieldAlert, Check, Users, ArrowUpRight, Copy, Calculator, Calendar, Monitor, Server, PauseCircle, SlidersHorizontal,
+    FolderCheck, ShieldAlert, Check, Users, ArrowUpRight, Copy, Calculator, Calendar, Monitor, Server, PauseCircle, SlidersHorizontal, ArrowUpDown,
     Eye, Music, BookOpen, Tv, Baby, X, CalendarClock, Zap, BellRing, Gamepad2, Filter, Headphones
 } from "lucide-react";
 import { DiscordMemberManagerModal } from "@/components/discord-member-manager-modal";
@@ -98,6 +98,23 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
     const [restoreStatusMsg, setRestoreStatusMsg] = useState("");
     const [filterStatus, setFilterStatus] = useState<"ALL" | "PENDING" | "APPROVED" | "TRIAL" | "INACTIVE">("ALL");
     const [searchQuery, setSearchQuery] = useState("");
+    const [sortBy, setSortBy] = useState<"last_login_desc" | "last_login_asc" | "username_asc" | "username_desc" | "joined_desc" | "joined_asc" | "name_asc" | "expiration_asc" | "expiration_desc" | "status_asc">("joined_desc");
+
+    useEffect(() => {
+        if (typeof window !== "undefined") {
+            const savedSort = localStorage.getItem("user-directory-sort");
+            if (savedSort) {
+                setSortBy(savedSort as any);
+            }
+        }
+    }, []);
+
+    const handleSortChange = (newSort: any) => {
+        setSortBy(newSort);
+        if (typeof window !== "undefined") {
+            localStorage.setItem("user-directory-sort", newSort);
+        }
+    };
     const [showDiscordModal, setShowDiscordModal] = useState(false);
 
     // Plex Libraries & Shares state
@@ -1740,6 +1757,80 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
         return matchStatus && matchSearch;
     });
 
+    // Sort filtered users
+    const sortedAndFilteredUsers = [...filteredUsers].sort((a, b) => {
+        switch (sortBy) {
+            case "last_login_desc": {
+                const timeA = a.lastLogin ? new Date(a.lastLogin).getTime() : 0;
+                const timeB = b.lastLogin ? new Date(b.lastLogin).getTime() : 0;
+                if (timeA && !timeB) return -1;
+                if (!timeA && timeB) return 1;
+                if (!timeA && !timeB) return (a.username || "").localeCompare(b.username || "");
+                return timeB - timeA;
+            }
+            case "last_login_asc": {
+                const timeA = a.lastLogin ? new Date(a.lastLogin).getTime() : 0;
+                const timeB = b.lastLogin ? new Date(b.lastLogin).getTime() : 0;
+                if (!timeA && timeB) return -1;
+                if (timeA && !timeB) return 1;
+                if (!timeA && !timeB) return (a.username || "").localeCompare(b.username || "");
+                return timeA - timeB;
+            }
+            case "username_asc": {
+                return (a.username || "").localeCompare(b.username || "", undefined, { sensitivity: "base" });
+            }
+            case "username_desc": {
+                return (b.username || "").localeCompare(a.username || "", undefined, { sensitivity: "base" });
+            }
+            case "joined_desc": {
+                const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                return timeB - timeA;
+            }
+            case "joined_asc": {
+                const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                return timeA - timeB;
+            }
+            case "name_asc": {
+                const nameA = (a.name || a.username || "").trim();
+                const nameB = (b.name || b.username || "").trim();
+                return nameA.localeCompare(nameB, undefined, { sensitivity: "base" });
+            }
+            case "expiration_asc": {
+                const expA = a.subscriptionEndsAt || a.trialEndsAt;
+                const expB = b.subscriptionEndsAt || b.trialEndsAt;
+                const timeA = expA ? new Date(expA).getTime() : Infinity;
+                const timeB = expB ? new Date(expB).getTime() : Infinity;
+                if (timeA === Infinity && timeB === Infinity) return (a.username || "").localeCompare(b.username || "");
+                return timeA - timeB;
+            }
+            case "expiration_desc": {
+                const expA = a.subscriptionEndsAt || a.trialEndsAt;
+                const expB = b.subscriptionEndsAt || b.trialEndsAt;
+                const timeA = expA ? new Date(expA).getTime() : 0;
+                const timeB = expB ? new Date(expB).getTime() : 0;
+                return timeB - timeA;
+            }
+            case "status_asc": {
+                const statusOrder: Record<string, number> = {
+                    PENDING: 1,
+                    TRIAL: 2,
+                    APPROVED: 3,
+                    EXPIRED: 4,
+                    SUSPENDED: 5,
+                    REJECTED: 6
+                };
+                const orderA = statusOrder[a.status] || 99;
+                const orderB = statusOrder[b.status] || 99;
+                if (orderA !== orderB) return orderA - orderB;
+                return (a.username || "").localeCompare(b.username || "");
+            }
+            default:
+                return 0;
+        }
+    });
+
     // Helper to calculate trial days left
     const getDaysLeft = (endsAt: string | null) => {
         if (!endsAt) return 0;
@@ -2098,20 +2189,55 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                 </div>
                             )}
 
-                            <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 pt-2 min-w-0">
-                                {/* SEARCH INPUT */}
-                                <div className="relative flex-1 min-w-0 sm:min-w-[220px]">
-                                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                                    <Input 
-                                        placeholder="Search by username, email, referrer..." 
-                                        className="pl-9 text-xs h-9 bg-background/60 w-full"
-                                        value={searchQuery}
-                                        onChange={(e) => setSearchQuery(e.target.value)}
-                                    />
+                            <div className="flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3 pt-2 min-w-0">
+                                {/* SEARCH INPUT & SORT DROPDOWN */}
+                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-1 min-w-0">
+                                    <div className="relative flex-1 min-w-0 sm:min-w-[220px]">
+                                        <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                                        <Input 
+                                            placeholder="Search by username, email, referrer..." 
+                                            className="pl-9 text-xs h-9 bg-background/60 w-full"
+                                            value={searchQuery}
+                                            onChange={(e) => setSearchQuery(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                        <Select value={sortBy} onValueChange={handleSortChange}>
+                                            <SelectTrigger className="h-9 text-xs w-full sm:w-[215px] bg-background/60 border-border/50 shrink-0 font-medium cursor-pointer">
+                                                <div className="flex items-center gap-2 truncate">
+                                                    <ArrowUpDown className="h-3.5 w-3.5 text-primary shrink-0" />
+                                                    <span className="truncate">
+                                                        {sortBy === 'last_login_desc' && '⚡ Last Login: Recent'}
+                                                        {sortBy === 'last_login_asc' && '💤 Last Login: Oldest/Never'}
+                                                        {sortBy === 'username_asc' && '🔤 Username: A → Z'}
+                                                        {sortBy === 'username_desc' && '🔤 Username: Z → A'}
+                                                        {sortBy === 'joined_desc' && '📅 Joined: Newest First'}
+                                                        {sortBy === 'joined_asc' && '📅 Joined: Oldest First'}
+                                                        {sortBy === 'name_asc' && '👤 Real Name: A → Z'}
+                                                        {sortBy === 'expiration_asc' && '⏳ Expiring Soonest'}
+                                                        {sortBy === 'expiration_desc' && '🛡️ Furthest Expiration'}
+                                                        {sortBy === 'status_asc' && '🚦 Account Status'}
+                                                    </span>
+                                                </div>
+                                            </SelectTrigger>
+                                            <SelectContent className="text-xs bg-[#121218] border-border/60">
+                                                <SelectItem value="last_login_desc">⚡ Last Login: Most Recent First</SelectItem>
+                                                <SelectItem value="last_login_asc">💤 Last Login: Oldest / Never First</SelectItem>
+                                                <SelectItem value="username_asc">🔤 Username: Alphabetical (A → Z)</SelectItem>
+                                                <SelectItem value="username_desc">🔤 Username: Reverse (Z → A)</SelectItem>
+                                                <SelectItem value="joined_desc">📅 Joined Date: Newest First</SelectItem>
+                                                <SelectItem value="joined_asc">📅 Joined Date: Oldest First</SelectItem>
+                                                <SelectItem value="name_asc">👤 Real Name: Alphabetical (A → Z)</SelectItem>
+                                                <SelectItem value="expiration_asc">⏳ Expiration: Expiring Soonest First</SelectItem>
+                                                <SelectItem value="expiration_desc">🛡️ Expiration: Furthest Remaining First</SelectItem>
+                                                <SelectItem value="status_asc">🚦 Status: Pending → Active → Expired</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
                                 </div>
 
                                 {/* STATUS FILTER BUTTONS */}
-                                <div className="flex flex-wrap sm:flex-nowrap lg:flex-wrap overflow-x-auto no-scrollbar gap-1 bg-muted/30 p-1 rounded-xl border border-muted/50 text-xs w-full lg:w-auto max-w-full">
+                                <div className="flex flex-wrap sm:flex-nowrap lg:flex-wrap overflow-x-auto no-scrollbar gap-1 bg-muted/30 p-1 rounded-xl border border-muted/50 text-xs w-full xl:w-auto max-w-full">
                                     <Button 
                                         variant={filterStatus === "ALL" ? "secondary" : "ghost"} 
                                         size="sm" 
@@ -2187,7 +2313,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                 )}
 
                                 {/* BULK SELECTION & ACTIONS TOOLBAR */}
-                                {!loading && filteredUsers.length > 0 && (
+                                {!loading && sortedAndFilteredUsers.length > 0 && (
                                     <div className="space-y-2.5">
                                         {/* Master Select Bar */}
                                         <div className="flex flex-wrap items-center justify-between gap-2.5 p-2.5 bg-muted/20 rounded-xl border border-border/40 text-xs">
@@ -2195,12 +2321,12 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                 <input
                                                     type="checkbox"
                                                     id="bulk-select-all"
-                                                    checked={filteredUsers.length > 0 && filteredUsers.every(u => selectedUserIds.includes(u.id))}
-                                                    onChange={() => handleSelectAllFiltered(filteredUsers)}
+                                                    checked={sortedAndFilteredUsers.length > 0 && sortedAndFilteredUsers.every(u => selectedUserIds.includes(u.id))}
+                                                    onChange={() => handleSelectAllFiltered(sortedAndFilteredUsers)}
                                                     className="h-4 w-4 rounded border-slate-750 bg-slate-950 text-amber-500 focus:ring-amber-500/30 cursor-pointer"
                                                 />
                                                 <label htmlFor="bulk-select-all" className="font-semibold text-foreground cursor-pointer select-none">
-                                                    Select All Filtered ({filteredUsers.length})
+                                                    Select All Filtered ({sortedAndFilteredUsers.length})
                                                 </label>
                                                 {selectedUserIds.length > 0 && (
                                                     <Badge variant="outline" className="text-[11px] bg-amber-500/15 text-amber-300 border-amber-500/40 font-bold px-2 py-0.5">
@@ -2323,12 +2449,12 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                     <div className="text-sm text-muted-foreground flex items-center gap-2 p-6 justify-center">
                                         <Loader2 className="h-5 w-5 animate-spin text-emerald-400" /> Loading user directory...
                                     </div>
-                                ) : filteredUsers.length === 0 ? (
+                                ) : sortedAndFilteredUsers.length === 0 ? (
                                     <div className="text-sm text-muted-foreground italic p-8 text-center border border-dashed border-border/40 rounded-xl bg-muted/10">
                                         No matching users found.
                                     </div>
                                 ) : (
-                                    filteredUsers.map((user) => {
+                                    sortedAndFilteredUsers.map((user) => {
                                         const isTrial = user.status === "TRIAL";
                                         const isSuspended = user.status === "SUSPENDED";
                                         const isExpired = user.status === "EXPIRED";
