@@ -2253,7 +2253,7 @@ async function runTestSuite() {
             if (launchTpl.defaultBody.includes("Step 1")) {
                 throw new Error("new_site_launch should not contain 'Step 1' header since there is no Step 2");
             }
-            if (!launchTpl.defaultBody.includes("one site to rule them all") || !launchTpl.defaultBody.includes("troubleshoot")) {
+            if (!launchTpl.defaultBody.includes("centralized platform") || !launchTpl.defaultBody.includes("troubleshoot")) {
                 throw new Error("new_site_launch missing problem-solution-outcome opening");
             }
             if (!launchTpl.defaultBody.includes("open-dashboard-btn") || !launchTpl.defaultBody.includes("Open Dashboard")) {
