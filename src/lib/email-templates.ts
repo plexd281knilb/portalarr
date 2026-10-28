@@ -1507,11 +1507,11 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
         defaultSubject: "Welcome to the New DomsHomeLab Portal — Login & Feature Guide",
         defaultBody: `<h2 style="margin-top: 0; color: #0f172a;">Welcome to the New DomsHomeLab Portal, {username}!</h2>
 
-<p style="color: #334155; font-size: 14.5px; line-height: 1.6; margin-bottom: 14px;">I wanted to reach out personally because I know how frustrating and disjointed things have felt at times. Between juggling multiple different links, trying to navigate completely separate interfaces, getting scattered emails from different sources, and never really knowing where to go or who to contact when a stream buffers or something isn't working—it was clunky, and I truly care about giving you a smooth, effortless experience.</p>
+<p style="color: #334155; font-size: 14.5px; line-height: 1.6; margin-bottom: 14px;">Over the past few months, things had gotten a bit messy with the server. Between juggling different bookmarks, jumping across confusing interfaces, getting scattered emails from random services, and not knowing where to turn when a stream buffered or a show was missing—it was just too much hassle.</p>
 
-<p style="color: #334155; font-size: 14.5px; line-height: 1.6; margin-bottom: 14px;">To solve this once and for all, I built one site to rule them all: <strong>DomsHomeLab (d281knilb)</strong>.</p>
+<p style="color: #334155; font-size: 14.5px; line-height: 1.6; margin-bottom: 14px;">I wanted to make things way simpler for everyone, so I built one site to rule them all: <strong>DomsHomeLab (d281knilb)</strong>.</p>
 
-<p style="color: #334155; font-size: 14.5px; line-height: 1.6; margin-bottom: 22px;">This site was built specifically for you as your all-in-one home base. Now, whenever you need to request a movie or show, troubleshoot or auto-repair playback issues, explore new features and add-ons (like our full e-book &amp; audiobook library), or easily customize your email notification preferences, you have a single dedicated place to go.</p>
+<p style="color: #334155; font-size: 14.5px; line-height: 1.6; margin-bottom: 22px;">Think of it as your new all-in-one home base. Now you have a single, easy spot to request movies and shows, troubleshoot and fix stream issues on the fly, check out new add-ons like the Kindle book and audiobook library, and dial in your email notification controls so you only get what you actually want.</p>
 
 <div style="background: linear-gradient(135deg, #eef2ff 0%, #f8fafc 100%); border: 1px solid #c7d2fe; border-left: 4px solid #4f46e5; padding: 18px 20px; border-radius: 10px; margin: 22px 0 24px 0; box-sizing: border-box; word-break: break-word; overflow-wrap: anywhere;">
     <p style="margin: 0 0 10px 0; font-size: 13px; font-weight: 800; color: #4338ca; text-transform: uppercase; letter-spacing: 0.5px;">How to Log In &amp; Get Started</p>
