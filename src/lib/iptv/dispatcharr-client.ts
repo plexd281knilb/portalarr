@@ -219,7 +219,6 @@ export async function testDispatcharrConnection(customUrl?: string, customApiKey
         };
         if (apiKey) {
             headers["X-API-Key"] = apiKey;
-            headers["Authorization"] = `Bearer ${apiKey}`;
         }
 
         const res = await fetch(`${baseUrl}/api/channels/profiles/`, {
@@ -297,7 +296,6 @@ export async function syncDispatcharrLineup(): Promise<{
         const headers: Record<string, string> = { "Accept": "application/json" };
         if (apiKey) {
             headers["X-API-Key"] = apiKey;
-            headers["Authorization"] = `Bearer ${apiKey}`;
         }
 
         const profRes = await fetch(`${baseUrl}/api/channels/profiles/`, {
