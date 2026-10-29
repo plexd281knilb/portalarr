@@ -176,3 +176,43 @@ Standard grid layout for media shelves and discovery pages:
     2. Fallback to `/api/media/image` proxy if primary fails or is missing.
     3. Styled placeholder container with `Tv`/`Film` icon and title line clamping if both fail.
 
+---
+
+## 9. Horizontal Library Media Cards & Anti-Overlap Architecture (Sonarr & Radarr)
+
+- **Problem & Failure Mode**:
+  - In horizontal media cards (e.g. Sonarr TV shows, Radarr movies), positioning status badges (like `MONITORED` or `NO SEASONS MONITORED`) or quick-action icons using `absolute top-2 right-2` while the title in the main content container uses `h4 className="truncate pr-6"` causes text collision. Long titles or medium-length titles on narrow viewports/multi-column grids render directly behind and through the badge and buttons, making both completely unreadable.
+- **Architectural Solution: Natural Flex Header Row**:
+  - Avoid `absolute` positioning for corner badges on horizontal cards where the title occupies the top line.
+  - Structure the header as a dedicated flex container with `items-start justify-between gap-2 min-w-0`:
+    ```tsx
+    <div className="flex items-start justify-between gap-2 min-w-0">
+      <h4
+        className="font-semibold text-sm truncate flex-1 min-w-0 text-foreground"
+        title={`${item.title} (${item.year})`}
+      >
+        {item.title}{" "}
+        <span className="text-muted-foreground font-normal text-xs">
+          ({item.year})
+        </span>
+      </h4>
+      <div className="flex items-center gap-1.5 shrink-0">
+        {/* Quick toggle icon & status badge */}
+        <Badge
+          variant="secondary"
+          className={`text-[9px] px-1.5 font-bold uppercase tracking-wider ${
+            isMonitored
+              ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+              : "bg-muted/40 text-muted-foreground border-border/40"
+          }`}
+        >
+          {isMonitored ? "Monitored" : "Unmonitored"}
+        </Badge>
+      </div>
+    </div>
+    ```
+  - **Rules**:
+    1. The title heading MUST have `flex-1 min-w-0 truncate` (with native `title` attribute for full title hover tooltips).
+    2. The status badge / action container MUST have `shrink-0`.
+    3. The title and badges are sibling elements in normal document flow, guaranteeing that titles truncate cleanly with an ellipsis (`...`) before touching the status badges across all viewport widths with 0% chance of overlap.
+

@@ -707,8 +707,14 @@ export default function RadarrPage() {
                         )}
                       </div>
                       <div className="flex flex-col flex-1 min-w-0 py-1">
-                        <h4 className="font-semibold text-sm truncate">
-                          {movie.title} ({movie.year})
+                        <h4
+                          className="font-semibold text-sm truncate text-foreground"
+                          title={`${movie.title} (${movie.year})`}
+                        >
+                          {movie.title}{" "}
+                          <span className="text-muted-foreground font-normal text-xs">
+                            ({movie.year})
+                          </span>
                         </h4>
                         {(movie.inCinemas ||
                           movie.digitalRelease ||
@@ -878,7 +884,7 @@ export default function RadarrPage() {
                       return (
                         <div
                           key={movie.id}
-                          className="flex gap-4 border border-border/50 rounded-xl p-3.5 bg-[#101014]/90 backdrop-blur-md hover:border-blue-500/40 hover:ring-2 hover:ring-blue-500/20 hover:shadow-lg transition-all duration-200 relative"
+                          className="flex gap-4 border border-border/50 rounded-xl p-3.5 bg-[#101014]/90 backdrop-blur-md hover:border-blue-500/40 hover:ring-2 hover:ring-blue-500/20 hover:shadow-lg transition-all duration-200"
                         >
                           <div className="w-16 sm:w-20 h-24 sm:h-28 shrink-0 bg-muted/30 border border-border/40 rounded-lg overflow-hidden relative shadow-sm">
                             {coverImg ? (
@@ -894,9 +900,45 @@ export default function RadarrPage() {
                             )}
                           </div>
                           <div className="flex flex-col flex-1 min-w-0 py-0.5">
-                            <h4 className="font-semibold text-sm truncate pr-6" title={`${movie.title} (${movie.year})`}>
-                              {movie.title} ({movie.year})
-                            </h4>
+                            {/* Header row: title and monitor status cleanly separated in flex layout */}
+                            <div className="flex items-start justify-between gap-2 min-w-0">
+                              <h4
+                                className="font-semibold text-sm truncate flex-1 min-w-0 text-foreground"
+                                title={`${movie.title} (${movie.year})`}
+                              >
+                                {movie.title}{" "}
+                                <span className="text-muted-foreground font-normal text-xs">
+                                  ({movie.year})
+                                </span>
+                              </h4>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <Badge
+                                  variant="secondary"
+                                  onClick={() => {
+                                    if (movie.monitored) {
+                                      if (
+                                        !window.confirm(
+                                          `Are you sure you want to unmonitor "${movie.title}"?\n\nRadarr will no longer automatically search for or download new releases, upgrades, or missing files for this title.`,
+                                        )
+                                      )
+                                        return;
+                                    }
+                                    handleToggleMonitor(movie);
+                                  }}
+                                  className={`text-[9px] px-1.5 font-bold uppercase tracking-wider cursor-pointer hover:opacity-80 transition-opacity ${
+                                    movie.monitored
+                                      ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                                      : "bg-muted/40 text-muted-foreground border-border/40"
+                                  }`}
+                                  title={movie.monitored ? "Click to unmonitor" : "Click to monitor"}
+                                >
+                                  {modifyingId === movie.id ? (
+                                    <Loader2 className="h-2.5 w-2.5 animate-spin mr-1 inline" />
+                                  ) : null}
+                                  {movie.monitored ? "Monitored" : "Unmonitored"}
+                                </Badge>
+                              </div>
+                            </div>
                             {(movie.inCinemas ||
                               movie.digitalRelease ||
                               movie.physicalRelease) && (
@@ -936,7 +978,7 @@ export default function RadarrPage() {
                                   ? "Downloaded"
                                   : movie.monitored
                                     ? "Missing"
-                                    : "Not Monitored"}
+                                    : "No File"}
                               </Badge>
                               <Badge
                                 variant="outline"
@@ -1026,16 +1068,6 @@ export default function RadarrPage() {
                                 <Trash2 className="h-3.5 w-3.5" />
                               </Button>
                             </div>
-                          </div>
-                          <div className="absolute top-2 right-2 flex items-center">
-                            {movie.monitored && (
-                              <Badge
-                                variant="secondary"
-                                className="bg-emerald-500/20 text-emerald-400 text-[9px] px-1.5 border-emerald-500/30"
-                              >
-                                MONITORED
-                              </Badge>
-                            )}
                           </div>
                         </div>
                       );
