@@ -107,6 +107,11 @@ Portalarr leverages a strict, multi-tiered Google Gemini subagent architecture d
    - **Model**: Gemini 3.5 Flash Lite (`Model: "flash_lite"`) or Gemini 3.8 Flash (`Model: "flash"`).
    - **When to Invoke**: Audits `src/proxy.ts` and `CLOUDFLARE_ADMIN_PATHS` to ensure newly added routes are protected, checks `git status` for clean trees, and verifies SemVer compliance.
 
+### 🔔 Proactive User Model-Switching Notification Rule (Mandatory)
+Because the root chat UI model selector directly controls whether turns consume **Gemini 4 Argon** quota or **Gemini 3.8 Flash** quota, you MUST proactively advise the user whenever to switch models:
+1. **When to Recommend Switching TO Argon 4.0**: If the session is on Flash and the user requests a brand-new subsystem architecture, multi-table Prisma schema redesign, complex security model, or intricate algorithmic puzzle, pause and tell the user: *"🔔 **Switch to Argon 4.0**: Please switch your model dropdown to **Gemini 4 Argon** so we can architect the foundation."*
+2. **When to Recommend Switching BACK to Flash 3.8**: As soon as the Argon 4.0 architectural foundation, database schema, and core backend logic are complete—and BEFORE starting high-volume frontend UI components, styling, `npm test`, or `npm run build` loops—immediately stop and tell the user: *"🔔 **Switch Back to Flash 3.8**: The Argon 4.0 foundation is complete! Switch your model dropdown back to **Gemini 3.8 Flash** now to save your 4.0 quota while we build the UI and run verification."*
+
 ### ⚡ Quota Depletion & Graceful Fallback Protocol
 When calling Layer 1 (`deep-architect`) with `Model: "pro"`:
 1. **Detection**: If the API returns a rate limit (HTTP 429), quota exhaustion, or timeout error:

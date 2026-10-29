@@ -90,6 +90,14 @@ Portalarr leverages a strict, multi-tiered Google Gemini subagent architecture d
 
 ---
 
+## 🔔 Proactive User Model-Switching Notification Rule (Mandatory)
+
+Because the root chat UI model selector directly controls whether turns consume **Gemini 4 Argon** quota or **Gemini 3.8 Flash** quota, ALWAYS notify the user when to toggle between models:
+- **Switch TO Argon 4.0**: Recommend switching to **Gemini 4 Argon** before laying out new subsystem architectures, complex Prisma schema migrations, or deep security/algorithmic designs.
+- **Switch BACK to Flash 3.8**: Immediately notify the user to switch back to **Gemini 3.8 Flash** as soon as the Argon architectural/backend foundation is complete—before writing large React UI pages, running `npm test`, or running `npm run build`.
+
+---
+
 ## ⚡ Quota Depletion & Graceful Fallback Protocol
 
 When calling Layer 1 (`deep-architect`) with `Model: "pro"`:

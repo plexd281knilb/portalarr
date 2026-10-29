@@ -2478,6 +2478,198 @@ async function runTestSuite() {
     });
 
 
+    // =========================================================================
+    // SUITE 23: IPTV & Live TV Hub Subsystem: Provider Vault, Profiles & Concurrency Engine
+    // =========================================================================
+    await assertTest("Suite 23: IPTV & Live TV Hub Subsystem: Provider Vault, Profiles & Concurrency Engine", async () => {
+        const { getIptvSettings, saveIptvSettings, encryptProviderCredentials, decryptProviderCredentials, calculateIptvCapacity, getDecryptedDispatcharrApiKey } = await import("../src/lib/iptv/provider-vault");
+        const { ensureDefaultIptvProfiles, buildDispatcharrEndpoints, DEFAULT_DISPATCHARR_PROFILES } = await import("../src/lib/iptv/dispatcharr-client");
+        const { matchesCloudflareBypass, matchesCloudflareAdmin } = await import("../src/lib/edge-policy-paths");
+
+        // 1. Verify Edge Security Policy Route Coverage
+        if (!matchesCloudflareBypass("/channels")) {
+            throw new Error("Route /channels must be open at edge (matchesCloudflareBypass: true)");
+        }
+        if (!matchesCloudflareBypass("/api/iptv/m3u?token=test")) {
+            throw new Error("Route /api/iptv/m3u must be open at edge for standalone IPTV players");
+        }
+        if (!matchesCloudflareBypass("/api/iptv/epg?token=test")) {
+            throw new Error("Route /api/iptv/epg must be open at edge for standalone IPTV players");
+        }
+        if (!matchesCloudflareAdmin("/admin/iptv")) {
+            throw new Error("Route /admin/iptv must be strictly locked to Admins at Cloudflare edge");
+        }
+        if (!matchesCloudflareAdmin("/api/admin/iptv/sync")) {
+            throw new Error("Route /api/admin/iptv must be strictly locked to Admins at Cloudflare edge");
+        }
+
+        // 2. Verify IPTV Settings & Dispatcharr API Key Encryption
+        const testApiKey = "test_dispatcharr_key_" + Date.now();
+        await saveIptvSettings({
+            dispatcharrUrl: "http://192.168.1.87:9191",
+            dispatcharrApiKey: testApiKey,
+            dvrBufferReservation: 2,
+            enabled: true
+        });
+
+        const rawSettingsInDb = await prisma.iptvSettings.findUnique({ where: { id: "global" } });
+        if (!rawSettingsInDb) throw new Error("IptvSettings record missing in DB");
+        if (rawSettingsInDb.dispatcharrApiKey === testApiKey) {
+            throw new Error("Dispatcharr API key must be encrypted with AES-256-GCM, not plaintext in DB");
+        }
+        const decryptedKey = await getDecryptedDispatcharrApiKey();
+        if (decryptedKey !== testApiKey) {
+            throw new Error(`Failed to decrypt Dispatcharr API key: expected ${testApiKey}, got ${decryptedKey}`);
+        }
+
+        // 3. Verify Provider Credential Vault Encryption & Decryption
+        const testProviderId = "test_prov_" + Date.now();
+        const rawPassword = "secret_provider_password_123";
+        const rawUsername = "iptv_user_test";
+        const rawServerUrl = "http://stream.provider-dns.com:8080";
+
+        const encryptedCreds = encryptProviderCredentials({
+            serverUrl: rawServerUrl,
+            username: rawUsername,
+            password: rawPassword,
+            m3uUrl: "http://stream.provider-dns.com:8080/get.php",
+            epgUrl: "http://stream.provider-dns.com:8080/xmltv.php"
+        });
+
+        const createdProvider = await prisma.iptvProvider.create({
+            data: {
+                id: testProviderId,
+                name: "Test Xtream Provider",
+                type: "XTREAM_CODES",
+                serverUrl: encryptedCreds.serverUrl,
+                username: encryptedCreds.username,
+                password: encryptedCreds.password,
+                m3uUrl: encryptedCreds.m3uUrl,
+                epgUrl: encryptedCreds.epgUrl,
+                maxConnections: 5,
+                activeStreams: 2,
+                priorityOrder: 1,
+                enabled: true
+            }
+        });
+
+        try {
+            // Check that plaintext does not exist in SQLite table
+            if (createdProvider.password === rawPassword || !createdProvider.password?.includes(":")) {
+                throw new Error("Provider password must be stored as AES-256-GCM ciphertext");
+            }
+            if (createdProvider.username === rawUsername) {
+                throw new Error("Provider username must be stored encrypted");
+            }
+
+            const decrypted = decryptProviderCredentials(createdProvider);
+            if (decrypted.password !== rawPassword) {
+                throw new Error(`Mismatched decrypted password: expected ${rawPassword}, got ${decrypted.password}`);
+            }
+            if (decrypted.username !== rawUsername) {
+                throw new Error(`Mismatched decrypted username: expected ${rawUsername}, got ${decrypted.username}`);
+            }
+            if (decrypted.serverUrl !== rawServerUrl) {
+                throw new Error(`Mismatched decrypted serverUrl: expected ${rawServerUrl}, got ${decrypted.serverUrl}`);
+            }
+
+            // 4. Verify Saturation & Capacity Governor Math
+            const capacity = await calculateIptvCapacity();
+            if (capacity.totalMaxConnections < 5) {
+                throw new Error(`Expected totalMaxConnections >= 5, got ${capacity.totalMaxConnections}`);
+            }
+            if (capacity.dvrReservedStreams !== 2) {
+                throw new Error(`Expected dvrReservedStreams = 2, got ${capacity.dvrReservedStreams}`);
+            }
+            if (capacity.availableStreams < 1) {
+                throw new Error(`Expected availableStreams >= 1, got ${capacity.availableStreams}`);
+            }
+        } finally {
+            await prisma.iptvProvider.delete({ where: { id: testProviderId } }).catch(() => {});
+        }
+
+        // 5. Verify Dispatcharr 7 Default Channel Profiles & Endpoint Builder
+        await ensureDefaultIptvProfiles();
+        const profiles = await prisma.iptvProfile.findMany();
+        if (profiles.length < 7) {
+            throw new Error(`Expected at least 7 profiles, got ${profiles.length}`);
+        }
+
+        const requiredSlugs = ["kids", "sports", "news", "entertainment", "fios", "spectrum", "all_channels"];
+        for (const slug of requiredSlugs) {
+            const matched = profiles.find(p => p.slug === slug);
+            if (!matched) {
+                throw new Error(`Missing required Dispatcharr profile: "${slug}"`);
+            }
+        }
+
+        const sportsEndpoints = buildDispatcharrEndpoints("http://192.168.1.87:9191", "Sports");
+        if (sportsEndpoints.hdhrUrl !== "http://192.168.1.87:9191/hdhr/Sports") {
+            throw new Error(`Invalid HDHR tuner URL: ${sportsEndpoints.hdhrUrl}`);
+        }
+        if (sportsEndpoints.epgUrl !== "http://192.168.1.87:9191/output/epg/Sports/") {
+            throw new Error(`Invalid XMLTV EPG URL: ${sportsEndpoints.epgUrl}`);
+        }
+
+        const allEndpoints = buildDispatcharrEndpoints("http://192.168.1.87:9191", "All_Channels");
+        if (allEndpoints.epgUrl !== "http://192.168.1.87:9191/output/epg/") {
+            throw new Error(`All_Channels must map to root /output/epg/, got: ${allEndpoints.epgUrl}`);
+        }
+
+        // 6. Verify User Access Gating & Channel Request Workflow
+        const testUser = await prisma.user.create({
+            data: {
+                username: "iptv_test_user_" + Date.now(),
+                email: "iptv_test_" + Date.now() + "@example.com",
+                password: "hashed_dummy_password",
+                canAccessIptv: false,
+                maxConcurrentIptvStreams: 1
+            }
+        });
+
+        try {
+            const { requestIptvChannelAction, resolveIptvChannelRequestAction } = await import("../src/app/iptv-actions");
+            process.env.PORTALARR_TEST_AUTH = "true";
+            process.env.PORTALARR_TEST_USER_ID = testUser.id;
+
+            const reqRes = await requestIptvChannelAction({
+                channelName: "Test Tennis Network",
+                genre: "Sports",
+                reason: "Want to stream Grand Slam tournaments"
+            });
+
+            if (!reqRes.success || !reqRes.data) {
+                throw new Error(`Failed to create channel request: ${reqRes.error}`);
+            }
+
+            const channelReqId = reqRes.data.id;
+            delete process.env.PORTALARR_TEST_USER_ID;
+
+            // Admin resolves & activates channel
+            const resolveRes = await resolveIptvChannelRequestAction({
+                requestId: channelReqId,
+                status: "ACTIVATED",
+                channelNumber: 599,
+                profileSlug: "sports"
+            });
+
+            if (!resolveRes.success) {
+                throw new Error(`Failed to activate channel request: ${resolveRes.error}`);
+            }
+
+            const activatedChannel = await prisma.iptvChannel.findFirst({
+                where: { name: "Test Tennis Network" }
+            });
+            if (!activatedChannel || activatedChannel.channelNumber !== 599) {
+                throw new Error("Activated channel missing or channelNumber mismatch");
+            }
+
+            await prisma.iptvChannel.delete({ where: { id: activatedChannel.id } }).catch(() => {});
+        } finally {
+            await prisma.user.delete({ where: { id: testUser.id } }).catch(() => {});
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

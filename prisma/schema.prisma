@@ -454,6 +454,13 @@ model User {
   mediaRequests          MediaRequest[]
   adminApprovals         AdminApproval[]
   watchHistories         WatchHistory[]
+  // Live TV & IPTV Subsystem Entitlements
+  canAccessIptv               Boolean   @default(false)
+  maxConcurrentIptvStreams    Int?      @default(1)
+  allowedIptvProfileSlugs     String?   // Comma-separated or JSON array of profile slugs (e.g. "sports,entertainment,kids")
+  iptvTokens                  IptvUserToken[]
+  iptvWatchSessions           IptvWatchSession[]
+  iptvChannelRequests         IptvChannelRequest[]
   sentEmailLogs          SentEmailLog[]
 }
 
@@ -1033,4 +1040,209 @@ model SentEmailLog {
   @@index([templateId])
   @@index([sentAt])
   @@index([userId])
+}
+
+
+// ============================================================================
+// IPTV & LIVE TV HUB SUBSYSTEM MODELS (v1.4.0)
+// ============================================================================
+
+model IptvSettings {
+  id                         String    @id @default("global")
+  enabled                    Boolean   @default(false)
+  dispatcharrUrl             String?   // e.g. "http://192.168.1.87:9191"
+  dispatcharrApiKey          String?   // AES-256-GCM encrypted Dispatcharr API token
+  defaultMaxStreamsPerUser   Int       @default(1)
+  allowTrialAccess           Boolean   @default(false)
+  trialDailyMinutesLimit     Int       @default(30) // Daily preview allowance for trials
+  enforceSingleHousehold     Boolean   @default(true) // Detect multi-IP concurrent streaming
+  dvrBufferReservation      Int       @default(1) // Number of provider lines reserved for DVR
+  autoPruneInactiveDays      Int       @default(30) // Prune user-activated channels with 0 plays
+  healthCheckIntervalMinutes Int       @default(15) // Background latency probe frequency
+  epgSyncSchedule            String?   @default("daily_3am") // EPG guide reload schedule
+  lastHealthCheckAt          DateTime?
+  lastEpgSyncAt              DateTime?
+  lastEpgSyncStatus          String?   // JSON summary of last guide reload
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @default(now()) @updatedAt
+}
+
+model IptvProvider {
+  id               String            @id @default(cuid())
+  name             String            // e.g. "Xtream Provider Prime", "Local HDHomeRun"
+  type             String            // "XTREAM_CODES", "M3U_URL", "M3U_FILE", "HDHOMERUN"
+  serverUrl        String?           // Encrypted server host/port
+  username         String?           // Encrypted Xtream username
+  password         String?           // Encrypted Xtream password
+  m3uUrl           String?           // Encrypted remote M3U URL
+  epgUrl           String?           // Encrypted XMLTV EPG URL
+  hdhrIp           String?           // Physical SiliconDust device IP
+  maxConnections   Int               @default(3) // Contracted simultaneous stream limit
+  activeStreams    Int               @default(0) // Current concurrent stream consumption
+  status           String            @default("ONLINE") // "ONLINE", "DEGRADED", "EXPIRED", "OFFLINE"
+  lastPingMs       Int?              // Round-trip latency in milliseconds
+  accountExpiresAt DateTime?         // Provider contract expiration date
+  lastHealthCheck  DateTime?
+  healthError      String?           // Last probe failure message if any
+  priorityOrder    Int               @default(1) // Failover ranking (1 = highest)
+  enabled          Boolean           @default(true)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  channelStreams   IptvChannelStream[]
+  watchSessions    IptvWatchSession[]
+
+  @@index([status])
+  @@index([enabled])
+}
+
+model IptvProfile {
+  id               String            @id @default(cuid())
+  name             String            // e.g. "Sports", "Kids", "Entertainment", "Fios"
+  slug             String            @unique // e.g. "sports", "kids", "fios"
+  description      String?
+  icon             String?           // Lucide icon name e.g. "Trophy", "Tv", "Baby"
+  virtualTunerSlug String?           // HDHR simulation path slug
+  isPublic         Boolean           @default(true)
+  minRoleRequired  String            @default("USER") // "ADMIN", "SUPER_USER", "USER", "TRIAL"
+  channelCount     Int               @default(0)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  profileChannels  IptvProfileChannel[]
+  userTokens       IptvUserToken[]
+
+  @@index([slug])
+  @@index([minRoleRequired])
+}
+
+model IptvChannel {
+  id               String               @id @default(cuid())
+  channelNumber    Int?                 // Virtual channel number (e.g. 501, 7)
+  callsign         String?              // e.g. "ESPNHD", "WABC", "HBO-HD"
+  name             String               // e.g. "ESPN 1080p 60fps East"
+  logoUrl          String?              // Channel badge / logo
+  genre            String?              // "Sports", "News", "Movies", "Kids", "Local"
+  xmltvId          String?              // EPG mapping ID (e.g. "I10245.labs.zap2it.com")
+  epgName          String?              // Standardized EPG channel name
+  isCustom         Boolean              @default(false) // Added via user on-demand request
+  isActive         Boolean              @default(true)
+  totalViewHours   Float                @default(0)
+  lastWatchedAt    DateTime?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  profileChannels  IptvProfileChannel[]
+  streams          IptvChannelStream[]
+  watchSessions    IptvWatchSession[]
+
+  @@index([genre])
+  @@index([callsign])
+  @@index([isActive])
+  @@index([channelNumber])
+}
+
+model IptvProfileChannel {
+  id               String       @id @default(cuid())
+  profileId        String
+  channelId        String
+  channelOrder     Int          @default(0) // Visual sorting index within the profile
+  profile          IptvProfile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  channel          IptvChannel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  createdAt        DateTime     @default(now())
+
+  @@unique([profileId, channelId])
+  @@index([profileId])
+  @@index([channelId])
+}
+
+model IptvChannelStream {
+  id               String        @id @default(cuid())
+  channelId        String
+  providerId       String
+  streamUrl        String        // Encrypted or proxied stream source URL
+  priority         Int           @default(1) // Priority 1 = primary, 2 = fallback
+  resolution       String?       // "1080p", "720p", "4K", "SD"
+  frameRate        Int?          // 60, 30, 24
+  videoCodec       String?       // "h264", "hevc", "mpeg2"
+  audioCodec       String?       // "aac", "ac3", "mp3"
+  isWorking        Boolean       @default(true)
+  lastTestedAt     DateTime?
+  channel          IptvChannel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  provider         IptvProvider  @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  @@index([channelId])
+  @@index([providerId])
+}
+
+model IptvUserToken {
+  id               String       @id @default(cuid())
+  userId           String
+  token            String       @unique // 64-char crypto hex string
+  label            String       // e.g. "Living Room TiviMate", "Dad iPhone"
+  profileId        String?
+  profile          IptvProfile? @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  maxStreams       Int          @default(1)
+  activeStreams    Int          @default(0)
+  lastAccessIp     String?
+  lastAccessAt     DateTime?
+  isRevoked        Boolean      @default(false)
+  expiresAt        DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@index([token])
+  @@index([userId])
+}
+
+model IptvWatchSession {
+  id                String        @id @default(cuid())
+  sessionKey        String        @unique // Unique player session identifier
+  userId            String?
+  user              User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userName          String        // Display username
+  channelId         String?
+  channel           IptvChannel?  @relation(fields: [channelId], references: [id], onDelete: SetNull)
+  channelTitle      String        // e.g. "ESPN"
+  programTitle      String?       // e.g. "SportsCenter Live"
+  providerId        String?
+  provider          IptvProvider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  platform          String?       // "Plex tvOS", "TiviMate", "Jellyfin Web"
+  device            String?       // "Apple TV 4K", "Nvidia Shield"
+  ipAddress         String?
+  location          String?       // "LAN" or "Remote"
+  streamBitrateKbps Int?
+  transcodeDecision String?      // "direct_play" | "transcode"
+  transcodeHw       Boolean       @default(false)
+  startedAt         DateTime      @default(now())
+  stoppedAt         DateTime?
+  durationSeconds   Int           @default(0)
+  isSharingAlert    Boolean       @default(false)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([userId])
+  @@index([channelId])
+  @@index([providerId])
+  @@index([startedAt])
+  @@index([isSharingAlert])
+}
+
+model IptvChannelRequest {
+  id                  String       @id @default(cuid())
+  channelName         String
+  callsign            String?
+  genre               String?
+  reason              String?
+  requestedByUserId   String
+  requestedByUser     User         @relation(fields: [requestedByUserId], references: [id], onDelete: Cascade)
+  requestedByUsername String
+  status              String       @default("PENDING") // "PENDING", "APPROVED", "ACTIVATED", "REJECTED"
+  adminNotes          String?
+  activatedChannelId  String?
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  @@index([status])
+  @@index([requestedByUserId])
 }

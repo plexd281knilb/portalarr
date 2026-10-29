@@ -29,6 +29,8 @@ export const CLOUDFLARE_BYPASS_PATHS: string[] = [
     "/profile*",
     "/tickets*",
     "/beta*",
+    "/channels*",
+    "/api/iptv*",
     "/api/books*",
     "/api/cover*",
     "/api/media/*",

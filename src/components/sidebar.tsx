@@ -162,6 +162,17 @@ function SidebarNavContent({ onItemClick }: SidebarNavContentProps) {
         )}
 
         <NavItem
+          href="/channels"
+          label="Live TV & Channels"
+          icon={Tv}
+          isActive={pathname.startsWith("/channels")}
+          iconColor="text-teal-400 group-hover:text-teal-300"
+          activeColorClass="bg-teal-500/15 text-teal-300 border-teal-500 shadow-[0_0_10px_rgba(20,184,166,0.2)]"
+          inactiveHoverClass="hover:bg-teal-950/25 hover:text-teal-200"
+          onClick={onItemClick}
+        />
+
+        <NavItem
           href="/guides"
           label="Setup Guides"
           icon={HelpCircle}
@@ -358,6 +369,17 @@ function SidebarNavContent({ onItemClick }: SidebarNavContentProps) {
               iconColor="text-emerald-400 group-hover:text-emerald-300"
               activeColorClass="bg-emerald-500/15 text-emerald-300 border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.2)]"
               inactiveHoverClass="hover:bg-emerald-950/25 hover:text-emerald-200"
+              onClick={onItemClick}
+            />
+
+            <NavItem
+              href="/admin/iptv"
+              label="Live TV Hub"
+              icon={Tv}
+              isActive={pathname.startsWith("/admin/iptv")}
+              iconColor="text-teal-400 group-hover:text-teal-300"
+              activeColorClass="bg-teal-500/15 text-teal-300 border-teal-500 shadow-[0_0_10px_rgba(20,184,166,0.2)]"
+              inactiveHoverClass="hover:bg-teal-950/25 hover:text-teal-200"
               onClick={onItemClick}
             />
 

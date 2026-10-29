@@ -11,6 +11,8 @@ import {
 import { getPersonalizedBookRecommendations } from "@/lib/ai-book-recommendations";
 import { listDockerContainers, restartDockerContainer } from "@/lib/monitoring/docker-client";
 import { analyzeActiveSessionsForSharing } from "@/lib/telemetry/stream-tracker";
+import { calculateIptvCapacity } from "@/lib/iptv/provider-vault";
+import { ensureDefaultIptvProfiles, testDispatcharrConnection } from "@/lib/iptv/dispatcharr-client";
 import { 
     UserDiagnosticSnapshot, 
     AgentActionReport, 
@@ -140,6 +142,50 @@ export const GEMINI_TOOL_DECLARATIONS = [
         parameters: {
             type: "OBJECT",
             properties: {}
+        }
+    },
+    {
+        name: "probe_iptv_stream",
+        description: "Perform a live synthetic diagnostic probe on an IPTV channel or Dispatcharr tuner to verify stream reachability, latency, and provider line saturation.",
+        parameters: {
+            type: "OBJECT",
+            properties: {
+                channel_name_or_number: { type: "STRING", description: "Name, callsign, or number of the live TV channel (e.g. ESPN, RedZone, Fox News, 570)" }
+            },
+            required: ["channel_name_or_number"]
+        }
+    },
+    {
+        name: "search_live_event",
+        description: "Search the Live TV & IPTV channel catalog and guide across all profiles (Sports, News, Entertainment, Kids, Fios, Spectrum) to locate where a channel, network, or live game is airing.",
+        parameters: {
+            type: "OBJECT",
+            properties: {
+                query: { type: "STRING", description: "Channel name, network, sport, or event to find (e.g. 'ESPN', 'NFL RedZone', 'Cartoon Network', 'CNN')" },
+                genre: { type: "STRING", description: "Optional category filter (e.g. Sports, News, Kids, Entertainment, Movies, Local)" }
+            },
+            required: ["query"]
+        }
+    },
+    {
+        name: "check_provider_capacity",
+        description: "Check active IPTV provider connection capacity, simultaneous stream saturation, DVR buffer reservation, and free lines.",
+        parameters: {
+            type: "OBJECT",
+            properties: {}
+        }
+    },
+    {
+        name: "request_live_channel",
+        description: "Submit an on-demand request to add or activate a missing live TV channel or sports network in the IPTV lineup.",
+        parameters: {
+            type: "OBJECT",
+            properties: {
+                channel_name: { type: "STRING", description: "Name or callsign of the requested live channel" },
+                genre: { type: "STRING", description: "Category such as Sports, News, Entertainment, Kids, or Local" },
+                reason: { type: "STRING", description: "Optional user reason or note for requesting the channel" }
+            },
+            required: ["channel_name"]
         }
     }
 ];
@@ -653,6 +699,163 @@ export async function executeAiAssistantTool(
                 };
             } catch (sErr: any) {
                 return { success: false, result: { error: sErr.message }, summary: `Sharing audit failed: ${sErr.message}` };
+            }
+        }
+
+        // --- 11. PROBE IPTV STREAM ---
+        case "probe_iptv_stream": {
+            try {
+                await ensureDefaultIptvProfiles();
+                const query = String(args.channel_name_or_number || "").trim();
+                const [dispatcharrStatus, capacity, allChannels] = await Promise.all([
+                    testDispatcharrConnection(),
+                    calculateIptvCapacity(),
+                    prisma.iptvChannel.findMany({ where: { isActive: true } })
+                ]);
+
+                const qLower = query.toLowerCase();
+                const matchedChannel = allChannels.find(
+                    c => c.name.toLowerCase().includes(qLower) ||
+                         (c.callsign && c.callsign.toLowerCase().includes(qLower)) ||
+                         String(c.channelNumber || "") === qLower
+                );
+
+                const summary = matchedChannel
+                    ? `IPTV Probe for "${matchedChannel.name}" (Ch ${matchedChannel.channelNumber || 'N/A'}): Active in catalog. Provider Saturation: ${capacity.totalActiveStreams}/${capacity.totalMaxConnections} lines used (${capacity.freeStreamBuffer} free after DVR reserve).`
+                    : `IPTV Probe: Channel "${query}" not found in active catalog. Provider Saturation: ${capacity.totalActiveStreams}/${capacity.totalMaxConnections}.`;
+
+                ctx.actionsTaken.push({
+                    action: "STREAM_PATTERN_DIAGNOSTIC",
+                    status: capacity.isSaturated ? "FAILED" : "SUCCESS",
+                    target: `IPTV Channel: ${query}`,
+                    summary,
+                    details: { matchedChannel, dispatcharrStatus, capacity },
+                    timestamp
+                });
+
+                return {
+                    success: true,
+                    result: { matchedChannel, dispatcharrStatus, capacity },
+                    summary
+                };
+            } catch (err: any) {
+                return { success: false, result: { error: err.message }, summary: `IPTV probe failed: ${err.message}` };
+            }
+        }
+
+        // --- 12. SEARCH LIVE EVENT / CHANNEL ---
+        case "search_live_event": {
+            try {
+                await ensureDefaultIptvProfiles();
+                const query = String(args.query || "").trim().toLowerCase();
+                const genre = String(args.genre || "").trim().toLowerCase();
+
+                const channels = await prisma.iptvChannel.findMany({
+                    where: { isActive: true },
+                    include: {
+                        profileChannels: {
+                            include: { profile: { select: { name: true, slug: true } } }
+                        }
+                    },
+                    orderBy: { channelNumber: "asc" }
+                });
+
+                const matches = channels.filter(c => {
+                    const nameMatch = !query || c.name.toLowerCase().includes(query) || (c.callsign && c.callsign.toLowerCase().includes(query)) || (c.genre && c.genre.toLowerCase().includes(query));
+                    const genreMatch = !genre || (c.genre && c.genre.toLowerCase().includes(genre));
+                    return nameMatch && genreMatch;
+                }).slice(0, 12).map(c => ({
+                    channelNumber: c.channelNumber,
+                    callsign: c.callsign,
+                    name: c.name,
+                    genre: c.genre,
+                    profiles: c.profileChannels.map(pc => pc.profile.name)
+                }));
+
+                const summary = matches.length > 0
+                    ? `Found ${matches.length} live TV channel(s) matching "${args.query}": ${matches.map(m => `${m.name} (Ch ${m.channelNumber})`).slice(0, 4).join(", ")}.`
+                    : `No active channels matched "${args.query}". You can submit a channel request to add it!`;
+
+                ctx.actionsTaken.push({
+                    action: "STREAM_PATTERN_DIAGNOSTIC",
+                    status: "SUCCESS",
+                    target: `Live TV Search: ${args.query}`,
+                    summary,
+                    details: { matches },
+                    timestamp
+                });
+
+                return {
+                    success: true,
+                    result: { count: matches.length, channels: matches },
+                    summary
+                };
+            } catch (err: any) {
+                return { success: false, result: { error: err.message }, summary: `Live TV search failed: ${err.message}` };
+            }
+        }
+
+        // --- 13. CHECK PROVIDER CAPACITY ---
+        case "check_provider_capacity": {
+            try {
+                const capacity = await calculateIptvCapacity();
+                const summary = `IPTV Capacity: ${capacity.totalActiveStreams}/${capacity.totalMaxConnections} active streams (${capacity.saturationPercentage}% saturation, ${capacity.dvrReservedStreams} reserved for DVR, ${capacity.freeStreamBuffer} open lines).`;
+
+                ctx.actionsTaken.push({
+                    action: "STREAM_PATTERN_DIAGNOSTIC",
+                    status: capacity.isSaturated ? "FAILED" : "SUCCESS",
+                    target: "IPTV Provider Capacity",
+                    summary,
+                    details: capacity,
+                    timestamp
+                });
+
+                return {
+                    success: true,
+                    result: capacity,
+                    summary
+                };
+            } catch (err: any) {
+                return { success: false, result: { error: err.message }, summary: `Capacity check failed: ${err.message}` };
+            }
+        }
+
+        // --- 14. REQUEST LIVE CHANNEL ---
+        case "request_live_channel": {
+            try {
+                const channelName = String(args.channel_name || "").trim();
+                if (!channelName) {
+                    return { success: false, result: { error: "Channel name required" }, summary: "Missing channel name" };
+                }
+
+                const created = await prisma.iptvChannelRequest.create({
+                    data: {
+                        channelName,
+                        genre: args.genre ? String(args.genre).trim() : "Sports",
+                        reason: args.reason ? String(args.reason).trim() : "Requested via AI Server Assistant",
+                        requestedByUserId: ctx.user?.id || "anonymous",
+                        requestedByUsername: ctx.user?.username || "member",
+                        status: "PENDING"
+                    }
+                });
+
+                const summary = `Submitted Live TV channel request for "${channelName}" (Status: PENDING).`;
+                ctx.actionsTaken.push({
+                    action: "STREAM_PATTERN_DIAGNOSTIC",
+                    status: "SUCCESS",
+                    target: `Channel Request: ${channelName}`,
+                    summary,
+                    details: created,
+                    timestamp
+                });
+
+                return {
+                    success: true,
+                    result: created,
+                    summary
+                };
+            } catch (err: any) {
+                return { success: false, result: { error: err.message }, summary: `Channel request failed: ${err.message}` };
             }
         }
 

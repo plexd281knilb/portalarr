@@ -783,7 +783,10 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["jellyfinUsername", `ALTER TABLE "User" ADD COLUMN "jellyfinUsername" TEXT;`],
                 ["embyUserId", `ALTER TABLE "User" ADD COLUMN "embyUserId" TEXT;`],
                 ["embyUsername", `ALTER TABLE "User" ADD COLUMN "embyUsername" TEXT;`],
-                ["accountPreferences", `ALTER TABLE "User" ADD COLUMN "accountPreferences" TEXT;`]
+                ["accountPreferences", `ALTER TABLE "User" ADD COLUMN "accountPreferences" TEXT;`],
+                ["canAccessIptv", `ALTER TABLE "User" ADD COLUMN "canAccessIptv" BOOLEAN NOT NULL DEFAULT 0;`],
+                ["maxConcurrentIptvStreams", `ALTER TABLE "User" ADD COLUMN "maxConcurrentIptvStreams" INTEGER DEFAULT 1;`],
+                ["allowedIptvProfileSlugs", `ALTER TABLE "User" ADD COLUMN "allowedIptvProfileSlugs" TEXT;`]
             ];
 
             for (const [colName, ddl] of userAddCols) {
@@ -2085,6 +2088,214 @@ export async function ensureSchemaColumns(): Promise<void> {
         }
 
 
+
+        // --- 17. IPTV & LIVE TV HUB SUBSYSTEM TABLES ---
+        try {
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "IptvSettings" (
+                    "id" TEXT NOT NULL PRIMARY KEY DEFAULT 'global',
+                    "enabled" BOOLEAN NOT NULL DEFAULT 0,
+                    "dispatcharrUrl" TEXT,
+                    "dispatcharrApiKey" TEXT,
+                    "defaultMaxStreamsPerUser" INTEGER NOT NULL DEFAULT 1,
+                    "allowTrialAccess" BOOLEAN NOT NULL DEFAULT 0,
+                    "trialDailyMinutesLimit" INTEGER NOT NULL DEFAULT 30,
+                    "enforceSingleHousehold" BOOLEAN NOT NULL DEFAULT 1,
+                    "dvrBufferReservation" INTEGER NOT NULL DEFAULT 1,
+                    "autoPruneInactiveDays" INTEGER NOT NULL DEFAULT 30,
+                    "healthCheckIntervalMinutes" INTEGER NOT NULL DEFAULT 15,
+                    "epgSyncSchedule" TEXT DEFAULT 'daily_3am',
+                    "lastHealthCheckAt" DATETIME,
+                    "lastEpgSyncAt" DATETIME,
+                    "lastEpgSyncStatus" TEXT,
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            `);
+
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "IptvProvider" (
+                    "id" TEXT NOT NULL PRIMARY KEY,
+                    "name" TEXT NOT NULL,
+                    "type" TEXT NOT NULL,
+                    "serverUrl" TEXT,
+                    "username" TEXT,
+                    "password" TEXT,
+                    "m3uUrl" TEXT,
+                    "epgUrl" TEXT,
+                    "hdhrIp" TEXT,
+                    "maxConnections" INTEGER NOT NULL DEFAULT 3,
+                    "activeStreams" INTEGER NOT NULL DEFAULT 0,
+                    "status" TEXT NOT NULL DEFAULT 'ONLINE',
+                    "lastPingMs" INTEGER,
+                    "accountExpiresAt" DATETIME,
+                    "lastHealthCheck" DATETIME,
+                    "healthError" TEXT,
+                    "priorityOrder" INTEGER NOT NULL DEFAULT 1,
+                    "enabled" BOOLEAN NOT NULL DEFAULT 1,
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            `);
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "IptvProvider_status_idx" ON "IptvProvider"("status");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "IptvProvider_enabled_idx" ON "IptvProvider"("enabled");`).catch(() => {});
+
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "IptvProfile" (
+                    "id" TEXT NOT NULL PRIMARY KEY,
+                    "name" TEXT NOT NULL,
+                    "slug" TEXT NOT NULL UNIQUE,
+                    "description" TEXT,
+                    "icon" TEXT,
+                    "virtualTunerSlug" TEXT,
+                    "isPublic" BOOLEAN NOT NULL DEFAULT 1,
+                    "minRoleRequired" TEXT NOT NULL DEFAULT 'USER',
+                    "channelCount" INTEGER NOT NULL DEFAULT 0,
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            `);
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "IptvProfile_slug_idx" ON "IptvProfile"("slug");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "IptvProfile_minRoleRequired_idx" ON "IptvProfile"("minRoleRequired");`).catch(() => {});
+
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "IptvChannel" (
+                    "id" TEXT NOT NULL PRIMARY KEY,
+                    "channelNumber" INTEGER,
+                    "callsign" TEXT,
+                    "name" TEXT NOT NULL,
+                    "logoUrl" TEXT,
+                    "genre" TEXT,
+                    "xmltvId" TEXT,
+                    "epgName" TEXT,
+                    "isCustom" BOOLEAN NOT NULL DEFAULT 0,
+                    "isActive" BOOLEAN NOT NULL DEFAULT 1,
+                    "totalViewHours" REAL NOT NULL DEFAULT 0,
+                    "lastWatchedAt" DATETIME,
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            `);
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "IptvChannel_genre_idx" ON "IptvChannel"("genre");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "IptvChannel_callsign_idx" ON "IptvChannel"("callsign");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "IptvChannel_isActive_idx" ON "IptvChannel"("isActive");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "IptvChannel_channelNumber_idx" ON "IptvChannel"("channelNumber");`).catch(() => {});
+
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "IptvProfileChannel" (
+                    "id" TEXT NOT NULL PRIMARY KEY,
+                    "profileId" TEXT NOT NULL,
+                    "channelId" TEXT NOT NULL,
+                    "channelOrder" INTEGER NOT NULL DEFAULT 0,
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY ("profileId") REFERENCES "IptvProfile" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+                    FOREIGN KEY ("channelId") REFERENCES "IptvChannel" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+                );
+            `);
+            await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "IptvProfileChannel_profileId_channelId_key" ON "IptvProfileChannel"("profileId", "channelId");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "IptvProfileChannel_profileId_idx" ON "IptvProfileChannel"("profileId");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "IptvProfileChannel_channelId_idx" ON "IptvProfileChannel"("channelId");`).catch(() => {});
+
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "IptvChannelStream" (
+                    "id" TEXT NOT NULL PRIMARY KEY,
+                    "channelId" TEXT NOT NULL,
+                    "providerId" TEXT NOT NULL,
+                    "streamUrl" TEXT NOT NULL,
+                    "priority" INTEGER NOT NULL DEFAULT 1,
+                    "resolution" TEXT,
+                    "frameRate" INTEGER,
+                    "videoCodec" TEXT,
+                    "audioCodec" TEXT,
+                    "isWorking" BOOLEAN NOT NULL DEFAULT 1,
+                    "lastTestedAt" DATETIME,
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY ("channelId") REFERENCES "IptvChannel" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+                    FOREIGN KEY ("providerId") REFERENCES "IptvProvider" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+                );
+            `);
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "IptvChannelStream_channelId_idx" ON "IptvChannelStream"("channelId");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "IptvChannelStream_providerId_idx" ON "IptvChannelStream"("providerId");`).catch(() => {});
+
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "IptvUserToken" (
+                    "id" TEXT NOT NULL PRIMARY KEY,
+                    "userId" TEXT NOT NULL,
+                    "token" TEXT NOT NULL UNIQUE,
+                    "label" TEXT NOT NULL,
+                    "profileId" TEXT,
+                    "maxStreams" INTEGER NOT NULL DEFAULT 1,
+                    "activeStreams" INTEGER NOT NULL DEFAULT 0,
+                    "lastAccessIp" TEXT,
+                    "lastAccessAt" DATETIME,
+                    "isRevoked" BOOLEAN NOT NULL DEFAULT 0,
+                    "expiresAt" DATETIME,
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY ("profileId") REFERENCES "IptvProfile" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
+                    FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+                );
+            `);
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "IptvUserToken_token_idx" ON "IptvUserToken"("token");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "IptvUserToken_userId_idx" ON "IptvUserToken"("userId");`).catch(() => {});
+
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "IptvWatchSession" (
+                    "id" TEXT NOT NULL PRIMARY KEY,
+                    "sessionKey" TEXT NOT NULL UNIQUE,
+                    "userId" TEXT,
+                    "userName" TEXT NOT NULL,
+                    "channelId" TEXT,
+                    "channelTitle" TEXT NOT NULL,
+                    "programTitle" TEXT,
+                    "providerId" TEXT,
+                    "platform" TEXT,
+                    "device" TEXT,
+                    "ipAddress" TEXT,
+                    "location" TEXT,
+                    "streamBitrateKbps" INTEGER,
+                    "transcodeDecision" TEXT,
+                    "transcodeHw" BOOLEAN NOT NULL DEFAULT 0,
+                    "startedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "stoppedAt" DATETIME,
+                    "durationSeconds" INTEGER NOT NULL DEFAULT 0,
+                    "isSharingAlert" BOOLEAN NOT NULL DEFAULT 0,
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
+                    FOREIGN KEY ("channelId") REFERENCES "IptvChannel" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
+                    FOREIGN KEY ("providerId") REFERENCES "IptvProvider" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+                );
+            `);
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "IptvWatchSession_userId_idx" ON "IptvWatchSession"("userId");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "IptvWatchSession_channelId_idx" ON "IptvWatchSession"("channelId");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "IptvWatchSession_providerId_idx" ON "IptvWatchSession"("providerId");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "IptvWatchSession_startedAt_idx" ON "IptvWatchSession"("startedAt");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "IptvWatchSession_isSharingAlert_idx" ON "IptvWatchSession"("isSharingAlert");`).catch(() => {});
+
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "IptvChannelRequest" (
+                    "id" TEXT NOT NULL PRIMARY KEY,
+                    "channelName" TEXT NOT NULL,
+                    "callsign" TEXT,
+                    "genre" TEXT,
+                    "reason" TEXT,
+                    "requestedByUserId" TEXT NOT NULL,
+                    "requestedByUsername" TEXT NOT NULL,
+                    "status" TEXT NOT NULL DEFAULT 'PENDING',
+                    "adminNotes" TEXT,
+                    "activatedChannelId" TEXT,
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY ("requestedByUserId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+                );
+            `);
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "IptvChannelRequest_status_idx" ON "IptvChannelRequest"("status");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "IptvChannelRequest_requestedByUserId_idx" ON "IptvChannelRequest"("requestedByUserId");`).catch(() => {});
+        } catch (e: any) {
+            console.error("[DB-SCHEMA-AUTOFIX] IPTV tables check error:", e.message || e);
+        }
 
         schemaPatchCompleted = true;
     } catch (globalErr: any) {
