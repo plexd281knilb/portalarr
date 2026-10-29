@@ -790,6 +790,7 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["isPlexHomeMember", `ALTER TABLE "User" ADD COLUMN "isPlexHomeMember" BOOLEAN NOT NULL DEFAULT 0;`],
                 ["plexHomeUserId", `ALTER TABLE "User" ADD COLUMN "plexHomeUserId" TEXT;`],
                 ["hasPlexLiveTvAccess", `ALTER TABLE "User" ADD COLUMN "hasPlexLiveTvAccess" BOOLEAN NOT NULL DEFAULT 0;`],
+                ["hasPlexDvrAccess", `ALTER TABLE "User" ADD COLUMN "hasPlexDvrAccess" BOOLEAN NOT NULL DEFAULT 0;`],
                 ["plexHomeJoinedAt", `ALTER TABLE "User" ADD COLUMN "plexHomeJoinedAt" DATETIME;`],
                 ["hasJellyfinLiveTvAccess", `ALTER TABLE "User" ADD COLUMN "hasJellyfinLiveTvAccess" BOOLEAN NOT NULL DEFAULT 0;`],
                 ["lastIptvWatchedAt", `ALTER TABLE "User" ADD COLUMN "lastIptvWatchedAt" DATETIME;`],

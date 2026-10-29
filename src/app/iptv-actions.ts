@@ -32,6 +32,7 @@ import {
     inviteUserToPlexHome,
     removeUserFromPlexHome,
     setPlexUserLiveTvPrivilege,
+    setPlexUserDvrPrivilege,
     setJellyfinUserLiveTvAccess
 } from "@/lib/iptv/plex-jellyfin-livetv";
 import { IptvProviderType, IptvSettingsDTO } from "@/lib/iptv/types";
@@ -443,6 +444,7 @@ export async function getIptvUsersAccessAction() {
                     isPlexHomeMember: true,
                     plexHomeUserId: true,
                     hasPlexLiveTvAccess: true,
+                    hasPlexDvrAccess: true,
                     plexHomeJoinedAt: true,
                     hasJellyfinLiveTvAccess: true,
                     jellyfinUserId: true,
@@ -477,19 +479,23 @@ export async function getIptvUsersAccessAction() {
                     const isOwner = u.role === "ADMIN";
                     const isPlexHome = isOwner ? true : Boolean(u.isPlexHomeMember);
                     const hasPlexLiveTv = isOwner ? true : Boolean(u.hasPlexLiveTvAccess);
+                    const hasPlexDvr = isOwner ? true : Boolean(u.hasPlexDvrAccess);
                     const missingPlexLiveTvPrivilege = isPlexHome && !isOwner && !hasPlexLiveTv;
+                    const missingPlexDvrPrivilege = isPlexHome && !isOwner && !hasPlexDvr;
 
-                    const refDate = u.lastIptvWatchedAt
-                        ? new Date(u.lastIptvWatchedAt)
-                        : u.plexHomeJoinedAt
-                        ? new Date(u.plexHomeJoinedAt)
+                    const daysInactive = u.lastIptvWatchedAt
+                        ? Math.max(0, Math.floor((Date.now() - new Date(u.lastIptvWatchedAt).getTime()) / 86400000))
                         : null;
-                    const daysInactive = refDate
-                        ? Math.max(0, Math.floor((Date.now() - refDate.getTime()) / 86400000))
+
+                    const daysInPlexHome = u.plexHomeJoinedAt
+                        ? Math.max(0, Math.floor((Date.now() - new Date(u.plexHomeJoinedAt).getTime()) / 86400000))
                         : null;
 
                     const isInactiveCandidate =
-                        isPlexHome && !isOwner && daysInactive !== null && daysInactive >= inactivityDaysThreshold;
+                        isPlexHome && !isOwner && (
+                            (daysInactive !== null && daysInactive >= inactivityDaysThreshold) ||
+                            (daysInactive === null && daysInPlexHome !== null && daysInPlexHome >= inactivityDaysThreshold)
+                        );
 
                     return {
                         ...u,
@@ -497,11 +503,14 @@ export async function getIptvUsersAccessAction() {
                         maxConcurrentIptvStreams: u.maxConcurrentIptvStreams ?? 1,
                         isPlexHomeMember: isPlexHome,
                         hasPlexLiveTvAccess: hasPlexLiveTv,
+                        hasPlexDvrAccess: hasPlexDvr,
                         missingPlexLiveTvPrivilege,
+                        missingPlexDvrPrivilege,
                         hasJellyfinLiveTvAccess: isOwner ? true : Boolean(u.hasJellyfinLiveTvAccess),
                         lastIptvWatchedAt: u.lastIptvWatchedAt ? u.lastIptvWatchedAt.toISOString() : null,
                         plexHomeJoinedAt: u.plexHomeJoinedAt ? u.plexHomeJoinedAt.toISOString() : null,
                         daysInactive,
+                        daysInPlexHome,
                         isInactiveCandidate,
                         allowedProfiles: u.allowedIptvProfileSlugs
                             ? u.allowedIptvProfileSlugs.split(",").map((s) => s.trim()).filter(Boolean)
@@ -574,6 +583,21 @@ export async function setPlexUserLiveTvPrivilegeAction(targetUserOrPlexId: strin
         return res;
     } catch (err: any) {
         return { success: false, error: err?.message || "Failed to update Plex Live TV privilege" };
+    }
+}
+
+export async function setPlexUserDvrPrivilegeAction(targetUserOrPlexId: string, allow: boolean) {
+    try {
+        const admin = await verifySessionAdmin();
+        const res = await setPlexUserDvrPrivilege(targetUserOrPlexId, allow);
+        if (res.success) {
+            logger.addLog("INFO", "PLEX", `Admin "${admin.username}": ${res.message}`);
+            safeRevalidate("/admin/iptv");
+            safeRevalidate("/channels");
+        }
+        return res;
+    } catch (err: any) {
+        return { success: false, error: err?.message || "Failed to update Plex DVR privilege" };
     }
 }
 

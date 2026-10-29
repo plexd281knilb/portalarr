@@ -461,6 +461,7 @@ model User {
   isPlexHomeMember            Boolean   @default(false) // Whether user is currently in the 15-slot Plex Home
   plexHomeUserId              String?   // Plex cloud user ID inside Plex Home
   hasPlexLiveTvAccess         Boolean   @default(false) // Whether allowTuners / allowChannels is enabled on Plex
+  hasPlexDvrAccess            Boolean   @default(false) // Whether allowDvr is enabled on Plex
   plexHomeJoinedAt            DateTime? // When the user was added to Plex Home
   hasJellyfinLiveTvAccess     Boolean   @default(false) // Whether EnableLiveTvAccess is enabled in Jellyfin
   lastIptvWatchedAt           DateTime? // Most recent Live TV playback timestamp for inactivity tracking

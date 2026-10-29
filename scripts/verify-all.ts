@@ -2677,6 +2677,7 @@ async function runTestSuite() {
                 auditPlexHomeAndLiveTvPrivileges,
                 inviteUserToPlexHome,
                 setPlexUserLiveTvPrivilege,
+                setPlexUserDvrPrivilege,
                 setJellyfinUserLiveTvAccess,
                 removeUserFromPlexHome
             } = await import("../src/lib/iptv/plex-jellyfin-livetv");
@@ -2688,11 +2689,12 @@ async function runTestSuite() {
             const homeUser = await prisma.user.findUnique({ where: { id: testUser.id } });
             if (!homeUser?.isPlexHomeMember) throw new Error("Expected isPlexHomeMember to be true");
             if (!homeUser?.hasPlexLiveTvAccess) throw new Error("Expected hasPlexLiveTvAccess to be true");
+            if (!homeUser?.hasPlexDvrAccess) throw new Error("Expected hasPlexDvrAccess to be true");
 
-            // B. Simulate Anomaly: In Plex Home but Live TV privilege revoked
+            // B. Simulate Anomaly: In Plex Home but Live TV & DVR privileges revoked
             await prisma.user.update({
                 where: { id: testUser.id },
-                data: { hasPlexLiveTvAccess: false }
+                data: { hasPlexLiveTvAccess: false, hasPlexDvrAccess: false }
             });
 
             const auditReport1 = await auditPlexHomeAndLiveTvPrivileges();
@@ -2705,13 +2707,20 @@ async function runTestSuite() {
             if (auditReport1.plexHomeMissingLiveTvCount < 1) {
                 throw new Error("Expected plexHomeMissingLiveTvCount >= 1 when member in Home lacks Live TV privilege");
             }
+            if (auditReport1.plexHomeMissingDvrCount < 1) {
+                throw new Error("Expected plexHomeMissingDvrCount >= 1 when member in Home lacks DVR privilege");
+            }
 
-            // C. Fix Anomaly: Grant Live TV privilege
+            // C. Fix Anomaly: Grant Live TV and DVR privileges independently
             const grantPrivRes = await setPlexUserLiveTvPrivilege(testUser.id, true);
             if (!grantPrivRes.success) throw new Error("setPlexUserLiveTvPrivilege failed");
 
+            const grantDvrRes = await setPlexUserDvrPrivilege(testUser.id, true);
+            if (!grantDvrRes.success) throw new Error("setPlexUserDvrPrivilege failed");
+
             const fixedHomeUser = await prisma.user.findUnique({ where: { id: testUser.id } });
             if (!fixedHomeUser?.hasPlexLiveTvAccess) throw new Error("Expected hasPlexLiveTvAccess to be true after grant");
+            if (!fixedHomeUser?.hasPlexDvrAccess) throw new Error("Expected hasPlexDvrAccess to be true after DVR grant");
 
             // D. Jellyfin Live TV Policy Management
             const jfRes = await setJellyfinUserLiveTvAccess(testUser.id, true);

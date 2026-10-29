@@ -32,11 +32,14 @@ export interface PlexHomeLiveTvMemberAudit {
     isPlexHomeMember: boolean;
     allowTuners: boolean;
     allowChannels: boolean;
+    allowDvr: boolean;
     missingLiveTvPrivilege: boolean; // True when in Plex Home (non-admin) WITHOUT allowTuners/allowChannels
+    missingDvrPrivilege: boolean;    // True when in Plex Home (non-admin) WITHOUT allowDvr
     portalarrUserId?: string | null;
     portalarrUsername?: string | null;
     lastIptvWatchedAt?: string | null;
     daysInactive?: number | null;
+    daysInPlexHome?: number | null;
     isInactiveCandidate: boolean;
 }
 
@@ -46,6 +49,9 @@ export interface LiveTvEcosystemAuditReport {
     plexHomeMaxSlots: number;     // Default 14
     plexHomeAvailableSlots: number;
     plexHomeMissingLiveTvCount: number; // Members in Plex Home lacking Live TV privileges
+    plexHomeMissingDvrCount: number;    // Members in Plex Home lacking DVR privileges
+    plexHomeWithLiveTvCount: number;    // Members with Live TV allowed
+    plexHomeWithDvrCount: number;       // Members with DVR allowed
     plexHomeInactiveCandidateCount: number;
     plexHomeAutoKickEnabled: boolean;
     plexHomeInactivityDays: number;

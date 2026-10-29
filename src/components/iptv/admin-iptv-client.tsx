@@ -44,6 +44,7 @@ import {
     inviteUserToPlexHomeAction,
     removeUserFromPlexHomeAction,
     setPlexUserLiveTvPrivilegeAction,
+    setPlexUserDvrPrivilegeAction,
     setJellyfinUserLiveTvAccessAction
 } from "@/app/iptv-actions";
 
@@ -308,23 +309,26 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                 showMsg(res.message);
                 handleRunEcosystemAudit();
             } else {
-                showMsg(res.error || "Failed to update Plex privilege", "error");
+                showMsg(res.error || "Failed to update Plex Live TV privilege", "error");
             }
         });
     };
 
-    const handleToggleJellyfinLiveTv = (userId: string, current: boolean) => {
+    const handleTogglePlexDvr = (targetUserOrPlexId: string, current: boolean) => {
         startTransition(async () => {
-            const res = await setJellyfinUserLiveTvAccessAction(userId, !current);
+            const res = await setPlexUserDvrPrivilegeAction(targetUserOrPlexId, !current);
             if (res.success) {
                 setUsersList(
                     usersList.map((u) =>
-                        u.id === userId ? { ...u, hasJellyfinLiveTvAccess: !current } : u
+                        u.id === targetUserOrPlexId || u.plexHomeUserId === targetUserOrPlexId
+                            ? { ...u, hasPlexDvrAccess: !current, missingPlexDvrPrivilege: false }
+                            : u
                     )
                 );
                 showMsg(res.message);
+                handleRunEcosystemAudit();
             } else {
-                showMsg(res.error || "Failed to update Jellyfin policy", "error");
+                showMsg(res.error || "Failed to update Plex DVR privilege", "error");
             }
         });
     };
@@ -342,6 +346,23 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                 if (res.success) fixedCount++;
             }
             showMsg(`Granted Live TV privileges to ${fixedCount} Plex Home member(s).`);
+            handleRunEcosystemAudit();
+        });
+    };
+
+    const handleFixAllMissingDvr = () => {
+        if (!auditReport?.plexMembers) return;
+        const missing = auditReport.plexMembers.filter((m: any) => m.missingDvrPrivilege);
+        if (missing.length === 0) return;
+
+        startTransition(async () => {
+            let fixedCount = 0;
+            for (const m of missing) {
+                const target = m.portalarrUserId || m.plexUserId;
+                const res = await setPlexUserDvrPrivilegeAction(target, true);
+                if (res.success) fixedCount++;
+            }
+            showMsg(`Granted DVR privileges to ${fixedCount} Plex Home member(s).`);
             handleRunEcosystemAudit();
         });
     };
@@ -969,23 +990,38 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                             </div>
                         </div>
 
-                        {/* Anomaly Callout Banner (If Plex Home members lack Live TV) */}
-                        {auditReport && auditReport.plexHomeMissingLiveTvCount > 0 && (
+                        {/* Anomaly Callout Banner (If Plex Home members lack Live TV or DVR) */}
+                        {auditReport && ((auditReport.plexHomeMissingLiveTvCount ?? 0) > 0 || (auditReport.plexHomeMissingDvrCount ?? 0) > 0) && (
                             <div className="p-3.5 rounded-xl border border-rose-500/40 bg-rose-500/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-rose-200">
                                 <div className="flex items-center gap-2.5">
                                     <AlertTriangle className="h-4 w-4 text-rose-400 shrink-0" />
                                     <span>
-                                        <b>{auditReport.plexHomeMissingLiveTvCount} member(s)</b> are taking up a Plex Home slot but currently have Live TV / DVR privileges turned off in Plex!
+                                        <b>{auditReport.plexHomeMissingLiveTvCount ?? 0} missing Live TV</b> and{" "}
+                                        <b>{auditReport.plexHomeMissingDvrCount ?? 0} missing DVR</b> in Plex Home!
                                     </span>
                                 </div>
-                                <Button
-                                    size="sm"
-                                    onClick={handleFixAllMissingLiveTv}
-                                    disabled={isPending}
-                                    className="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs h-7 self-start sm:self-auto rounded-lg"
-                                >
-                                    Enable Live TV For All
-                                </Button>
+                                <div className="flex items-center gap-2">
+                                    {(auditReport.plexHomeMissingLiveTvCount ?? 0) > 0 && (
+                                        <Button
+                                            size="sm"
+                                            onClick={handleFixAllMissingLiveTv}
+                                            disabled={isPending}
+                                            className="bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs h-7 self-start sm:self-auto rounded-lg"
+                                        >
+                                            Enable Live TV For All
+                                        </Button>
+                                    )}
+                                    {(auditReport.plexHomeMissingDvrCount ?? 0) > 0 && (
+                                        <Button
+                                            size="sm"
+                                            onClick={handleFixAllMissingDvr}
+                                            disabled={isPending}
+                                            className="bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs h-7 self-start sm:self-auto rounded-lg"
+                                        >
+                                            Enable DVR For All
+                                        </Button>
+                                    )}
+                                </div>
                             </div>
                         )}
                     </div>
@@ -1048,8 +1084,8 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                     <div
                                         key={u.id}
                                         className={`p-4 rounded-xl border transition-all text-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4 ${
-                                            u.missingPlexLiveTvPrivilege
-                                                ? "border-rose-500/40 bg-rose-500/5"
+                                            u.isPlexHomeMember && !isOwner && (!u.hasPlexLiveTvAccess || !u.hasPlexDvrAccess)
+                                                ? (!u.hasPlexLiveTvAccess && !u.hasPlexDvrAccess ? "border-rose-500/40 bg-rose-500/5" : "border-amber-500/40 bg-amber-500/5")
                                                 : u.isInactiveCandidate
                                                 ? "border-amber-500/30 bg-amber-500/5"
                                                 : "border-border/40 bg-background/40"
@@ -1074,10 +1110,24 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                                         Plex Home
                                                     </Badge>
                                                 )}
-                                                {u.missingPlexLiveTvPrivilege && (
-                                                    <Badge className="text-[10px] bg-rose-500/20 text-rose-300 border-rose-500/30 font-bold">
-                                                        ⚠️ Missing Live TV
-                                                    </Badge>
+                                                {u.isPlexHomeMember && !isOwner && (
+                                                    u.hasPlexLiveTvAccess && u.hasPlexDvrAccess ? (
+                                                        <Badge className="text-[10px] bg-emerald-500/20 text-emerald-300 border-emerald-500/30 font-bold">
+                                                            Live TV + DVR
+                                                        </Badge>
+                                                    ) : u.hasPlexLiveTvAccess ? (
+                                                        <Badge className="text-[10px] bg-sky-500/20 text-sky-300 border-sky-500/30 font-bold">
+                                                            Live TV Only
+                                                        </Badge>
+                                                    ) : u.hasPlexDvrAccess ? (
+                                                        <Badge className="text-[10px] bg-amber-500/20 text-amber-300 border-amber-500/30 font-bold">
+                                                            DVR Only
+                                                        </Badge>
+                                                    ) : (
+                                                        <Badge className="text-[10px] bg-rose-500/20 text-rose-300 border-rose-500/30 font-bold">
+                                                            ⚠️ Missing Live TV & DVR
+                                                        </Badge>
+                                                    )
                                                 )}
                                             </div>
 
@@ -1085,7 +1135,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                                 {u.email} {u.plexUsername ? `• Plex: ${u.plexUsername}` : ""}
                                             </p>
 
-                                            <div className="flex items-center gap-2 pt-0.5 text-[10px] text-muted-foreground">
+                                            <div className="flex items-center gap-2 pt-0.5 text-[10px] text-muted-foreground flex-wrap">
                                                 <span>
                                                     Last streamed:{" "}
                                                     <b className="text-foreground">
@@ -1094,6 +1144,11 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                                             : "Never"}
                                                     </b>
                                                 </span>
+                                                {u.daysInPlexHome !== null && u.daysInPlexHome !== undefined && u.isPlexHomeMember && (
+                                                    <span className="text-muted-foreground/70">
+                                                        • In Home: {u.daysInPlexHome}d
+                                                    </span>
+                                                )}
                                                 {u.isInactiveCandidate && (
                                                     <span className="text-amber-400 font-semibold">
                                                         • Slot Rotation Candidate (Protected)
@@ -1108,7 +1163,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                             {!isOwner && (
                                                 <>
                                                     {u.isPlexHomeMember ? (
-                                                        <div className="flex items-center gap-1.5 bg-card/60 p-1.5 rounded-xl border border-sky-500/30">
+                                                        <div className="flex items-center gap-1.5 bg-card/60 p-1.5 rounded-xl border border-sky-500/30 flex-wrap">
                                                             <Button
                                                                 size="sm"
                                                                 variant={u.hasPlexLiveTvAccess ? "default" : "outline"}
@@ -1117,10 +1172,24 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                                                 className={`h-7 text-[11px] font-bold rounded-lg ${
                                                                     u.hasPlexLiveTvAccess
                                                                         ? "bg-sky-600 hover:bg-sky-500 text-white"
-                                                                        : "border-rose-500/50 text-rose-300 hover:bg-rose-500/10"
+                                                                        : "border-sky-500/40 text-sky-300 hover:bg-sky-500/10"
                                                                 }`}
                                                             >
-                                                                {u.hasPlexLiveTvAccess ? "Plex Live TV ON" : "⚠️ Enable Live TV"}
+                                                                {u.hasPlexLiveTvAccess ? "Live TV: ON" : "Enable Live TV"}
+                                                            </Button>
+
+                                                            <Button
+                                                                size="sm"
+                                                                variant={u.hasPlexDvrAccess ? "default" : "outline"}
+                                                                onClick={() => handleTogglePlexDvr(u.id, u.hasPlexDvrAccess)}
+                                                                disabled={isPending}
+                                                                className={`h-7 text-[11px] font-bold rounded-lg ${
+                                                                    u.hasPlexDvrAccess
+                                                                        ? "bg-amber-600 hover:bg-amber-500 text-white"
+                                                                        : "border-amber-500/40 text-amber-300 hover:bg-amber-500/10"
+                                                                }`}
+                                                            >
+                                                                {u.hasPlexDvrAccess ? "DVR: ON" : "Enable DVR"}
                                                             </Button>
 
                                                             <Button
