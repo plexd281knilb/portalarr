@@ -379,7 +379,7 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
     }), [requests]);
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-4 w-full min-w-0">
             {/* Header Controls & Filter Bar */}
             <div className="flex flex-col gap-3 p-4 rounded-2xl bg-[#121218] border border-border/50 shadow-sm">
                 {/* Media Type Tabs & Search */}
@@ -617,7 +617,7 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                     </p>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 3xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 3xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-5 w-full min-w-0">
                     {filteredRequests.map((req) => {
                         const isMovie = req.mediaType === "movie";
                         const isTv = req.mediaType === "tv";
@@ -645,7 +645,7 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                         return (
                             <div
                                 key={req.id}
-                                className={`p-3.5 rounded-2xl bg-[#14141c] border transition-all flex gap-3.5 items-start justify-between shadow-sm relative group ${
+                                className={`p-3 sm:p-3.5 rounded-2xl bg-[#14141c] border transition-all flex gap-3 sm:gap-3.5 items-start justify-between shadow-sm relative group overflow-hidden min-w-0 ${
                                     isSelected 
                                         ? "border-primary ring-1 ring-primary/40 bg-[#161626]" 
                                         : "border-border/40 hover:border-border/80"
@@ -686,7 +686,7 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                                                         publishYear: req.releaseYear || undefined,
                                                         mediaType: isAudiobook ? "audiobook" : "ebook",
                                                         availability: {
-                                                            status: req.status === "AVAILABLE" ? "AVAILABLE" : req.status === "PROCESSING" ? "DOWNLOADING" : "REQUESTED",
+                                                            status: (req.status === "AVAILABLE" || req.status === "Downloaded") ? "AVAILABLE" : (req.status === "PROCESSING" || req.status === "SEARCHING" || req.status === "DOWNLOADING") ? "DOWNLOADING" : "REQUESTED",
                                                             requestId: req.id
                                                         }
                                                     });
@@ -712,7 +712,7 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                                                     ) : (
                                                         <Film className="h-6 w-6 text-blue-400 mb-1 shrink-0" />
                                                     )}
-                                                    <span className="text-[9px] font-semibold line-clamp-2 text-foreground/80 leading-tight px-0.5">
+                                                    <span className="text-[9px] font-semibold line-clamp-2 text-foreground/80 leading-tight px-0.5 break-words">
                                                         {req.title}
                                                     </span>
                                                 </div>
@@ -722,24 +722,36 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                                 })()}
 
                                 {/* Content Details */}
-                                <div className="flex-1 min-w-0 space-y-1.5">
-                                    <div className="flex flex-wrap items-center gap-1.5">
-                                        <Badge variant="outline" className={`text-[9px] uppercase font-bold px-1.5 py-0.2 rounded ${formatBadgeColor}`}>
+                                <div className="flex-1 min-w-0 space-y-1.5 overflow-hidden">
+                                    <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                                        <Badge variant="outline" className={`text-[9px] uppercase font-bold px-1.5 py-0.2 rounded shrink-0 ${formatBadgeColor}`}>
                                             {formatLabel}
                                         </Badge>
+                                        {isTv && req.seasons && (
+                                            <Badge variant="outline" className="text-[9px] font-semibold px-1.5 py-0.2 rounded bg-cyan-950/40 text-cyan-300 border-cyan-500/30 shrink-0">
+                                                {req.seasons === "all" ? "All Seasons" : (() => {
+                                                    try {
+                                                        const parsed = JSON.parse(req.seasons);
+                                                        return Array.isArray(parsed) ? (parsed.length > 3 ? `${parsed.length} Seasons` : `S${parsed.join(", S")}`) : req.seasons;
+                                                    } catch {
+                                                        return req.seasons;
+                                                    }
+                                                })()}
+                                            </Badge>
+                                        )}
                                         {req.is4k && (
-                                            <Badge variant="outline" className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 border-purple-500/40">
+                                            <Badge variant="outline" className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 border-purple-500/40 shrink-0">
                                                 4K
                                             </Badge>
                                         )}
                                         {req.sendToKindle && isBook && (
-                                            <Badge variant="outline" className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-purple-900/30 text-purple-300 border-purple-500/30 gap-1">
+                                            <Badge variant="outline" className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-purple-900/30 text-purple-300 border-purple-500/30 gap-1 shrink-0">
                                                 <Send className="h-2.5 w-2.5" />
                                                 <span>Kindle</span>
                                             </Badge>
                                         )}
                                         {req.releaseYear && (
-                                            <span className="text-[11px] text-muted-foreground font-semibold">({req.releaseYear})</span>
+                                            <span className="text-[11px] text-muted-foreground font-semibold shrink-0">({req.releaseYear})</span>
                                         )}
                                     </div>
 
@@ -764,80 +776,100 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                                                 });
                                             }
                                         }}
-                                        className="text-sm font-bold text-foreground line-clamp-1 hover:text-primary cursor-pointer transition-colors"
+                                        title={req.title}
+                                        className="text-sm font-bold text-foreground line-clamp-1 hover:text-primary cursor-pointer transition-colors truncate break-words"
                                     >
                                         {req.title}
                                     </h4>
 
                                     {/* Author & Series Subtitle (for books) */}
-                                    {(isBook || isAudiobook) && req.bookAuthor && (
-                                        <p className="text-xs text-muted-foreground line-clamp-1 font-medium">
-                                            by {req.bookAuthor} {req.bookSeries ? `• Series: ${req.bookSeries}` : ""}
+                                    {(isBook || isAudiobook) && (req.bookAuthor || req.bookSeries) && (
+                                        <p 
+                                            className="text-xs text-muted-foreground line-clamp-1 font-medium truncate break-words"
+                                            title={`${req.bookAuthor ? `by ${req.bookAuthor}` : ""}${req.bookSeries ? ` • Series: ${req.bookSeries}` : ""}`}
+                                        >
+                                            {req.bookAuthor ? `by ${req.bookAuthor}` : ""}{req.bookSeries ? ` • ${req.bookSeries}` : ""}
                                         </p>
                                     )}
 
                                     {/* Status Badge & Download Progress */}
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex flex-wrap items-center gap-1.5 min-w-0 w-full">
                                         {req.status === "AVAILABLE" && (
-                                            <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-400">
+                                            <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-400 shrink-0">
                                                 <CheckCircle2 className="h-3.5 w-3.5" /> Available in {isBook || isAudiobook ? "Shelf" : "Plex"}
                                             </span>
                                         )}
+                                        {req.status === "PARTIALLY_AVAILABLE" && (
+                                            <span className="flex items-center gap-1 text-[11px] font-bold text-teal-400 shrink-0">
+                                                <CheckCircle2 className="h-3.5 w-3.5" /> Partial in Plex
+                                            </span>
+                                        )}
                                         {(req.status === "PROCESSING" || req.status === "SEARCHING" || req.status === "DOWNLOADING") && (
-                                            <div className="space-y-1 w-full max-w-xs">
-                                                <div className="flex items-center justify-between text-[11px] font-bold text-cyan-300">
-                                                    <span className="flex items-center gap-1">
+                                            <div className="space-y-1 w-full min-w-0">
+                                                <div className="flex items-center justify-between text-[11px] font-bold text-cyan-300 gap-1.5 flex-wrap">
+                                                    <span className="flex items-center gap-1 shrink-0">
                                                         <Download className="h-3.5 w-3.5 animate-pulse" /> Downloading
                                                     </span>
-                                                    <span>{req.downloadProgress ? `${req.downloadProgress}%` : "Searching / Queued"}</span>
+                                                    <span className="shrink-0 text-right font-mono text-[10px]">
+                                                        {req.downloadProgress ? `${Math.round(req.downloadProgress)}%` : "Queued"}
+                                                    </span>
                                                 </div>
                                                 {req.downloadProgress ? (
                                                     <div className="w-full h-1.5 bg-muted/40 rounded-full overflow-hidden">
                                                         <div 
                                                             className="h-full bg-cyan-400 rounded-full transition-all duration-300"
-                                                            style={{ width: `${req.downloadProgress}%` }}
+                                                            style={{ width: `${Math.min(100, Math.max(0, req.downloadProgress))}%` }}
                                                         />
                                                     </div>
                                                 ) : null}
                                             </div>
                                         )}
                                         {req.status === "APPROVED" && (
-                                            <span className="flex items-center gap-1 text-[11px] font-bold text-blue-400">
+                                            <span className="flex items-center gap-1 text-[11px] font-bold text-blue-400 shrink-0">
                                                 <Clock className="h-3.5 w-3.5" /> Approved
                                             </span>
                                         )}
                                         {req.status === "PENDING" && (
-                                            <span className="flex items-center gap-1 text-[11px] font-bold text-amber-400">
+                                            <span className="flex items-center gap-1 text-[11px] font-bold text-amber-400 shrink-0">
                                                 <Clock className="h-3.5 w-3.5" /> Awaiting Approval
                                             </span>
                                         )}
                                         {(req.status === "FAILED" || req.status === "DECLINED") && (
-                                            <span className="flex items-center gap-1 text-[11px] font-bold text-rose-400">
+                                            <span className="flex items-center gap-1 text-[11px] font-bold text-rose-400 shrink-0">
                                                 <AlertCircle className="h-3.5 w-3.5" /> {req.status === "DECLINED" ? "Declined / Rejected" : "Failed"}
                                             </span>
                                         )}
                                     </div>
 
                                     {/* Requester Attribution */}
-                                    <div className="text-[11px] text-muted-foreground flex items-center gap-1.5 pt-0.5">
-                                        <UserIcon className="h-3 w-3 opacity-60" />
-                                        <span className="font-semibold text-foreground/80">{req.requestedByUsername}</span>
+                                    <div className="text-[11px] text-muted-foreground flex items-center flex-wrap gap-x-1.5 gap-y-0.5 pt-0.5 min-w-0">
+                                        <div className="flex items-center gap-1 min-w-0 max-w-full">
+                                            <UserIcon className="h-3 w-3 opacity-60 shrink-0" />
+                                            <span className="font-semibold text-foreground/80 truncate max-w-[130px] sm:max-w-[180px]" title={req.requestedByUsername}>
+                                                {req.requestedByUsername}
+                                            </span>
+                                        </div>
                                         {req.kindleEmail && isBook && (
-                                            <span className="text-[10px] text-purple-300/80">({req.kindleEmail})</span>
+                                            <span className="text-[10px] text-purple-300/80 truncate max-w-[140px] sm:max-w-[200px]" title={req.kindleEmail}>
+                                                ({req.kindleEmail})
+                                            </span>
                                         )}
-                                        <span>•</span>
-                                        <span>{new Date(req.createdAt).toLocaleDateString()}</span>
+                                        <span className="text-muted-foreground/40 shrink-0">•</span>
+                                        <span className="shrink-0 text-[10px]">{new Date(req.createdAt).toLocaleDateString()}</span>
                                     </div>
 
                                     {req.errorMessage && (
-                                        <p className="text-[10px] text-rose-400 line-clamp-1 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">
+                                        <p 
+                                            className="text-[10px] text-rose-400 line-clamp-2 bg-rose-500/10 px-2 py-1 rounded border border-rose-500/20 break-words overflow-hidden"
+                                            title={req.errorMessage}
+                                        >
                                             {req.errorMessage}
                                         </p>
                                     )}
                                 </div>
 
                                 {/* Action Buttons */}
-                                <div className="flex flex-col gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                <div className="flex flex-col gap-1 shrink-0 ml-1 z-10" onClick={(e) => e.stopPropagation()}>
                                     {isAdmin && req.status === "PENDING" && (
                                         <>
                                             <Button
