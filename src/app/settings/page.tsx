@@ -36,7 +36,7 @@ import {
     AlertTriangle, PlaySquare, Activity, Sliders, Megaphone, Beaker, 
     CheckCircle2, XCircle, MailCheck, RefreshCw, Mail, FolderCheck, 
     Radio, ExternalLink, FileCode, Check, Bot, Sparkles, Key, Cpu, Eye, EyeOff, Terminal, Zap, Tv,
-    Bell, BellOff, UserCheck, BookOpen, LifeBuoy, Save, RotateCcw, Star, Globe, Compass, MessageSquare, History, Search, Server, ArrowUpRight
+    Bell, BellOff, UserCheck, BookOpen, LifeBuoy, Save, RotateCcw, Star, Globe, Compass, MessageSquare, History, Search, Server, ArrowUpRight, Wrench
 } from "lucide-react";
 import { 
     Dialog, 
@@ -379,6 +379,7 @@ function SettingsPageContent() {
         aiMaxDailyGrabs: number;
         aiApiKey: string;
         roadmapText: string;
+        devRoadmapText: string;
         betaText: string;
     } | null>(null);
 
@@ -441,6 +442,9 @@ function SettingsPageContent() {
 
     const isRoadmapDirty = initialDataRef.current ? (
         roadmapText !== initialDataRef.current.roadmapText
+    ) : false;
+    const isDevRoadmapDirty = initialDataRef.current ? (
+        devRoadmapText !== (initialDataRef.current as any).devRoadmapText
     ) : false;
 
     const isBetaDirty = initialDataRef.current ? (
@@ -1143,11 +1147,12 @@ function SettingsPageContent() {
             setMediaApps(m || []);
 
             const roadmapTextVal = rt || "";
+            const devRoadmapTextVal = devRt || "";
             const betaTextVal = bt || "";
             setBetaText(betaTextVal);
             setBetaCards(bc || []);
             setRoadmapText(roadmapTextVal);
-            setDevRoadmapText(devRt || "");
+            setDevRoadmapText(devRoadmapTextVal);
 
             const aiProviderVal = ai?.aiProvider || "default";
             const aiModelVal = ai?.aiModel || "gemini-3.5-flash-lite";
@@ -1205,6 +1210,7 @@ function SettingsPageContent() {
                 aiMaxDailyGrabs: aiMaxGrabsVal,
                 aiApiKey: aiApiKeyVal,
                 roadmapText: roadmapTextVal,
+                devRoadmapText: devRoadmapTextVal,
                 betaText: betaTextVal,
             };
         } catch (error) {

@@ -98,7 +98,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
     const [restoreStatusMsg, setRestoreStatusMsg] = useState("");
     const [filterStatus, setFilterStatus] = useState<"ALL" | "PENDING" | "APPROVED" | "TRIAL" | "INACTIVE">("ALL");
     const [searchQuery, setSearchQuery] = useState("");
-    type UserSortOption = "last_login_desc" | "last_login_asc" | "username_asc" | "username_desc" | "joined_desc" | "joined_asc" | "name_asc" | "expiration_asc" | "expiration_desc" | "status_asc";
+    type UserSortOption = "last_login" | "last_login_desc" | "last_login_asc" | "username" | "username_asc" | "username_desc" | "last_joined" | "joined" | "joined_desc" | "joined_asc" | "name" | "name_asc" | "expiration" | "expiration_asc" | "expiration_desc" | "status" | "status_asc";
     const [sortBy, setSortBy] = useState<UserSortOption>("joined_desc");
 
     const normalizeSortKey = (raw: string | null | undefined): UserSortOption => {
