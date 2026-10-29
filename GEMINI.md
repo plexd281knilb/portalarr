@@ -8,7 +8,7 @@ Portalarr is a centralized, self-hosted dashboard designed to manage a media ser
 
 Portalarr adheres to strict Semantic Versioning (`MAJOR.MINOR.PATCH`):
 - **Released Baseline**: `v1.0.0` is the production milestone baseline release.
-- **Active Feature Release**: `v1.4.3` is the active feature release (IPTV & Live TV subsystem on `main`).
+- **Active Feature Release**: `v1.4.4` is the active feature release (IPTV & Live TV subsystem on `main`).
 - **Production Baseline & Hotfix Track**: `v1.3.80` is the production milestone on `stable`. All hotfixes for the live production site are strictly versioned on `1.3.x` (`v1.3.81+`).
 - **Strict SemVer Policy**:
   - **PATCH increments (`1.3.22` ➔ `1.3.23`)**: Bug fixes, security patches, styling polish, telemetry adjustments, and non-breaking corrections.

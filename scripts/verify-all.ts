@@ -2504,6 +2504,7 @@ async function runTestSuite() {
         }
 
         // 2. Verify IPTV Settings & Dispatcharr API Key Encryption
+        const originalApiKey = await getDecryptedDispatcharrApiKey();
         const testApiKey = "test_dispatcharr_key_" + Date.now();
         await saveIptvSettings({
             dispatcharrUrl: "http://192.168.1.87:9191",
@@ -2520,6 +2521,11 @@ async function runTestSuite() {
         const decryptedKey = await getDecryptedDispatcharrApiKey();
         if (decryptedKey !== testApiKey) {
             throw new Error(`Failed to decrypt Dispatcharr API key: expected ${testApiKey}, got ${decryptedKey}`);
+        }
+
+        // Restore original API key so tests never clobber live Dispatcharr credentials
+        if (originalApiKey) {
+            await saveIptvSettings({ dispatcharrApiKey: originalApiKey });
         }
 
         // 3. Verify Provider Credential Vault Encryption & Decryption

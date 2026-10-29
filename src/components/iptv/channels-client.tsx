@@ -20,7 +20,8 @@ import {
     Clock,
     Sparkles,
     CheckCircle2,
-    Lock
+    Lock,
+    RefreshCw
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,7 +30,9 @@ import {
     requestIptvAccessAction,
     requestIptvChannelAction,
     generateUserIptvTokenAction,
-    revokeUserIptvTokenAction
+    revokeUserIptvTokenAction,
+    syncDispatcharrLineupAction,
+    getIptvCatalogAction
 } from "@/app/iptv-actions";
 
 interface ChannelsClientProps {
@@ -54,6 +57,11 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
     const [visibleCount, setVisibleCount] = useState<number>(64);
     const [copiedToken, setCopiedToken] = useState<string | null>(null);
 
+    // Live catalog state
+    const [channelsList, setChannelsList] = useState(initialData.channels || []);
+    const [profilesList, setProfilesList] = useState(initialData.profiles || []);
+    const [syncMsg, setSyncMsg] = useState("");
+
     // Modal state
     const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
     const [channelNameInput, setChannelNameInput] = useState("");
@@ -74,8 +82,26 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
 
     const canAccess = initialData.userAccess.canAccessIptv;
 
+    const handleSyncLineup = () => {
+        startTransition(async () => {
+            const res = await syncDispatcharrLineupAction();
+            if (res.success) {
+                const catRes = await getIptvCatalogAction();
+                if (catRes.success && catRes.data) {
+                    setChannelsList(catRes.data.channels);
+                    setProfilesList(catRes.data.profiles);
+                }
+                setSyncMsg(res.data?.message || "Synced channels from Dispatcharr!");
+                setTimeout(() => setSyncMsg(""), 4500);
+            } else {
+                setSyncMsg(res.error || "Failed to sync Dispatcharr");
+                setTimeout(() => setSyncMsg(""), 4500);
+            }
+        });
+    };
+
     // Filter channels by selected profile, genre and search query
-    const filteredChannels = initialData.channels.filter((c) => {
+    const filteredChannels = channelsList.filter((c) => {
         const matchesProfile =
             selectedProfile === "all" ||
             (c.profileSlugs && c.profileSlugs.includes(selectedProfile));
@@ -188,12 +214,23 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
 
                 <div className="flex flex-wrap items-center gap-2.5">
                     {initialData.userAccess.isAdmin && (
-                        <Link href="/admin/iptv">
-                            <Button variant="outline" className="border-amber-500/30 text-amber-300 hover:bg-amber-500/10 text-xs font-bold gap-2">
-                                <ShieldCheck className="h-4 w-4" />
-                                Admin IPTV Control
+                        <>
+                            <Button
+                                onClick={handleSyncLineup}
+                                disabled={isPending}
+                                variant="outline"
+                                className="border-teal-500/40 text-teal-300 hover:bg-teal-500/10 text-xs font-bold gap-1.5 shadow-sm"
+                            >
+                                <RefreshCw className={`h-3.5 w-3.5 ${isPending ? "animate-spin" : ""}`} />
+                                Sync Lineup ({channelsList.length})
                             </Button>
-                        </Link>
+                            <Link href="/admin/iptv">
+                                <Button variant="outline" className="border-amber-500/30 text-amber-300 hover:bg-amber-500/10 text-xs font-bold gap-2">
+                                    <ShieldCheck className="h-4 w-4" />
+                                    Admin IPTV Control
+                                </Button>
+                            </Link>
+                        </>
                     )}
 
                     <Button
@@ -212,6 +249,17 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                     </Link>
                 </div>
             </div>
+
+            {/* Sync Status Banner */}
+            {syncMsg && (
+                <div className="p-3.5 rounded-xl bg-teal-500/15 border border-teal-500/40 text-teal-200 text-xs font-semibold flex items-center justify-between shadow-sm animate-in fade-in duration-200">
+                    <span className="flex items-center gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-teal-400 shrink-0" />
+                        {syncMsg}
+                    </span>
+                    <button onClick={() => setSyncMsg("")} className="text-teal-400 hover:text-teal-200 text-xs font-bold">✕</button>
+                </div>
+            )}
 
             {/* Access Gating Notice (For Users/Trials without Live TV unlocked) */}
             {!canAccess && (
@@ -262,7 +310,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                         {filteredChannels.length} channel{filteredChannels.length === 1 ? "" : "s"} shown
                         {selectedProfile !== "all" && (
                             <span className="ml-1 text-teal-400 font-semibold">
-                                ({initialData.profiles.find((p) => p.slug === selectedProfile)?.name || selectedProfile})
+                                ({profilesList.find((p) => p.slug === selectedProfile)?.name || selectedProfile})
                             </span>
                         )}
                     </span>
@@ -284,7 +332,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                         All Lineups
                     </button>
 
-                    {initialData.profiles.map((p) => {
+                    {profilesList.map((p) => {
                         const IconComponent = p.slug.includes("sport")
                             ? Trophy
                             : p.slug.includes("kid")

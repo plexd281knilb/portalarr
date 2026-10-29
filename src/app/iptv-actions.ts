@@ -1017,7 +1017,7 @@ export async function getIptvCatalogAction(filters?: {
             }
         }
 
-        const allChannels = await prisma.iptvChannel.findMany({
+        let allChannels = await prisma.iptvChannel.findMany({
             where: {
                 isActive: true,
                 ...(channelIdsFilter ? { id: { in: channelIdsFilter } } : {}),
@@ -1034,6 +1034,31 @@ export async function getIptvCatalogAction(filters?: {
             },
             orderBy: [{ channelNumber: "asc" }, { name: "asc" }]
         });
+
+        // Self-Healing Auto-Sync: If catalog only contains baseline seeds (<= 28 channels),
+        // automatically trigger a sync from Dispatcharr if API key is configured.
+        if (allChannels.length <= 28 && !channelIdsFilter && !filters?.genre) {
+            try {
+                const syncRes = await syncDispatcharrLineup();
+                if (syncRes.liveConnected && syncRes.channelsSynced > 28) {
+                    allChannels = await prisma.iptvChannel.findMany({
+                        where: { isActive: true },
+                        include: {
+                            profileChannels: {
+                                select: {
+                                    profile: {
+                                        select: { slug: true }
+                                    }
+                                }
+                            }
+                        },
+                        orderBy: [{ channelNumber: "asc" }, { name: "asc" }]
+                    });
+                }
+            } catch {
+                // Ignore sync errors during catalog fetch
+            }
+        }
 
         const searchLower = (filters?.search || "").trim().toLowerCase();
         const filteredList = searchLower
