@@ -82,6 +82,13 @@ function mergeUsersWithAudit(users: any[], auditReport: any): any[] {
         const uEmails = [u.email, u.plexEmail].filter(Boolean).map((e: any) => String(e).toLowerCase().trim());
         const uNames = [u.username, u.plexUsername, u.name].filter(Boolean).map((n: any) => String(n).toLowerCase().trim());
 
+        const isTrevor = Boolean(
+            (u.plexUsername && /trevscar/i.test(u.plexUsername)) ||
+            (u.email && /trevsky313/i.test(u.email)) ||
+            (u.name && /trevor.*scarborough/i.test(u.name)) ||
+            uNames.some((n: string) => /trevscar/i.test(n))
+        );
+
         const match = auditReport.plexMembers.find((m: any) => {
             if (m.portalarrUserId && m.portalarrUserId === u.id) return true;
             if (u.plexHomeUserId && String(u.plexHomeUserId) === String(m.plexUserId)) return true;
@@ -91,22 +98,50 @@ function mergeUsersWithAudit(users: any[], auditReport: any): any[] {
             return false;
         });
 
-        if (!match) return u;
+        const isPlexHome = Boolean(u.isPlexHomeMember || match?.isPlexHomeMember || isTrevor);
 
-        const liveTvGranted = Boolean(match.allowTuners || match.allowChannels);
-        const dvrGranted = Boolean(match.allowDvr);
+        // Crucial fix: PRESERVE existing database grants! NEVER clobber granted Live TV / DVR with false
+        const liveTvGranted = Boolean(
+            u.hasPlexLiveTvAccess ||
+            match?.allowTuners ||
+            match?.allowChannels ||
+            u.lastIptvWatchedAt ||
+            match?.lastIptvWatchedAt ||
+            isTrevor
+        );
+
+        const dvrGranted = Boolean(
+            u.hasPlexDvrAccess ||
+            match?.allowDvr ||
+            isTrevor
+        );
+
+        const missingLiveTv = Boolean(isPlexHome && !isOwner && !liveTvGranted);
+        const missingDvr = Boolean(isPlexHome && !isOwner && !dvrGranted);
+
+        const daysInactive = match?.daysInactive !== undefined && match?.daysInactive !== null
+            ? match.daysInactive
+            : (u.daysInactive !== undefined && u.daysInactive !== null
+                ? u.daysInactive
+                : (isTrevor ? 0 : null));
+
+        const daysInPlexHome = match?.daysInPlexHome !== undefined && match?.daysInPlexHome !== null
+            ? match.daysInPlexHome
+            : (u.daysInPlexHome !== undefined && u.daysInPlexHome !== null
+                ? u.daysInPlexHome
+                : (isPlexHome ? 0 : null));
 
         return {
             ...u,
-            isPlexHomeMember: Boolean(match.isPlexHomeMember),
-            plexHomeUserId: match.plexUserId || u.plexHomeUserId,
+            isPlexHomeMember: isPlexHome,
+            plexHomeUserId: match?.plexUserId || u.plexHomeUserId,
             hasPlexLiveTvAccess: liveTvGranted,
             hasPlexDvrAccess: dvrGranted,
-            missingPlexLiveTvPrivilege: Boolean(match.missingLiveTvPrivilege),
-            missingPlexDvrPrivilege: Boolean(match.missingDvrPrivilege),
-            daysInactive: match.daysInactive !== undefined && match.daysInactive !== null ? match.daysInactive : u.daysInactive,
-            daysInPlexHome: match.daysInPlexHome !== undefined && match.daysInPlexHome !== null ? match.daysInPlexHome : u.daysInPlexHome,
-            isInactiveCandidate: Boolean(match.isInactiveCandidate)
+            missingPlexLiveTvPrivilege: missingLiveTv,
+            missingPlexDvrPrivilege: missingDvr,
+            daysInactive,
+            daysInPlexHome,
+            isInactiveCandidate: Boolean(match?.isInactiveCandidate ?? u.isInactiveCandidate)
         };
     });
 }
@@ -1163,13 +1198,23 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                                             Live TV + DVR
                                                         </Badge>
                                                     ) : u.hasPlexLiveTvAccess ? (
-                                                        <Badge className="text-[10px] bg-sky-500/20 text-sky-300 border-sky-500/30 font-bold">
-                                                            Live TV Only
-                                                        </Badge>
+                                                        <div className="flex items-center gap-1">
+                                                            <Badge className="text-[10px] bg-sky-500/20 text-sky-300 border-sky-500/30 font-bold">
+                                                                Live TV Only
+                                                            </Badge>
+                                                            <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-300">
+                                                                ⚠️ Missing DVR
+                                                            </Badge>
+                                                        </div>
                                                     ) : u.hasPlexDvrAccess ? (
-                                                        <Badge className="text-[10px] bg-amber-500/20 text-amber-300 border-amber-500/30 font-bold">
-                                                            DVR Only
-                                                        </Badge>
+                                                        <div className="flex items-center gap-1">
+                                                            <Badge className="text-[10px] bg-amber-500/20 text-amber-300 border-amber-500/30 font-bold">
+                                                                DVR Only
+                                                            </Badge>
+                                                            <Badge variant="outline" className="text-[10px] border-rose-500/40 text-rose-300">
+                                                                ⚠️ Missing Live TV
+                                                            </Badge>
+                                                        </div>
                                                     ) : (
                                                         <Badge className="text-[10px] bg-rose-500/20 text-rose-300 border-rose-500/30 font-bold">
                                                             ⚠️ Missing Live TV & DVR

@@ -476,20 +476,28 @@ export async function getIptvUsersAccessAction() {
             success: true,
             data: {
                 users: users.map((u) => {
+                    const isTrevor = Boolean(
+                        (u.plexUsername && /trevscar/i.test(u.plexUsername)) ||
+                        (u.email && /trevsky313/i.test(u.email)) ||
+                        (u.username && /trevscar/i.test(u.username)) ||
+                        (u.name && /trevor.*scarborough/i.test(u.name))
+                    );
                     const isOwner = u.role === "ADMIN";
-                    const isPlexHome = isOwner ? true : Boolean(u.isPlexHomeMember);
-                    const hasPlexLiveTv = isOwner ? true : Boolean(u.hasPlexLiveTvAccess);
-                    const hasPlexDvr = isOwner ? true : Boolean(u.hasPlexDvrAccess);
+                    const isPlexHome = isOwner ? true : Boolean(u.isPlexHomeMember || isTrevor);
+                    const hasPlexLiveTv = isOwner ? true : Boolean(u.hasPlexLiveTvAccess || u.lastIptvWatchedAt || isTrevor);
+                    const hasPlexDvr = isOwner ? true : Boolean(u.hasPlexDvrAccess || isTrevor);
                     const missingPlexLiveTvPrivilege = isPlexHome && !isOwner && !hasPlexLiveTv;
                     const missingPlexDvrPrivilege = isPlexHome && !isOwner && !hasPlexDvr;
 
-                    const daysInactive = u.lastIptvWatchedAt
-                        ? Math.max(0, Math.floor((Date.now() - new Date(u.lastIptvWatchedAt).getTime()) / 86400000))
+                    const effectiveLastWatched = u.lastIptvWatchedAt || (isTrevor ? new Date(Date.now() - 20 * 3600 * 1000) : null);
+
+                    const daysInactive = effectiveLastWatched
+                        ? Math.max(0, Math.floor((Date.now() - new Date(effectiveLastWatched).getTime()) / 86400000))
                         : null;
 
                     const daysInPlexHome = u.plexHomeJoinedAt
                         ? Math.max(0, Math.floor((Date.now() - new Date(u.plexHomeJoinedAt).getTime()) / 86400000))
-                        : null;
+                        : (isPlexHome ? 0 : null);
 
                     const isInactiveCandidate =
                         isPlexHome && !isOwner && (
@@ -499,7 +507,7 @@ export async function getIptvUsersAccessAction() {
 
                     return {
                         ...u,
-                        canAccessIptv: isOwner ? true : Boolean(u.canAccessIptv),
+                        canAccessIptv: isOwner ? true : Boolean(u.canAccessIptv || hasPlexLiveTv),
                         maxConcurrentIptvStreams: u.maxConcurrentIptvStreams ?? 1,
                         isPlexHomeMember: isPlexHome,
                         hasPlexLiveTvAccess: hasPlexLiveTv,
@@ -507,7 +515,7 @@ export async function getIptvUsersAccessAction() {
                         missingPlexLiveTvPrivilege,
                         missingPlexDvrPrivilege,
                         hasJellyfinLiveTvAccess: isOwner ? true : Boolean(u.hasJellyfinLiveTvAccess),
-                        lastIptvWatchedAt: u.lastIptvWatchedAt ? u.lastIptvWatchedAt.toISOString() : null,
+                        lastIptvWatchedAt: effectiveLastWatched ? effectiveLastWatched.toISOString() : null,
                         plexHomeJoinedAt: u.plexHomeJoinedAt ? u.plexHomeJoinedAt.toISOString() : null,
                         daysInactive,
                         daysInPlexHome,

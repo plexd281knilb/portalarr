@@ -2810,6 +2810,56 @@ async function runTestSuite() {
             if (updatedUser?.preferredMediaMarket !== "houston") {
                 throw new Error(`Expected preferredMediaMarket 'houston', got '${updatedUser?.preferredMediaMarket}'`);
             }
+
+            // Test Suite 23.D: Plex Home Live TV vs DVR Differentiation & Trevor Scarborough Audit Safeguards
+            await prisma.user.deleteMany({
+                where: { OR: [{ username: "trevscar1121" }, { email: "trevsky313@gmail.com" }] }
+            }).catch(() => {});
+
+            const trevorMock = await prisma.user.create({
+                data: {
+                    username: "trevscar1121",
+                    email: "trevsky313@gmail.com",
+                    name: "Trevor Scarborough",
+                    plexUsername: "trevscar1121",
+                    plexEmail: "trevsky313@gmail.com",
+                    password: "mock_password_hash_123",
+                    role: "USER",
+                    status: "APPROVED",
+                    isPlexHomeMember: true,
+                    hasPlexLiveTvAccess: true,
+                    hasPlexDvrAccess: true,
+                    lastIptvWatchedAt: new Date(Date.now() - 20 * 3600 * 1000)
+                }
+            });
+
+            try {
+                const { auditPlexHomeAndLiveTvPrivileges } = await import("../src/lib/iptv/plex-jellyfin-livetv");
+                const auditResult = await auditPlexHomeAndLiveTvPrivileges();
+                const trevorAudited = auditResult.plexMembers.find(
+                    (m: any) => m.portalarrUserId === trevorMock.id || m.username === "trevscar1121"
+                );
+                if (!trevorAudited) {
+                    throw new Error("Trevor Scarborough was not found in Plex Home audit report");
+                }
+                if (!trevorAudited.allowTuners && !trevorAudited.allowChannels) {
+                    throw new Error("Trevor Scarborough must be granted Live TV privileges");
+                }
+                if (!trevorAudited.allowDvr) {
+                    throw new Error("Trevor Scarborough must be granted DVR privileges");
+                }
+                if (trevorAudited.missingLiveTvPrivilege) {
+                    throw new Error("Trevor Scarborough must NOT be flagged as missing Live TV privilege");
+                }
+                if (trevorAudited.missingDvrPrivilege) {
+                    throw new Error("Trevor Scarborough must NOT be flagged as missing DVR privilege");
+                }
+                if (trevorAudited.daysInactive === null || trevorAudited.daysInactive > 1) {
+                    throw new Error(`Expected Trevor daysInactive <= 1, got ${trevorAudited.daysInactive}`);
+                }
+            } finally {
+                await prisma.user.delete({ where: { id: trevorMock.id } }).catch(() => {});
+            }
         } finally {
             await prisma.user.delete({ where: { id: testUser.id } }).catch(() => {});
         }
