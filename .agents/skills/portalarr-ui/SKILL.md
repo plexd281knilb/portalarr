@@ -1446,3 +1446,14 @@ Detailed guide on updating: [updating-this-skill.md](./references/updating-this-
 - **Admin-Only Blocking Architecture**: Cloudflare Zero Trust blocks access strictly to designated Admin-Only paths (`/settings*`, `/admin*`, `/curation*`, `/tautulli*`, `/streams*`, `/api/admin*`, `/api/system*`, `/api/debug*`, `/api/curation*`, `/api/users*`, `/api/books/upload*`). All other paths are open at the edge and handled by Portalarr's native JWT session management.
 - **Strict Prohibition of User/Super User Features Under Admin Prefixes**: No user-facing or super-user-facing page, button, link, or API fetch may ever target an admin-only path.
 - **Canonical `/profile` Route**: User profile, server selection, and password management reside strictly at `/profile`. Any legacy hits to `/settings/profile` are automatically redirected to `/profile` on the server. Non-admins must never fetch `/api/users` on `/library` or any other view.
+
+
+### 49. Dual Roadmap Architecture: User-Facing Roadmap vs Developer Backlog
+- **Separation of Concerns**:
+  - **User-Facing Roadmap (`roadmap.md`)**: Publicly accessible and tailored across 4 role views (`USER`, `TRIAL`, `SUPER_USER`, `ADMIN`). Formatted in approachable, plain English zero-jargon language highlighting platform capabilities, media features, and new enhancements.
+  - **Developer Maintenance Backlog (`docs/DEV_ROADMAP.md`)**: Strictly restricted to Administrators. Contains technical maintenance tasks, background scheduler mutexes, edge policies, Docker socket optimizations, API sync pipelines, and database migrations.
+- **UI Interaction & Gating**:
+  - `WhatsNewModal` (`src/components/whats-new-modal.tsx`) provides an integrated dual-tab switcher (`🚀 User Roadmap` vs `🛠️ Developer Roadmap`) mounted strictly for verified Administrators (`userRole === "ADMIN"`).
+  - Dedicated `[🛠️ Dev Roadmap]` button (`DevRoadmapModal`) is mounted on the Home Dashboard (`src/app/page.tsx`) header lockup and inside `AdminDetailedStreams` (`src/components/admin-detailed-streams.tsx`).
+  - **Settings Management**: In `/settings?tab=announcements`, administrators can edit, preview, and save both `roadmap.md` and `docs/DEV_ROADMAP.md` via a dual-tab Markdown editor with dirty state tracking.
+  - **Container Packaging**: `Dockerfile` copies `/app/docs` to the runtime container so developer maintenance logs persist in Docker homelab deployments.

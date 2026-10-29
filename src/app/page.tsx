@@ -2,6 +2,7 @@ import { BuildBadge } from "@/components/build-badge";
 import { 
     getPublicMediaApps, 
     getRoadmapText, 
+    getDevRoadmapText, 
     getAlertBanner, 
     checkUserLibraryAccess,
     getUserReferralInfo,
@@ -79,9 +80,10 @@ export default async function UserLandingPage() {
     }).catch(() => []) : [];
 
     // Fetch dynamic content safely
-    const [apps, roadmapText, alertBanner, hasAccess, referralInfo, joinConfig, globalSettings] = await Promise.all([
+    const [apps, roadmapText, devRoadmapText, alertBanner, hasAccess, referralInfo, joinConfig, globalSettings] = await Promise.all([
         getPublicMediaApps().catch(() => []),
         getRoadmapText().catch(() => ""),
+        isAdmin ? getDevRoadmapText().catch(() => "") : Promise.resolve(""),
         getAlertBanner().catch(() => ({ enabled: false, text: "" })),
         isLoggedIn ? checkUserLibraryAccess().catch(() => false) : Promise.resolve(false),
         isLoggedIn ? getUserReferralInfo().catch(() => null) : Promise.resolve(null),
@@ -186,9 +188,21 @@ export default async function UserLandingPage() {
                     <div className="flex items-center gap-2 shrink-0">
                         <WhatsNewModal 
                             roadmapText={roadmapText} 
+                            devRoadmapText={devRoadmapText}
                             userRole={isAdmin ? "ADMIN" : isSuperUser ? "SUPER_USER" : isTrial ? "TRIAL" : "USER"} 
                             triggerButton={true} 
+                            triggerVariant="default"
                         />
+                        {isAdmin && (
+                            <WhatsNewModal 
+                                roadmapText={roadmapText} 
+                                devRoadmapText={devRoadmapText}
+                                userRole="ADMIN" 
+                                triggerButton={true} 
+                                triggerVariant="dev"
+                                initialTab="dev"
+                            />
+                        )}
                     </div>
                 </section>
 
@@ -398,7 +412,7 @@ export default async function UserLandingPage() {
                         <AdminSystemHealthGrid />
 
                         {/* INTRICATE ADMIN SYSTEM STATUS & STREAM TELEMETRY TABLE */}
-                        <AdminDetailedStreams />
+                        <AdminDetailedStreams devRoadmapText={devRoadmapText} roadmapText={roadmapText} />
 
                         {/* 24/7 AI SERVER ASSISTANT */}
                         <div className="w-full">

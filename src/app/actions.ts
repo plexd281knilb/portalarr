@@ -9710,6 +9710,42 @@ export async function updateRoadmapText(formData: FormData) {
     return { success: true };
 }
 
+export async function getDevRoadmapText(): Promise<string> {
+    await verifyAdmin();
+    try {
+        const devPath = path.join(process.cwd(), "docs", "DEV_ROADMAP.md");
+        if (fs.existsSync(devPath)) {
+            return fs.readFileSync(devPath, "utf-8");
+        }
+        const altDevPath = path.join(process.cwd(), "DEV_ROADMAP.md");
+        if (fs.existsSync(altDevPath)) {
+            return fs.readFileSync(altDevPath, "utf-8");
+        }
+    } catch (e) {
+        console.warn("Failed to read DEV_ROADMAP.md from disk:", e);
+    }
+    return "# 🛠️ Developer Roadmap & Maintenance Backlog\n\nNo developer maintenance items currently logged.";
+}
+
+export async function updateDevRoadmapText(formData: FormData) {
+    await verifyAdmin();
+    const text = (formData.get("text") as string) || "";
+    try {
+        const devPath = path.join(process.cwd(), "docs", "DEV_ROADMAP.md");
+        const dir = path.dirname(devPath);
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+        fs.writeFileSync(devPath, text, "utf-8");
+    } catch (e: any) {
+        console.error("Failed to write docs/DEV_ROADMAP.md:", e);
+    }
+    revalidatePath("/");
+    revalidatePath("/settings");
+    return { success: true };
+}
+
+
 // ============================================================================
 // --- COMMUNITY FEATURE SUGGESTIONS & VOTING POLL ---
 // ============================================================================

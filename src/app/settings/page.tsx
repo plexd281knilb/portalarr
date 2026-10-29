@@ -15,7 +15,7 @@ import {
     getMediaApps, addMediaApp, updateMediaApp, removeMediaApp, toggleMediaAppMonitoringAction,
     getBetaDashboardText, updateBetaDashboardText,
     getBetaCards, createBetaCard, updateBetaCard, deleteBetaCard,
-    getRoadmapText, updateRoadmapText,
+    getRoadmapText, updateRoadmapText, getDevRoadmapText, updateDevRoadmapText,
     getAlertBanner, updateAlertBanner,
     testAppConnectionAction, testTautulliConnectionAction, testGlancesConnectionAction, validateDownloadsPathAction,
     testTautulliConfigAction, testGlancesConfigAction, testMediaAppConfigAction,
@@ -187,6 +187,7 @@ function SettingsPageContent() {
     const [betaText, setBetaText] = useState<string>("");
     const [betaCards, setBetaCards] = useState<any[]>([]);
     const [roadmapText, setRoadmapText] = useState<string>("");
+    const [devRoadmapText, setDevRoadmapText] = useState<string>("");
 
     // Alert States
     const [alertBanner, setAlertBanner] = useState<{enabled: boolean, text: string}>({enabled: false, text: ""});
@@ -472,13 +473,13 @@ function SettingsPageContent() {
     }
 
     const hasUnsavedChanges = unsavedSections.length > 0;
-    const isGeneralHubDirty = isAlertBannerDirty || isAppUrlDirty || isAutomationDirty || isRoadmapDirty || isBetaDirty;
+    const isGeneralHubDirty = isAlertBannerDirty || isAppUrlDirty || isAutomationDirty || isRoadmapDirty || isDevRoadmapDirty || isBetaDirty;
     const isServersHubDirty = isPlexDirty || isSnapshotPathDirty || isMediaServersDirty;
     const isIntegrationsHubDirty = isSeerrDirty || isAiDirty || isCurationDirty || isGoogleBooksDirty;
     const isCommunicationsHubDirty = isSmtpDirty || isDiscordDirty;
 
     const isGeneralTabDirty = isGeneralHubDirty;
-    const isBetaTabDirty = isRoadmapDirty || isBetaDirty;
+    const isBetaTabDirty = isRoadmapDirty || isDevRoadmapDirty || isBetaDirty;
     // Browser-level reload/close protection
     useEffect(() => {
         const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -1047,7 +1048,7 @@ function SettingsPageContent() {
         }, 2500);
 
         try {
-            const [u, s, t, g, m, bt, bc, rt, ab, ai, ps, adminEmailRes] = await Promise.all([
+            const [u, s, t, g, m, bt, bc, rt, devRt, ab, ai, ps, adminEmailRes] = await Promise.all([
                 getAppUsers().catch(err => { console.error("getAppUsers error:", err); return []; }),
                 getSettings().catch(err => { console.error("getSettings error:", err); return {}; }),
                 getTautulliInstances().catch(err => { console.error("getTautulliInstances error:", err); return []; }),
@@ -1056,6 +1057,8 @@ function SettingsPageContent() {
                 getBetaDashboardText().catch(() => ""), 
                 getBetaCards().catch(() => []),
                 getRoadmapText().catch(() => ""),
+                getDevRoadmapText().catch(() => ""),
+
                 getAlertBanner().catch(() => ({ enabled: false, text: "" })),
                 getAiAgentSettings().catch(() => null),
                 getPlexServersAction().catch(err => { console.error("getPlexServersAction error:", err); return []; }),
@@ -1144,6 +1147,7 @@ function SettingsPageContent() {
             setBetaText(betaTextVal);
             setBetaCards(bc || []);
             setRoadmapText(roadmapTextVal);
+            setDevRoadmapText(devRt || "");
 
             const aiProviderVal = ai?.aiProvider || "default";
             const aiModelVal = ai?.aiModel || "gemini-3.5-flash-lite";
@@ -1418,6 +1422,7 @@ function SettingsPageContent() {
         setAiMaxDailyGrabs(init.aiMaxDailyGrabs ?? 3);
         setAiApiKeyInput(init.aiApiKey);
         setRoadmapText(init.roadmapText);
+        setDevRoadmapText(init.devRoadmapText);
         setBetaText(init.betaText);
         if (targetSnapshotServer) {
             setPlexServerFormDatabasePath(targetSnapshotServer.databasePath || "");
@@ -2073,17 +2078,17 @@ function SettingsPageContent() {
                         </CardContent>
                     </Card>
 
-                                                {/* ROADMAP CARD EDITOR */}
+                                                {/* DUAL ROADMAP CARD EDITOR (USER & DEV ROADMAPS) */}
                     <Card className={`bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
-                        isRoadmapDirty ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" : ""
+                        (isRoadmapDirty || isDevRoadmapDirty) ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" : ""
                     }`}>
                         <CardHeader>
                             <div className="flex justify-between items-start">
                                 <div>
-                                    <CardTitle className="flex items-center gap-2">🗺️ Roadmap & Feature Announcements</CardTitle>
-                                    <CardDescription>Update the Markdown roadmap text displayed on the main dashboard.</CardDescription>
+                                    <CardTitle className="flex items-center gap-2">🗺️ Dual Platform Roadmaps</CardTitle>
+                                    <CardDescription>Manage both the public user-facing feature announcements and the internal developer maintenance backlog.</CardDescription>
                                 </div>
-                                {isRoadmapDirty && (
+                                {(isRoadmapDirty || isDevRoadmapDirty) && (
                                     <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
                                         ● Unsaved Changes
                                     </Badge>
@@ -2091,29 +2096,74 @@ function SettingsPageContent() {
                             </div>
                         </CardHeader>
                         <CardContent>
-                            <form onSubmit={(e) => handleForm(e, updateRoadmapText)} className="space-y-4">
-                                <Tabs defaultValue="write" className="w-full">
-                                    <TabsList className="mb-2 grid w-full max-w-[200px] grid-cols-2">
-                                        <TabsTrigger value="write">Write</TabsTrigger>
-                                        <TabsTrigger value="preview">Preview</TabsTrigger>
-                                    </TabsList>
-                                    <TabsContent value="write">
-                                        <Textarea 
-                                            name="text" 
-                                            value={roadmapText} 
-                                            onChange={(e) => setRoadmapText(e.target.value)}
-                                            rows={12} 
-                                            className="font-mono text-sm leading-relaxed"
-                                            placeholder="### ✨ Recently Released..."
-                                            required
-                                        />
-                                    </TabsContent>
-                                    <TabsContent value="preview" className="border rounded-md p-5 min-h-[290px] bg-muted/10 prose prose-neutral dark:prose-invert max-w-none text-sm leading-relaxed overflow-y-auto prose-headings:font-bold prose-h3:text-base prose-h3:text-foreground prose-h3:mt-3 prose-h3:mb-2 prose-ul:my-2 prose-ul:space-y-2 prose-li:my-1 prose-hr:my-4">
-                                        <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{roadmapText || "*No content*"}</ReactMarkdown>
-                                    </TabsContent>
-                                </Tabs>
-                                <Button type="submit" className="font-semibold hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all">Save Roadmap Text</Button>
-                            </form>
+                            <Tabs defaultValue="user-roadmap" className="w-full">
+                                <TabsList className="mb-4 grid w-full max-w-md grid-cols-2 bg-black/40 border border-white/[0.08]">
+                                    <TabsTrigger value="user-roadmap" className="gap-1.5 text-xs font-semibold data-[state=active]:bg-purple-500/20 data-[state=active]:text-purple-300">
+                                        <Sparkles className="h-3.5 w-3.5 text-purple-400" />
+                                        <span>User Roadmap</span>
+                                        {isRoadmapDirty && <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />}
+                                    </TabsTrigger>
+                                    <TabsTrigger value="dev-roadmap" className="gap-1.5 text-xs font-semibold data-[state=active]:bg-amber-500/20 data-[state=active]:text-amber-300">
+                                        <Wrench className="h-3.5 w-3.5 text-amber-400" />
+                                        <span>Dev Roadmap</span>
+                                        {isDevRoadmapDirty && <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />}
+                                    </TabsTrigger>
+                                </TabsList>
+
+                                {/* TAB 1: USER-FACING ROADMAP */}
+                                <TabsContent value="user-roadmap" className="space-y-4">
+                                    <form onSubmit={(e) => handleForm(e, updateRoadmapText)} className="space-y-4">
+                                        <Tabs defaultValue="write" className="w-full">
+                                            <TabsList className="mb-2 grid w-full max-w-[200px] grid-cols-2">
+                                                <TabsTrigger value="write">Write</TabsTrigger>
+                                                <TabsTrigger value="preview">Preview</TabsTrigger>
+                                            </TabsList>
+                                            <TabsContent value="write">
+                                                <Textarea 
+                                                    name="text" 
+                                                    value={roadmapText} 
+                                                    onChange={(e) => setRoadmapText(e.target.value)}
+                                                    rows={12} 
+                                                    className="font-mono text-sm leading-relaxed"
+                                                    placeholder="### ✨ Recently Released..."
+                                                    required
+                                                />
+                                            </TabsContent>
+                                            <TabsContent value="preview" className="border rounded-md p-5 min-h-[290px] bg-muted/10 prose prose-neutral dark:prose-invert max-w-none text-sm leading-relaxed overflow-y-auto prose-headings:font-bold prose-h3:text-base prose-h3:text-foreground prose-h3:mt-3 prose-h3:mb-2 prose-ul:my-2 prose-ul:space-y-2 prose-li:my-1 prose-hr:my-4">
+                                                <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{roadmapText || "*No content*"}</ReactMarkdown>
+                                            </TabsContent>
+                                        </Tabs>
+                                        <Button type="submit" className="font-semibold hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all">Save User Roadmap</Button>
+                                    </form>
+                                </TabsContent>
+
+                                {/* TAB 2: DEVELOPER ROADMAP */}
+                                <TabsContent value="dev-roadmap" className="space-y-4">
+                                    <form onSubmit={(e) => handleForm(e, updateDevRoadmapText)} className="space-y-4">
+                                        <Tabs defaultValue="write" className="w-full">
+                                            <TabsList className="mb-2 grid w-full max-w-[200px] grid-cols-2">
+                                                <TabsTrigger value="write">Write</TabsTrigger>
+                                                <TabsTrigger value="preview">Preview</TabsTrigger>
+                                            </TabsList>
+                                            <TabsContent value="write">
+                                                <Textarea 
+                                                    name="text" 
+                                                    value={devRoadmapText} 
+                                                    onChange={(e) => setDevRoadmapText(e.target.value)}
+                                                    rows={12} 
+                                                    className="font-mono text-sm leading-relaxed text-amber-200 bg-black/40"
+                                                    placeholder="# 🛠️ Developer Roadmap & Maintenance Backlog..."
+                                                    required
+                                                />
+                                            </TabsContent>
+                                            <TabsContent value="preview" className="border border-amber-500/20 rounded-md p-5 min-h-[290px] bg-amber-950/10 prose prose-neutral dark:prose-invert max-w-none text-sm leading-relaxed overflow-y-auto prose-headings:font-bold prose-h3:text-base prose-h3:text-amber-300 prose-h3:mt-3 prose-h3:mb-2 prose-ul:my-2 prose-ul:space-y-2 prose-li:my-1 prose-hr:my-4">
+                                                <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{devRoadmapText || "*No developer backlog content*"}</ReactMarkdown>
+                                            </TabsContent>
+                                        </Tabs>
+                                        <Button type="submit" className="font-semibold bg-amber-600 hover:bg-amber-500 text-white hover:ring-2 hover:ring-amber-400/40 active:scale-95 transition-all">Save Developer Roadmap</Button>
+                                    </form>
+                                </TabsContent>
+                            </Tabs>
                         </CardContent>
                     </Card>
 
