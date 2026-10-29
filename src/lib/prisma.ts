@@ -792,7 +792,8 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["hasPlexLiveTvAccess", `ALTER TABLE "User" ADD COLUMN "hasPlexLiveTvAccess" BOOLEAN NOT NULL DEFAULT 0;`],
                 ["plexHomeJoinedAt", `ALTER TABLE "User" ADD COLUMN "plexHomeJoinedAt" DATETIME;`],
                 ["hasJellyfinLiveTvAccess", `ALTER TABLE "User" ADD COLUMN "hasJellyfinLiveTvAccess" BOOLEAN NOT NULL DEFAULT 0;`],
-                ["lastIptvWatchedAt", `ALTER TABLE "User" ADD COLUMN "lastIptvWatchedAt" DATETIME;`]
+                ["lastIptvWatchedAt", `ALTER TABLE "User" ADD COLUMN "lastIptvWatchedAt" DATETIME;`],
+                ["preferredMediaMarket", `ALTER TABLE "User" ADD COLUMN "preferredMediaMarket" TEXT DEFAULT 'dallas';`]
             ];
 
             for (const [colName, ddl] of userAddCols) {

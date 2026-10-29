@@ -677,10 +677,11 @@ export async function inviteUserToPlexHome(
                     "Accept": "application/json, application/xml, */*",
                     "X-Plex-Token": adminToken,
                     "X-Plex-Client-Identifier": PLEX_CLIENT_ID
-                }
-            });
+                },
+                signal: AbortSignal.timeout(3500)
+            }).catch(() => null);
 
-            if (res.ok) {
+            if (res && res.ok) {
                 const text = await res.text().catch(() => "");
                 const idMatch = text.match(/\bid="([^"]*)"/i)?.[1];
                 if (idMatch) plexHomeUserId = idMatch;
@@ -694,7 +695,8 @@ export async function inviteUserToPlexHome(
                             "Accept": "application/json",
                             "X-Plex-Token": adminToken,
                             "X-Plex-Client-Identifier": PLEX_CLIENT_ID
-                        }
+                        },
+                        signal: AbortSignal.timeout(3500)
                     }
                 ).catch(() => null);
 

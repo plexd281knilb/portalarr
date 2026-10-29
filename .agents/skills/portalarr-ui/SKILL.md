@@ -1457,3 +1457,10 @@ Detailed guide on updating: [updating-this-skill.md](./references/updating-this-
   - Dedicated `[🛠️ Dev Roadmap]` button (`DevRoadmapModal`) is mounted on the Home Dashboard (`src/app/page.tsx`) header lockup and inside `AdminDetailedStreams` (`src/components/admin-detailed-streams.tsx`).
   - **Settings Management**: In `/settings?tab=announcements`, administrators can edit, preview, and save both `roadmap.md` and `docs/DEV_ROADMAP.md` via a dual-tab Markdown editor with dirty state tracking.
   - **Container Packaging**: `Dockerfile` copies `/app/docs` to the runtime container so developer maintenance logs persist in Docker homelab deployments.
+
+
+### 50. Live TV & Channel Lineup UI Architecture
+- **Origin Channel Logo Proxy (`/api/iptv/logo/[id]`)**: To prevent Mixed Content (`http://` on `https://`) blocks and unroutable private LAN IP (`192.168.x.x`) failures on remote client devices, channel logos from Dispatcharr are proxied through Portalarr's HTTPS origin with 7-day browser caching (`Cache-Control: public, max-age=604800, stale-while-revalidate=86400`).
+- **Fail-Safe Card Logo Fallback**: `ChannelCard` components dynamically sanitize raw upstream URLs to the proxy path, handle `onError` via component state, and render a semantic Lucide genre icon (e.g. `Trophy`, `Tv`, `Newspaper`, `Baby`, `Film`) if the image fails or is unavailable, preventing blank or broken cards.
+- **Dynamic Media Market Customization Shelves**: Displays sticky anchor feeds for the host server market (Dallas CBS/NBC/FOX/ABC/CW) alongside a client-selected or IP-detected local media market shelf, college sports (NCAA), and NFL showcase carousels.
+- **DVR Stream Reservation Controls**: Dedicated stream headroom reservation prevents concurrent client live TV viewers from starving scheduled Plex DVR tuner recordings, configurable by homelab administrators down to 0 if DVR recording is not utilized.

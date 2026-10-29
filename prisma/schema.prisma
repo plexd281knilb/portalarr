@@ -464,6 +464,7 @@ model User {
   plexHomeJoinedAt            DateTime? // When the user was added to Plex Home
   hasJellyfinLiveTvAccess     Boolean   @default(false) // Whether EnableLiveTvAccess is enabled in Jellyfin
   lastIptvWatchedAt           DateTime? // Most recent Live TV playback timestamp for inactivity tracking
+  preferredMediaMarket        String?   @default("dallas") // User-preferred media market for local channels & NFL feeds
   iptvTokens                  IptvUserToken[]
   iptvWatchSessions           IptvWatchSession[]
   iptvChannelRequests         IptvChannelRequest[]

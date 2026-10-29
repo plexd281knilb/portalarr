@@ -193,7 +193,7 @@ export async function calculateIptvCapacity(): Promise<IptvCapacityMetrics> {
         };
     });
 
-    const dvrReservedStreams = settings.dvrBufferReservation || 1;
+    const dvrReservedStreams = typeof settings.dvrBufferReservation === "number" ? settings.dvrBufferReservation : 1;
     const availableStreams = Math.max(0, totalMaxConnections - totalActiveStreams);
     const freeStreamBuffer = Math.max(0, availableStreams - dvrReservedStreams);
     const saturationPercentage = totalMaxConnections > 0 

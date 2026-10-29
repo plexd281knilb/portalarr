@@ -2727,6 +2727,80 @@ async function runTestSuite() {
             const removedUser = await prisma.user.findUnique({ where: { id: testUser.id } });
             if (removedUser?.isPlexHomeMember) throw new Error("Expected isPlexHomeMember to be false after removal");
             if (removedUser?.hasPlexLiveTvAccess) throw new Error("Expected hasPlexLiveTvAccess to be false after removal");
+
+            // 8. Test Media Market Locator, Dallas Server Anchor Feeds, NFL Command Center & NCAA Hub
+            const {
+                detectMarketFromHeaders,
+                getDallasAnchorChannels,
+                getMarketChannels,
+                getNflChannels,
+                getNcaaChannels,
+                MEDIA_MARKETS,
+                ORDERED_MARKETS
+            } = await import("../src/lib/iptv/market-locator");
+
+            if (!MEDIA_MARKETS.dallas || !MEDIA_MARKETS.dallas.isHostServer) {
+                throw new Error("Dallas media market must be defined with isHostServer: true");
+            }
+            if (ORDERED_MARKETS.length < 15) {
+                throw new Error(`Expected at least 15 media markets, found ${ORDERED_MARKETS.length}`);
+            }
+
+            // Test Edge IP header market detection
+            const dallasDetected = detectMarketFromHeaders({ "cf-region-code": "TX", "cf-ipcity": "Dallas" });
+            if (dallasDetected !== "dallas") throw new Error(`Expected dallas, got ${dallasDetected}`);
+
+            const nyDetected = detectMarketFromHeaders({ "cf-region-code": "NY", "cf-ipcity": "New York" });
+            if (nyDetected !== "new_york") throw new Error(`Expected new_york, got ${nyDetected}`);
+
+            const defaultFallback = detectMarketFromHeaders({});
+            if (defaultFallback !== "dallas") throw new Error(`Expected dallas default fallback, got ${defaultFallback}`);
+
+            // Test Dallas Anchor channels filtering
+            const mockCatalog = [
+                { id: "1", channelNumber: 504, callsign: "KXAS", name: "US NBC 5 DALLAS TX (KXAS)", genre: "Local" },
+                { id: "2", channelNumber: 505, callsign: "KDFW", name: "US FOX 4 DALLAS TX (KDFW)", genre: "Local" },
+                { id: "3", channelNumber: 589, callsign: "REDZONE", name: "NFL RedZone 1080p 60fps", genre: "Sports" },
+                { id: "4", channelNumber: 588, callsign: "NFLHD", name: "NFL Network HD", genre: "Sports" },
+                { id: "5", channelNumber: 780, callsign: "SEC", name: "SEC Network", genre: "Sports" },
+                { id: "6", channelNumber: 84, callsign: "BTN", name: "Big Ten Network", genre: "Sports" },
+                { id: "7", channelNumber: 79, callsign: "ACC", name: "ACC Network", genre: "Sports" },
+                { id: "8", channelNumber: 5814, callsign: "KPRC", name: "NBC 2 Houston (KPRC)", genre: "Local" }
+            ];
+
+            const dallasAnchored = getDallasAnchorChannels(mockCatalog);
+            if (dallasAnchored.length !== 2) throw new Error(`Expected 2 Dallas anchor channels, got ${dallasAnchored.length}`);
+            if (dallasAnchored[0].callsign !== "KXAS") throw new Error("Expected NBC 5 KXAS to be prioritized first in Dallas hub");
+
+            const nflFiltered = getNflChannels(mockCatalog);
+            if (nflFiltered.length < 2) throw new Error("Expected NFL channels to include RedZone and NFL Network");
+            if (!nflFiltered[0].name.toLowerCase().includes("redzone")) {
+                throw new Error("NFL RedZone must be prioritized #1 in NFL command center");
+            }
+
+            const ncaaFiltered = getNcaaChannels(mockCatalog);
+            if (ncaaFiltered.length !== 3) throw new Error(`Expected 3 NCAA channels, got ${ncaaFiltered.length}`);
+            if (!ncaaFiltered[0].name.includes("SEC Network")) {
+                throw new Error("SEC Network must be prioritized #1 in NCAA college football hub");
+            }
+
+            const houstonMarket = getMarketChannels(mockCatalog, "houston");
+            if (houstonMarket.length !== 1 || houstonMarket[0].callsign !== "KPRC") {
+                throw new Error("Expected Houston market to match NBC 2 Houston KPRC");
+            }
+
+            // Test saving preferred market via Server Action
+            process.env.PORTALARR_TEST_USER_ID = testUser.id;
+            const { setUserPreferredMarketAction } = await import("../src/app/iptv-actions");
+            const marketSaveRes = await setUserPreferredMarketAction("houston");
+            if (!marketSaveRes.success || marketSaveRes.preferredMediaMarket !== "houston") {
+                throw new Error("Failed to save preferred media market");
+            }
+            const updatedUser = await prisma.user.findUnique({ where: { id: testUser.id } });
+            delete process.env.PORTALARR_TEST_USER_ID;
+            if (updatedUser?.preferredMediaMarket !== "houston") {
+                throw new Error(`Expected preferredMediaMarket 'houston', got '${updatedUser?.preferredMediaMarket}'`);
+            }
         } finally {
             await prisma.user.delete({ where: { id: testUser.id } }).catch(() => {});
         }

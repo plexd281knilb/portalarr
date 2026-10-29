@@ -102,6 +102,9 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
         initialData.settings?.dispatcharrUrl || "http://192.168.1.87:9191"
     );
     const [dispatcharrApiKey, setDispatcharrApiKey] = useState("");
+    const [dvrBufferReservation, setDvrBufferReservation] = useState<number>(
+        initialData.settings?.dvrBufferReservation ?? 1
+    );
     const [dispatcharrTestResult, setDispatcharrTestResult] = useState<any>(null);
 
     // Users & Approvals State
@@ -205,10 +208,11 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
             const res = await saveIptvSettingsAction({
                 dispatcharrUrl: dispatcharrUrl.trim(),
                 dispatcharrApiKey: dispatcharrApiKey.trim() || undefined,
+                dvrBufferReservation,
                 enabled: true
             });
             if (res.success) {
-                showMsg("Dispatcharr configuration updated");
+                showMsg("Dispatcharr and DVR buffer configuration updated");
             } else {
                 showMsg(res.error || "Save failed", "error");
             }
@@ -687,35 +691,57 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                             </div>
                         </div>
 
-                        <form onSubmit={handleSaveDispatcharrSettings} className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                            <div>
-                                <label className="text-xs font-bold text-muted-foreground block mb-1">Dispatcharr Host / IP</label>
-                                <Input
-                                    value={dispatcharrUrl}
-                                    onChange={(e) => setDispatcharrUrl(e.target.value)}
-                                    placeholder="http://192.168.1.87:9191"
-                                    className="text-xs rounded-xl"
-                                />
+                        <form onSubmit={handleSaveDispatcharrSettings} className="space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                <div>
+                                    <label className="text-xs font-bold text-muted-foreground block mb-1">Dispatcharr Host / IP</label>
+                                    <Input
+                                        value={dispatcharrUrl}
+                                        onChange={(e) => setDispatcharrUrl(e.target.value)}
+                                        placeholder="http://192.168.1.87:9191"
+                                        className="text-xs rounded-xl"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="text-xs font-bold text-muted-foreground block mb-1">API Key (AES-256-GCM Encrypted)</label>
+                                    <Input
+                                        type="password"
+                                        value={dispatcharrApiKey}
+                                        onChange={(e) => setDispatcharrApiKey(e.target.value)}
+                                        placeholder={initialData.settings?.hasDispatcharrApiKey ? "•••••••••••••••• (Saved)" : "Enter Dispatcharr API Key"}
+                                        className="text-xs rounded-xl"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="text-xs font-bold text-muted-foreground block mb-1">
+                                        DVR Reserved Buffer (Streams)
+                                    </label>
+                                    <Input
+                                        type="number"
+                                        min={0}
+                                        max={10}
+                                        value={dvrBufferReservation}
+                                        onChange={(e) => setDvrBufferReservation(Math.max(0, parseInt(e.target.value) || 0))}
+                                        className="text-xs rounded-xl"
+                                    />
+                                </div>
                             </div>
 
-                            <div>
-                                <label className="text-xs font-bold text-muted-foreground block mb-1">API Key (AES-256-GCM Encrypted)</label>
-                                <Input
-                                    type="password"
-                                    value={dispatcharrApiKey}
-                                    onChange={(e) => setDispatcharrApiKey(e.target.value)}
-                                    placeholder={initialData.settings?.hasDispatcharrApiKey ? "•••••••••••••••• (Saved)" : "Enter Dispatcharr API Key"}
-                                    className="text-xs rounded-xl"
-                                />
-                            </div>
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1 border-t border-border/30">
+                                <p className="text-[11px] text-muted-foreground">
+                                    💡 <b>DVR Reserve Buffer</b>: Reserves dedicated lines for scheduled Plex TV recordings so recordings never fail when users are streaming. Set to <b>0</b> if you do not use Plex DVR or want all lines free for casual watching.
+                                </p>
 
-                            <div className="flex items-end gap-2">
-                                <Button type="submit" disabled={isPending} className="bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs h-9 rounded-xl">
-                                    Save Settings
-                                </Button>
-                                <Button type="button" onClick={handleTestDispatcharr} variant="outline" className="text-xs font-bold h-9 rounded-xl">
-                                    Test Connection
-                                </Button>
+                                <div className="flex items-center gap-2 shrink-0">
+                                    <Button type="button" onClick={handleTestDispatcharr} variant="outline" className="text-xs font-bold h-9 rounded-xl">
+                                        Test Connection
+                                    </Button>
+                                    <Button type="submit" disabled={isPending} className="bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs h-9 rounded-xl">
+                                        Save Settings
+                                    </Button>
+                                </div>
                             </div>
                         </form>
                     </div>

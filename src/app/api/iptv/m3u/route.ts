@@ -69,11 +69,16 @@ export async function GET(req: NextRequest) {
             `#EXTM3U url-tvg="${dispatcharrBase}/output/epg/" x-tvg-url="${dispatcharrBase}/output/epg/"`
         ];
 
+        const origin = request.nextUrl.origin;
         for (const ch of channels) {
             const chNum = ch.channelNumber || 100;
             const tvgId = ch.xmltvId || ch.callsign || ch.name;
             const group = ch.genre || "Live TV";
-            const logo = ch.logoUrl ? ` tvg-logo="${ch.logoUrl}"` : "";
+            let logoVal = ch.logoUrl;
+            if (logoVal && logoVal.startsWith("/")) {
+                logoVal = `${origin}${logoVal}`;
+            }
+            const logo = logoVal ? ` tvg-logo="${logoVal}"` : "";
             lines.push(
                 `#EXTINF:-1 tvg-id="${tvgId}" tvg-name="${ch.name}" tvg-chno="${chNum}"${logo} group-title="${group}",${ch.name}`
             );

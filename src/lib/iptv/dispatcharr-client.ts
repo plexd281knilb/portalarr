@@ -366,7 +366,7 @@ export async function syncDispatcharrLineup(): Promise<{
                     const uuid = ch.uuid || "";
                     const xmltvId = ch.effective_tvg_id || ch.tvg_id || (uuid ? `dispatcharr.${uuid}` : `dispatcharr.${ch.id}`);
                     const logoId = ch.effective_logo_id || ch.logo_id;
-                    const logoUrl = logoId ? `${baseUrl}/api/channels/logos/${logoId}/cache/` : null;
+                    const logoUrl = logoId ? `/api/iptv/logo/${logoId}` : null;
 
                     // Classify Genre
                     let genre = "Entertainment";
@@ -497,3 +497,87 @@ export async function syncDispatcharrLineup(): Promise<{
             : `Verified ${totalProfiles} local profiles & ${totalChannels} catalog channels (Dispatcharr at ${baseUrl})`
     };
 }
+
+/**
+ * Provisions missing local network affiliates, college sports, and NFL broadcast feeds
+ * from unmapped streams in Dispatcharr by invoking POST /api/channels/channels/from-stream/
+ */
+export async function provisionMissingDispatcharrChannels(): Promise<{
+    success: boolean;
+    createdCount: number;
+    message: string;
+}> {
+    const settings = await getIptvSettings();
+    const apiKey = await getDecryptedDispatcharrApiKey();
+
+    if (!settings?.dispatcharrUrl || !apiKey) {
+        return {
+            success: false,
+            createdCount: 0,
+            message: "Dispatcharr is not configured or API key is missing"
+        };
+    }
+
+    const baseUrl = settings.dispatcharrUrl.replace(/\/+$/, "");
+    const headers = {
+        "X-API-Key": apiKey,
+        "Accept": "application/json",
+        "Content-Type": "application/json"
+    };
+
+    const searchTerms = [
+        "Houston", "Austin", "San Antonio", "New York", "Los Angeles", "Chicago",
+        "Philadelphia", "Boston", "Atlanta", "Miami", "Denver", "Phoenix", "Seattle",
+        "San Francisco", "Minneapolis", "Detroit", "Pittsburgh", "Tampa",
+        "SEC", "Big Ten", "ACC", "ESPNU", "CBS Sports", "NFL"
+    ];
+
+    let createdCount = 0;
+    const seenStreamIds = new Set<number>();
+
+    for (const term of searchTerms) {
+        try {
+            const streamRes = await fetch(`${baseUrl}/api/channels/streams/?search=${encodeURIComponent(term)}&page_size=20`, { headers });
+            if (!streamRes.ok) continue;
+            const streamData = await streamRes.json();
+            const streams = Array.isArray(streamData?.results) ? streamData.results : [];
+
+            for (const s of streams) {
+                if (s.channel_id || s.channel || seenStreamIds.has(s.id)) continue;
+                seenStreamIds.add(s.id);
+
+                let cleanName = s.name.replace(/^(US[|:]\s*|✦●✦\s*|\s*✦●✦)/gi, "").trim();
+                const isTarget = /nbc|fox|cbs|abc|cw|sec|big ten|acc|espnu|cbssn|sportsnet|redzone|nfl/i.test(cleanName);
+                if (!isTarget) continue;
+
+                const createRes = await fetch(`${baseUrl}/api/channels/channels/from-stream/`, {
+                    method: "POST",
+                    headers,
+                    body: JSON.stringify({
+                        stream_id: s.id,
+                        name: cleanName
+                    })
+                });
+
+                if (createRes.ok || createRes.status === 201) {
+                    createdCount++;
+                }
+            }
+        } catch {
+            // Continue scanning other terms
+        }
+    }
+
+    if (createdCount > 0) {
+        await syncDispatcharrLineup();
+    }
+
+    return {
+        success: true,
+        createdCount,
+        message: createdCount > 0
+            ? `Successfully provisioned ${createdCount} missing local and sports channels in Dispatcharr and synced lineup.`
+            : `All available local and sports streams are already provisioned as active channels.`
+    };
+}
+

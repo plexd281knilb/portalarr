@@ -2,7 +2,7 @@
 
 import crypto from "crypto";
 import { prisma, ensureSchemaColumns } from "@/lib/prisma";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { jwtVerify } from "jose";
 import { getJwtSecret } from "@/lib/auth-secret";
 import { revalidatePath } from "next/cache";
@@ -19,8 +19,14 @@ import {
     ensureDefaultIptvProfiles,
     buildDispatcharrEndpoints,
     testDispatcharrConnection,
-    syncDispatcharrLineup
+    syncDispatcharrLineup,
+    provisionMissingDispatcharrChannels
 } from "@/lib/iptv/dispatcharr-client";
+import {
+    detectMarketFromHeaders,
+    ORDERED_MARKETS,
+    MEDIA_MARKETS
+} from "@/lib/iptv/market-locator";
 import {
     auditPlexHomeAndLiveTvPrivileges,
     inviteUserToPlexHome,
@@ -1076,7 +1082,7 @@ export async function getIptvCatalogAction(filters?: {
             channelNumber: c.channelNumber,
             callsign: c.callsign,
             name: c.name,
-            logoUrl: c.logoUrl,
+            logoUrl: c.logoUrl ? c.logoUrl.replace(/^https?:\/\/[^/]+\/api\/channels\/logos\/(\d+).*/, "/api/iptv/logo/$1") : null,
             genre: c.genre,
             xmltvId: c.xmltvId,
             epgName: c.epgName,
@@ -1104,6 +1110,14 @@ export async function getIptvCatalogAction(filters?: {
             }
         });
 
+        let detectedMarket = "dallas";
+        try {
+            const headerList = await headers();
+            detectedMarket = detectMarketFromHeaders(headerList);
+        } catch {}
+
+        const preferredMediaMarket = user.preferredMediaMarket || "dallas";
+
         return {
             success: true,
             data: {
@@ -1111,8 +1125,11 @@ export async function getIptvCatalogAction(filters?: {
                     canAccessIptv: isAdmin || Boolean(user.canAccessIptv),
                     maxConcurrentStreams: user.maxConcurrentIptvStreams ?? 1,
                     hasPendingAccessRequest: Boolean(pendingAccessRequest),
-                    isAdmin
+                    isAdmin,
+                    preferredMediaMarket,
+                    detectedMediaMarket: detectedMarket
                 },
+                availableMarkets: ORDERED_MARKETS,
                 profiles,
                 channels,
                 requests,
@@ -1130,6 +1147,52 @@ export async function getIptvCatalogAction(filters?: {
         };
     } catch (err: any) {
         return { success: false, error: err?.message || "Failed to load channel catalog" };
+    }
+}
+
+/**
+ * Update user's preferred media market (e.g. for local affiliates & NFL feeds)
+ */
+export async function setUserPreferredMarketAction(marketSlug: string) {
+    try {
+        const user = await verifySessionUser();
+        const validSlug = MEDIA_MARKETS[marketSlug] ? marketSlug : "dallas";
+        await prisma.user.update({
+            where: { id: user.id },
+            data: { preferredMediaMarket: validSlug }
+        });
+        safeRevalidate("/channels");
+        return { success: true, preferredMediaMarket: validSlug };
+    } catch (err: any) {
+        return { success: false, error: err?.message || "Failed to save preferred media market" };
+    }
+}
+
+/**
+ * Detect user media market based on edge headers / client IP
+ */
+export async function detectUserMarketAction() {
+    try {
+        const headerList = await headers();
+        const detectedSlug = detectMarketFromHeaders(headerList);
+        return { success: true, marketSlug: detectedSlug, market: MEDIA_MARKETS[detectedSlug] };
+    } catch (err: any) {
+        return { success: true, marketSlug: "dallas", market: MEDIA_MARKETS.dallas };
+    }
+}
+
+/**
+ * Provisions missing local network affiliates, college sports, and NFL broadcast feeds
+ * from unmapped streams in Dispatcharr
+ */
+export async function provisionMissingDispatcharrChannelsAction() {
+    try {
+        await verifySessionAdmin();
+        const result = await provisionMissingDispatcharrChannels();
+        safeRevalidate("/channels");
+        return result;
+    } catch (err: any) {
+        return { success: false, createdCount: 0, message: err?.message || "Failed to provision channels" };
     }
 }
 
