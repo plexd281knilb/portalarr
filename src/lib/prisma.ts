@@ -786,7 +786,13 @@ export async function ensureSchemaColumns(): Promise<void> {
                 ["accountPreferences", `ALTER TABLE "User" ADD COLUMN "accountPreferences" TEXT;`],
                 ["canAccessIptv", `ALTER TABLE "User" ADD COLUMN "canAccessIptv" BOOLEAN NOT NULL DEFAULT 0;`],
                 ["maxConcurrentIptvStreams", `ALTER TABLE "User" ADD COLUMN "maxConcurrentIptvStreams" INTEGER DEFAULT 1;`],
-                ["allowedIptvProfileSlugs", `ALTER TABLE "User" ADD COLUMN "allowedIptvProfileSlugs" TEXT;`]
+                ["allowedIptvProfileSlugs", `ALTER TABLE "User" ADD COLUMN "allowedIptvProfileSlugs" TEXT;`],
+                ["isPlexHomeMember", `ALTER TABLE "User" ADD COLUMN "isPlexHomeMember" BOOLEAN NOT NULL DEFAULT 0;`],
+                ["plexHomeUserId", `ALTER TABLE "User" ADD COLUMN "plexHomeUserId" TEXT;`],
+                ["hasPlexLiveTvAccess", `ALTER TABLE "User" ADD COLUMN "hasPlexLiveTvAccess" BOOLEAN NOT NULL DEFAULT 0;`],
+                ["plexHomeJoinedAt", `ALTER TABLE "User" ADD COLUMN "plexHomeJoinedAt" DATETIME;`],
+                ["hasJellyfinLiveTvAccess", `ALTER TABLE "User" ADD COLUMN "hasJellyfinLiveTvAccess" BOOLEAN NOT NULL DEFAULT 0;`],
+                ["lastIptvWatchedAt", `ALTER TABLE "User" ADD COLUMN "lastIptvWatchedAt" DATETIME;`]
             ];
 
             for (const [colName, ddl] of userAddCols) {
@@ -2103,6 +2109,9 @@ export async function ensureSchemaColumns(): Promise<void> {
                     "enforceSingleHousehold" BOOLEAN NOT NULL DEFAULT 1,
                     "dvrBufferReservation" INTEGER NOT NULL DEFAULT 1,
                     "autoPruneInactiveDays" INTEGER NOT NULL DEFAULT 30,
+                    "plexHomeMaxSlots" INTEGER NOT NULL DEFAULT 14,
+                    "plexHomeInactivityDays" INTEGER NOT NULL DEFAULT 21,
+                    "plexHomeAutoKickEnabled" BOOLEAN NOT NULL DEFAULT 0,
                     "healthCheckIntervalMinutes" INTEGER NOT NULL DEFAULT 15,
                     "epgSyncSchedule" TEXT DEFAULT 'daily_3am',
                     "lastHealthCheckAt" DATETIME,
@@ -2112,6 +2121,21 @@ export async function ensureSchemaColumns(): Promise<void> {
                     "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
             `);
+
+            try {
+                const iptvSettingsInfo: any[] = await prisma.$queryRawUnsafe(`PRAGMA table_info("IptvSettings");`);
+                const iptvSettingsCols = iptvSettingsInfo.map((c: any) => c.name);
+                const iptvSettingsAddCols: [string, string][] = [
+                    ["plexHomeMaxSlots", `ALTER TABLE "IptvSettings" ADD COLUMN "plexHomeMaxSlots" INTEGER NOT NULL DEFAULT 14;`],
+                    ["plexHomeInactivityDays", `ALTER TABLE "IptvSettings" ADD COLUMN "plexHomeInactivityDays" INTEGER NOT NULL DEFAULT 21;`],
+                    ["plexHomeAutoKickEnabled", `ALTER TABLE "IptvSettings" ADD COLUMN "plexHomeAutoKickEnabled" BOOLEAN NOT NULL DEFAULT 0;`]
+                ];
+                for (const [colName, ddl] of iptvSettingsAddCols) {
+                    if (!iptvSettingsCols.includes(colName)) {
+                        try { await prisma.$executeRawUnsafe(ddl); } catch (e) {}
+                    }
+                }
+            } catch (e) {}
 
             await prisma.$executeRawUnsafe(`
                 CREATE TABLE IF NOT EXISTS "IptvProvider" (

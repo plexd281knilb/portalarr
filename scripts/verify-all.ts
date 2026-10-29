@@ -2665,6 +2665,62 @@ async function runTestSuite() {
             }
 
             await prisma.iptvChannel.delete({ where: { id: activatedChannel.id } }).catch(() => {});
+
+            // 7. Test Plex Home & Live TV Privilege Auditor, Anomaly Detection & Jellyfin Policy Manager
+            const {
+                auditPlexHomeAndLiveTvPrivileges,
+                inviteUserToPlexHome,
+                setPlexUserLiveTvPrivilege,
+                setJellyfinUserLiveTvAccess,
+                removeUserFromPlexHome
+            } = await import("../src/lib/iptv/plex-jellyfin-livetv");
+
+            // A. Invite to Plex Home
+            const inviteRes = await inviteUserToPlexHome(testUser.id, true);
+            if (!inviteRes.success) throw new Error(`inviteUserToPlexHome failed: ${inviteRes.error || inviteRes.message}`);
+
+            const homeUser = await prisma.user.findUnique({ where: { id: testUser.id } });
+            if (!homeUser?.isPlexHomeMember) throw new Error("Expected isPlexHomeMember to be true");
+            if (!homeUser?.hasPlexLiveTvAccess) throw new Error("Expected hasPlexLiveTvAccess to be true");
+
+            // B. Simulate Anomaly: In Plex Home but Live TV privilege revoked
+            await prisma.user.update({
+                where: { id: testUser.id },
+                data: { hasPlexLiveTvAccess: false }
+            });
+
+            const auditReport1 = await auditPlexHomeAndLiveTvPrivileges();
+            if (auditReport1.plexHomeMaxSlots !== 14) {
+                throw new Error(`Expected plexHomeMaxSlots 14, got: ${auditReport1.plexHomeMaxSlots}`);
+            }
+            if (auditReport1.plexHomeAutoKickEnabled !== false) {
+                throw new Error("plexHomeAutoKickEnabled must strictly default to false");
+            }
+            if (auditReport1.plexHomeMissingLiveTvCount < 1) {
+                throw new Error("Expected plexHomeMissingLiveTvCount >= 1 when member in Home lacks Live TV privilege");
+            }
+
+            // C. Fix Anomaly: Grant Live TV privilege
+            const grantPrivRes = await setPlexUserLiveTvPrivilege(testUser.id, true);
+            if (!grantPrivRes.success) throw new Error("setPlexUserLiveTvPrivilege failed");
+
+            const fixedHomeUser = await prisma.user.findUnique({ where: { id: testUser.id } });
+            if (!fixedHomeUser?.hasPlexLiveTvAccess) throw new Error("Expected hasPlexLiveTvAccess to be true after grant");
+
+            // D. Jellyfin Live TV Policy Management
+            const jfRes = await setJellyfinUserLiveTvAccess(testUser.id, true);
+            if (!jfRes.success) throw new Error(`setJellyfinUserLiveTvAccess failed: ${jfRes.error || jfRes.message}`);
+
+            const jfUser = await prisma.user.findUnique({ where: { id: testUser.id } });
+            if (!jfUser?.hasJellyfinLiveTvAccess) throw new Error("Expected hasJellyfinLiveTvAccess to be true");
+
+            // E. Remove from Plex Home
+            const removeHomeRes = await removeUserFromPlexHome(testUser.id);
+            if (!removeHomeRes.success) throw new Error(`removeUserFromPlexHome failed: ${removeHomeRes.error}`);
+
+            const removedUser = await prisma.user.findUnique({ where: { id: testUser.id } });
+            if (removedUser?.isPlexHomeMember) throw new Error("Expected isPlexHomeMember to be false after removal");
+            if (removedUser?.hasPlexLiveTvAccess) throw new Error("Expected hasPlexLiveTvAccess to be false after removal");
         } finally {
             await prisma.user.delete({ where: { id: testUser.id } }).catch(() => {});
         }

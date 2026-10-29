@@ -458,6 +458,12 @@ model User {
   canAccessIptv               Boolean   @default(false)
   maxConcurrentIptvStreams    Int?      @default(1)
   allowedIptvProfileSlugs     String?   // Comma-separated or JSON array of profile slugs (e.g. "sports,entertainment,kids")
+  isPlexHomeMember            Boolean   @default(false) // Whether user is currently in the 15-slot Plex Home
+  plexHomeUserId              String?   // Plex cloud user ID inside Plex Home
+  hasPlexLiveTvAccess         Boolean   @default(false) // Whether allowTuners / allowChannels is enabled on Plex
+  plexHomeJoinedAt            DateTime? // When the user was added to Plex Home
+  hasJellyfinLiveTvAccess     Boolean   @default(false) // Whether EnableLiveTvAccess is enabled in Jellyfin
+  lastIptvWatchedAt           DateTime? // Most recent Live TV playback timestamp for inactivity tracking
   iptvTokens                  IptvUserToken[]
   iptvWatchSessions           IptvWatchSession[]
   iptvChannelRequests         IptvChannelRequest[]
@@ -1058,6 +1064,9 @@ model IptvSettings {
   enforceSingleHousehold     Boolean   @default(true) // Detect multi-IP concurrent streaming
   dvrBufferReservation      Int       @default(1) // Number of provider lines reserved for DVR
   autoPruneInactiveDays      Int       @default(30) // Prune user-activated channels with 0 plays
+  plexHomeMaxSlots           Int       @default(14) // Usable member slots in Plex Home (15 max minus 1 owner)
+  plexHomeInactivityDays     Int       @default(21) // Days of Live TV inactivity before flagging for slot rotation
+  plexHomeAutoKickEnabled    Boolean   @default(false) // Safety lock: OFF by default so nobody is auto-removed
   healthCheckIntervalMinutes Int       @default(15) // Background latency probe frequency
   epgSyncSchedule            String?   @default("daily_3am") // EPG guide reload schedule
   lastHealthCheckAt          DateTime?

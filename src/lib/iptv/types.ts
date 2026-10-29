@@ -12,11 +12,46 @@ export interface IptvSettingsDTO {
     enforceSingleHousehold: boolean;
     dvrBufferReservation: number;
     autoPruneInactiveDays: number;
+    plexHomeMaxSlots: number;
+    plexHomeInactivityDays: number;
+    plexHomeAutoKickEnabled: boolean;
     healthCheckIntervalMinutes: number;
     epgSyncSchedule: string;
     lastHealthCheckAt?: string | null;
     lastEpgSyncAt?: string | null;
     lastEpgSyncStatus?: string | null;
+}
+
+export interface PlexHomeLiveTvMemberAudit {
+    plexUserId: string;
+    username: string;
+    email: string;
+    title: string;
+    thumb?: string;
+    isOwnerAdmin: boolean;
+    isPlexHomeMember: boolean;
+    allowTuners: boolean;
+    allowChannels: boolean;
+    missingLiveTvPrivilege: boolean; // True when in Plex Home (non-admin) WITHOUT allowTuners/allowChannels
+    portalarrUserId?: string | null;
+    portalarrUsername?: string | null;
+    lastIptvWatchedAt?: string | null;
+    daysInactive?: number | null;
+    isInactiveCandidate: boolean;
+}
+
+export interface LiveTvEcosystemAuditReport {
+    plexReachable: boolean;
+    plexHomeTotalMembers: number; // Non-owner members occupying slots
+    plexHomeMaxSlots: number;     // Default 14
+    plexHomeAvailableSlots: number;
+    plexHomeMissingLiveTvCount: number; // Members in Plex Home lacking Live TV privileges
+    plexHomeInactiveCandidateCount: number;
+    plexHomeAutoKickEnabled: boolean;
+    plexHomeInactivityDays: number;
+    plexMembers: PlexHomeLiveTvMemberAudit[];
+    jellyfinServersChecked: number;
+    jellyfinLiveTvUsersCount: number;
 }
 
 export interface IptvProviderDTO {

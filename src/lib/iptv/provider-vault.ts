@@ -21,6 +21,9 @@ export async function getIptvSettings(): Promise<IptvSettingsDTO> {
                 enforceSingleHousehold: true,
                 dvrBufferReservation: 1,
                 autoPruneInactiveDays: 30,
+                plexHomeMaxSlots: 14,
+                plexHomeInactivityDays: 21,
+                plexHomeAutoKickEnabled: false,
                 healthCheckIntervalMinutes: 15,
                 epgSyncSchedule: "daily_3am"
             }
@@ -37,6 +40,9 @@ export async function getIptvSettings(): Promise<IptvSettingsDTO> {
         enforceSingleHousehold: settings.enforceSingleHousehold,
         dvrBufferReservation: settings.dvrBufferReservation,
         autoPruneInactiveDays: settings.autoPruneInactiveDays,
+        plexHomeMaxSlots: (settings as any).plexHomeMaxSlots ?? 14,
+        plexHomeInactivityDays: (settings as any).plexHomeInactivityDays ?? 21,
+        plexHomeAutoKickEnabled: Boolean((settings as any).plexHomeAutoKickEnabled),
         healthCheckIntervalMinutes: settings.healthCheckIntervalMinutes,
         epgSyncSchedule: settings.epgSyncSchedule || "daily_3am",
         lastHealthCheckAt: settings.lastHealthCheckAt?.toISOString() || null,
@@ -62,6 +68,9 @@ export async function saveIptvSettings(data: Partial<IptvSettingsDTO> & { dispat
     if (data.enforceSingleHousehold !== undefined) updatePayload.enforceSingleHousehold = data.enforceSingleHousehold;
     if (data.dvrBufferReservation !== undefined) updatePayload.dvrBufferReservation = data.dvrBufferReservation;
     if (data.autoPruneInactiveDays !== undefined) updatePayload.autoPruneInactiveDays = data.autoPruneInactiveDays;
+    if (data.plexHomeMaxSlots !== undefined) updatePayload.plexHomeMaxSlots = data.plexHomeMaxSlots;
+    if (data.plexHomeInactivityDays !== undefined) updatePayload.plexHomeInactivityDays = data.plexHomeInactivityDays;
+    if (data.plexHomeAutoKickEnabled !== undefined) updatePayload.plexHomeAutoKickEnabled = Boolean(data.plexHomeAutoKickEnabled);
     if (data.healthCheckIntervalMinutes !== undefined) updatePayload.healthCheckIntervalMinutes = data.healthCheckIntervalMinutes;
     if (data.epgSyncSchedule !== undefined) updatePayload.epgSyncSchedule = data.epgSyncSchedule;
 

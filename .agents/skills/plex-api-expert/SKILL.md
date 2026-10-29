@@ -148,3 +148,10 @@ See detailed runbook: [tags-collections-and-hubs.md](./references/tags-collectio
     - Step 2: `cmd /c "npm run build"` (Next.js production build, 0 TS errors, 100% clean).
     - Step 3: Skills & Documentation Sync.
     - Step 4: SemVer Version Increment & Git Version Control (increment `package.json` version, `[v<version>]` prefix, push strictly to `origin/main` (Beta). NEVER push to `stable` unless user explicitly instructs).
+
+24. **Plex Home Live TV Privilege Auditor & Jellyfin Policy Management (`plex-jellyfin-livetv.ts`)**:
+    - **15-User Plex Home Limit**: Plex caps Plex Home at 15 users (1 admin owner + 14 member slots). Only Plex Home members can be granted Live TV / DVR tuner access (`allowTuners="1"`, `allowChannels="1"`). Regular Plex friends cannot access Live TV tuners unless admitted into the Plex Home.
+    - **Plex Home Discovery & Privilege Audit**: Inspects `GET https://plex.tv/api/users` (XML) and `GET https://plex.tv/api/v2/home/users` (JSON). Flags users where `isPlexHomeMember: true` but `allowTuners` and `allowChannels` are false as missing Live TV privileges (`missingLiveTvPrivilege: true`).
+    - **Live TV Privilege Provisioning**: Calls PMS server `POST /system/players/{id}/shared_servers` and `https://plex.tv/api/v2/friends` to toggle `allowTuners` and `allowChannels`.
+    - **Inactivity Rotation Engine**: Evaluates `lastIptvWatchedAt` and `plexHomeJoinedAt` against `plexHomeInactivityDays` (default: 21 days). Strictly non-destructive: `plexHomeAutoKickEnabled` is strictly `false` by default, surfacing candidates for admin review without kicking anyone out unexpectedly.
+    - **Jellyfin Live TV Policy Management**: Audits and controls `EnableLiveTvAccess` in Jellyfin via `POST /Users/{id}/Policy`. Always reads existing policies first and merges changes (`{ ...currentPolicy, EnableLiveTvAccess: true, EnableLiveTvManagement: false }`) to preserve library folder access permissions (`EnabledFolders`).

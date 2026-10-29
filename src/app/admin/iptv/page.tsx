@@ -5,7 +5,8 @@ import {
     getDvrConnectionsStatusAction,
     getIptvLiveTelemetryAction,
     getIptvUsersAccessAction,
-    getIptvCatalogAction
+    getIptvCatalogAction,
+    auditLiveTvEcosystemAction
 } from "@/app/iptv-actions";
 import { AdminIptvClient } from "@/components/iptv/admin-iptv-client";
 
@@ -17,13 +18,14 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function AdminIptvPage() {
-    const [settingsRes, providersRes, dvrRes, telemetryRes, usersRes, catalogRes] = await Promise.all([
+    const [settingsRes, providersRes, dvrRes, telemetryRes, usersRes, catalogRes, auditRes] = await Promise.all([
         getIptvSettingsAction(),
         getIptvProvidersAction(),
         getDvrConnectionsStatusAction(),
         getIptvLiveTelemetryAction(),
         getIptvUsersAccessAction(),
-        getIptvCatalogAction()
+        getIptvCatalogAction(),
+        auditLiveTvEcosystemAction()
     ]);
 
     const initialData = {
@@ -35,7 +37,8 @@ export default async function AdminIptvPage() {
         users: usersRes.success && usersRes.data?.users ? usersRes.data.users : [],
         pendingApprovals: usersRes.success && usersRes.data?.pendingApprovals ? usersRes.data.pendingApprovals : [],
         channels: catalogRes.success && catalogRes.data?.channels ? catalogRes.data.channels : [],
-        requests: catalogRes.success && catalogRes.data?.requests ? catalogRes.data.requests : []
+        requests: catalogRes.success && catalogRes.data?.requests ? catalogRes.data.requests : [],
+        auditReport: auditRes.success && auditRes.data ? auditRes.data : null
     };
 
     return <AdminIptvClient initialData={initialData} />;

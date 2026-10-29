@@ -39,7 +39,12 @@ import {
     probeIptvProviderHealthAction,
     updateUserIptvAccessAction,
     terminateIptvWatchSessionAction,
-    resolveIptvChannelRequestAction
+    resolveIptvChannelRequestAction,
+    auditLiveTvEcosystemAction,
+    inviteUserToPlexHomeAction,
+    removeUserFromPlexHomeAction,
+    setPlexUserLiveTvPrivilegeAction,
+    setJellyfinUserLiveTvAccessAction
 } from "@/app/iptv-actions";
 
 interface AdminIptvClientProps {
@@ -61,6 +66,7 @@ interface AdminIptvClientProps {
         pendingApprovals: any[];
         channels: any[];
         requests: any[];
+        auditReport?: any;
     };
 }
 
@@ -70,6 +76,9 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
 
     // Feedback messages
     const [statusMsg, setStatusMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+    // Audit Report State
+    const [auditReport, setAuditReport] = useState<any>(initialData.auditReport || null);
 
     // Providers state
     const [providersList, setProvidersList] = useState(initialData.providers || []);
@@ -227,6 +236,109 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
             } else {
                 showMsg(res.error || "Sync failed", "error");
             }
+        });
+    };
+
+    // --- Plex Home & Live TV Ecosystem Audit Actions ---
+    const handleRunEcosystemAudit = () => {
+        startTransition(async () => {
+            const res = await auditLiveTvEcosystemAction();
+            if (res.success && res.data) {
+                setAuditReport(res.data);
+                showMsg("Plex Home & Jellyfin Live TV audit completed");
+            } else {
+                showMsg(res.error || "Failed to audit ecosystem", "error");
+            }
+        });
+    };
+
+    const handleInvitePlexHome = (userId: string) => {
+        startTransition(async () => {
+            const res = await inviteUserToPlexHomeAction(userId, true);
+            if (res.success) {
+                setUsersList(
+                    usersList.map((u) =>
+                        u.id === userId
+                            ? { ...u, isPlexHomeMember: true, hasPlexLiveTvAccess: true, canAccessIptv: true }
+                            : u
+                    )
+                );
+                showMsg(res.message);
+                handleRunEcosystemAudit();
+            } else {
+                showMsg(res.error || "Failed to add user to Plex Home", "error");
+            }
+        });
+    };
+
+    const handleRemovePlexHome = (userId: string) => {
+        startTransition(async () => {
+            const res = await removeUserFromPlexHomeAction(userId);
+            if (res.success) {
+                setUsersList(
+                    usersList.map((u) =>
+                        u.id === userId
+                            ? { ...u, isPlexHomeMember: false, hasPlexLiveTvAccess: false }
+                            : u
+                    )
+                );
+                showMsg(res.message);
+                handleRunEcosystemAudit();
+            } else {
+                showMsg(res.error || "Failed to remove user from Plex Home", "error");
+            }
+        });
+    };
+
+    const handleTogglePlexLiveTv = (targetUserOrPlexId: string, current: boolean) => {
+        startTransition(async () => {
+            const res = await setPlexUserLiveTvPrivilegeAction(targetUserOrPlexId, !current);
+            if (res.success) {
+                setUsersList(
+                    usersList.map((u) =>
+                        u.id === targetUserOrPlexId || u.plexHomeUserId === targetUserOrPlexId
+                            ? { ...u, hasPlexLiveTvAccess: !current, missingPlexLiveTvPrivilege: false }
+                            : u
+                    )
+                );
+                showMsg(res.message);
+                handleRunEcosystemAudit();
+            } else {
+                showMsg(res.error || "Failed to update Plex privilege", "error");
+            }
+        });
+    };
+
+    const handleToggleJellyfinLiveTv = (userId: string, current: boolean) => {
+        startTransition(async () => {
+            const res = await setJellyfinUserLiveTvAccessAction(userId, !current);
+            if (res.success) {
+                setUsersList(
+                    usersList.map((u) =>
+                        u.id === userId ? { ...u, hasJellyfinLiveTvAccess: !current } : u
+                    )
+                );
+                showMsg(res.message);
+            } else {
+                showMsg(res.error || "Failed to update Jellyfin policy", "error");
+            }
+        });
+    };
+
+    const handleFixAllMissingLiveTv = () => {
+        if (!auditReport?.plexMembers) return;
+        const missing = auditReport.plexMembers.filter((m: any) => m.missingLiveTvPrivilege);
+        if (missing.length === 0) return;
+
+        startTransition(async () => {
+            let fixedCount = 0;
+            for (const m of missing) {
+                const target = m.portalarrUserId || m.plexUserId;
+                const res = await setPlexUserLiveTvPrivilegeAction(target, true);
+                if (res.success) fixedCount++;
+            }
+            showMsg(`Granted Live TV privileges to ${fixedCount} Plex Home member(s).`);
+            handleRunEcosystemAudit();
         });
     };
 
@@ -742,6 +854,116 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
 
                 {/* TAB 5: USER ACCESS & ENTITLEMENTS */}
                 <TabsContent value="users" className="space-y-6">
+                    {/* PLEX HOME & LIVE TV AUDIT COCKPIT */}
+                    <div className="p-5 rounded-2xl border border-sky-500/30 bg-gradient-to-r from-sky-500/10 via-sky-500/5 to-transparent space-y-4">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                            <div className="flex items-center gap-3">
+                                <div className="h-10 w-10 rounded-xl bg-sky-500/20 border border-sky-500/30 flex items-center justify-center text-sky-300 shrink-0">
+                                    <Server className="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <h3 className="font-bold text-sm text-foreground flex items-center gap-2">
+                                        Plex Home & Jellyfin Live TV Governance
+                                        <Badge variant="outline" className="text-[10px] bg-sky-500/10 text-sky-300 border-sky-500/30">
+                                            15-Slot Plex Cap
+                                        </Badge>
+                                    </h3>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                        Plex strictly restricts Live TV & DVR to Plex Home members. Manage slots, grant Jellyfin policies, and monitor inactive members.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={handleRunEcosystemAudit}
+                                disabled={isPending}
+                                className="border-sky-500/30 text-sky-300 hover:bg-sky-500/10 text-xs font-bold gap-2 self-start md:self-auto rounded-xl"
+                            >
+                                <RefreshCw className={`h-3.5 w-3.5 ${isPending ? "animate-spin" : ""}`} />
+                                Audit Ecosystem
+                            </Button>
+                        </div>
+
+                        {/* Capacity & Rotation Indicators */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 pt-1">
+                            <div className="p-3 rounded-xl border border-border/50 bg-background/50">
+                                <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                                    Plex Home Slots
+                                </div>
+                                <div className="text-xl font-black text-foreground mt-0.5">
+                                    {auditReport?.plexHomeTotalMembers ?? usersList.filter(u => u.isPlexHomeMember && u.role !== "ADMIN").length} / {auditReport?.plexHomeMaxSlots ?? 14}
+                                </div>
+                                <p className="text-[10px] text-muted-foreground mt-0.5">
+                                    {auditReport?.plexHomeAvailableSlots ?? Math.max(0, 14 - usersList.filter(u => u.isPlexHomeMember && u.role !== "ADMIN").length)} slot{auditReport?.plexHomeAvailableSlots === 1 ? "" : "s"} open
+                                </p>
+                            </div>
+
+                            <div className="p-3 rounded-xl border border-border/50 bg-background/50">
+                                <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                                    Privilege Anomalies
+                                </div>
+                                <div className="text-xl font-black mt-0.5">
+                                    {(auditReport?.plexHomeMissingLiveTvCount ?? 0) > 0 ? (
+                                        <span className="text-rose-400">
+                                            {auditReport.plexHomeMissingLiveTvCount} Missing
+                                        </span>
+                                    ) : (
+                                        <span className="text-emerald-400">0 Anomalies</span>
+                                    )}
+                                </div>
+                                <p className="text-[10px] text-muted-foreground mt-0.5">
+                                    In Home without Live TV
+                                </p>
+                            </div>
+
+                            <div className="p-3 rounded-xl border border-border/50 bg-background/50">
+                                <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                                    Inactivity Candidates
+                                </div>
+                                <div className="text-xl font-black text-amber-300 mt-0.5">
+                                    {auditReport?.plexHomeInactiveCandidateCount ?? usersList.filter(u => u.isInactiveCandidate).length} Inactive
+                                </div>
+                                <p className="text-[10px] text-muted-foreground mt-0.5">
+                                    &gt; {auditReport?.plexHomeInactivityDays ?? 21}d with 0 plays (Auto-kick OFF)
+                                </p>
+                            </div>
+
+                            <div className="p-3 rounded-xl border border-border/50 bg-background/50">
+                                <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                                    Jellyfin Live TV
+                                </div>
+                                <div className="text-xl font-black text-purple-300 mt-0.5">
+                                    {auditReport?.jellyfinLiveTvUsersCount ?? usersList.filter(u => u.hasJellyfinLiveTvAccess).length} Users
+                                </div>
+                                <p className="text-[10px] text-muted-foreground mt-0.5">
+                                    Unlimited user allowance
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Anomaly Callout Banner (If Plex Home members lack Live TV) */}
+                        {auditReport && auditReport.plexHomeMissingLiveTvCount > 0 && (
+                            <div className="p-3.5 rounded-xl border border-rose-500/40 bg-rose-500/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-rose-200">
+                                <div className="flex items-center gap-2.5">
+                                    <AlertTriangle className="h-4 w-4 text-rose-400 shrink-0" />
+                                    <span>
+                                        <b>{auditReport.plexHomeMissingLiveTvCount} member(s)</b> are taking up a Plex Home slot but currently have Live TV / DVR privileges turned off in Plex!
+                                    </span>
+                                </div>
+                                <Button
+                                    size="sm"
+                                    onClick={handleFixAllMissingLiveTv}
+                                    disabled={isPending}
+                                    className="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs h-7 self-start sm:self-auto rounded-lg"
+                                >
+                                    Enable Live TV For All
+                                </Button>
+                            </div>
+                        )}
+                    </div>
+
                     {pendingApprovals.length > 0 && (
                         <div className="p-5 rounded-2xl border border-amber-500/30 bg-amber-500/10 space-y-3">
                             <h3 className="font-bold text-sm text-amber-200 flex items-center gap-2">
@@ -778,39 +1000,161 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                         </div>
                     )}
 
-                    <div className="p-5 rounded-2xl border border-border/60 bg-card/60 space-y-3">
-                        <h3 className="font-bold text-sm text-foreground">Member Live TV Access Roster</h3>
-                        <div className="space-y-2">
-                            {usersList.map((u) => (
-                                <div key={u.id} className="p-3.5 rounded-xl border border-border/40 bg-background/40 flex items-center justify-between text-xs">
-                                    <div>
-                                        <div className="flex items-center gap-2">
-                                            <span className="font-bold text-foreground">{u.name || u.username}</span>
-                                            <Badge variant="outline" className="text-[10px]">
-                                                {u.role}
-                                            </Badge>
-                                        </div>
-                                        <p className="text-[11px] text-muted-foreground mt-0.5">
-                                            Max concurrent streams: <b className="text-foreground">{u.maxConcurrentIptvStreams}</b>
-                                        </p>
-                                    </div>
+                    {/* Member Live TV Roster Table */}
+                    <div className="p-5 rounded-2xl border border-border/60 bg-card/60 space-y-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div>
+                                <h3 className="font-bold text-sm text-foreground">Member Live TV Access & Platforms</h3>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                    Manage Plex Home slots, Live TV privileges, Jellyfin policies, and standalone player access.
+                                </p>
+                            </div>
+                            <span className="text-xs text-muted-foreground font-mono">
+                                {usersList.length} total members
+                            </span>
+                        </div>
 
-                                    <div>
-                                        <Button
-                                            size="sm"
-                                            variant={u.canAccessIptv ? "default" : "outline"}
-                                            onClick={() => handleToggleUserAccess(u.id, u.canAccessIptv)}
-                                            className={`h-8 text-xs font-bold ${
-                                                u.canAccessIptv
-                                                    ? "bg-teal-600 hover:bg-teal-500 text-white"
-                                                    : "text-muted-foreground"
-                                            }`}
-                                        >
-                                            {u.canAccessIptv ? "Access Enabled" : "Access Disabled"}
-                                        </Button>
+                        <div className="space-y-2.5">
+                            {usersList.map((u) => {
+                                const isOwner = u.role === "ADMIN";
+
+                                return (
+                                    <div
+                                        key={u.id}
+                                        className={`p-4 rounded-xl border transition-all text-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4 ${
+                                            u.missingPlexLiveTvPrivilege
+                                                ? "border-rose-500/40 bg-rose-500/5"
+                                                : u.isInactiveCandidate
+                                                ? "border-amber-500/30 bg-amber-500/5"
+                                                : "border-border/40 bg-background/40"
+                                        }`}
+                                    >
+                                        {/* User Identity Info */}
+                                        <div className="space-y-1 min-w-[200px]">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <span className="font-bold text-foreground text-sm">
+                                                    {u.name || u.username}
+                                                </span>
+                                                <Badge variant="outline" className="text-[10px]">
+                                                    {u.role}
+                                                </Badge>
+                                                {isOwner && (
+                                                    <Badge className="text-[10px] bg-amber-500/20 text-amber-300 border-amber-500/30">
+                                                        Plex Owner
+                                                    </Badge>
+                                                )}
+                                                {u.isPlexHomeMember && !isOwner && (
+                                                    <Badge className="text-[10px] bg-sky-500/20 text-sky-300 border-sky-500/30">
+                                                        Plex Home
+                                                    </Badge>
+                                                )}
+                                                {u.missingPlexLiveTvPrivilege && (
+                                                    <Badge className="text-[10px] bg-rose-500/20 text-rose-300 border-rose-500/30 font-bold">
+                                                        ⚠️ Missing Live TV
+                                                    </Badge>
+                                                )}
+                                            </div>
+
+                                            <p className="text-[11px] text-muted-foreground">
+                                                {u.email} {u.plexUsername ? `• Plex: ${u.plexUsername}` : ""}
+                                            </p>
+
+                                            <div className="flex items-center gap-2 pt-0.5 text-[10px] text-muted-foreground">
+                                                <span>
+                                                    Last streamed:{" "}
+                                                    <b className="text-foreground">
+                                                        {u.daysInactive !== null && u.daysInactive !== undefined
+                                                            ? `${u.daysInactive}d ago`
+                                                            : "Never"}
+                                                    </b>
+                                                </span>
+                                                {u.isInactiveCandidate && (
+                                                    <span className="text-amber-400 font-semibold">
+                                                        • Slot Rotation Candidate (Protected)
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Platform Actions Row */}
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            {/* Plex Home Slot Toggle */}
+                                            {!isOwner && (
+                                                <>
+                                                    {u.isPlexHomeMember ? (
+                                                        <div className="flex items-center gap-1.5 bg-card/60 p-1.5 rounded-xl border border-sky-500/30">
+                                                            <Button
+                                                                size="sm"
+                                                                variant={u.hasPlexLiveTvAccess ? "default" : "outline"}
+                                                                onClick={() => handleTogglePlexLiveTv(u.id, u.hasPlexLiveTvAccess)}
+                                                                disabled={isPending}
+                                                                className={`h-7 text-[11px] font-bold rounded-lg ${
+                                                                    u.hasPlexLiveTvAccess
+                                                                        ? "bg-sky-600 hover:bg-sky-500 text-white"
+                                                                        : "border-rose-500/50 text-rose-300 hover:bg-rose-500/10"
+                                                                }`}
+                                                            >
+                                                                {u.hasPlexLiveTvAccess ? "Plex Live TV ON" : "⚠️ Enable Live TV"}
+                                                            </Button>
+
+                                                            <Button
+                                                                size="sm"
+                                                                variant="ghost"
+                                                                onClick={() => handleRemovePlexHome(u.id)}
+                                                                disabled={isPending}
+                                                                className="h-7 text-[11px] text-muted-foreground hover:text-rose-400 hover:bg-rose-500/10 px-2 rounded-lg"
+                                                                title="Demote to regular Plex Friend (frees 1 Plex Home slot)"
+                                                            >
+                                                                Free Slot
+                                                            </Button>
+                                                        </div>
+                                                    ) : (
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={() => handleInvitePlexHome(u.id)}
+                                                            disabled={isPending}
+                                                            className="h-7 text-[11px] border-sky-500/30 text-sky-300 hover:bg-sky-500/10 font-bold rounded-xl"
+                                                        >
+                                                            + Plex Home
+                                                        </Button>
+                                                    )}
+                                                </>
+                                            )}
+
+                                            {/* Jellyfin Live TV Policy Toggle */}
+                                            <Button
+                                                size="sm"
+                                                variant={u.hasJellyfinLiveTvAccess ? "default" : "outline"}
+                                                onClick={() => handleToggleJellyfinLiveTv(u.id, u.hasJellyfinLiveTvAccess)}
+                                                disabled={isPending}
+                                                className={`h-7 text-[11px] font-bold rounded-xl ${
+                                                    u.hasJellyfinLiveTvAccess
+                                                        ? "bg-purple-600 hover:bg-purple-500 text-white"
+                                                        : "border-border/60 text-muted-foreground hover:text-foreground"
+                                                }`}
+                                            >
+                                                Jellyfin: {u.hasJellyfinLiveTvAccess ? "ON" : "OFF"}
+                                            </Button>
+
+                                            {/* Standalone Player / M3U Master Toggle */}
+                                            <Button
+                                                size="sm"
+                                                variant={u.canAccessIptv ? "default" : "outline"}
+                                                onClick={() => handleToggleUserAccess(u.id, u.canAccessIptv)}
+                                                disabled={isPending}
+                                                className={`h-7 text-[11px] font-bold rounded-xl ${
+                                                    u.canAccessIptv
+                                                        ? "bg-teal-600 hover:bg-teal-500 text-white"
+                                                        : "border-border/60 text-muted-foreground hover:text-foreground"
+                                                }`}
+                                            >
+                                                M3U/Tokens: {u.canAccessIptv ? "Active" : "Disabled"}
+                                            </Button>
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </div>
                 </TabsContent>

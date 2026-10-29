@@ -21,6 +21,13 @@ import {
     testDispatcharrConnection,
     syncDispatcharrLineup
 } from "@/lib/iptv/dispatcharr-client";
+import {
+    auditPlexHomeAndLiveTvPrivileges,
+    inviteUserToPlexHome,
+    removeUserFromPlexHome,
+    setPlexUserLiveTvPrivilege,
+    setJellyfinUserLiveTvAccess
+} from "@/lib/iptv/plex-jellyfin-livetv";
 import { IptvProviderType, IptvSettingsDTO } from "@/lib/iptv/types";
 
 function safeRevalidate(path: string) {
@@ -411,19 +418,30 @@ export async function getDvrConnectionsStatusAction() {
 export async function getIptvUsersAccessAction() {
     try {
         await verifySessionAdmin();
-        const [users, pendingApprovals] = await Promise.all([
+        const [iptvSettings, users, pendingApprovals] = await Promise.all([
+            getIptvSettings(),
             prisma.user.findMany({
                 select: {
                     id: true,
                     username: true,
                     name: true,
                     email: true,
+                    plexUsername: true,
+                    plexEmail: true,
                     role: true,
                     status: true,
                     membershipTier: true,
                     canAccessIptv: true,
                     maxConcurrentIptvStreams: true,
                     allowedIptvProfileSlugs: true,
+                    isPlexHomeMember: true,
+                    plexHomeUserId: true,
+                    hasPlexLiveTvAccess: true,
+                    plexHomeJoinedAt: true,
+                    hasJellyfinLiveTvAccess: true,
+                    jellyfinUserId: true,
+                    jellyfinUsername: true,
+                    lastIptvWatchedAt: true,
                     enabledAddons: true,
                     _count: {
                         select: {
@@ -444,22 +462,127 @@ export async function getIptvUsersAccessAction() {
             })
         ]);
 
+        const inactivityDaysThreshold = iptvSettings.plexHomeInactivityDays || 21;
+
         return {
             success: true,
             data: {
-                users: users.map((u) => ({
-                    ...u,
-                    canAccessIptv: u.role === "ADMIN" ? true : Boolean(u.canAccessIptv),
-                    maxConcurrentIptvStreams: u.maxConcurrentIptvStreams ?? 1,
-                    allowedProfiles: u.allowedIptvProfileSlugs
-                        ? u.allowedIptvProfileSlugs.split(",").map((s) => s.trim()).filter(Boolean)
-                        : ["kids", "sports", "news", "entertainment", "fios", "spectrum"]
-                })),
+                users: users.map((u) => {
+                    const isOwner = u.role === "ADMIN";
+                    const isPlexHome = isOwner ? true : Boolean(u.isPlexHomeMember);
+                    const hasPlexLiveTv = isOwner ? true : Boolean(u.hasPlexLiveTvAccess);
+                    const missingPlexLiveTvPrivilege = isPlexHome && !isOwner && !hasPlexLiveTv;
+
+                    const refDate = u.lastIptvWatchedAt
+                        ? new Date(u.lastIptvWatchedAt)
+                        : u.plexHomeJoinedAt
+                        ? new Date(u.plexHomeJoinedAt)
+                        : null;
+                    const daysInactive = refDate
+                        ? Math.max(0, Math.floor((Date.now() - refDate.getTime()) / 86400000))
+                        : null;
+
+                    const isInactiveCandidate =
+                        isPlexHome && !isOwner && daysInactive !== null && daysInactive >= inactivityDaysThreshold;
+
+                    return {
+                        ...u,
+                        canAccessIptv: isOwner ? true : Boolean(u.canAccessIptv),
+                        maxConcurrentIptvStreams: u.maxConcurrentIptvStreams ?? 1,
+                        isPlexHomeMember: isPlexHome,
+                        hasPlexLiveTvAccess: hasPlexLiveTv,
+                        missingPlexLiveTvPrivilege,
+                        hasJellyfinLiveTvAccess: isOwner ? true : Boolean(u.hasJellyfinLiveTvAccess),
+                        lastIptvWatchedAt: u.lastIptvWatchedAt ? u.lastIptvWatchedAt.toISOString() : null,
+                        plexHomeJoinedAt: u.plexHomeJoinedAt ? u.plexHomeJoinedAt.toISOString() : null,
+                        daysInactive,
+                        isInactiveCandidate,
+                        allowedProfiles: u.allowedIptvProfileSlugs
+                            ? u.allowedIptvProfileSlugs.split(",").map((s) => s.trim()).filter(Boolean)
+                            : ["kids", "sports", "news", "entertainment", "fios", "spectrum"]
+                    };
+                }),
                 pendingApprovals
             }
         };
     } catch (err: any) {
         return { success: false, error: err?.message || "Failed to load IPTV user access list" };
+    }
+}
+
+export async function auditLiveTvEcosystemAction() {
+    try {
+        const admin = await verifySessionAdmin();
+        const report = await auditPlexHomeAndLiveTvPrivileges();
+        logger.addLog(
+            "INFO",
+            "SYSTEM",
+            `Admin "${admin.username}" audited Plex Home & Jellyfin Live TV permissions (${report.plexHomeTotalMembers}/${report.plexHomeMaxSlots} Plex Home slots used, ${report.plexHomeMissingLiveTvCount} missing Live TV privileges).`
+        );
+        safeRevalidate("/admin/iptv");
+        return { success: true, data: report };
+    } catch (err: any) {
+        return { success: false, error: err?.message || "Failed to audit Live TV ecosystem" };
+    }
+}
+
+export async function inviteUserToPlexHomeAction(userId: string, grantLiveTv = true) {
+    try {
+        const admin = await verifySessionAdmin();
+        const res = await inviteUserToPlexHome(userId, grantLiveTv);
+        if (res.success) {
+            logger.addLog("INFO", "PLEX", `Admin "${admin.username}": ${res.message}`);
+            safeRevalidate("/admin/iptv");
+            safeRevalidate("/channels");
+        }
+        return res;
+    } catch (err: any) {
+        return { success: false, error: err?.message || "Failed to add user to Plex Home" };
+    }
+}
+
+export async function removeUserFromPlexHomeAction(userId: string) {
+    try {
+        const admin = await verifySessionAdmin();
+        const res = await removeUserFromPlexHome(userId);
+        if (res.success) {
+            logger.addLog("INFO", "PLEX", `Admin "${admin.username}": ${res.message}`);
+            safeRevalidate("/admin/iptv");
+            safeRevalidate("/channels");
+        }
+        return res;
+    } catch (err: any) {
+        return { success: false, error: err?.message || "Failed to remove user from Plex Home" };
+    }
+}
+
+export async function setPlexUserLiveTvPrivilegeAction(targetUserOrPlexId: string, allow: boolean) {
+    try {
+        const admin = await verifySessionAdmin();
+        const res = await setPlexUserLiveTvPrivilege(targetUserOrPlexId, allow);
+        if (res.success) {
+            logger.addLog("INFO", "PLEX", `Admin "${admin.username}": ${res.message}`);
+            safeRevalidate("/admin/iptv");
+            safeRevalidate("/channels");
+        }
+        return res;
+    } catch (err: any) {
+        return { success: false, error: err?.message || "Failed to update Plex Live TV privilege" };
+    }
+}
+
+export async function setJellyfinUserLiveTvAccessAction(userId: string, enableLiveTv: boolean) {
+    try {
+        const admin = await verifySessionAdmin();
+        const res = await setJellyfinUserLiveTvAccess(userId, enableLiveTv);
+        if (res.success) {
+            logger.addLog("INFO", "SYSTEM", `Admin "${admin.username}": ${res.message}`);
+            safeRevalidate("/admin/iptv");
+            safeRevalidate("/channels");
+        }
+        return res;
+    } catch (err: any) {
+        return { success: false, error: err?.message || "Failed to update Jellyfin Live TV policy" };
     }
 }
 
@@ -802,6 +925,23 @@ export async function recordIptvWatchSessionAction(input: {
                     lastWatchedAt: new Date(),
                     totalViewHours: { increment: 0.25 }
                 }
+            }).catch(() => {});
+        }
+
+        if (input.userId) {
+            await prisma.user.update({
+                where: { id: input.userId },
+                data: { lastIptvWatchedAt: new Date() }
+            }).catch(() => {});
+        } else if (input.userName) {
+            await prisma.user.updateMany({
+                where: {
+                    OR: [
+                        { username: input.userName },
+                        { plexUsername: input.userName }
+                    ]
+                },
+                data: { lastIptvWatchedAt: new Date() }
             }).catch(() => {});
         }
 
