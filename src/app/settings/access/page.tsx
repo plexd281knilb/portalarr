@@ -98,21 +98,38 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
     const [restoreStatusMsg, setRestoreStatusMsg] = useState("");
     const [filterStatus, setFilterStatus] = useState<"ALL" | "PENDING" | "APPROVED" | "TRIAL" | "INACTIVE">("ALL");
     const [searchQuery, setSearchQuery] = useState("");
-    const [sortBy, setSortBy] = useState<"last_login_desc" | "last_login_asc" | "username_asc" | "username_desc" | "joined_desc" | "joined_asc" | "name_asc" | "expiration_asc" | "expiration_desc" | "status_asc">("joined_desc");
+    type UserSortOption = "last_login_desc" | "last_login_asc" | "username_asc" | "username_desc" | "joined_desc" | "joined_asc" | "name_asc" | "expiration_asc" | "expiration_desc" | "status_asc";
+    const [sortBy, setSortBy] = useState<UserSortOption>("joined_desc");
+
+    const normalizeSortKey = (raw: string | null | undefined): UserSortOption => {
+        if (!raw) return "joined_desc";
+        if (raw === "last_joined" || raw === "joined" || raw === "joined_desc") return "joined_desc";
+        if (raw === "joined_asc") return "joined_asc";
+        if (raw === "last_login" || raw === "last_login_desc") return "last_login_desc";
+        if (raw === "last_login_asc") return "last_login_asc";
+        if (raw === "username" || raw === "username_asc") return "username_asc";
+        if (raw === "username_desc") return "username_desc";
+        if (raw === "name" || raw === "name_asc") return "name_asc";
+        if (raw === "expiration" || raw === "expiration_asc") return "expiration_asc";
+        if (raw === "expiration_desc") return "expiration_desc";
+        if (raw === "status" || raw === "status_asc") return "status_asc";
+        return "joined_desc";
+    };
 
     useEffect(() => {
         if (typeof window !== "undefined") {
             const savedSort = localStorage.getItem("user-directory-sort");
             if (savedSort) {
-                setSortBy(savedSort as any);
+                setSortBy(normalizeSortKey(savedSort));
             }
         }
     }, []);
 
-    const handleSortChange = (newSort: any) => {
-        setSortBy(newSort);
+    const handleSortChange = (newSort: string) => {
+        const normalized = normalizeSortKey(newSort);
+        setSortBy(normalized);
         if (typeof window !== "undefined") {
-            localStorage.setItem("user-directory-sort", newSort);
+            localStorage.setItem("user-directory-sort", normalized);
         }
     };
     const [showDiscordModal, setShowDiscordModal] = useState(false);
@@ -1760,6 +1777,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
     // Sort filtered users
     const sortedAndFilteredUsers = [...filteredUsers].sort((a, b) => {
         switch (sortBy) {
+            case "last_login":
             case "last_login_desc": {
                 const timeA = a.lastLogin ? new Date(a.lastLogin).getTime() : 0;
                 const timeB = b.lastLogin ? new Date(b.lastLogin).getTime() : 0;
@@ -1776,12 +1794,15 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                 if (!timeA && !timeB) return (a.username || "").localeCompare(b.username || "");
                 return timeA - timeB;
             }
+            case "username":
             case "username_asc": {
                 return (a.username || "").localeCompare(b.username || "", undefined, { sensitivity: "base" });
             }
             case "username_desc": {
                 return (b.username || "").localeCompare(a.username || "", undefined, { sensitivity: "base" });
             }
+            case "last_joined":
+            case "joined":
             case "joined_desc": {
                 const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
                 const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
@@ -1792,11 +1813,13 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                 const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
                 return timeA - timeB;
             }
+            case "name":
             case "name_asc": {
                 const nameA = (a.name || a.username || "").trim();
                 const nameB = (b.name || b.username || "").trim();
                 return nameA.localeCompare(nameB, undefined, { sensitivity: "base" });
             }
+            case "expiration":
             case "expiration_asc": {
                 const expA = a.subscriptionEndsAt || a.trialEndsAt;
                 const expB = b.subscriptionEndsAt || b.trialEndsAt;
@@ -1812,6 +1835,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                 const timeB = expB ? new Date(expB).getTime() : 0;
                 return timeB - timeA;
             }
+            case "status":
             case "status_asc": {
                 const statusOrder: Record<string, number> = {
                     PENDING: 1,
@@ -2203,34 +2227,23 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                     </div>
                                     <div className="flex items-center gap-1.5 shrink-0">
                                         <Select value={sortBy} onValueChange={handleSortChange}>
-                                            <SelectTrigger className="h-9 text-xs w-full sm:w-[215px] bg-background/60 border-border/50 shrink-0 font-medium cursor-pointer">
+                                            <SelectTrigger className="h-9 text-xs w-full sm:w-[225px] bg-background/60 border-border/50 shrink-0 font-medium cursor-pointer">
                                                 <div className="flex items-center gap-2 truncate">
                                                     <ArrowUpDown className="h-3.5 w-3.5 text-primary shrink-0" />
-                                                    <span className="truncate">
-                                                        {sortBy === 'last_login_desc' && '⚡ Last Login: Recent'}
-                                                        {sortBy === 'last_login_asc' && '💤 Last Login: Oldest/Never'}
-                                                        {sortBy === 'username_asc' && '🔤 Username: A → Z'}
-                                                        {sortBy === 'username_desc' && '🔤 Username: Z → A'}
-                                                        {sortBy === 'joined_desc' && '📅 Joined: Newest First'}
-                                                        {sortBy === 'joined_asc' && '📅 Joined: Oldest First'}
-                                                        {sortBy === 'name_asc' && '👤 Real Name: A → Z'}
-                                                        {sortBy === 'expiration_asc' && '⏳ Expiring Soonest'}
-                                                        {sortBy === 'expiration_desc' && '🛡️ Furthest Expiration'}
-                                                        {sortBy === 'status_asc' && '🚦 Account Status'}
-                                                    </span>
+                                                    <SelectValue placeholder="Sort users..." />
                                                 </div>
                                             </SelectTrigger>
-                                            <SelectContent className="text-xs bg-[#121218] border-border/60">
-                                                <SelectItem value="last_login_desc">⚡ Last Login: Most Recent First</SelectItem>
-                                                <SelectItem value="last_login_asc">💤 Last Login: Oldest / Never First</SelectItem>
-                                                <SelectItem value="username_asc">🔤 Username: Alphabetical (A → Z)</SelectItem>
-                                                <SelectItem value="username_desc">🔤 Username: Reverse (Z → A)</SelectItem>
-                                                <SelectItem value="joined_desc">📅 Joined Date: Newest First</SelectItem>
-                                                <SelectItem value="joined_asc">📅 Joined Date: Oldest First</SelectItem>
-                                                <SelectItem value="name_asc">👤 Real Name: Alphabetical (A → Z)</SelectItem>
-                                                <SelectItem value="expiration_asc">⏳ Expiration: Expiring Soonest First</SelectItem>
-                                                <SelectItem value="expiration_desc">🛡️ Expiration: Furthest Remaining First</SelectItem>
-                                                <SelectItem value="status_asc">🚦 Status: Pending → Active → Expired</SelectItem>
+                                            <SelectContent position="popper" sideOffset={4} className="text-xs bg-[#121218] border-border/60 z-[100] min-w-[225px]">
+                                                <SelectItem value="joined_desc">📅 Joined: Newest First</SelectItem>
+                                                <SelectItem value="joined_asc">📅 Joined: Oldest First</SelectItem>
+                                                <SelectItem value="last_login_desc">⚡ Last Login: Recent First</SelectItem>
+                                                <SelectItem value="last_login_asc">💤 Last Login: Oldest / Never</SelectItem>
+                                                <SelectItem value="username_asc">🔤 Username: A → Z</SelectItem>
+                                                <SelectItem value="username_desc">🔤 Username: Z → A</SelectItem>
+                                                <SelectItem value="name_asc">👤 Real Name: A → Z</SelectItem>
+                                                <SelectItem value="expiration_asc">⏳ Expiring Soonest</SelectItem>
+                                                <SelectItem value="expiration_desc">🛡️ Furthest Expiration</SelectItem>
+                                                <SelectItem value="status_asc">🚦 Account Status</SelectItem>
                                             </SelectContent>
                                         </Select>
                                     </div>
@@ -3004,7 +3017,10 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                         <span className="text-foreground">{format(new Date(user.createdAt), "MMM d, yyyy")}</span>
                                                         <span className="text-muted-foreground/40 mx-0.5">•</span>
                                                         <span className="text-muted-foreground">Last Login:</span>
-                                                        <span className={user.lastLogin ? "text-foreground font-medium" : "text-muted-foreground italic text-xs"}>
+                                                        <span 
+                                                            className={user.lastLogin ? "text-foreground font-medium cursor-help" : "text-muted-foreground italic text-xs"}
+                                                            title={user.lastLogin ? `Last active: ${format(new Date(user.lastLogin), "PPP p")}` : "Never active"}
+                                                        >
                                                             {user.lastLogin ? format(new Date(user.lastLogin), "MMM d, yyyy") : "Never"}
                                                         </span>
                                                     </div>

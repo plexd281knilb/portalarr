@@ -566,6 +566,7 @@ export async function getCurrentUser() {
       kindleEmail: true, 
       role: true, 
       status: true,
+      lastLogin: true,
       membershipTier: true,
       subscriptionCadence: true,
       lastRenewalReminderSentAt: true,
@@ -736,6 +737,25 @@ export async function getCurrentUser() {
     console.log(`[AUTH] User status/role/tier updated for ${user.username} (Status: ${payload.status} -> ${user.status}, Tier: ${(payload as any).membershipTier} -> ${user.membershipTier}). Updating session cookie.`);
     await createSession(user.id, user.username, user.role, user.status, user.trialEndsAt, user.subscriptionEndsAt, user.membershipTier);
   }
+
+  // Update lastLogin to record site visit activity (debounced to 5 minutes, skipping admin impersonation)
+  try {
+    const cookieStore = await cookies().catch(() => null);
+    const isImpersonating = !!cookieStore?.get("portalarr_impersonator_token")?.value;
+    if (!isImpersonating) {
+      const lastActive = (user as any).lastLogin ? new Date((user as any).lastLogin).getTime() : 0;
+      const FIVE_MINUTES_MS = 5 * 60 * 1000;
+      if (!lastActive || now.getTime() - lastActive > FIVE_MINUTES_MS) {
+        prisma.user.update({
+          where: { id: user.id },
+          data: { lastLogin: now }
+        }).catch((err) => {
+          console.warn("[AUTH] Failed to touch lastLogin on site visit:", err);
+        });
+        (user as any).lastLogin = now;
+      }
+    }
+  } catch (touchErr) {}
 
   return user;
 }

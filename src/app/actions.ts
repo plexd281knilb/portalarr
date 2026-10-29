@@ -21571,13 +21571,16 @@ export async function prewarmUserSessionAction() {
         const session: any = await verifyUser().catch(() => null);
         const userId = String(session?.userId || session?.id || "");
         if (!session || !userId) return { success: false, message: "Not logged in" };
+        const cookieStore = await (await import("next/headers")).cookies();
+        const isImpersonating = !!cookieStore.get("portalarr_impersonator_token")?.value;
         const { prewarmUserSession } = await import("@/lib/prewarm");
         const res = await prewarmUserSession({
             id: userId,
             username: String(session.username || ""),
             role: session.role ? String(session.role) : undefined,
             email: session.email ? String(session.email) : undefined,
-            status: session.status ? String(session.status) : undefined
+            status: session.status ? String(session.status) : undefined,
+            isImpersonating
         });
         return res;
     } catch (e: any) {
