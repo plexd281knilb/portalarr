@@ -292,7 +292,7 @@ export async function syncDispatcharrLineup(): Promise<{
 
     try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 6000);
+        const timeout = setTimeout(() => controller.abort(), 12000);
         const headers: Record<string, string> = { "Accept": "application/json" };
         if (apiKey) {
             headers["X-API-Key"] = apiKey;
@@ -308,31 +308,158 @@ export async function syncDispatcharrLineup(): Promise<{
             const profData = await profRes.json().catch(() => []);
             const profList = Array.isArray(profData) ? profData : (profData?.results || []);
 
+            const profileChannelMap = new Map<string, Set<number>>();
+            const dbProfiles: Record<string, string> = {};
+
             for (const p of profList) {
                 const name = String(p.name || "").trim();
                 if (!name) continue;
                 const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "_");
-                const channelCount = Array.isArray(p.channels) ? p.channels.length : (p.channel_count ?? 0);
+                const channelIds = Array.isArray(p.channels) ? p.channels : [];
+                profileChannelMap.set(slug, new Set(channelIds));
 
-                await prisma.iptvProfile.upsert({
+                const icon = slug.includes("sport")
+                    ? "Trophy"
+                    : slug.includes("kid")
+                    ? "Baby"
+                    : slug.includes("news")
+                    ? "Newspaper"
+                    : slug.includes("fios") || slug.includes("spectrum")
+                    ? "Radio"
+                    : "Tv";
+
+                const dbProf = await prisma.iptvProfile.upsert({
                     where: { slug },
                     create: {
                         name,
                         slug,
                         virtualTunerSlug: name,
-                        icon: slug.includes("sport") ? "Trophy" : slug.includes("kid") ? "Baby" : slug.includes("news") ? "Newspaper" : "Tv",
+                        icon,
                         description: p.description || `Dispatcharr ${name} lineup`,
                         isPublic: name !== "All_Channels",
                         minRoleRequired: name === "All_Channels" ? "ADMIN" : "USER",
-                        channelCount
+                        channelCount: channelIds.length || p.channel_count || 0
                     },
                     update: {
                         name,
                         virtualTunerSlug: name,
-                        ...(channelCount > 0 ? { channelCount } : {})
+                        channelCount: channelIds.length || p.channel_count || 0
                     }
                 });
+                dbProfiles[slug] = dbProf.id;
                 profilesSynced++;
+            }
+
+            // Fetch full channels inventory from Dispatcharr
+            const chanRes = await fetch(`${baseUrl}/api/channels/channels/?page_size=1000`, {
+                headers,
+                signal: controller.signal
+            }).catch(() => null);
+
+            if (chanRes && chanRes.ok) {
+                const chanData = await chanRes.json().catch(() => null);
+                const channels = Array.isArray(chanData?.results) ? chanData.results : [];
+
+                for (const ch of channels) {
+                    const chNum = ch.effective_channel_number ?? ch.channel_number ?? null;
+                    const chName = (ch.effective_name || ch.name || "Channel").trim();
+                    const uuid = ch.uuid || "";
+                    const xmltvId = ch.effective_tvg_id || ch.tvg_id || (uuid ? `dispatcharr.${uuid}` : `dispatcharr.${ch.id}`);
+                    const logoId = ch.effective_logo_id || ch.logo_id;
+                    const logoUrl = logoId ? `${baseUrl}/api/channels/logos/${logoId}/cache/` : null;
+
+                    // Classify Genre
+                    let genre = "Entertainment";
+                    if (profileChannelMap.get("sports")?.has(ch.id)) {
+                        genre = "Sports";
+                    } else if (profileChannelMap.get("kids")?.has(ch.id)) {
+                        genre = "Kids";
+                    } else if (profileChannelMap.get("news")?.has(ch.id)) {
+                        genre = "News";
+                    } else if (profileChannelMap.get("entertainment")?.has(ch.id)) {
+                        if (/movie|hbo|cinemax|showtime|starz/i.test(chName)) {
+                            genre = "Movies";
+                        } else {
+                            genre = "Entertainment";
+                        }
+                    } else if (/cbs|nbc|fox|abc|pbs|cw|univision|telemundo/i.test(chName)) {
+                        genre = "Local";
+                    } else if (/movie|hbo|cinemax|showtime|starz/i.test(chName)) {
+                        genre = "Movies";
+                    } else if (/sport|espn|fs1|fs2|nfl|nba|mlb|nhl|golf|tennis/i.test(chName)) {
+                        genre = "Sports";
+                    } else if (/news|cnn|msnbc|cnbc|weather|c-span/i.test(chName)) {
+                        genre = "News";
+                    } else if (/disney|nick|cartoon|pbs kids/i.test(chName)) {
+                        genre = "Kids";
+                    }
+
+                    const callsign = (ch.callsign || chName.split(" ")[0] || "TV").slice(0, 12).toUpperCase();
+
+                    let dbChannel = await prisma.iptvChannel.findFirst({
+                        where: {
+                            OR: [
+                                { xmltvId },
+                                ...(chNum !== null ? [{ name: chName, channelNumber: chNum }] : [{ name: chName }])
+                            ]
+                        }
+                    });
+
+                    if (dbChannel) {
+                        dbChannel = await prisma.iptvChannel.update({
+                            where: { id: dbChannel.id },
+                            data: {
+                                name: chName,
+                                channelNumber: chNum,
+                                callsign,
+                                genre,
+                                logoUrl: logoUrl || dbChannel.logoUrl,
+                                epgName: chName,
+                                xmltvId
+                            }
+                        });
+                    } else {
+                        dbChannel = await prisma.iptvChannel.create({
+                            data: {
+                                name: chName,
+                                channelNumber: chNum,
+                                callsign,
+                                genre,
+                                logoUrl,
+                                epgName: chName,
+                                xmltvId,
+                                isActive: true,
+                                isCustom: false
+                            }
+                        });
+                    }
+
+                    // Link channel to profiles
+                    for (const [slug, idSet] of profileChannelMap.entries()) {
+                        if (idSet.has(ch.id) || slug === "all_channels") {
+                            const profileId = dbProfiles[slug];
+                            if (profileId) {
+                                await prisma.iptvProfileChannel.upsert({
+                                    where: {
+                                        profileId_channelId: {
+                                            profileId,
+                                            channelId: dbChannel.id
+                                        }
+                                    },
+                                    create: {
+                                        profileId,
+                                        channelId: dbChannel.id,
+                                        channelOrder: chNum || 0
+                                    },
+                                    update: {
+                                        channelOrder: chNum || 0
+                                    }
+                                }).catch(() => {});
+                            }
+                        }
+                    }
+                    channelsSynced++;
+                }
             }
         }
 
@@ -366,7 +493,7 @@ export async function syncDispatcharrLineup(): Promise<{
         channelsSynced: channelsSynced || totalChannels,
         liveConnected,
         message: liveConnected
-            ? `Synced ${profilesSynced || totalProfiles} profiles from live Dispatcharr (${baseUrl})`
+            ? `Synced ${profilesSynced || totalProfiles} profiles and ${channelsSynced || totalChannels} channels from live Dispatcharr (${baseUrl})`
             : `Verified ${totalProfiles} local profiles & ${totalChannels} catalog channels (Dispatcharr at ${baseUrl})`
     };
 }

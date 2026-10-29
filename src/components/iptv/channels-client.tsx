@@ -51,6 +51,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
     const [selectedProfile, setSelectedProfile] = useState<string>("all");
     const [selectedGenre, setSelectedGenre] = useState<string>("all");
     const [searchQuery, setSearchQuery] = useState<string>("");
+    const [visibleCount, setVisibleCount] = useState<number>(64);
     const [copiedToken, setCopiedToken] = useState<string | null>(null);
 
     // Modal state
@@ -73,17 +74,23 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
 
     const canAccess = initialData.userAccess.canAccessIptv;
 
-    // Filter channels
+    // Filter channels by selected profile, genre and search query
     const filteredChannels = initialData.channels.filter((c) => {
+        const matchesProfile =
+            selectedProfile === "all" ||
+            (c.profileSlugs && c.profileSlugs.includes(selectedProfile));
         const matchesGenre = selectedGenre === "all" || c.genre?.toLowerCase() === selectedGenre.toLowerCase();
         const search = searchQuery.trim().toLowerCase();
         const matchesSearch =
             !search ||
             c.name.toLowerCase().includes(search) ||
             (c.callsign && c.callsign.toLowerCase().includes(search)) ||
+            (c.genre && c.genre.toLowerCase().includes(search)) ||
             String(c.channelNumber || "").includes(search);
-        return matchesGenre && matchesSearch;
+        return matchesProfile && matchesGenre && matchesSearch;
     });
+
+    const displayedChannels = filteredChannels.slice(0, visibleCount);
 
     const handleCopy = (text: string, id: string) => {
         navigator.clipboard.writeText(text);
@@ -253,12 +260,20 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                     </span>
                     <span className="text-xs text-muted-foreground">
                         {filteredChannels.length} channel{filteredChannels.length === 1 ? "" : "s"} shown
+                        {selectedProfile !== "all" && (
+                            <span className="ml-1 text-teal-400 font-semibold">
+                                ({initialData.profiles.find((p) => p.slug === selectedProfile)?.name || selectedProfile})
+                            </span>
+                        )}
                     </span>
                 </div>
 
                 <div className="flex flex-wrap gap-2">
                     <button
-                        onClick={() => setSelectedProfile("all")}
+                        onClick={() => {
+                            setSelectedProfile("all");
+                            setVisibleCount(64);
+                        }}
                         className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all border ${
                             selectedProfile === "all"
                                 ? "bg-teal-500/20 border-teal-500/50 text-teal-200 shadow-sm"
@@ -283,7 +298,10 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                         return (
                             <button
                                 key={p.id}
-                                onClick={() => setSelectedProfile(p.slug)}
+                                onClick={() => {
+                                    setSelectedProfile(p.slug);
+                                    setVisibleCount(64);
+                                }}
                                 className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${
                                     selectedProfile === p.slug
                                         ? "bg-teal-500/20 border-teal-500/50 text-teal-200 shadow-sm"
@@ -306,7 +324,10 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                     <Input
                         placeholder="Search by channel, callsign, or #..."
                         value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onChange={(e) => {
+                            setSearchQuery(e.target.value);
+                            setVisibleCount(64);
+                        }}
                         className="pl-9 h-9 text-xs bg-background/60 border-border/60 rounded-xl"
                     />
                 </div>
@@ -315,7 +336,10 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                     {["all", "Sports", "News", "Entertainment", "Kids", "Local", "Movies"].map((genre) => (
                         <button
                             key={genre}
-                            onClick={() => setSelectedGenre(genre)}
+                            onClick={() => {
+                                setSelectedGenre(genre);
+                                setVisibleCount(64);
+                            }}
                             className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors ${
                                 selectedGenre === genre
                                     ? "bg-primary text-primary-foreground font-bold"
@@ -330,7 +354,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
 
             {/* Channel Cards Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {filteredChannels.map((ch) => {
+                {displayedChannels.map((ch) => {
                     const GenreIcon = genreIcons[ch.genre] || Tv;
 
                     return (
@@ -341,8 +365,20 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                             <div className="space-y-2.5">
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="flex items-center gap-2.5">
-                                        <div className="h-9 w-9 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400 group-hover:scale-105 transition-transform">
-                                            <GenreIcon className="h-4 w-4" />
+                                        <div className="h-9 w-9 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400 group-hover:scale-105 transition-transform overflow-hidden shrink-0">
+                                            {ch.logoUrl ? (
+                                                /* eslint-disable-next-line @next/next/no-img-element */
+                                                <img
+                                                    src={ch.logoUrl}
+                                                    alt={ch.name}
+                                                    className="h-7 w-7 object-contain"
+                                                    onError={(e) => {
+                                                        (e.currentTarget as HTMLElement).style.display = "none";
+                                                    }}
+                                                />
+                                            ) : (
+                                                <GenreIcon className="h-4 w-4" />
+                                            )}
                                         </div>
                                         <div>
                                             <div className="flex items-center gap-1.5">
@@ -384,6 +420,26 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                 })}
             </div>
 
+            {/* Pagination / Load More */}
+            {filteredChannels.length > visibleCount && (
+                <div className="flex flex-col sm:flex-row items-center justify-center pt-4 pb-2 gap-3">
+                    <Button
+                        onClick={() => setVisibleCount((prev) => prev + 64)}
+                        variant="outline"
+                        className="border-teal-500/30 text-teal-300 hover:bg-teal-500/10 text-xs font-bold gap-2 px-5 py-2 rounded-xl"
+                    >
+                        Load Next 64 Channels (Showing {displayedChannels.length} of {filteredChannels.length})
+                    </Button>
+                    <Button
+                        onClick={() => setVisibleCount(filteredChannels.length)}
+                        variant="ghost"
+                        className="text-xs text-muted-foreground hover:text-foreground"
+                    >
+                        Show All {filteredChannels.length}
+                    </Button>
+                </div>
+            )}
+
             {filteredChannels.length === 0 && (
                 <div className="text-center py-12 border border-dashed border-border/60 rounded-2xl bg-card/20 space-y-3">
                     <Tv className="h-8 w-8 text-muted-foreground mx-auto opacity-50" />
@@ -395,6 +451,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                             setSelectedGenre("all");
                             setSelectedProfile("all");
                             setSearchQuery("");
+                            setVisibleCount(64);
                         }}
                         variant="outline"
                         className="text-xs"

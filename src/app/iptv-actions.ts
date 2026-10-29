@@ -883,11 +883,20 @@ export async function getIptvCatalogAction(filters?: {
                 ...(channelIdsFilter ? { id: { in: channelIdsFilter } } : {}),
                 ...(filters?.genre && filters.genre !== "all" ? { genre: filters.genre } : {})
             },
+            include: {
+                profileChannels: {
+                    select: {
+                        profile: {
+                            select: { slug: true }
+                        }
+                    }
+                }
+            },
             orderBy: [{ channelNumber: "asc" }, { name: "asc" }]
         });
 
         const searchLower = (filters?.search || "").trim().toLowerCase();
-        const channels = searchLower
+        const filteredList = searchLower
             ? allChannels.filter(
                   (c) =>
                       c.name.toLowerCase().includes(searchLower) ||
@@ -896,6 +905,19 @@ export async function getIptvCatalogAction(filters?: {
                       String(c.channelNumber || "").includes(searchLower)
               )
             : allChannels;
+
+        const channels = filteredList.map((c) => ({
+            id: c.id,
+            channelNumber: c.channelNumber,
+            callsign: c.callsign,
+            name: c.name,
+            logoUrl: c.logoUrl,
+            genre: c.genre,
+            xmltvId: c.xmltvId,
+            epgName: c.epgName,
+            isCustom: c.isCustom,
+            profileSlugs: c.profileChannels.map((pc) => pc.profile.slug)
+        }));
 
         const requests = await prisma.iptvChannelRequest.findMany({
             where: isAdmin ? {} : { requestedByUserId: user.id },
