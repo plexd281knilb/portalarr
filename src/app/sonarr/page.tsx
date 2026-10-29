@@ -810,8 +810,14 @@ export default function SonarrPage() {
                         )}
                       </div>
                       <div className="flex flex-col flex-1 min-w-0 py-0.5">
-                        <h4 className="font-semibold text-sm truncate">
-                          {series.title} ({series.year})
+                        <h4
+                          className="font-semibold text-sm truncate text-foreground"
+                          title={`${series.title} (${series.year})`}
+                        >
+                          {series.title}{" "}
+                          <span className="text-muted-foreground font-normal text-xs">
+                            ({series.year})
+                          </span>
                         </h4>
                         {(series.firstAired || series.network) && (
                           <div className="text-[10px] text-muted-foreground mt-1 font-semibold uppercase tracking-wider flex gap-3 flex-wrap">
@@ -986,7 +992,7 @@ export default function SonarrPage() {
                       return (
                         <div
                           key={series.id}
-                          className="flex gap-4 border border-border/50 rounded-xl p-3.5 bg-[#101014]/90 backdrop-blur-md hover:border-cyan-500/40 hover:ring-2 hover:ring-cyan-500/20 hover:shadow-lg transition-all duration-200 relative"
+                          className="flex gap-4 border border-border/50 rounded-xl p-3.5 bg-[#101014]/90 backdrop-blur-md hover:border-cyan-500/40 hover:ring-2 hover:ring-cyan-500/20 hover:shadow-lg transition-all duration-200"
                         >
                           <div className="w-16 sm:w-20 h-24 sm:h-28 shrink-0 bg-muted/30 border border-border/40 rounded-lg overflow-hidden relative shadow-sm">
                             {coverImg ? (
@@ -1002,9 +1008,54 @@ export default function SonarrPage() {
                             )}
                           </div>
                           <div className="flex flex-col flex-1 min-w-0 py-0.5">
-                            <h4 className="font-semibold text-sm truncate pr-6">
-                              {series.title} ({series.year})
-                            </h4>
+                            {/* Header row: title and monitor status cleanly separated in flex layout */}
+                            <div className="flex items-start justify-between gap-2 min-w-0">
+                              <h4
+                                className="font-semibold text-sm truncate flex-1 min-w-0 text-foreground"
+                                title={`${series.title} (${series.year})`}
+                              >
+                                {series.title}{" "}
+                                <span className="text-muted-foreground font-normal text-xs">
+                                  ({series.year})
+                                </span>
+                              </h4>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground transition-all duration-150 hover:bg-muted/40"
+                                  title={series.monitored ? "Click to unmonitor series" : "Click to monitor series"}
+                                  onClick={() => handleToggleMonitor(series)}
+                                  disabled={modifyingId === series.id}
+                                >
+                                  {modifyingId === series.id ? (
+                                    <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                                  ) : series.monitored ? (
+                                    <Eye className="h-3.5 w-3.5 text-emerald-400" />
+                                  ) : (
+                                    <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
+                                  )}
+                                </Button>
+                                <Badge
+                                  variant="secondary"
+                                  onClick={() => handleToggleMonitor(series)}
+                                  className={`text-[9px] px-1.5 font-bold uppercase tracking-wider cursor-pointer hover:opacity-80 transition-opacity ${
+                                    series.monitored
+                                      ? monitoredSeasons > 0
+                                        ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                                        : "bg-amber-500/20 text-amber-500 border-amber-500/30"
+                                      : "bg-muted/40 text-muted-foreground border-border/40"
+                                  }`}
+                                  title={series.monitored ? "Click to unmonitor series" : "Click to monitor series"}
+                                >
+                                  {series.monitored
+                                    ? monitoredSeasons > 0
+                                      ? "Monitored"
+                                      : "No Seasons"
+                                    : "Unmonitored"}
+                                </Badge>
+                              </div>
+                            </div>
                             {(series.firstAired || series.network) && (
                               <div className="text-[10px] text-muted-foreground mt-1 font-semibold uppercase tracking-wider flex gap-3 flex-wrap">
                                 {series.firstAired && (
@@ -1033,9 +1084,7 @@ export default function SonarrPage() {
                               >
                                 {series.statistics?.percentOfEpisodes === 100
                                   ? "Downloaded"
-                                  : isEffectivelyMonitored
-                                    ? `${series.statistics?.episodeFileCount || 0} / ${series.statistics?.episodeCount || 0} EPs`
-                                    : "Not Monitored"}
+                                  : `${series.statistics?.episodeFileCount || 0} / ${series.statistics?.episodeCount || 0} EPs`}
                               </Badge>
                               <Badge
                                 variant="outline"
@@ -1084,31 +1133,6 @@ export default function SonarrPage() {
                                 <Trash2 className="h-3.5 w-3.5" />
                               </Button>
                             </div>
-                          </div>
-                          <div className="absolute top-2 right-2 flex items-center gap-1.5">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-                              title={series.monitored ? "Unmonitor Series" : "Monitor Series"}
-                              onClick={() => handleToggleMonitor(series)}
-                            >
-                              {series.monitored ? (
-                                <Eye className="h-3.5 w-3.5 text-emerald-400" />
-                              ) : (
-                                <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
-                              )}
-                            </Button>
-                            {series.monitored && (
-                              <Badge
-                                variant="secondary"
-                                className={`text-[9px] px-1.5 ${monitoredSeasons > 0 ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : "bg-amber-500/20 text-amber-500 border-amber-500/30"}`}
-                              >
-                                {monitoredSeasons > 0
-                                  ? "MONITORED"
-                                  : "NO SEASONS MONITORED"}
-                              </Badge>
-                            )}
                           </div>
                         </div>
                       );

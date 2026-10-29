@@ -1,5 +1,7 @@
 "use client";
 
+import WhatsNewModal from "@/components/whats-new-modal";
+
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { getAdminDetailedStreamsAction, killUserStream, getWatchHistoryAction, clearWatchHistoryAction } from "@/app/actions";
@@ -23,7 +25,12 @@ import {
     ArrowUpDown, Volume2
 } from "lucide-react";
 
-export default function AdminDetailedStreams() {
+interface AdminDetailedStreamsProps {
+    devRoadmapText?: string;
+    roadmapText?: string;
+}
+
+export default function AdminDetailedStreams({ devRoadmapText = "", roadmapText = "" }: AdminDetailedStreamsProps) {
     const [data, setData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);

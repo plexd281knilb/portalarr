@@ -98,7 +98,8 @@ export async function login(formData: FormData) {
   } else if (currentStatus === "APPROVED" && user.subscriptionEndsAt && new Date(user.subscriptionEndsAt) < now) {
     currentStatus = "EXPIRED";
     await prisma.user.update({ where: { id: user.id }, data: { status: "EXPIRED", plexLibrarySectionIds: "" } }).catch(() => {});
-  }
+    if (!user) return null;
+}
 
   // Auto-heal membership tier for approved members or admins whose tier is still marked as TRIAL
   let currentTier = user.membershipTier;
@@ -566,6 +567,7 @@ export async function getCurrentUser() {
       kindleEmail: true, 
       role: true, 
       status: true,
+      lastLogin: true,
       membershipTier: true,
       subscriptionCadence: true,
       lastRenewalReminderSentAt: true,
@@ -618,17 +620,19 @@ export async function getCurrentUser() {
       discordUsername: true,
       discordDiscriminator: true,
       discordAvatar: true,
-      discordLinkedAt: true
+      discordLinkedAt: true,
+        lastLogin: true
       }
     });
 
     try {
       const { revokePlexAccessForUserInternal } = await import("./actions");
-      await revokePlexAccessForUserInternal(user, "Your trial period has expired.");
+      if (user) await revokePlexAccessForUserInternal(user, "Your trial period has expired.");
     } catch (revokeErr) {
       console.warn("[AUTH-TRIAL-REVOKE-WARNING]:", revokeErr);
     }
-  }
+    if (!user) return null;
+}
 
   // Auto-expire timed subscriptions that have elapsed
   if (user.status === "APPROVED" && user.subscriptionEndsAt && new Date(user.subscriptionEndsAt) < now) {
@@ -659,13 +663,14 @@ export async function getCurrentUser() {
       discordUsername: true,
       discordDiscriminator: true,
       discordAvatar: true,
-      discordLinkedAt: true
+      discordLinkedAt: true,
+        lastLogin: true
       }
     });
 
     try {
       const { revokePlexAccessForUserInternal } = await import("./actions");
-      await revokePlexAccessForUserInternal(user, "Your subscription period has expired.");
+      if (user) await revokePlexAccessForUserInternal(user, "Your subscription period has expired.");
     } catch (revokeErr) {
       console.warn("[AUTH-SUB-REVOKE-WARNING]:", revokeErr);
     }
@@ -700,7 +705,8 @@ export async function getCurrentUser() {
       discordUsername: true,
       discordDiscriminator: true,
       discordAvatar: true,
-      discordLinkedAt: true
+      discordLinkedAt: true,
+        lastLogin: true
       }
     });
   }
@@ -736,6 +742,25 @@ export async function getCurrentUser() {
     console.log(`[AUTH] User status/role/tier updated for ${user.username} (Status: ${payload.status} -> ${user.status}, Tier: ${(payload as any).membershipTier} -> ${user.membershipTier}). Updating session cookie.`);
     await createSession(user.id, user.username, user.role, user.status, user.trialEndsAt, user.subscriptionEndsAt, user.membershipTier);
   }
+
+  // Update lastLogin to record site visit activity (debounced to 5 minutes, skipping admin impersonation)
+  try {
+    const cookieStore = await cookies().catch(() => null);
+    const isImpersonating = !!cookieStore?.get("portalarr_impersonator_token")?.value;
+    if (!isImpersonating) {
+      const lastActive = (user as any).lastLogin ? new Date((user as any).lastLogin).getTime() : 0;
+      const FIVE_MINUTES_MS = 5 * 60 * 1000;
+      if (!lastActive || now.getTime() - lastActive > FIVE_MINUTES_MS) {
+        prisma.user.update({
+          where: { id: user.id },
+          data: { lastLogin: now }
+        }).catch((err) => {
+          console.warn("[AUTH] Failed to touch lastLogin on site visit:", err);
+        });
+        (user as any).lastLogin = now;
+      }
+    }
+  } catch (touchErr) {}
 
   return user;
 }

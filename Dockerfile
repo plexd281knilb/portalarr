@@ -81,6 +81,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 COPY --from=builder --chown=nextjs:nodejs /app/roadmap.md ./roadmap.md
+COPY --from=builder --chown=nextjs:nodejs /app/docs ./docs
 
 # Copy entrypoint script AFTER standalone artifacts so it is never overwritten, and enforce 755 permissions
 COPY --chmod=755 docker-entrypoint.sh /app/docker-entrypoint.sh

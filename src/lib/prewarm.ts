@@ -80,6 +80,7 @@ export async function prewarmUserSession(user: {
     role?: string;
     email?: string;
     status?: string;
+    isImpersonating?: boolean;
 }): Promise<{ success: boolean; warmedItems: string[] }> {
     const safeUsername = (user.username || "").trim();
     if (!safeUsername) return { success: false, warmedItems: [] };
@@ -95,6 +96,16 @@ export async function prewarmUserSession(user: {
         return { success: true, warmedItems: ["skipped_debounced"] };
     }
     lastUserPrewarmTimes.set(userId, Date.now());
+
+    // Update lastLogin to record site visit activity (debounced per user session)
+    if (!user.isImpersonating) {
+        prisma.user.update({
+            where: { id: userId },
+            data: { lastLogin: new Date() }
+        }).catch((e) => {
+            console.warn("[PREWARM] Failed to update lastLogin on site visit:", e);
+        });
+    }
 
     const tasks: Array<Promise<any>> = [];
 
