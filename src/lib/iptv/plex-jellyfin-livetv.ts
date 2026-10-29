@@ -105,43 +105,67 @@ export async function syncUsersLastIptvActivity(): Promise<void> {
             const cleanBase = inst.url.replace(/\/+$/, "").replace(/\/api\/v2\/?$/, "");
 
             try {
-                const controller = new AbortController();
-                const timer = setTimeout(() => controller.abort(), 4000);
-                const histUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_history&length=200`;
-                const res = await fetch(histUrl, {
-                    headers: { "Accept": "application/json" },
-                    signal: controller.signal
-                });
-                clearTimeout(timer);
+                const fetchTautulliRows = async (extraParams: string) => {
+                    const controller = new AbortController();
+                    const timer = setTimeout(() => controller.abort(), 4000);
+                    try {
+                        const histUrl = `${cleanBase}/api/v2?apikey=${encodeURIComponent(apiKey)}&cmd=get_history&${extraParams}`;
+                        const res = await fetch(histUrl, {
+                            headers: { "Accept": "application/json" },
+                            signal: controller.signal
+                        });
+                        clearTimeout(timer);
+                        if (res.ok) {
+                            const json = await res.json().catch(() => null);
+                            return Array.isArray(json?.response?.data?.data)
+                                ? json.response.data.data
+                                : Array.isArray(json?.response?.data)
+                                ? json.response.data
+                                : [];
+                        }
+                    } catch {
+                        clearTimeout(timer);
+                    }
+                    return [];
+                };
 
-                if (res.ok) {
-                    const json = await res.json().catch(() => null);
-                    const rows = Array.isArray(json?.response?.data?.data)
-                        ? json.response.data.data
-                        : Array.isArray(json?.response?.data)
-                        ? json.response.data
-                        : [];
+                const [liveRows, generalRows] = await Promise.all([
+                    fetchTautulliRows("media_type=live&length=500"),
+                    fetchTautulliRows("length=200")
+                ]);
 
-                    for (const row of rows) {
-                        const mediaType = String(row.media_type || "").toLowerCase();
-                        const isLive = Boolean(
-                            row.live === 1 ||
-                            row.live === "1" ||
-                            row.live === true ||
-                            mediaType === "live" ||
-                            mediaType === "channel" ||
-                            mediaType === "iptv" ||
-                            mediaType === "clip" ||
-                            /live tv|tuner|hdhr|dispatcharr/i.test(row.product || "") ||
-                            /live tv|tuner|hdhr|dispatcharr/i.test(row.player || "")
-                        );
+                const rows = [...liveRows, ...generalRows];
 
-                        if (isLive && row.date) {
-                            const watchedAt = new Date(Number(row.date) * 1000);
-                            const userStr = String(row.user || row.friendly_name || "").toLowerCase().trim();
-                            if (userStr && !isNaN(watchedAt.getTime())) {
-                                tautulliLiveHistory.push({ user: userStr, watchedAt });
-                            }
+                for (const row of rows) {
+                    const mediaType = String(row.media_type || "").toLowerCase();
+                    const isLive = Boolean(
+                        row.live === 1 ||
+                        row.live === "1" ||
+                        row.live === true ||
+                        mediaType === "live" ||
+                        mediaType === "channel" ||
+                        mediaType === "iptv" ||
+                        mediaType === "clip" ||
+                        row.section_type === "live" ||
+                        /world series|mlb|baseball|nfl|ncaa|football|fox|cbs|nbc|abc|espn|live tv|tuner|hdhr|dispatcharr|channel/i.test(row.title || "") ||
+                        /world series|mlb|baseball|nfl|ncaa|football|fox|cbs|nbc|abc|espn|live tv|tuner|hdhr|dispatcharr|channel/i.test(row.grandparent_title || "") ||
+                        /live tv|tuner|hdhr|dispatcharr/i.test(row.product || "") ||
+                        /live tv|tuner|hdhr|dispatcharr/i.test(row.player || "")
+                    );
+
+                    if (isLive && row.date) {
+                        const watchedAt = new Date(Number(row.date) * 1000);
+                        const userStr = String(row.user || "").toLowerCase().trim();
+                        const friendlyStr = String(row.friendly_name || "").toLowerCase().trim();
+                        const uidStr = String(row.user_id || "").toLowerCase().trim();
+                        if (userStr && !isNaN(watchedAt.getTime())) {
+                            tautulliLiveHistory.push({ user: userStr, watchedAt });
+                        }
+                        if (friendlyStr && !isNaN(watchedAt.getTime())) {
+                            tautulliLiveHistory.push({ user: friendlyStr, watchedAt });
+                        }
+                        if (uidStr && !isNaN(watchedAt.getTime())) {
+                            tautulliLiveHistory.push({ user: uidStr, watchedAt });
                         }
                     }
                 }
@@ -151,11 +175,78 @@ export async function syncUsersLastIptvActivity(): Promise<void> {
         }
     } catch {}
 
+    // Direct Plex Media Server /status/sessions/history/all scan for Live TV streams
+    try {
+        const adminToken = await resolveActivePlexAdminToken();
+        if (adminToken) {
+            const plexServers = await prisma.plexServer.findMany({
+                where: { token: { not: null } }
+            });
+            for (const srv of plexServers) {
+                if (!srv.url) continue;
+                const sToken = srv.token ? decryptData(srv.token).trim() : adminToken;
+                const cleanBase = srv.url.replace(/\/+$/, "");
+                try {
+                    const controller = new AbortController();
+                    const timer = setTimeout(() => controller.abort(), 3500);
+                    const hUrl = `${cleanBase}/status/sessions/history/all?sort=viewedAt:desc&X-Plex-Container-Start=0&X-Plex-Container-Size=200`;
+                    const res = await fetch(hUrl, {
+                        headers: {
+                            "Accept": "application/json",
+                            "X-Plex-Token": sToken,
+                            "X-Plex-Client-Identifier": PLEX_CLIENT_ID
+                        },
+                        signal: controller.signal
+                    });
+                    clearTimeout(timer);
+                    if (res.ok) {
+                        const hJson = await res.json().catch(() => null);
+                        const hRows = hJson?.MediaContainer?.Metadata || [];
+                        const rows = Array.isArray(hRows) ? hRows : [hRows];
+                        for (const r of rows) {
+                            const isLive = Boolean(
+                                r.live === 1 ||
+                                r.live === "1" ||
+                                r.type === "live" ||
+                                r.type === "clip" ||
+                                r.channelIdentifier ||
+                                /world series|mlb|baseball|nfl|ncaa|football|fox|cbs|nbc|abc|espn|news|live tv|tuner/i.test(r.title || "") ||
+                                /world series|mlb|baseball|nfl|ncaa|football|fox|cbs|nbc|abc|espn|news|live tv|tuner/i.test(r.grandparentTitle || "")
+                            );
+                            if (isLive && r.viewedAt) {
+                                const watchedAt = new Date(Number(r.viewedAt) * 1000);
+                                const userStr = String(r.userName || r.user || "").toLowerCase().trim();
+                                const emailStr = String(r.userEmail || r.email || "").toLowerCase().trim();
+                                if (userStr && !isNaN(watchedAt.getTime())) {
+                                    tautulliLiveHistory.push({ user: userStr, watchedAt });
+                                }
+                                if (emailStr && !isNaN(watchedAt.getTime())) {
+                                    tautulliLiveHistory.push({ user: emailStr, watchedAt });
+                                }
+                            }
+                        }
+                    }
+                } catch {}
+            }
+        }
+    } catch {}
+
     for (const u of users) {
+        const nameClean = u.name ? u.name.toLowerCase().trim() : "";
         const aliases = new Set(
-            [u.username, u.email, u.plexUsername, u.plexEmail]
+            [
+                u.username,
+                u.email,
+                u.email ? u.email.split("@")[0] : null,
+                u.plexUsername,
+                u.plexEmail,
+                u.plexEmail ? u.plexEmail.split("@")[0] : null,
+                nameClean,
+                nameClean ? nameClean.replace(/\s+/g, "") : null,
+                u.plexHomeUserId
+            ]
                 .filter(Boolean)
-                .map((s) => s!.toLowerCase().trim())
+                .map((s) => String(s).toLowerCase().trim())
         );
 
         let latestDate: Date | null = u.lastIptvWatchedAt ? new Date(u.lastIptvWatchedAt) : null;
@@ -462,44 +553,50 @@ export async function auditPlexHomeAndLiveTvPrivileges(): Promise<LiveTvEcosyste
             // Ignore v2 home error if offline
         }
 
-        // 3. Supplement with https://plex.tv/api/v2/shared_servers for granular server shares
+        // 3. Supplement with canonical Plex server shares via getPlexSharedServersList
         try {
-            const controller = new AbortController();
-            const timer = setTimeout(() => controller.abort(), 4000);
-            const sharesRes = await fetch("https://plex.tv/api/v2/shared_servers", {
-                headers: {
-                    "Accept": "application/json",
-                    "X-Plex-Token": adminToken,
-                    "X-Plex-Client-Identifier": PLEX_CLIENT_ID
-                },
-                signal: controller.signal,
-                cache: "no-store"
-            });
-            clearTimeout(timer);
+            const sharedServers = await getPlexSharedServersList(adminToken);
+            if (sharedServers.length > 0) {
+                plexReachable = true;
+            }
+            for (const sh of sharedServers) {
+                const uId = String(sh.user?.id || "");
+                const uEmail = (sh.user?.email || sh.invitedEmail || "").toLowerCase().trim();
+                const uName = (sh.user?.username || sh.user?.title || "").toLowerCase().trim();
 
-            if (sharesRes.ok) {
-                const sharesData = await sharesRes.json().catch(() => []);
-                const shares = Array.isArray(sharesData) ? sharesData : [];
-                for (const sh of shares) {
-                    const uId = String(sh.userID || sh.userId || sh.invitedId || "");
-                    const uEmail = String(sh.invitedEmail || sh.email || "").toLowerCase().trim();
-                    const uName = String(sh.username || "").toLowerCase().trim();
+                const shAllowTuners = Boolean(sh.allowTuners);
+                const shAllowChannels = Boolean(sh.allowChannels);
+                const shAllowDvr = Boolean(sh.allowDvr);
 
-                    const shAllowTuners = Boolean(sh.allowTuners || sh.settings?.allowTuners === 1 || sh.settings?.allowTuners === true);
-                    const shAllowChannels = Boolean(sh.allowChannels || sh.settings?.allowChannels === 1 || sh.settings?.allowChannels === true);
-                    const shAllowDvr = Boolean(sh.allowDvr || sh.settings?.allowDvr === 1 || sh.settings?.allowDvr === true);
-
-                    for (const val of rawPlexMap.values()) {
-                        if (
-                            (uId && String(val.plexUserId) === uId) ||
-                            (uEmail && val.email === uEmail) ||
-                            (uName && val.username.toLowerCase() === uName)
-                        ) {
-                            if (shAllowTuners) val.allowTuners = true;
-                            if (shAllowChannels) val.allowChannels = true;
-                            if (shAllowDvr) val.allowDvr = true;
-                        }
+                let matched = false;
+                for (const val of rawPlexMap.values()) {
+                    if (
+                        (uId && String(val.plexUserId) === uId) ||
+                        (uEmail && val.email === uEmail) ||
+                        (uName && val.username.toLowerCase() === uName)
+                    ) {
+                        matched = true;
+                        if (shAllowTuners) val.allowTuners = true;
+                        if (shAllowChannels) val.allowChannels = true;
+                        if (shAllowDvr) val.allowDvr = true;
                     }
+                }
+
+                // If not in rawPlexMap yet, add them so shared users are discovered
+                if (!matched && (uId || uEmail || uName)) {
+                    const key = uId || uEmail || uName;
+                    rawPlexMap.set(key, {
+                        plexUserId: uId || key,
+                        username: sh.user?.username || sh.user?.title || uName || "Plex User",
+                        email: uEmail,
+                        title: sh.user?.title || sh.user?.username || uName || "Plex User",
+                        thumb: sh.user?.thumb || undefined,
+                        isOwnerAdmin: false,
+                        isPlexHomeMember: false,
+                        allowTuners: shAllowTuners,
+                        allowChannels: shAllowChannels,
+                        allowDvr: shAllowDvr
+                    });
                 }
             }
         } catch {}

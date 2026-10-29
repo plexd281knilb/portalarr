@@ -1542,6 +1542,10 @@ export interface PlexSharedServerItem {
     librarySectionIds: number[];
     allLibraries?: boolean;
     accepted?: boolean;
+    allowTuners?: boolean;
+    allowChannels?: boolean;
+    allowDvr?: boolean;
+    allowSync?: boolean;
 }
 
 export async function getPlexSharedServersList(adminToken: string): Promise<PlexSharedServerItem[]> {
@@ -1584,6 +1588,10 @@ export async function getPlexSharedServersList(adminToken: string): Promise<Plex
                     const machineId = sAttrs.match(/\bmachineIdentifier="([^"]*)"/i)?.[1] || "";
                     const serverName = sAttrs.match(/\bname="([^"]*)"/i)?.[1] || "Plex Server";
                     const allLibraries = sAttrs.match(/\ballLibraries="([^"]*)"/i)?.[1] === "1";
+                    const allowTuners = sAttrs.match(/\ballowTuners="([^"]*)"/i)?.[1] === "1" || uAttrs.match(/\ballowTuners="([^"]*)"/i)?.[1] === "1";
+                    const allowChannels = sAttrs.match(/\ballowChannels="([^"]*)"/i)?.[1] === "1" || uAttrs.match(/\ballowChannels="([^"]*)"/i)?.[1] === "1";
+                    const allowDvr = sAttrs.match(/\ballowDvr="([^"]*)"/i)?.[1] === "1" || uAttrs.match(/\ballowDvr="([^"]*)"/i)?.[1] === "1";
+                    const allowSync = sAttrs.match(/\ballowSync="([^"]*)"/i)?.[1] === "1" || uAttrs.match(/\ballowSync="([^"]*)"/i)?.[1] === "1";
 
                     const secIds: number[] = [];
                     if (sInner) {
@@ -1618,7 +1626,11 @@ export async function getPlexSharedServersList(adminToken: string): Promise<Plex
                             invitedEmail: userEmail,
                             librarySectionIds: secIds,
                             allLibraries,
-                            accepted: true
+                            accepted: true,
+                            allowTuners,
+                            allowChannels,
+                            allowDvr,
+                            allowSync
                         });
                     }
                 }
@@ -1655,6 +1667,10 @@ export async function getPlexSharedServersList(adminToken: string): Promise<Plex
                     const invitedEmail = attrs.match(/\binvitedEmail="([^"]*)"/i)?.[1] || email;
                     const userId = parseInt(attrs.match(/\buserID="([^"]*)"/i)?.[1] || "0", 10);
                     const allLibraries = attrs.match(/\ballLibraries="([^"]*)"/i)?.[1] === "1";
+                    const allowTuners = attrs.match(/\ballowTuners="([^"]*)"/i)?.[1] === "1";
+                    const allowChannels = attrs.match(/\ballowChannels="([^"]*)"/i)?.[1] === "1";
+                    const allowDvr = attrs.match(/\ballowDvr="([^"]*)"/i)?.[1] === "1";
+                    const allowSync = attrs.match(/\ballowSync="([^"]*)"/i)?.[1] === "1";
                     const serverName = attrs.match(/\bname="([^"]*)"/i)?.[1] || srv.name;
 
                     const sectionIds: number[] = [];
@@ -1692,6 +1708,10 @@ export async function getPlexSharedServersList(adminToken: string): Promise<Plex
                             }
                         }
                         existing.allLibraries = existing.allLibraries || allLibraries;
+                        if (allowTuners) existing.allowTuners = true;
+                        if (allowChannels) existing.allowChannels = true;
+                        if (allowDvr) existing.allowDvr = true;
+                        if (allowSync) existing.allowSync = true;
                     } else if (shareId || username || email) {
                         items.push({
                             id: shareId,
@@ -1706,7 +1726,11 @@ export async function getPlexSharedServersList(adminToken: string): Promise<Plex
                             invitedEmail,
                             librarySectionIds: sectionIds,
                             allLibraries,
-                            accepted: true
+                            accepted: true,
+                            allowTuners,
+                            allowChannels,
+                            allowDvr,
+                            allowSync
                         });
                     }
                 }

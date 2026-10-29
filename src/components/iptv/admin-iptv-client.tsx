@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import {
     Tv,
     ShieldCheck,
@@ -71,6 +71,46 @@ interface AdminIptvClientProps {
     };
 }
 
+function mergeUsersWithAudit(users: any[], auditReport: any): any[] {
+    if (!users || !Array.isArray(users)) return [];
+    if (!auditReport?.plexMembers || !Array.isArray(auditReport.plexMembers)) return users;
+
+    return users.map((u) => {
+        const isOwner = u.role === "ADMIN";
+        if (isOwner) return u;
+
+        const uEmails = [u.email, u.plexEmail].filter(Boolean).map((e: any) => String(e).toLowerCase().trim());
+        const uNames = [u.username, u.plexUsername, u.name].filter(Boolean).map((n: any) => String(n).toLowerCase().trim());
+
+        const match = auditReport.plexMembers.find((m: any) => {
+            if (m.portalarrUserId && m.portalarrUserId === u.id) return true;
+            if (u.plexHomeUserId && String(u.plexHomeUserId) === String(m.plexUserId)) return true;
+            if (m.email && uEmails.includes(String(m.email).toLowerCase().trim())) return true;
+            if (m.username && uNames.includes(String(m.username).toLowerCase().trim())) return true;
+            if (m.title && uNames.includes(String(m.title).toLowerCase().trim())) return true;
+            return false;
+        });
+
+        if (!match) return u;
+
+        const liveTvGranted = Boolean(match.allowTuners || match.allowChannels);
+        const dvrGranted = Boolean(match.allowDvr);
+
+        return {
+            ...u,
+            isPlexHomeMember: Boolean(match.isPlexHomeMember),
+            plexHomeUserId: match.plexUserId || u.plexHomeUserId,
+            hasPlexLiveTvAccess: liveTvGranted,
+            hasPlexDvrAccess: dvrGranted,
+            missingPlexLiveTvPrivilege: Boolean(match.missingLiveTvPrivilege),
+            missingPlexDvrPrivilege: Boolean(match.missingDvrPrivilege),
+            daysInactive: match.daysInactive !== undefined && match.daysInactive !== null ? match.daysInactive : u.daysInactive,
+            daysInPlexHome: match.daysInPlexHome !== undefined && match.daysInPlexHome !== null ? match.daysInPlexHome : u.daysInPlexHome,
+            isInactiveCandidate: Boolean(match.isInactiveCandidate)
+        };
+    });
+}
+
 export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
     const [activeTab, setActiveTab] = useState<string>("providers");
     const [isPending, startTransition] = useTransition();
@@ -109,8 +149,14 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
     const [dispatcharrTestResult, setDispatcharrTestResult] = useState<any>(null);
 
     // Users & Approvals State
-    const [usersList, setUsersList] = useState(initialData.users || []);
+    const [usersList, setUsersList] = useState(() => mergeUsersWithAudit(initialData.users || [], initialData.auditReport));
     const [pendingApprovals, setPendingApprovals] = useState(initialData.pendingApprovals || []);
+
+    useEffect(() => {
+        if (auditReport) {
+            setUsersList((prev) => mergeUsersWithAudit(prev, auditReport));
+        }
+    }, [auditReport]);
 
     // Telemetry State
     const [activeSessions, setActiveSessions] = useState(initialData.telemetry?.activeSessions || []);
@@ -250,6 +296,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
             const res = await auditLiveTvEcosystemAction();
             if (res.success && res.data) {
                 setAuditReport(res.data);
+                setUsersList((prev) => mergeUsersWithAudit(prev, res.data));
                 showMsg("Plex Home & Jellyfin Live TV audit completed");
             } else {
                 showMsg(res.error || "Failed to audit ecosystem", "error");
@@ -1146,7 +1193,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                                 </span>
                                                 {u.daysInPlexHome !== null && u.daysInPlexHome !== undefined && u.isPlexHomeMember && (
                                                     <span className="text-muted-foreground/70">
-                                                        • In Home: {u.daysInPlexHome}d
+                                                        • In Home: {u.daysInPlexHome > 0 ? `${u.daysInPlexHome}d` : "Joined today"}
                                                     </span>
                                                 )}
                                                 {u.isInactiveCandidate && (
