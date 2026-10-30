@@ -29,8 +29,8 @@ export async function GET(req: NextRequest) {
             });
         }
 
-        if (userToken.user.role !== "ADMIN" && !userToken.user.canAccessIptv) {
-            return new NextResponse("#EXTM3U\n#EXTINF:-1,Access Denied: IPTV Not Enabled\nhttp://127.0.0.1/denied.ts\n", {
+        if (userToken.user.role !== "ADMIN") {
+            return new NextResponse("#EXTM3U\n#EXTINF:-1,Access Denied: Standalone M3U streaming is restricted to administrators\nhttp://127.0.0.1/denied.ts\n", {
                 status: 403,
                 headers: { "Content-Type": "audio/x-mpegurl; charset=utf-8" }
             });

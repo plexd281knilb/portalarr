@@ -502,7 +502,7 @@ export async function getIptvUsersAccessAction() {
 
                     return {
                         ...u,
-                        canAccessIptv: isOwner ? true : Boolean(u.canAccessIptv),
+                        canAccessIptv: isOwner ? true : false,
                         maxConcurrentIptvStreams: u.maxConcurrentIptvStreams ?? 1,
                         isPlexHomeMember: isPlexHome,
                         hasPlexLiveTvAccess: hasPlexLiveTv,
@@ -632,10 +632,16 @@ export async function updateUserIptvAccessAction(input: {
             ? input.allowedProfiles.join(",")
             : undefined;
 
+        const targetUser = await prisma.user.findUnique({
+            where: { id: input.userId },
+            select: { role: true }
+        });
+        const canAccessIptv = targetUser?.role === "ADMIN" ? Boolean(input.canAccessIptv) : false;
+
         const updatedUser = await prisma.user.update({
             where: { id: input.userId },
             data: {
-                canAccessIptv: input.canAccessIptv,
+                canAccessIptv,
                 ...(input.maxConcurrentIptvStreams !== undefined
                     ? { maxConcurrentIptvStreams: Math.max(1, Number(input.maxConcurrentIptvStreams)) }
                     : {}),
@@ -1152,7 +1158,7 @@ export async function getIptvCatalogAction(filters?: {
             success: true,
             data: {
                 userAccess: {
-                    canAccessIptv: isAdmin || Boolean(user.canAccessIptv),
+                    canAccessIptv: isAdmin || Boolean(user.hasPlexLiveTvAccess || user.hasJellyfinLiveTvAccess || user.isPlexHomeMember),
                     maxConcurrentStreams: user.maxConcurrentIptvStreams ?? 1,
                     hasPendingAccessRequest: Boolean(pendingAccessRequest),
                     isAdmin,

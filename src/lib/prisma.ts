@@ -676,6 +676,8 @@ export async function ensureSchemaColumns(): Promise<void> {
                     VALUES ('global', 'dark', 10, 6, 14, 180, 15, 1, 1, 'YEARLY_PRORATED');
                 `);
             } catch (e) {}
+            // Enforce that standalone IPTV/M3U stream links are strictly restricted to administrators
+            await prisma.$executeRawUnsafe(`UPDATE "User" SET "canAccessIptv" = 0 WHERE "role" != 'ADMIN';`).catch(() => {});
         } catch (e: any) {
             console.error("[DB-SCHEMA-AUTOFIX] Settings table check error:", e.message || e);
         }

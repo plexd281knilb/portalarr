@@ -91,17 +91,22 @@ function mergeUsersWithAudit(users: any[], auditReport: any): any[] {
             return false;
         });
 
-        const isPlexHome = Boolean(u.isPlexHomeMember || match?.isPlexHomeMember);
+        const isPlexHome = Boolean(match ? match.isPlexHomeMember : u.isPlexHomeMember);
 
-        // Real privileges: From Plex API audit or explicitly granted in DB
-        const liveTvGranted = Boolean(
-            u.hasPlexLiveTvAccess ||
-            match?.allowTuners
-        );
+        // Real privileges: Match from live Plex API audit is authoritative!
+        const liveTvGranted = isOwner
+            ? true
+            : match !== undefined
+            ? Boolean(match.allowTuners)
+            : Boolean(u.hasPlexLiveTvAccess);
 
-        const dvrGranted = Boolean(
-            liveTvGranted && (u.hasPlexDvrAccess || match?.allowDvr)
-        );
+        const dvrGranted = isOwner
+            ? true
+            : !liveTvGranted
+            ? false
+            : match !== undefined
+            ? Boolean(match.allowDvr)
+            : Boolean(u.hasPlexDvrAccess);
 
         const missingLiveTv = Boolean(isPlexHome && !isOwner && !liveTvGranted);
         const missingDvr = Boolean(isPlexHome && !isOwner && !dvrGranted);
@@ -173,6 +178,8 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
     useEffect(() => {
         if (auditReport) {
             setUsersList((prev) => mergeUsersWithAudit(prev, auditReport));
+        } else {
+            handleRunEcosystemAudit();
         }
     }, [auditReport]);
 
@@ -329,7 +336,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                 setUsersList(
                     usersList.map((u) =>
                         u.id === userId
-                            ? { ...u, isPlexHomeMember: true, hasPlexLiveTvAccess: true, canAccessIptv: true }
+                            ? { ...u, isPlexHomeMember: true, hasPlexLiveTvAccess: true }
                             : u
                     )
                 );
@@ -445,34 +452,16 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
     };
 
     // --- User Entitlement Actions ---
-    const handleToggleUserAccess = (userId: string, current: boolean) => {
-        startTransition(async () => {
-            const res = await updateUserIptvAccessAction({
-                userId,
-                canAccessIptv: !current
-            });
-            if (res.success) {
-                setUsersList(
-                    usersList.map((u) => (u.id === userId ? { ...u, canAccessIptv: !current } : u))
-                );
-                showMsg(`Updated IPTV access`);
-            }
-        });
-    };
-
     const handleResolveApproval = (approvalId: string, userId: string, approved: boolean) => {
         startTransition(async () => {
             const res = await updateUserIptvAccessAction({
                 userId,
-                canAccessIptv: approved,
+                canAccessIptv: false,
                 approvalId
             });
             if (res.success) {
                 setPendingApprovals(pendingApprovals.filter((a) => a.id !== approvalId));
-                setUsersList(
-                    usersList.map((u) => (u.id === userId ? { ...u, canAccessIptv: approved } : u))
-                );
-                showMsg(`Access request ${approved ? "Approved" : "Rejected"}`);
+                showMsg(approved ? "Request approved. Enable Plex Home or Jellyfin Live TV to grant access." : "Request rejected.");
             }
         });
     };
@@ -1132,7 +1121,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                             <div>
                                 <h3 className="font-bold text-sm text-foreground">Member Live TV Access & Platforms</h3>
                                 <p className="text-xs text-muted-foreground mt-0.5">
-                                    Manage Plex Home slots, Live TV privileges, Jellyfin policies, and standalone player access.
+                                    Manage Plex Home slots, Live TV privileges, and Jellyfin Live TV policies. Standalone M3U links and player access are strictly restricted to administrators.
                                 </p>
                             </div>
                             <span className="text-xs text-muted-foreground font-mono">
@@ -1296,21 +1285,6 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                                 }`}
                                             >
                                                 Jellyfin: {u.hasJellyfinLiveTvAccess ? "ON" : "OFF"}
-                                            </Button>
-
-                                            {/* Standalone Player / M3U Master Toggle */}
-                                            <Button
-                                                size="sm"
-                                                variant={u.canAccessIptv ? "default" : "outline"}
-                                                onClick={() => handleToggleUserAccess(u.id, u.canAccessIptv)}
-                                                disabled={isPending}
-                                                className={`h-7 text-[11px] font-bold rounded-xl ${
-                                                    u.canAccessIptv
-                                                        ? "bg-teal-600 hover:bg-teal-500 text-white"
-                                                        : "border-border/60 text-muted-foreground hover:text-foreground"
-                                                }`}
-                                            >
-                                                Live TV Hub: {u.canAccessIptv ? "Authorized" : "Disabled"}
                                             </Button>
                                         </div>
                                     </div>

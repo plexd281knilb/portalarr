@@ -66,31 +66,36 @@ src/
 ### 5. Plex Home Live TV & DVR 3-Tier Permission Model
 Plex Media Server enforces three distinct radio restriction states under **Restrictions > Live TV & DVR Access**:
 
-| Plex Web Restriction | Plex API Flags | Portalarr Badge | Action Buttons |
-| :--- | :--- | :--- | :--- |
-| **`No Live TV and DVR access`** | `allowTuners: 0`<br/>`allowDvr: 0` | `⚠️ Missing Live TV & DVR` (Rose) | `[Enable Live TV]` \| `[Enable DVR]` |
-| **`Allow Live TV only`** | `allowTuners: 1`<br/>`allowDvr: 0` | `Live TV Only` (Sky Blue) | `[Live TV: ON]` \| `[Enable DVR]` |
-| **`Allow Live TV and DVR access`** | `allowTuners: 1`<br/>`allowDvr: 1` | `Live TV + DVR` (Emerald) | `[Live TV: ON]` \| `[DVR: ON]` |
+| Plex Web Restriction | Plex API `allowTuners` Enum | Plex API Flags | Portalarr Badge | Action Buttons |
+| :--- | :--- | :--- | :--- | :--- |
+| **`No Live TV and DVR access`** | `allowTuners="0"` | `allowTuners: false`<br/>`allowDvr: false` | `⚠️ Missing Live TV & DVR` (Rose) | `[Enable Live TV]` \| `[Enable DVR]` |
+| **`Allow Live TV only`** | `allowTuners="1"` | `allowTuners: true`<br/>`allowDvr: false` | `Live TV Only` (Sky Blue) | `[Live TV: ON]` \| `[Enable DVR]` |
+| **`Allow Live TV and DVR access`** | `allowTuners="2"` | `allowTuners: true`<br/>`allowDvr: true` | `Live TV + DVR` (Emerald) | `[Live TV: ON]` \| `[DVR: ON]` |
 
 - **Hierarchical 1-Click Transitions**:
   - *Clicking `[Enable Live TV]`*: Sets `allowTuners=1` and `allowChannels=1`, promoting user to **"Allow Live TV only"**.
-  - *Clicking `[Enable DVR]`*: Automatically sets `allowDvr=1`, `allowTuners=1`, and `allowChannels=1`, promoting user to **"Allow Live TV and DVR access"** (since Plex requires tuner access to manage recordings).
-  - *Clicking `[DVR: ON]`*: Revokes only DVR (`allowDvr=0`), gracefully dropping the user down to **"Allow Live TV only"**.
-  - *Clicking `[Live TV: ON]`*: Revokes both Live TV and DVR (`allowTuners=0`, `allowDvr=0`), dropping the user to **"No Live TV and DVR access"**.
+  - *Clicking `[Enable DVR]`*: Automatically sets `allowTuners=2` (and `allowDvr=1`), promoting user to **"Allow Live TV and DVR access"** (since Plex requires tuner access to manage recordings).
+  - *Clicking `[DVR: ON]`*: Revokes only DVR (`allowDvr=0&allowTuners=1`), gracefully dropping the user down to **"Allow Live TV only"**.
+  - *Clicking `[Live TV: ON]`*: Revokes both Live TV and DVR (`allowTuners=0&allowDvr=0`), dropping the user to **"No Live TV and DVR access"**.
 
 ### 6. Plex Home & 3-Tier Live TV / DVR Restrictions Architecture
-- **Plex 3-Tier Restriction Standard**:
-  - **Tier 1: No Live TV and DVR access** (`allowTuners="0"`, `allowDvr="0"`): Both Live TV and DVR are completely disabled for the friend/member. In Portalarr UI, displays clean `No Live TV / DVR` badge and `Enable Live TV` / `Enable DVR` buttons.
+- **Plex 3-Tier Integer Enum Standard**:
+  - **Tier 1: No Live TV and DVR access** (`allowTuners="0"`, `allowDvr="0"`): Both Live TV and DVR are completely disabled for the friend/member (e.g. `krismo4`, `Zestyandstizy`). In Portalarr UI, displays clean `No Live TV / DVR` badge and `Enable Live TV` / `Enable DVR` buttons.
   - **Tier 2: Allow Live TV only** (`allowTuners="1"`, `allowDvr="0"`): User can stream live broadcasts from virtual tuners, but cannot record or schedule DVR passes. In Portalarr UI, displays sky `Live TV Only` badge and `Live TV: ON` button.
-  - **Tier 3: Allow Live TV and DVR access** (`allowTuners="1"`, `allowDvr="1"`): User can stream live TV and schedule individual DVR recordings. In Portalarr UI, displays emerald `Live TV + DVR` badge and `DVR: ON` button.
+  - **Tier 3: Allow Live TV and DVR access** (`allowTuners="2"` or `allowTuners="1"` with `allowDvr="1"`): User can stream live TV and schedule individual DVR recordings (e.g. `jrj78`, `trevscar1121`). In Portalarr UI, displays emerald `Live TV + DVR` badge and `DVR: ON` button.
+- **Plex Cloud XML Integer Representation**:
+  - In `https://plex.tv/api/users` XML and `/api/servers/{id}/shared_servers`, Plex returns `allowTuners="2"` directly for Tier 3 members rather than outputting a distinct `allowDvr="1"` attribute. Parsers MUST check integer values (`tunersInt === 2`) to identify DVR access.
+- **Multi-Server Cluster Verification**:
+  - Auditing user shares must check all servers in the cluster: both cloud-discovered PMS instances and database-configured servers in `prisma.plexServer`.
+  - `getPlexSharedServersList` queries `https://plex.tv/api/servers/${encodeURIComponent(srvId)}/shared_servers` across every server (`KidsPlexServer`, `MainPlexServer`, `MainPlexServerBackup`, etc.) using server-specific tokens (`srv.accessToken || adminToken`), ensuring complete coverage across all servers.
 - **`allowChannels` vs `allowTuners` Separation**:
   - `allowChannels` in Plex Media Server XML/REST API refers strictly to legacy online channels/plugins (e.g. TED, Vimeo, YouTube plugins) and is enabled by default on shared servers. It MUST NEVER be used to infer or grant Live TV access.
   - Live TV privilege is strictly governed by `allowTuners`.
 - **`allowTuners` vs `allowDvr` Independence & DVR Dependency**:
   - `allowTuners="1"` does NOT imply `allowDvr="1"`. A user can have Live TV without DVR access ("Allow Live TV only").
   - In Plex, DVR strictly requires Live TV: if `allowTuners` is false (Tier 1, e.g. `krismo4`), `dvrGranted` is guaranteed `false`.
-  - When `allowTuners` is true (e.g. `jrj78`, `trevscar1121`), `dvrGranted` is granted if Plex API reports DVR access OR if configured in Portalarr (`matchedPortalUser?.hasPlexDvrAccess`), preventing undocumented Plex XML omission from wiping out Tier 3 access down to Tier 2.
-  - Enabling DVR requires both `allowTuners="1"` and `allowDvr="1"`.
+  - When `allowTuners` is true (e.g. `jrj78`, `trevscar1121`), `dvrGranted` is granted if Plex API reports DVR access (`allowTuners="2"` or `allowDvr="1"`) OR if configured in Portalarr (`matchedPortalUser?.hasPlexDvrAccess`), preventing undocumented Plex XML omission from wiping out Tier 3 access down to Tier 2.
+  - Enabling DVR requires both `allowTuners="2"` (or `allowTuners="1"` and `allowDvr="1"`).
   - Revoking DVR (`allowDvr="0"`) leaves `allowTuners="1"` intact.
   - Revoking Live TV (`allowTuners="0"`) automatically sets `allowDvr="0"`.
 - **Live Plex API Authoritative Precedence Over SQLite**:
@@ -105,7 +110,12 @@ Plex Media Server enforces three distinct radio restriction states under **Restr
   `{ ...currentPolicy, EnableLiveTvAccess: enable, EnableLiveTvManagement: false }`.
   Never sends an unmerged policy payload, which would inadvertently reset `EnabledFolders` and revoke media library access.
 
-### 8. Live Stream Session Telemetry & Watch History Integration
+### 8. Live TV Access Restrictions & Admin-Only M3U / Player Policy
+- **Plex & Jellyfin Exclusivity for Members**: Regular users and members stream Live TV strictly and exclusively through official Plex (`allowTuners`) and Jellyfin (`EnableLiveTvAccess`) client applications.
+- **Standalone M3U & EPG Link Prohibition**: Standalone M3U playlists (`/api/iptv/m3u`), XMLTV feeds (`/api/iptv/epg`), and direct IPTV player tokens (`canAccessIptv`) are strictly restricted to administrators (`role === "ADMIN"`). Regular members must NEVER be granted standalone links or `canAccessIptv: true` in SQLite to protect upstream tuner bandwidth, avoid stream stability degradation, and prevent playlist leakages.
+- **Admin Users Table Design**: The Member Live TV roster strictly manages Plex Home slots, Live TV & DVR privileges, and Jellyfin Live TV policies. Standalone player / M3U toggle buttons are excluded from member rows.
+
+### 9. Live Stream Session Telemetry & Watch History Integration
 - **Tautulli & PMS Session Scans**: Scans active streams and session history via `/status/sessions/history/all` and Tautulli `get_history`.
 - **Heuristic Live Stream Detection**: Detects live broadcasts using media type (`live`, `channel`, `clip`, `iptv`), channel identifiers, and title patterns (`/world series|mlb|baseball|nfl|ncaa|football|fox|cbs|nbc|abc|espn/i`).
 - **Activity Persistence**: Updates `lastIptvWatchedAt` on the User record to track genuine live TV engagement for slot rotation calculations.

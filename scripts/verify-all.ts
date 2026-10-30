@@ -2794,6 +2794,7 @@ async function runTestSuite() {
             if (!homeUser?.isPlexHomeMember) throw new Error("Expected isPlexHomeMember to be true");
             if (!homeUser?.hasPlexLiveTvAccess) throw new Error("Expected hasPlexLiveTvAccess to be true");
             if (!homeUser?.hasPlexDvrAccess) throw new Error("Expected hasPlexDvrAccess to be true");
+            if (homeUser?.canAccessIptv !== false) throw new Error("Expected canAccessIptv to remain false for non-admin user");
 
             // B. Simulate Anomaly: In Plex Home but Live TV & DVR privileges revoked
             await prisma.user.update({
@@ -2825,6 +2826,7 @@ async function runTestSuite() {
             const fixedHomeUser = await prisma.user.findUnique({ where: { id: testUser.id } });
             if (!fixedHomeUser?.hasPlexLiveTvAccess) throw new Error("Expected hasPlexLiveTvAccess to be true after grant");
             if (!fixedHomeUser?.hasPlexDvrAccess) throw new Error("Expected hasPlexDvrAccess to be true after DVR grant");
+            if (fixedHomeUser?.canAccessIptv !== false) throw new Error("Expected canAccessIptv to remain false for non-admin user");
 
             // D. Jellyfin Live TV Policy Management
             const jfRes = await setJellyfinUserLiveTvAccess(testUser.id, true);
@@ -2832,6 +2834,7 @@ async function runTestSuite() {
 
             const jfUser = await prisma.user.findUnique({ where: { id: testUser.id } });
             if (!jfUser?.hasJellyfinLiveTvAccess) throw new Error("Expected hasJellyfinLiveTvAccess to be true");
+            if (jfUser?.canAccessIptv !== false) throw new Error("Expected canAccessIptv to remain false for non-admin user after Jellyfin policy enable");
 
             // E. Remove from Plex Home
             const removeHomeRes = await removeUserFromPlexHome(testUser.id);
@@ -2917,7 +2920,12 @@ async function runTestSuite() {
 
             // Test Suite 23.D: Plex Home Live TV vs DVR Differentiation & Trevor Scarborough Audit Safeguards
             await prisma.user.deleteMany({
-                where: { OR: [{ username: "trevscar1121" }, { email: "trevsky313@gmail.com" }, { username: "krismo4" }, { email: "krismoulton5@gmail.com" }, { username: "jrj78" }, { email: "jrj016@gmail.com" }] }
+                where: { OR: [
+                    { username: "trevscar1121" }, { email: "trevsky313@gmail.com" },
+                    { username: "krismo4" }, { email: "krismoulton5@gmail.com" },
+                    { username: "jrj78" }, { email: "jrj016@gmail.com" },
+                    { username: "Zestyandstizy" }, { email: "sarahjs84@gmail.com" }
+                ] }
             }).catch(() => {});
 
             const trevorMock = await prisma.user.create({
@@ -2970,6 +2978,24 @@ async function runTestSuite() {
                     hasPlexLiveTvAccess: false,
                     hasPlexDvrAccess: false,
                     lastIptvWatchedAt: new Date(Date.now() - 177 * 86400 * 1000)
+                }
+            });
+
+            // Zestyandstizy (Sarah): Plex Home member with "No Live TV and DVR access" restriction (allowTuners="0")
+            const zestyMock = await prisma.user.create({
+                data: {
+                    username: "Zestyandstizy",
+                    email: "sarahjs84@gmail.com",
+                    name: "Sarah",
+                    plexUsername: "Zestyandstizy",
+                    plexEmail: "sarahjs84@gmail.com",
+                    password: "mock_password_hash_123",
+                    role: "USER",
+                    status: "APPROVED",
+                    isPlexHomeMember: true,
+                    hasPlexLiveTvAccess: false,
+                    hasPlexDvrAccess: false,
+                    lastIptvWatchedAt: new Date(Date.now() - 3 * 86400 * 1000)
                 }
             });
 
@@ -3040,9 +3066,26 @@ async function runTestSuite() {
                 if (krisAudited.daysInactive === null || krisAudited.daysInactive < 170) {
                     throw new Error(`Expected Kris daysInactive around 177d, got ${krisAudited.daysInactive}`);
                 }
+
+                // Zestyandstizy verification: Must strictly reflect No Live TV and DVR access (allowTuners="0")
+                const zestyAudited = auditResult.plexMembers.find(
+                    (m: any) => m.portalarrUserId === zestyMock.id || m.username === "Zestyandstizy"
+                );
+                if (!zestyAudited) {
+                    throw new Error("Zestyandstizy was not found in Plex Home audit report");
+                }
+                if (zestyAudited.allowTuners) {
+                    throw new Error("Zestyandstizy has No Live TV and DVR access: allowTuners must be false");
+                }
+                if (zestyAudited.allowDvr) {
+                    throw new Error("Zestyandstizy has No Live TV and DVR access: allowDvr must be false");
+                }
+                if (!zestyAudited.isPlexHomeMember) {
+                    throw new Error("Zestyandstizy must remain flagged as a Plex Home member");
+                }
             } finally {
                 await prisma.user.deleteMany({
-                    where: { id: { in: [trevorMock.id, krisMock.id, jonathanMock.id] } }
+                    where: { id: { in: [trevorMock.id, krisMock.id, jonathanMock.id, zestyMock.id] } }
                 }).catch(() => {});
             }
         } finally {

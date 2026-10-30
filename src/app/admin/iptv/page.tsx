@@ -18,13 +18,14 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function AdminIptvPage() {
-    const [settingsRes, providersRes, dvrRes, telemetryRes, usersRes, catalogRes] = await Promise.all([
+    const [settingsRes, providersRes, dvrRes, telemetryRes, usersRes, catalogRes, auditRes] = await Promise.all([
         getIptvSettingsAction(),
         getIptvProvidersAction(),
         getDvrConnectionsStatusAction(),
         getIptvLiveTelemetryAction(),
         getIptvUsersAccessAction(),
-        getIptvCatalogAction()
+        getIptvCatalogAction(),
+        auditLiveTvEcosystemAction().catch(() => ({ success: false, data: null }))
     ]);
 
     const initialData = {
@@ -37,7 +38,7 @@ export default async function AdminIptvPage() {
         pendingApprovals: usersRes.success && usersRes.data?.pendingApprovals ? usersRes.data.pendingApprovals : [],
         channels: catalogRes.success && catalogRes.data?.channels ? catalogRes.data.channels : [],
         requests: catalogRes.success && catalogRes.data?.requests ? catalogRes.data.requests : [],
-        auditReport: null
+        auditReport: auditRes && auditRes.success && auditRes.data ? auditRes.data : null
     };
 
     return <AdminIptvClient initialData={initialData} />;

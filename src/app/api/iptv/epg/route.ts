@@ -17,8 +17,8 @@ export async function GET(req: NextRequest) {
             include: { user: true }
         });
 
-        if (!userToken || userToken.isRevoked || !userToken.user) {
-            return new NextResponse("Forbidden: Invalid or revoked token", { status: 403 });
+        if (!userToken || userToken.isRevoked || !userToken.user || userToken.user.role !== "ADMIN") {
+            return new NextResponse("Forbidden: Standalone EPG feeds are restricted to administrators", { status: 403 });
         }
 
         const channels = await prisma.iptvChannel.findMany({

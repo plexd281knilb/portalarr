@@ -1617,11 +1617,19 @@ export async function getPlexSharedServersList(adminToken: string): Promise<Plex
                     const machineId = sAttrs.match(/\bmachineIdentifier="([^"]*)"/i)?.[1] || "";
                     const serverName = sAttrs.match(/\bname="([^"]*)"/i)?.[1] || "Plex Server";
                     const allLibraries = sAttrs.match(/\ballLibraries="([^"]*)"/i)?.[1] === "1";
-                    const allowTuners = /^(?:1|true)$/i.test(sAttrs.match(/\b(?:allowTuners|allow_tuners)="([^"]*)"/i)?.[1] || "") ||
-                                        /^(?:1|true)$/i.test(uAttrs.match(/\b(?:allowTuners|allow_tuners)="([^"]*)"/i)?.[1] || "");
+                    const sRawTuners = sAttrs.match(/\b(?:allowTuners|allow_tuners)="([^"]*)"/i)?.[1] || "";
+                    const uRawTuners = uAttrs.match(/\b(?:allowTuners|allow_tuners)="([^"]*)"/i)?.[1] || "";
+                    const sTunersInt = parseInt(sRawTuners, 10);
+                    const uTunersInt = parseInt(uRawTuners, 10);
+
+                    // Plex 3-tier enum: 0 = No Live TV & DVR | 1 = Allow Live TV only | 2 = Allow Live TV and DVR access
+                    const allowTuners = sTunersInt >= 1 || uTunersInt >= 1 ||
+                                        /^(?:1|true)$/i.test(sRawTuners) ||
+                                        /^(?:1|true)$/i.test(uRawTuners);
                     const allowChannels = /^(?:1|true)$/i.test(sAttrs.match(/\b(?:allowChannels|allow_channels)="([^"]*)"/i)?.[1] || "") ||
                                           /^(?:1|true)$/i.test(uAttrs.match(/\b(?:allowChannels|allow_channels)="([^"]*)"/i)?.[1] || "");
-                    const allowDvr = /^(?:1|true)$/i.test(sAttrs.match(/\b(?:allowDvr|allow_dvr|allowDVR|dvr)="([^"]*)"/i)?.[1] || "") ||
+                    const allowDvr = sTunersInt === 2 || uTunersInt === 2 ||
+                                     /^(?:1|true)$/i.test(sAttrs.match(/\b(?:allowDvr|allow_dvr|allowDVR|dvr)="([^"]*)"/i)?.[1] || "") ||
                                      /^(?:1|true)$/i.test(uAttrs.match(/\b(?:allowDvr|allow_dvr|allowDVR|dvr)="([^"]*)"/i)?.[1] || "");
                     const allowSync = /^(?:1|true)$/i.test(sAttrs.match(/\b(?:allowSync|allow_sync)="([^"]*)"/i)?.[1] || "") ||
                                       /^(?:1|true)$/i.test(uAttrs.match(/\b(?:allowSync|allow_sync)="([^"]*)"/i)?.[1] || "");
@@ -1678,11 +1686,12 @@ export async function getPlexSharedServersList(adminToken: string): Promise<Plex
     for (const srv of servers) {
         const srvId = srv.clientIdentifier;
         if (!srvId) continue;
+        const srvToken = srv.accessToken || adminToken;
         try {
-            const res = await fetch(`https://plex.tv/api/servers/${encodeURIComponent(srvId)}/shared_servers?X-Plex-Token=${encodeURIComponent(adminToken)}`, {
+            const res = await fetch(`https://plex.tv/api/servers/${encodeURIComponent(srvId)}/shared_servers?X-Plex-Token=${encodeURIComponent(srvToken)}`, {
                 headers: {
                     "Accept": "application/xml, text/xml, */*",
-                    "X-Plex-Token": adminToken,
+                    "X-Plex-Token": srvToken,
                     "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
                 },
                 cache: "no-store"
@@ -1700,9 +1709,12 @@ export async function getPlexSharedServersList(adminToken: string): Promise<Plex
                     const invitedEmail = attrs.match(/\binvitedEmail="([^"]*)"/i)?.[1] || email;
                     const userId = parseInt(attrs.match(/\buserID="([^"]*)"/i)?.[1] || "0", 10);
                     const allLibraries = attrs.match(/\ballLibraries="([^"]*)"/i)?.[1] === "1";
-                    const allowTuners = /^(?:1|true)$/i.test(attrs.match(/\b(?:allowTuners|allow_tuners)="([^"]*)"/i)?.[1] || "");
+                    const rawTuners = attrs.match(/\b(?:allowTuners|allow_tuners)="([^"]*)"/i)?.[1] || "";
+                    const tunersInt = parseInt(rawTuners, 10);
+                    // Plex 3-tier enum: 0 = No Live TV & DVR | 1 = Allow Live TV only | 2 = Allow Live TV and DVR access
+                    const allowTuners = tunersInt >= 1 || /^(?:1|true)$/i.test(rawTuners);
                     const allowChannels = /^(?:1|true)$/i.test(attrs.match(/\b(?:allowChannels|allow_channels)="([^"]*)"/i)?.[1] || "");
-                    const allowDvr = /^(?:1|true)$/i.test(attrs.match(/\b(?:allowDvr|allow_dvr|allowDVR|dvr)="([^"]*)"/i)?.[1] || "");
+                    const allowDvr = tunersInt === 2 || /^(?:1|true)$/i.test(attrs.match(/\b(?:allowDvr|allow_dvr|allowDVR|dvr)="([^"]*)"/i)?.[1] || "");
                     const allowSync = /^(?:1|true)$/i.test(attrs.match(/\b(?:allowSync|allow_sync)="([^"]*)"/i)?.[1] || "");
                     const serverName = attrs.match(/\bname="([^"]*)"/i)?.[1] || srv.name;
 
