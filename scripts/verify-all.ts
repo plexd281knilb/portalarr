@@ -3109,6 +3109,41 @@ async function runTestSuite() {
 
             delete process.env.PORTALARR_TEST_USER_ID;
 
+            // Test Suite 23.F: Dispatcharr Duplicate Channel Cleanup & Multi-Source Stream Consolidation
+            const { cleanupDispatcharrDuplicatesAction } = await import("../src/app/iptv-actions");
+            const { cleanupAndMergeDispatcharrChannels, normalizeChannelNameForDedup, cleanChannelNameForDisplay } = await import("../src/lib/iptv/dispatcharr-client");
+
+            // 1. Name normalization & display cleaner unit tests
+            const norm1 = normalizeChannelNameForDedup("US| NBC 5 DALLAS (HD)");
+            if (norm1 !== "nbc 5 dallas") {
+                throw new Error(`Expected 'nbc 5 dallas', got '${norm1}'`);
+            }
+            const norm2 = normalizeChannelNameForDedup("✦●✦ SEC NETWORK HD [USA]");
+            if (norm2 !== "sec network") {
+                throw new Error(`Expected 'sec network', got '${norm2}'`);
+            }
+            const cleanDisplay = cleanChannelNameForDisplay("US| NBC 5 DALLAS [USA]");
+            if (cleanDisplay !== "NBC 5 DALLAS") {
+                throw new Error(`Expected 'NBC 5 DALLAS', got '${cleanDisplay}'`);
+            }
+
+            // 2. Security gating: Non-admin invocation must be blocked
+            process.env.PORTALARR_TEST_USER_ID = testUser.id; // standard non-admin test user
+            const forbiddenCleanup = await cleanupDispatcharrDuplicatesAction();
+            if (forbiddenCleanup.success || !forbiddenCleanup.error?.toLowerCase().includes("forbidden")) {
+                throw new Error(`Expected non-admin cleanup to be blocked with Forbidden, got: ${JSON.stringify(forbiddenCleanup)}`);
+            }
+            delete process.env.PORTALARR_TEST_USER_ID;
+
+            // 3. Admin invocation: Deduplication engine execution
+            const adminCleanupRes = await cleanupDispatcharrDuplicatesAction();
+            if (!adminCleanupRes.success || !adminCleanupRes.data) {
+                throw new Error(`Expected admin cleanup to succeed, got: ${JSON.stringify(adminCleanupRes)}`);
+            }
+            if (typeof adminCleanupRes.data.survivingChannelsCount !== "number") {
+                throw new Error("Expected survivingChannelsCount number in cleanup response");
+            }
+
             // Test Suite 23.D: Plex Home Live TV vs DVR Differentiation & Trevor Scarborough Audit Safeguards
             await prisma.user.deleteMany({
                 where: { OR: [

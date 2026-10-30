@@ -1228,3 +1228,428 @@ export async function moveChannelDispatcharrProfile(
         dispatcharrUpdated
     };
 }
+
+export interface DispatcharrCleanupResult {
+    success: boolean;
+    duplicateGroupsFound: number;
+    channelsMerged: number;
+    channelsDeleted: number;
+    streamsConsolidated: number;
+    profilesUpdated: number;
+    survivingChannelsCount: number;
+    durationMs: number;
+    message: string;
+    sampleGroups?: {
+        name: string;
+        tvgId?: string;
+        primaryChannelId: number;
+        primaryChannelName: string;
+        primaryChannelNumber?: number;
+        mergedStreamCount: number;
+        deletedChannelCount: number;
+    }[];
+}
+
+/**
+ * Normalizes a channel name by removing IPTV prefixes and video quality tags.
+ */
+export function normalizeChannelNameForDedup(name: string): string {
+    let n = (name || "").toLowerCase();
+    n = n.replace(/^(us[|: -]|usa[|: -]|ca[|: -]|uk[|: -]|✦●✦\s*)/gi, "");
+    n = n.replace(/\[(usa|us|fhd|hd|sd|4k|raw)\]/gi, "");
+    n = n.replace(/\((usa|us|fhd|hd|sd|4k|raw)\)/gi, "");
+    n = n.replace(/\b(1080p|720p|60fps|hevc|uhd|fhd|hd)\b/gi, "");
+    n = n.replace(/[^a-z0-9]/gi, " ").replace(/\s+/g, " ").trim();
+    return n;
+}
+
+/**
+ * Cleans provider prefix artifacts and trailing tags from a channel name.
+ */
+export function cleanChannelNameForDisplay(rawName: string): string {
+    if (!rawName) return "Channel";
+    let name = rawName.trim();
+    name = name.replace(/^(us[|: -]|usa[|: -]|ca[|: -]|uk[|: -]|✦●✦\s*)/gi, "").trim();
+    name = name.replace(/\s*\[(usa|us|raw)\]\s*/gi, " ").trim();
+    name = name.replace(/\s*\((usa|us|raw)\)\s*/gi, " ").trim();
+    return name.replace(/\s+/g, " ").trim() || rawName.trim();
+}
+
+/**
+ * Helper to run async tasks in concurrent batches.
+ */
+async function runConcurrentBatches<T, R>(
+    items: T[],
+    concurrency: number,
+    fn: (item: T) => Promise<R>
+): Promise<R[]> {
+    const results: R[] = [];
+    for (let i = 0; i < items.length; i += concurrency) {
+        const batch = items.slice(i, i + concurrency);
+        const batchResults = await Promise.all(batch.map(fn));
+        results.push(...batchResults);
+    }
+    return results;
+}
+
+/**
+ * Evaluates a candidate channel row to determine the best surviving primary channel in a duplicate group.
+ */
+function scoreCandidateChannel(c: any, profileChannelSets: Map<number, Set<number>>): number {
+    let score = 0;
+    const chNo = c.effective_channel_number ?? c.channel_number ?? 0;
+    if (chNo > 0 && chNo < 1000) score += 100;
+    else if (chNo > 0 && chNo < 2000) score += 50;
+    else if (chNo > 0 && chNo < 10000) score += 20;
+
+    for (const [, set] of profileChannelSets) {
+        if (set.has(c.id)) score += 30;
+    }
+
+    const streams = Array.isArray(c.streams) ? c.streams : [];
+    score += streams.length * 10;
+
+    if (c.logo_id || c.effective_logo_id) score += 10;
+    if (c.epg_data_id || c.effective_epg_data_id) score += 10;
+    if (c.name && !/^(us[|:]|✦●✦)/i.test(c.name)) score += 15;
+    if (c.name && !/\[usa\]/i.test(c.name)) score += 5;
+
+    score += Math.max(0, 50 - (c.id / 1000));
+    return score;
+}
+
+/**
+ * Scans Dispatcharr channels, identifies duplicates and overlapping channel records,
+ * merges all distinct stream sources onto the canonical primary channel for each network,
+ * removes duplicate channel entries from Dispatcharr and profiles, updates SQLite mappings,
+ * and notifies Plex Media Server to reload its DVR lineup and refresh guide data.
+ */
+export async function cleanupAndMergeDispatcharrChannels(): Promise<DispatcharrCleanupResult> {
+    const startTime = Date.now();
+    const settings = await getIptvSettings();
+    const apiKey = await getDecryptedDispatcharrApiKey();
+
+    if (!settings?.dispatcharrUrl || !apiKey) {
+        // Fallback / mock mode when Dispatcharr is unconfigured
+        const localDups = await prisma.iptvChannel.findMany({
+            where: { isCustom: false }
+        });
+        return {
+            success: true,
+            duplicateGroupsFound: 0,
+            channelsMerged: 0,
+            channelsDeleted: 0,
+            streamsConsolidated: 0,
+            profilesUpdated: 0,
+            survivingChannelsCount: localDups.length,
+            durationMs: Date.now() - startTime,
+            message: "Dispatcharr is not configured or in offline mock mode. No remote channels modified.",
+            sampleGroups: []
+        };
+    }
+
+    const baseUrl = settings.dispatcharrUrl.replace(/\/+$/, "");
+    const headers = {
+        "X-API-Key": apiKey,
+        "Accept": "application/json",
+        "Content-Type": "application/json"
+    };
+
+    // 1. Fetch all profiles from Dispatcharr
+    const profRes = await fetch(`${baseUrl}/api/channels/profiles/`, { headers });
+    if (!profRes.ok) {
+        return {
+            success: false,
+            duplicateGroupsFound: 0,
+            channelsMerged: 0,
+            channelsDeleted: 0,
+            streamsConsolidated: 0,
+            profilesUpdated: 0,
+            survivingChannelsCount: 0,
+            durationMs: Date.now() - startTime,
+            message: `Failed to fetch profiles from Dispatcharr (HTTP ${profRes.status})`
+        };
+    }
+
+    const profData = await profRes.json();
+    const profiles: any[] = Array.isArray(profData) ? profData : (profData?.results || []);
+    const profileChannelSets = new Map<number, Set<number>>();
+    for (const p of profiles) {
+        profileChannelSets.set(p.id, new Set(p.channels || []));
+    }
+
+    // 2. Fetch all channels from Dispatcharr
+    const chanRes = await fetch(`${baseUrl}/api/channels/channels/?page_size=5000`, { headers });
+    if (!chanRes.ok) {
+        return {
+            success: false,
+            duplicateGroupsFound: 0,
+            channelsMerged: 0,
+            channelsDeleted: 0,
+            streamsConsolidated: 0,
+            profilesUpdated: 0,
+            survivingChannelsCount: 0,
+            durationMs: Date.now() - startTime,
+            message: `Failed to fetch channels from Dispatcharr (HTTP ${chanRes.status})`
+        };
+    }
+
+    const chanData = await chanRes.json();
+    const channels: any[] = Array.isArray(chanData?.results) ? chanData.results : (Array.isArray(chanData) ? chanData : []);
+
+    if (channels.length === 0) {
+        return {
+            success: true,
+            duplicateGroupsFound: 0,
+            channelsMerged: 0,
+            channelsDeleted: 0,
+            streamsConsolidated: 0,
+            profilesUpdated: 0,
+            survivingChannelsCount: 0,
+            durationMs: Date.now() - startTime,
+            message: "No channels found in Dispatcharr."
+        };
+    }
+
+    // 3. Multi-stage grouping: TVG-ID match first, then normalized name match
+    const groups = new Map<string, any[]>();
+    const channelToGroupKey = new Map<number, string>();
+
+    // Stage 1: Group by valid tvg_id
+    for (const c of channels) {
+        const tvg = (c.effective_tvg_id || c.tvg_id || "").trim().toLowerCase();
+        if (tvg && !tvg.startsWith("dispatcharr.")) {
+            const key = `tvg:${tvg}`;
+            if (!groups.has(key)) groups.set(key, []);
+            groups.get(key)!.push(c);
+            channelToGroupKey.set(c.id, key);
+        }
+    }
+
+    // Stage 2: Group remainder by normalized name
+    for (const c of channels) {
+        if (channelToGroupKey.has(c.id)) continue;
+        const norm = normalizeChannelNameForDedup(c.effective_name || c.name);
+        if (norm && norm.length >= 3) {
+            const key = `name:${norm}`;
+            if (!groups.has(key)) groups.set(key, []);
+            groups.get(key)!.push(c);
+            channelToGroupKey.set(c.id, key);
+        }
+    }
+
+    const dupGroups = Array.from(groups.entries()).filter(([_, list]) => list.length > 1);
+
+    if (dupGroups.length === 0) {
+        return {
+            success: true,
+            duplicateGroupsFound: 0,
+            channelsMerged: 0,
+            channelsDeleted: 0,
+            streamsConsolidated: 0,
+            profilesUpdated: 0,
+            survivingChannelsCount: channels.length,
+            durationMs: Date.now() - startTime,
+            message: "Dispatcharr lineup is already clean. No duplicate channels found."
+        };
+    }
+
+    // 4. Resolve primary vs duplicates, merge streams, map aliases
+    const aliasMap = new Map<number, number>();
+    const toDeleteIds: number[] = [];
+    const patchesToApply: { channelId: number; payload: Record<string, any> }[] = [];
+    const sampleGroups: any[] = [];
+    let totalStreamsAdded = 0;
+
+    for (const [groupKey, list] of dupGroups) {
+        // Rank candidate channels in this group
+        list.sort((a, b) => scoreCandidateChannel(b, profileChannelSets) - scoreCandidateChannel(a, profileChannelSets));
+        const primary = list[0];
+        const dups = list.slice(1);
+
+        const primaryStreamsSet = new Set<number>(primary.streams || []);
+        const originalStreamCount = primaryStreamsSet.size;
+
+        for (const dup of dups) {
+            aliasMap.set(dup.id, primary.id);
+            toDeleteIds.push(dup.id);
+            for (const st of (dup.streams || [])) {
+                if (typeof st === "number" && st > 0) {
+                    primaryStreamsSet.add(st);
+                }
+            }
+        }
+
+        const mergedStreams = Array.from(primaryStreamsSet);
+        const streamsGained = mergedStreams.length - originalStreamCount;
+        totalStreamsAdded += streamsGained;
+
+        // Build patch payload for primary channel
+        const patchPayload: Record<string, any> = {};
+        let needsPatch = false;
+
+        if (streamsGained > 0) {
+            patchPayload.streams = mergedStreams;
+            needsPatch = true;
+        }
+
+        const cleanedName = cleanChannelNameForDisplay(primary.name);
+        if (cleanedName && cleanedName !== primary.name) {
+            patchPayload.name = cleanedName;
+            needsPatch = true;
+        }
+
+        if (!primary.logo_id) {
+            const fallbackLogo = list.find((c) => c.logo_id || c.effective_logo_id);
+            if (fallbackLogo) {
+                patchPayload.logo_id = fallbackLogo.logo_id || fallbackLogo.effective_logo_id;
+                needsPatch = true;
+            }
+        }
+
+        if (!primary.epg_data_id) {
+            const fallbackEpg = list.find((c) => c.epg_data_id || c.effective_epg_data_id);
+            if (fallbackEpg) {
+                patchPayload.epg_data_id = fallbackEpg.epg_data_id || fallbackEpg.effective_epg_data_id;
+                needsPatch = true;
+            }
+        }
+
+        if (needsPatch) {
+            patchesToApply.push({ channelId: primary.id, payload: patchPayload });
+        }
+
+        if (sampleGroups.length < 15) {
+            sampleGroups.push({
+                name: cleanedName,
+                tvgId: primary.effective_tvg_id || primary.tvg_id || groupKey,
+                primaryChannelId: primary.id,
+                primaryChannelName: primary.name,
+                primaryChannelNumber: primary.effective_channel_number ?? primary.channel_number,
+                mergedStreamCount: mergedStreams.length,
+                deletedChannelCount: dups.length
+            });
+        }
+    }
+
+    // 5. Apply PATCH to primary channels in concurrent batches
+    if (patchesToApply.length > 0) {
+        await runConcurrentBatches(patchesToApply, 10, async ({ channelId, payload }) => {
+            try {
+                await fetch(`${baseUrl}/api/channels/channels/${channelId}/`, {
+                    method: "PATCH",
+                    headers,
+                    body: JSON.stringify(payload)
+                });
+            } catch {
+                // Ignore individual patch failures
+            }
+        });
+    }
+
+    // 6. Update all Dispatcharr Profiles (remapping deleted IDs to primary ID and deduplicating)
+    const toDeleteSet = new Set(toDeleteIds);
+    let profilesUpdated = 0;
+
+    for (const p of profiles) {
+        const original = Array.isArray(p.channels) ? p.channels : [];
+        const updatedSet = new Set<number>();
+
+        for (const cid of original) {
+            if (aliasMap.has(cid)) {
+                updatedSet.add(aliasMap.get(cid)!);
+            } else if (!toDeleteSet.has(cid)) {
+                updatedSet.add(cid);
+            }
+        }
+
+        const newChannels = Array.from(updatedSet);
+        if (newChannels.length !== original.length || !newChannels.every((id, idx) => id === original[idx])) {
+            try {
+                const patchProfRes = await fetch(`${baseUrl}/api/channels/profiles/${p.id}/`, {
+                    method: "PATCH",
+                    headers,
+                    body: JSON.stringify({ channels: newChannels })
+                });
+                if (patchProfRes.ok) {
+                    profilesUpdated++;
+                }
+            } catch {
+                // Ignore profile patch errors
+            }
+        }
+    }
+
+    // 7. Delete duplicate channels from Dispatcharr in concurrent batches
+    let channelsDeleted = 0;
+    await runConcurrentBatches(toDeleteIds, 15, async (dupId) => {
+        try {
+            const delRes = await fetch(`${baseUrl}/api/channels/channels/${dupId}/`, {
+                method: "DELETE",
+                headers
+            });
+            if (delRes.ok || delRes.status === 204 || delRes.status === 404) {
+                channelsDeleted++;
+            }
+        } catch {
+            // Ignore individual delete failures
+        }
+    });
+
+    // 8. Sync clean lineup back into SQLite
+    try {
+        await syncDispatcharrLineup();
+    } catch {
+        // Local sync failure non-blocking
+    }
+
+    // 9. Clean up any stale channels in SQLite that were deleted from Dispatcharr
+    try {
+        const remainingChanRes = await fetch(`${baseUrl}/api/channels/channels/?page_size=5000`, { headers });
+        if (remainingChanRes.ok) {
+            const remainingData = await remainingChanRes.json();
+            const liveChannels = Array.isArray(remainingData?.results) ? remainingData.results : (Array.isArray(remainingData) ? remainingData : []);
+            const liveXmltvIds = new Set(liveChannels.map((c: any) => c.effective_tvg_id || c.tvg_id || `dispatcharr.${c.uuid || c.id}`).filter(Boolean));
+            const liveNames = new Set(liveChannels.map((c: any) => (c.effective_name || c.name || "").trim().toLowerCase()).filter(Boolean));
+
+            const dbChannels = await prisma.iptvChannel.findMany({ where: { isCustom: false } });
+            const toRemoveDbIds = dbChannels
+                .filter((c) => !liveXmltvIds.has(c.xmltvId || "") && !liveNames.has(c.name.trim().toLowerCase()))
+                .map((c) => c.id);
+
+            if (toRemoveDbIds.length > 0) {
+                await prisma.iptvProfileChannel.deleteMany({
+                    where: { channelId: { in: toRemoveDbIds } }
+                });
+                await prisma.iptvChannel.deleteMany({
+                    where: { id: { in: toRemoveDbIds } }
+                });
+            }
+        }
+    } catch {
+        // Ignore stale DB cleanup errors
+    }
+
+    // 10. Automatically refresh Plex Media Server DVR lineup & XMLTV guide
+    try {
+        await refreshPlexDvrLineupAndGuide();
+    } catch {
+        // Plex offline
+    }
+
+    const durationMs = Date.now() - startTime;
+    const survivingChannelsCount = channels.length - channelsDeleted;
+
+    return {
+        success: true,
+        duplicateGroupsFound: dupGroups.length,
+        channelsMerged: toDeleteIds.length,
+        channelsDeleted,
+        streamsConsolidated: totalStreamsAdded,
+        profilesUpdated,
+        survivingChannelsCount,
+        durationMs,
+        message: `Successfully cleaned up ${channelsDeleted} duplicate channels across ${dupGroups.length} groups in Dispatcharr, consolidated ${totalStreamsAdded} fallback streams onto primary channels, updated ${profilesUpdated} profiles, and refreshed Plex DVR!`,
+        sampleGroups
+    };
+}

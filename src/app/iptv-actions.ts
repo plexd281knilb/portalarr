@@ -1757,3 +1757,42 @@ export async function refreshPlexDvrAction() {
         return { success: false, serversUpdated: 0, dvrsRefreshed: 0, message: err?.message || "Failed to refresh Plex DVR" };
     }
 }
+
+/**
+ * Scans Dispatcharr for duplicate and overlapping channels, consolidates all distinct stream sources
+ * onto canonical primary channels, removes duplicate rows, cleans profiles, and refreshes Plex DVR.
+ */
+export async function cleanupDispatcharrDuplicatesAction(): Promise<{
+    success: boolean;
+    data?: any;
+    error?: string;
+    message: string;
+}> {
+    try {
+        const admin = await verifySessionAdmin();
+        const { cleanupAndMergeDispatcharrChannels } = await import("@/lib/iptv/dispatcharr-client");
+        const res = await cleanupAndMergeDispatcharrChannels();
+
+        if (res.success) {
+            logger.addLog(
+                "INFO",
+                "SYSTEM",
+                `Admin "${admin.username}" executed Dispatcharr duplicate cleanup: ${res.message}`
+            );
+            safeRevalidate("/channels");
+            safeRevalidate("/admin/iptv");
+        }
+
+        return {
+            success: res.success,
+            data: res,
+            message: res.message
+        };
+    } catch (err: any) {
+        return {
+            success: false,
+            error: err?.message || "Failed to clean up Dispatcharr duplicate channels",
+            message: err?.message || "Failed to clean up Dispatcharr duplicate channels"
+        };
+    }
+}

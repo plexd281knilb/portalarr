@@ -35,6 +35,7 @@ import {
     saveIptvSettingsAction,
     testDispatcharrConnectionAction,
     syncDispatcharrLineupAction,
+    cleanupDispatcharrDuplicatesAction,
     refreshPlexDvrAction,
     requestAddChannelToProfileAction,
     requestMoveChannelProfileAction,
@@ -341,6 +342,18 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                 showMsg(res.data.message);
             } else {
                 showMsg(res.error || "Sync failed", "error");
+            }
+        });
+    };
+
+    const handleCleanupDuplicates = () => {
+        startTransition(async () => {
+            showMsg("Scanning Dispatcharr for duplicate channels and merging sources...");
+            const res = await cleanupDispatcharrDuplicatesAction();
+            if (res.success && res.data) {
+                showMsg(res.data.message);
+            } else {
+                showMsg(res.error || "Duplicate cleanup failed", "error");
             }
         });
     };
@@ -941,6 +954,30 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                 </div>
                             </div>
                         </form>
+                    </div>
+
+                    {/* Lineup Optimization & Multi-Source Stream Consolidation Card */}
+                    <div className="p-5 rounded-2xl border border-teal-500/30 bg-teal-500/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="space-y-1">
+                            <h4 className="font-bold text-sm text-foreground flex items-center gap-2">
+                                <Sparkles className="h-4 w-4 text-teal-400" />
+                                Lineup Deduplication & Multi-Source Stream Consolidation
+                            </h4>
+                            <p className="text-xs text-muted-foreground max-w-2xl leading-relaxed">
+                                Scans all Dispatcharr channels, identifies duplicates across TVG-IDs and normalized station names, consolidates overlapping stream sources onto primary channels for automatic failover, cleans up redundant channel rows across all 7 profiles, and triggers a Plex DVR lineup and guide reload.
+                            </p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                            <Button
+                                type="button"
+                                onClick={handleCleanupDuplicates}
+                                disabled={isPending}
+                                className="h-9 px-4 text-xs font-bold bg-teal-600 hover:bg-teal-500 text-white rounded-xl shadow-sm gap-2"
+                            >
+                                <Sparkles className="h-3.5 w-3.5" />
+                                {isPending ? "Cleaning & Consolidating..." : "Clean Duplicates & Merge Sources"}
+                            </Button>
+                        </div>
                     </div>
 
                     {/* Dispatcharr Profiles Grid */}

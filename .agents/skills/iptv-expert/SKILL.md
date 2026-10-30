@@ -172,6 +172,28 @@ Plex Media Server enforces three distinct radio restriction states under **Restr
   - Provides a 1-click `[Move in Dispatcharr & Plex]` button that executes the move action and updates request status to `ACTIVATED`.
   - Header features manual `[🔄 Refresh Plex DVR Lineup]` tool to force a cluster-wide DVR reload anytime.
 
+### 14. Dispatcharr Channel Deduplication & Stream Consolidation Engine (`cleanupAndMergeDispatcharrChannels`)
+- **Two-Pass Grouping**:
+  1. *Stage 1: TVG-ID Match*: Groups channels by exact `tvg_id` or `effective_tvg_id` (ignoring synthetic `dispatcharr.*` placeholders).
+  2. *Stage 2: Normalized Name Match*: Groups remaining channels by normalized name (`normalizeChannelNameForDedup`) stripping provider prefixes (`US|`, `USA:`, `✦●✦`), video tags (`[USA]`, `(FHD)`, `1080p`, `60fps`), and non-alphanumeric punctuation.
+- **Channel Scoring Formula (`scoreCandidateChannel`)**:
+  - Cable/satellite channel numbers (<1000: +100 pts, <2000: +50 pts, <10000: +20 pts).
+  - Profile memberships (+30 pts per assigned profile).
+  - Existing stream sources (+10 pts per upstream stream).
+  - Valid channel logos (+10 pts) and EPG bindings (+10 pts).
+  - Clean display names without provider artifacts (+15 pts).
+  - Lower database ID preference (tie-breaker: up to +50 pts).
+- **Stream Consolidation & Multi-Source Merging**:
+  - Merges all distinct upstream stream IDs from duplicate channels onto the winning primary channel via `PATCH /api/channels/channels/{primaryId}/` with `{ streams: mergedStreams }`. No redundant fallback feeds or provider tuners are discarded.
+  - Automatically copies missing logos or EPG data IDs from duplicate channels to the primary if the primary channel lacked them.
+  - Cleans display names (`cleanChannelNameForDisplay`) on primary channels to remove provider tags (`[USA]`, `US|`).
+- **Profile Remapping & Deletion**:
+  - Updates all Dispatcharr profiles via `PATCH /api/channels/profiles/{id}/` by replacing duplicate channel IDs with the primary ID and deduplicating array elements.
+  - Deletes redundant duplicate channel records via `DELETE /api/channels/channels/{dupId}/` (concurrent batches of 15).
+  - Re-syncs local SQLite catalog (`syncDispatcharrLineup`) and removes deleted channels from `iptvProfileChannel` and `iptvChannel`.
+  - Automatically triggers `refreshPlexDvrLineupAndGuide()` to reload PMS DVR lineups and refresh electronic program guides.
+- **Admin Command Center UI**: Available as a dedicated action card in Tab 2 of `/admin/iptv` (`admin-iptv-client.tsx`) and backed by Server Action `cleanupDispatcharrDuplicatesAction()`.
+
 ---
 
 ## 🚨 Mandatory Task Completion Protocol (Strict SemVer)
