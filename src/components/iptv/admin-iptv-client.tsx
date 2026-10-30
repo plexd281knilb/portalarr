@@ -96,13 +96,11 @@ function mergeUsersWithAudit(users: any[], auditReport: any): any[] {
         // Real privileges: From Plex API audit or explicitly granted in DB
         const liveTvGranted = Boolean(
             u.hasPlexLiveTvAccess ||
-            match?.allowTuners ||
-            match?.allowChannels
+            match?.allowTuners
         );
 
         const dvrGranted = Boolean(
-            u.hasPlexDvrAccess ||
-            match?.allowDvr
+            liveTvGranted && (u.hasPlexDvrAccess || match?.allowDvr)
         );
 
         const missingLiveTv = Boolean(isPlexHome && !isOwner && !liveTvGranted);

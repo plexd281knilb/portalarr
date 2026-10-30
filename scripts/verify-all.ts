@@ -2917,7 +2917,7 @@ async function runTestSuite() {
 
             // Test Suite 23.D: Plex Home Live TV vs DVR Differentiation & Trevor Scarborough Audit Safeguards
             await prisma.user.deleteMany({
-                where: { OR: [{ username: "trevscar1121" }, { email: "trevsky313@gmail.com" }, { username: "krismo4" }, { email: "krismoulton5@gmail.com" }] }
+                where: { OR: [{ username: "trevscar1121" }, { email: "trevsky313@gmail.com" }, { username: "krismo4" }, { email: "krismoulton5@gmail.com" }, { username: "jrj78" }, { email: "jrj016@gmail.com" }] }
             }).catch(() => {});
 
             const trevorMock = await prisma.user.create({
@@ -2934,6 +2934,24 @@ async function runTestSuite() {
                     hasPlexLiveTvAccess: true,
                     hasPlexDvrAccess: true,
                     lastIptvWatchedAt: new Date(Date.now() - 20 * 3600 * 1000)
+                }
+            });
+
+            // Jonathan Juliano: Plex Home member with "Allow Live TV and DVR access" restriction (Tier 3)
+            const jonathanMock = await prisma.user.create({
+                data: {
+                    username: "jrj78",
+                    email: "jrj016@gmail.com",
+                    name: "Jonathan Juliano",
+                    plexUsername: "jrj78",
+                    plexEmail: "jrj016@gmail.com",
+                    password: "mock_password_hash_123",
+                    role: "USER",
+                    status: "APPROVED",
+                    isPlexHomeMember: true,
+                    hasPlexLiveTvAccess: true,
+                    hasPlexDvrAccess: true,
+                    lastIptvWatchedAt: new Date(Date.now() - 4 * 86400 * 1000)
                 }
             });
 
@@ -2980,6 +2998,29 @@ async function runTestSuite() {
                     throw new Error(`Expected Trevor daysInactive <= 1, got ${trevorAudited.daysInactive}`);
                 }
 
+                // Jonathan Juliano verification: Must strictly reflect Live TV + DVR access (Tier 3)
+                const jonathanAudited = auditResult.plexMembers.find(
+                    (m: any) => m.portalarrUserId === jonathanMock.id || m.username === "jrj78"
+                );
+                if (!jonathanAudited) {
+                    throw new Error("Jonathan Juliano was not found in Plex Home audit report");
+                }
+                if (!jonathanAudited.allowTuners) {
+                    throw new Error("Jonathan Juliano must have allowTuners=true");
+                }
+                if (!jonathanAudited.allowDvr) {
+                    throw new Error("Jonathan Juliano must have allowDvr=true (Allow Live TV and DVR access)");
+                }
+                if (jonathanAudited.missingLiveTvPrivilege) {
+                    throw new Error("Jonathan Juliano must NOT be flagged as missing Live TV privilege");
+                }
+                if (jonathanAudited.missingDvrPrivilege) {
+                    throw new Error("Jonathan Juliano must NOT be flagged as missing DVR privilege");
+                }
+                if (jonathanAudited.daysInactive === null || jonathanAudited.daysInactive > 5) {
+                    throw new Error(`Expected Jonathan daysInactive around 4d, got ${jonathanAudited.daysInactive}`);
+                }
+
                 // Kris Moulton verification: Must strictly reflect No Live TV and DVR access
                 const krisAudited = auditResult.plexMembers.find(
                     (m: any) => m.portalarrUserId === krisMock.id || m.username === "krismo4"
@@ -3001,7 +3042,7 @@ async function runTestSuite() {
                 }
             } finally {
                 await prisma.user.deleteMany({
-                    where: { id: { in: [trevorMock.id, krisMock.id] } }
+                    where: { id: { in: [trevorMock.id, krisMock.id, jonathanMock.id] } }
                 }).catch(() => {});
             }
         } finally {

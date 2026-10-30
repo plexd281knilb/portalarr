@@ -494,16 +494,16 @@ export async function auditPlexHomeAndLiveTvPrivileges(): Promise<LiveTvEcosyste
                     const thumb = attrs.match(/\bthumb="([^"]*)"/i)?.[1] || undefined;
                     const isHome = attrs.match(/\bhome="([^"]*)"/i)?.[1] === "1";
 
-                    let allowTuners = attrs.match(/\ballowTuners="([^"]*)"/i)?.[1] === "1";
+                    let allowTuners = /^(?:1|true)$/i.test(attrs.match(/\b(?:allowTuners|allow_tuners)="([^"]*)"/i)?.[1] || "");
                     // Plex 3-tier: 1. No Live TV & DVR | 2. Allow Live TV only | 3. Allow Live TV and DVR access
-                    let allowDvr = attrs.match(/\ballowDvr="([^"]*)"/i)?.[1] === "1";
+                    let allowDvr = /^(?:1|true)$/i.test(attrs.match(/\b(?:allowDvr|allow_dvr|allowDVR|dvr)="([^"]*)"/i)?.[1] || "");
 
                     if (inner) {
                         const srvMatches = inner.matchAll(/<Server\b([^>]*?)(?:\/>|>[\s\S]*?<\/Server>)/gi);
                         for (const sm of srvMatches) {
                             const sAttrs = sm[1] || "";
-                            if (sAttrs.match(/\ballowTuners="([^"]*)"/i)?.[1] === "1") allowTuners = true;
-                            if (sAttrs.match(/\ballowDvr="([^"]*)"/i)?.[1] === "1") allowDvr = true;
+                            if (/^(?:1|true)$/i.test(sAttrs.match(/\b(?:allowTuners|allow_tuners)="([^"]*)"/i)?.[1] || "")) allowTuners = true;
+                            if (/^(?:1|true)$/i.test(sAttrs.match(/\b(?:allowDvr|allow_dvr|allowDVR|dvr)="([^"]*)"/i)?.[1] || "")) allowDvr = true;
                         }
                     }
 
@@ -558,10 +558,10 @@ export async function auditPlexHomeAndLiveTvPrivileges(): Promise<LiveTvEcosyste
                     const title = String(hu.title || hu.friendlyName || username || "Home Member");
                     const isAdmin = Boolean(hu.admin);
 
-                    const huAllowTuners = Boolean(hu.allowTuners || hu.settings?.allowTuners);
-                    const huAllowDvr = Boolean(hu.allowDvr || hu.settings?.allowDvr);
+                    const huAllowTuners = Boolean(hu.allowTuners || hu.settings?.allowTuners || hu.allow_tuners);
+                    const huAllowDvr = Boolean(hu.allowDvr || hu.settings?.allowDvr || hu.allow_dvr || hu.dvr || hu.settings?.dvr);
 
-                    // Find existing entry in rawPlexMap by id, email, or username
+                    // Find existing entry in rawPlexMap by id, email, username, or display title
                     let existing = rawPlexMap.get(id);
                     if (!existing && email) {
                         for (const val of rawPlexMap.values()) {
@@ -574,6 +574,16 @@ export async function auditPlexHomeAndLiveTvPrivileges(): Promise<LiveTvEcosyste
                     if (!existing && username) {
                         for (const val of rawPlexMap.values()) {
                             if (val.username.toLowerCase() === username.toLowerCase()) {
+                                existing = val;
+                                break;
+                            }
+                        }
+                    }
+                    if (!existing) {
+                        const candidateNames = [username, title, hu.friendlyName].filter(Boolean).map((s: string) => s.toLowerCase().trim());
+                        for (const val of rawPlexMap.values()) {
+                            const valNames = [val.username, val.title].filter(Boolean).map((s: string) => s.toLowerCase().trim());
+                            if (candidateNames.some((cn: string) => valNames.includes(cn))) {
                                 existing = val;
                                 break;
                             }
@@ -728,8 +738,8 @@ export async function auditPlexHomeAndLiveTvPrivileges(): Promise<LiveTvEcosyste
 
         const dvrGranted = isOwner
             ? true
-            : plexReachable
-            ? Boolean(item.allowDvr)
+            : !liveTvGranted
+            ? false // In Plex, DVR requires Live TV. If user has no Live TV, DVR is strictly disabled.
             : Boolean(item.allowDvr || matchedPortalUser?.hasPlexDvrAccess);
 
         const isHomeMember = isOwner

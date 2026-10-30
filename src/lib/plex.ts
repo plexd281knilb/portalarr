@@ -1617,10 +1617,14 @@ export async function getPlexSharedServersList(adminToken: string): Promise<Plex
                     const machineId = sAttrs.match(/\bmachineIdentifier="([^"]*)"/i)?.[1] || "";
                     const serverName = sAttrs.match(/\bname="([^"]*)"/i)?.[1] || "Plex Server";
                     const allLibraries = sAttrs.match(/\ballLibraries="([^"]*)"/i)?.[1] === "1";
-                    const allowTuners = sAttrs.match(/\ballowTuners="([^"]*)"/i)?.[1] === "1" || uAttrs.match(/\ballowTuners="([^"]*)"/i)?.[1] === "1";
-                    const allowChannels = sAttrs.match(/\ballowChannels="([^"]*)"/i)?.[1] === "1" || uAttrs.match(/\ballowChannels="([^"]*)"/i)?.[1] === "1";
-                    const allowDvr = sAttrs.match(/\ballowDvr="([^"]*)"/i)?.[1] === "1" || uAttrs.match(/\ballowDvr="([^"]*)"/i)?.[1] === "1";
-                    const allowSync = sAttrs.match(/\ballowSync="([^"]*)"/i)?.[1] === "1" || uAttrs.match(/\ballowSync="([^"]*)"/i)?.[1] === "1";
+                    const allowTuners = /^(?:1|true)$/i.test(sAttrs.match(/\b(?:allowTuners|allow_tuners)="([^"]*)"/i)?.[1] || "") ||
+                                        /^(?:1|true)$/i.test(uAttrs.match(/\b(?:allowTuners|allow_tuners)="([^"]*)"/i)?.[1] || "");
+                    const allowChannels = /^(?:1|true)$/i.test(sAttrs.match(/\b(?:allowChannels|allow_channels)="([^"]*)"/i)?.[1] || "") ||
+                                          /^(?:1|true)$/i.test(uAttrs.match(/\b(?:allowChannels|allow_channels)="([^"]*)"/i)?.[1] || "");
+                    const allowDvr = /^(?:1|true)$/i.test(sAttrs.match(/\b(?:allowDvr|allow_dvr|allowDVR|dvr)="([^"]*)"/i)?.[1] || "") ||
+                                     /^(?:1|true)$/i.test(uAttrs.match(/\b(?:allowDvr|allow_dvr|allowDVR|dvr)="([^"]*)"/i)?.[1] || "");
+                    const allowSync = /^(?:1|true)$/i.test(sAttrs.match(/\b(?:allowSync|allow_sync)="([^"]*)"/i)?.[1] || "") ||
+                                      /^(?:1|true)$/i.test(uAttrs.match(/\b(?:allowSync|allow_sync)="([^"]*)"/i)?.[1] || "");
 
                     const secIds: number[] = [];
                     if (sInner) {
@@ -1696,10 +1700,10 @@ export async function getPlexSharedServersList(adminToken: string): Promise<Plex
                     const invitedEmail = attrs.match(/\binvitedEmail="([^"]*)"/i)?.[1] || email;
                     const userId = parseInt(attrs.match(/\buserID="([^"]*)"/i)?.[1] || "0", 10);
                     const allLibraries = attrs.match(/\ballLibraries="([^"]*)"/i)?.[1] === "1";
-                    const allowTuners = attrs.match(/\ballowTuners="([^"]*)"/i)?.[1] === "1";
-                    const allowChannels = attrs.match(/\ballowChannels="([^"]*)"/i)?.[1] === "1";
-                    const allowDvr = attrs.match(/\ballowDvr="([^"]*)"/i)?.[1] === "1";
-                    const allowSync = attrs.match(/\ballowSync="([^"]*)"/i)?.[1] === "1";
+                    const allowTuners = /^(?:1|true)$/i.test(attrs.match(/\b(?:allowTuners|allow_tuners)="([^"]*)"/i)?.[1] || "");
+                    const allowChannels = /^(?:1|true)$/i.test(attrs.match(/\b(?:allowChannels|allow_channels)="([^"]*)"/i)?.[1] || "");
+                    const allowDvr = /^(?:1|true)$/i.test(attrs.match(/\b(?:allowDvr|allow_dvr|allowDVR|dvr)="([^"]*)"/i)?.[1] || "");
+                    const allowSync = /^(?:1|true)$/i.test(attrs.match(/\b(?:allowSync|allow_sync)="([^"]*)"/i)?.[1] || "");
                     const serverName = attrs.match(/\bname="([^"]*)"/i)?.[1] || srv.name;
 
                     const sectionIds: number[] = [];

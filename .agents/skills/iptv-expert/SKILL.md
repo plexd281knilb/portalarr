@@ -86,8 +86,10 @@ Plex Media Server enforces three distinct radio restriction states under **Restr
 - **`allowChannels` vs `allowTuners` Separation**:
   - `allowChannels` in Plex Media Server XML/REST API refers strictly to legacy online channels/plugins (e.g. TED, Vimeo, YouTube plugins) and is enabled by default on shared servers. It MUST NEVER be used to infer or grant Live TV access.
   - Live TV privilege is strictly governed by `allowTuners`.
-- **`allowTuners` vs `allowDvr` Independence**:
+- **`allowTuners` vs `allowDvr` Independence & DVR Dependency**:
   - `allowTuners="1"` does NOT imply `allowDvr="1"`. A user can have Live TV without DVR access ("Allow Live TV only").
+  - In Plex, DVR strictly requires Live TV: if `allowTuners` is false (Tier 1, e.g. `krismo4`), `dvrGranted` is guaranteed `false`.
+  - When `allowTuners` is true (e.g. `jrj78`, `trevscar1121`), `dvrGranted` is granted if Plex API reports DVR access OR if configured in Portalarr (`matchedPortalUser?.hasPlexDvrAccess`), preventing undocumented Plex XML omission from wiping out Tier 3 access down to Tier 2.
   - Enabling DVR requires both `allowTuners="1"` and `allowDvr="1"`.
   - Revoking DVR (`allowDvr="0"`) leaves `allowTuners="1"` intact.
   - Revoking Live TV (`allowTuners="0"`) automatically sets `allowDvr="0"`.
