@@ -149,11 +149,13 @@ See detailed runbook: [tags-collections-and-hubs.md](./references/tags-collectio
       1. `No Live TV and DVR access` (`allowTuners="0"`, `allowDvr="0"`): User has neither live tuner nor recording privileges.
       2. `Allow Live TV only` (`allowTuners="1"`, `allowDvr="0"`): User can stream live channels, but cannot view scheduled recordings or schedule DVR recordings.
       3. `Allow Live TV and DVR access` (`allowTuners="1"`, `allowDvr="1"`): User can both stream live channels and schedule/manage their own recordings.
-    - **Plex Home Discovery & Decoupled Audit**: Inspects `GET https://plex.tv/api/users` (XML) and `GET https://plex.tv/api/v2/home/users` (JSON). Audits `allowTuners`, `allowChannels`, and `allowDvr` independently without assuming that tuner access automatically implies DVR access.
+    - **Plex Home Discovery & Decoupled Audit**: Inspects `GET https://plex.tv/api/users` (XML) and `GET https://plex.tv/api/v2/home/users` (JSON). Audits `allowTuners` and `allowDvr` independently without assuming that tuner access automatically implies DVR access.
+    - **`allowChannels` vs `allowTuners` Separation**: `allowChannels` on PMS shared servers refers to legacy online plugins/channels (e.g. YouTube, Vimeo) and is enabled by default. It MUST NOT be used to grant Live TV. Live TV is strictly governed by `allowTuners`.
+    - **Live Plex API Authoritative Precedence**: When Plex is reachable (`plexReachable === true`), the live values from Plex API are authoritative. Never OR cached SQLite values (`matchedPortalUser?.hasPlexLiveTvAccess`) into live state, which would prevent Plex restrictions from syncing down when revoked in Plex Web.
     - **Hierarchical Privilege Transitions**:
-      - *Grant Live TV*: Calls `/api/friends/{uid}?allowTuners=1&allowChannels=1` and updates server shares; sets `hasPlexLiveTvAccess: true` while preserving existing DVR state.
-      - *Revoke Live TV*: Revokes both tuner and DVR access (`allowTuners=0`, `allowChannels=0`, `allowDvr=0`), dropping the user to `No Live TV and DVR access`.
-      - *Grant DVR*: Automatically enables tuners if disabled (`allowDvr=1&allowTuners=1&allowChannels=1`), upgrading the user to `Allow Live TV and DVR access`.
+      - *Grant Live TV*: Calls `/api/friends/{uid}?allowTuners=1` and updates server shares; sets `hasPlexLiveTvAccess: true` while preserving existing DVR state.
+      - *Revoke Live TV*: Revokes both tuner and DVR access (`allowTuners=0`, `allowDvr=0`), dropping the user to `No Live TV and DVR access`.
+      - *Grant DVR*: Automatically enables tuners if disabled (`allowDvr=1&allowTuners=1`), upgrading the user to `Allow Live TV and DVR access`.
       - *Revoke DVR*: Revokes only DVR (`allowDvr=0`) while preserving `allowTuners=1`, gracefully dropping the user down to `Allow Live TV only`.
     - **Inactivity Rotation Engine**: Evaluates `lastIptvWatchedAt` and `plexHomeJoinedAt` against `plexHomeInactivityDays` (default: 21 days). Strictly non-destructive: `plexHomeAutoKickEnabled` is strictly `false` by default, surfacing candidates for admin review without kicking anyone out unexpectedly.
     - **Jellyfin Live TV Policy Management**: Audits and controls `EnableLiveTvAccess` in Jellyfin via `POST /Users/{id}/Policy`. Always reads existing policies first and merges changes (`{ ...currentPolicy, EnableLiveTvAccess: true, EnableLiveTvManagement: false }`) to preserve library folder access permissions (`EnabledFolders`).

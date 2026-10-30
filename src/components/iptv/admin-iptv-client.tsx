@@ -1190,8 +1190,8 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                                             DVR Only
                                                         </Badge>
                                                     ) : (
-                                                        <Badge className="text-[10px] bg-rose-500/20 text-rose-300 border-rose-500/30 font-bold" title="Plex: No Live TV and DVR access">
-                                                            ⚠️ Missing Live TV & DVR
+                                                        <Badge className="text-[10px] bg-zinc-500/20 text-zinc-400 border-zinc-500/30 font-medium" title="Plex: No Live TV and DVR access">
+                                                            No Live TV / DVR
                                                         </Badge>
                                                     )
                                                 )}

@@ -78,7 +78,21 @@ Plex Media Server enforces three distinct radio restriction states under **Restr
   - *Clicking `[DVR: ON]`*: Revokes only DVR (`allowDvr=0`), gracefully dropping the user down to **"Allow Live TV only"**.
   - *Clicking `[Live TV: ON]`*: Revokes both Live TV and DVR (`allowTuners=0`, `allowDvr=0`), dropping the user to **"No Live TV and DVR access"**.
 
-### 6. Plex Home 15-User Constraint & Slot Rotation Engine
+### 6. Plex Home & 3-Tier Live TV / DVR Restrictions Architecture
+- **Plex 3-Tier Restriction Standard**:
+  - **Tier 1: No Live TV and DVR access** (`allowTuners="0"`, `allowDvr="0"`): Both Live TV and DVR are completely disabled for the friend/member. In Portalarr UI, displays clean `No Live TV / DVR` badge and `Enable Live TV` / `Enable DVR` buttons.
+  - **Tier 2: Allow Live TV only** (`allowTuners="1"`, `allowDvr="0"`): User can stream live broadcasts from virtual tuners, but cannot record or schedule DVR passes. In Portalarr UI, displays sky `Live TV Only` badge and `Live TV: ON` button.
+  - **Tier 3: Allow Live TV and DVR access** (`allowTuners="1"`, `allowDvr="1"`): User can stream live TV and schedule individual DVR recordings. In Portalarr UI, displays emerald `Live TV + DVR` badge and `DVR: ON` button.
+- **`allowChannels` vs `allowTuners` Separation**:
+  - `allowChannels` in Plex Media Server XML/REST API refers strictly to legacy online channels/plugins (e.g. TED, Vimeo, YouTube plugins) and is enabled by default on shared servers. It MUST NEVER be used to infer or grant Live TV access.
+  - Live TV privilege is strictly governed by `allowTuners`.
+- **`allowTuners` vs `allowDvr` Independence**:
+  - `allowTuners="1"` does NOT imply `allowDvr="1"`. A user can have Live TV without DVR access ("Allow Live TV only").
+  - Enabling DVR requires both `allowTuners="1"` and `allowDvr="1"`.
+  - Revoking DVR (`allowDvr="0"`) leaves `allowTuners="1"` intact.
+  - Revoking Live TV (`allowTuners="0"`) automatically sets `allowDvr="0"`.
+- **Live Plex API Authoritative Precedence Over SQLite**:
+  - When Plex is reachable (`plexReachable === true`), the live values from `https://plex.tv/api/users` and `https://plex.tv/api/v2/home/users` (`item.allowTuners`, `item.allowDvr`, `item.isPlexHomeMember`) are authoritative. Never OR cached SQLite values (`matchedPortalUser?.hasPlexLiveTvAccess`) into live state when Plex is reachable, or user privilege revocations made in Plex Web will be ignored and perpetually re-written to SQLite.
 - **Hard Limit**: Plex caps Plex Home at 15 total users (1 owner + 14 member slots). Regular Plex friends cannot tune Live TV channels unless admitted to Plex Home.
 - **Inactivity Audit**: Evaluates `lastIptvWatchedAt` and `plexHomeJoinedAt` against `plexHomeInactivityDays` (default: 21 days).
 - **Non-Destructive Candidate Flagging**: Inactive members are surfaced with visual warning borders (`border-amber-500/30 bg-amber-500/5`) and labeled `• Slot Rotation Candidate (Protected)`. Auto-kick is strictly `false` by default, preserving administrator control.
