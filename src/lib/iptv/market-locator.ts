@@ -416,3 +416,35 @@ export function getNcaaChannels<T extends GenericIptvChannel>(channels: T[]): T[
 
     return matched.sort((a, b) => rank(a.name) - rank(b.name));
 }
+
+/**
+ * Generates an actionable AI Dispatcharr Prompt to locate, provision, and map
+ * local broadcast network affiliates and regional sports into Dispatcharr.
+ */
+export function generateMarketAiPrompt(marketSlug: string, requestedByUsername?: string): string {
+    const market = MEDIA_MARKETS[marketSlug] || MEDIA_MARKETS.dallas;
+    const requester = requestedByUsername ? `Member "${requestedByUsername}"` : "A homelab member";
+    const nflString = market.nflTeams.length > 0 ? market.nflTeams.join(", ") : "Regional NFL Broadcasts";
+    const conferences = market.collegeConferences?.join(", ") || "NCAA Division 1";
+
+    return `[AI-DISPATCHARR-PROMPT]
+Target Media Market: ${market.name} (${market.shortName}, ${market.state})
+Requested By: ${requester}
+In-Market NFL / Regional Sports: ${nflString}
+College Coverage: ${conferences}
+
+Target Broadcast Networks & Station Callsigns:
+- Callsigns & Search Terms: ${market.keywords.join(", ")}
+- Network Affiliates to Map: NBC, CBS, FOX, ABC, CW, and Regional Sports Networks
+
+Instructions to Add into Dispatcharr:
+1. Search unmapped M3U provider streams:
+   GET /api/channels/streams/?search=<KEYWORD>&page_size=50
+   Run queries for: ${market.keywords.slice(0, 8).map(k => `"${k}"`).join(", ")}
+2. Provision matching live streams into active channels:
+   POST /api/channels/channels/from-stream/
+   Body: { "stream_id": <STREAM_ID>, "name": "<CLEAN_CHANNEL_NAME>" }
+3. Assign newly created local stations to the "Sports" (regional sports) and "Entertainment" (affiliates) channel profiles.
+4. Trigger Portalarr Lineup Sync to expose virtual tuners directly to Plex Live TV & Jellyfin.`;
+}
+

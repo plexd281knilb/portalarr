@@ -1266,6 +1266,107 @@ export async function requestIptvChannelAction(input: {
     }
 }
 
+export async function requestMarketLocalChannelsAction(input: {
+    marketSlug: string;
+    customNote?: string;
+}) {
+    try {
+        const user = await verifySessionUser();
+        const { MEDIA_MARKETS, generateMarketAiPrompt } = await import("@/lib/iptv/market-locator");
+        const { provisionMarketChannelsFromDispatcharr } = await import("@/lib/iptv/dispatcharr-client");
+
+        const market = MEDIA_MARKETS[input.marketSlug];
+        if (!market) {
+            return { success: false, error: `Invalid media market: "${input.marketSlug}"` };
+        }
+
+        const aiPrompt = generateMarketAiPrompt(input.marketSlug, user.username);
+        const channelName = `${market.shortName} Local Affiliates (NBC, CBS, FOX, ABC)`;
+        const callsign = `${market.shortName.toUpperCase()} LOCALS`;
+
+        const existing = await prisma.iptvChannelRequest.findFirst({
+            where: {
+                callsign,
+                status: { in: ["PENDING", "ACTIVATED"] }
+            }
+        });
+
+        let requestId = existing?.id;
+        let requestRecord = existing;
+
+        if (!existing) {
+            requestRecord = await prisma.iptvChannelRequest.create({
+                data: {
+                    channelName,
+                    callsign,
+                    genre: "Local",
+                    reason: input.customNote?.trim() || `User requested local broadcast feeds and regional sports for ${market.name} (NFL: ${market.nflTeams.join(", ")}).`,
+                    adminNotes: aiPrompt,
+                    requestedByUserId: user.id,
+                    requestedByUsername: user.username,
+                    status: "PENDING"
+                }
+            });
+            requestId = requestRecord.id;
+        }
+
+        let autoProvisioned = false;
+        let provisionCount = 0;
+        try {
+            const scanRes = await provisionMarketChannelsFromDispatcharr(input.marketSlug);
+            if (scanRes.success && scanRes.createdCount > 0) {
+                autoProvisioned = true;
+                provisionCount = scanRes.createdCount;
+                if (requestId) {
+                    await prisma.iptvChannelRequest.update({
+                        where: { id: requestId },
+                        data: {
+                            status: "ACTIVATED",
+                            adminNotes: `${aiPrompt}\n\n[AUTO-PROVISIONED]: Successfully linked ${provisionCount} streams in Dispatcharr: ${scanRes.matchedStreams.join(", ")}.`
+                        }
+                    });
+                }
+            }
+        } catch {}
+
+        logger.addLog(
+            "INFO",
+            "SYSTEM",
+            `User "${user.username}" requested local channels for ${market.name}. (autoProvisioned=${autoProvisioned}, count=${provisionCount})`
+        );
+
+        safeRevalidate("/channels");
+        safeRevalidate("/admin/iptv");
+
+        return {
+            success: true,
+            autoProvisioned,
+            provisionCount,
+            aiPrompt,
+            marketName: market.name,
+            shortName: market.shortName,
+            message: autoProvisioned
+                ? `🎉 Found and added ${provisionCount} local ${market.shortName} channels in Dispatcharr!`
+                : `Sent request for ${market.shortName} local channels! AI prompt for Dispatcharr generated and added to admin queue.`
+        };
+    } catch (err: any) {
+        return { success: false, error: err?.message || "Failed to submit local market channel request" };
+    }
+}
+
+export async function scanAndProvisionMarketChannelsAction(marketSlug: string) {
+    try {
+        await verifySessionAdmin();
+        const { provisionMarketChannelsFromDispatcharr } = await import("@/lib/iptv/dispatcharr-client");
+        const res = await provisionMarketChannelsFromDispatcharr(marketSlug);
+        safeRevalidate("/channels");
+        safeRevalidate("/admin/iptv");
+        return res;
+    } catch (err: any) {
+        return { success: false, createdCount: 0, message: err?.message || "Failed to scan Dispatcharr" };
+    }
+}
+
 export async function resolveIptvChannelRequestAction(input: {
     requestId: string;
     status: "APPROVED" | "ACTIVATED" | "REJECTED";

@@ -581,3 +581,100 @@ export async function provisionMissingDispatcharrChannels(): Promise<{
     };
 }
 
+/**
+ * Provisions missing local channels for a specific media market from unmapped streams in Dispatcharr
+ */
+export async function provisionMarketChannelsFromDispatcharr(marketSlug: string): Promise<{
+    success: boolean;
+    createdCount: number;
+    message: string;
+    matchedStreams: string[];
+}> {
+    const { MEDIA_MARKETS } = await import("./market-locator");
+    const market = MEDIA_MARKETS[marketSlug];
+    if (!market) {
+        return {
+            success: false,
+            createdCount: 0,
+            message: `Unknown media market "${marketSlug}"`,
+            matchedStreams: []
+        };
+    }
+
+    const settings = await getIptvSettings();
+    const apiKey = await getDecryptedDispatcharrApiKey();
+
+    if (!settings?.dispatcharrUrl || !apiKey) {
+        return {
+            success: false,
+            createdCount: 0,
+            message: "Dispatcharr is not configured or API key is missing",
+            matchedStreams: []
+        };
+    }
+
+    const baseUrl = settings.dispatcharrUrl.replace(/\/+$/, "");
+    const headers = {
+        "X-API-Key": apiKey,
+        "Accept": "application/json",
+        "Content-Type": "application/json"
+    };
+
+    let createdCount = 0;
+    const seenStreamIds = new Set<number>();
+    const matchedStreams: string[] = [];
+
+    // Search specifically for the market's city name, short name, and callsigns
+    const searchTerms = Array.from(new Set([market.shortName, market.state, ...market.keywords.filter(k => k.length >= 3)]));
+
+    for (const term of searchTerms) {
+        try {
+            const streamRes = await fetch(`${baseUrl}/api/channels/streams/?search=${encodeURIComponent(term)}&page_size=25`, { headers });
+            if (!streamRes.ok) continue;
+            const streamData = await streamRes.json();
+            const streams = Array.isArray(streamData?.results) ? streamData.results : [];
+
+            for (const s of streams) {
+                if (s.channel_id || s.channel || seenStreamIds.has(s.id)) continue;
+                seenStreamIds.add(s.id);
+
+                let cleanName = s.name.replace(/^(US[|:]\s*|✦●✦\s*|\s*✦●✦)/gi, "").trim();
+                const isTarget = /nbc|fox|cbs|abc|cw|sports|bally|nesn|marquee|sny|yes|spectrum/i.test(cleanName) ||
+                                 market.keywords.some(k => cleanName.toLowerCase().includes(k.toLowerCase()));
+
+                if (!isTarget) continue;
+
+                const createRes = await fetch(`${baseUrl}/api/channels/channels/from-stream/`, {
+                    method: "POST",
+                    headers,
+                    body: JSON.stringify({
+                        stream_id: s.id,
+                        name: cleanName
+                    })
+                });
+
+                if (createRes.ok || createRes.status === 201) {
+                    createdCount++;
+                    matchedStreams.push(cleanName);
+                }
+            }
+        } catch {
+            // Continue scanning other terms
+        }
+    }
+
+    if (createdCount > 0) {
+        await syncDispatcharrLineup();
+    }
+
+    return {
+        success: true,
+        createdCount,
+        matchedStreams,
+        message: createdCount > 0
+            ? `Successfully provisioned ${createdCount} local channels for ${market.shortName} in Dispatcharr and synced lineup.`
+            : `No unmapped streams currently found in Dispatcharr for ${market.shortName}. Request recorded with AI prompt.`
+    };
+}
+
+

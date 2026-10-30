@@ -120,6 +120,20 @@ Plex Media Server enforces three distinct radio restriction states under **Restr
 - **Heuristic Live Stream Detection**: Detects live broadcasts using media type (`live`, `channel`, `clip`, `iptv`), channel identifiers, and title patterns (`/world series|mlb|baseball|nfl|ncaa|football|fox|cbs|nbc|abc|espn/i`).
 - **Activity Persistence**: Updates `lastIptvWatchedAt` on the User record to track genuine live TV engagement for slot rotation calculations.
 
+### 10. Local Media Market Affiliates & AI Dispatcharr Provisioning
+- **Market Detection & Local Shelves**: Detects media markets via client IP or dropdown selector (Dallas host server default, plus Philadelphia, New York, Los Angeles, Chicago, Houston, Boston, etc.).
+- **Local Broadcast Affiliates Request**: When local channels for a market are missing, users can click `[Request {City} Channels]` on `/channels` or ask the AI Server Assistant.
+- **AI Dispatcharr Prompt Generation (`generateMarketAiPrompt`)**:
+  - Automatically compiles network callsigns (NBC, CBS, FOX, ABC, CW), regional sports networks, in-market NFL teams, and exact Dispatcharr REST API instructions (`GET /api/channels/streams/?search={term}` and `POST /api/channels/channels/from-stream/`).
+  - Stored inside `IptvChannelRequest.adminNotes` (`[AI-DISPATCHARR-PROMPT]` block).
+- **Automated Stream Discovery & Provisioning (`provisionMarketChannelsFromDispatcharr`)**:
+  - Queries Dispatcharr unmapped upstream streams for market keywords and callsigns.
+  - Automatically creates channels via `POST /api/channels/channels/from-stream/` with `{ stream_id, name }` and syncs the channel lineup without manual admin work.
+- **Admin Mission Control Experience (`/admin/iptv` Tab 6)**:
+  - Displays `AI Prompt Ready` badge on market requests.
+  - Expandable terminal code card allows 1-click clipboard copying (`📋 Copy AI Prompt`).
+  - Instant manual trigger button (`[🤖 AI Auto-Scan Dispatcharr]`) to re-scan Dispatcharr and auto-provision channels on demand.
+
 ---
 
 ## 🚨 Mandatory Task Completion Protocol (Strict SemVer)

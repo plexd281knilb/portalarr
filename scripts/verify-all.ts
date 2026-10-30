@@ -2918,6 +2918,31 @@ async function runTestSuite() {
                 throw new Error(`Expected preferredMediaMarket 'houston', got '${updatedUser?.preferredMediaMarket}'`);
             }
 
+            // Test 8.B: AI Dispatcharr Prompt Builder & Market Local Channel Request
+            const { generateMarketAiPrompt } = await import("../src/lib/iptv/market-locator");
+            const phillyPrompt = generateMarketAiPrompt("philadelphia", "test_user");
+            if (!phillyPrompt.includes("Philadelphia Eagles") || !phillyPrompt.toLowerCase().includes("wcau") || !phillyPrompt.includes("Dispatcharr")) {
+                throw new Error("generateMarketAiPrompt must include Philadelphia Eagles, WCAU and Dispatcharr instructions");
+            }
+
+            process.env.PORTALARR_TEST_AUTH = "true";
+            process.env.PORTALARR_TEST_USER_ID = testUser.id;
+            const { requestMarketLocalChannelsAction } = await import("../src/app/iptv-actions");
+            const marketReqRes = await requestMarketLocalChannelsAction({ marketSlug: "philadelphia" });
+            delete process.env.PORTALARR_TEST_USER_ID;
+
+            if (!marketReqRes.success || !marketReqRes.aiPrompt) {
+                throw new Error(`Failed to request local market channels: ${marketReqRes.error}`);
+            }
+
+            const dbMarketReq = await prisma.iptvChannelRequest.findFirst({
+                where: { callsign: "PHILADELPHIA LOCALS" }
+            });
+            if (!dbMarketReq || !dbMarketReq.adminNotes?.includes("[AI-DISPATCHARR-PROMPT]")) {
+                throw new Error("Expected iptvChannelRequest to contain AI Dispatcharr prompt in adminNotes");
+            }
+            await prisma.iptvChannelRequest.delete({ where: { id: dbMarketReq.id } }).catch(() => {});
+
             // Test Suite 23.D: Plex Home Live TV vs DVR Differentiation & Trevor Scarborough Audit Safeguards
             await prisma.user.deleteMany({
                 where: { OR: [

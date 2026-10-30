@@ -828,30 +828,63 @@ export async function executeAiAssistantTool(
                     return { success: false, result: { error: "Channel name required" }, summary: "Missing channel name" };
                 }
 
+                const { MEDIA_MARKETS, generateMarketAiPrompt } = await import("@/lib/iptv/market-locator");
+                const { provisionMarketChannelsFromDispatcharr } = await import("@/lib/iptv/dispatcharr-client");
+
+                const lowerInput = `${channelName} ${args.reason || ""}`.toLowerCase();
+                let matchedMarketSlug: string | null = null;
+                for (const [slug, m] of Object.entries(MEDIA_MARKETS)) {
+                    if (lowerInput.includes(m.shortName.toLowerCase()) || lowerInput.includes(slug)) {
+                        matchedMarketSlug = slug;
+                        break;
+                    }
+                }
+
+                let adminNotes: string | null = null;
+                let autoProvisionCount = 0;
+                let autoProvisioned = false;
+
+                if (matchedMarketSlug) {
+                    const aiPrompt = generateMarketAiPrompt(matchedMarketSlug, ctx.user?.username);
+                    adminNotes = aiPrompt;
+                    try {
+                        const provRes = await provisionMarketChannelsFromDispatcharr(matchedMarketSlug);
+                        if (provRes.success && provRes.createdCount > 0) {
+                            autoProvisioned = true;
+                            autoProvisionCount = provRes.createdCount;
+                            adminNotes = `${aiPrompt}\n\n[AUTO-PROVISIONED]: Added ${provRes.createdCount} streams in Dispatcharr: ${provRes.matchedStreams.join(", ")}`;
+                        }
+                    } catch {}
+                }
+
                 const created = await prisma.iptvChannelRequest.create({
                     data: {
                         channelName,
-                        genre: args.genre ? String(args.genre).trim() : "Sports",
+                        genre: args.genre ? String(args.genre).trim() : (matchedMarketSlug ? "Local" : "Sports"),
                         reason: args.reason ? String(args.reason).trim() : "Requested via AI Server Assistant",
+                        adminNotes,
                         requestedByUserId: ctx.user?.id || "anonymous",
                         requestedByUsername: ctx.user?.username || "member",
-                        status: "PENDING"
+                        status: autoProvisioned ? "ACTIVATED" : "PENDING"
                     }
                 });
 
-                const summary = `Submitted Live TV channel request for "${channelName}" (Status: PENDING).`;
+                const summary = autoProvisioned
+                    ? `Auto-provisioned ${autoProvisionCount} local channels for "${channelName}" in Dispatcharr and updated lineup!`
+                    : `Submitted Live TV channel request for "${channelName}" with Dispatcharr AI prompt (Status: PENDING).`;
+
                 ctx.actionsTaken.push({
                     action: "STREAM_PATTERN_DIAGNOSTIC",
                     status: "SUCCESS",
                     target: `Channel Request: ${channelName}`,
                     summary,
-                    details: created,
+                    details: { ...created, autoProvisioned, autoProvisionCount },
                     timestamp
                 });
 
                 return {
                     success: true,
-                    result: created,
+                    result: { ...created, autoProvisioned, autoProvisionCount },
                     summary
                 };
             } catch (err: any) {

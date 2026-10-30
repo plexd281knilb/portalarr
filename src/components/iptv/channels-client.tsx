@@ -43,7 +43,8 @@ import {
     getIptvCatalogAction,
     setUserPreferredMarketAction,
     detectUserMarketAction,
-    provisionMissingDispatcharrChannelsAction
+    provisionMissingDispatcharrChannelsAction,
+    requestMarketLocalChannelsAction
 } from "@/app/iptv-actions";
 import {
     ORDERED_MARKETS,
@@ -179,6 +180,8 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
     const [searchQuery, setSearchQuery] = useState<string>("");
     const [visibleCount, setVisibleCount] = useState<number>(64);
     const [copiedToken, setCopiedToken] = useState<string | null>(null);
+    const [marketActionMsg, setMarketActionMsg] = useState<string>("");
+    const [marketActionPrompt, setMarketActionPrompt] = useState<{ marketName: string; prompt: string } | null>(null);
 
     // Location & Media Market State
     const [selectedMarket, setSelectedMarket] = useState<string>(
@@ -275,6 +278,36 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
         setSelectedMarket(newMarket);
         startTransition(async () => {
             await setUserPreferredMarketAction(newMarket);
+        });
+    };
+
+    // Request local market channels with AI prompt for Dispatcharr
+    const handleRequestMarketChannels = (marketSlug: string) => {
+        startTransition(async () => {
+            setMarketActionMsg("Analyzing local affiliates & dispatching request to Dispatcharr...");
+            const res = await requestMarketLocalChannelsAction({ marketSlug });
+            if (res.success) {
+                if (res.autoProvisioned && res.provisionCount && res.provisionCount > 0) {
+                    const catRes = await getIptvCatalogAction();
+                    if (catRes.success && catRes.data) {
+                        setChannelsList(catRes.data.channels);
+                        setProfilesList(catRes.data.profiles);
+                    }
+                    setMarketActionMsg(`🎉 Successfully added ${res.provisionCount} local ${res.shortName} channels to Dispatcharr and synced lineup!`);
+                } else {
+                    setMarketActionMsg(res.message || `Local channel request submitted for ${res.shortName || marketSlug}!`);
+                    if (res.aiPrompt) {
+                        setMarketActionPrompt({
+                            marketName: res.marketName || marketSlug,
+                            prompt: res.aiPrompt
+                        });
+                    }
+                }
+                setTimeout(() => setMarketActionMsg(""), 8000);
+            } else {
+                setMarketActionMsg(res.error || "Failed to submit local channel request");
+                setTimeout(() => setMarketActionMsg(""), 5000);
+            }
         });
     };
 
@@ -512,7 +545,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                                 </Badge>
                             </div>
                             <p className="text-xs text-muted-foreground mt-0.5">
-                                Server is hosted in Dallas, TX (DFW broadcast feeds are always active below). Choose your location to watch in-market broadcast feeds and regional NFL games:
+                                Server is anchored in Dallas, TX (DFW broadcast feeds are always active below). Select your media market to browse local affiliates or send an AI request to add missing local channels into Dispatcharr:
                             </p>
                         </div>
                     </div>
@@ -543,6 +576,18 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                             <Crosshair className={`h-3.5 w-3.5 ${isPending ? "animate-spin" : ""}`} />
                             Auto-Detect from IP
                         </Button>
+
+                        {selectedMarket !== "dallas" && (
+                            <Button
+                                onClick={() => handleRequestMarketChannels(selectedMarket)}
+                                disabled={isPending}
+                                size="sm"
+                                className="h-8 text-xs font-bold gap-1.5 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white rounded-xl shadow-sm whitespace-nowrap"
+                            >
+                                <Sparkles className="h-3.5 w-3.5 text-teal-200" />
+                                Request {currentMarket.shortName} Channels
+                            </Button>
+                        )}
                     </div>
                 </div>
 
@@ -672,9 +717,9 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
             )}
 
             {/* 📍 Selected User Media Market Shelf (when market != dallas) */}
-            {selectedMarket !== "dallas" && localMarketChannels.length > 0 && activeShelf === "all" && (
+            {selectedMarket !== "dallas" && activeShelf === "all" && (
                 <div className="rounded-2xl border border-sky-500/30 bg-gradient-to-r from-sky-950/20 via-card/50 to-card/30 p-5 space-y-4 shadow-sm">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div className="flex items-center gap-2.5">
                             <div className="h-8 w-8 rounded-lg bg-sky-500/20 border border-sky-500/40 flex items-center justify-center text-sky-300">
                                 <MapPin className="h-4 w-4" />
@@ -691,18 +736,40 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                                 </p>
                             </div>
                         </div>
+
+                        <Button
+                            onClick={() => handleRequestMarketChannels(selectedMarket)}
+                            disabled={isPending}
+                            size="sm"
+                            variant="outline"
+                            className="h-8 text-xs font-bold gap-1.5 border-sky-500/40 text-sky-300 hover:bg-sky-500/10 rounded-xl whitespace-nowrap self-start sm:self-auto"
+                        >
+                            <Sparkles className="h-3.5 w-3.5 text-sky-400" />
+                            {localMarketChannels.length === 0 ? "Request All Local Channels" : "Request Missing Affiliates"}
+                        </Button>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
-                        {localMarketChannels.slice(0, 8).map((ch) => (
-                            <ChannelCard
-                                key={ch.id}
-                                ch={ch}
-                                specialBadge={`📍 ${currentMarket.shortName}`}
-                                badgeColor="blue"
-                            />
-                        ))}
-                    </div>
+                    {localMarketChannels.length > 0 ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
+                            {localMarketChannels.slice(0, 8).map((ch) => (
+                                <ChannelCard
+                                    key={ch.id}
+                                    ch={ch}
+                                    specialBadge={`📍 ${currentMarket.shortName}`}
+                                    badgeColor="blue"
+                                />
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="p-4 rounded-xl border border-dashed border-sky-500/30 bg-sky-500/5 text-center space-y-2">
+                            <p className="text-xs text-sky-200">
+                                No broadcast channels are currently mapped for <b>{currentMarket.name}</b> in Dispatcharr.
+                            </p>
+                            <p className="text-[11px] text-muted-foreground">
+                                Click the button above to send a request with an AI-generated Dispatcharr prompt to search and map NBC, CBS, FOX, ABC & regional sports.
+                            </p>
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -966,6 +1033,92 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                             <p className="text-xs text-muted-foreground leading-relaxed">
                                 Launch Jellyfin or Swiftfin on your streaming device. Click <b className="text-foreground">Live TV</b> from the home screen dashboard to view all active tuner feeds and watch live events with direct audio/video passthrough.
                             </p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Market Action Feedback Banner */}
+            {marketActionMsg && (
+                <div className="p-3.5 rounded-xl bg-teal-500/15 border border-teal-500/40 text-teal-200 text-xs font-semibold flex items-center justify-between shadow-sm animate-in fade-in duration-200">
+                    <span className="flex items-center gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-teal-400 shrink-0" />
+                        {marketActionMsg}
+                    </span>
+                    <div className="flex items-center gap-2">
+                        {marketActionPrompt && (
+                            <button
+                                onClick={() => {}}
+                                className="underline text-teal-300 hover:text-teal-100 text-xs font-bold"
+                            >
+                                AI Prompt Ready
+                            </button>
+                        )}
+                        <button onClick={() => setMarketActionMsg("")} className="text-teal-400 hover:text-teal-200 text-xs font-bold">✕</button>
+                    </div>
+                </div>
+            )}
+
+            {/* AI Prompt Modal for Dispatcharr */}
+            {marketActionPrompt && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="w-full max-w-lg rounded-2xl border border-teal-500/40 bg-card p-6 shadow-2xl space-y-4">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 text-teal-300 font-bold text-sm">
+                                <Sparkles className="h-4 w-4" />
+                                <span>AI Prompt for Dispatcharr Generated</span>
+                            </div>
+                            <button
+                                onClick={() => setMarketActionPrompt(null)}
+                                className="text-muted-foreground hover:text-foreground text-xs font-bold"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <div>
+                            <h4 className="text-base font-bold text-foreground">
+                                Local Channels Request: {marketActionPrompt.marketName}
+                            </h4>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                                Your request and the structured AI prompt below have been queued for the homelab administrator. You can also copy the prompt:
+                            </p>
+                        </div>
+
+                        <div className="p-3.5 rounded-xl bg-slate-950 border border-border/80 font-mono text-[11px] text-teal-200/90 whitespace-pre-wrap max-h-60 overflow-y-auto leading-relaxed select-all">
+                            {marketActionPrompt.prompt}
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2 pt-1">
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                    navigator.clipboard.writeText(marketActionPrompt.prompt);
+                                    setCopiedToken("prompt-modal");
+                                    setTimeout(() => setCopiedToken(null), 2000);
+                                }}
+                                className="h-8 text-xs font-bold gap-1.5 rounded-xl"
+                            >
+                                {copiedToken === "prompt-modal" ? (
+                                    <>
+                                        <Check className="h-3.5 w-3.5 text-emerald-400" />
+                                        <span>Copied to Clipboard!</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Copy className="h-3.5 w-3.5" />
+                                        <span>Copy AI Prompt</span>
+                                    </>
+                                )}
+                            </Button>
+                            <Button
+                                size="sm"
+                                onClick={() => setMarketActionPrompt(null)}
+                                className="h-8 text-xs font-bold bg-teal-600 hover:bg-teal-500 text-white rounded-xl"
+                            >
+                                Done
+                            </Button>
                         </div>
                     </div>
                 </div>

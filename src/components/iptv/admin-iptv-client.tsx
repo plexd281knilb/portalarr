@@ -23,7 +23,8 @@ import {
     Layers,
     Clock,
     Zap,
-    ExternalLink
+    ExternalLink,
+    Sparkles
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,8 +46,10 @@ import {
     removeUserFromPlexHomeAction,
     setPlexUserLiveTvPrivilegeAction,
     setPlexUserDvrPrivilegeAction,
-    setJellyfinUserLiveTvAccessAction
+    setJellyfinUserLiveTvAccessAction,
+    scanAndProvisionMarketChannelsAction
 } from "@/app/iptv-actions";
+import { MEDIA_MARKETS } from "@/lib/iptv/market-locator";
 
 interface AdminIptvClientProps {
     initialData: {
@@ -477,7 +480,36 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
         });
     };
 
-    // --- Channel Request Resolution ---
+    // --- Channel Request Resolution & AI Dispatcharr Scanner ---
+    const handleScanMarketStreams = (requestId: string, callsignOrNotes: string) => {
+        startTransition(async () => {
+            let slug = "houston";
+            const lower = (callsignOrNotes || "").toLowerCase();
+            for (const s of Object.keys(MEDIA_MARKETS)) {
+                if (lower.includes(s) || lower.includes(s.replace(/_/g, " "))) {
+                    slug = s;
+                    break;
+                }
+            }
+
+            showMsg(`Scanning Dispatcharr unmapped streams for ${slug}...`);
+            const res = await scanAndProvisionMarketChannelsAction(slug);
+            if (res.success && res.createdCount > 0) {
+                await resolveIptvChannelRequestAction({
+                    requestId,
+                    status: "ACTIVATED",
+                    adminNotes: `[AI-AUTO-PROVISIONED]: Added ${res.createdCount} streams in Dispatcharr: ${res.matchedStreams.join(", ")}`
+                });
+                setChannelRequests(
+                    channelRequests.map((r) => (r.id === requestId ? { ...r, status: "ACTIVATED" } : r))
+                );
+                showMsg(`🎉 Successfully provisioned ${res.createdCount} channels in Dispatcharr!`);
+            } else {
+                showMsg(res.message || "No matching streams found in Dispatcharr yet. Copy AI prompt to search manually.");
+            }
+        });
+    };
+
     const handleResolveChannelRequest = (
         requestId: string,
         status: "APPROVED" | "ACTIVATED" | "REJECTED"
@@ -1297,55 +1329,116 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                 {/* TAB 6: CHANNEL REQUESTS */}
                 <TabsContent value="catalog" className="space-y-6">
                     <div className="p-5 rounded-2xl border border-border/60 bg-card/60 space-y-3">
-                        <h3 className="font-bold text-sm text-foreground">On-Demand Channel Requests Queue</h3>
-                        {channelRequests.length > 0 ? (
-                            <div className="space-y-2">
-                                {channelRequests.map((r: any) => (
-                                    <div key={r.id} className="p-3.5 rounded-xl border border-border/40 bg-background/40 flex items-center justify-between text-xs">
-                                        <div>
-                                            <div className="flex items-center gap-2">
-                                                <span className="font-bold text-foreground text-sm">{r.channelName}</span>
-                                                <Badge variant="outline" className="text-[10px]">
-                                                    {r.genre || "TV"}
-                                                </Badge>
-                                                <Badge
-                                                    className={`text-[10px] ${
-                                                        r.status === "ACTIVATED"
-                                                            ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
-                                                            : r.status === "PENDING"
-                                                            ? "bg-amber-500/15 text-amber-300 border-amber-500/30"
-                                                            : "bg-muted text-muted-foreground"
-                                                    }`}
-                                                >
-                                                    {r.status}
-                                                </Badge>
-                                            </div>
-                                            <p className="text-[11px] text-muted-foreground mt-0.5">
-                                                Requested by <b className="text-foreground">{r.requestedByUsername}</b>: {r.reason || "No note provided"}
-                                            </p>
-                                        </div>
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h3 className="font-bold text-sm text-foreground">On-Demand Channel Requests Queue</h3>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                    Member requests for live networks, sports feeds, and local media market affiliate packages with AI Dispatcharr prompts.
+                                </p>
+                            </div>
+                            <span className="text-xs text-muted-foreground font-mono">
+                                {channelRequests.length} requests
+                            </span>
+                        </div>
 
-                                        {r.status === "PENDING" && (
-                                            <div className="flex items-center gap-2">
-                                                <Button
-                                                    size="sm"
-                                                    onClick={() => handleResolveChannelRequest(r.id, "ACTIVATED")}
-                                                    className="h-8 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-bold"
-                                                >
-                                                    Activate Channel
-                                                </Button>
-                                                <Button
-                                                    size="sm"
-                                                    variant="ghost"
-                                                    onClick={() => handleResolveChannelRequest(r.id, "REJECTED")}
-                                                    className="h-8 text-xs text-rose-400"
-                                                >
-                                                    Reject
-                                                </Button>
+                        {channelRequests.length > 0 ? (
+                            <div className="space-y-3">
+                                {channelRequests.map((r: any) => {
+                                    const hasAiPrompt = Boolean(r.adminNotes && r.adminNotes.includes("[AI-DISPATCHARR-PROMPT]"));
+                                    const isLocalRequest = Boolean(r.genre === "Local" || r.callsign?.includes("LOCALS") || hasAiPrompt);
+
+                                    return (
+                                        <div key={r.id} className="p-4 rounded-xl border border-border/40 bg-background/40 space-y-3 text-xs">
+                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                                <div>
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        <span className="font-bold text-foreground text-sm">{r.channelName}</span>
+                                                        <Badge variant="outline" className="text-[10px]">
+                                                            {r.genre || "TV"}
+                                                        </Badge>
+                                                        {hasAiPrompt && (
+                                                            <Badge className="text-[10px] bg-teal-500/15 text-teal-300 border-teal-500/30 gap-1">
+                                                                <Sparkles className="h-3 w-3" /> AI Prompt Ready
+                                                            </Badge>
+                                                        )}
+                                                        <Badge
+                                                            className={`text-[10px] ${
+                                                                r.status === "ACTIVATED"
+                                                                    ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
+                                                                    : r.status === "PENDING"
+                                                                    ? "bg-amber-500/15 text-amber-300 border-amber-500/30"
+                                                                    : "bg-muted text-muted-foreground"
+                                                            }`}
+                                                        >
+                                                            {r.status}
+                                                        </Badge>
+                                                    </div>
+                                                    <p className="text-[11px] text-muted-foreground mt-1">
+                                                        Requested by <b className="text-foreground">{r.requestedByUsername}</b>: {r.reason || "No note provided"}
+                                                    </p>
+                                                </div>
+
+                                                {r.status === "PENDING" && (
+                                                    <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
+                                                        {isLocalRequest && (
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={() => handleScanMarketStreams(r.id, r.callsign || r.channelName || r.adminNotes)}
+                                                                disabled={isPending}
+                                                                className="h-8 text-xs border-teal-500/40 text-teal-300 hover:bg-teal-500/10 font-bold gap-1 rounded-xl"
+                                                            >
+                                                                <Sparkles className="h-3.5 w-3.5" />
+                                                                AI Auto-Scan Dispatcharr
+                                                            </Button>
+                                                        )}
+                                                        <Button
+                                                            size="sm"
+                                                            onClick={() => handleResolveChannelRequest(r.id, "ACTIVATED")}
+                                                            className="h-8 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl"
+                                                        >
+                                                            Activate Channel
+                                                        </Button>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            onClick={() => handleResolveChannelRequest(r.id, "REJECTED")}
+                                                            className="h-8 text-xs text-rose-400 rounded-xl"
+                                                        >
+                                                            Reject
+                                                        </Button>
+                                                    </div>
+                                                )}
                                             </div>
-                                        )}
-                                    </div>
-                                ))}
+
+                                            {r.adminNotes && (
+                                                <div className="pt-2.5 border-t border-border/30 space-y-1.5">
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="text-[11px] font-bold text-teal-300 flex items-center gap-1.5">
+                                                            <Sparkles className="h-3 w-3" />
+                                                            AI Dispatcharr Integration Prompt:
+                                                        </span>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            onClick={() => {
+                                                                navigator.clipboard.writeText(r.adminNotes);
+                                                                setCopiedToken(`prompt-${r.id}`);
+                                                                setTimeout(() => setCopiedToken(null), 2000);
+                                                            }}
+                                                            className="h-6 text-[10px] text-teal-300 hover:text-teal-200 px-2"
+                                                        >
+                                                            {copiedToken === `prompt-${r.id}` ? "✓ Copied!" : "📋 Copy AI Prompt"}
+                                                        </Button>
+                                                    </div>
+                                                    <pre className="p-2.5 rounded-lg bg-slate-950/80 border border-border/60 text-[10px] font-mono text-teal-200/90 whitespace-pre-wrap leading-relaxed max-h-40 overflow-y-auto select-all">
+                                                        {r.adminNotes}
+                                                    </pre>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
                             </div>
                         ) : (
                             <div className="text-center py-8 text-xs text-muted-foreground">
