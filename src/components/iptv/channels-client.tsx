@@ -256,7 +256,8 @@ function ChannelCard({ ch, specialBadge, badgeColor = "teal", onAddToProfile }: 
 }
 
 export function ChannelsClient({ initialData }: ChannelsClientProps) {
-    const [selectedProfile, setSelectedProfile] = useState<string>("all");
+    // Active Hub: "local" | "sports" | "news" | "entertainment" | "kids" | "all" | string (custom profile slug) | "unassigned"
+    const [activeHub, setActiveHub] = useState<string>("local");
     const [selectedGenre, setSelectedGenre] = useState<string>("all");
     const [searchQuery, setSearchQuery] = useState<string>("");
     const [visibleCount, setVisibleCount] = useState<number>(64);
@@ -264,15 +265,13 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
     const [marketActionMsg, setMarketActionMsg] = useState<string>("");
     const [marketActionPrompt, setMarketActionPrompt] = useState<{ marketName: string; prompt: string } | null>(null);
 
-    // Location & Media Market State
+    // Location & Media Market State (Anchored by host, customized by user)
     const [selectedMarket, setSelectedMarket] = useState<string>(
-        initialData.userAccess.preferredMediaMarket || "dallas"
+        initialData.userAccess.preferredMediaMarket || initialData.userAccess.detectedMediaMarket || "dallas"
     );
     const [marketDetectMsg, setMarketDetectMsg] = useState<string>("");
-    const [showDallasAnchor, setShowDallasAnchor] = useState<boolean>(true);
-    const [activeShelf, setActiveShelf] = useState<"all" | "dallas" | "local" | "nfl" | "ncaa" | "unassigned">("all");
 
-        // Add Channel to Profile Modal State
+    // Add Channel to Profile Modal State
     const [targetChannelForProfile, setTargetChannelForProfile] = useState<any | null>(null);
     const [selectedTargetProfile, setSelectedTargetProfile] = useState<string>("");
     const [profileAddReason, setProfileAddReason] = useState<string>("");
@@ -307,11 +306,12 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
     const [showPlexHomeGuide, setShowPlexHomeGuide] = useState(false);
     const canAccess = canAccessState;
 
-    // Computed Shelves
-    const dallasChannels = useMemo(() => getDallasAnchorChannels(channelsList), [channelsList]);
-    const localMarketChannels = useMemo(() => getMarketChannels(channelsList, selectedMarket), [channelsList, selectedMarket]);
-    const nflChannels = useMemo(() => getNflChannels(channelsList), [channelsList]);
-    const ncaaChannels = useMemo(() => getNcaaChannels(channelsList), [channelsList]);
+    // Computed Shelves & Channel Subsets
+    const localMarketChannels = useMemo(
+        () => getMarketChannels(channelsList, selectedMarket),
+        [channelsList, selectedMarket]
+    );
+
     const unassignedChannels = useMemo(() => {
         return channelsList.filter((c) => {
             const curProfiles = Array.isArray(c.profiles) && c.profiles.length > 0
@@ -321,6 +321,37 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
         });
     }, [channelsList]);
 
+    // Accurate channel counts for profile badges
+    const profileMap = useMemo(() => {
+        const map = new Map<string, number>();
+        for (const p of profilesList) {
+            map.set(p.slug, p.channelCount || 0);
+        }
+        return map;
+    }, [profilesList]);
+
+    const sportsCount = useMemo(() => {
+        return profileMap.get("sports") ?? channelsList.filter((c) => c.profileSlugs?.includes("sports")).length;
+    }, [profileMap, channelsList]);
+
+    const newsCount = useMemo(() => {
+        return profileMap.get("news") ?? channelsList.filter((c) => c.profileSlugs?.includes("news")).length;
+    }, [profileMap, channelsList]);
+
+    const entertainmentCount = useMemo(() => {
+        return profileMap.get("entertainment") ?? channelsList.filter((c) => c.profileSlugs?.includes("entertainment")).length;
+    }, [profileMap, channelsList]);
+
+    const kidsCount = useMemo(() => {
+        return profileMap.get("kids") ?? channelsList.filter((c) => c.profileSlugs?.includes("kids")).length;
+    }, [profileMap, channelsList]);
+
+    const primaryGenreSlugs = ["sports", "news", "entertainment", "kids"];
+    const otherProfiles = useMemo(() => {
+        return profilesList.filter(
+            (p) => p.slug !== "all_channels" && !primaryGenreSlugs.includes(p.slug)
+        );
+    }, [profilesList]);
 
     // Synchronize Lineup from live Dispatcharr
     const handleSyncLineup = () => {
@@ -411,27 +442,24 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
         });
     };
 
-    // Filter channels by selected profile, genre, shelf and search query
-    const filteredChannels = useMemo(() => {
+    // Filter channels by active hub, search query, and genre
+    const activeHubChannels = useMemo(() => {
         let base = channelsList;
-
-        if (activeShelf === "dallas") {
-            base = dallasChannels;
-        } else if (activeShelf === "local") {
+        if (activeHub === "local") {
             base = localMarketChannels;
-        } else if (activeShelf === "nfl") {
-            base = nflChannels;
-        } else if (activeShelf === "ncaa") {
-            base = ncaaChannels;
-        } else if (activeShelf === "unassigned") {
+        } else if (activeHub === "unassigned") {
             base = unassignedChannels;
+        } else if (activeHub === "all") {
+            base = channelsList;
+        } else {
+            // Profile slug (sports, news, entertainment, kids, or other custom profiles)
+            base = channelsList.filter((c) => {
+                const slugs = c.profileSlugs || (c.profiles || []).map((p: any) => p.slug);
+                return slugs.includes(activeHub);
+            });
         }
 
         return base.filter((c) => {
-            const matchesProfile =
-                selectedProfile === "all" ||
-                activeShelf !== "all" ||
-                (c.profileSlugs && c.profileSlugs.includes(selectedProfile));
             const matchesGenre = selectedGenre === "all" || c.genre?.toLowerCase() === selectedGenre.toLowerCase();
             const search = searchQuery.trim().toLowerCase();
             const matchesSearch =
@@ -440,11 +468,11 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                 (c.callsign && c.callsign.toLowerCase().includes(search)) ||
                 (c.genre && c.genre.toLowerCase().includes(search)) ||
                 String(c.channelNumber || "").includes(search);
-            return matchesProfile && matchesGenre && matchesSearch;
+            return matchesGenre && matchesSearch;
         });
-    }, [channelsList, activeShelf, dallasChannels, localMarketChannels, nflChannels, ncaaChannels, unassignedChannels, selectedProfile, selectedGenre, searchQuery]);
+    }, [channelsList, activeHub, localMarketChannels, unassignedChannels, selectedGenre, searchQuery]);
 
-    const displayedChannels = filteredChannels.slice(0, visibleCount);
+    const displayedChannels = activeHubChannels.slice(0, visibleCount);
 
     const handleCopy = (text: string, id: string) => {
         navigator.clipboard.writeText(text);
@@ -464,7 +492,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
         });
     };
 
-        const handleOpenAddToProfile = (channel: any) => {
+    const handleOpenAddToProfile = (channel: any) => {
         setTargetChannelForProfile(channel);
         const existingSlugs = channel.profileSlugs || channel.profiles?.map((p: any) => p.slug) || [];
         const candidateProfile = profilesList.find((p) => p.slug !== "all_channels" && !existingSlugs.includes(p.slug));
@@ -622,32 +650,10 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
         });
     };
 
-    const handleGenerateToken = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!tokenLabelInput.trim()) return;
-
-        startTransition(async () => {
-            const res = await generateUserIptvTokenAction(tokenLabelInput.trim());
-            if (res.success && res.data) {
-                setTokensList([res.data, ...tokensList]);
-                setTokenLabelInput("");
-            }
-        });
-    };
-
-    const handleRevokeToken = (tokenId: string) => {
-        startTransition(async () => {
-            const res = await revokeUserIptvTokenAction(tokenId);
-            if (res.success) {
-                setTokensList(tokensList.filter((t) => t.id !== tokenId));
-            }
-        });
-    };
-
     const currentMarket = MEDIA_MARKETS[selectedMarket] || MEDIA_MARKETS.dallas;
 
     return (
-        <div className="container max-w-7xl mx-auto px-4 py-8 space-y-8 animate-in fade-in duration-300">
+        <div className="container max-w-7xl mx-auto px-4 py-8 space-y-7 animate-in fade-in duration-300">
             {/* Header Lockup */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border/40 pb-6">
                 <div>
@@ -659,7 +665,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                             <h1 className="text-2xl md:text-3xl font-extrabold text-foreground tracking-tight flex items-center gap-2.5">
                                 Live TV & Channels
                                 <Badge variant="outline" className="text-xs font-semibold bg-teal-500/10 border-teal-500/30 text-teal-300">
-                                    v1.4 Feature
+                                    v1.5 Feature
                                 </Badge>
                             </h1>
                             <p className="text-sm text-muted-foreground mt-0.5">
@@ -816,403 +822,447 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                 )
             )}
 
-            {/* User Location & Media Market Customization Bar */}
-            <div className="p-4 md:p-5 rounded-2xl border border-teal-500/30 bg-gradient-to-r from-teal-950/40 via-card/60 to-card/40 space-y-3.5 shadow-sm">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                        <div className="h-9 w-9 rounded-xl bg-teal-500/20 border border-teal-500/40 flex items-center justify-center text-teal-300 shrink-0">
-                            <MapPin className="h-4.5 w-4.5" />
-                        </div>
-                        <div>
-                            <div className="flex items-center gap-2">
-                                <h3 className="text-sm font-bold text-foreground">
-                                    Local News, Affiliates & Regional Sports
-                                </h3>
-                                <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-300 border-emerald-500/30">
-                                    Dallas Host Server Anchored
-                                </Badge>
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                                Server is anchored in Dallas, TX (DFW broadcast feeds are always active below). Select your media market to browse local affiliates or send an AI request to add missing local channels into Dispatcharr:
-                            </p>
-                        </div>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2">
-                        <div className="flex items-center gap-1.5 bg-background/80 border border-border/80 rounded-xl px-2.5 py-1">
-                            <span className="text-xs text-muted-foreground font-semibold">Location:</span>
-                            <select
-                                value={selectedMarket}
-                                onChange={(e) => handleMarketChange(e.target.value)}
-                                className="bg-transparent text-xs font-bold text-foreground focus:outline-none cursor-pointer pr-1"
-                            >
-                                {ORDERED_MARKETS.map((m) => (
-                                    <option key={m.slug} value={m.slug} className="bg-card text-foreground">
-                                        {m.name} {m.isHostServer ? "⭐️" : ""}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-
-                        <Button
-                            onClick={handleAutoDetectMarket}
-                            disabled={isPending}
-                            size="sm"
-                            variant="outline"
-                            className="h-8 text-xs font-bold gap-1.5 border-teal-500/40 text-teal-300 hover:bg-teal-500/10 rounded-xl"
-                        >
-                            <Crosshair className={`h-3.5 w-3.5 ${isPending ? "animate-spin" : ""}`} />
-                            Auto-Detect from IP
-                        </Button>
-
-                        {selectedMarket !== "dallas" && (
-                            <Button
-                                onClick={() => handleRequestMarketChannels(selectedMarket)}
-                                disabled={isPending}
-                                size="sm"
-                                className="h-8 text-xs font-bold gap-1.5 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white rounded-xl shadow-sm whitespace-nowrap"
-                            >
-                                <Sparkles className="h-3.5 w-3.5 text-teal-200" />
-                                Request {currentMarket.shortName} Channels
-                            </Button>
-                        )}
-                    </div>
-                </div>
-
-                {marketDetectMsg && (
-                    <div className="text-xs text-emerald-400 font-semibold flex items-center gap-1.5 animate-in fade-in duration-200">
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                        {marketDetectMsg}
-                    </div>
-                )}
-
-                {/* Quick Shelf Filter Pills */}
-                <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-border/30">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                        Featured Hubs:
+            {/* Top-Level Clickable Hubs Bar (Profiles + Local Hub + Unassigned Hub strictly last) */}
+            <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground/80 flex items-center gap-2">
+                        <span>Select Channel Hub</span>
+                        <span className="text-[10px] text-teal-400/80 lowercase font-medium">
+                            • click any hub to explore lineup
+                        </span>
                     </span>
-                    <button
-                        onClick={() => setActiveShelf("all")}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-                            activeShelf === "all"
-                                ? "bg-teal-500/20 text-teal-200 border border-teal-500/40"
-                                : "text-muted-foreground hover:text-foreground hover:bg-card/60"
-                        }`}
-                    >
-                        All Lineup Channels ({channelsList.length})
-                    </button>
-                    <button
-                        onClick={() => setActiveShelf("dallas")}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
-                            activeShelf === "dallas"
-                                ? "bg-amber-500/20 text-amber-200 border border-amber-500/40"
-                                : "text-muted-foreground hover:text-foreground hover:bg-card/60"
-                        }`}
-                    >
-                        <Star className="h-3 w-3 text-amber-400 fill-amber-400" />
-                        Dallas Hub ({dallasChannels.length})
-                    </button>
-                    {selectedMarket !== "dallas" && (
-                        <button
-                            onClick={() => setActiveShelf("local")}
-                            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
-                                activeShelf === "local"
-                                    ? "bg-sky-500/20 text-sky-200 border border-sky-500/40"
-                                    : "text-muted-foreground hover:text-foreground hover:bg-card/60"
-                            }`}
-                        >
-                            <MapPin className="h-3 w-3 text-sky-400" />
-                            {currentMarket.shortName} Locals ({localMarketChannels.length})
-                        </button>
-                    )}
-                    <button
-                        onClick={() => setActiveShelf("nfl")}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
-                            activeShelf === "nfl"
-                                ? "bg-rose-500/20 text-rose-200 border border-rose-500/40"
-                                : "text-muted-foreground hover:text-foreground hover:bg-card/60"
-                        }`}
-                    >
-                        <Flame className="h-3 w-3 text-rose-400" />
-                        NFL & Pro Football ({nflChannels.length})
-                    </button>
-                    <button
-                        onClick={() => setActiveShelf("ncaa")}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
-                            activeShelf === "ncaa"
-                                ? "bg-purple-500/20 text-purple-200 border border-purple-500/40"
-                                : "text-muted-foreground hover:text-foreground hover:bg-card/60"
-                        }`}
-                    >
-                        <GraduationCap className="h-3 w-3 text-purple-400" />
-                        NCAA Football ({ncaaChannels.length})
-                    </button>
-                    {unassignedChannels.length > 0 && (
-                        <button
-                            onClick={() => setActiveShelf("unassigned")}
-                            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
-                                activeShelf === "unassigned"
-                                    ? "bg-amber-500/20 text-amber-200 border border-amber-500/40"
-                                    : "text-muted-foreground hover:text-foreground hover:bg-card/60"
-                            }`}
-                        >
-                            <AlertCircle className="h-3 w-3 text-amber-400" />
-                            ⚠️ Not in a Profile ({unassignedChannels.length})
-                        </button>
-                    )}
+                    <span className="text-xs text-muted-foreground">
+                        {activeHubChannels.length} channel{activeHubChannels.length === 1 ? "" : "s"} in view
+                    </span>
                 </div>
-            </div>
 
-            {/* ⭐️ Dallas Host Server Hub (Always Anchored & Prominent) */}
-            {dallasChannels.length > 0 && activeShelf === "all" && (
-                <div className="rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-950/20 via-card/50 to-card/30 p-5 space-y-4 shadow-sm">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2.5">
-                            <div className="h-8 w-8 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-300">
-                                <Star className="h-4 w-4 fill-amber-400" />
-                            </div>
-                            <div>
-                                <h3 className="font-bold text-sm text-foreground flex items-center gap-2">
-                                    Dallas / Fort Worth Host Feeds (DFW)
-                                    <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-300 border-amber-500/30">
-                                        Server Anchor • 11 Feeds
-                                    </Badge>
-                                </h3>
-                                <p className="text-[11px] text-muted-foreground">
-                                    Direct in-market Dallas broadcast stations (KXAS NBC 5, KDFW FOX 4, KTVT CBS 11, WFAA ABC 8, KTXA 21, KDFI 27)
-                                </p>
-                            </div>
-                        </div>
-
-                        <button
-                            onClick={() => setShowDallasAnchor(!showDallasAnchor)}
-                            className="text-xs text-muted-foreground hover:text-foreground font-semibold flex items-center gap-1 px-2.5 py-1 rounded-lg hover:bg-card"
-                        >
-                            {showDallasAnchor ? (
-                                <>
-                                    <span>Collapse</span>
-                                    <ChevronUp className="h-3.5 w-3.5" />
-                                </>
-                            ) : (
-                                <>
-                                    <span>Expand ({dallasChannels.length})</span>
-                                    <ChevronDown className="h-3.5 w-3.5" />
-                                </>
-                            )}
-                        </button>
-                    </div>
-
-                    {showDallasAnchor && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5 animate-in fade-in duration-200">
-                            {dallasChannels.slice(0, 8).map((ch) => (
-                                <ChannelCard key={ch.id} ch={ch} specialBadge="⭐️ Dallas Anchor" badgeColor="amber" onAddToProfile={handleOpenAddToProfile} />
-                            ))}
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {/* 📍 Selected User Media Market Shelf (when market != dallas) */}
-            {selectedMarket !== "dallas" && activeShelf === "all" && (
-                <div className="rounded-2xl border border-sky-500/30 bg-gradient-to-r from-sky-950/20 via-card/50 to-card/30 p-5 space-y-4 shadow-sm">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <div className="flex items-center gap-2.5">
-                            <div className="h-8 w-8 rounded-lg bg-sky-500/20 border border-sky-500/40 flex items-center justify-center text-sky-300">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2.5">
+                    {/* Hub 1: 📍 Local Channels Hub (Anchored by host, customized by IP or selector) */}
+                    <button
+                        onClick={() => {
+                            setActiveHub("local");
+                            setVisibleCount(64);
+                        }}
+                        className={`p-3 rounded-2xl border text-left transition-all duration-200 flex flex-col justify-between group relative overflow-hidden ${
+                            activeHub === "local"
+                                ? "bg-gradient-to-br from-sky-500/25 via-sky-950/40 to-card border-sky-500/60 shadow-md ring-1 ring-sky-500/30"
+                                : "bg-card/60 hover:bg-card border-border/50 hover:border-sky-500/40"
+                        }`}
+                    >
+                        <div className="flex items-center justify-between w-full mb-2">
+                            <div className={`p-1.5 rounded-xl transition-colors ${
+                                activeHub === "local"
+                                    ? "bg-sky-500/30 text-sky-200"
+                                    : "bg-sky-500/10 text-sky-400 group-hover:bg-sky-500/20"
+                            }`}>
                                 <MapPin className="h-4 w-4" />
                             </div>
+                            <span className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-full ${
+                                activeHub === "local"
+                                    ? "bg-sky-400 text-slate-950"
+                                    : "bg-sky-500/15 text-sky-300 border border-sky-500/30"
+                            }`}>
+                                {localMarketChannels.length}
+                            </span>
+                        </div>
+                        <div>
+                            <h4 className="text-xs font-extrabold text-foreground tracking-tight group-hover:text-sky-200 transition-colors">
+                                Local Hub
+                            </h4>
+                            <p className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5">
+                                {currentMarket.shortName}
+                            </p>
+                        </div>
+                    </button>
+
+                    {/* Hub 2: 🏆 Sports */}
+                    <button
+                        onClick={() => {
+                            setActiveHub("sports");
+                            setVisibleCount(64);
+                        }}
+                        className={`p-3 rounded-2xl border text-left transition-all duration-200 flex flex-col justify-between group relative overflow-hidden ${
+                            activeHub === "sports"
+                                ? "bg-gradient-to-br from-rose-500/25 via-rose-950/40 to-card border-rose-500/60 shadow-md ring-1 ring-rose-500/30"
+                                : "bg-card/60 hover:bg-card border-border/50 hover:border-rose-500/40"
+                        }`}
+                    >
+                        <div className="flex items-center justify-between w-full mb-2">
+                            <div className={`p-1.5 rounded-xl transition-colors ${
+                                activeHub === "sports"
+                                    ? "bg-rose-500/30 text-rose-200"
+                                    : "bg-rose-500/10 text-rose-400 group-hover:bg-rose-500/20"
+                            }`}>
+                                <Trophy className="h-4 w-4" />
+                            </div>
+                            <span className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-full ${
+                                activeHub === "sports"
+                                    ? "bg-rose-400 text-slate-950"
+                                    : "bg-rose-500/15 text-rose-300 border border-rose-500/30"
+                            }`}>
+                                {sportsCount}
+                            </span>
+                        </div>
+                        <div>
+                            <h4 className="text-xs font-extrabold text-foreground tracking-tight group-hover:text-rose-200 transition-colors">
+                                Sports
+                            </h4>
+                            <p className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5">
+                                RedZone, ESPN & College
+                            </p>
+                        </div>
+                    </button>
+
+                    {/* Hub 3: 📰 News */}
+                    <button
+                        onClick={() => {
+                            setActiveHub("news");
+                            setVisibleCount(64);
+                        }}
+                        className={`p-3 rounded-2xl border text-left transition-all duration-200 flex flex-col justify-between group relative overflow-hidden ${
+                            activeHub === "news"
+                                ? "bg-gradient-to-br from-blue-500/25 via-blue-950/40 to-card border-blue-500/60 shadow-md ring-1 ring-blue-500/30"
+                                : "bg-card/60 hover:bg-card border-border/50 hover:border-blue-500/40"
+                        }`}
+                    >
+                        <div className="flex items-center justify-between w-full mb-2">
+                            <div className={`p-1.5 rounded-xl transition-colors ${
+                                activeHub === "news"
+                                    ? "bg-blue-500/30 text-blue-200"
+                                    : "bg-blue-500/10 text-blue-400 group-hover:bg-blue-500/20"
+                            }`}>
+                                <Newspaper className="h-4 w-4" />
+                            </div>
+                            <span className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-full ${
+                                activeHub === "news"
+                                    ? "bg-blue-400 text-slate-950"
+                                    : "bg-blue-500/15 text-blue-300 border border-blue-500/30"
+                            }`}>
+                                {newsCount}
+                            </span>
+                        </div>
+                        <div>
+                            <h4 className="text-xs font-extrabold text-foreground tracking-tight group-hover:text-blue-200 transition-colors">
+                                News
+                            </h4>
+                            <p className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5">
+                                National & Financial
+                            </p>
+                        </div>
+                    </button>
+
+                    {/* Hub 4: 🎬 Entertainment */}
+                    <button
+                        onClick={() => {
+                            setActiveHub("entertainment");
+                            setVisibleCount(64);
+                        }}
+                        className={`p-3 rounded-2xl border text-left transition-all duration-200 flex flex-col justify-between group relative overflow-hidden ${
+                            activeHub === "entertainment"
+                                ? "bg-gradient-to-br from-purple-500/25 via-purple-950/40 to-card border-purple-500/60 shadow-md ring-1 ring-purple-500/30"
+                                : "bg-card/60 hover:bg-card border-border/50 hover:border-purple-500/40"
+                        }`}
+                    >
+                        <div className="flex items-center justify-between w-full mb-2">
+                            <div className={`p-1.5 rounded-xl transition-colors ${
+                                activeHub === "entertainment"
+                                    ? "bg-purple-500/30 text-purple-200"
+                                    : "bg-purple-500/10 text-purple-400 group-hover:bg-purple-500/20"
+                            }`}>
+                                <Film className="h-4 w-4" />
+                            </div>
+                            <span className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-full ${
+                                activeHub === "entertainment"
+                                    ? "bg-purple-400 text-slate-950"
+                                    : "bg-purple-500/15 text-purple-300 border border-purple-500/30"
+                            }`}>
+                                {entertainmentCount}
+                            </span>
+                        </div>
+                        <div>
+                            <h4 className="text-xs font-extrabold text-foreground tracking-tight group-hover:text-purple-200 transition-colors">
+                                Entertainment
+                            </h4>
+                            <p className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5">
+                                Series, Drama & Movies
+                            </p>
+                        </div>
+                    </button>
+
+                    {/* Hub 5: 👶 Kids */}
+                    <button
+                        onClick={() => {
+                            setActiveHub("kids");
+                            setVisibleCount(64);
+                        }}
+                        className={`p-3 rounded-2xl border text-left transition-all duration-200 flex flex-col justify-between group relative overflow-hidden ${
+                            activeHub === "kids"
+                                ? "bg-gradient-to-br from-emerald-500/25 via-emerald-950/40 to-card border-emerald-500/60 shadow-md ring-1 ring-emerald-500/30"
+                                : "bg-card/60 hover:bg-card border-border/50 hover:border-emerald-500/40"
+                        }`}
+                    >
+                        <div className="flex items-center justify-between w-full mb-2">
+                            <div className={`p-1.5 rounded-xl transition-colors ${
+                                activeHub === "kids"
+                                    ? "bg-emerald-500/30 text-emerald-200"
+                                    : "bg-emerald-500/10 text-emerald-400 group-hover:bg-emerald-500/20"
+                            }`}>
+                                <Baby className="h-4 w-4" />
+                            </div>
+                            <span className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-full ${
+                                activeHub === "kids"
+                                    ? "bg-emerald-400 text-slate-950"
+                                    : "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
+                            }`}>
+                                {kidsCount}
+                            </span>
+                        </div>
+                        <div>
+                            <h4 className="text-xs font-extrabold text-foreground tracking-tight group-hover:text-emerald-200 transition-colors">
+                                Kids & Family
+                            </h4>
+                            <p className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5">
+                                Animation & Cartoons
+                            </p>
+                        </div>
+                    </button>
+
+                    {/* Hub 6: 📺 All Channels */}
+                    <button
+                        onClick={() => {
+                            setActiveHub("all");
+                            setVisibleCount(64);
+                        }}
+                        className={`p-3 rounded-2xl border text-left transition-all duration-200 flex flex-col justify-between group relative overflow-hidden ${
+                            activeHub === "all"
+                                ? "bg-gradient-to-br from-teal-500/25 via-teal-950/40 to-card border-teal-500/60 shadow-md ring-1 ring-teal-500/30"
+                                : "bg-card/60 hover:bg-card border-border/50 hover:border-teal-500/40"
+                        }`}
+                    >
+                        <div className="flex items-center justify-between w-full mb-2">
+                            <div className={`p-1.5 rounded-xl transition-colors ${
+                                activeHub === "all"
+                                    ? "bg-teal-500/30 text-teal-200"
+                                    : "bg-teal-500/10 text-teal-400 group-hover:bg-teal-500/20"
+                            }`}>
+                                <Layers className="h-4 w-4" />
+                            </div>
+                            <span className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-full ${
+                                activeHub === "all"
+                                    ? "bg-teal-400 text-slate-950"
+                                    : "bg-teal-500/15 text-teal-300 border border-teal-500/30"
+                            }`}>
+                                {channelsList.length}
+                            </span>
+                        </div>
+                        <div>
+                            <h4 className="text-xs font-extrabold text-foreground tracking-tight group-hover:text-teal-200 transition-colors">
+                                All Lineups
+                            </h4>
+                            <p className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5">
+                                Master Channel Pool
+                            </p>
+                        </div>
+                    </button>
+
+                    {/* Hub 7: ⚠️ Not in any Profile (Strictly the LAST hub) */}
+                    <button
+                        onClick={() => {
+                            setActiveHub("unassigned");
+                            setVisibleCount(64);
+                        }}
+                        className={`p-3 rounded-2xl border text-left transition-all duration-200 flex flex-col justify-between group relative overflow-hidden ${
+                            activeHub === "unassigned"
+                                ? "bg-gradient-to-br from-amber-500/25 via-amber-950/40 to-card border-amber-500/60 shadow-md ring-1 ring-amber-500/30"
+                                : unassignedChannels.length > 0
+                                ? "bg-amber-500/5 hover:bg-card border-amber-500/30 hover:border-amber-500/50"
+                                : "bg-card/60 hover:bg-card border-border/50 hover:border-amber-500/40"
+                        }`}
+                    >
+                        <div className="flex items-center justify-between w-full mb-2">
+                            <div className={`p-1.5 rounded-xl transition-colors ${
+                                activeHub === "unassigned"
+                                    ? "bg-amber-500/30 text-amber-200"
+                                    : "bg-amber-500/10 text-amber-400 group-hover:bg-amber-500/20"
+                            }`}>
+                                <AlertCircle className="h-4 w-4" />
+                            </div>
+                            <span className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-full ${
+                                activeHub === "unassigned"
+                                    ? "bg-amber-400 text-slate-950"
+                                    : unassignedChannels.length > 0
+                                    ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                                    : "bg-muted text-muted-foreground"
+                            }`}>
+                                {unassignedChannels.length}
+                            </span>
+                        </div>
+                        <div>
+                            <h4 className="text-xs font-extrabold text-foreground tracking-tight group-hover:text-amber-200 transition-colors">
+                                Not in Profile
+                            </h4>
+                            <p className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5">
+                                Needs Profile Mapping
+                            </p>
+                        </div>
+                    </button>
+                </div>
+
+                {/* Optional Custom Profiles (e.g. Fios, Spectrum, or other custom lineups) */}
+                {otherProfiles.length > 0 && (
+                    <div className="flex items-center gap-2 pt-1 flex-wrap">
+                        <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+                            Additional Lineups:
+                        </span>
+                        {otherProfiles.map((p) => (
+                            <button
+                                key={p.id}
+                                onClick={() => {
+                                    setActiveHub(p.slug);
+                                    setVisibleCount(64);
+                                }}
+                                className={`px-2.5 py-1 rounded-xl text-xs font-semibold border transition-all flex items-center gap-1.5 ${
+                                    activeHub === p.slug
+                                        ? "bg-teal-500/20 border-teal-500/50 text-teal-200 shadow-sm"
+                                        : "bg-card/40 border-border/40 text-muted-foreground hover:text-foreground hover:bg-card"
+                                }`}
+                            >
+                                <Radio className="h-3 w-3" />
+                                <span>{p.name}</span>
+                                <span className="text-[10px] opacity-70 font-mono">({p.channelCount || 0})</span>
+                            </button>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {/* CHANNELS DISPLAYED DIRECTLY UNDERNEATH ACTIVE HUB */}
+
+            {/* Sub-Header Toolbar when "Local Hub" is active */}
+            {activeHub === "local" && (
+                <div className="p-4 md:p-5 rounded-2xl border border-sky-500/30 bg-gradient-to-r from-sky-950/30 via-card/60 to-card/40 space-y-3.5 shadow-sm animate-in fade-in duration-200">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                            <div className="h-9 w-9 rounded-xl bg-sky-500/20 border border-sky-500/40 flex items-center justify-center text-sky-300 shrink-0">
+                                <MapPin className="h-4.5 w-4.5" />
+                            </div>
                             <div>
-                                <h3 className="font-bold text-sm text-foreground flex items-center gap-2">
-                                    Your Local Market Feeds: {currentMarket.name}
-                                    <Badge variant="outline" className="text-[10px] bg-sky-500/10 text-sky-300 border-sky-500/30">
-                                        {localMarketChannels.length} Channels Matched
-                                    </Badge>
-                                </h3>
-                                <p className="text-[11px] text-muted-foreground">
-                                    In-market broadcast affiliates and regional sports covering {currentMarket.nflTeams.join(", ")}
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <h3 className="text-sm font-bold text-foreground">
+                                        {currentMarket.name}
+                                    </h3>
+                                    {currentMarket.isHostServer ? (
+                                        <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-300 border-amber-500/30">
+                                            ⭐️ Host Server Anchored (DFW)
+                                        </Badge>
+                                    ) : (
+                                        <Badge variant="outline" className="text-[10px] bg-sky-500/10 text-sky-300 border-sky-500/30">
+                                            📍 Selected Media Market
+                                        </Badge>
+                                    )}
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                    Direct in-market broadcast stations (NBC, CBS, FOX, ABC, CW) and regional sports feeds for {currentMarket.shortName}.
                                 </p>
                             </div>
                         </div>
 
-                        <Button
-                            onClick={() => handleRequestMarketChannels(selectedMarket)}
-                            disabled={isPending}
-                            size="sm"
-                            variant="outline"
-                            className="h-8 text-xs font-bold gap-1.5 border-sky-500/40 text-sky-300 hover:bg-sky-500/10 rounded-xl whitespace-nowrap self-start sm:self-auto"
-                        >
-                            <Sparkles className="h-3.5 w-3.5 text-sky-400" />
-                            {localMarketChannels.length === 0 ? "Request All Local Channels" : "Request Missing Affiliates"}
-                        </Button>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <div className="flex items-center gap-1.5 bg-background/80 border border-border/80 rounded-xl px-2.5 py-1">
+                                <span className="text-xs text-muted-foreground font-semibold">Location:</span>
+                                <select
+                                    value={selectedMarket}
+                                    onChange={(e) => handleMarketChange(e.target.value)}
+                                    className="bg-transparent text-xs font-bold text-foreground focus:outline-none cursor-pointer pr-1"
+                                >
+                                    {ORDERED_MARKETS.map((m) => (
+                                        <option key={m.slug} value={m.slug} className="bg-card text-foreground">
+                                            {m.name} {m.isHostServer ? "⭐️" : ""}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <Button
+                                onClick={handleAutoDetectMarket}
+                                disabled={isPending}
+                                size="sm"
+                                variant="outline"
+                                className="h-8 text-xs font-bold gap-1.5 border-teal-500/40 text-teal-300 hover:bg-teal-500/10 rounded-xl"
+                            >
+                                <Crosshair className={`h-3.5 w-3.5 ${isPending ? "animate-spin" : ""}`} />
+                                Auto-Detect from IP
+                            </Button>
+
+                            {selectedMarket !== "dallas" && (
+                                <Button
+                                    onClick={() => handleRequestMarketChannels(selectedMarket)}
+                                    disabled={isPending}
+                                    size="sm"
+                                    className="h-8 text-xs font-bold gap-1.5 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white rounded-xl shadow-sm whitespace-nowrap"
+                                >
+                                    <Sparkles className="h-3.5 w-3.5 text-teal-200" />
+                                    {localMarketChannels.length === 0 ? "Request All Local Channels" : `Request Missing ${currentMarket.shortName} Channels`}
+                                </Button>
+                            )}
+                        </div>
                     </div>
 
-                    {localMarketChannels.length > 0 ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
-                            {localMarketChannels.slice(0, 8).map((ch) => (
-                                <ChannelCard key={ch.id} ch={ch} specialBadge={`📍 ${currentMarket.shortName}`} badgeColor="blue" onAddToProfile={handleOpenAddToProfile} />
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="p-4 rounded-xl border border-dashed border-sky-500/30 bg-sky-500/5 text-center space-y-2">
-                            <p className="text-xs text-sky-200">
-                                No broadcast channels are currently mapped for <b>{currentMarket.name}</b> in Dispatcharr.
-                            </p>
-                            <p className="text-[11px] text-muted-foreground">
-                                Click the button above to send a request with an AI-generated Dispatcharr prompt to search and map NBC, CBS, FOX, ABC & regional sports.
-                            </p>
+                    {marketDetectMsg && (
+                        <div className="text-xs text-emerald-400 font-semibold flex items-center gap-1.5 animate-in fade-in duration-200">
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            {marketDetectMsg}
                         </div>
                     )}
                 </div>
             )}
 
-            {/* 🏈 NFL & Pro Football Quick Shelf */}
-            {nflChannels.length > 0 && activeShelf === "all" && (
-                <div className="rounded-2xl border border-rose-500/30 bg-gradient-to-r from-rose-950/20 via-card/50 to-card/30 p-5 space-y-4 shadow-sm">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2.5">
-                            <div className="h-8 w-8 rounded-lg bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-300">
-                                <Flame className="h-4 w-4" />
-                            </div>
-                            <div>
-                                <h3 className="font-bold text-sm text-foreground flex items-center gap-2">
-                                    NFL & Sunday Football Command Center
-                                    <Badge variant="outline" className="text-[10px] bg-rose-500/10 text-rose-300 border-rose-500/30">
-                                        RedZone • NFL Network • Sunday Games
-                                    </Badge>
-                                </h3>
-                                <p className="text-[11px] text-muted-foreground">
-                                    Commercial-free NFL RedZone 1080p 60fps, 24/7 NFL Network, and Sunday NFL national broadcast feeds
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
-                        {nflChannels.slice(0, 4).map((ch) => (
-                            <ChannelCard key={ch.id} ch={ch} specialBadge="🏈 NFL Live" badgeColor="rose" onAddToProfile={handleOpenAddToProfile} />
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            {/* 🎓 NCAA College Football & Sports Hub Quick Shelf */}
-            {ncaaChannels.length > 0 && activeShelf === "all" && (
-                <div className="rounded-2xl border border-purple-500/30 bg-gradient-to-r from-purple-950/20 via-card/50 to-card/30 p-5 space-y-4 shadow-sm">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2.5">
-                            <div className="h-8 w-8 rounded-lg bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-300">
-                                <GraduationCap className="h-4 w-4" />
-                            </div>
-                            <div>
-                                <h3 className="font-bold text-sm text-foreground flex items-center gap-2">
-                                    NCAA College Football & Campus Sports
-                                    <Badge variant="outline" className="text-[10px] bg-purple-500/10 text-purple-300 border-purple-500/30">
-                                        SEC • Big Ten • ACC • ESPNU • CBSSN
-                                    </Badge>
-                                </h3>
-                                <p className="text-[11px] text-muted-foreground">
-                                    Saturday college football game day coverage across SEC Network, Big Ten Network, ACC Network, and ESPNU
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
-                        {ncaaChannels.slice(0, 4).map((ch) => (
-                            <ChannelCard key={ch.id} ch={ch} specialBadge="🎓 NCAA Sports" badgeColor="purple" onAddToProfile={handleOpenAddToProfile} />
-                        ))}
-                    </div>
-                </div>
-            )}
-
-                        {/* ⚠️ Unassigned Channels Shelf Banner */}
-            {activeShelf === "unassigned" && (
-                <div className="rounded-2xl border border-amber-500/40 bg-gradient-to-r from-amber-950/20 via-card/50 to-card/30 p-5 space-y-2 shadow-sm animate-in fade-in duration-200">
+            {/* Sub-Header Banner when "Not in a Profile" Hub is active */}
+            {activeHub === "unassigned" && (
+                <div className="p-4 md:p-5 rounded-2xl border border-amber-500/40 bg-gradient-to-r from-amber-950/25 via-card/60 to-card/40 space-y-2 shadow-sm animate-in fade-in duration-200">
                     <div className="flex items-center gap-2.5">
                         <div className="h-8 w-8 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-300">
                             <AlertCircle className="h-4 w-4" />
                         </div>
                         <div>
                             <h3 className="font-bold text-sm text-foreground flex items-center gap-2">
-                                Channels Not Assigned to Any Profile ({unassignedChannels.length})
+                                Channels Not in Any Profile ({unassignedChannels.length})
                                 <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-300 border-amber-500/30">
                                     Needs Profile Mapping
                                 </Badge>
                             </h3>
                             <p className="text-[11px] text-muted-foreground">
-                                These channels exist in your master lineup but have not yet been assigned to any Dispatcharr profile (Sports, News, Entertainment, Kids, Fios, Spectrum, etc.). Click <b>+ Add to Profile</b> on any card to map it to a profile and update Plex Live TV automatically.
+                                These channels exist in your master lineup but have not yet been assigned to any Dispatcharr profile (Sports, News, Entertainment, Kids). Click <b>+ Add to Profile</b> on any card to map it to a profile and update Plex Live TV automatically.
                             </p>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Profile Lineup Selector Pills */}
-            <div className="space-y-3 pt-2">
-                <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground/80">
-                        {activeShelf === "all" ? "Channel Lineup Profiles" : `Filtered by: ${activeShelf.toUpperCase()}`}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                        {filteredChannels.length} channel{filteredChannels.length === 1 ? "" : "s"} shown
-                        {selectedProfile !== "all" && (
-                            <span className="ml-1 text-teal-400 font-semibold">
-                                ({profilesList.find((p) => p.slug === selectedProfile)?.name || selectedProfile})
-                            </span>
-                        )}
-                    </span>
+            {/* Sub-Header Banner when "Sports" Hub is active */}
+            {activeHub === "sports" && (
+                <div className="p-3.5 rounded-2xl border border-rose-500/25 bg-gradient-to-r from-rose-950/20 via-card/50 to-card/30 flex items-center justify-between shadow-sm animate-in fade-in duration-200">
+                    <div className="flex items-center gap-2.5">
+                        <div className="h-7 w-7 rounded-lg bg-rose-500/20 border border-rose-500/30 flex items-center justify-center text-rose-300">
+                            <Trophy className="h-3.5 w-3.5" />
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-xs text-foreground flex items-center gap-2">
+                                Sports Command Center Lineup
+                                <Badge variant="outline" className="text-[9px] bg-rose-500/10 text-rose-300 border-rose-500/30">
+                                    RedZone • NFL • College • ESPN
+                                </Badge>
+                            </h3>
+                            <p className="text-[10px] text-muted-foreground">
+                                Commercial-free NFL RedZone, NFL Network, Saturday college football (SEC, Big Ten, ACC, ESPNU), and major league sports feeds
+                            </p>
+                        </div>
+                    </div>
                 </div>
+            )}
 
-                <div className="flex flex-wrap gap-2">
-                    <button
-                        onClick={() => {
-                            setSelectedProfile("all");
-                            setVisibleCount(64);
-                        }}
-                        className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all border ${
-                            selectedProfile === "all"
-                                ? "bg-teal-500/20 border-teal-500/50 text-teal-200 shadow-sm"
-                                : "bg-card/60 border-border/40 text-muted-foreground hover:text-foreground hover:bg-card"
-                        }`}
-                    >
-                        <Layers className="h-3.5 w-3.5 inline mr-1.5" />
-                        All Lineups
-                    </button>
-
-                    {profilesList.filter((p) => p.slug !== "all_channels").map((p) => {
-                        const IconComponent = p.slug.includes("sport")
-                            ? Trophy
-                            : p.slug.includes("kid")
-                            ? Baby
-                            : p.slug.includes("news")
-                            ? Newspaper
-                            : p.slug.includes("fios") || p.slug.includes("spectrum")
-                            ? Radio
-                            : Film;
-
-                        return (
-                            <button
-                                key={p.id}
-                                onClick={() => {
-                                    setSelectedProfile(p.slug);
-                                    setVisibleCount(64);
-                                }}
-                                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${
-                                    selectedProfile === p.slug
-                                        ? "bg-teal-500/20 border-teal-500/50 text-teal-200 shadow-sm"
-                                        : "bg-card/60 border-border/40 text-muted-foreground hover:text-foreground hover:bg-card"
-                                }`}
-                            >
-                                <IconComponent className="h-3.5 w-3.5" />
-                                {p.name}
-                                <span className="text-[10px] opacity-60">({p.channelCount})</span>
-                            </button>
-                        );
-                    })}
-                </div>
-            </div>
-
-            {/* Search & Genre Filters */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-card/40 p-3 rounded-2xl border border-border/40">
+            {/* Search & Genre Filter Bar */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-card/40 p-3 rounded-2xl border border-border/40 shadow-sm">
                 <div className="relative w-full sm:w-80">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
@@ -1236,7 +1286,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                             }}
                             className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors ${
                                 selectedGenre === genre
-                                    ? "bg-primary text-primary-foreground font-bold"
+                                    ? "bg-primary text-primary-foreground font-bold shadow-sm"
                                     : "bg-muted/40 text-muted-foreground hover:text-foreground"
                             }`}
                         >
@@ -1247,57 +1297,117 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
             </div>
 
             {/* Main Channel Cards Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {displayedChannels.map((ch) => (
-                    <ChannelCard key={ch.id} ch={ch} onAddToProfile={handleOpenAddToProfile} />
-                ))}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
+                {displayedChannels.map((ch) => {
+                    let specialBadge: string | undefined = undefined;
+                    let badgeColor: "teal" | "amber" | "emerald" | "purple" | "rose" | "blue" = "teal";
+
+                    if (activeHub === "local") {
+                        specialBadge = currentMarket.isHostServer ? "⭐️ Dallas Anchor" : `📍 ${currentMarket.shortName}`;
+                        badgeColor = currentMarket.isHostServer ? "amber" : "blue";
+                    } else if (activeHub === "unassigned") {
+                        specialBadge = "⚠️ Needs Profile";
+                        badgeColor = "amber";
+                    } else if (activeHub === "sports") {
+                        const nameLower = ch.name.toLowerCase();
+                        if (nameLower.includes("redzone") || nameLower.includes("nfl network")) {
+                            specialBadge = "🏈 NFL Live";
+                            badgeColor = "rose";
+                        } else if (nameLower.includes("sec") || nameLower.includes("big ten") || nameLower.includes("acc") || nameLower.includes("espnu")) {
+                            specialBadge = "🎓 NCAA Sports";
+                            badgeColor = "purple";
+                        }
+                    }
+
+                    return (
+                        <ChannelCard
+                            key={ch.id}
+                            ch={ch}
+                            specialBadge={specialBadge}
+                            badgeColor={badgeColor}
+                            onAddToProfile={handleOpenAddToProfile}
+                        />
+                    );
+                })}
             </div>
 
+            {/* Empty State for Active Hub */}
+            {activeHubChannels.length === 0 && (
+                <div className="text-center py-12 border border-dashed border-border/60 rounded-2xl bg-card/20 space-y-3">
+                    {activeHub === "local" ? (
+                        <>
+                            <MapPin className="h-8 w-8 text-sky-400 mx-auto opacity-70" />
+                            <p className="text-sm font-semibold text-foreground">
+                                No local broadcast stations are currently mapped for {currentMarket.name}.
+                            </p>
+                            <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                                Click the button below to send an AI-assisted request into Dispatcharr to search and map NBC, CBS, FOX, ABC & regional sports feeds.
+                            </p>
+                            <Button
+                                onClick={() => handleRequestMarketChannels(selectedMarket)}
+                                disabled={isPending}
+                                size="sm"
+                                className="bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs gap-1.5 rounded-xl shadow-sm"
+                            >
+                                <Sparkles className="h-3.5 w-3.5" />
+                                Request {currentMarket.shortName} Channels
+                            </Button>
+                        </>
+                    ) : activeHub === "unassigned" ? (
+                        <>
+                            <CheckCircle2 className="h-8 w-8 text-emerald-400 mx-auto" />
+                            <p className="text-sm font-semibold text-emerald-300">
+                                All Channels Are Assigned!
+                            </p>
+                            <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                                Every active channel in your lineup is assigned to at least one Dispatcharr profile.
+                            </p>
+                        </>
+                    ) : (
+                        <>
+                            <Tv className="h-8 w-8 text-muted-foreground mx-auto opacity-50" />
+                            <p className="text-sm font-semibold text-muted-foreground">
+                                No channels matched your search or filters.
+                            </p>
+                            <Button
+                                onClick={() => {
+                                    setSelectedGenre("all");
+                                    setSearchQuery("");
+                                    setVisibleCount(64);
+                                }}
+                                variant="outline"
+                                className="text-xs rounded-xl"
+                            >
+                                Reset Filters
+                            </Button>
+                        </>
+                    )}
+                </div>
+            )}
+
             {/* Pagination / Load More */}
-            {filteredChannels.length > visibleCount && (
-                <div className="flex flex-col sm:flex-row items-center justify-center pt-4 pb-2 gap-3">
+            {activeHubChannels.length > visibleCount && (
+                <div className="flex flex-col sm:flex-row items-center justify-center pt-2 pb-2 gap-3">
                     <Button
                         onClick={() => setVisibleCount((prev) => prev + 64)}
                         variant="outline"
                         className="border-teal-500/30 text-teal-300 hover:bg-teal-500/10 text-xs font-bold gap-2 px-5 py-2 rounded-xl"
                     >
-                        Load Next 64 Channels (Showing {displayedChannels.length} of {filteredChannels.length})
+                        Load Next 64 Channels (Showing {displayedChannels.length} of {activeHubChannels.length})
                     </Button>
                     <Button
-                        onClick={() => setVisibleCount(filteredChannels.length)}
+                        onClick={() => setVisibleCount(activeHubChannels.length)}
                         variant="ghost"
                         className="text-xs text-muted-foreground hover:text-foreground"
                     >
-                        Show All {filteredChannels.length}
+                        Show All {activeHubChannels.length}
                     </Button>
                 </div>
             )}
 
-            {filteredChannels.length === 0 && (
-                <div className="text-center py-12 border border-dashed border-border/60 rounded-2xl bg-card/20 space-y-3">
-                    <Tv className="h-8 w-8 text-muted-foreground mx-auto opacity-50" />
-                    <p className="text-sm font-semibold text-muted-foreground">
-                        No channels matched your search or filters.
-                    </p>
-                    <Button
-                        onClick={() => {
-                            setSelectedGenre("all");
-                            setSelectedProfile("all");
-                            setActiveShelf("all");
-                            setSearchQuery("");
-                            setVisibleCount(64);
-                        }}
-                        variant="outline"
-                        className="text-xs"
-                    >
-                        Reset Filters
-                    </Button>
-                </div>
-            )}
-
-            {/* Stream on Plex & Jellyfin Guide */}
+            {/* How to Stream on Plex & Jellyfin Guide */}
             {canAccess && (
-                <div className="mt-12 p-6 rounded-2xl border border-border/50 bg-card/40 space-y-5">
+                <div className="mt-8 p-6 rounded-2xl border border-border/50 bg-card/40 space-y-4 shadow-sm">
                     <div className="flex items-center gap-3">
                         <div className="h-10 w-10 rounded-xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-400">
                             <Tv className="h-5 w-5" />
@@ -1541,6 +1651,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                     </div>
                 </div>
             )}
+
             {/* Plex Home User Login & Setup Guide Modal */}
             <PlexHomeGuideModal
                 open={showPlexHomeGuide}

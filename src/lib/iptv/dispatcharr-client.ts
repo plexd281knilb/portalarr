@@ -359,6 +359,7 @@ export async function syncDispatcharrLineup(): Promise<{
             if (chanRes && chanRes.ok) {
                 const chanData = await chanRes.json().catch(() => null);
                 const channels = Array.isArray(chanData?.results) ? chanData.results : [];
+                const syncedDbChannelIds = new Set<string>();
 
                 for (const ch of channels) {
                     const chNum = ch.effective_channel_number ?? ch.channel_number ?? null;
@@ -434,32 +435,74 @@ export async function syncDispatcharrLineup(): Promise<{
                         });
                     }
 
-                    // Link channel to profiles
+                    // Link channel to profiles or unlink if removed from profile
                     for (const [slug, idSet] of profileChannelMap.entries()) {
+                        const profileId = dbProfiles[slug];
+                        if (!profileId) continue;
+
                         if (idSet.has(ch.id) || slug === "all_channels") {
-                            const profileId = dbProfiles[slug];
-                            if (profileId) {
-                                await prisma.iptvProfileChannel.upsert({
-                                    where: {
-                                        profileId_channelId: {
-                                            profileId,
-                                            channelId: dbChannel.id
-                                        }
-                                    },
-                                    create: {
+                            await prisma.iptvProfileChannel.upsert({
+                                where: {
+                                    profileId_channelId: {
                                         profileId,
-                                        channelId: dbChannel.id,
-                                        channelOrder: chNum || 0
-                                    },
-                                    update: {
-                                        channelOrder: chNum || 0
+                                        channelId: dbChannel.id
                                     }
-                                }).catch(() => {});
-                            }
+                                },
+                                create: {
+                                    profileId,
+                                    channelId: dbChannel.id,
+                                    channelOrder: chNum || 0
+                                },
+                                update: {
+                                    channelOrder: chNum || 0
+                                }
+                            }).catch(() => {});
+                        } else {
+                            await prisma.iptvProfileChannel.deleteMany({
+                                where: {
+                                    profileId,
+                                    channelId: dbChannel.id
+                                }
+                            }).catch(() => {});
                         }
                     }
+                    syncedDbChannelIds.add(dbChannel.id);
                     channelsSynced++;
                 }
+
+                // Prune stale channels from SQLite that were deleted or merged in Dispatcharr
+                if (syncedDbChannelIds.size > 0) {
+                    const staleChannels = await prisma.iptvChannel.findMany({
+                        where: {
+                            isCustom: false,
+                            id: { notIn: Array.from(syncedDbChannelIds) }
+                        },
+                        select: { id: true }
+                    });
+                    if (staleChannels.length > 0) {
+                        const staleIds = staleChannels.map((c) => c.id);
+                        await prisma.iptvProfileChannel.deleteMany({
+                            where: { channelId: { in: staleIds } }
+                        }).catch(() => {});
+                        await prisma.iptvChannelStream.deleteMany({
+                            where: { channelId: { in: staleIds } }
+                        }).catch(() => {});
+                        await prisma.iptvChannel.deleteMany({
+                            where: { id: { in: staleIds } }
+                        }).catch(() => {});
+                    }
+                }
+            }
+
+            // Update accurate channel count on each profile record in SQLite
+            for (const [slug, profileId] of Object.entries(dbProfiles)) {
+                const count = await prisma.iptvProfileChannel.count({
+                    where: { profileId }
+                });
+                await prisma.iptvProfile.update({
+                    where: { id: profileId },
+                    data: { channelCount: count }
+                }).catch(() => {});
             }
         }
 
@@ -1251,14 +1294,27 @@ export interface DispatcharrCleanupResult {
 }
 
 /**
+ * Extracts 3-5 letter FCC station callsign from channel name or callsign string.
+ */
+export function extractCallsign(name: string): string | null {
+    if (!name) return null;
+    const m = name.match(/\(([A-Z]{3,5})\)/i);
+    if (m) return m[1].toUpperCase();
+    const m2 = name.match(/\b(K[A-Z]{3}|W[A-Z]{3})\b/i);
+    if (m2) return m2[1].toUpperCase();
+    return null;
+}
+
+/**
  * Normalizes a channel name by removing IPTV prefixes and video quality tags.
  */
 export function normalizeChannelNameForDedup(name: string): string {
     let n = (name || "").toLowerCase();
     n = n.replace(/^(us[|: -]|usa[|: -]|ca[|: -]|uk[|: -]|✦●✦\s*)/gi, "");
-    n = n.replace(/\[(usa|us|fhd|hd|sd|4k|raw)\]/gi, "");
-    n = n.replace(/\((usa|us|fhd|hd|sd|4k|raw)\)/gi, "");
-    n = n.replace(/\b(1080p|720p|60fps|hevc|uhd|fhd|hd)\b/gi, "");
+    n = n.replace(/\[(usa|us|fhd|hd|sd|4k|raw|bk|backup)\]/gi, "");
+    n = n.replace(/\((usa|us|fhd|hd|sd|4k|raw|bk|backup)\)/gi, "");
+    n = n.replace(/\b(1080p|720p|60fps|hevc|uhd|fhd|hd|bk|backup|alt|alternate)\b/gi, "");
+    n = n.replace(/\b0+(\d+)\b/g, "$1");
     n = n.replace(/[^a-z0-9]/gi, " ").replace(/\s+/g, " ").trim();
     return n;
 }
@@ -1270,9 +1326,45 @@ export function cleanChannelNameForDisplay(rawName: string): string {
     if (!rawName) return "Channel";
     let name = rawName.trim();
     name = name.replace(/^(us[|: -]|usa[|: -]|ca[|: -]|uk[|: -]|✦●✦\s*)/gi, "").trim();
-    name = name.replace(/\s*\[(usa|us|raw)\]\s*/gi, " ").trim();
-    name = name.replace(/\s*\((usa|us|raw)\)\s*/gi, " ").trim();
+    name = name.replace(/\s*\[(usa|us|raw|bk|backup)\]\s*/gi, " ").trim();
+    name = name.replace(/\s*\((usa|us|raw|bk|backup)\)\s*/gi, " ").trim();
+    name = name.replace(/\b0+(\d+)\b/g, "$1");
     return name.replace(/\s+/g, " ").trim() || rawName.trim();
+}
+
+/**
+ * Categorizes a channel into curated profile slugs (kids, sports, news, entertainment).
+ */
+export function classifyChannelForProfile(name: string, tvgId: string): string[] {
+    const n = (name || "").toLowerCase();
+    const tvg = (tvgId || "").toLowerCase();
+    const profiles: string[] = [];
+
+    // Kids
+    if (/disney|nickelodeon|\bnick\b|nickjr|cartoon network|boomerang|pbs kids|universal kids|baby tv|discovery family|teennick|nicktoons/.test(n) ||
+        /disney|nickelodeon|cartoon|pbskids/.test(tvg)) {
+        profiles.push("kids");
+    }
+
+    // Sports
+    if (/espn|\bfs1\b|\bfs2\b|fox sports|nbc sports|cbs sports|cbssn|\bnfl\b|redzone|\bmlb\b|\bnba\b|\bnhl\b|sec network|big ten|acc network|golf channel|tennis channel|fight network|motorsport|motor trend|marquee|yes network|nesn|bally|altitude|root sports|sportsnet|fan duel|pac-12|willow|mavtv|t2\b|bein sports/.test(n) ||
+        /espn|fs1|fs2|sports|nfl|mlb|nba|nhl|secnetwork|bigten/.test(tvg)) {
+        profiles.push("sports");
+    }
+
+    // News
+    if (/\bcnn\b|fox news|\bmsnbc\b|\bcnbc\b|bloomberg|c-span|weather channel|bbc news|\bhln\b|newsmax|scripps news|newsnation|local news|cbs news|abc news|nbc news|weather nation/.test(n) ||
+        /cnn|foxnews|msnbc|cnbc|bloomberg|cspan|weather/.test(tvg)) {
+        profiles.push("news");
+    }
+
+    // Entertainment
+    if (/\busa\b|\btnt\b|\btbs\b|\bfx\b|\bfxx\b|\bfxm\b|\bamc\b|bravo|hgtv|food network|comedy central|discovery|history|a&e|paramount|hallmark|\btlc\b|syfy|\be!\b|\bbet\b|\bmtv\b|\bvh1\b|freeform|tru tv|investigation discovery|nat geo|national geographic|travel channel|oxygen|lifetime|\bown\b|vice|\bpop\b|reelz|\btcm\b|turner classic|sundance|\bifc\b|starz|\bhbo\b|cinemax|showtime|epix|\bmgm\b|encore|tv land|cozi|metv|antenna|game show|gsn/.test(n) ||
+        /usa|tnt|tbs|fx|amc|bravo|hgtv|food|comedy|discovery|history|paramount|hallmark|tlc|syfy|bet|mtv|vh1|freeform|hbo|cinemax|showtime|starz/.test(tvg)) {
+        profiles.push("entertainment");
+    }
+
+    return profiles;
 }
 
 /**
@@ -1411,31 +1503,43 @@ export async function cleanupAndMergeDispatcharrChannels(): Promise<DispatcharrC
         };
     }
 
-    // 3. Multi-stage grouping: TVG-ID match first, then normalized name match
+    // 3. Multi-stage grouping: FCC Callsign, Canonical Sports Networks, Normalized Name, and TVG-ID
     const groups = new Map<string, any[]>();
-    const channelToGroupKey = new Map<number, string>();
-
-    // Stage 1: Group by valid tvg_id
     for (const c of channels) {
-        const tvg = (c.effective_tvg_id || c.tvg_id || "").trim().toLowerCase();
-        if (tvg && !tvg.startsWith("dispatcharr.")) {
-            const key = `tvg:${tvg}`;
-            if (!groups.has(key)) groups.set(key, []);
-            groups.get(key)!.push(c);
-            channelToGroupKey.set(c.id, key);
-        }
-    }
+        const name = c.effective_name || c.name || "";
+        const callsign = extractCallsign(name) || extractCallsign(c.callsign || "");
+        let groupKey = "";
 
-    // Stage 2: Group remainder by normalized name
-    for (const c of channels) {
-        if (channelToGroupKey.has(c.id)) continue;
-        const norm = normalizeChannelNameForDedup(c.effective_name || c.name);
-        if (norm && norm.length >= 3) {
-            const key = `name:${norm}`;
-            if (!groups.has(key)) groups.set(key, []);
-            groups.get(key)!.push(c);
-            channelToGroupKey.set(c.id, key);
+        if (callsign && /^[KW][A-Z]{3,4}$/.test(callsign)) {
+            groupKey = `callsign:${callsign}`;
+        } else {
+            const norm = normalizeChannelNameForDedup(name);
+            if (/redzone/.test(norm)) groupKey = "sports:nfl-redzone";
+            else if (/sec network/.test(norm)) groupKey = "sports:sec-network";
+            else if (/big ten network/.test(norm) && !/alternate|alt|2|3|4/.test(norm)) groupKey = "sports:big-ten-network";
+            else if (/acc network/.test(norm) && !/extra|2|3/.test(norm)) groupKey = "sports:acc-network";
+            else if (/espnu/.test(norm)) groupKey = "sports:espnu";
+            else if (/cbs sports network|cbssn/.test(norm)) groupKey = "sports:cbssn";
+            else if (/nfl network/.test(norm)) groupKey = "sports:nfl-network";
+            else if (/mlb network/.test(norm)) groupKey = "sports:mlb-network";
+            else if (/nba tv/.test(norm)) groupKey = "sports:nba-tv";
+            else if (/nhl network/.test(norm)) groupKey = "sports:nhl-network";
+            else if (/tennis channel/.test(norm)) groupKey = "sports:tennis-channel";
+            else if (/golf channel/.test(norm)) groupKey = "sports:golf-channel";
+            else if (norm && norm.length >= 3) groupKey = `name:${norm}`;
+            else {
+                const tvg = (c.effective_tvg_id || c.tvg_id || "").trim().toLowerCase();
+                if (tvg && !tvg.startsWith("dispatcharr.")) {
+                    const cleanTvg = tvg.replace(/^loc\./, "").replace(/\.us$/, "").trim();
+                    groupKey = `tvg:${cleanTvg}`;
+                } else {
+                    groupKey = `id:${c.id}`;
+                }
+            }
         }
+
+        if (!groups.has(groupKey)) groups.set(groupKey, []);
+        groups.get(groupKey)!.push(c);
     }
 
     const dupGroups = Array.from(groups.entries()).filter(([_, list]) => list.length > 1);
@@ -1534,7 +1638,7 @@ export async function cleanupAndMergeDispatcharrChannels(): Promise<DispatcharrC
 
     // 5. Apply PATCH to primary channels in concurrent batches
     if (patchesToApply.length > 0) {
-        await runConcurrentBatches(patchesToApply, 10, async ({ channelId, payload }) => {
+        await runConcurrentBatches(patchesToApply, 15, async ({ channelId, payload }) => {
             try {
                 await fetch(`${baseUrl}/api/channels/channels/${channelId}/`, {
                     method: "PATCH",
@@ -1547,40 +1651,7 @@ export async function cleanupAndMergeDispatcharrChannels(): Promise<DispatcharrC
         });
     }
 
-    // 6. Update all Dispatcharr Profiles (remapping deleted IDs to primary ID and deduplicating)
-    const toDeleteSet = new Set(toDeleteIds);
-    let profilesUpdated = 0;
-
-    for (const p of profiles) {
-        const original = Array.isArray(p.channels) ? p.channels : [];
-        const updatedSet = new Set<number>();
-
-        for (const cid of original) {
-            if (aliasMap.has(cid)) {
-                updatedSet.add(aliasMap.get(cid)!);
-            } else if (!toDeleteSet.has(cid)) {
-                updatedSet.add(cid);
-            }
-        }
-
-        const newChannels = Array.from(updatedSet);
-        if (newChannels.length !== original.length || !newChannels.every((id, idx) => id === original[idx])) {
-            try {
-                const patchProfRes = await fetch(`${baseUrl}/api/channels/profiles/${p.id}/`, {
-                    method: "PATCH",
-                    headers,
-                    body: JSON.stringify({ channels: newChannels })
-                });
-                if (patchProfRes.ok) {
-                    profilesUpdated++;
-                }
-            } catch {
-                // Ignore profile patch errors
-            }
-        }
-    }
-
-    // 7. Delete duplicate channels from Dispatcharr in concurrent batches
+    // 6. Delete duplicate channels from Dispatcharr in concurrent batches
     let channelsDeleted = 0;
     await runConcurrentBatches(toDeleteIds, 15, async (dupId) => {
         try {
@@ -1595,6 +1666,50 @@ export async function cleanupAndMergeDispatcharrChannels(): Promise<DispatcharrC
             // Ignore individual delete failures
         }
     });
+
+    // 7. Curate Dispatcharr Profiles (Kids, Sports, News, Entertainment) using official bulk-update API
+    let profilesUpdated = 0;
+    try {
+        const remainingRes = await fetch(`${baseUrl}/api/channels/channels/?page_size=5000`, { headers });
+        if (remainingRes.ok) {
+            const remainingData = await remainingRes.json();
+            const survivingList: any[] = remainingData.results || remainingData || [];
+
+            const curatedTargets = [
+                { slug: "sports", filter: (c: any) => classifyChannelForProfile(c.name, c.tvg_id || c.effective_tvg_id).includes("sports") },
+                { slug: "kids", filter: (c: any) => classifyChannelForProfile(c.name, c.tvg_id || c.effective_tvg_id).includes("kids") },
+                { slug: "news", filter: (c: any) => classifyChannelForProfile(c.name, c.tvg_id || c.effective_tvg_id).includes("news") },
+                { slug: "entertainment", filter: (c: any) => classifyChannelForProfile(c.name, c.tvg_id || c.effective_tvg_id).includes("entertainment") },
+            ];
+
+            for (const target of curatedTargets) {
+                const p = profiles.find((x) => x.name.toLowerCase().replace(/[^a-z0-9]/g, "_") === target.slug);
+                if (!p) continue;
+
+                const currentIds: number[] = Array.isArray(p.channels) ? p.channels : [];
+                const matchingChannels = survivingList.filter(target.filter);
+                const matchingIdSet = new Set(matchingChannels.map((c) => c.id));
+
+                const toDisable = currentIds.filter((id) => !matchingIdSet.has(id)).map((id) => ({ channel_id: id, enabled: false }));
+                const toEnable = matchingChannels.map((c) => ({ channel_id: c.id, enabled: true }));
+                const bulkBatch = [...toDisable, ...toEnable];
+
+                if (bulkBatch.length > 0) {
+                    for (let i = 0; i < bulkBatch.length; i += 200) {
+                        const chunk = bulkBatch.slice(i, i + 200);
+                        await fetch(`${baseUrl}/api/channels/profiles/${p.id}/channels/bulk-update/`, {
+                            method: "PATCH",
+                            headers,
+                            body: JSON.stringify({ channels: chunk })
+                        });
+                    }
+                    profilesUpdated++;
+                }
+            }
+        }
+    } catch {
+        // Profile curation non-blocking
+    }
 
     // 8. Sync clean lineup back into SQLite
     try {

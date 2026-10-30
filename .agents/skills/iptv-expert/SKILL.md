@@ -172,7 +172,24 @@ Plex Media Server enforces three distinct radio restriction states under **Restr
   - Provides a 1-click `[Move in Dispatcharr & Plex]` button that executes the move action and updates request status to `ACTIVATED`.
   - Header features manual `[🔄 Refresh Plex DVR Lineup]` tool to force a cluster-wide DVR reload anytime.
 
-### 14. Dispatcharr Channel Deduplication & Stream Consolidation Engine (`cleanupAndMergeDispatcharrChannels`)
+### 15. Clickable Hub Navigation & Profile Curation Architecture
+- **Clickable Channel Hubs Bar**: Replaces hard-locked permanent top carousels with an interactive, responsive Hubs bar (`ChannelsClient`):
+  1. **📍 Local Hub ({marketName})**: Anchored by the Dallas host server (DFW) by default, customized via IP edge geolocation or dropdown selector, displaying local broadcast affiliates (NBC, CBS, FOX, ABC, CW) and regional sports directly underneath.
+  2. **🏆 Sports**: Commercial-free NFL RedZone, NFL Network, and Saturday college football (SEC, Big Ten, ACC, ESPNU). Curated to genuine sports channels (~104 channels).
+  3. **📰 News**: 24/7 national, financial, and international news networks (~33 channels).
+  4. **🎬 Entertainment**: Premium movies, series, drama, and comedy networks (~171 channels).
+  5. **👶 Kids & Family**: Educational and family networks (Disney, Nick, Cartoon Network, PBS Kids) (~20 channels).
+  6. **📺 All Lineups**: Full master lineup with virtual channel numbers (~539 channels).
+  7. **⚠️ Not in a Profile (Strictly Last Hub)**: Isolates channels in the master pool that need profile mapping, with 1-click `[+ Add to Profile]` buttons.
+- **Dispatcharr Bulk Profile Update API**:
+  - Dispatcharr treats `channels` as `readOnly` in `PATCH /api/channels/profiles/{id}/`.
+  - The authoritative endpoint for assigning/unassigning channels is:
+    `PATCH /api/channels/profiles/{profile_id}/channels/bulk-update/` with payload `{ channels: [ { channel_id, enabled } ] }`.
+- **FCC Callsign & Zero-Padded Channel Normalization**:
+  - `extractCallsign()` extracts 3–5 letter US broadcast callsigns (`(KXAS)`, `(KDFW)`, `(KTVT)`, `(WFAA)`).
+  - Normalizes zero-padded channel numbers (`NBC 05` -> `NBC 5`) and strips backup tags (`[BK]`, `(BK)`, `alt`) to ensure broadcast feeds are deduplicated and merged cleanly.
+- **Stale Channel SQLite Pruning**:
+  - `syncDispatcharrLineup` tracks synced channel IDs and prunes non-custom `IptvChannel` records that were deleted or merged in Dispatcharr, keeping SQLite and Dispatcharr counts 100% synchronized.
 - **Two-Pass Grouping**:
   1. *Stage 1: TVG-ID Match*: Groups channels by exact `tvg_id` or `effective_tvg_id` (ignoring synthetic `dispatcharr.*` placeholders).
   2. *Stage 2: Normalized Name Match*: Groups remaining channels by normalized name (`normalizeChannelNameForDedup`) stripping provider prefixes (`US|`, `USA:`, `✦●✦`), video tags (`[USA]`, `(FHD)`, `1080p`, `60fps`), and non-alphanumeric punctuation.
