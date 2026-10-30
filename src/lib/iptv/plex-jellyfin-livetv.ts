@@ -678,10 +678,19 @@ export async function auditPlexHomeAndLiveTvPrivileges(): Promise<LiveTvEcosyste
         orderBy: { username: "asc" }
     });
 
-    if (rawPlexMap.size === 0) {
-        // Populate from local Portalarr User records so UI & tests always work even offline
-        for (const pu of portalUsers) {
-            if (pu.isPlexHomeMember || pu.hasPlexLiveTvAccess || pu.hasPlexDvrAccess || pu.role === "ADMIN") {
+    // Merge any Portalarr users who are in Plex Home or have Live TV / DVR access locally
+    for (const pu of portalUsers) {
+        if (pu.isPlexHomeMember || pu.hasPlexLiveTvAccess || pu.hasPlexDvrAccess || pu.role === "ADMIN") {
+            const isAlreadyInMap = Array.from(rawPlexMap.values()).some((val) => {
+                const pEmails = [pu.email, pu.plexEmail].filter(Boolean).map((e) => e!.toLowerCase().trim());
+                const pNames = [pu.username, pu.plexUsername, pu.name].filter(Boolean).map((n) => n!.toLowerCase().trim());
+                if (pu.plexHomeUserId && String(pu.plexHomeUserId) === String(val.plexUserId)) return true;
+                if (val.email && pEmails.includes(val.email.toLowerCase().trim())) return true;
+                if (val.username && pNames.includes(val.username.toLowerCase().trim())) return true;
+                return false;
+            });
+
+            if (!isAlreadyInMap) {
                 const isOwner = pu.role === "ADMIN";
                 rawPlexMap.set(pu.id, {
                     plexUserId: pu.plexHomeUserId || pu.id,

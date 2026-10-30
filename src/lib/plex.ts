@@ -950,6 +950,7 @@ const PLEX_SECTIONS_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 export function clearPlexSectionsCache(): void {
     plexServerSectionsCache.clear();
     plexServerLibrarySectionsCache.clear();
+    clearResolvedServerCache();
 }
 
 /**
@@ -1164,7 +1165,15 @@ export interface ResolvedPlexConnection {
 }
 
 const resolvedServerCache = new Map<string, { timestamp: number; data: ResolvedPlexConnection }>();
+const inFlightServerProbes = new Map<string, Promise<ResolvedPlexConnection | null>>();
+const loggedServerConnections = new Map<string, string>(); // serverId_cacheKey -> lastLoggedWorkingUrl
 const RESOLVED_SERVER_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+export function clearResolvedServerCache(): void {
+    resolvedServerCache.clear();
+    inFlightServerProbes.clear();
+    loggedServerConnections.clear();
+}
 
 export async function resolveWorkingPlexServerConnection(
     serverIdOrName?: string,
@@ -1202,7 +1211,13 @@ export async function resolveWorkingPlexServerConnection(
         }
     }
 
-    const servers = await getPlexServers(token, forceRefresh).catch(() => []);
+    if (!forceRefresh && inFlightServerProbes.has(cacheKey)) {
+        return inFlightServerProbes.get(cacheKey)!;
+    }
+
+    const probePromise = (async (): Promise<ResolvedPlexConnection | null> => {
+        try {
+            const servers = await getPlexServers(token, forceRefresh).catch(() => []);
 
     // Also check manual Plex servers and media apps in DB
     const dbPlexUrls: string[] = [];
@@ -1500,8 +1515,14 @@ export async function resolveWorkingPlexServerConnection(
 
     const finalUrl = workingUrl || candidateUrls[0] || "";
 
+    const logKey = `${serverId}_${cacheKey}`;
+    const previousLoggedUrl = loggedServerConnections.get(logKey);
+
     if (workingUrl) {
-        logger.addLog("INFO", "PLEX", `[SERVER-ISOLATION] Resolved verified working connection for Plex server "${serverName}" (${serverId}): ${workingUrl}`);
+        if (previousLoggedUrl !== workingUrl) {
+            loggedServerConnections.set(logKey, workingUrl);
+            logger.addLog("INFO", "PLEX", `[SERVER-ISOLATION] Resolved verified working connection for Plex server "${serverName}" (${serverId}): ${workingUrl}`);
+        }
     } else {
         logger.addLog("WARN", "PLEX", `Could not verify connection to Plex server "${serverName}" across ${candidateUrls.length} candidate URLs: ${probeFailures.join("; ")}. Falling back to ${finalUrl}`);
     }
@@ -1525,6 +1546,13 @@ export async function resolveWorkingPlexServerConnection(
 
     resolvedServerCache.set(cacheKey, { timestamp: Date.now(), data: result });
     return result;
+} finally {
+    inFlightServerProbes.delete(cacheKey);
+}
+})();
+
+inFlightServerProbes.set(cacheKey, probePromise);
+return probePromise;
 }
 
 export interface PlexSharedServerItem {

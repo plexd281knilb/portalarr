@@ -2555,7 +2555,6 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
           await prisma.settings.update({ where: { id: "global" }, data: { overlayIncrementalLastRunAt: now } }).catch(() => {});
           (async () => {
             setCurationTaskRunning("Kometa Incremental Overlays");
-            (global as any).__PORTALARR_OVERLAY_INC_RUNNING = true;
             try {
               console.log(`[OVERLAY-TIMER] Triggering scheduled incremental overlay scan (${incSchedule})...`);
               const { runOverlayIncrementalSyncInternal } = await import("../app/curation-actions");
@@ -2566,7 +2565,6 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
             } catch (err: any) {
               console.error("[OVERLAY-TIMER] Error in incremental overlay background runner:", err.message || err);
             } finally {
-              (global as any).__PORTALARR_OVERLAY_INC_RUNNING = false;
               clearCurationTaskRunning("Kometa Incremental Overlays");
             }
           })();
@@ -2584,7 +2582,6 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
           await prisma.settings.update({ where: { id: "global" }, data: { overlayRecheckLastRunAt: now } }).catch(() => {});
           (async () => {
             setCurationTaskRunning("Kometa Deep Library Recheck");
-            (global as any).__PORTALARR_OVERLAY_RECHECK_RUNNING = true;
             try {
               console.log(`[OVERLAY-TIMER] Triggering scheduled deep library recheck (${recheckSchedule})...`);
               const { runOverlayRecheckSyncInternal } = await import("../app/curation-actions");
@@ -2595,7 +2592,6 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
             } catch (err: any) {
               console.error("[OVERLAY-TIMER] Error in deep recheck background runner:", err.message || err);
             } finally {
-              (global as any).__PORTALARR_OVERLAY_RECHECK_RUNNING = false;
               clearCurationTaskRunning("Kometa Deep Library Recheck");
             }
           })();
@@ -2613,7 +2609,6 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
           await prisma.settings.update({ where: { id: "global" }, data: { agregarrLastRunAt: now } }).catch(() => {});
           (async () => {
             setCurationTaskRunning("Agregarr Collections Sync");
-            (global as any).__PORTALARR_AGREGARR_RUNNING = true;
             try {
               console.log(`[AGREGARR-TIMER] Triggering scheduled collection sync (${agregarrSchedule})...`);
               const { runAgregarrSyncInternal } = await import("../app/curation-actions");
@@ -2624,7 +2619,6 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
             } catch (aErr: any) {
               console.error("[AGREGARR-TIMER] Error in Agregarr background runner:", aErr.message || aErr);
             } finally {
-              (global as any).__PORTALARR_AGREGARR_RUNNING = false;
               clearCurationTaskRunning("Agregarr Collections Sync");
             }
           })();
@@ -2642,7 +2636,6 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
           await prisma.settings.update({ where: { id: "global" }, data: { pruneLastRunAt: now } }).catch(() => {});
           (async () => {
             setCurationTaskRunning("Maintainerr Prune Sync");
-            (global as any).__PORTALARR_PRUNE_RUNNING = true;
             try {
               console.log(`[MAINTAINERR-TIMER] Triggering scheduled prune sync (${pruneSchedule})...`);
               const { runMaintainerrSyncInternal } = await import("../app/curation-actions");
@@ -2653,7 +2646,6 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
             } catch (pErr: any) {
               console.error("[MAINTAINERR-TIMER] Error in Maintainerr background runner:", pErr.message || pErr);
             } finally {
-              (global as any).__PORTALARR_PRUNE_RUNNING = false;
               clearCurationTaskRunning("Maintainerr Prune Sync");
             }
           })();
@@ -2671,7 +2663,6 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
           await prisma.settings.update({ where: { id: "global" }, data: { taggingLastRunAt: now } }).catch(() => {});
           (async () => {
             setCurationTaskRunning("IMDb Parental Tagging Sync");
-            (global as any).__PORTALARR_TAGGING_RUNNING = true;
             try {
               console.log(`[TAGGING-TIMER] Triggering scheduled IMDb parental tagging sync (${taggingSchedule})...`);
               const { runParentalTagsSyncInternal } = await import("../app/curation-actions");
@@ -2682,7 +2673,6 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
             } catch (tErr: any) {
               console.error("[TAGGING-TIMER] Error in Tagging background runner:", tErr.message || tErr);
             } finally {
-              (global as any).__PORTALARR_TAGGING_RUNNING = false;
               clearCurationTaskRunning("IMDb Parental Tagging Sync");
             }
           })();
