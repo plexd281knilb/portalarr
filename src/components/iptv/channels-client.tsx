@@ -30,7 +30,8 @@ import {
     ChevronDown,
     ChevronUp,
     AlertCircle,
-    Wand2
+    Wand2,
+    ArrowRightLeft
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,6 +49,7 @@ import {
     requestMarketLocalChannelsAction,
     activateJellyfinLiveTvAction,
     requestAddChannelToProfileAction,
+    requestMoveChannelProfileAction,
     refreshPlexDvrAction
 } from "@/app/iptv-actions";
 import { PlexHomeGuideModal } from "@/components/iptv/plex-home-guide-modal";
@@ -225,15 +227,28 @@ function ChannelCard({ ch, specialBadge, badgeColor = "teal", onAddToProfile }: 
                 <div className="flex items-center gap-1.5">
                     <span>1080p 60fps</span>
                 </div>
-                {onAddToProfile && hasNoProfiles && (
-                    <Button
-                        size="sm"
-                        onClick={() => onAddToProfile(ch)}
-                        className="h-6 px-2.5 text-[10px] font-bold bg-teal-600 hover:bg-teal-500 text-white rounded-lg flex items-center gap-1 shadow-sm"
-                    >
-                        <Plus className="h-3 w-3" />
-                        Add to Profile
-                    </Button>
+                {onAddToProfile && (
+                    hasNoProfiles ? (
+                        <Button
+                            size="sm"
+                            onClick={() => onAddToProfile(ch)}
+                            className="h-6 px-2.5 text-[10px] font-bold bg-teal-600 hover:bg-teal-500 text-white rounded-lg flex items-center gap-1 shadow-sm"
+                        >
+                            <Plus className="h-3 w-3" />
+                            Add to Profile
+                        </Button>
+                    ) : (
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => onAddToProfile(ch)}
+                            className="h-6 px-2 text-[10px] font-semibold text-teal-400 hover:text-teal-300 hover:bg-teal-500/10 border border-teal-500/25 rounded-lg flex items-center gap-1"
+                            title="Move or reassign channel to a different Dispatcharr profile"
+                        >
+                            <ArrowRightLeft className="h-2.5 w-2.5" />
+                            Move Profile
+                        </Button>
+                    )
                 )}
             </div>
         </div>
@@ -451,7 +466,9 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
 
         const handleOpenAddToProfile = (channel: any) => {
         setTargetChannelForProfile(channel);
-        setSelectedTargetProfile(profilesList[0]?.slug || "sports");
+        const existingSlugs = channel.profileSlugs || channel.profiles?.map((p: any) => p.slug) || [];
+        const candidateProfile = profilesList.find((p) => p.slug !== "all_channels" && !existingSlugs.includes(p.slug));
+        setSelectedTargetProfile(candidateProfile?.slug || profilesList[0]?.slug || "sports");
         setProfileAddReason("");
         setProfileAddMsg(null);
     };
@@ -460,18 +477,31 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
         e.preventDefault();
         if (!targetChannelForProfile || !selectedTargetProfile) return;
 
+        const isMove = Boolean(
+            (targetChannelForProfile.profiles && targetChannelForProfile.profiles.length > 0) ||
+            (targetChannelForProfile.profileSlugs && targetChannelForProfile.profileSlugs.length > 0)
+        );
+        const currentProfileSlug = targetChannelForProfile.profiles?.[0]?.slug || targetChannelForProfile.profileSlugs?.[0];
+
         setProfileAddLoading(true);
         startTransition(async () => {
-            const res = await requestAddChannelToProfileAction({
-                channelId: targetChannelForProfile.id,
-                profileSlug: selectedTargetProfile,
-                reason: profileAddReason.trim() || undefined
-            });
+            const res = isMove
+                ? await requestMoveChannelProfileAction({
+                      channelId: targetChannelForProfile.id,
+                      targetProfileSlug: selectedTargetProfile,
+                      fromProfileSlug: currentProfileSlug,
+                      reason: profileAddReason.trim() || undefined
+                  })
+                : await requestAddChannelToProfileAction({
+                      channelId: targetChannelForProfile.id,
+                      profileSlug: selectedTargetProfile,
+                      reason: profileAddReason.trim() || undefined
+                  });
 
             setProfileAddLoading(false);
             if (res.success) {
                 setProfileAddMsg({
-                    text: res.message || `Added to ${res.profileName || selectedTargetProfile}! Plex Live TV DVR lineup refreshed.`
+                    text: res.message || `${isMove ? "Moved" : "Added"} to ${res.profileName || selectedTargetProfile}! Plex Live TV DVR lineup refreshed.`
                 });
 
                 // Update local channelsList in-place
@@ -479,26 +509,40 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                 setChannelsList((prev) =>
                     prev.map((c) => {
                         if (c.id === targetChannelForProfile.id) {
-                            const existingSlugs = c.profileSlugs || [];
-                            const existingProfiles = c.profiles || [];
-                            const newSlugs = existingSlugs.includes(selectedTargetProfile)
-                                ? existingSlugs
-                                : [...existingSlugs, selectedTargetProfile];
-                            const newProfiles = existingProfiles.some((p: any) => p.slug === selectedTargetProfile)
-                                ? existingProfiles
-                                : [
-                                      ...existingProfiles,
-                                      {
-                                          id: targetProfileObj?.id || selectedTargetProfile,
-                                          name: targetProfileObj?.name || selectedTargetProfile,
-                                          slug: selectedTargetProfile
-                                      }
-                                  ];
-                            return {
-                                ...c,
-                                profileSlugs: newSlugs,
-                                profiles: newProfiles
-                            };
+                            if (isMove) {
+                                return {
+                                    ...c,
+                                    profileSlugs: [selectedTargetProfile],
+                                    profiles: [
+                                        {
+                                            id: targetProfileObj?.id || selectedTargetProfile,
+                                            name: targetProfileObj?.name || selectedTargetProfile,
+                                            slug: selectedTargetProfile
+                                        }
+                                    ]
+                                };
+                            } else {
+                                const existingSlugs = c.profileSlugs || [];
+                                const existingProfiles = c.profiles || [];
+                                const newSlugs = existingSlugs.includes(selectedTargetProfile)
+                                    ? existingSlugs
+                                    : [...existingSlugs, selectedTargetProfile];
+                                const newProfiles = existingProfiles.some((p: any) => p.slug === selectedTargetProfile)
+                                    ? existingProfiles
+                                    : [
+                                          ...existingProfiles,
+                                          {
+                                              id: targetProfileObj?.id || selectedTargetProfile,
+                                              name: targetProfileObj?.name || selectedTargetProfile,
+                                              slug: selectedTargetProfile
+                                          }
+                                      ];
+                                return {
+                                    ...c,
+                                    profileSlugs: newSlugs,
+                                    profiles: newProfiles
+                                };
+                            }
                         }
                         return c;
                     })
@@ -507,6 +551,9 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                 // Update profile count
                 setProfilesList((prev) =>
                     prev.map((p) => {
+                        if (isMove && currentProfileSlug && p.slug === currentProfileSlug) {
+                            return { ...p, channelCount: Math.max(0, (p.channelCount || 0) - 1) };
+                        }
                         if (p.slug === selectedTargetProfile) {
                             return { ...p, channelCount: (p.channelCount || 0) + 1 };
                         }
@@ -528,7 +575,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                 }, 2200);
             } else {
                 setProfileAddMsg({
-                    text: res.error || "Failed to add channel to profile",
+                    text: res.error || (isMove ? "Failed to move channel profile" : "Failed to add channel to profile"),
                     isError: true
                 });
             }
@@ -1500,147 +1547,165 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                 onOpenChange={setShowPlexHomeGuide}
             />
 
-            {/* Add Channel to Dispatcharr Profile Modal */}
-            {targetChannelForProfile && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="w-full max-w-md rounded-2xl border border-teal-500/40 bg-card p-6 shadow-2xl space-y-4">
-                        <div className="flex items-center justify-between border-b border-border/40 pb-3">
-                            <div className="flex items-center gap-2.5">
-                                <div className="h-9 w-9 rounded-xl bg-teal-500/15 border border-teal-500/30 flex items-center justify-center text-teal-400">
-                                    <Layers className="h-5 w-5" />
+            {/* Add / Move Channel to Dispatcharr Profile Modal */}
+            {targetChannelForProfile && (() => {
+                const isMove = Boolean(
+                    (targetChannelForProfile.profiles && targetChannelForProfile.profiles.length > 0) ||
+                    (targetChannelForProfile.profileSlugs && targetChannelForProfile.profileSlugs.length > 0)
+                );
+                const currentSlugs = targetChannelForProfile.profiles?.map((p: any) => p.slug) || targetChannelForProfile.profileSlugs || [];
+
+                return (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
+                        <div className="w-full max-w-md rounded-2xl border border-teal-500/40 bg-card p-6 shadow-2xl space-y-4">
+                            <div className="flex items-center justify-between border-b border-border/40 pb-3">
+                                <div className="flex items-center gap-2.5">
+                                    <div className="h-9 w-9 rounded-xl bg-teal-500/15 border border-teal-500/30 flex items-center justify-center text-teal-400">
+                                        {isMove ? <ArrowRightLeft className="h-5 w-5" /> : <Layers className="h-5 w-5" />}
+                                    </div>
+                                    <div>
+                                        <h3 className="font-bold text-sm text-foreground">
+                                            {isMove ? "Move Channel to Different Profile" : "Add Channel to Dispatcharr Profile"}
+                                        </h3>
+                                        <p className="text-[11px] text-muted-foreground">
+                                            {isMove
+                                                ? "Select target profile (channel will be moved and Plex Live TV & DVR lineup refreshed)"
+                                                : "Select an existing profile (Plex Live TV & DVR lineup updates automatically)"}
+                                        </p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <h3 className="font-bold text-sm text-foreground">
-                                        Add Channel to Dispatcharr Profile
-                                    </h3>
-                                    <p className="text-[11px] text-muted-foreground">
-                                        Select an existing profile (Plex Live TV & DVR lineup updates automatically)
-                                    </p>
-                                </div>
-                            </div>
-                            <button
-                                onClick={() => {
-                                    setTargetChannelForProfile(null);
-                                    setProfileAddMsg(null);
-                                }}
-                                className="text-muted-foreground hover:text-foreground text-sm font-bold"
-                            >
-                                ✕
-                            </button>
-                        </div>
-
-                        <div className="p-3 rounded-xl bg-background/60 border border-border/40 space-y-1.5">
-                            <div className="flex items-center justify-between">
-                                <span className="font-bold text-sm text-foreground">
-                                    {targetChannelForProfile.name}
-                                </span>
-                                {targetChannelForProfile.channelNumber && (
-                                    <Badge variant="outline" className="text-[10px] font-mono">
-                                        Ch {targetChannelForProfile.channelNumber}
-                                    </Badge>
-                                )}
-                            </div>
-                            <p className="text-[11px] text-muted-foreground">
-                                Callsign: <b className="text-teal-300">{targetChannelForProfile.callsign || "N/A"}</b> • Genre: {targetChannelForProfile.genre || "Entertainment"}
-                            </p>
-                            <div className="pt-1 flex items-center gap-1.5 flex-wrap">
-                                <span className="text-[10px] text-muted-foreground">Current Profiles:</span>
-                                {targetChannelForProfile.profiles?.length ? (
-                                    targetChannelForProfile.profiles.map((p: any) => (
-                                        <Badge key={p.slug} variant="outline" className="text-[9px] bg-teal-500/10 text-teal-300 border-teal-500/20">
-                                            {p.name}
-                                        </Badge>
-                                    ))
-                                ) : (
-                                    <Badge variant="outline" className="text-[9px] bg-amber-500/10 text-amber-300 border-amber-500/30">
-                                        None (Unassigned)
-                                    </Badge>
-                                )}
-                            </div>
-                        </div>
-
-                        <form onSubmit={handleConfirmAddToProfile} className="space-y-3.5 text-xs">
-                            <div>
-                                <label className="font-bold text-muted-foreground block mb-1">
-                                    Select Target Dispatcharr Profile *
-                                </label>
-                                <select
-                                    value={selectedTargetProfile}
-                                    onChange={(e) => setSelectedTargetProfile(e.target.value)}
-                                    required
-                                    className="w-full h-9 px-3 rounded-xl bg-background border border-border text-foreground font-medium text-xs focus:ring-1 focus:ring-teal-500"
-                                >
-                                    <option value="">-- Choose Profile --</option>
-                                    {profilesList.filter((p: any) => p.slug !== "all_channels").map((p: any) => (
-                                        <option key={p.id} value={p.slug}>
-                                            {p.name} ({p.channelCount || 0} channels)
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div>
-                                <label className="font-bold text-muted-foreground block mb-1">
-                                    Request Reason / Device Target (Optional)
-                                </label>
-                                <Input
-                                    placeholder="e.g. Want this in my Apple TV Sports lineup or Plex Home guide"
-                                    value={profileAddReason}
-                                    onChange={(e) => setProfileAddReason(e.target.value)}
-                                    className="rounded-xl h-9 text-xs"
-                                />
-                            </div>
-
-                            {profileAddMsg && (
-                                <div className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center gap-2 ${
-                                    profileAddMsg.isError
-                                        ? "bg-rose-500/10 border-rose-500/30 text-rose-300"
-                                        : "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
-                                }`}>
-                                    {profileAddMsg.isError ? (
-                                        <AlertCircle className="h-4 w-4 shrink-0 text-rose-400" />
-                                    ) : (
-                                        <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
-                                    )}
-                                    <span>{profileAddMsg.text}</span>
-                                </div>
-                            )}
-
-                            <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/40">
-                                <Button
-                                    type="button"
-                                    variant="ghost"
+                                <button
                                     onClick={() => {
                                         setTargetChannelForProfile(null);
                                         setProfileAddMsg(null);
                                     }}
-                                    disabled={profileAddLoading}
-                                    className="h-8 text-xs"
+                                    className="text-muted-foreground hover:text-foreground text-sm font-bold"
                                 >
-                                    Cancel
-                                </Button>
-                                <Button
-                                    type="submit"
-                                    disabled={profileAddLoading || !selectedTargetProfile}
-                                    className="h-8 text-xs bg-teal-600 hover:bg-teal-500 text-white font-bold gap-1.5 rounded-xl shadow-sm"
-                                >
-                                    {profileAddLoading ? (
-                                        <>
-                                            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                                            Updating Dispatcharr & Plex...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Plus className="h-3.5 w-3.5" />
-                                            Add to Profile & Update Plex
-                                        </>
-                                    )}
-                                </Button>
+                                    ✕
+                                </button>
                             </div>
-                        </form>
+
+                            <div className="p-3 rounded-xl bg-background/60 border border-border/40 space-y-1.5">
+                                <div className="flex items-center justify-between">
+                                    <span className="font-bold text-sm text-foreground">
+                                        {targetChannelForProfile.name}
+                                    </span>
+                                    {targetChannelForProfile.channelNumber && (
+                                        <Badge variant="outline" className="text-[10px] font-mono">
+                                            Ch {targetChannelForProfile.channelNumber}
+                                        </Badge>
+                                    )}
+                                </div>
+                                <p className="text-[11px] text-muted-foreground">
+                                    Callsign: <b className="text-teal-300">{targetChannelForProfile.callsign || "N/A"}</b> • Genre: {targetChannelForProfile.genre || "Entertainment"}
+                                </p>
+                                <div className="pt-1 flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-[10px] text-muted-foreground">Current Profiles:</span>
+                                    {targetChannelForProfile.profiles?.length ? (
+                                        targetChannelForProfile.profiles.map((p: any) => (
+                                            <Badge key={p.slug} variant="outline" className="text-[9px] bg-teal-500/10 text-teal-300 border-teal-500/20">
+                                                {p.name}
+                                            </Badge>
+                                        ))
+                                    ) : (
+                                        <Badge variant="outline" className="text-[9px] bg-amber-500/10 text-amber-300 border-amber-500/30">
+                                            None (Unassigned)
+                                        </Badge>
+                                    )}
+                                </div>
+                            </div>
+
+                            <form onSubmit={handleConfirmAddToProfile} className="space-y-3.5 text-xs">
+                                <div>
+                                    <label className="font-bold text-muted-foreground block mb-1">
+                                        {isMove ? "Select New Target Profile *" : "Select Target Dispatcharr Profile *"}
+                                    </label>
+                                    <select
+                                        value={selectedTargetProfile}
+                                        onChange={(e) => setSelectedTargetProfile(e.target.value)}
+                                        required
+                                        className="w-full h-9 px-3 rounded-xl bg-background border border-border text-foreground font-medium text-xs focus:ring-1 focus:ring-teal-500"
+                                    >
+                                        <option value="">-- Choose Profile --</option>
+                                        {profilesList.filter((p: any) => p.slug !== "all_channels").map((p: any) => {
+                                            const isCurrent = currentSlugs.includes(p.slug);
+                                            return (
+                                                <option key={p.id} value={p.slug} disabled={isCurrent}>
+                                                    {p.name} ({p.channelCount || 0} channels){isCurrent ? " (Current)" : ""}
+                                                </option>
+                                            );
+                                        })}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="font-bold text-muted-foreground block mb-1">
+                                        Request Reason / Device Target (Optional)
+                                    </label>
+                                    <Input
+                                        placeholder={isMove ? "e.g. Move from News to Sports for upcoming tournaments" : "e.g. Want this in my Apple TV Sports lineup or Plex Home guide"}
+                                        value={profileAddReason}
+                                        onChange={(e) => setProfileAddReason(e.target.value)}
+                                        className="rounded-xl h-9 text-xs"
+                                    />
+                                </div>
+
+                                {profileAddMsg && (
+                                    <div className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center gap-2 ${
+                                        profileAddMsg.isError
+                                            ? "bg-rose-500/10 border-rose-500/30 text-rose-300"
+                                            : "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                                    }`}>
+                                        {profileAddMsg.isError ? (
+                                            <AlertCircle className="h-4 w-4 shrink-0 text-rose-400" />
+                                        ) : (
+                                            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                                        )}
+                                        <span>{profileAddMsg.text}</span>
+                                    </div>
+                                )}
+
+                                <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/40">
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        onClick={() => {
+                                            setTargetChannelForProfile(null);
+                                            setProfileAddMsg(null);
+                                        }}
+                                        disabled={profileAddLoading}
+                                        className="h-8 text-xs"
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        type="submit"
+                                        disabled={profileAddLoading || !selectedTargetProfile || currentSlugs.includes(selectedTargetProfile)}
+                                        className="h-8 text-xs bg-teal-600 hover:bg-teal-500 text-white font-bold gap-1.5 rounded-xl shadow-sm"
+                                    >
+                                        {profileAddLoading ? (
+                                            <>
+                                                <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                                                {isMove ? "Moving & Updating Plex..." : "Updating Dispatcharr & Plex..."}
+                                            </>
+                                        ) : isMove ? (
+                                            <>
+                                                <ArrowRightLeft className="h-3.5 w-3.5" />
+                                                Move Profile & Update Plex
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Plus className="h-3.5 w-3.5" />
+                                                Add to Profile & Update Plex
+                                            </>
+                                        )}
+                                    </Button>
+                                </div>
+                            </form>
+                        </div>
                     </div>
-                </div>
-            )}
+                );
+            })()}
 
         </div>
     );

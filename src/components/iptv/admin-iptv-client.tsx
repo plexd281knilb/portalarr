@@ -24,7 +24,8 @@ import {
     Clock,
     Zap,
     ExternalLink,
-    Sparkles
+    Sparkles,
+    ArrowRightLeft
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +37,7 @@ import {
     syncDispatcharrLineupAction,
     refreshPlexDvrAction,
     requestAddChannelToProfileAction,
+    requestMoveChannelProfileAction,
     saveIptvProviderAction,
     deleteIptvProviderAction,
     revealIptvProviderCredentialsAction,
@@ -547,26 +549,41 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
     };
 
     const handleAddRequestToProfile = (requestId: string, channelName: string, notes: string) => {
+        const isMove = notes.includes("[PROFILE_MOVE]");
         const profileMatch = notes.match(/Target profile "([^"]+)" \(([^)]+)\)/);
         const profileSlug = profileMatch ? profileMatch[2] : "sports";
+        const fromMatch = notes.match(/from "([^"]+)" \(([^)]+)\)/);
+        const fromSlug = fromMatch ? fromMatch[2] : undefined;
 
         startTransition(async () => {
-            const res = await requestAddChannelToProfileAction({
-                channelId: channelName,
-                profileSlug
-            });
+            const res = isMove
+                ? await requestMoveChannelProfileAction({
+                      channelId: channelName,
+                      targetProfileSlug: profileSlug,
+                      fromProfileSlug: fromSlug
+                  })
+                : await requestAddChannelToProfileAction({
+                      channelId: channelName,
+                      profileSlug
+                  });
             if (res.success) {
                 await resolveIptvChannelRequestAction({
                     requestId,
                     status: "ACTIVATED",
-                    adminNotes: `[PROFILE_ADD_COMPLETED]: Added to ${res.profileName || profileSlug} in Dispatcharr and Plex DVR refreshed.`
+                    adminNotes: isMove
+                        ? `[PROFILE_MOVE_COMPLETED]: Moved to ${res.profileName || profileSlug} in Dispatcharr and Plex DVR refreshed.`
+                        : `[PROFILE_ADD_COMPLETED]: Added to ${res.profileName || profileSlug} in Dispatcharr and Plex DVR refreshed.`
                 });
                 setChannelRequests(
                     channelRequests.map((r) => (r.id === requestId ? { ...r, status: "ACTIVATED" } : r))
                 );
-                showMsg(`🎉 Added "${channelName}" to Dispatcharr profile "${profileSlug}" and refreshed Plex DVR!`);
+                showMsg(
+                    isMove
+                        ? `🎉 Moved "${channelName}" to Dispatcharr profile "${profileSlug}" and refreshed Plex DVR!`
+                        : `🎉 Added "${channelName}" to Dispatcharr profile "${profileSlug}" and refreshed Plex DVR!`
+                );
             } else {
-                showMsg(res.error || "Failed to add channel to profile", "error");
+                showMsg(res.error || (isMove ? "Failed to move channel profile" : "Failed to add channel to profile"), "error");
             }
         });
     };
@@ -1455,7 +1472,9 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                             <div className="space-y-3">
                                 {channelRequests.map((r: any) => {
                                     const hasAiPrompt = Boolean(r.adminNotes && r.adminNotes.includes("[AI-DISPATCHARR-PROMPT]"));
-                                    const isProfileRequest = Boolean(r.adminNotes && r.adminNotes.includes("[PROFILE_ADD]"));
+                                    const isProfileMoveRequest = Boolean(r.adminNotes && r.adminNotes.includes("[PROFILE_MOVE]"));
+                                    const isProfileAddRequest = Boolean(r.adminNotes && r.adminNotes.includes("[PROFILE_ADD]"));
+                                    const isProfileRequest = isProfileAddRequest || isProfileMoveRequest;
                                     const isLocalRequest = Boolean(r.genre === "Local" || r.callsign?.includes("LOCALS") || hasAiPrompt);
 
                                     return (
@@ -1472,7 +1491,12 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                                                 <Sparkles className="h-3 w-3" /> AI Prompt Ready
                                                             </Badge>
                                                         )}
-                                                        {isProfileRequest && (
+                                                        {isProfileMoveRequest && (
+                                                            <Badge className="text-[10px] bg-purple-500/15 text-purple-300 border-purple-500/30 gap-1">
+                                                                <ArrowRightLeft className="h-3 w-3" /> Profile Move
+                                                            </Badge>
+                                                        )}
+                                                        {isProfileAddRequest && (
                                                             <Badge className="text-[10px] bg-sky-500/15 text-sky-300 border-sky-500/30 gap-1">
                                                                 <Layers className="h-3 w-3" /> Profile Addition
                                                             </Badge>
@@ -1513,10 +1537,23 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                                                 size="sm"
                                                                 onClick={() => handleAddRequestToProfile(r.id, r.channelName, r.adminNotes || "")}
                                                                 disabled={isPending}
-                                                                className="h-8 text-xs bg-sky-600 hover:bg-sky-500 text-white font-bold gap-1 rounded-xl"
+                                                                className={`h-8 text-xs text-white font-bold gap-1 rounded-xl ${
+                                                                    isProfileMoveRequest
+                                                                        ? "bg-purple-600 hover:bg-purple-500"
+                                                                        : "bg-sky-600 hover:bg-sky-500"
+                                                                }`}
                                                             >
-                                                                <Plus className="h-3.5 w-3.5" />
-                                                                Add to Dispatcharr & Plex
+                                                                {isProfileMoveRequest ? (
+                                                                    <>
+                                                                        <ArrowRightLeft className="h-3.5 w-3.5" />
+                                                                        Move in Dispatcharr & Plex
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <Plus className="h-3.5 w-3.5" />
+                                                                        Add to Dispatcharr & Plex
+                                                                    </>
+                                                                )}
                                                             </Button>
                                                         )}
                                                         <Button

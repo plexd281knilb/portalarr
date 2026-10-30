@@ -1647,6 +1647,102 @@ export async function requestAddChannelToProfileAction(input: {
 }
 
 /**
+ * Moves/reassigns a channel to a target Dispatcharr profile (removing it from previous profile(s)),
+ * records the activity/request, and notifies Plex Media Server to reload its DVR tuner lineup and guide.
+ */
+export async function requestMoveChannelProfileAction(input: {
+    channelId: string;
+    targetProfileSlug: string;
+    fromProfileSlug?: string;
+    reason?: string;
+}): Promise<{
+    success: boolean;
+    message: string;
+    channelName?: string;
+    profileName?: string;
+    oldProfileName?: string;
+    error?: string;
+}> {
+    try {
+        const user = await verifySessionUser();
+        const { moveChannelDispatcharrProfile } = await import("@/lib/iptv/dispatcharr-client");
+
+        const channel = await prisma.iptvChannel.findUnique({
+            where: { id: input.channelId }
+        });
+        if (!channel) {
+            return { success: false, error: "Channel not found in catalog", message: "Channel not found" };
+        }
+
+        if (!input.targetProfileSlug || input.targetProfileSlug === "all_channels") {
+            return {
+                success: false,
+                error: "Invalid target profile selection. Channels can only be assigned to existing curated profiles.",
+                message: "Invalid target profile"
+            };
+        }
+
+        const profile = await prisma.iptvProfile.findFirst({
+            where: {
+                OR: [
+                    { id: input.targetProfileSlug },
+                    { slug: input.targetProfileSlug }
+                ],
+                slug: { not: "all_channels" }
+            }
+        });
+        if (!profile) {
+            return {
+                success: false,
+                error: `Profile "${input.targetProfileSlug}" does not exist. Channels can only be moved to existing Dispatcharr profiles.`,
+                message: "Profile does not exist"
+            };
+        }
+
+        // Execute moving/reassigning in Dispatcharr profile and Plex DVR refresh
+        const result = await moveChannelDispatcharrProfile(channel.id, profile.slug, input.fromProfileSlug);
+
+        // Record request / activity in IptvChannelRequest for audit trail
+        await prisma.iptvChannelRequest.create({
+            data: {
+                channelName: channel.name,
+                callsign: channel.callsign,
+                genre: channel.genre,
+                reason: input.reason?.trim() || `User moved channel to Dispatcharr profile "${profile.name}".`,
+                adminNotes: `[PROFILE_MOVE]: Target profile "${profile.name}" (${profile.slug})${result.oldProfileName ? ` from "${result.oldProfileName}"` : ""}. Result: ${result.message}`,
+                requestedByUserId: user.id,
+                requestedByUsername: user.username,
+                status: result.success ? "ACTIVATED" : "PENDING",
+                activatedChannelId: channel.id
+            }
+        }).catch(() => {});
+
+        logger.addLog(
+            "INFO",
+            "SYSTEM",
+            `User "${user.username}" moved channel "${channel.name}" to Dispatcharr profile "${profile.name}". (plexRefreshed=${result.plexRefreshed})`
+        );
+
+        safeRevalidate("/channels");
+        safeRevalidate("/admin/iptv");
+
+        return {
+            success: result.success,
+            message: result.message,
+            channelName: channel.name,
+            profileName: profile.name,
+            oldProfileName: result.oldProfileName
+        };
+    } catch (err: any) {
+        return {
+            success: false,
+            error: err?.message || "Failed to move channel profile",
+            message: err?.message || "Failed to move channel profile"
+        };
+    }
+}
+
+/**
  * Triggers Plex Media Server(s) to reload DVR channel lineups and refresh electronic program guides.
  */
 export async function refreshPlexDvrAction() {

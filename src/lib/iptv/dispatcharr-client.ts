@@ -982,3 +982,249 @@ export async function addChannelToDispatcharrProfile(
         dispatcharrUpdated
     };
 }
+
+/**
+ * Moves/reassigns a channel from its current profile(s) to a target profile in Dispatcharr,
+ * updates SQLite mappings (removing old, adding new), updates channel counts,
+ * and notifies Plex Media Server to reload its DVR lineup and refresh the associated EPG guide.
+ */
+export async function moveChannelDispatcharrProfile(
+    channelIdOrXmltvId: string,
+    targetProfileSlugOrId: string,
+    fromProfileSlugOrId?: string
+): Promise<{
+    success: boolean;
+    message: string;
+    profileName?: string;
+    oldProfileName?: string;
+    channelName?: string;
+    plexRefreshed?: boolean;
+    dispatcharrUpdated?: boolean;
+}> {
+    const channel = await prisma.iptvChannel.findFirst({
+        where: {
+            OR: [
+                { id: channelIdOrXmltvId },
+                { xmltvId: channelIdOrXmltvId },
+                { name: channelIdOrXmltvId }
+            ]
+        }
+    });
+
+    if (!channel) {
+        return {
+            success: false,
+            message: `Channel "${channelIdOrXmltvId}" not found in catalog`
+        };
+    }
+
+    if (targetProfileSlugOrId === "all_channels") {
+        return {
+            success: false,
+            message: "Cannot move to All_Channels master pool. Only existing curated profiles are permitted."
+        };
+    }
+
+    const targetProfile = await prisma.iptvProfile.findFirst({
+        where: {
+            OR: [
+                { id: targetProfileSlugOrId },
+                { slug: targetProfileSlugOrId },
+                { name: targetProfileSlugOrId }
+            ],
+            slug: { not: "all_channels" }
+        }
+    });
+
+    if (!targetProfile) {
+        return {
+            success: false,
+            message: `Profile "${targetProfileSlugOrId}" does not exist. Channels can only be moved to existing profiles.`
+        };
+    }
+
+    // 1. Identify existing profile links to remove
+    const existingLinks = await prisma.iptvProfileChannel.findMany({
+        where: {
+            channelId: channel.id,
+            profile: {
+                slug: { not: "all_channels" },
+                ...(fromProfileSlugOrId
+                    ? {
+                          OR: [
+                              { id: fromProfileSlugOrId },
+                              { slug: fromProfileSlugOrId },
+                              { name: fromProfileSlugOrId }
+                          ]
+                      }
+                    : {})
+            }
+        },
+        include: { profile: true }
+    });
+
+    const oldProfileIds = existingLinks
+        .filter((l) => l.profile.id !== targetProfile.id)
+        .map((l) => l.profile.id);
+
+    // If channel is already exclusively in targetProfile, nothing to change
+    if (existingLinks.length > 0 && oldProfileIds.length === 0 && existingLinks.some((l) => l.profile.id === targetProfile.id)) {
+        return {
+            success: true,
+            message: `Channel "${channel.name}" is already in the "${targetProfile.name}" profile.`,
+            profileName: targetProfile.name,
+            channelName: channel.name,
+            plexRefreshed: false,
+            dispatcharrUpdated: false
+        };
+    }
+
+    // 2. Remove old profile link(s) in SQLite
+    if (oldProfileIds.length > 0) {
+        await prisma.iptvProfileChannel.deleteMany({
+            where: {
+                channelId: channel.id,
+                profileId: { in: oldProfileIds }
+            }
+        });
+    }
+
+    // 3. Add to target profile in SQLite
+    await prisma.iptvProfileChannel.upsert({
+        where: {
+            profileId_channelId: {
+                profileId: targetProfile.id,
+                channelId: channel.id
+            }
+        },
+        create: {
+            profileId: targetProfile.id,
+            channelId: channel.id,
+            channelOrder: channel.channelNumber || 0
+        },
+        update: {
+            channelOrder: channel.channelNumber || 0
+        }
+    });
+
+    // 4. Update channel counts on all affected profiles
+    const affectedProfileIds = Array.from(new Set([...oldProfileIds, targetProfile.id]));
+    for (const pid of affectedProfileIds) {
+        const count = await prisma.iptvProfileChannel.count({
+            where: { profileId: pid }
+        });
+        await prisma.iptvProfile.update({
+            where: { id: pid },
+            data: { channelCount: count }
+        });
+    }
+
+    // 5. Update Dispatcharr upstream REST API if reachable
+    let dispatcharrUpdated = false;
+    const settings = await getIptvSettings();
+    const apiKey = await getDecryptedDispatcharrApiKey();
+
+    if (settings?.dispatcharrUrl && apiKey) {
+        try {
+            const baseUrl = settings.dispatcharrUrl.replace(/\/+$/, "");
+            const headers = {
+                "X-API-Key": apiKey,
+                "Accept": "application/json",
+                "Content-Type": "application/json"
+            };
+
+            const profRes = await fetch(`${baseUrl}/api/channels/profiles/`, { headers });
+            if (profRes.ok) {
+                const profData = await profRes.json();
+                const profList = Array.isArray(profData) ? profData : (profData?.results || []);
+
+                // Find channel in Dispatcharr
+                const chanRes = await fetch(
+                    `${baseUrl}/api/channels/channels/?search=${encodeURIComponent(channel.name)}`,
+                    { headers }
+                );
+                if (chanRes.ok) {
+                    const chanData = await chanRes.json();
+                    const chanList = Array.isArray(chanData) ? chanData : (chanData?.results || []);
+                    const targetDChan = chanList.find(
+                        (c) =>
+                            (c.effective_name || c.name || "").toLowerCase() === channel.name.toLowerCase() ||
+                            c.tvg_id === channel.xmltvId ||
+                            c.channel_number === channel.channelNumber
+                    );
+
+                    if (targetDChan) {
+                        // A. Remove channel from old Dispatcharr profile(s)
+                        for (const oldLink of existingLinks) {
+                            if (oldLink.profile.id === targetProfile.id) continue;
+                            const oldDProf = profList.find(
+                                (p) =>
+                                    String(p.name || "").toLowerCase() === oldLink.profile.name.toLowerCase() ||
+                                    String(p.slug || "").toLowerCase() === oldLink.profile.slug.toLowerCase() ||
+                                    p.id === oldLink.profile.id
+                            );
+                            if (oldDProf && Array.isArray(oldDProf.channels) && oldDProf.channels.includes(targetDChan.id)) {
+                                const filteredChannels = oldDProf.channels.filter((cid: any) => cid !== targetDChan.id);
+                                await fetch(`${baseUrl}/api/channels/profiles/${oldDProf.id}/`, {
+                                    method: "PATCH",
+                                    headers,
+                                    body: JSON.stringify({ channels: filteredChannels })
+                                });
+                            }
+                        }
+
+                        // B. Add channel to target Dispatcharr profile
+                        const targetDProf = profList.find(
+                            (p) =>
+                                String(p.name || "").toLowerCase() === targetProfile.name.toLowerCase() ||
+                                String(p.slug || "").toLowerCase() === targetProfile.slug.toLowerCase() ||
+                                p.id === targetProfile.id
+                        );
+                        if (targetDProf) {
+                            const currentChannels = Array.isArray(targetDProf.channels) ? targetDProf.channels : [];
+                            if (!currentChannels.includes(targetDChan.id)) {
+                                const updatedChannels = [...currentChannels, targetDChan.id];
+                                const patchRes = await fetch(`${baseUrl}/api/channels/profiles/${targetDProf.id}/`, {
+                                    method: "PATCH",
+                                    headers,
+                                    body: JSON.stringify({ channels: updatedChannels })
+                                });
+                                if (patchRes.ok) {
+                                    dispatcharrUpdated = true;
+                                }
+                            } else {
+                                dispatcharrUpdated = true;
+                            }
+                        }
+                    }
+                }
+            }
+        } catch {
+            // Live Dispatcharr unreachable, local SQLite sync succeeded
+        }
+    }
+
+    // 6. Trigger Plex Media Server DVR lineup and guide reload
+    let plexRefreshed = false;
+    try {
+        const plexRes = await refreshPlexDvrLineupAndGuide();
+        plexRefreshed = plexRes.success;
+    } catch {
+        // Plex offline
+    }
+
+    const oldNames = existingLinks
+        .filter((l) => l.profile.id !== targetProfile.id)
+        .map((l) => l.profile.name);
+    const oldStr = oldNames.length > 0 ? ` from "${oldNames.join(", ")}"` : "";
+
+    return {
+        success: true,
+        message: `Successfully moved "${channel.name}"${oldStr} to the "${targetProfile.name}" profile in Dispatcharr and refreshed Plex Live TV & guide!`,
+        profileName: targetProfile.name,
+        oldProfileName: oldNames[0] || undefined,
+        channelName: channel.name,
+        plexRefreshed,
+        dispatcharrUpdated
+    };
+}

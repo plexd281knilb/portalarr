@@ -2997,8 +2997,8 @@ async function runTestSuite() {
             }
 
             // Test Suite 23.E: Dispatcharr Profile Mapping, Channel Addition & Plex DVR Refresh
-            const { requestAddChannelToProfileAction, refreshPlexDvrAction } = await import("../src/app/iptv-actions");
-            const { addChannelToDispatcharrProfile, refreshPlexDvrLineupAndGuide } = await import("../src/lib/iptv/dispatcharr-client");
+            const { requestAddChannelToProfileAction, requestMoveChannelProfileAction, refreshPlexDvrAction } = await import("../src/app/iptv-actions");
+            const { addChannelToDispatcharrProfile, moveChannelDispatcharrProfile, refreshPlexDvrLineupAndGuide } = await import("../src/lib/iptv/dispatcharr-client");
 
             if (!catalogRes.data.channels[0]?.profiles || !Array.isArray(catalogRes.data.channels[0].profiles)) {
                 throw new Error("Catalog channels must include profiles array with id, name and slug");
@@ -3058,6 +3058,53 @@ async function runTestSuite() {
             const plexRefreshRes = await refreshPlexDvrLineupAndGuide();
             if (typeof plexRefreshRes.success !== "boolean") {
                 throw new Error("refreshPlexDvrLineupAndGuide must return success boolean");
+            }
+
+            // Test 4: Move channel profile from "sports" to "news" and trigger Plex DVR lineup & guide refresh
+            process.env.PORTALARR_TEST_USER_ID = testUser.id;
+            const moveProfRes = await requestMoveChannelProfileAction({
+                channelId: testUnassignedChan.id,
+                targetProfileSlug: "news",
+                fromProfileSlug: "sports",
+                reason: "Moving channel from Sports to News profile"
+            });
+            if (!moveProfRes.success) {
+                throw new Error(`requestMoveChannelProfileAction failed: ${moveProfRes.error}`);
+            }
+
+            const unlinkedSports = await prisma.iptvProfileChannel.findFirst({
+                where: { channelId: testUnassignedChan.id, profile: { slug: "sports" } }
+            });
+            if (unlinkedSports) {
+                throw new Error("Expected channel to be removed from sports profile after move");
+            }
+
+            const linkedNews = await prisma.iptvProfileChannel.findFirst({
+                where: { channelId: testUnassignedChan.id, profile: { slug: "news" } }
+            });
+            if (!linkedNews) {
+                throw new Error("Expected channel to be added to news profile after move");
+            }
+
+            // Verify moveChannelDispatcharrProfile directly
+            const directMoveRes = await moveChannelDispatcharrProfile(testUnassignedChan.id, "sports", "news");
+            if (!directMoveRes.success) {
+                throw new Error(`Direct moveChannelDispatcharrProfile failed: ${directMoveRes.error}`);
+            }
+
+            const reLinkedSports = await prisma.iptvProfileChannel.findFirst({
+                where: { channelId: testUnassignedChan.id, profile: { slug: "sports" } }
+            });
+            if (!reLinkedSports) {
+                throw new Error("Expected channel to be moved back to sports profile via moveChannelDispatcharrProfile");
+            }
+
+            // Verify move audit record logged
+            const moveAudit = await prisma.iptvChannelRequest.findFirst({
+                where: { channelName: testUnassignedChan.name, adminNotes: { contains: "[PROFILE_MOVE]" } }
+            });
+            if (!moveAudit) {
+                throw new Error("Expected [PROFILE_MOVE] audit log in iptvChannelRequest");
             }
 
             delete process.env.PORTALARR_TEST_USER_ID;

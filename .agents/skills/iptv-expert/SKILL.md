@@ -154,14 +154,23 @@ Plex Media Server enforces three distinct radio restriction states under **Restr
 - **Capacity Fallback Banner on `/channels`**: When Plex Home is at capacity, users without Live TV see an informative banner highlighting unlimited viewer slots on Jellyfin & Swiftfin with an instant 1-click activation button.
 - **Admin 1-Click Provisioning on Tab 5**: In pending requests, admins can click `[⚡ Provision on Jellyfin (Unlimited Slots)]` to instantly grant access without exceeding the 14-member Plex Home ceiling.
 
-### 13. Dispatcharr Profile Mapping, Channel Lineup Transparency & Plex DVR Auto-Refresh
+### 13. Dispatcharr Profile Mapping, Channel Reassignment & Plex DVR Auto-Refresh
 - **Profile Transparency on Channel Cards**: Channel cards render badges for each Dispatcharr profile they belong to (`Sports`, `News`, `Kids`, `Entertainment`, `Fios`, `Spectrum`, etc.).
-- **Unmapped Channels Detection & Strict Action Button Gating**: Channels not assigned to any profile display a prominent `⚠️ Not in a Profile` badge. The `[+ Add to Profile]` action button is strictly and exclusively rendered for channels that do NOT already belong to an existing profile (`hasNoProfiles === true`). Channels that already have a profile simply display their profile badges without any add button.
+- **Unmapped vs Assigned Channel Actions**:
+  - Channels not assigned to any profile display a prominent `⚠️ Not in a Profile` badge with an `[+ Add to Profile]` action button.
+  - Channels that already have an assigned profile display a clean `[Move Profile]` button with an `ArrowRightLeft` icon, allowing users and admins to easily re-categorize channels across profiles (e.g. moving regional sports channels from News or Entertainment into Sports).
 - **Dedicated Unassigned Shelf**: "Featured Hubs" includes a dedicated `⚠️ Not in a Profile ({count})` pill that isolates unmapped channels so users and admins can quickly review and organize them.
-- **Strict Existing-Profile Restriction**: Channels can ONLY be added to existing, configured Dispatcharr profiles. Creating new profiles is strictly blocked because Plex DVR tuners only poll pre-configured virtual tuner paths and will not detect or pull new profile feeds without server reconfiguration.
-- **Dispatcharr Upstream API Sync (`addChannelToDispatcharrProfile`)**: Links the channel in SQLite `prisma.iptvProfileChannel`, increments profile `channelCount`, and updates the Dispatcharr REST API (`PATCH /api/channels/profiles/{id}/` with updated channel IDs).
-- **Automated Plex DVR Lineup & Guide Refresh (`refreshPlexDvrLineupAndGuide`)**: Discovers active Plex DVR tuners across PMS instances (`GET /livetv/dvrs`), triggers `POST /livetv/dvrs/{key}/reloadLineup`, `POST /livetv/dvrs/{key}/refreshGuide`, and `POST /media/subscriptions/refresh` so new channels immediately appear in Plex Live TV & DVR grids without server restarts.
-- **Admin Mission Control Experience (`/admin/iptv` Tab 6)**: Surfaces profile addition requests with a 1-click `[⚡ Add to Dispatcharr & Plex]` button, plus a manual `[🔄 Refresh Plex DVR Lineup]` tool in the mission control header.
+- **Strict Existing-Profile Restriction**: Channels can ONLY be added or moved to existing, configured Dispatcharr profiles. Creating new profiles is strictly blocked because Plex DVR tuners only poll pre-configured virtual tuner paths and will not detect or pull new profile feeds without server reconfiguration.
+- **Profile Move Engine (`moveChannelDispatcharrProfile`)**:
+  - Finds the channel by ID or `xmltvId` and resolves target and source profiles.
+  - Updates local SQLite database: deletes old `prisma.iptvProfileChannel` links, inserts the new link, and recalculates accurate channel counts on both source and target profiles.
+  - Updates Dispatcharr upstream REST API: patches the target profile via `PATCH /api/channels/profiles/{targetProfileId}/` with the channel appended, and patches the old profile via `PATCH /api/channels/profiles/{oldProfileId}/` with the channel removed.
+  - Automatically triggers `refreshPlexDvrLineupAndGuide()` across all active Plex servers.
+- **Automated Plex DVR Lineup & Guide Refresh (`refreshPlexDvrLineupAndGuide`)**: Discovers active Plex DVR tuners across PMS instances (`GET /livetv/dvrs`), triggers `POST /livetv/dvrs/{key}/reloadLineup`, `POST /livetv/dvrs/{key}/refreshGuide`, and `POST /media/subscriptions/refresh` so moved or added channels immediately appear in the correct Plex Live TV & DVR lineups and EPG grids without server restarts.
+- **Admin Mission Control Experience (`/admin/iptv` Tab 6)**:
+  - Distinguishes new additions (`[PROFILE_ADD]`, sky badge) from profile moves (`[PROFILE_MOVE]`, purple badge).
+  - Provides a 1-click `[Move in Dispatcharr & Plex]` button that executes the move action and updates request status to `ACTIVATED`.
+  - Header features manual `[🔄 Refresh Plex DVR Lineup]` tool to force a cluster-wide DVR reload anytime.
 
 ---
 
