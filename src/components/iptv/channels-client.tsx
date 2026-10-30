@@ -225,26 +225,15 @@ function ChannelCard({ ch, specialBadge, badgeColor = "teal", onAddToProfile }: 
                 <div className="flex items-center gap-1.5">
                     <span>1080p 60fps</span>
                 </div>
-                {onAddToProfile && (
-                    hasNoProfiles ? (
-                        <Button
-                            size="sm"
-                            onClick={() => onAddToProfile(ch)}
-                            className="h-6 px-2 text-[10px] font-bold bg-teal-600 hover:bg-teal-500 text-white rounded-lg flex items-center gap-1 shadow-sm"
-                        >
-                            <Plus className="h-3 w-3" />
-                            Add to Profile
-                        </Button>
-                    ) : (
-                        <button
-                            onClick={() => onAddToProfile(ch)}
-                            className="text-[10px] text-teal-400 hover:text-teal-300 font-bold flex items-center gap-0.5 px-1.5 py-0.5 rounded hover:bg-teal-500/10 transition-colors"
-                            title="Add to another Dispatcharr profile"
-                        >
-                            <Plus className="h-2.5 w-2.5" />
-                            + Profile
-                        </button>
-                    )
+                {onAddToProfile && hasNoProfiles && (
+                    <Button
+                        size="sm"
+                        onClick={() => onAddToProfile(ch)}
+                        className="h-6 px-2.5 text-[10px] font-bold bg-teal-600 hover:bg-teal-500 text-white rounded-lg flex items-center gap-1 shadow-sm"
+                    >
+                        <Plus className="h-3 w-3" />
+                        Add to Profile
+                    </Button>
                 )}
             </div>
         </div>
@@ -1525,7 +1514,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                                         Add Channel to Dispatcharr Profile
                                     </h3>
                                     <p className="text-[11px] text-muted-foreground">
-                                        Plex Live TV & DVR lineup updates automatically
+                                        Select an existing profile (Plex Live TV & DVR lineup updates automatically)
                                     </p>
                                 </div>
                             </div>

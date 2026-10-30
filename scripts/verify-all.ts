@@ -3004,9 +3004,34 @@ async function runTestSuite() {
                 throw new Error("Catalog channels must include profiles array with id, name and slug");
             }
 
-            const testChan = catalogRes.data.channels[0];
+            // Find a channel that has no curated profile yet, or create a mock unassigned channel
+            let testUnassignedChan = catalogRes.data.channels.find(
+                (c: any) => !c.profiles?.some((p: any) => p.slug !== "all_channels")
+            );
+
+            if (!testUnassignedChan) {
+                testUnassignedChan = await prisma.iptvChannel.create({
+                    data: {
+                        name: "Test Unassigned Channel",
+                        channelNumber: 9999,
+                        genre: "Entertainment",
+                        isCustom: true
+                    }
+                });
+            }
+
+            // Test 1: Verify trying to add to a nonexistent profile is rejected
+            const invalidProfRes = await requestAddChannelToProfileAction({
+                channelId: testUnassignedChan.id,
+                profileSlug: "nonexistent_profile_123"
+            });
+            if (invalidProfRes.success) {
+                throw new Error("Adding to non-existent profile must be rejected");
+            }
+
+            // Test 2: Add unassigned channel to existing 'sports' profile
             const addProfRes = await requestAddChannelToProfileAction({
-                channelId: testChan.id,
+                channelId: testUnassignedChan.id,
                 profileSlug: "sports",
                 reason: "Testing profile addition workflow"
             });
@@ -3014,8 +3039,17 @@ async function runTestSuite() {
                 throw new Error(`requestAddChannelToProfileAction failed: ${addProfRes.error}`);
             }
 
+            // Test 3: Verify trying to add again when already in a profile is rejected
+            const duplicateAddRes = await requestAddChannelToProfileAction({
+                channelId: testUnassignedChan.id,
+                profileSlug: "news"
+            });
+            if (duplicateAddRes.success) {
+                throw new Error("Adding a channel that is already in a profile must be rejected");
+            }
+
             const profileChanLink = await prisma.iptvProfileChannel.findFirst({
-                where: { channelId: testChan.id, profile: { slug: "sports" } }
+                where: { channelId: testUnassignedChan.id, profile: { slug: "sports" } }
             });
             if (!profileChanLink) {
                 throw new Error("Expected IptvProfileChannel link to exist for channel in sports profile");

@@ -1559,16 +1559,49 @@ export async function requestAddChannelToProfileAction(input: {
             return { success: false, error: "Channel not found in catalog", message: "Channel not found" };
         }
 
+        // 1. Guard: Channels can only be added to existing curated profiles
+        if (!input.profileSlug || input.profileSlug === "all_channels") {
+            return {
+                success: false,
+                error: "Invalid profile selection. Channels can only be added to existing curated profiles.",
+                message: "Invalid profile"
+            };
+        }
+
         const profile = await prisma.iptvProfile.findFirst({
             where: {
                 OR: [
                     { id: input.profileSlug },
                     { slug: input.profileSlug }
-                ]
+                ],
+                slug: { not: "all_channels" }
             }
         });
         if (!profile) {
-            return { success: false, error: `Profile "${input.profileSlug}" not found`, message: "Profile not found" };
+            return {
+                success: false,
+                error: `Profile "${input.profileSlug}" does not exist. Channels can only be added to existing Dispatcharr profiles.`,
+                message: "Profile does not exist"
+            };
+        }
+
+        // 2. Guard: Only show and allow adding if the channel is not already in an existing profile
+        const existingCuratedProfiles = await prisma.iptvProfileChannel.findMany({
+            where: {
+                channelId: channel.id,
+                profile: {
+                    slug: { not: "all_channels" }
+                }
+            },
+            include: { profile: { select: { name: true } } }
+        });
+
+        if (existingCuratedProfiles.length > 0) {
+            return {
+                success: false,
+                error: `Channel "${channel.name}" is already in an existing profile (${existingCuratedProfiles.map((p) => p.profile.name).join(", ")}).`,
+                message: "Channel is already assigned to a profile"
+            };
         }
 
         // Execute addition to Dispatcharr profile and Plex DVR refresh

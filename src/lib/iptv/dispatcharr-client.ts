@@ -848,20 +848,28 @@ export async function addChannelToDispatcharrProfile(
         };
     }
 
+    if (targetProfileSlugOrId === "all_channels") {
+        return {
+            success: false,
+            message: "Cannot add to All_Channels master pool. Only existing curated profiles are permitted."
+        };
+    }
+
     const profile = await prisma.iptvProfile.findFirst({
         where: {
             OR: [
                 { id: targetProfileSlugOrId },
                 { slug: targetProfileSlugOrId },
                 { name: targetProfileSlugOrId }
-            ]
+            ],
+            slug: { not: "all_channels" }
         }
     });
 
     if (!profile) {
         return {
             success: false,
-            message: `Profile "${targetProfileSlugOrId}" not found`
+            message: `Profile "${targetProfileSlugOrId}" does not exist. Channels can only be added to existing profiles.`
         };
     }
 
