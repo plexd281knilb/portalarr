@@ -84,3 +84,63 @@ When 7 components or poster endpoints (`/api/media/image`) fire in parallel on i
 
 #### Planned Action
 Verify host-to-container mount paths in `docker-compose.yml` to confirm that the `/Kyrabooks/audiobooks` directory is properly mounted into the Portalarr container and accessible.
+
+---
+
+### 📬 4. Secondary & Linked Notification Inboxes (Family & Alternate Email Routing)
+
+**Status:** Planned (Design & Architecture Complete)  
+**Priority:** High  
+**Target Subsystems & Files:**
+- `prisma/schema.prisma` (`UserLinkedEmail` model + relation in `User`)
+- `src/app/actions.ts` (`sendEmailAction`, `getLinkedEmailsAction`, `addLinkedEmailAction`, `updateLinkedEmailRoutingAction`, `deleteLinkedEmailAction`)
+- `src/app/profile/page.tsx` (`/profile` & `/settings/profile` notification management card)
+- `src/app/payment-actions.ts` (subscription renewal reminder multi-dispatch)
+- `src/components/sent-email-audit-log.tsx` (audit logging with recipient tag)
+
+#### 1. Problem Statement & Real-World Use Cases
+- **Plex Login Email Decoupling:** Many users registered on Plex with burner, placeholder, or unmonitored email addresses (e.g. `plexuser99@gmail.com`). They need critical server announcements and maintenance alerts forwarded to their actual daily inbox.
+- **Spouse / Household Billing Sharing:** A subscriber wants their spouse or partner to receive subscription renewal reminder notices (so whoever handles the household budget sees the upcoming bill) without sharing personal Portalarr account passwords.
+- **Media Fulfillment Sharing:** A family member who frequently requests media wants email notifications when requested movies/shows finish downloading, while another family member only cares about platform downtime announcements.
+- **Granular Opt-In Matrix:** Each linked email address must have independent checkboxes for every email category, preventing inbox spam for recipients who only want specific notifications.
+
+#### 2. Data Model Design (`prisma/schema.prisma`)
+```prisma
+model UserLinkedEmail {
+  id                           String   @id @default(cuid())
+  userId                       String
+  user                         User     @relation("UserLinkedEmails", fields: [userId], references: [id], onDelete: Cascade)
+  email                        String
+  label                        String?  // e.g. "Spouse (Sarah)", "Work Inbox", "Partner"
+  isVerified                   Boolean  @default(true) // Auto-verified for active subscribers
+  
+  // Granular Delivery Category Toggles
+  receiveSubscriptionReminders Boolean  @default(true)  // Invoices, payment receipts, renewal notices
+  receiveAnnouncements         Boolean  @default(true)  // Server maintenance & downtime alerts
+  receiveMediaReady            Boolean  @default(false) // Media downloaded & ready to stream
+  receiveRequestApproved       Boolean  @default(false) // Requests approved by admin
+  receiveNewContent            Boolean  @default(false) // Weekly library digests & recommendations
+  receiveSupportTickets        Boolean  @default(false) // Support ticket replies & resolutions
+
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+
+  @@unique([userId, email])
+  @@index([userId])
+}
+```
+
+#### 3. Dispatch Engine Integration (`sendEmailAction`)
+- When an email event triggers (e.g. `subscription_renewal_reminder` or `broadcast_announcement`), the engine resolves the target `user` record.
+- If the user has linked emails with that category enabled (`linked.receiveSubscriptionReminders === true`), the engine dispatches a tailored copy to each linked recipient with:
+  - Personal salutation: `Hi [Label or Name],`
+  - Contextual delivery disclaimer: `"You received this notification because [User] added this email address for [Category] alerts on DomsHomeLab."`
+  - Safe 1-click unsubscribe token link: allows the secondary recipient to opt out of future emails without affecting the primary user's account.
+
+#### 4. Frontend UX / UI in Account Settings (`/profile`)
+- Mount a new section in `/profile`: **"📬 Additional Notification Inboxes & Family Routing"**.
+- Displays each linked email with its custom label (e.g. `sarah@gmail.com • Sarah (Spouse)`).
+- Category badges showing active routing (e.g. `[💳 Renewals] [🎬 Media Ready] [📢 Announcements]`).
+- Interactive modal to adjust checkboxes per category or delete linked inboxes.
+- "Add Alternate Email" button with instant email format validation and duplicate prevention.
+

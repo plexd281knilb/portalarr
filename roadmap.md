@@ -30,3 +30,4 @@
 - **📊 Personal Year-in-Review ("DomsHomeLab Wrapped"):** Interactive annual streaming recaps showcasing your top-watched genres, directors, actors, total hours streamed, and reading milestones.
 - **📱 Progressive Web App (PWA) Push Notifications:** Native mobile notifications when your requested movies, TV episodes, or Kindle books finish downloading.
 - **🔁 Cross-Device Watchlist & Reading Sync:** Unified watchlist across Movies, TV Series, Ebooks, and Audiobooks synced directly with your accounts.
+- **📬 Linked Inboxes & Family Email Routing:** Add alternate or secondary email addresses (such as a spouse, partner, or daily work inbox) with granular routing controls. Choose exactly which updates each inbox receives—such as routing subscription renewal notices to a spouse, sending movie/TV request availability alerts to the household, or directing server announcements to your primary daily email instead of your Plex account login.
