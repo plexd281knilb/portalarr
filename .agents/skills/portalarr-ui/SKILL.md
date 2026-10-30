@@ -1464,3 +1464,15 @@ Detailed guide on updating: [updating-this-skill.md](./references/updating-this-
 - **Fail-Safe Card Logo Fallback**: `ChannelCard` components dynamically sanitize raw upstream URLs to the proxy path, handle `onError` via component state, and render a semantic Lucide genre icon (e.g. `Trophy`, `Tv`, `Newspaper`, `Baby`, `Film`) if the image fails or is unavailable, preventing blank or broken cards.
 - **Dynamic Media Market Customization Shelves**: Displays sticky anchor feeds for the host server market (Dallas CBS/NBC/FOX/ABC/CW) alongside a client-selected or IP-detected local media market shelf, college sports (NCAA), and NFL showcase carousels.
 - **DVR Stream Reservation Controls**: Dedicated stream headroom reservation prevents concurrent client live TV viewers from starving scheduled Plex DVR tuner recordings, configurable by homelab administrators down to 0 if DVR recording is not utilized.
+
+
+### 51. Member Live TV Access & Platforms Management UI (`admin-iptv-client.tsx`)
+- **Plex 3-Tier Restriction Badge Lockup**:
+  - `Live TV + DVR` (Emerald `bg-emerald-500/20 text-emerald-300`): Displayed when user has both live channel and DVR privileges (`Allow Live TV and DVR access` in Plex).
+  - `Live TV Only` (Sky Blue `bg-sky-500/20 text-sky-300`): Displayed when user has channel tuning without DVR recording privileges (`Allow Live TV only` in Plex).
+  - `⚠️ Missing Live TV & DVR` (Rose `bg-rose-500/20 text-rose-300`): Displayed when user lacks tuner and DVR access (`No Live TV and DVR access` in Plex).
+- **Hierarchical Action Buttons**:
+  - `[Live TV: ON]` / `[Enable Live TV]`: Toggles live stream privileges. Revoking Live TV automatically revokes DVR privileges.
+  - `[DVR: ON]` / `[Enable DVR]`: Toggles DVR recording privileges. Granting DVR automatically ensures live tuner privileges are active.
+  - `[Free Slot]`: Ghost button demoting the user to a regular Plex friend to free up one of the 14 shared Plex Home slots.
+- **Card Status Outlines**: Cards are outlined with `border-rose-500/40 bg-rose-500/5` when a Plex Home member lacks live privileges, and `border-amber-500/30 bg-amber-500/5` when identified as an inactive rotation candidate.
