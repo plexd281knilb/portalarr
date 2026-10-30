@@ -127,16 +127,16 @@ function ChannelCard({ ch, specialBadge, badgeColor = "teal", onAddToProfile }: 
     }[badgeColor];
 
     const profilesList: { name: string; slug: string }[] = useMemo(() => {
+        let list: { name: string; slug: string }[] = [];
         if (Array.isArray(ch.profiles) && ch.profiles.length > 0) {
-            return ch.profiles;
-        }
-        if (Array.isArray(ch.profileSlugs) && ch.profileSlugs.length > 0) {
-            return ch.profileSlugs.map((slug: string) => ({
+            list = ch.profiles;
+        } else if (Array.isArray(ch.profileSlugs) && ch.profileSlugs.length > 0) {
+            list = ch.profileSlugs.map((slug: string) => ({
                 name: slug.charAt(0).toUpperCase() + slug.slice(1).replace(/_/g, " "),
                 slug
             }));
         }
-        return [];
+        return list.filter((p) => p.slug !== "all_channels" && p.name.toLowerCase() !== "all_channels");
     }, [ch.profiles, ch.profileSlugs]);
 
     const hasNoProfiles = profilesList.length === 0;
@@ -192,7 +192,7 @@ function ChannelCard({ ch, specialBadge, badgeColor = "teal", onAddToProfile }: 
                     </h4>
                     <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1">
                         <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 inline-block" />
-                        {ch.epgName || "Live Stream Active"}
+                        {ch.epgName && ch.epgName.trim().toLowerCase() !== ch.name.trim().toLowerCase() ? ch.epgName : "Live Stream Active"}
                     </p>
                 </div>
 
@@ -242,7 +242,7 @@ function ChannelCard({ ch, specialBadge, badgeColor = "teal", onAddToProfile }: 
                             title="Add to another Dispatcharr profile"
                         >
                             <Plus className="h-2.5 w-2.5" />
-                            Profile
+                            + Profile
                         </button>
                     )
                 )}
@@ -309,11 +309,12 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
     const nflChannels = useMemo(() => getNflChannels(channelsList), [channelsList]);
     const ncaaChannels = useMemo(() => getNcaaChannels(channelsList), [channelsList]);
     const unassignedChannels = useMemo(() => {
-        return channelsList.filter(
-            (c) =>
-                (!c.profiles || c.profiles.length === 0) &&
-                (!c.profileSlugs || c.profileSlugs.length === 0)
-        );
+        return channelsList.filter((c) => {
+            const curProfiles = Array.isArray(c.profiles) && c.profiles.length > 0
+                ? c.profiles.filter((p: any) => p.slug !== "all_channels" && p.name?.toLowerCase() !== "all_channels")
+                : (c.profileSlugs || []).filter((s: string) => s !== "all_channels");
+            return curProfiles.length === 0;
+        });
     }, [channelsList]);
 
 
@@ -1141,7 +1142,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                         All Lineups
                     </button>
 
-                    {profilesList.map((p) => {
+                    {profilesList.filter((p) => p.slug !== "all_channels").map((p) => {
                         const IconComponent = p.slug.includes("sport")
                             ? Trophy
                             : p.slug.includes("kid")
@@ -1581,7 +1582,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                                     className="w-full h-9 px-3 rounded-xl bg-background border border-border text-foreground font-medium text-xs focus:ring-1 focus:ring-teal-500"
                                 >
                                     <option value="">-- Choose Profile --</option>
-                                    {profilesList.map((p: any) => (
+                                    {profilesList.filter((p: any) => p.slug !== "all_channels").map((p: any) => (
                                         <option key={p.id} value={p.slug}>
                                             {p.name} ({p.channelCount || 0} channels)
                                         </option>
