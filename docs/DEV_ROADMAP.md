@@ -89,7 +89,7 @@ Verify host-to-container mount paths in `docker-compose.yml` to confirm that the
 
 ### 📬 4. Secondary & Linked Notification Inboxes (Family & Alternate Email Routing)
 
-**Status:** Planned (Design & Architecture Complete)  
+**Status:** Completed (Shipped in v1.4.0)  
 **Priority:** High  
 **Target Subsystems & Files:**
 - `prisma/schema.prisma` (`UserLinkedEmail` model + relation in `User`)
