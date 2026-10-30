@@ -455,6 +455,31 @@ model User {
   adminApprovals         AdminApproval[]
   watchHistories         WatchHistory[]
   sentEmailLogs          SentEmailLog[]
+  linkedEmails           UserLinkedEmail[]
+}
+
+model UserLinkedEmail {
+  id                           String   @id @default(cuid())
+  userId                       String
+  user                         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email                        String
+  label                        String?  // e.g. "Spouse", "Family", "Work", "Daily Primary"
+  isVerified                   Boolean  @default(false)
+  verificationToken            String?
+
+  // Granular category routing toggles
+  receiveSubscriptionReminders Boolean  @default(true)  // Renewal warnings, payment confirmations
+  receiveAnnouncements         Boolean  @default(true)  // Server newsletters, planned downtime
+  receiveMediaReady            Boolean  @default(false) // "Your media is ready to stream"
+  receiveRequestApproved       Boolean  @default(false) // "Media request approved"
+  receiveNewContent            Boolean  @default(false) // Weekly digest of newly added content
+  receiveSupportTickets        Boolean  @default(false) // Ticket updates & replies
+
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+
+  @@unique([userId, email])
+  @@index([userId])
 }
 
 model SupportTicket {

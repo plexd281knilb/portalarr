@@ -2368,6 +2368,110 @@ async function runTestSuite() {
                 await prisma.userNotificationPreference.deleteMany({ where: { userId: testOptOutUser.id } });
                 await prisma.user.delete({ where: { id: testOptOutUser.id } });
             }
+
+            // 8d. Test Secondary & Linked Notification Inboxes with Granular Routing
+            const linkedTestUser = await prisma.user.create({
+                data: {
+                    username: `linked_usr_${Date.now()}`,
+                    email: `linked_usr_${Date.now()}@example.com`,
+                    name: "Linked Test User",
+                    password: "mock_password_hash_123",
+                    role: "USER",
+                    status: "APPROVED"
+                }
+            });
+
+            try {
+                process.env.PORTALARR_TEST_AUTH = "true";
+                process.env.PORTALARR_TEST_USER_ID = linkedTestUser.id;
+
+                const {
+                    getUserLinkedEmailsAction,
+                    addOrUpdateLinkedEmailAction,
+                    deleteLinkedEmailAction,
+                    toggleLinkedEmailCategoryAction
+                } = await import("../src/app/linked-email-actions");
+
+                // 1. Add linked spouse email with Billing enabled
+                const addRes = await addOrUpdateLinkedEmailAction({
+                    email: "spouse@example.com",
+                    label: "Spouse / Partner",
+                    receiveSubscriptionReminders: true,
+                    receiveAnnouncements: true,
+                    receiveMediaReady: false
+                });
+                if (!addRes.success || !addRes.linkedEmail) {
+                    throw new Error(`Failed to add linked email: ${addRes.error}`);
+                }
+                if (addRes.linkedEmail.email !== "spouse@example.com") {
+                    throw new Error(`Expected spouse@example.com, got ${addRes.linkedEmail.email}`);
+                }
+                if (addRes.linkedEmail.receiveSubscriptionReminders !== true) {
+                    throw new Error("Expected receiveSubscriptionReminders: true");
+                }
+
+                // 2. Duplicate protection test: Cannot link same email twice
+                const dupRes = await addOrUpdateLinkedEmailAction({
+                    email: "spouse@example.com",
+                    label: "Spouse Duplicate"
+                });
+                if (dupRes.success) {
+                    throw new Error("Expected duplicate linked email to be rejected");
+                }
+
+                // 3. Primary email conflict test: Cannot link user's own primary login email
+                const primaryClashRes = await addOrUpdateLinkedEmailAction({
+                    email: linkedTestUser.email,
+                    label: "Myself"
+                });
+                if (primaryClashRes.success) {
+                    throw new Error("Expected primary login email clash to be rejected");
+                }
+
+                // 4. Toggle category test
+                const toggleRes = await toggleLinkedEmailCategoryAction(
+                    addRes.linkedEmail.id,
+                    "receiveMediaReady",
+                    true
+                );
+                if (!toggleRes.success || !toggleRes.linkedEmail?.receiveMediaReady) {
+                    throw new Error("Failed to toggle linked email category");
+                }
+
+                // 5. Retrieve linked emails list
+                const listRes = await getUserLinkedEmailsAction();
+                if (!listRes.success || !listRes.linkedEmails || listRes.linkedEmails.length !== 1) {
+                    throw new Error(`Expected 1 linked email, got ${listRes.linkedEmails?.length}`);
+                }
+
+                // 6. Fan-out integration check: mapping helper
+                const { getLinkedEmailCategoryForTemplate } = await import("../src/app/actions");
+                if ((await getLinkedEmailCategoryForTemplate("payment_reminder")) !== "receiveSubscriptionReminders") {
+                    throw new Error("payment_reminder must map to receiveSubscriptionReminders");
+                }
+                if ((await getLinkedEmailCategoryForTemplate("broadcast")) !== "receiveAnnouncements") {
+                    throw new Error("broadcast must map to receiveAnnouncements");
+                }
+                if ((await getLinkedEmailCategoryForTemplate("media_ready")) !== "receiveMediaReady") {
+                    throw new Error("media_ready must map to receiveMediaReady");
+                }
+
+                // 7. Delete linked email
+                const delRes = await deleteLinkedEmailAction(addRes.linkedEmail.id);
+                if (!delRes.success) {
+                    throw new Error(`Failed to delete linked email: ${delRes.error}`);
+                }
+                const verifyListRes = await getUserLinkedEmailsAction();
+                if (verifyListRes.linkedEmails?.length !== 0) {
+                    throw new Error("Linked email not removed after deletion");
+                }
+
+                delete process.env.PORTALARR_TEST_USER_ID;
+            } finally {
+                await prisma.userLinkedEmail.deleteMany({ where: { userId: linkedTestUser.id } }).catch(() => {});
+                await prisma.user.delete({ where: { id: linkedTestUser.id } }).catch(() => {});
+                delete process.env.PORTALARR_TEST_USER_ID;
+            }
         } finally {
             await prisma.sentEmailLog.deleteMany({
                 where: { id: { in: [autoEmail.id, approvedEmail.id] } }

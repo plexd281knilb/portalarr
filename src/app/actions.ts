@@ -4895,6 +4895,65 @@ function getNotificationCategoryForTemplate(templateId?: string): {
     return null;
 }
 
+export async function getLinkedEmailCategoryForTemplate(templateId?: string): Promise<string | null> {
+    if (!templateId) return null;
+    const t = templateId.toLowerCase();
+
+    // 1. Subscription & Payment Reminders
+    if (
+        t.startsWith("subscription_renewal_reminder") ||
+        t.includes("payment_reminder") ||
+        t.includes("payment_confirmed") ||
+        t.includes("trial_expiring") ||
+        t.includes("trial_expired") ||
+        t.includes("subscription_expired") ||
+        t.includes("payment_receipt")
+    ) {
+        return "receiveSubscriptionReminders";
+    }
+
+    // 2. Announcements
+    if (
+        t === "broadcast" ||
+        t === "new_site_launch" ||
+        t === "maintenance_announcement" ||
+        t === "server_update" ||
+        t === "announcement"
+    ) {
+        return "receiveAnnouncements";
+    }
+
+    // 3. Media Ready
+    if (
+        t === "media_ready" || 
+        t === "book_ready" || 
+        t === "seerr_request_available"
+    ) {
+        return "receiveMediaReady";
+    }
+
+    // 4. Request Approved
+    if (
+        t === "seerr_request_approved" || 
+        t === "seerr_request_auto_approved" || 
+        t === "request_approved"
+    ) {
+        return "receiveRequestApproved";
+    }
+
+    // 5. New Content
+    if (t.includes("new_content") || t.includes("weekly_digest")) {
+        return "receiveNewContent";
+    }
+
+    // 6. Support Tickets
+    if (t.includes("ticket")) {
+        return "receiveSupportTickets";
+    }
+
+    return null;
+}
+
 export async function sendOrQueueEmail(options: {
     to: string | string[];
     subject: string;
@@ -4911,6 +4970,7 @@ export async function sendOrQueueEmail(options: {
     approvalId?: string;
     approvedBy?: string;
     approvedAt?: Date;
+    isLinkedInboxDispatch?: boolean;
 }): Promise<{ success: boolean; queued?: boolean; sent?: boolean; approvalId?: string; error?: string; logId?: string }> {
     try {
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
@@ -4948,6 +5008,35 @@ export async function sendOrQueueEmail(options: {
             (recipientList.length > 0 && recipientList.every(e => adminEmailSet.has(e))) ||
             (options.templateId ? ADMIN_ALERT_TEMPLATES.has(options.templateId) : false);
 
+        // Resolve targeted user record and associated linked emails
+        let targetUserRecord: any = null;
+        if (options.userId) {
+            targetUserRecord = await prisma.user.findUnique({
+                where: { id: options.userId },
+                include: { notificationPreference: true, linkedEmails: true }
+            }).catch(() => null);
+        }
+        if (!targetUserRecord && options.targetUser) {
+            targetUserRecord = await prisma.user.findFirst({
+                where: { username: options.targetUser },
+                include: { notificationPreference: true, linkedEmails: true }
+            }).catch(() => null);
+        }
+        if (!targetUserRecord && options.to) {
+            const toEmail = Array.isArray(options.to) ? options.to[0] : options.to;
+            if (toEmail && typeof toEmail === "string") {
+                targetUserRecord = await prisma.user.findFirst({
+                    where: {
+                        OR: [
+                            { email: toEmail.trim().toLowerCase() },
+                            { plexEmail: toEmail.trim().toLowerCase() }
+                        ]
+                    },
+                    include: { notificationPreference: true, linkedEmails: true }
+                }).catch(() => null);
+            }
+        }
+
         // If automated email notifications are globally disabled, skip automated background emails
         // (but never silently drop explicit admin-initiated broadcasts/manual emails or admin-targeted alerts!)
         if (settings?.emailNotificationsEnabled === false && !options.bypassApproval && !isExplicitAdminDispatch && !isToAdminOnly) {
@@ -4963,46 +5052,16 @@ export async function sendOrQueueEmail(options: {
         // Admin alerts (isToAdminOnly), 1:1 manual admin emails (manual_email), and security notices are never blocked.
         if (!isToAdminOnly && options.templateId && options.templateId !== "manual_email") {
             const notifCategory = getNotificationCategoryForTemplate(options.templateId);
-            if (notifCategory) {
-                let targetUserRecord: any = null;
-                if (options.userId) {
-                    targetUserRecord = await prisma.user.findUnique({
-                        where: { id: options.userId },
-                        include: { notificationPreference: true }
-                    }).catch(() => null);
-                }
-                if (!targetUserRecord && options.targetUser) {
-                    targetUserRecord = await prisma.user.findFirst({
-                        where: { username: options.targetUser },
-                        include: { notificationPreference: true }
-                    }).catch(() => null);
-                }
-                if (!targetUserRecord && options.to) {
-                    const toEmail = Array.isArray(options.to) ? options.to[0] : options.to;
-                    if (toEmail && typeof toEmail === "string") {
-                        targetUserRecord = await prisma.user.findFirst({
-                            where: {
-                                OR: [
-                                    { email: toEmail.trim().toLowerCase() },
-                                    { plexEmail: toEmail.trim().toLowerCase() }
-                                ]
-                            },
-                            include: { notificationPreference: true }
-                        }).catch(() => null);
-                    }
-                }
-
-                if (targetUserRecord?.notificationPreference) {
-                    const isPrefEnabled = (targetUserRecord.notificationPreference as any)[notifCategory.field];
-                    if (isPrefEnabled === false) {
-                        logger.addLog(
-                            "INFO",
-                            "EMAIL",
-                            `[USER-PREFERENCE-GATE] User "${targetUserRecord.username}" opted out of ${notifCategory.label} emails. Skipping "${options.subject}" (template: ${options.templateId}).`
-                        );
-                        console.log(`[USER-PREFERENCE-GATE] User "${targetUserRecord.username}" opted out of ${notifCategory.label}. Skipping email "${options.subject}"`);
-                        return { success: true, sent: false, queued: false };
-                    }
+            if (notifCategory && targetUserRecord?.notificationPreference) {
+                const isPrefEnabled = (targetUserRecord.notificationPreference as any)[notifCategory.field];
+                if (isPrefEnabled === false) {
+                    logger.addLog(
+                        "INFO",
+                        "EMAIL",
+                        `[USER-PREFERENCE-GATE] User "${targetUserRecord.username}" opted out of ${notifCategory.label} emails. Skipping "${options.subject}" (template: ${options.templateId}).`
+                    );
+                    console.log(`[USER-PREFERENCE-GATE] User "${targetUserRecord.username}" opted out of ${notifCategory.label}. Skipping email "${options.subject}"`);
+                    return { success: true, sent: false, queued: false };
                 }
             }
         }
@@ -5136,6 +5195,46 @@ export async function sendOrQueueEmail(options: {
         }
 
         logger.addLog("INFO", "EMAIL", `Dispatched email "${options.subject}" to ${recipientStr} (${effectiveMode === "APPROVED_AND_SENT" ? "Approved by Admin" : "Automatic"})`);
+
+        // ==========================================
+        // FAN-OUT TO LINKED / FAMILY INBOXES
+        // ==========================================
+        if (!options.isLinkedInboxDispatch && !isToAdminOnly && options.templateId && targetUserRecord?.id) {
+            const linkedCategory = await getLinkedEmailCategoryForTemplate(options.templateId);
+            if (linkedCategory) {
+                try {
+                    const linkedInboxes = (targetUserRecord.linkedEmails && targetUserRecord.linkedEmails.length > 0)
+                        ? targetUserRecord.linkedEmails.filter((l: any) => Boolean(l[linkedCategory]))
+                        : await prisma.userLinkedEmail.findMany({
+                            where: {
+                                userId: targetUserRecord.id,
+                                [linkedCategory]: true
+                            }
+                        });
+
+                    for (const linked of linkedInboxes) {
+                        const cleanLinkedEmail = (linked.email || "").trim().toLowerCase();
+                        if (cleanLinkedEmail && !recipientList.includes(cleanLinkedEmail)) {
+                            const linkedNote = `<div style="margin-bottom:14px;padding:8px 12px;background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.25);border-radius:8px;font-size:12px;color:#94a3b8;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;">📬 Delivered to linked inbox <strong>${cleanLinkedEmail}</strong>${linked.label ? ` (${linked.label})` : ""} for <strong>${targetUserRecord.name || targetUserRecord.username}</strong></div>`;
+                            const linkedHtml = options.html ? (linkedNote + options.html) : options.html;
+
+                            await sendOrQueueEmail({
+                                ...options,
+                                to: cleanLinkedEmail,
+                                html: linkedHtml,
+                                isLinkedInboxDispatch: true,
+                                skipAdminAlert: true
+                            }).catch(err => {
+                                console.warn(`[LINKED-INBOX-DISPATCH-ERROR] Failed to dispatch to linked inbox ${cleanLinkedEmail}:`, err?.message || err);
+                            });
+                        }
+                    }
+                } catch (linkedErr: any) {
+                    console.warn("[LINKED-INBOX-FANOUT-ERROR]:", linkedErr?.message || linkedErr);
+                }
+            }
+        }
+
         return { success: true, sent: true, logId: createdLog?.id };
     } catch (e: any) {
         const recipientStr = Array.isArray(options.to) ? options.to.join(", ") : options.to;

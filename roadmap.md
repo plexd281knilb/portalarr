@@ -16,6 +16,7 @@
 - **📬 Outbound Communications & Email Audit (Admin):** Complete outbound communications ledger tracking messages sent automatically by system workflows versus those vetted and approved via the Action Approval Queue.
 - **🔄 Background Scheduler Mutex & Automation Engine (Admin):** Concurrency timer mutex flags resolved in `prisma.ts` so automated hourly overlay scans and 6-hour Agregarr collection syncs execute smoothly on schedule without internal self-collision.
 - **🌐 Plex Server Connection Debouncing & Quiet Logging (Admin):** In-flight promise deduplication and throttled logging implemented in `plex.ts` to eliminate repetitive server connection resolution log bursts on dashboard load.
+- **📬 Linked Inboxes & Family Email Routing:** Add alternate or secondary email addresses (such as a spouse, partner, or daily work inbox) with granular routing controls in Account Settings. Choose exactly which updates each inbox receives—such as routing subscription renewal notices to a spouse, sending movie/TV request availability alerts to the household, or directing server announcements to your primary daily email instead of your Plex account login.
 
 ---
 
@@ -30,4 +31,3 @@
 - **📊 Personal Year-in-Review ("DomsHomeLab Wrapped"):** Interactive annual streaming recaps showcasing your top-watched genres, directors, actors, total hours streamed, and reading milestones.
 - **📱 Progressive Web App (PWA) Push Notifications:** Native mobile notifications when your requested movies, TV episodes, or Kindle books finish downloading.
 - **🔁 Cross-Device Watchlist & Reading Sync:** Unified watchlist across Movies, TV Series, Ebooks, and Audiobooks synced directly with your accounts.
-- **📬 Linked Inboxes & Family Email Routing:** Add alternate or secondary email addresses (such as a spouse, partner, or daily work inbox) with granular routing controls. Choose exactly which updates each inbox receives—such as routing subscription renewal notices to a spouse, sending movie/TV request availability alerts to the household, or directing server announcements to your primary daily email instead of your Plex account login.

@@ -2084,6 +2084,33 @@ export async function ensureSchemaColumns(): Promise<void> {
             console.error("[DB-SCHEMA-AUTOFIX] SentEmailLog table check error:", e.message || e);
         }
 
+        // --- 17. USER LINKED EMAILS TABLE ---
+        try {
+            await prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "UserLinkedEmail" (
+                    "id" TEXT NOT NULL PRIMARY KEY,
+                    "userId" TEXT NOT NULL,
+                    "email" TEXT NOT NULL,
+                    "label" TEXT,
+                    "isVerified" BOOLEAN NOT NULL DEFAULT 0,
+                    "verificationToken" TEXT,
+                    "receiveSubscriptionReminders" BOOLEAN NOT NULL DEFAULT 1,
+                    "receiveAnnouncements" BOOLEAN NOT NULL DEFAULT 1,
+                    "receiveMediaReady" BOOLEAN NOT NULL DEFAULT 0,
+                    "receiveRequestApproved" BOOLEAN NOT NULL DEFAULT 0,
+                    "receiveNewContent" BOOLEAN NOT NULL DEFAULT 0,
+                    "receiveSupportTickets" BOOLEAN NOT NULL DEFAULT 0,
+                    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT "UserLinkedEmail_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+                );
+            `);
+            await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "UserLinkedEmail_userId_email_key" ON "UserLinkedEmail"("userId", "email");`).catch(() => {});
+            await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "UserLinkedEmail_userId_idx" ON "UserLinkedEmail"("userId");`).catch(() => {});
+        } catch (e: any) {
+            console.error("[DB-SCHEMA-AUTOFIX] UserLinkedEmail table check error:", e.message || e);
+        }
+
 
 
         schemaPatchCompleted = true;

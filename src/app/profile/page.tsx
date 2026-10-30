@@ -56,6 +56,7 @@ import PlexSetupGuides from "@/components/plex-setup-guides";
 import SuperUserCard from "@/components/super-user-card";
 import { PaymentMethodsGrid } from "@/components/payment-methods-grid";
 import { UserMediaServersManager, UserMediaServersManagerHandle } from "@/components/profile/user-media-servers-manager";
+import { LinkedEmailsManager } from "@/components/profile/linked-emails-manager";
 import { format, differenceInDays } from "date-fns";
 
 function safeFormatDate(dateVal: any, formatPattern: string, fallback = ""): string {
@@ -2117,6 +2118,9 @@ export default function UserProfilePage() {
                     </form>
                 </CardContent>
             </Card>
+
+            {/* LINKED INBOXES & FAMILY NOTIFICATION ROUTING CARD */}
+            <LinkedEmailsManager />
 
             {/* DISCORD COMMUNITY & ROLE SYNC CARD */}
             <Card id="discord" className="border-indigo-500/30 bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden scroll-mt-6">
