@@ -2293,6 +2293,9 @@ export async function ensureSchemaColumns(): Promise<void> {
             await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "IptvUserToken_token_idx" ON "IptvUserToken"("token");`).catch(() => {});
             await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "IptvUserToken_userId_idx" ON "IptvUserToken"("userId");`).catch(() => {});
 
+            // Clean up accidental server names saved as user names (e.g. MainPlexServer)
+            await prisma.$executeRawUnsafe(`UPDATE "User" SET "name" = NULL WHERE "name" LIKE '%Server%' OR "name" LIKE '%MainPlex%' OR "name" LIKE '%KidsPlex%';`).catch(() => {});
+
             await prisma.$executeRawUnsafe(`
                 CREATE TABLE IF NOT EXISTS "IptvWatchSession" (
                     "id" TEXT NOT NULL PRIMARY KEY,

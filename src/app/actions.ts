@@ -18386,9 +18386,22 @@ export async function syncPlexFriendsInternal() {
                     }
                 }
 
-                // Auto-fill real name if empty and Plex friend has title/name
-                if (!existingUser.name && friend.title && friend.title !== fUsername && friend.title !== fEmail && friend.title.length >= 3) {
+                // Auto-fill real name if empty and Plex friend has valid title/name (never server names)
+                const isValidFriendName = Boolean(
+                    friend.title && 
+                    friend.title !== fUsername && 
+                    friend.title !== fEmail && 
+                    friend.title.length >= 2 &&
+                    !/server/i.test(friend.title)
+                );
+
+                if (!existingUser.name && isValidFriendName) {
                     updateData.name = friend.title.trim();
+                    needsUpdate = true;
+                } else if (existingUser.name && /server/i.test(existingUser.name)) {
+                    // Purge accidental server names (e.g. MainPlexServer) saved into user name
+                    updateData.name = null;
+                    existingUser.name = null;
                     needsUpdate = true;
                 }
 
@@ -18427,10 +18440,17 @@ export async function syncPlexFriendsInternal() {
                 const randomPassword = Math.random().toString(36).slice(-16) + "Plex!1";
                 const hashedPassword = await hash(randomPassword, 10);
 
+                const isValidNewFriendName = Boolean(
+                    friend.title && 
+                    friend.title !== fUsername && 
+                    friend.title !== fEmail && 
+                    !/server/i.test(friend.title)
+                );
+
                 const newUser = await prisma.user.create({
                     data: {
                         username: safeUsername,
-                        name: friend.title && friend.title !== fUsername && friend.title !== fEmail ? friend.title.trim() : null,
+                        name: isValidNewFriendName ? friend.title.trim() : null,
                         email: safeEmail,
                         password: hashedPassword,
                         role: "USER",

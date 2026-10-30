@@ -59,10 +59,19 @@ export async function resolveActivePlexAdminToken(): Promise<string> {
     return candidates[0] || "";
 }
 
+let lastIptvActivitySyncTime = 0;
+const ACTIVITY_SYNC_COOLDOWN_MS = 10 * 60 * 1000;
+
 /**
  * Synchronizes lastIptvWatchedAt on User records from IptvWatchSession and WatchHistory (live TV plays).
  */
-export async function syncUsersLastIptvActivity(): Promise<void> {
+export async function syncUsersLastIptvActivity(force = false): Promise<void> {
+    const now = Date.now();
+    if (!force && (now - lastIptvActivitySyncTime < ACTIVITY_SYNC_COOLDOWN_MS)) {
+        return;
+    }
+    lastIptvActivitySyncTime = now;
+
     const users = await prisma.user.findMany({
         select: {
             id: true,
@@ -219,10 +228,10 @@ export async function syncUsersLastIptvActivity(): Promise<void> {
                     if (c.uri) candidateUrls.add(c.uri.replace(/\/+$/, ""));
                 }
             }
-            // Standard LAN PMS fallbacks
-            candidateUrls.add("http://192.168.1.87:32400");
-            candidateUrls.add("http://192.168.1.66:32400");
-            candidateUrls.add("http://192.168.1.66:24958");
+            const dbPlexServers = await prisma.plexServer.findMany({ select: { url: true } });
+            for (const s of dbPlexServers) {
+                if (s.url) candidateUrls.add(s.url.replace(/\/+$/, ""));
+            }
 
             for (const baseUrl of candidateUrls) {
                 try {
@@ -271,12 +280,6 @@ export async function syncUsersLastIptvActivity(): Promise<void> {
     } catch {}
 
     for (const u of users) {
-        const isTrevor = Boolean(
-            (u.plexUsername && /trevscar/i.test(u.plexUsername)) ||
-            (u.email && /trevsky313/i.test(u.email)) ||
-            (u.username && /trevscar/i.test(u.username)) ||
-            (u.name && /trevor.*scarborough/i.test(u.name))
-        );
 
         const nameClean = u.name ? u.name.toLowerCase().trim() : "";
         const aliases = new Set(
@@ -337,22 +340,9 @@ export async function syncUsersLastIptvActivity(): Promise<void> {
             }
         }
 
-        // Trevor explicitly streamed the World Series yesterday
-        if (isTrevor && !latestDate) {
-            latestDate = new Date(Date.now() - 20 * 3600 * 1000);
-            foundLiveStream = true;
-        }
-
         const updateData: any = {};
         if (latestDate && (!u.lastIptvWatchedAt || latestDate.getTime() !== new Date(u.lastIptvWatchedAt).getTime())) {
             updateData.lastIptvWatchedAt = latestDate;
-        }
-        if (foundLiveStream || isTrevor) {
-            updateData.hasPlexLiveTvAccess = true;
-        }
-        if (isTrevor) {
-            updateData.hasPlexDvrAccess = true;
-            updateData.isPlexHomeMember = true;
         }
 
         if (Object.keys(updateData).length > 0) {
@@ -721,39 +711,23 @@ export async function auditPlexHomeAndLiveTvPrivileges(): Promise<LiveTvEcosyste
             return false;
         });
 
-        const isTrevor = Boolean(
-            (matchedPortalUser?.plexUsername && /trevscar/i.test(matchedPortalUser.plexUsername)) ||
-            (matchedPortalUser?.email && /trevsky313/i.test(matchedPortalUser.email)) ||
-            (matchedPortalUser?.username && /trevscar/i.test(matchedPortalUser.username)) ||
-            (matchedPortalUser?.name && /trevor.*scarborough/i.test(matchedPortalUser.name)) ||
-            (item.username && /trevscar/i.test(item.username)) ||
-            (item.email && /trevsky313/i.test(item.email)) ||
-            (item.title && /trevor.*scarborough/i.test(item.title))
-        );
+        const isOwner = Boolean(item.isOwnerAdmin || matchedPortalUser?.role === "ADMIN");
 
-        const hasLiveTvStreamingHistory = Boolean(
-            matchedPortalUser?.lastIptvWatchedAt ||
-            isTrevor
-        );
-
-        // Crucial fix: PRESERVE existing database grants! NEVER clobber granted Live TV / DVR with false
+        // Real privileges: From Plex API or explicitly granted in Portalarr
         const liveTvGranted = Boolean(
-            item.isOwnerAdmin ||
+            isOwner ||
             item.allowTuners ||
             item.allowChannels ||
-            matchedPortalUser?.hasPlexLiveTvAccess ||
-            hasLiveTvStreamingHistory ||
-            isTrevor
+            matchedPortalUser?.hasPlexLiveTvAccess
         );
 
         const dvrGranted = Boolean(
-            item.isOwnerAdmin ||
+            isOwner ||
             item.allowDvr ||
-            matchedPortalUser?.hasPlexDvrAccess ||
-            isTrevor
+            matchedPortalUser?.hasPlexDvrAccess
         );
 
-        const isHomeMember = Boolean(item.isPlexHomeMember || matchedPortalUser?.isPlexHomeMember || isTrevor);
+        const isHomeMember = Boolean(isOwner || item.isPlexHomeMember || matchedPortalUser?.isPlexHomeMember);
 
         // Sync discovered Plex Home & Live TV status into Portalarr User record
         if (matchedPortalUser) {
@@ -764,20 +738,14 @@ export async function auditPlexHomeAndLiveTvPrivileges(): Promise<LiveTvEcosyste
                     plexHomeUserId: item.plexUserId || matchedPortalUser.plexHomeUserId,
                     hasPlexLiveTvAccess: liveTvGranted,
                     hasPlexDvrAccess: dvrGranted,
-                    ...(isHomeMember && !matchedPortalUser.plexHomeJoinedAt
-                        ? { plexHomeJoinedAt: new Date() }
-                        : {}),
-                    ...(liveTvGranted ? { canAccessIptv: true } : {}),
-                    ...(isTrevor && !matchedPortalUser.lastIptvWatchedAt
-                        ? { lastIptvWatchedAt: new Date(Date.now() - 20 * 3600 * 1000) }
-                        : {})
+                    ...(liveTvGranted ? { canAccessIptv: true } : {})
                 }
             }).catch(() => {});
         }
 
         const lastWatchedDate = matchedPortalUser?.lastIptvWatchedAt
             ? new Date(matchedPortalUser.lastIptvWatchedAt)
-            : (isTrevor ? new Date(Date.now() - 20 * 3600 * 1000) : null);
+            : null;
 
         const joinedDate = matchedPortalUser?.plexHomeJoinedAt
             ? new Date(matchedPortalUser.plexHomeJoinedAt)
@@ -785,7 +753,7 @@ export async function auditPlexHomeAndLiveTvPrivileges(): Promise<LiveTvEcosyste
 
         const daysInactive = lastWatchedDate
             ? Math.max(0, Math.floor((Date.now() - lastWatchedDate.getTime()) / 86400000))
-            : (isTrevor ? 0 : null);
+            : null;
 
         const daysInPlexHome = joinedDate
             ? Math.max(0, Math.floor((Date.now() - joinedDate.getTime()) / 86400000))

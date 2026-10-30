@@ -476,20 +476,14 @@ export async function getIptvUsersAccessAction() {
             success: true,
             data: {
                 users: users.map((u) => {
-                    const isTrevor = Boolean(
-                        (u.plexUsername && /trevscar/i.test(u.plexUsername)) ||
-                        (u.email && /trevsky313/i.test(u.email)) ||
-                        (u.username && /trevscar/i.test(u.username)) ||
-                        (u.name && /trevor.*scarborough/i.test(u.name))
-                    );
                     const isOwner = u.role === "ADMIN";
-                    const isPlexHome = isOwner ? true : Boolean(u.isPlexHomeMember || isTrevor);
-                    const hasPlexLiveTv = isOwner ? true : Boolean(u.hasPlexLiveTvAccess || u.lastIptvWatchedAt || isTrevor);
-                    const hasPlexDvr = isOwner ? true : Boolean(u.hasPlexDvrAccess || isTrevor);
+                    const isPlexHome = isOwner ? true : Boolean(u.isPlexHomeMember);
+                    const hasPlexLiveTv = isOwner ? true : Boolean(u.hasPlexLiveTvAccess);
+                    const hasPlexDvr = isOwner ? true : Boolean(u.hasPlexDvrAccess);
                     const missingPlexLiveTvPrivilege = isPlexHome && !isOwner && !hasPlexLiveTv;
                     const missingPlexDvrPrivilege = isPlexHome && !isOwner && !hasPlexDvr;
 
-                    const effectiveLastWatched = u.lastIptvWatchedAt || (isTrevor ? new Date(Date.now() - 20 * 3600 * 1000) : null);
+                    const effectiveLastWatched = u.lastIptvWatchedAt;
 
                     const daysInactive = effectiveLastWatched
                         ? Math.max(0, Math.floor((Date.now() - new Date(effectiveLastWatched).getTime()) / 86400000))
@@ -497,7 +491,7 @@ export async function getIptvUsersAccessAction() {
 
                     const daysInPlexHome = u.plexHomeJoinedAt
                         ? Math.max(0, Math.floor((Date.now() - new Date(u.plexHomeJoinedAt).getTime()) / 86400000))
-                        : (isPlexHome ? 0 : null);
+                        : (isPlexHome ? null : null);
 
                     const isInactiveCandidate =
                         isPlexHome && !isOwner && (
@@ -507,7 +501,7 @@ export async function getIptvUsersAccessAction() {
 
                     return {
                         ...u,
-                        canAccessIptv: isOwner ? true : Boolean(u.canAccessIptv || hasPlexLiveTv),
+                        canAccessIptv: isOwner ? true : Boolean(u.canAccessIptv),
                         maxConcurrentIptvStreams: u.maxConcurrentIptvStreams ?? 1,
                         isPlexHomeMember: isPlexHome,
                         hasPlexLiveTvAccess: hasPlexLiveTv,
@@ -746,8 +740,11 @@ export async function requestIptvAccessAction(input?: {
 export async function generateUserIptvTokenAction(label: string, profileSlug?: string) {
     try {
         const user = await verifySessionUser();
-        if (user.role !== "ADMIN" && !user.canAccessIptv) {
-            return { success: false, error: "IPTV access is not enabled on your account yet" };
+        if (user.role !== "ADMIN") {
+            return {
+                success: false,
+                error: "Standalone IPTV playlist tokens are restricted to administrators. Members stream Live TV directly through Plex and Jellyfin."
+            };
         }
 
         let profileId: string | null = null;
@@ -1165,7 +1162,7 @@ export async function getIptvCatalogAction(filters?: {
                 profiles,
                 channels,
                 requests,
-                tokens: tokens.map((t) => ({
+                tokens: isAdmin ? tokens.map((t) => ({
                     id: t.id,
                     label: t.label,
                     token: t.token,
@@ -1174,7 +1171,7 @@ export async function getIptvCatalogAction(filters?: {
                     maxStreams: t.maxStreams,
                     m3uPath: `/api/iptv/m3u?token=${t.token}${t.profile?.slug ? `&profile=${t.profile.slug}` : ""}`,
                     epgPath: `/api/iptv/epg?token=${t.token}${t.profile?.slug ? `&profile=${t.profile.slug}` : ""}`
-                }))
+                })) : []
             }
         };
     } catch (err: any) {

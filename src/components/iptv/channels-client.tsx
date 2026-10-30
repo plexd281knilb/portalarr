@@ -925,107 +925,49 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                 </div>
             )}
 
-            {/* Standalone Player Tokens (TiviMate, IPTV Smarters) */}
+            {/* Stream on Plex & Jellyfin Guide */}
             {canAccess && (
-                <div className="mt-12 p-6 rounded-2xl border border-border/50 bg-card/40 space-y-4">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400">
-                                <Key className="h-5 w-5" />
-                            </div>
-                            <div>
-                                <h3 className="font-bold text-base text-foreground flex items-center gap-2">
-                                    Standalone IPTV Apps & Player Tokens
-                                    <Badge variant="outline" className="text-[10px] bg-purple-500/10 text-purple-300 border-purple-500/30">
-                                        TiviMate & Smarters
-                                    </Badge>
-                                </h3>
-                                <p className="text-xs text-muted-foreground mt-0.5">
-                                    Generate private proxy M3U & XMLTV links to stream in dedicated IPTV apps without exposing homelab passwords.
-                                </p>
-                            </div>
+                <div className="mt-12 p-6 rounded-2xl border border-border/50 bg-card/40 space-y-5">
+                    <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-400">
+                            <Tv className="h-5 w-5" />
                         </div>
-
-                        <form onSubmit={handleGenerateToken} className="flex items-center gap-2">
-                            <Input
-                                placeholder="Device name (e.g. Living Room TV)..."
-                                value={tokenLabelInput}
-                                onChange={(e) => setTokenLabelInput(e.target.value)}
-                                className="h-9 text-xs bg-background/60 border-border/60 w-56 rounded-xl"
-                            />
-                            <Button
-                                type="submit"
-                                disabled={isPending || !tokenLabelInput.trim()}
-                                className="bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold h-9 rounded-xl shadow-sm whitespace-nowrap"
-                            >
-                                Generate Token
-                            </Button>
-                        </form>
+                        <div>
+                            <h3 className="font-bold text-base text-foreground flex items-center gap-2">
+                                How to Stream Live Channels
+                                <Badge variant="outline" className="text-[10px] bg-sky-500/10 text-sky-300 border-sky-500/30">
+                                    Plex & Jellyfin Verified
+                                </Badge>
+                            </h3>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                                All requested and active Live TV channels stream directly inside your official Plex and Jellyfin apps with electronic guide listings. Standalone M3U links and Xtream codes are strictly disabled to protect stream stability.
+                            </p>
+                        </div>
                     </div>
 
-                    {tokensList.length > 0 && (
-                        <div className="space-y-2.5 pt-2">
-                            {tokensList.map((tok) => {
-                                const fullM3uUrl = typeof window !== "undefined"
-                                    ? `${window.location.origin}${tok.m3uPath}`
-                                    : tok.m3uPath;
-                                const fullEpgUrl = typeof window !== "undefined"
-                                    ? `${window.location.origin}${tok.epgPath}`
-                                    : tok.epgPath;
-
-                                return (
-                                    <div
-                                        key={tok.id}
-                                        className="p-3.5 rounded-xl border border-border/40 bg-background/40 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-xs"
-                                    >
-                                        <div>
-                                            <div className="flex items-center gap-2">
-                                                <span className="font-bold text-foreground">{tok.label}</span>
-                                                <Badge variant="outline" className="text-[10px] font-mono">
-                                                    Max {tok.maxStreams} stream{tok.maxStreams === 1 ? "" : "s"}
-                                                </Badge>
-                                            </div>
-                                            <div className="text-[11px] text-muted-foreground mt-1 space-x-3">
-                                                <span>Profile: <b className="text-purple-300">{tok.profileName || "All Allowed"}</b></span>
-                                                <span className="font-mono text-muted-foreground/60">Token: {tok.token.slice(0, 10)}...</span>
-                                            </div>
-                                        </div>
-
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            <Button
-                                                size="sm"
-                                                variant="outline"
-                                                onClick={() => handleCopy(fullM3uUrl, `m3u-${tok.id}`)}
-                                                className="h-8 text-xs gap-1.5"
-                                            >
-                                                {copiedToken === `m3u-${tok.id}` ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
-                                                Copy M3U
-                                            </Button>
-
-                                            <Button
-                                                size="sm"
-                                                variant="outline"
-                                                onClick={() => handleCopy(fullEpgUrl, `epg-${tok.id}`)}
-                                                className="h-8 text-xs gap-1.5"
-                                            >
-                                                {copiedToken === `epg-${tok.id}` ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
-                                                Copy EPG
-                                            </Button>
-
-                                            <Button
-                                                size="sm"
-                                                variant="ghost"
-                                                onClick={() => handleRevokeToken(tok.id)}
-                                                className="h-8 text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-500/10"
-                                            >
-                                                Revoke
-                                            </Button>
-                                        </div>
-                                    </div>
-                                );
-                            })}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                        {/* Plex Guide Card */}
+                        <div className="p-4 rounded-xl border border-amber-500/20 bg-amber-500/5 space-y-2">
+                            <div className="flex items-center gap-2 font-bold text-sm text-amber-300">
+                                <Tv className="h-4 w-4" />
+                                <span>Plex Media Player & Apps</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground leading-relaxed">
+                                Open Plex on your Smart TV, Apple TV, Roku, Fire TV, or mobile device. Select <b className="text-foreground">Live TV & DVR</b> in the left navigation sidebar to view program guides, browse live channels, and start playback instantly.
+                            </p>
                         </div>
-                    )}
+
+                        {/* Jellyfin Guide Card */}
+                        <div className="p-4 rounded-xl border border-purple-500/20 bg-purple-500/5 space-y-2">
+                            <div className="flex items-center gap-2 font-bold text-sm text-purple-300">
+                                <Layers className="h-4 w-4" />
+                                <span>Jellyfin & Swiftfin</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground leading-relaxed">
+                                Launch Jellyfin or Swiftfin on your streaming device. Click <b className="text-foreground">Live TV</b> from the home screen dashboard to view all active tuner feeds and watch live events with direct audio/video passthrough.
+                            </p>
+                        </div>
+                    </div>
                 </div>
             )}
 

@@ -82,13 +82,6 @@ function mergeUsersWithAudit(users: any[], auditReport: any): any[] {
         const uEmails = [u.email, u.plexEmail].filter(Boolean).map((e: any) => String(e).toLowerCase().trim());
         const uNames = [u.username, u.plexUsername, u.name].filter(Boolean).map((n: any) => String(n).toLowerCase().trim());
 
-        const isTrevor = Boolean(
-            (u.plexUsername && /trevscar/i.test(u.plexUsername)) ||
-            (u.email && /trevsky313/i.test(u.email)) ||
-            (u.name && /trevor.*scarborough/i.test(u.name)) ||
-            uNames.some((n: string) => /trevscar/i.test(n))
-        );
-
         const match = auditReport.plexMembers.find((m: any) => {
             if (m.portalarrUserId && m.portalarrUserId === u.id) return true;
             if (u.plexHomeUserId && String(u.plexHomeUserId) === String(m.plexUserId)) return true;
@@ -98,22 +91,18 @@ function mergeUsersWithAudit(users: any[], auditReport: any): any[] {
             return false;
         });
 
-        const isPlexHome = Boolean(u.isPlexHomeMember || match?.isPlexHomeMember || isTrevor);
+        const isPlexHome = Boolean(u.isPlexHomeMember || match?.isPlexHomeMember);
 
-        // Crucial fix: PRESERVE existing database grants! NEVER clobber granted Live TV / DVR with false
+        // Real privileges: From Plex API audit or explicitly granted in DB
         const liveTvGranted = Boolean(
             u.hasPlexLiveTvAccess ||
             match?.allowTuners ||
-            match?.allowChannels ||
-            u.lastIptvWatchedAt ||
-            match?.lastIptvWatchedAt ||
-            isTrevor
+            match?.allowChannels
         );
 
         const dvrGranted = Boolean(
             u.hasPlexDvrAccess ||
-            match?.allowDvr ||
-            isTrevor
+            match?.allowDvr
         );
 
         const missingLiveTv = Boolean(isPlexHome && !isOwner && !liveTvGranted);
@@ -121,15 +110,11 @@ function mergeUsersWithAudit(users: any[], auditReport: any): any[] {
 
         const daysInactive = match?.daysInactive !== undefined && match?.daysInactive !== null
             ? match.daysInactive
-            : (u.daysInactive !== undefined && u.daysInactive !== null
-                ? u.daysInactive
-                : (isTrevor ? 0 : null));
+            : (u.daysInactive !== undefined && u.daysInactive !== null ? u.daysInactive : null);
 
         const daysInPlexHome = match?.daysInPlexHome !== undefined && match?.daysInPlexHome !== null
             ? match.daysInPlexHome
-            : (u.daysInPlexHome !== undefined && u.daysInPlexHome !== null
-                ? u.daysInPlexHome
-                : (isPlexHome ? 0 : null));
+            : (u.daysInPlexHome !== undefined && u.daysInPlexHome !== null ? u.daysInPlexHome : null);
 
         return {
             ...u,
@@ -1072,37 +1057,24 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                             </div>
                         </div>
 
-                        {/* Anomaly Callout Banner (If Plex Home members lack Live TV or DVR) */}
-                        {auditReport && ((auditReport.plexHomeMissingLiveTvCount ?? 0) > 0 || (auditReport.plexHomeMissingDvrCount ?? 0) > 0) && (
+                        {/* Anomaly Callout Banner (If Plex Home members lack Live TV) */}
+                        {auditReport && (auditReport.plexHomeMissingLiveTvCount ?? 0) > 0 && (
                             <div className="p-3.5 rounded-xl border border-rose-500/40 bg-rose-500/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-rose-200">
                                 <div className="flex items-center gap-2.5">
                                     <AlertTriangle className="h-4 w-4 text-rose-400 shrink-0" />
                                     <span>
-                                        <b>{auditReport.plexHomeMissingLiveTvCount ?? 0} missing Live TV</b> and{" "}
-                                        <b>{auditReport.plexHomeMissingDvrCount ?? 0} missing DVR</b> in Plex Home!
+                                        <b>{auditReport.plexHomeMissingLiveTvCount} member(s) in Plex Home</b> are missing Live TV access!
                                     </span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    {(auditReport.plexHomeMissingLiveTvCount ?? 0) > 0 && (
-                                        <Button
-                                            size="sm"
-                                            onClick={handleFixAllMissingLiveTv}
-                                            disabled={isPending}
-                                            className="bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs h-7 self-start sm:self-auto rounded-lg"
-                                        >
-                                            Enable Live TV For All
-                                        </Button>
-                                    )}
-                                    {(auditReport.plexHomeMissingDvrCount ?? 0) > 0 && (
-                                        <Button
-                                            size="sm"
-                                            onClick={handleFixAllMissingDvr}
-                                            disabled={isPending}
-                                            className="bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs h-7 self-start sm:self-auto rounded-lg"
-                                        >
-                                            Enable DVR For All
-                                        </Button>
-                                    )}
+                                    <Button
+                                        size="sm"
+                                        onClick={handleFixAllMissingLiveTv}
+                                        disabled={isPending}
+                                        className="bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs h-7 self-start sm:self-auto rounded-lg"
+                                    >
+                                        Enable Live TV For All
+                                    </Button>
                                 </div>
                             </div>
                         )}
@@ -1166,8 +1138,8 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                     <div
                                         key={u.id}
                                         className={`p-4 rounded-xl border transition-all text-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4 ${
-                                            u.isPlexHomeMember && !isOwner && (!u.hasPlexLiveTvAccess || !u.hasPlexDvrAccess)
-                                                ? (!u.hasPlexLiveTvAccess && !u.hasPlexDvrAccess ? "border-rose-500/40 bg-rose-500/5" : "border-amber-500/40 bg-amber-500/5")
+                                            u.isPlexHomeMember && !isOwner && !u.hasPlexLiveTvAccess
+                                                ? "border-rose-500/40 bg-rose-500/5"
                                                 : u.isInactiveCandidate
                                                 ? "border-amber-500/30 bg-amber-500/5"
                                                 : "border-border/40 bg-background/40"
@@ -1177,7 +1149,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                         <div className="space-y-1 min-w-[200px]">
                                             <div className="flex items-center gap-2 flex-wrap">
                                                 <span className="font-bold text-foreground text-sm">
-                                                    {u.name || u.username}
+                                                    {u.name && !/server/i.test(u.name) ? u.name : (u.username || u.plexUsername)}
                                                 </span>
                                                 <Badge variant="outline" className="text-[10px]">
                                                     {u.role}
@@ -1198,26 +1170,16 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                                             Live TV + DVR
                                                         </Badge>
                                                     ) : u.hasPlexLiveTvAccess ? (
-                                                        <div className="flex items-center gap-1">
-                                                            <Badge className="text-[10px] bg-sky-500/20 text-sky-300 border-sky-500/30 font-bold">
-                                                                Live TV Only
-                                                            </Badge>
-                                                            <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-300">
-                                                                ⚠️ Missing DVR
-                                                            </Badge>
-                                                        </div>
+                                                        <Badge className="text-[10px] bg-sky-500/20 text-sky-300 border-sky-500/30 font-bold">
+                                                            Live TV
+                                                        </Badge>
                                                     ) : u.hasPlexDvrAccess ? (
-                                                        <div className="flex items-center gap-1">
-                                                            <Badge className="text-[10px] bg-amber-500/20 text-amber-300 border-amber-500/30 font-bold">
-                                                                DVR Only
-                                                            </Badge>
-                                                            <Badge variant="outline" className="text-[10px] border-rose-500/40 text-rose-300">
-                                                                ⚠️ Missing Live TV
-                                                            </Badge>
-                                                        </div>
+                                                        <Badge className="text-[10px] bg-amber-500/20 text-amber-300 border-amber-500/30 font-bold">
+                                                            DVR Only
+                                                        </Badge>
                                                     ) : (
                                                         <Badge className="text-[10px] bg-rose-500/20 text-rose-300 border-rose-500/30 font-bold">
-                                                            ⚠️ Missing Live TV & DVR
+                                                            ⚠️ Missing Live TV
                                                         </Badge>
                                                     )
                                                 )}
@@ -1336,7 +1298,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                                         : "border-border/60 text-muted-foreground hover:text-foreground"
                                                 }`}
                                             >
-                                                M3U/Tokens: {u.canAccessIptv ? "Active" : "Disabled"}
+                                                Live TV Hub: {u.canAccessIptv ? "Authorized" : "Disabled"}
                                             </Button>
                                         </div>
                                     </div>
