@@ -2995,6 +2995,37 @@ async function runTestSuite() {
             if (!activatedUser?.hasJellyfinLiveTvAccess) {
                 throw new Error("testUser must have hasJellyfinLiveTvAccess set to true after activation");
             }
+
+            // Test Suite 23.E: Dispatcharr Profile Mapping, Channel Addition & Plex DVR Refresh
+            const { requestAddChannelToProfileAction, refreshPlexDvrAction } = await import("../src/app/iptv-actions");
+            const { addChannelToDispatcharrProfile, refreshPlexDvrLineupAndGuide } = await import("../src/lib/iptv/dispatcharr-client");
+
+            if (!catalogRes.data.channels[0]?.profiles || !Array.isArray(catalogRes.data.channels[0].profiles)) {
+                throw new Error("Catalog channels must include profiles array with id, name and slug");
+            }
+
+            const testChan = catalogRes.data.channels[0];
+            const addProfRes = await requestAddChannelToProfileAction({
+                channelId: testChan.id,
+                profileSlug: "sports",
+                reason: "Testing profile addition workflow"
+            });
+            if (!addProfRes.success) {
+                throw new Error(`requestAddChannelToProfileAction failed: ${addProfRes.error}`);
+            }
+
+            const profileChanLink = await prisma.iptvProfileChannel.findFirst({
+                where: { channelId: testChan.id, profile: { slug: "sports" } }
+            });
+            if (!profileChanLink) {
+                throw new Error("Expected IptvProfileChannel link to exist for channel in sports profile");
+            }
+
+            const plexRefreshRes = await refreshPlexDvrLineupAndGuide();
+            if (typeof plexRefreshRes.success !== "boolean") {
+                throw new Error("refreshPlexDvrLineupAndGuide must return success boolean");
+            }
+
             delete process.env.PORTALARR_TEST_USER_ID;
 
             // Test Suite 23.D: Plex Home Live TV vs DVR Differentiation & Trevor Scarborough Audit Safeguards

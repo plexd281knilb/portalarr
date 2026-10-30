@@ -34,6 +34,8 @@ import {
     saveIptvSettingsAction,
     testDispatcharrConnectionAction,
     syncDispatcharrLineupAction,
+    refreshPlexDvrAction,
+    requestAddChannelToProfileAction,
     saveIptvProviderAction,
     deleteIptvProviderAction,
     revealIptvProviderCredentialsAction,
@@ -529,6 +531,42 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                 showMsg(`🎉 Successfully provisioned ${res.createdCount} channels in Dispatcharr!`);
             } else {
                 showMsg(res.message || "No matching streams found in Dispatcharr yet. Copy AI prompt to search manually.");
+            }
+        });
+    };
+
+    const handleRefreshPlexDvr = () => {
+        startTransition(async () => {
+            const res = await refreshPlexDvrAction();
+            if (res.success) {
+                showMsg(res.message);
+            } else {
+                showMsg(res.message || "Failed to refresh Plex DVR", "error");
+            }
+        });
+    };
+
+    const handleAddRequestToProfile = (requestId: string, channelName: string, notes: string) => {
+        const profileMatch = notes.match(/Target profile "([^"]+)" \(([^)]+)\)/);
+        const profileSlug = profileMatch ? profileMatch[2] : "sports";
+
+        startTransition(async () => {
+            const res = await requestAddChannelToProfileAction({
+                channelId: channelName,
+                profileSlug
+            });
+            if (res.success) {
+                await resolveIptvChannelRequestAction({
+                    requestId,
+                    status: "ACTIVATED",
+                    adminNotes: `[PROFILE_ADD_COMPLETED]: Added to ${res.profileName || profileSlug} in Dispatcharr and Plex DVR refreshed.`
+                });
+                setChannelRequests(
+                    channelRequests.map((r) => (r.id === requestId ? { ...r, status: "ACTIVATED" } : r))
+                );
+                showMsg(`🎉 Added "${channelName}" to Dispatcharr profile "${profileSlug}" and refreshed Plex DVR!`);
+            } else {
+                showMsg(res.error || "Failed to add channel to profile", "error");
             }
         });
     };
@@ -1417,6 +1455,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                             <div className="space-y-3">
                                 {channelRequests.map((r: any) => {
                                     const hasAiPrompt = Boolean(r.adminNotes && r.adminNotes.includes("[AI-DISPATCHARR-PROMPT]"));
+                                    const isProfileRequest = Boolean(r.adminNotes && r.adminNotes.includes("[PROFILE_ADD]"));
                                     const isLocalRequest = Boolean(r.genre === "Local" || r.callsign?.includes("LOCALS") || hasAiPrompt);
 
                                     return (
@@ -1431,6 +1470,11 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                                         {hasAiPrompt && (
                                                             <Badge className="text-[10px] bg-teal-500/15 text-teal-300 border-teal-500/30 gap-1">
                                                                 <Sparkles className="h-3 w-3" /> AI Prompt Ready
+                                                            </Badge>
+                                                        )}
+                                                        {isProfileRequest && (
+                                                            <Badge className="text-[10px] bg-sky-500/15 text-sky-300 border-sky-500/30 gap-1">
+                                                                <Layers className="h-3 w-3" /> Profile Addition
                                                             </Badge>
                                                         )}
                                                         <Badge
@@ -1462,6 +1506,17 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                                             >
                                                                 <Sparkles className="h-3.5 w-3.5" />
                                                                 AI Auto-Scan Dispatcharr
+                                                            </Button>
+                                                        )}
+                                                        {isProfileRequest && (
+                                                            <Button
+                                                                size="sm"
+                                                                onClick={() => handleAddRequestToProfile(r.id, r.channelName, r.adminNotes || "")}
+                                                                disabled={isPending}
+                                                                className="h-8 text-xs bg-sky-600 hover:bg-sky-500 text-white font-bold gap-1 rounded-xl"
+                                                            >
+                                                                <Plus className="h-3.5 w-3.5" />
+                                                                Add to Dispatcharr & Plex
                                                             </Button>
                                                         )}
                                                         <Button

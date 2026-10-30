@@ -154,6 +154,15 @@ Plex Media Server enforces three distinct radio restriction states under **Restr
 - **Capacity Fallback Banner on `/channels`**: When Plex Home is at capacity, users without Live TV see an informative banner highlighting unlimited viewer slots on Jellyfin & Swiftfin with an instant 1-click activation button.
 - **Admin 1-Click Provisioning on Tab 5**: In pending requests, admins can click `[⚡ Provision on Jellyfin (Unlimited Slots)]` to instantly grant access without exceeding the 14-member Plex Home ceiling.
 
+### 13. Dispatcharr Profile Mapping, Channel Lineup Transparency & Plex DVR Auto-Refresh
+- **Profile Transparency on Channel Cards**: Channel cards render badges for each Dispatcharr profile they belong to (`Sports`, `News`, `Kids`, `Entertainment`, `Fios`, `Spectrum`, etc.).
+- **Unmapped Channels Detection**: Channels not assigned to any profile display a prominent `⚠️ Not in a Profile` badge.
+- **Dedicated Unassigned Shelf**: "Featured Hubs" includes a dedicated `⚠️ Not in a Profile ({count})` pill that isolates unmapped channels so users and admins can quickly review and organize them.
+- **1-Click Profile Addition Modal (`AddToProfileModal`)**: Users and administrators can click `[+ Add to Profile]` to choose a target Dispatcharr profile and optional notes.
+- **Dispatcharr Upstream API Sync (`addChannelToDispatcharrProfile`)**: Links the channel in SQLite `prisma.iptvProfileChannel`, increments profile `channelCount`, and updates the Dispatcharr REST API (`PATCH /api/channels/profiles/{id}/` with updated channel IDs).
+- **Automated Plex DVR Lineup & Guide Refresh (`refreshPlexDvrLineupAndGuide`)**: Discovers active Plex DVR tuners across PMS instances (`GET /livetv/dvrs`), triggers `POST /livetv/dvrs/{key}/reloadLineup`, `POST /livetv/dvrs/{key}/refreshGuide`, and `POST /media/subscriptions/refresh` so new channels immediately appear in Plex Live TV & DVR grids without server restarts.
+- **Admin Mission Control Experience (`/admin/iptv` Tab 6)**: Surfaces profile addition requests with a 1-click `[⚡ Add to Dispatcharr & Plex]` button, plus a manual `[🔄 Refresh Plex DVR Lineup]` tool in the mission control header.
+
 ---
 
 ## 🚨 Mandatory Task Completion Protocol (Strict SemVer)

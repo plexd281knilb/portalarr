@@ -29,6 +29,7 @@ import {
     Star,
     ChevronDown,
     ChevronUp,
+    AlertCircle,
     Wand2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -45,7 +46,9 @@ import {
     detectUserMarketAction,
     provisionMissingDispatcharrChannelsAction,
     requestMarketLocalChannelsAction,
-    activateJellyfinLiveTvAction
+    activateJellyfinLiveTvAction,
+    requestAddChannelToProfileAction,
+    refreshPlexDvrAction
 } from "@/app/iptv-actions";
 import { PlexHomeGuideModal } from "@/components/iptv/plex-home-guide-modal";
 import {
@@ -98,9 +101,10 @@ interface ChannelCardProps {
     ch: any;
     specialBadge?: string;
     badgeColor?: "teal" | "amber" | "emerald" | "purple" | "rose" | "blue";
+    onAddToProfile?: (channel: any) => void;
 }
 
-function ChannelCard({ ch, specialBadge, badgeColor = "teal" }: ChannelCardProps) {
+function ChannelCard({ ch, specialBadge, badgeColor = "teal", onAddToProfile }: ChannelCardProps) {
     const [imgError, setImgError] = useState(false);
     const GenreIcon = genreIcons[ch.genre] || Tv;
 
@@ -122,6 +126,21 @@ function ChannelCard({ ch, specialBadge, badgeColor = "teal" }: ChannelCardProps
         blue: "bg-sky-500/10 border-sky-500/30 text-sky-300"
     }[badgeColor];
 
+    const profilesList: { name: string; slug: string }[] = useMemo(() => {
+        if (Array.isArray(ch.profiles) && ch.profiles.length > 0) {
+            return ch.profiles;
+        }
+        if (Array.isArray(ch.profileSlugs) && ch.profileSlugs.length > 0) {
+            return ch.profileSlugs.map((slug: string) => ({
+                name: slug.charAt(0).toUpperCase() + slug.slice(1).replace(/_/g, " "),
+                slug
+            }));
+        }
+        return [];
+    }, [ch.profiles, ch.profileSlugs]);
+
+    const hasNoProfiles = profilesList.length === 0;
+
     return (
         <div className="group p-4 rounded-2xl border border-border/50 bg-card/60 hover:bg-card hover:border-teal-500/40 transition-all duration-200 flex flex-col justify-between shadow-sm hover:shadow-md">
             <div className="space-y-2.5">
@@ -142,7 +161,7 @@ function ChannelCard({ ch, specialBadge, badgeColor = "teal" }: ChannelCardProps
                             )}
                         </div>
                         <div>
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
                                 {ch.channelNumber && (
                                     <span className="text-[11px] font-mono font-extrabold px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground">
                                         Ch {ch.channelNumber}
@@ -176,11 +195,57 @@ function ChannelCard({ ch, specialBadge, badgeColor = "teal" }: ChannelCardProps
                         {ch.epgName || "Live Stream Active"}
                     </p>
                 </div>
+
+                {/* Dispatcharr Profile Badges or Unmapped Indicator */}
+                <div className="pt-1 flex flex-wrap items-center gap-1">
+                    {hasNoProfiles ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                            <AlertCircle className="h-2.5 w-2.5" />
+                            Not in a Profile
+                        </span>
+                    ) : (
+                        profilesList.slice(0, 3).map((p) => (
+                            <span
+                                key={p.slug}
+                                className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-teal-500/10 text-teal-300 border border-teal-500/20"
+                            >
+                                {p.name}
+                            </span>
+                        ))
+                    )}
+                    {profilesList.length > 3 && (
+                        <span className="text-[9px] text-muted-foreground font-mono">
+                            +{profilesList.length - 3}
+                        </span>
+                    )}
+                </div>
             </div>
 
             <div className="pt-3 mt-3 border-t border-border/30 flex items-center justify-between text-[11px] text-muted-foreground">
-                <span>1080p 60fps</span>
-                <span className="text-teal-400/80 font-medium">Original Quality</span>
+                <div className="flex items-center gap-1.5">
+                    <span>1080p 60fps</span>
+                </div>
+                {onAddToProfile && (
+                    hasNoProfiles ? (
+                        <Button
+                            size="sm"
+                            onClick={() => onAddToProfile(ch)}
+                            className="h-6 px-2 text-[10px] font-bold bg-teal-600 hover:bg-teal-500 text-white rounded-lg flex items-center gap-1 shadow-sm"
+                        >
+                            <Plus className="h-3 w-3" />
+                            Add to Profile
+                        </Button>
+                    ) : (
+                        <button
+                            onClick={() => onAddToProfile(ch)}
+                            className="text-[10px] text-teal-400 hover:text-teal-300 font-bold flex items-center gap-0.5 px-1.5 py-0.5 rounded hover:bg-teal-500/10 transition-colors"
+                            title="Add to another Dispatcharr profile"
+                        >
+                            <Plus className="h-2.5 w-2.5" />
+                            Profile
+                        </button>
+                    )
+                )}
             </div>
         </div>
     );
@@ -201,7 +266,14 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
     );
     const [marketDetectMsg, setMarketDetectMsg] = useState<string>("");
     const [showDallasAnchor, setShowDallasAnchor] = useState<boolean>(true);
-    const [activeShelf, setActiveShelf] = useState<"all" | "dallas" | "local" | "nfl" | "ncaa">("all");
+    const [activeShelf, setActiveShelf] = useState<"all" | "dallas" | "local" | "nfl" | "ncaa" | "unassigned">("all");
+
+        // Add Channel to Profile Modal State
+    const [targetChannelForProfile, setTargetChannelForProfile] = useState<any | null>(null);
+    const [selectedTargetProfile, setSelectedTargetProfile] = useState<string>("");
+    const [profileAddReason, setProfileAddReason] = useState<string>("");
+    const [profileAddLoading, setProfileAddLoading] = useState<boolean>(false);
+    const [profileAddMsg, setProfileAddMsg] = useState<{ text: string; isError?: boolean } | null>(null);
 
     // Live catalog state
     const [channelsList, setChannelsList] = useState(initialData.channels || []);
@@ -236,6 +308,14 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
     const localMarketChannels = useMemo(() => getMarketChannels(channelsList, selectedMarket), [channelsList, selectedMarket]);
     const nflChannels = useMemo(() => getNflChannels(channelsList), [channelsList]);
     const ncaaChannels = useMemo(() => getNcaaChannels(channelsList), [channelsList]);
+    const unassignedChannels = useMemo(() => {
+        return channelsList.filter(
+            (c) =>
+                (!c.profiles || c.profiles.length === 0) &&
+                (!c.profileSlugs || c.profileSlugs.length === 0)
+        );
+    }, [channelsList]);
+
 
     // Synchronize Lineup from live Dispatcharr
     const handleSyncLineup = () => {
@@ -338,6 +418,8 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
             base = nflChannels;
         } else if (activeShelf === "ncaa") {
             base = ncaaChannels;
+        } else if (activeShelf === "unassigned") {
+            base = unassignedChannels;
         }
 
         return base.filter((c) => {
@@ -355,7 +437,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                 String(c.channelNumber || "").includes(search);
             return matchesProfile && matchesGenre && matchesSearch;
         });
-    }, [channelsList, activeShelf, dallasChannels, localMarketChannels, nflChannels, ncaaChannels, selectedProfile, selectedGenre, searchQuery]);
+    }, [channelsList, activeShelf, dallasChannels, localMarketChannels, nflChannels, ncaaChannels, unassignedChannels, selectedProfile, selectedGenre, searchQuery]);
 
     const displayedChannels = filteredChannels.slice(0, visibleCount);
 
@@ -373,6 +455,92 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
             if (res.success) {
                 setHasPendingRequest(true);
                 setAccessRequestMsg("Your request for Live TV access was sent to Dom for approval!");
+            }
+        });
+    };
+
+        const handleOpenAddToProfile = (channel: any) => {
+        setTargetChannelForProfile(channel);
+        setSelectedTargetProfile(profilesList[0]?.slug || "sports");
+        setProfileAddReason("");
+        setProfileAddMsg(null);
+    };
+
+    const handleConfirmAddToProfile = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!targetChannelForProfile || !selectedTargetProfile) return;
+
+        setProfileAddLoading(true);
+        startTransition(async () => {
+            const res = await requestAddChannelToProfileAction({
+                channelId: targetChannelForProfile.id,
+                profileSlug: selectedTargetProfile,
+                reason: profileAddReason.trim() || undefined
+            });
+
+            setProfileAddLoading(false);
+            if (res.success) {
+                setProfileAddMsg({
+                    text: res.message || `Added to ${res.profileName || selectedTargetProfile}! Plex Live TV DVR lineup refreshed.`
+                });
+
+                // Update local channelsList in-place
+                const targetProfileObj = profilesList.find((p) => p.slug === selectedTargetProfile);
+                setChannelsList((prev) =>
+                    prev.map((c) => {
+                        if (c.id === targetChannelForProfile.id) {
+                            const existingSlugs = c.profileSlugs || [];
+                            const existingProfiles = c.profiles || [];
+                            const newSlugs = existingSlugs.includes(selectedTargetProfile)
+                                ? existingSlugs
+                                : [...existingSlugs, selectedTargetProfile];
+                            const newProfiles = existingProfiles.some((p: any) => p.slug === selectedTargetProfile)
+                                ? existingProfiles
+                                : [
+                                      ...existingProfiles,
+                                      {
+                                          id: targetProfileObj?.id || selectedTargetProfile,
+                                          name: targetProfileObj?.name || selectedTargetProfile,
+                                          slug: selectedTargetProfile
+                                      }
+                                  ];
+                            return {
+                                ...c,
+                                profileSlugs: newSlugs,
+                                profiles: newProfiles
+                            };
+                        }
+                        return c;
+                    })
+                );
+
+                // Update profile count
+                setProfilesList((prev) =>
+                    prev.map((p) => {
+                        if (p.slug === selectedTargetProfile) {
+                            return { ...p, channelCount: (p.channelCount || 0) + 1 };
+                        }
+                        return p;
+                    })
+                );
+
+                // Background catalog reload
+                getIptvCatalogAction().then((catRes) => {
+                    if (catRes.success && catRes.data) {
+                        setChannelsList(catRes.data.channels);
+                        setProfilesList(catRes.data.profiles);
+                    }
+                });
+
+                setTimeout(() => {
+                    setTargetChannelForProfile(null);
+                    setProfileAddMsg(null);
+                }, 2200);
+            } else {
+                setProfileAddMsg({
+                    text: res.error || "Failed to add channel to profile",
+                    isError: true
+                });
             }
         });
     };
@@ -742,6 +910,19 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                         <GraduationCap className="h-3 w-3 text-purple-400" />
                         NCAA Football ({ncaaChannels.length})
                     </button>
+                    {unassignedChannels.length > 0 && (
+                        <button
+                            onClick={() => setActiveShelf("unassigned")}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                                activeShelf === "unassigned"
+                                    ? "bg-amber-500/20 text-amber-200 border border-amber-500/40"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-card/60"
+                            }`}
+                        >
+                            <AlertCircle className="h-3 w-3 text-amber-400" />
+                            ⚠️ Not in a Profile ({unassignedChannels.length})
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -787,12 +968,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                     {showDallasAnchor && (
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5 animate-in fade-in duration-200">
                             {dallasChannels.slice(0, 8).map((ch) => (
-                                <ChannelCard
-                                    key={ch.id}
-                                    ch={ch}
-                                    specialBadge="⭐️ Dallas Anchor"
-                                    badgeColor="amber"
-                                />
+                                <ChannelCard key={ch.id} ch={ch} specialBadge="⭐️ Dallas Anchor" badgeColor="amber" onAddToProfile={handleOpenAddToProfile} />
                             ))}
                         </div>
                     )}
@@ -835,12 +1011,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                     {localMarketChannels.length > 0 ? (
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
                             {localMarketChannels.slice(0, 8).map((ch) => (
-                                <ChannelCard
-                                    key={ch.id}
-                                    ch={ch}
-                                    specialBadge={`📍 ${currentMarket.shortName}`}
-                                    badgeColor="blue"
-                                />
+                                <ChannelCard key={ch.id} ch={ch} specialBadge={`📍 ${currentMarket.shortName}`} badgeColor="blue" onAddToProfile={handleOpenAddToProfile} />
                             ))}
                         </div>
                     ) : (
@@ -880,12 +1051,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
                         {nflChannels.slice(0, 4).map((ch) => (
-                            <ChannelCard
-                                key={ch.id}
-                                ch={ch}
-                                specialBadge="🏈 NFL Live"
-                                badgeColor="rose"
-                            />
+                            <ChannelCard key={ch.id} ch={ch} specialBadge="🏈 NFL Live" badgeColor="rose" onAddToProfile={handleOpenAddToProfile} />
                         ))}
                     </div>
                 </div>
@@ -915,13 +1081,30 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
                         {ncaaChannels.slice(0, 4).map((ch) => (
-                            <ChannelCard
-                                key={ch.id}
-                                ch={ch}
-                                specialBadge="🎓 NCAA Sports"
-                                badgeColor="purple"
-                            />
+                            <ChannelCard key={ch.id} ch={ch} specialBadge="🎓 NCAA Sports" badgeColor="purple" onAddToProfile={handleOpenAddToProfile} />
                         ))}
+                    </div>
+                </div>
+            )}
+
+                        {/* ⚠️ Unassigned Channels Shelf Banner */}
+            {activeShelf === "unassigned" && (
+                <div className="rounded-2xl border border-amber-500/40 bg-gradient-to-r from-amber-950/20 via-card/50 to-card/30 p-5 space-y-2 shadow-sm animate-in fade-in duration-200">
+                    <div className="flex items-center gap-2.5">
+                        <div className="h-8 w-8 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-300">
+                            <AlertCircle className="h-4 w-4" />
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-sm text-foreground flex items-center gap-2">
+                                Channels Not Assigned to Any Profile ({unassignedChannels.length})
+                                <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-300 border-amber-500/30">
+                                    Needs Profile Mapping
+                                </Badge>
+                            </h3>
+                            <p className="text-[11px] text-muted-foreground">
+                                These channels exist in your master lineup but have not yet been assigned to any Dispatcharr profile (Sports, News, Entertainment, Kids, Fios, Spectrum, etc.). Click <b>+ Add to Profile</b> on any card to map it to a profile and update Plex Live TV automatically.
+                            </p>
+                        </div>
                     </div>
                 </div>
             )}
@@ -1029,7 +1212,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
             {/* Main Channel Cards Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {displayedChannels.map((ch) => (
-                    <ChannelCard key={ch.id} ch={ch} />
+                    <ChannelCard key={ch.id} ch={ch} onAddToProfile={handleOpenAddToProfile} />
                 ))}
             </div>
 
@@ -1326,6 +1509,149 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                 open={showPlexHomeGuide}
                 onOpenChange={setShowPlexHomeGuide}
             />
+
+            {/* Add Channel to Dispatcharr Profile Modal */}
+            {targetChannelForProfile && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="w-full max-w-md rounded-2xl border border-teal-500/40 bg-card p-6 shadow-2xl space-y-4">
+                        <div className="flex items-center justify-between border-b border-border/40 pb-3">
+                            <div className="flex items-center gap-2.5">
+                                <div className="h-9 w-9 rounded-xl bg-teal-500/15 border border-teal-500/30 flex items-center justify-center text-teal-400">
+                                    <Layers className="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <h3 className="font-bold text-sm text-foreground">
+                                        Add Channel to Dispatcharr Profile
+                                    </h3>
+                                    <p className="text-[11px] text-muted-foreground">
+                                        Plex Live TV & DVR lineup updates automatically
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    setTargetChannelForProfile(null);
+                                    setProfileAddMsg(null);
+                                }}
+                                className="text-muted-foreground hover:text-foreground text-sm font-bold"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <div className="p-3 rounded-xl bg-background/60 border border-border/40 space-y-1.5">
+                            <div className="flex items-center justify-between">
+                                <span className="font-bold text-sm text-foreground">
+                                    {targetChannelForProfile.name}
+                                </span>
+                                {targetChannelForProfile.channelNumber && (
+                                    <Badge variant="outline" className="text-[10px] font-mono">
+                                        Ch {targetChannelForProfile.channelNumber}
+                                    </Badge>
+                                )}
+                            </div>
+                            <p className="text-[11px] text-muted-foreground">
+                                Callsign: <b className="text-teal-300">{targetChannelForProfile.callsign || "N/A"}</b> • Genre: {targetChannelForProfile.genre || "Entertainment"}
+                            </p>
+                            <div className="pt-1 flex items-center gap-1.5 flex-wrap">
+                                <span className="text-[10px] text-muted-foreground">Current Profiles:</span>
+                                {targetChannelForProfile.profiles?.length ? (
+                                    targetChannelForProfile.profiles.map((p: any) => (
+                                        <Badge key={p.slug} variant="outline" className="text-[9px] bg-teal-500/10 text-teal-300 border-teal-500/20">
+                                            {p.name}
+                                        </Badge>
+                                    ))
+                                ) : (
+                                    <Badge variant="outline" className="text-[9px] bg-amber-500/10 text-amber-300 border-amber-500/30">
+                                        None (Unassigned)
+                                    </Badge>
+                                )}
+                            </div>
+                        </div>
+
+                        <form onSubmit={handleConfirmAddToProfile} className="space-y-3.5 text-xs">
+                            <div>
+                                <label className="font-bold text-muted-foreground block mb-1">
+                                    Select Target Dispatcharr Profile *
+                                </label>
+                                <select
+                                    value={selectedTargetProfile}
+                                    onChange={(e) => setSelectedTargetProfile(e.target.value)}
+                                    required
+                                    className="w-full h-9 px-3 rounded-xl bg-background border border-border text-foreground font-medium text-xs focus:ring-1 focus:ring-teal-500"
+                                >
+                                    <option value="">-- Choose Profile --</option>
+                                    {profilesList.map((p: any) => (
+                                        <option key={p.id} value={p.slug}>
+                                            {p.name} ({p.channelCount || 0} channels)
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="font-bold text-muted-foreground block mb-1">
+                                    Request Reason / Device Target (Optional)
+                                </label>
+                                <Input
+                                    placeholder="e.g. Want this in my Apple TV Sports lineup or Plex Home guide"
+                                    value={profileAddReason}
+                                    onChange={(e) => setProfileAddReason(e.target.value)}
+                                    className="rounded-xl h-9 text-xs"
+                                />
+                            </div>
+
+                            {profileAddMsg && (
+                                <div className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center gap-2 ${
+                                    profileAddMsg.isError
+                                        ? "bg-rose-500/10 border-rose-500/30 text-rose-300"
+                                        : "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                                }`}>
+                                    {profileAddMsg.isError ? (
+                                        <AlertCircle className="h-4 w-4 shrink-0 text-rose-400" />
+                                    ) : (
+                                        <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                                    )}
+                                    <span>{profileAddMsg.text}</span>
+                                </div>
+                            )}
+
+                            <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/40">
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    onClick={() => {
+                                        setTargetChannelForProfile(null);
+                                        setProfileAddMsg(null);
+                                    }}
+                                    disabled={profileAddLoading}
+                                    className="h-8 text-xs"
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    type="submit"
+                                    disabled={profileAddLoading || !selectedTargetProfile}
+                                    className="h-8 text-xs bg-teal-600 hover:bg-teal-500 text-white font-bold gap-1.5 rounded-xl shadow-sm"
+                                >
+                                    {profileAddLoading ? (
+                                        <>
+                                            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                                            Updating Dispatcharr & Plex...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Plus className="h-3.5 w-3.5" />
+                                            Add to Profile & Update Plex
+                                        </>
+                                    )}
+                                </Button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
         </div>
     );
 }

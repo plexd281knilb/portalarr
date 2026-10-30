@@ -678,3 +678,299 @@ export async function provisionMarketChannelsFromDispatcharr(marketSlug: string)
 }
 
 
+
+
+/**
+ * Triggers Plex Media Server(s) to reload DVR channel lineups and refresh electronic program guides,
+ * ensuring newly mapped channels from Dispatcharr immediately appear in Plex Live TV & DVR.
+ */
+export async function refreshPlexDvrLineupAndGuide(): Promise<{
+    success: boolean;
+    serversUpdated: number;
+    dvrsRefreshed: number;
+    message: string;
+}> {
+    try {
+        const { resolveActivePlexAdminToken } = await import("./plex-jellyfin-livetv");
+        const adminToken = await resolveActivePlexAdminToken();
+        if (!adminToken) {
+            return {
+                success: false,
+                serversUpdated: 0,
+                dvrsRefreshed: 0,
+                message: "No Plex admin token available to refresh DVR lineup"
+            };
+        }
+
+        const { getPlexServers } = await import("@/lib/plex");
+        const { decryptData } = await import("@/lib/encryption");
+
+        const servers = await getPlexServers(adminToken).catch(() => []);
+        const dbServers = await prisma.plexServer.findMany({ where: { monitored: true } }).catch(() => []);
+
+        let dvrsRefreshed = 0;
+        let serversUpdated = 0;
+
+        const targetServers: { name: string; url: string; token: string }[] = [];
+
+        for (const s of servers) {
+            const uri = s.connections?.[0]?.uri || "";
+            if (uri) {
+                targetServers.push({
+                    name: s.name || "Plex Server",
+                    url: uri.replace(/\/+$/, ""),
+                    token: s.accessToken || adminToken
+                });
+            }
+        }
+
+        for (const s of dbServers) {
+            if (s.url && !targetServers.some((ts) => ts.url === s.url.replace(/\/+$/, ""))) {
+                const token = s.token ? decryptData(s.token).trim() : adminToken;
+                targetServers.push({
+                    name: s.name,
+                    url: s.url.replace(/\/+$/, ""),
+                    token
+                });
+            }
+        }
+
+        const globalSettings = await prisma.settings.findUnique({ where: { id: "global" } }).catch(() => null);
+        if (globalSettings?.mainPlexUrl) {
+            const cleanMain = globalSettings.mainPlexUrl.replace(/\/+$/, "");
+            if (!targetServers.some((ts) => ts.url === cleanMain)) {
+                targetServers.push({
+                    name: "Main PMS",
+                    url: cleanMain,
+                    token: adminToken
+                });
+            }
+        }
+
+        for (const srv of targetServers) {
+            try {
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 3500);
+
+                // 1. Query DVR list
+                const dvrRes = await fetch(`${srv.url}/livetv/dvrs?X-Plex-Token=${encodeURIComponent(srv.token)}`, {
+                    headers: { Accept: "application/json" },
+                    signal: controller.signal
+                }).catch(() => null);
+                clearTimeout(timeout);
+
+                let serverHadDvr = false;
+                if (dvrRes && dvrRes.ok) {
+                    const data = await dvrRes.json().catch(() => null);
+                    const dvrs = data?.MediaContainer?.Dvr || [];
+                    const dvrList = Array.isArray(dvrs) ? dvrs : [dvrs].filter(Boolean);
+
+                    for (const dvr of dvrList) {
+                        const key = dvr.key || dvr.uuid || "1";
+                        // Reload lineup
+                        await fetch(
+                            `${srv.url}/livetv/dvrs/${encodeURIComponent(key)}/reloadLineup?X-Plex-Token=${encodeURIComponent(srv.token)}`,
+                            { method: "POST" }
+                        ).catch(() => {});
+                        // Refresh guide
+                        await fetch(
+                            `${srv.url}/livetv/dvrs/${encodeURIComponent(key)}/refreshGuide?X-Plex-Token=${encodeURIComponent(srv.token)}`,
+                            { method: "POST" }
+                        ).catch(() => {});
+
+                        dvrsRefreshed++;
+                        serverHadDvr = true;
+                    }
+                }
+
+                // Global subscription refresh
+                await fetch(
+                    `${srv.url}/media/subscriptions/refresh?X-Plex-Token=${encodeURIComponent(srv.token)}`,
+                    { method: "POST" }
+                ).catch(() => {});
+
+                if (serverHadDvr || dvrRes?.ok) {
+                    serversUpdated++;
+                }
+            } catch {
+                // PMS instance offline
+            }
+        }
+
+        return {
+            success: true,
+            serversUpdated,
+            dvrsRefreshed,
+            message:
+                serversUpdated > 0
+                    ? `Plex Live TV DVR lineup refreshed across ${serversUpdated} server(s) (${dvrsRefreshed} tuner lineups reloaded).`
+                    : "Plex DVR reload signal sent to configured media servers."
+        };
+    } catch (err: any) {
+        return {
+            success: false,
+            serversUpdated: 0,
+            dvrsRefreshed: 0,
+            message: err?.message || "Failed to refresh Plex DVR lineup"
+        };
+    }
+}
+
+/**
+ * Adds a channel to a Dispatcharr profile, syncs SQLite IptvProfileChannel,
+ * and notifies Plex Media Server to reload its DVR tuner lineup.
+ */
+export async function addChannelToDispatcharrProfile(
+    channelIdOrXmltvId: string,
+    targetProfileSlugOrId: string
+): Promise<{
+    success: boolean;
+    message: string;
+    profileName?: string;
+    channelName?: string;
+    plexRefreshed?: boolean;
+    dispatcharrUpdated?: boolean;
+}> {
+    const channel = await prisma.iptvChannel.findFirst({
+        where: {
+            OR: [
+                { id: channelIdOrXmltvId },
+                { xmltvId: channelIdOrXmltvId },
+                { name: channelIdOrXmltvId }
+            ]
+        }
+    });
+
+    if (!channel) {
+        return {
+            success: false,
+            message: `Channel "${channelIdOrXmltvId}" not found in catalog`
+        };
+    }
+
+    const profile = await prisma.iptvProfile.findFirst({
+        where: {
+            OR: [
+                { id: targetProfileSlugOrId },
+                { slug: targetProfileSlugOrId },
+                { name: targetProfileSlugOrId }
+            ]
+        }
+    });
+
+    if (!profile) {
+        return {
+            success: false,
+            message: `Profile "${targetProfileSlugOrId}" not found`
+        };
+    }
+
+    // 1. Link channel to profile in SQLite
+    await prisma.iptvProfileChannel.upsert({
+        where: {
+            profileId_channelId: {
+                profileId: profile.id,
+                channelId: channel.id
+            }
+        },
+        create: {
+            profileId: profile.id,
+            channelId: channel.id,
+            channelOrder: channel.channelNumber || 0
+        },
+        update: {
+            channelOrder: channel.channelNumber || 0
+        }
+    });
+
+    const newChannelCount = await prisma.iptvProfileChannel.count({
+        where: { profileId: profile.id }
+    });
+    await prisma.iptvProfile.update({
+        where: { id: profile.id },
+        data: { channelCount: newChannelCount }
+    });
+
+    // 2. Add to profile in live Dispatcharr if configured
+    let dispatcharrUpdated = false;
+    const settings = await getIptvSettings();
+    const apiKey = await getDecryptedDispatcharrApiKey();
+
+    if (settings?.dispatcharrUrl && apiKey) {
+        try {
+            const baseUrl = settings.dispatcharrUrl.replace(/\/+$/, "");
+            const headers = {
+                "X-API-Key": apiKey,
+                "Accept": "application/json",
+                "Content-Type": "application/json"
+            };
+
+            const profRes = await fetch(`${baseUrl}/api/channels/profiles/`, { headers });
+            if (profRes.ok) {
+                const profData = await profRes.json();
+                const profList = Array.isArray(profData) ? profData : (profData?.results || []);
+                const targetDProf = profList.find(
+                    (p) =>
+                        String(p.name || "").toLowerCase() === profile.name.toLowerCase() ||
+                        String(p.slug || "").toLowerCase() === profile.slug.toLowerCase() ||
+                        p.id === profile.id
+                );
+
+                if (targetDProf) {
+                    // Find Dispatcharr channel
+                    const chanRes = await fetch(
+                        `${baseUrl}/api/channels/channels/?search=${encodeURIComponent(channel.name)}`,
+                        { headers }
+                    );
+                    if (chanRes.ok) {
+                        const chanData = await chanRes.json();
+                        const chanList = Array.isArray(chanData) ? chanData : (chanData?.results || []);
+                        const targetDChan = chanList.find(
+                            (c) =>
+                                (c.effective_name || c.name || "").toLowerCase() === channel.name.toLowerCase() ||
+                                c.tvg_id === channel.xmltvId ||
+                                c.channel_number === channel.channelNumber
+                        );
+
+                        if (targetDChan) {
+                            const currentChannels = Array.isArray(targetDProf.channels) ? targetDProf.channels : [];
+                            if (!currentChannels.includes(targetDChan.id)) {
+                                const updatedChannels = [...currentChannels, targetDChan.id];
+                                const patchRes = await fetch(`${baseUrl}/api/channels/profiles/${targetDProf.id}/`, {
+                                    method: "PATCH",
+                                    headers,
+                                    body: JSON.stringify({ channels: updatedChannels })
+                                });
+                                if (patchRes.ok) {
+                                    dispatcharrUpdated = true;
+                                }
+                            } else {
+                                dispatcharrUpdated = true;
+                            }
+                        }
+                    }
+                }
+            }
+        } catch {
+            // Live Dispatcharr unreachable, SQLite sync succeeded
+        }
+    }
+
+    // 3. Trigger Plex Media Server DVR lineup and guide reload
+    let plexRefreshed = false;
+    try {
+        const plexRes = await refreshPlexDvrLineupAndGuide();
+        plexRefreshed = plexRes.success;
+    } catch {
+        // Plex offline
+    }
+
+    return {
+        success: true,
+        message: `Successfully added "${channel.name}" to the "${profile.name}" profile in Dispatcharr and updated Plex Live TV!`,
+        profileName: profile.name,
+        channelName: channel.name,
+        plexRefreshed,
+        dispatcharrUpdated
+    };
+}

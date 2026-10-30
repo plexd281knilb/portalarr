@@ -1127,7 +1127,7 @@ export async function getIptvCatalogAction(filters?: {
                 profileChannels: {
                     select: {
                         profile: {
-                            select: { slug: true }
+                            select: { id: true, name: true, slug: true }
                         }
                     }
                 }
@@ -1145,12 +1145,12 @@ export async function getIptvCatalogAction(filters?: {
                         where: { isActive: true },
                         include: {
                             profileChannels: {
-                                select: {
-                                    profile: {
-                                        select: { slug: true }
-                                    }
-                                }
-                            }
+                    select: {
+                        profile: {
+                            select: { id: true, name: true, slug: true }
+                        }
+                    }
+                }
                         },
                         orderBy: [{ channelNumber: "asc" }, { name: "asc" }]
                     });
@@ -1181,7 +1181,12 @@ export async function getIptvCatalogAction(filters?: {
             xmltvId: c.xmltvId,
             epgName: c.epgName,
             isCustom: c.isCustom,
-            profileSlugs: c.profileChannels.map((pc) => pc.profile.slug)
+            profileSlugs: c.profileChannels.map((pc) => pc.profile.slug),
+            profiles: c.profileChannels.map((pc) => ({
+                id: pc.profile.id,
+                name: pc.profile.name,
+                slug: pc.profile.slug
+            }))
         }));
 
         const requests = await prisma.iptvChannelRequest.findMany({
@@ -1524,5 +1529,102 @@ export async function resolveIptvChannelRequestAction(input: {
         return { success: true, data: updated };
     } catch (err: any) {
         return { success: false, error: err?.message || "Failed to update channel request" };
+    }
+}
+
+
+/**
+ * Adds a channel to a specific Dispatcharr profile, records the activity/request,
+ * and notifies Plex Media Server to reload its DVR tuner lineup.
+ */
+export async function requestAddChannelToProfileAction(input: {
+    channelId: string;
+    profileSlug: string;
+    reason?: string;
+}): Promise<{
+    success: boolean;
+    message: string;
+    channelName?: string;
+    profileName?: string;
+    error?: string;
+}> {
+    try {
+        const user = await verifySessionUser();
+        const { addChannelToDispatcharrProfile } = await import("@/lib/iptv/dispatcharr-client");
+
+        const channel = await prisma.iptvChannel.findUnique({
+            where: { id: input.channelId }
+        });
+        if (!channel) {
+            return { success: false, error: "Channel not found in catalog", message: "Channel not found" };
+        }
+
+        const profile = await prisma.iptvProfile.findFirst({
+            where: {
+                OR: [
+                    { id: input.profileSlug },
+                    { slug: input.profileSlug }
+                ]
+            }
+        });
+        if (!profile) {
+            return { success: false, error: `Profile "${input.profileSlug}" not found`, message: "Profile not found" };
+        }
+
+        // Execute addition to Dispatcharr profile and Plex DVR refresh
+        const result = await addChannelToDispatcharrProfile(channel.id, profile.slug);
+
+        // Record request / activity in IptvChannelRequest for audit trail
+        await prisma.iptvChannelRequest.create({
+            data: {
+                channelName: channel.name,
+                callsign: channel.callsign,
+                genre: channel.genre,
+                reason: input.reason?.trim() || `User requested mapping to Dispatcharr profile "${profile.name}".`,
+                adminNotes: `[PROFILE_ADD]: Target profile "${profile.name}" (${profile.slug}). Result: ${result.message}`,
+                requestedByUserId: user.id,
+                requestedByUsername: user.username,
+                status: result.success ? "ACTIVATED" : "PENDING",
+                activatedChannelId: channel.id
+            }
+        }).catch(() => {});
+
+        logger.addLog(
+            "INFO",
+            "SYSTEM",
+            `User "${user.username}" added channel "${channel.name}" to Dispatcharr profile "${profile.name}". (plexRefreshed=${result.plexRefreshed})`
+        );
+
+        safeRevalidate("/channels");
+        safeRevalidate("/admin/iptv");
+
+        return {
+            success: result.success,
+            message: result.message,
+            channelName: channel.name,
+            profileName: profile.name
+        };
+    } catch (err: any) {
+        return {
+            success: false,
+            error: err?.message || "Failed to add channel to profile",
+            message: err?.message || "Failed to add channel to profile"
+        };
+    }
+}
+
+/**
+ * Triggers Plex Media Server(s) to reload DVR channel lineups and refresh electronic program guides.
+ */
+export async function refreshPlexDvrAction() {
+    try {
+        await verifySessionAdmin();
+        const { refreshPlexDvrLineupAndGuide } = await import("@/lib/iptv/dispatcharr-client");
+        const res = await refreshPlexDvrLineupAndGuide();
+        safeRevalidate("/channels");
+        safeRevalidate("/admin/iptv");
+        return res;
+    } catch (err: any) {
+        return { success: false, serversUpdated: 0, dvrsRefreshed: 0, message: err?.message || "Failed to refresh Plex DVR" };
     }
 }
