@@ -121,3 +121,32 @@ Located in [`.vscode/tasks.json`](file:///C:/Users/kyraj/Documents/Github/portal
 - `agy: Light Recon & Search (Gemini 3.5 Flash Lite)`: Runs `agy --model gemini-3.5-flash-lite --print "<prompt>"`.
 - `Portalarr: Run Integration Tests`: Runs `npm test`.
 - `Portalarr: Production Build`: Runs `npm run build`.
+
+---
+
+## 🚨 Mandatory Task Completion Protocol (Strict SemVer)
+
+To guarantee 100% reliability, quality control, and consistency, the following protocol MUST be executed across all agent turns:
+
+### Step 0: Read Skill Upfront (Task Start)
+Before editing or creating ANY files, call `read_file` on the relevant `.agents/skills/<skill>/SKILL.md` (e.g. `plex-api-expert`, `iptv-expert`, `portalarr-ui`, etc.) to load all architectural rules, API contracts, and edge cases into context. Never code on assumptions.
+
+### The 5-Step Pre-Push Verification Battery
+1. **Step 1: Integration Testing**: Execute `cmd /c "npm test"` (`scripts/verify-all.ts`). All test suites must pass (0 failures).
+2. **Step 2: Production Build Verification**: Execute `cmd /c "npm run build"`. Ensure 100% clean compilation, zero TypeScript errors, and zero Turbopack runtime errors.
+3. **Step 3: Edge Security & Cloudflare Policy Audit**: Whenever ANY page route (`src/app/**/page.tsx`) or API route (`src/app/api/**/route.ts`) is created, moved, or updated, register it in `src/lib/edge-policy-paths.ts` and inform the user.
+4. **Step 4: Skills & Documentation Sync**: Review and update relevant `.agents/skills/` documents to record any new UI patterns, API contracts, formulas, or operational guidelines **BEFORE** committing.
+5. **Step 5: SemVer Version Increment & Git Deployment Push**: Increment version in `package.json` according to SemVer (PATCH `+1` for fixes/polish, MINOR `+1` for features), stage all changes (`git add -A`), commit with freshly incremented semantic version prefix (`[v<version>] feat/fix(scope): message`), push strictly to `origin/main` (Beta). NEVER push to `stable` unless the user explicitly instructs.
+
+---
+
+### 🛑 Mandatory Extended Build Verification for Stable Releases (`npm run test:extended`)
+
+Whenever merging or pushing to the `stable` branch (production release environment), you MUST execute the 7-tier Extended Build Verification suite via `cmd /c "npm run test:extended"` (`scripts/verify-extended.ts`). Pushing to `stable` is strictly blocked unless all 7 tiers are 100% green:
+1. **Tier 1: Strict TypeScript Type Integrity (`npx tsc --noEmit`)**: Validates complete type safety with zero compiler errors across the entire codebase.
+2. **Tier 2: Curation Presets & Schedule Validator (`scripts/test-all-presets.ts`)**: Audits all 49 curation presets, seasonal date ranges, and TMDb query definitions.
+3. **Tier 3: AI Server Assistant & Security Guardrails (`scripts/test-ai-agent.ts`)**: Audits all 30 security guardrails, cross-user stream termination blocks, query extraction, and diagnostic tools.
+4. **Tier 4: Payment Scraper Lookback & Financial Engine (`scripts/test-payment-lookback.ts`)**: Audits payment parsing, lookback retention, and settings synchronization (12 assertions).
+5. **Tier 5: Plex User Matching & Identity Resolution (`scripts/test-plex-lookup.ts`)**: Audits identity collision guards, alphanumeric tokens, and user aliases (7 assertions).
+6. **Tier 6: Core System & Architecture 22-Suite Battery (`scripts/verify-all.ts`)**: Full 22 integration suites (79 core assertions) covering DB schema, encryption, Cloudflare Access coverage, user accounts, Plex sync, billing, and subscriptions.
+7. **Tier 7: Production Turbopack Next.js Build (`next build`)**: 100% clean production compilation across all 42 static and dynamic routes.

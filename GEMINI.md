@@ -8,7 +8,7 @@ Portalarr is a centralized, self-hosted dashboard designed to manage a media ser
 
 Portalarr adheres to strict Semantic Versioning (`MAJOR.MINOR.PATCH`):
 - **Released Baseline**: `v1.4.0` is the production milestone baseline release on `stable`.
-- **Active Feature Release**: `v1.5.4` is the active feature release (IPTV & Live TV subsystem on `main`).
+- **Active Feature Release**: `v1.5.5` is the active feature release (IPTV & Live TV subsystem on `main`).
 - **Strict SemVer Policy**:
   - **PATCH increments (`1.3.22` ➔ `1.3.23`)**: Bug fixes, security patches, styling polish, telemetry adjustments, and non-breaking corrections.
   - **MINOR increments (`1.1.2` ➔ `1.2.0`)**: Backwards-compatible new features, new curation studios, new third-party integrations, or major enhancements.
@@ -52,7 +52,10 @@ Personalized watch time and media statistics in `MyPlexHub` (`getUserPlexHubData
 5. **Local SQLite `WatchHistory` Fallback**: If Tautulli is offline or unconfigured, queries Prisma `WatchHistory` using exact and lowercased alias arrays (avoiding SQLite `mode: "insensitive"` crashes) to accurately aggregate watch hours, movies finished, and episodes watched.
 
 
-To guarantee 100% reliability, quality control, and consistency, the following 5-step protocol MUST be executed at the end of every task or feature change before considering the work complete:
+To guarantee 100% reliability, quality control, and consistency, the following protocol MUST be executed across all tasks:
+
+0. **Step 0: Mandatory Skill Ingestion (Task Start):**
+   Before creating or editing ANY code, scripts, or configuration files, you MUST call `read_file` on the relevant `.agents/skills/<skill>/SKILL.md` documents (e.g. `plex-api-expert`, `iptv-expert`, `portalarr-ui`, `seerr-expert`, etc.). Operating on internal memory or assumptions without reading the authoritative domain skills upfront is strictly forbidden.
 
 1. **Full Integration Testing & What's New Jargon/Gate Audit:**
    Execute `cmd /c "npm test"` to run the Portalarr verification suite (`scripts/verify-all.ts`). All tests must pass (0 failures). Always verify that `What's New in DomsHomeLab` (`roadmap.md` and `filterRoadmapByRole`) adheres strictly to Section 44 plain-English zero-jargon standards across all 4 account tiers (`USER`, `TRIAL`, `SUPER_USER`, `ADMIN`), with administrative features strictly stripped for non-admins and full-member perks stripped for trial accounts. Add new test cases whenever adding new actions or core calculations.

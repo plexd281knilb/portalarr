@@ -143,12 +143,6 @@ See detailed runbook: [tags-collections-and-hubs.md](./references/tags-collectio
     - **Direct Plex Media Server History Scan**: Accumulates watch time (ms) and counts across all discovered PMS instances without loop-scoped cutoff bugs.
     - **Local SQLite `WatchHistory` Fallback**: If Tautulli is offline or unconfigured, queries Prisma `WatchHistory` using exact and lowercased alias arrays (avoiding SQLite `mode: "insensitive"` crashes) to accurately aggregate watch hours, movies finished, and episodes watched.
 
-23. **Mandatory 4-Step Verification & Delivery Protocol (Strict SemVer)**:
-    - Step 1: `cmd /c "npm test"` (18+ suites, 100% pass, 0 failures).
-    - Step 2: `cmd /c "npm run build"` (Next.js production build, 0 TS errors, 100% clean).
-    - Step 3: Skills & Documentation Sync.
-    - Step 4: SemVer Version Increment & Git Version Control (increment `package.json` version, `[v<version>]` prefix, push strictly to `origin/main` (Beta). NEVER push to `stable` unless user explicitly instructs).
-
 24. **Plex Home Live TV & DVR Privilege Auditor & Policy Management (`plex-jellyfin-livetv.ts`)**:
     - **15-User Plex Home Limit**: Plex caps Plex Home at 15 users (1 admin owner + 14 member slots). Only Plex Home members can be granted Live TV / DVR tuner access (`allowTuners="1"`, `allowChannels="1"`). Regular Plex friends cannot access Live TV tuners unless admitted into the Plex Home.
     - **The 3 Plex Restrictions Radio States**: In Plex Media Server under **Restrictions > Live TV & DVR Access**, Plex enforces three distinct states:
@@ -163,3 +157,23 @@ See detailed runbook: [tags-collections-and-hubs.md](./references/tags-collectio
       - *Revoke DVR*: Revokes only DVR (`allowDvr=0`) while preserving `allowTuners=1`, gracefully dropping the user down to `Allow Live TV only`.
     - **Inactivity Rotation Engine**: Evaluates `lastIptvWatchedAt` and `plexHomeJoinedAt` against `plexHomeInactivityDays` (default: 21 days). Strictly non-destructive: `plexHomeAutoKickEnabled` is strictly `false` by default, surfacing candidates for admin review without kicking anyone out unexpectedly.
     - **Jellyfin Live TV Policy Management**: Audits and controls `EnableLiveTvAccess` in Jellyfin via `POST /Users/{id}/Policy`. Always reads existing policies first and merges changes (`{ ...currentPolicy, EnableLiveTvAccess: true, EnableLiveTvManagement: false }`) to preserve library folder access permissions (`EnabledFolders`).
+
+25. **Multi-Server Token Decryption Fallback, Debounced Probing & Quiet Logging**:
+    - **Token Decryption Fallback**: `resolveActivePlexAdminToken` inspects `prisma.settings.mainPlexToken` and decrypts server-specific tokens in `prisma.plexServer` (`dbPlexServers`), ensuring owner account discovery and friends lookups always succeed even if the primary cloud token is unconfigured.
+    - **Debounced Probes & Quiet Logging**: Plex connection resolutions enforce 3.5s timeouts per probe and debounce network probes across repetitive callers, silencing spammy `connect ECONNREFUSED` or timeout warnings in development and testing.
+    - **Tautulli Python Falsy `0` Fix**: In `getUserPlexHubData`, resolving Tautulli user history uses `user=${username}` for Plex server owner accounts to prevent Python `user_id = 0` falsy drops from blanking watch statistics.
+    - **Direct PMS Session History Scan**: Accumulates watch hours across discovered PMS instances via `/status/sessions/history/all?sort=viewedAt:desc` without loop-scoped cutoff bugs.
+    - **Local SQLite `WatchHistory` Fallback**: If Tautulli is offline, queries Prisma `WatchHistory` using exact and lowercased alias arrays (avoiding SQLite `mode: "insensitive"` crashes) to accurately aggregate watch hours, movies finished, and episodes watched.
+
+---
+
+## 🚨 Mandatory Task Completion Protocol (Strict SemVer)
+
+To guarantee 100% reliability, quality control, and consistency, the following 5-step protocol MUST be executed at the end of every task or feature change before considering the work complete:
+
+0. **Step 0: Read Skill Upfront**: Call `read_file` on the relevant `SKILL.md` before writing code.
+1. **Step 1: Integration Testing**: Execute `cmd /c "npm test"` to run the verification suite (`scripts/verify-all.ts`). All test suites must pass (0 failures).
+2. **Step 2: Production Build Verification**: Execute `cmd /c "npm run build"`. Ensure 100% clean compilation, zero TypeScript errors, and zero Turbopack runtime errors.
+3. **Step 3: Edge Security & Cloudflare Policy Audit**: Whenever ANY page route (`src/app/**/page.tsx`) or API route (`src/app/api/**/route.ts`) is created, moved, or updated, register it in `src/lib/edge-policy-paths.ts` and inform the user.
+4. **Step 4: Skills & Documentation Sync**: Review and update relevant `.agents/skills/` documents to record any new UI patterns, API contracts, formulas, or operational guidelines **BEFORE** committing.
+5. **Step 5: SemVer Version Increment & Git Deployment Push**: Increment version in `package.json` according to SemVer (PATCH `+1` for fixes/polish, MINOR `+1` for features), stage all changes (`git add -A`), commit with freshly incremented semantic version prefix (`[v<version>] feat/fix(scope): message`), push strictly to `origin/main` (Beta). NEVER push to `stable` unless the user explicitly instructs.

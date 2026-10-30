@@ -144,12 +144,19 @@ See detailed runbook: [leaving-soon-and-actions.md](./references/leaving-soon-an
 
 
 
+19. **Strict Server Isolation Guard & Automated Watch Rescue (`SERVER-ISOLATION-GUARD`)**:
+    - **Strict Server Isolation Guard**: When pruning or rechecking items for a specific server (e.g. `KidsPlexServer`), `SERVER-ISOLATION-GUARD` verifies that the target server exists and is active. If not found, it strictly blocks falling back to other Plex servers (`⚠️ [SERVER-ISOLATION-GUARD] Requested Plex server not found. Strictly blocked fallback to other servers to prevent unintended cross-server modifications`), permanently preventing accidental deletions on unintended servers.
+    - **Dynamic Watch Activity Rescue**: In `recheckLeavingSoonWatchActivityInternal`, if active playback is detected across Tautulli, PMS sessions, or local SQLite `WatchHistory`, the item is automatically unstaged (`🎉 Unflagged items from Leaving Soon due to detected watch activity`), original poster artwork is restored in PMS, and the Leaving Soon collection hub is synchronized immediately.
+
 ---
 
-## 🚨 Mandatory 4-Step Verification & Delivery Protocol (Strict SemVer)
+## 🚨 Mandatory Task Completion Protocol (Strict SemVer)
 
-To guarantee 100% reliability, quality control, and consistency, the following 4-step protocol MUST be executed at the end of every task or feature change:
-1. **Full Integration Testing:** Execute `cmd /c "npm test"` to run the verification suite (`scripts/verify-all.ts`). All 18+ test suites must pass (0 failures).
-2. **Production Build Verification:** Execute `cmd /c "npm run build"`. Ensure 100% clean compilation, zero TypeScript errors, and zero Turbopack runtime errors.
-3. **Skills & Documentation Sync:** Review and update relevant `.agents/skills/` documents to record any new UI patterns, API contracts, formulas, or operational guidelines.
-4. **SemVer Version Increment & Git Deployment Push:** Increment version in `package.json` according to SemVer (PATCH `+1` for fixes/polish, MINOR `+1` for features), stage all changes (`git add -A`), commit with freshly incremented semantic version prefix (`[v<version>] feat/fix(scope): message`), push strictly to `origin/main` (Beta). NEVER push to `stable` unless the user explicitly instructs.
+To guarantee 100% reliability, quality control, and consistency, the following 5-step protocol MUST be executed at the end of every task or feature change before considering the work complete:
+
+0. **Step 0: Read Skill Upfront**: Call `read_file` on the relevant `SKILL.md` before writing code.
+1. **Step 1: Integration Testing**: Execute `cmd /c "npm test"` to run the verification suite (`scripts/verify-all.ts`). All test suites must pass (0 failures).
+2. **Step 2: Production Build Verification**: Execute `cmd /c "npm run build"`. Ensure 100% clean compilation, zero TypeScript errors, and zero Turbopack runtime errors.
+3. **Step 3: Edge Security & Cloudflare Policy Audit**: Whenever ANY page route (`src/app/**/page.tsx`) or API route (`src/app/api/**/route.ts`) is created, moved, or updated, register it in `src/lib/edge-policy-paths.ts` and inform the user.
+4. **Step 4: Skills & Documentation Sync**: Review and update relevant `.agents/skills/` documents to record any new UI patterns, API contracts, formulas, or operational guidelines **BEFORE** committing.
+5. **Step 5: SemVer Version Increment & Git Deployment Push**: Increment version in `package.json` according to SemVer (PATCH `+1` for fixes/polish, MINOR `+1` for features), stage all changes (`git add -A`), commit with freshly incremented semantic version prefix (`[v<version>] feat/fix(scope): message`), push strictly to `origin/main` (Beta). NEVER push to `stable` unless the user explicitly instructs.

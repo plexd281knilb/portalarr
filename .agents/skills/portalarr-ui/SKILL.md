@@ -1476,3 +1476,40 @@ Detailed guide on updating: [updating-this-skill.md](./references/updating-this-
   - `[DVR: ON]` / `[Enable DVR]`: Toggles DVR recording privileges. Granting DVR automatically ensures live tuner privileges are active.
   - `[Free Slot]`: Ghost button demoting the user to a regular Plex friend to free up one of the 14 shared Plex Home slots.
 - **Card Status Outlines**: Cards are outlined with `border-rose-500/40 bg-rose-500/5` when a Plex Home member lacks live privileges, and `border-amber-500/30 bg-amber-500/5` when identified as an inactive rotation candidate.
+
+
+### 52. Secondary & Linked Notification Inboxes (`/profile`)
+- **Multi-Inbox Notification Architecture**:
+  - Homelab members frequently request that their spouse, partner, or family member receive specific notifications (e.g. billing receipts or media request approvals) without sharing account passwords.
+  - In `/profile` under **Secondary & Linked Inboxes**, members can link additional notification emails stored in `prisma.linkedNotificationEmail`.
+  - **Granular Category Routing**: Each linked inbox has independent category toggles (`BILLING`, `REQUESTS`, `MAINTENANCE`).
+  - **User-Level Notification Preference Second Gate**: User-level notification settings in `user.emailPreferences` act as an absolute second gate. If the account owner opts out of a category (e.g. Media Available alerts), dispatches to both the primary inbox and any linked inboxes for that category are strictly suppressed.
+
+
+### 53. User Directory Sorting & Account Age (`/settings?tab=access`)
+- **Multi-Column Directory Sorting**:
+  - In the User Management panel (`/settings?tab=access`), administrators can sort members by `lastLogin` (active vs inactive), account creation date, username, role, or storage footprint.
+  - Dynamic `lastLogin` tracking in `createSession()` updates automatically on password sign-in, Plex SSO, and active site visits.
+  - Active vs Inactive indicators display relative age (`Joined: MMM d, yyyy • Last Login: 4d ago` vs `Never`).
+
+
+### 54. First-Time Send-to-Kindle Setup Guide & Amazon Approved Sender Notice
+- **Amazon Approved Personal Document List Protection**:
+  - Amazon Kindle devices reject `.epub` deliveries from unapproved sender addresses with a silent delivery failure.
+  - Portalarr dispatches ebooks from `books@domshomelab.com`.
+  - **Auto-Popup Sender Notice Modal**: On the eBooks request tab and book library shelf, a setup guide pops up for first-time visitors with a 1-click link to their Amazon Personal Document Settings (`amazon.com/myk`), guiding them to add `books@domshomelab.com` to their Approved Personal Document E-mail List.
+  - **Persistent Dismissal**: Once acknowledged, dismissal is stored in `localStorage` (`kindleSenderNoticeDismissed`) so members are not repeatedly interrupted.
+
+
+---
+
+## 🚨 Mandatory Task Completion Protocol (Strict SemVer)
+
+To guarantee 100% reliability, quality control, and consistency, the following 5-step protocol MUST be executed at the end of every task or feature change before considering the work complete:
+
+0. **Step 0: Read Skill Upfront**: Call `read_file` on the relevant `SKILL.md` before writing code.
+1. **Step 1: Integration Testing**: Execute `cmd /c "npm test"` to run the verification suite (`scripts/verify-all.ts`). All test suites must pass (0 failures).
+2. **Step 2: Production Build Verification**: Execute `cmd /c "npm run build"`. Ensure 100% clean compilation, zero TypeScript errors, and zero Turbopack runtime errors.
+3. **Step 3: Edge Security & Cloudflare Policy Audit**: Whenever ANY page route (`src/app/**/page.tsx`) or API route (`src/app/api/**/route.ts`) is created, moved, or updated, register it in `src/lib/edge-policy-paths.ts` and inform the user.
+4. **Step 4: Skills & Documentation Sync**: Review and update relevant `.agents/skills/` documents to record any new UI patterns, API contracts, formulas, or operational guidelines **BEFORE** committing.
+5. **Step 5: SemVer Version Increment & Git Deployment Push**: Increment version in `package.json` according to SemVer (PATCH `+1` for fixes/polish, MINOR `+1` for features), stage all changes (`git add -A`), commit with freshly incremented semantic version prefix (`[v<version>] feat/fix(scope): message`), push strictly to `origin/main` (Beta). NEVER push to `stable` unless the user explicitly instructs.
