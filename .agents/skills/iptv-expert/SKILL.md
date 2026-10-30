@@ -134,6 +134,26 @@ Plex Media Server enforces three distinct radio restriction states under **Restr
   - Expandable terminal code card allows 1-click clipboard copying (`📋 Copy AI Prompt`).
   - Instant manual trigger button (`[🤖 AI Auto-Scan Dispatcharr]`) to re-scan Dispatcharr and auto-provision channels on demand.
 
+### 11. Plex Home Setup & Login Transition Guide (`PlexHomeGuideModal`)
+- **Interactive Guide Modal**: Accessible on `/channels`, `/admin/iptv` (Tab 5), and the Profile Add-ons catalog.
+- **5-Step Onboarding Workflow**:
+  1. **Accept Invitation Email**: Check email or visit `app.plex.tv -> Settings -> Account -> Plex Home` to accept the pending invite banner.
+  2. **Fast User Switching**: On Apple TV, Roku, Fire TV, and Smart TVs, Plex displays the "Who's Watching?" profile picker. Users must click their own profile avatar to keep watch history and continue-watching private.
+  3. **4-Digit Profile PIN**: Recommend setting a PIN under Plex account settings so other household members cannot enter their profile.
+  4. **Pin 'Live TV & DVR'**: In the Plex sidebar, click `More`, locate the server, and select `Pin to Sidebar` on `Live TV & DVR`.
+  5. **Tune & Record**: Browse electronic program guides (EPG) by genre and schedule DVR series passes.
+- **Admin 1-Click Clipboard Sharing**: Admins can copy a Markdown/plain-text formatted version of the guide (`PLEX_HOME_GUIDE_TEXT`) to paste to new users in Discord or email.
+
+### 12. Account Settings Free Add-on (`iptv_livetv`) & Jellyfin Capacity Fallback
+- **Account Settings Integration**: Live TV is a first-class Free Add-on (`iptv_livetv`) in `/profile` alongside Ebooks and Audiobooks.
+- **Self-Service / Admin Provisioning**:
+  - When enabled: checks Plex Home capacity. If slots are available ($< 14$ non-admin members), sends Plex Home invite and provisions `allowTuners=1`.
+  - If Plex Home is full ($14/14$): automatically provisions the user on Jellyfin (`POST /Users/New` if needed, `EnableLiveTvAccess: true`) without taking a Plex Home slot!
+  - When disabled: revokes tuner access across Plex PMS and Jellyfin.
+- **Live Catalog Access Gating**: Automatically unlocks `/channels` when `iptv_livetv` is active in `user.enabledAddons`.
+- **Capacity Fallback Banner on `/channels`**: When Plex Home is at capacity, users without Live TV see an informative banner highlighting unlimited viewer slots on Jellyfin & Swiftfin with an instant 1-click activation button.
+- **Admin 1-Click Provisioning on Tab 5**: In pending requests, admins can click `[⚡ Provision on Jellyfin (Unlimited Slots)]` to instantly grant access without exceeding the 14-member Plex Home ceiling.
+
 ---
 
 ## 🚨 Mandatory Task Completion Protocol (Strict SemVer)

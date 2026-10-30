@@ -8405,10 +8405,10 @@ const DEFAULT_ADDONS_CATALOG = [
     {
         id: "iptv_livetv",
         name: "Live TV & IPTV Streams",
-        description: "Stream live broadcast television channels, live sports, and digital TV guides (EPG) directly in your media player.",
+        description: "Stream live broadcast television channels, regional sports, news networks, and digital TV guides (EPG) across Plex Home and Jellyfin.",
         price: 0,
         isFree: true,
-        isAvailable: false,
+        isAvailable: true,
         icon: "tv",
         tag: "Live TV"
     },
@@ -8519,6 +8519,9 @@ export async function getAvailableAddonsAction() {
                             // Enforce locked coming-soon status for unbuilt household sub-accounts
                             return { ...def, isAvailable: false };
                         }
+                        if (def.id === "iptv_livetv") {
+                            return { ...def, ...(existing || {}), isAvailable: true };
+                        }
                         return existing ? { ...def, ...existing } : def;
                     });
                     for (const item of parsed) {
@@ -8583,6 +8586,9 @@ export async function toggleFreeAddonAction(addonId: string, enabled: boolean) {
                         if (def.id === "extra_kid_profile" || def.id === "extra_living_room" || def.id === "emby_access" || def.id === "music_streaming" || def.id === "priority_requests") {
                             // Enforce locked coming-soon status for unbuilt household sub-accounts
                             return { ...def, isAvailable: false };
+                        }
+                        if (def.id === "iptv_livetv") {
+                            return { ...def, ...(existing || {}), isAvailable: true };
                         }
                         return existing ? { ...def, ...existing } : def;
                     });
@@ -8657,6 +8663,53 @@ export async function toggleFreeAddonAction(addonId: string, enabled: boolean) {
                 where: { id: user.id },
                 data: { kindleEmail: "DIRECT_DOWNLOAD" }
             });
+        } else if (addonId === "iptv_livetv") {
+            try {
+                const {
+                    inviteUserToPlexHome,
+                    setPlexUserLiveTvPrivilege,
+                    setPlexUserDvrPrivilege,
+                    setJellyfinUserLiveTvAccess
+                } = await import("../lib/iptv/plex-jellyfin-livetv");
+
+                if (enabled) {
+                    const currentHomeCount = await prisma.user.count({
+                        where: { isPlexHomeMember: true, role: { not: "ADMIN" } }
+                    });
+                    if (currentHomeCount < 14) {
+                        const inviteRes = await inviteUserToPlexHome(user.id, true);
+                        if (!inviteRes.success) {
+                            // If Plex invite cannot be sent, automatically provision Jellyfin
+                            await setJellyfinUserLiveTvAccess(user.id, true);
+                        }
+                    } else {
+                        // Plex Home at capacity (14/14): provision Jellyfin with unlimited slots
+                        await setJellyfinUserLiveTvAccess(user.id, true);
+                    }
+                    await prisma.user.update({
+                        where: { id: user.id },
+                        data: {
+                            hasPlexLiveTvAccess: true,
+                            hasJellyfinLiveTvAccess: true
+                        }
+                    });
+                } else {
+                    // Revoke tuner privileges
+                    await setPlexUserLiveTvPrivilege(user.id, false);
+                    await setPlexUserDvrPrivilege(user.id, false);
+                    await setJellyfinUserLiveTvAccess(user.id, false);
+                    await prisma.user.update({
+                        where: { id: user.id },
+                        data: {
+                            hasPlexLiveTvAccess: false,
+                            hasPlexDvrAccess: false,
+                            hasJellyfinLiveTvAccess: false
+                        }
+                    });
+                }
+            } catch (iptvErr: any) {
+                console.warn("[LIVETV-ADDON-SYNC-WARN]:", iptvErr?.message || iptvErr);
+            }
         }
 
         try {
@@ -8755,6 +8808,9 @@ export async function toggleAdminAddonAvailabilityAction(addonId: string, isAvai
                         if (def.id === "extra_kid_profile" || def.id === "extra_living_room" || def.id === "emby_access" || def.id === "music_streaming" || def.id === "priority_requests") {
                             // Enforce locked coming-soon status for unbuilt household sub-accounts
                             return { ...def, isAvailable: false };
+                        }
+                        if (def.id === "iptv_livetv") {
+                            return { ...def, ...(existing || {}), isAvailable: true };
                         }
                         return existing ? { ...def, ...existing } : def;
                     });
@@ -21398,6 +21454,35 @@ export async function getPlexSetupGuides() {
                 {
                     title: "3. Avoid Browser Audio Transcoding",
                     desc: "Select standard 5.1 AC3 or AAC audio tracks in browser rather than TrueHD 7.1 or DTS-HD."
+                }
+            ]
+        },
+        {
+            id: "plexhome",
+            name: "Plex Home & Live TV",
+            icon: "Tv",
+            badge: "Fast Switching & Tuners",
+            summary: "Accept your invitation, navigate Fast User Switching on smart TVs, set a 4-digit PIN, and pin Live TV & DVR.",
+            steps: [
+                {
+                    title: "1. Accept Your Plex Home Email Invitation",
+                    desc: "Check your email for an invite from Plex ('You've been invited to join the Plex Home of [Owner]'). Click 'Accept Invitation' and sign in (or go to app.plex.tv -> Settings -> Account -> Plex Home)."
+                },
+                {
+                    title: "2. Fast User Switching ('Who's Watching?')",
+                    desc: "Next time you launch Plex on Apple TV, Roku, Fire TV, or Smart TV, the app displays the profile picker screen. Always click your own avatar so your watch progress stays private."
+                },
+                {
+                    title: "3. Set a 4-Digit Security PIN (Recommended)",
+                    desc: "Prevent other household members from accessing your profile: in Plex Web or mobile, go to Settings -> Account -> Plex Home -> click your name -> Require PIN -> set a 4-digit PIN."
+                },
+                {
+                    title: "4. Pin 'Live TV & DVR' to Sidebar",
+                    desc: "In your Plex app, scroll to the bottom of the left sidebar -> click 'More' -> find our server -> click the three dots (...) next to 'Live TV & DVR' -> select 'Pin to Sidebar'."
+                },
+                {
+                    title: "5. Tune Channels & Schedule DVR Passes",
+                    desc: "Click 'Live TV & DVR' to open the interactive program guide (EPG). Browse by channel or genre, watch live with Direct Play quality, and schedule DVR recordings if granted."
                 }
             ]
         },

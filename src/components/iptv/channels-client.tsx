@@ -44,8 +44,10 @@ import {
     setUserPreferredMarketAction,
     detectUserMarketAction,
     provisionMissingDispatcharrChannelsAction,
-    requestMarketLocalChannelsAction
+    requestMarketLocalChannelsAction,
+    activateJellyfinLiveTvAction
 } from "@/app/iptv-actions";
+import { PlexHomeGuideModal } from "@/components/iptv/plex-home-guide-modal";
 import {
     ORDERED_MARKETS,
     MEDIA_MARKETS,
@@ -64,6 +66,16 @@ interface ChannelsClientProps {
             isAdmin: boolean;
             preferredMediaMarket?: string;
             detectedMediaMarket?: string;
+            plexHomeTotalMembers?: number;
+            plexHomeMaxSlots?: number;
+            plexHomeAvailableSlots?: number;
+            isPlexHomeFull?: boolean;
+            hasPlexLiveTvAccess?: boolean;
+            hasPlexDvrAccess?: boolean;
+            isPlexHomeMember?: boolean;
+            hasJellyfinLiveTvAccess?: boolean;
+            jellyfinAvailable?: boolean;
+            jellyfinServerUrl?: string | null;
         };
         availableMarkets?: any[];
         profiles: any[];
@@ -214,7 +226,10 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
     const [tokensList, setTokensList] = useState(initialData.tokens || []);
     const [isPending, startTransition] = useTransition();
 
-    const canAccess = initialData.userAccess.canAccessIptv;
+    const [canAccessState, setCanAccessState] = useState(initialData.userAccess.canAccessIptv);
+    const [hasJellyfinState, setHasJellyfinState] = useState(Boolean(initialData.userAccess.hasJellyfinLiveTvAccess));
+    const [showPlexHomeGuide, setShowPlexHomeGuide] = useState(false);
+    const canAccess = canAccessState;
 
     // Computed Shelves
     const dallasChannels = useMemo(() => getDallasAnchorChannels(channelsList), [channelsList]);
@@ -362,6 +377,24 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
         });
     };
 
+    const handleActivateJellyfin = () => {
+        startTransition(async () => {
+            const res = await activateJellyfinLiveTvAction();
+            if (res.success) {
+                setAccessRequestMsg(res.message || "Live TV activated on Jellyfin!");
+                setCanAccessState(true);
+                setHasJellyfinState(true);
+                const catRes = await getIptvCatalogAction();
+                if (catRes.success && catRes.data) {
+                    setChannelsList(catRes.data.channels);
+                    setProfilesList(catRes.data.profiles);
+                }
+            } else {
+                setAccessRequestMsg(res.error || "Failed to activate Jellyfin Live TV");
+            }
+        });
+    };
+
     const handleSubmitChannelRequest = (e: React.FormEvent) => {
         e.preventDefault();
         if (!channelNameInput.trim()) return;
@@ -491,41 +524,91 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
 
             {/* Access Gating Notice (For Users/Trials without Live TV unlocked) */}
             {!canAccess && (
-                <div className="p-6 rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent text-amber-200 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
-                    <div className="flex items-start gap-3.5">
-                        <div className="p-2.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 shrink-0">
-                            <Lock className="h-5 w-5" />
-                        </div>
-                        <div>
-                            <h3 className="font-bold text-base text-amber-100">Live TV Access is Available Upon Request</h3>
-                            <p className="text-xs text-amber-300/80 mt-1 max-w-2xl">
-                                To protect upstream provider bandwidth and guarantee smooth streaming, Live TV access is allocated individually. You can preview the channel catalog below and request activation with 1 click.
-                            </p>
-                            {accessRequestMsg && (
-                                <p className="text-xs font-semibold text-emerald-400 mt-2 flex items-center gap-1.5">
-                                    <CheckCircle2 className="h-4 w-4" />
-                                    {accessRequestMsg}
+                initialData.userAccess.isPlexHomeFull && initialData.userAccess.jellyfinAvailable ? (
+                    <div className="p-6 rounded-2xl border border-purple-500/30 bg-gradient-to-r from-purple-500/15 via-purple-500/5 to-transparent text-purple-200 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
+                        <div className="flex items-start gap-3.5">
+                            <div className="p-2.5 rounded-xl bg-purple-500/20 border border-purple-500/40 text-purple-300 shrink-0">
+                                <Layers className="h-5 w-5" />
+                            </div>
+                            <div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <h3 className="font-bold text-base text-purple-100">
+                                        ⚡ Plex Home Slots Full ({initialData.userAccess.plexHomeTotalMembers || 14}/14) — Stream Instantly on Jellyfin!
+                                    </h3>
+                                    <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/40 text-[10px] font-bold">
+                                        Unlimited Viewer Slots
+                                    </Badge>
+                                </div>
+                                <p className="text-xs text-purple-300/80 mt-1 max-w-2xl leading-relaxed">
+                                    Plex limits shared tuner pools to 14 members, which are currently at capacity. However, DomsHomeLab also operates Jellyfin, which has <b>unlimited simultaneous Live TV slots</b> and direct audio/video passthrough for Apple TV, Roku, Fire TV, and mobile! Activate below to start streaming immediately.
                                 </p>
+                                {accessRequestMsg && (
+                                    <p className="text-xs font-semibold text-emerald-400 mt-2 flex items-center gap-1.5">
+                                        <CheckCircle2 className="h-4 w-4" />
+                                        {accessRequestMsg}
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap self-start md:self-center">
+                            <Button
+                                onClick={handleActivateJellyfin}
+                                disabled={isPending}
+                                className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-md whitespace-nowrap gap-1.5"
+                            >
+                                <Sparkles className="h-3.5 w-3.5" />
+                                Activate Instant Jellyfin Live TV
+                            </Button>
+                            {!hasPendingRequest && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleRequestAccess}
+                                    disabled={isPending}
+                                    className="text-xs border-purple-500/40 text-purple-300 hover:bg-purple-500/10 whitespace-nowrap"
+                                >
+                                    Plex Waitlist
+                                </Button>
                             )}
                         </div>
                     </div>
-                    <div>
-                        {hasPendingRequest ? (
-                            <Badge className="bg-amber-500/20 border-amber-500/40 text-amber-200 px-3 py-1.5 text-xs font-bold flex items-center gap-1.5">
-                                <Clock className="h-3.5 w-3.5 animate-spin" />
-                                Access Request Pending Review
-                            </Badge>
-                        ) : (
-                            <Button
-                                onClick={handleRequestAccess}
-                                disabled={isPending}
-                                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md whitespace-nowrap"
-                            >
-                                Request Live TV Access
-                            </Button>
-                        )}
+                ) : (
+                    <div className="p-6 rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent text-amber-200 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
+                        <div className="flex items-start gap-3.5">
+                            <div className="p-2.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 shrink-0">
+                                <Lock className="h-5 w-5" />
+                            </div>
+                            <div>
+                                <h3 className="font-bold text-base text-amber-100">Live TV Access is Available Upon Request</h3>
+                                <p className="text-xs text-amber-300/80 mt-1 max-w-2xl">
+                                    To protect upstream provider bandwidth and guarantee smooth streaming, Live TV access is allocated individually. You can preview the channel catalog below and request activation with 1 click.
+                                </p>
+                                {accessRequestMsg && (
+                                    <p className="text-xs font-semibold text-emerald-400 mt-2 flex items-center gap-1.5">
+                                        <CheckCircle2 className="h-4 w-4" />
+                                        {accessRequestMsg}
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                        <div>
+                            {hasPendingRequest ? (
+                                <Badge className="bg-amber-500/20 border-amber-500/40 text-amber-200 px-3 py-1.5 text-xs font-bold flex items-center gap-1.5">
+                                    <Clock className="h-3.5 w-3.5 animate-spin" />
+                                    Access Request Pending Review
+                                </Badge>
+                            ) : (
+                                <Button
+                                    onClick={handleRequestAccess}
+                                    disabled={isPending}
+                                    className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md whitespace-nowrap"
+                                >
+                                    Request Live TV Access
+                                </Button>
+                            )}
+                        </div>
                     </div>
-                </div>
+                )
             )}
 
             {/* User Location & Media Market Customization Bar */}
@@ -1022,6 +1105,17 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                             <p className="text-xs text-muted-foreground leading-relaxed">
                                 Open Plex on your Smart TV, Apple TV, Roku, Fire TV, or mobile device. Select <b className="text-foreground">Live TV & DVR</b> in the left navigation sidebar to view program guides, browse live channels, and start playback instantly.
                             </p>
+                            <div className="pt-2">
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => setShowPlexHomeGuide(true)}
+                                    className="h-7 text-xs border-amber-500/40 text-amber-300 hover:bg-amber-500/10 font-bold gap-1.5 rounded-lg"
+                                >
+                                    <Tv className="h-3.5 w-3.5" />
+                                    Plex Home Login & Setup Guide
+                                </Button>
+                            </div>
                         </div>
 
                         {/* Jellyfin Guide Card */}
@@ -1033,6 +1127,16 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                             <p className="text-xs text-muted-foreground leading-relaxed">
                                 Launch Jellyfin or Swiftfin on your streaming device. Click <b className="text-foreground">Live TV</b> from the home screen dashboard to view all active tuner feeds and watch live events with direct audio/video passthrough.
                             </p>
+                            <div className="pt-2 flex items-center gap-2">
+                                <Badge className="bg-purple-500/15 text-purple-300 border-purple-500/30 text-[10px] font-bold">
+                                    Unlimited Viewer Slots
+                                </Badge>
+                                {hasJellyfinState && (
+                                    <Badge className="bg-emerald-500/15 text-emerald-300 border-emerald-500/30 text-[10px] font-bold">
+                                        ✓ Live TV Active
+                                    </Badge>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1217,6 +1321,11 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                     </div>
                 </div>
             )}
+            {/* Plex Home User Login & Setup Guide Modal */}
+            <PlexHomeGuideModal
+                open={showPlexHomeGuide}
+                onOpenChange={setShowPlexHomeGuide}
+            />
         </div>
     );
 }

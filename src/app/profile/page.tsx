@@ -50,6 +50,7 @@ import {
     CheckSquare, Square, Plus, Edit2, AlertTriangle, Save, Music, Eye, EyeOff, Gamepad2, Link as LinkIcon, Headphones, Server
 } from "lucide-react";
 import { MediaServerSetupGuideModal } from "@/components/profile/media-server-setup-guide-modal";
+import { PlexHomeGuideModal } from "@/components/iptv/plex-home-guide-modal";
 import ServerSpeedTest from "@/components/server-speed-test";
 import FeatureGuideModal from "@/components/feature-guide-modal";
 import PlexSetupGuides from "@/components/plex-setup-guides";
@@ -177,6 +178,7 @@ export default function UserProfilePage() {
     const [userEnabledAddons, setUserEnabledAddons] = useState<string[]>([]);
     const [togglingAddonId, setTogglingAddonId] = useState<string | null>(null);
     const [addonGuideModalOpen, setAddonGuideModalOpen] = useState(false);
+    const [showLiveTvGuideModal, setShowLiveTvGuideModal] = useState(false);
     const [addonGuideType, setAddonGuideType] = useState<"JELLYFIN" | "EMBY">("JELLYFIN");
     const [addonMsg, setAddonMsg] = useState("");
     const [addonErr, setAddonErr] = useState("");
@@ -769,6 +771,9 @@ export default function UserProfilePage() {
                 if (enabled && (addonId === "jellyfin_access" || addonId === "emby_access")) {
                     setAddonGuideType(addonId === "jellyfin_access" ? "JELLYFIN" : "EMBY");
                     setAddonGuideModalOpen(true);
+                }
+                if (enabled && addonId === "iptv_livetv") {
+                    setShowLiveTvGuideModal(true);
                 }
                 if (addonId === "audiobooks") {
                     const [audioLibRes, libRes] = await Promise.all([
@@ -1851,6 +1856,17 @@ export default function UserProfilePage() {
                                                         setAddonGuideModalOpen(true);
                                                     }}
                                                     className="h-6 text-[10px] px-2 font-semibold gap-1 border-purple-500/40 text-purple-300 hover:bg-purple-500/10 cursor-pointer"
+                                                >
+                                                    📖 Setup Guide
+                                                </Button>
+                                            )}
+                                            {addon.id === "iptv_livetv" && (
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => setShowLiveTvGuideModal(true)}
+                                                    className="h-6 text-[10px] px-2 font-semibold gap-1 border-sky-500/40 text-sky-300 hover:bg-sky-500/10 cursor-pointer"
                                                 >
                                                     📖 Setup Guide
                                                 </Button>
@@ -3220,6 +3236,12 @@ export default function UserProfilePage() {
                         </Button>
                     </DialogFooter>
                 </DialogContent>
-            </Dialog></div>
+            </Dialog>
+
+            <PlexHomeGuideModal
+                open={showLiveTvGuideModal}
+                onOpenChange={setShowLiveTvGuideModal}
+            />
+        </div>
     );
 }

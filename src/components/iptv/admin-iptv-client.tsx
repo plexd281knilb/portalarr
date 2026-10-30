@@ -47,8 +47,10 @@ import {
     setPlexUserLiveTvPrivilegeAction,
     setPlexUserDvrPrivilegeAction,
     setJellyfinUserLiveTvAccessAction,
-    scanAndProvisionMarketChannelsAction
+    scanAndProvisionMarketChannelsAction,
+    activateJellyfinLiveTvAction
 } from "@/app/iptv-actions";
+import { PlexHomeGuideModal, PLEX_HOME_GUIDE_TEXT } from "@/components/iptv/plex-home-guide-modal";
 import { MEDIA_MARKETS } from "@/lib/iptv/market-locator";
 
 interface AdminIptvClientProps {
@@ -193,6 +195,27 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
     const [channelRequests, setChannelRequests] = useState(initialData.requests || []);
 
     const [copiedKey, setCopiedKey] = useState<string | null>(null);
+    const [showPlexHomeGuide, setShowPlexHomeGuide] = useState(false);
+    const [copiedGuide, setCopiedGuide] = useState(false);
+
+    const handleCopyPlexHomeGuide = () => {
+        navigator.clipboard.writeText(PLEX_HOME_GUIDE_TEXT);
+        setCopiedGuide(true);
+        setTimeout(() => setCopiedGuide(false), 2500);
+    };
+
+    const handleProvisionJellyfin = (approvalId: string, userId: string) => {
+        startTransition(async () => {
+            const res = await activateJellyfinLiveTvAction(userId);
+            if (res.success) {
+                setPendingApprovals(pendingApprovals.filter((a) => a.id !== approvalId));
+                setUsersList(usersList.map((u) => u.id === userId ? { ...u, hasJellyfinLiveTvAccess: true } : u));
+                showMsg("Provisioned user on Jellyfin with unlimited Live TV!");
+            } else {
+                showMsg(res.error || "Failed to provision Jellyfin", "error");
+            }
+        });
+    };
 
     const handleCopy = (text: string, id: string) => {
         navigator.clipboard.writeText(text);
@@ -1019,16 +1042,36 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                 </div>
                             </div>
 
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={handleRunEcosystemAudit}
-                                disabled={isPending}
-                                className="border-sky-500/30 text-sky-300 hover:bg-sky-500/10 text-xs font-bold gap-2 self-start md:self-auto rounded-xl"
-                            >
-                                <RefreshCw className={`h-3.5 w-3.5 ${isPending ? "animate-spin" : ""}`} />
-                                Audit Ecosystem
-                            </Button>
+                            <div className="flex items-center gap-2 flex-wrap self-start md:self-auto">
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => setShowPlexHomeGuide(true)}
+                                    className="border-amber-500/40 text-amber-300 hover:bg-amber-500/10 text-xs font-bold gap-1.5 rounded-xl"
+                                >
+                                    <Tv className="h-3.5 w-3.5" />
+                                    Plex Home Guide
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={handleCopyPlexHomeGuide}
+                                    className="border-border/50 text-muted-foreground hover:text-foreground text-xs font-bold gap-1.5 rounded-xl"
+                                >
+                                    {copiedGuide ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                                    {copiedGuide ? "✓ Copied" : "Copy for User"}
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={handleRunEcosystemAudit}
+                                    disabled={isPending}
+                                    className="border-sky-500/30 text-sky-300 hover:bg-sky-500/10 text-xs font-bold gap-2 rounded-xl"
+                                >
+                                    <RefreshCw className={`h-3.5 w-3.5 ${isPending ? "animate-spin" : ""}`} />
+                                    Audit Ecosystem
+                                </Button>
+                            </div>
                         </div>
 
                         {/* Capacity & Rotation Indicators */}
@@ -1088,6 +1131,26 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                             </div>
                         </div>
 
+                        {/* Plex Home Capacity Alert Banner */}
+                        {(auditReport?.plexHomeAvailableSlots ?? (14 - usersList.filter(u => u.isPlexHomeMember && u.role !== "ADMIN").length)) <= 0 && (
+                            <div className="p-4 rounded-xl border border-purple-500/30 bg-purple-500/10 flex items-start gap-3 text-xs">
+                                <div className="p-2 rounded-lg bg-purple-500/20 text-purple-300 shrink-0">
+                                    <Layers className="h-4 w-4" />
+                                </div>
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-bold text-purple-200">Plex Home is at Capacity (14/14 Member Slots Occupied)</span>
+                                        <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/40 text-[10px] font-bold">
+                                            Jellyfin Unlimited Mode
+                                        </Badge>
+                                    </div>
+                                    <p className="text-muted-foreground mt-0.5 leading-relaxed">
+                                        Plex caps shared tuner pools to 14 members. You can grant unlimited Live TV access using <b>&ldquo;⚡ Provision on Jellyfin&rdquo;</b> in pending requests below or by toggling <b>&ldquo;Jellyfin: OFF&rdquo;</b> without consuming a Plex Home slot.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
                         {/* Anomaly Callout Banner (If Plex Home members lack Live TV) */}
                         {auditReport && (auditReport.plexHomeMissingLiveTvCount ?? 0) > 0 && (
                             <div className="p-3.5 rounded-xl border border-rose-500/40 bg-rose-500/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-rose-200">
@@ -1127,8 +1190,17 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                         <div className="flex items-center gap-2">
                                             <Button
                                                 size="sm"
+                                                onClick={() => handleProvisionJellyfin(app.id, app.userId)}
+                                                disabled={isPending}
+                                                className="h-8 text-xs bg-purple-600 hover:bg-purple-500 text-white font-bold gap-1 rounded-xl"
+                                            >
+                                                <Sparkles className="h-3 w-3" />
+                                                Provision on Jellyfin
+                                            </Button>
+                                            <Button
+                                                size="sm"
                                                 onClick={() => handleResolveApproval(app.id, app.userId, true)}
-                                                className="h-8 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-bold"
+                                                className="h-8 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl"
                                             >
                                                 Approve
                                             </Button>
@@ -1533,7 +1605,12 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                         </form>
                     </div>
                 </div>
-            )}
+            )}            {/* Plex Home User Login & Setup Guide Modal */}
+            <PlexHomeGuideModal
+                open={showPlexHomeGuide}
+                onOpenChange={setShowPlexHomeGuide}
+                isAdminView={true}
+            />
         </div>
     );
 }

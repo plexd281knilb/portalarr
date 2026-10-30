@@ -342,6 +342,11 @@ async function runTestSuite() {
             throw new Error(`Expected audiobooks add-on in catalog, got: ${JSON.stringify(audiobooksAddon)}`);
         }
 
+        const liveTvAddon = defaultCatalog.find((a: any) => a.id === "iptv_livetv");
+        if (!liveTvAddon || liveTvAddon.icon !== "tv" || liveTvAddon.isFree !== true || liveTvAddon.isAvailable !== true) {
+            throw new Error(`Expected iptv_livetv in DEFAULT_ADDONS_CATALOG with isAvailable: true, got: ${JSON.stringify(liveTvAddon)}`);
+        }
+
         const legacyCombined = defaultCatalog.find((a: any) => a.id === "books_audiobooks");
         if (legacyCombined) {
             throw new Error("Legacy books_audiobooks should be split and not present in DEFAULT_ADDONS_CATALOG");
@@ -432,6 +437,20 @@ async function runTestSuite() {
             const priorityCatalogItem = availableRes.catalog.find((a: any) => a.id === "priority_requests");
             if (priorityCatalogItem && priorityCatalogItem.isAvailable !== false) {
                 throw new Error("priority_requests should be locked (isAvailable: false) in getAvailableAddonsAction");
+            }
+
+            // Test toggling iptv_livetv add-on in account settings
+            const { toggleFreeAddonAction } = await import("../src/app/actions");
+            const toggleRes = await toggleFreeAddonAction("iptv_livetv", true);
+            if (!toggleRes.success) {
+                throw new Error(`toggleFreeAddonAction for iptv_livetv failed: ${toggleRes.error}`);
+            }
+            if (!toggleRes.enabledAddons?.includes("iptv_livetv")) {
+                throw new Error("Expected enabledAddons to include iptv_livetv");
+            }
+            const updatedUser = await prisma.user.findUnique({ where: { id: testUser.id } });
+            if (!updatedUser?.hasPlexLiveTvAccess && !updatedUser?.hasJellyfinLiveTvAccess) {
+                throw new Error("User must have hasPlexLiveTvAccess or hasJellyfinLiveTvAccess granted upon enabling iptv_livetv add-on");
             }
         } finally {
             // Restore settings
@@ -2942,6 +2961,41 @@ async function runTestSuite() {
                 throw new Error("Expected iptvChannelRequest to contain AI Dispatcharr prompt in adminNotes");
             }
             await prisma.iptvChannelRequest.delete({ where: { id: dbMarketReq.id } }).catch(() => {});
+
+            // Test Suite 23.C: Plex Home Capacity Telemetry, Login Guides & Jellyfin Fallback Activation
+            process.env.PORTALARR_TEST_AUTH = "true";
+            process.env.PORTALARR_TEST_USER_ID = testUser.id;
+            const { getIptvCatalogAction, activateJellyfinLiveTvAction } = await import("../src/app/iptv-actions");
+            const { getPlexSetupGuides } = await import("../src/app/actions");
+
+            const catalogRes = await getIptvCatalogAction();
+            if (!catalogRes.success || !catalogRes.data) {
+                throw new Error("getIptvCatalogAction must succeed");
+            }
+            if (typeof catalogRes.data.userAccess.plexHomeMaxSlots !== "number" || catalogRes.data.userAccess.plexHomeMaxSlots !== 14) {
+                throw new Error(`Expected plexHomeMaxSlots to be 14, got ${catalogRes.data.userAccess.plexHomeMaxSlots}`);
+            }
+            if (typeof catalogRes.data.userAccess.isPlexHomeFull !== "boolean") {
+                throw new Error("isPlexHomeFull must be a boolean");
+            }
+
+            // Verify Plex Home Transition Guide in setup guides
+            const setupGuides = await getPlexSetupGuides();
+            const homeGuide = setupGuides.find((g: any) => g.id === "plexhome");
+            if (!homeGuide || !homeGuide.steps?.some((s: any) => s.title.includes("Plex Home"))) {
+                throw new Error("getPlexSetupGuides must include 'plexhome' guide with setup steps");
+            }
+
+            // Verify Jellyfin activation fallback
+            const jellyActivation = await activateJellyfinLiveTvAction(testUser.id);
+            if (!jellyActivation.success) {
+                throw new Error(`activateJellyfinLiveTvAction failed: ${jellyActivation.error}`);
+            }
+            const activatedUser = await prisma.user.findUnique({ where: { id: testUser.id } });
+            if (!activatedUser?.hasJellyfinLiveTvAccess) {
+                throw new Error("testUser must have hasJellyfinLiveTvAccess set to true after activation");
+            }
+            delete process.env.PORTALARR_TEST_USER_ID;
 
             // Test Suite 23.D: Plex Home Live TV vs DVR Differentiation & Trevor Scarborough Audit Safeguards
             await prisma.user.deleteMany({

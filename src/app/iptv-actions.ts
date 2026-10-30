@@ -744,6 +744,64 @@ export async function requestIptvAccessAction(input?: {
     }
 }
 
+/**
+ * Activates Live TV access for a user on Jellyfin (used as a capacity fallback when Plex Home
+ * is at its 14-member ceiling, or as a direct multi-platform streaming alternative with unlimited viewer slots).
+ */
+export async function activateJellyfinLiveTvAction(targetUserId?: string) {
+    try {
+        const sessionUser = await verifySessionUser();
+        let targetUser = sessionUser;
+        if (targetUserId && targetUserId !== sessionUser.id) {
+            await verifySessionAdmin();
+            const found = await prisma.user.findUnique({ where: { id: targetUserId } });
+            if (!found) return { success: false, error: "Target user not found" };
+            targetUser = found;
+        }
+
+        const res = await setJellyfinUserLiveTvAccess(targetUser.id, true);
+        if (!res.success) {
+            return { success: false, error: res.error || "Failed to activate Jellyfin Live TV" };
+        }
+
+        // Also mark user record as having Jellyfin Live TV access in SQLite
+        await prisma.user.update({
+            where: { id: targetUser.id },
+            data: { hasJellyfinLiveTvAccess: true }
+        });
+
+        // Resolve any pending IPTV_ACCESS_GRANT approvals for this user
+        await prisma.adminApproval.updateMany({
+            where: {
+                userId: targetUser.id,
+                type: "IPTV_ACCESS_GRANT",
+                status: "PENDING"
+            },
+            data: {
+                status: "APPROVED",
+                approvedBy: sessionUser.username,
+                approvedAt: new Date()
+            }
+        }).catch(() => {});
+
+        logger.addLog(
+            "INFO",
+            "SYSTEM",
+            `Activated Jellyfin Live TV for "${targetUser.username}" (servers updated: ${res.serversUpdated}).`
+        );
+
+        safeRevalidate("/channels");
+        safeRevalidate("/admin/iptv");
+        return {
+            success: true,
+            message: `Live TV activated on Jellyfin for ${targetUser.username}! You can now stream with unlimited viewer slots.`,
+            serversUpdated: res.serversUpdated
+        };
+    } catch (err: any) {
+        return { success: false, error: err?.message || "Failed to activate Jellyfin Live TV" };
+    }
+}
+
 export async function generateUserIptvTokenAction(label: string, profileSlug?: string) {
     try {
         const user = await verifySessionUser();
@@ -1154,16 +1212,51 @@ export async function getIptvCatalogAction(filters?: {
 
         const preferredMediaMarket = user.preferredMediaMarket || "dallas";
 
+        // Plex Home & Jellyfin Capacity Telemetry
+        const plexHomeTotalMembers = await prisma.user.count({
+            where: { isPlexHomeMember: true, role: { not: "ADMIN" } }
+        });
+        const iptvSettings = await getIptvSettings();
+        const plexHomeMaxSlots = iptvSettings.plexHomeMaxSlots || 14;
+        const plexHomeAvailableSlots = Math.max(0, plexHomeMaxSlots - plexHomeTotalMembers);
+        const isPlexHomeFull = plexHomeAvailableSlots <= 0;
+
+        const activeJellyfinServer = await prisma.mediaServer.findFirst({
+            where: { isActive: true, type: "JELLYFIN" }
+        });
+
+        let hasLiveTvAddon = false;
+        if (user.enabledAddons) {
+            try {
+                const parsedAddons = JSON.parse(user.enabledAddons);
+                if (Array.isArray(parsedAddons) && parsedAddons.includes("iptv_livetv")) {
+                    hasLiveTvAddon = true;
+                }
+            } catch {}
+        }
+
         return {
             success: true,
             data: {
                 userAccess: {
-                    canAccessIptv: isAdmin || Boolean(user.hasPlexLiveTvAccess || user.hasJellyfinLiveTvAccess || user.isPlexHomeMember),
+                    canAccessIptv: isAdmin || Boolean(hasLiveTvAddon || user.hasPlexLiveTvAccess || user.hasJellyfinLiveTvAccess || user.isPlexHomeMember),
                     maxConcurrentStreams: user.maxConcurrentIptvStreams ?? 1,
                     hasPendingAccessRequest: Boolean(pendingAccessRequest),
                     isAdmin,
+                    hasLiveTvAddon,
                     preferredMediaMarket,
-                    detectedMediaMarket: detectedMarket
+                    detectedMediaMarket: detectedMarket,
+                    // Plex Home & Jellyfin Capacity Telemetry
+                    plexHomeTotalMembers,
+                    plexHomeMaxSlots,
+                    plexHomeAvailableSlots,
+                    isPlexHomeFull,
+                    hasPlexLiveTvAccess: Boolean(user.hasPlexLiveTvAccess),
+                    hasPlexDvrAccess: Boolean(user.hasPlexDvrAccess),
+                    isPlexHomeMember: Boolean(user.isPlexHomeMember),
+                    hasJellyfinLiveTvAccess: Boolean(user.hasJellyfinLiveTvAccess),
+                    jellyfinAvailable: Boolean(activeJellyfinServer),
+                    jellyfinServerUrl: activeJellyfinServer?.url || null
                 },
                 availableMarkets: ORDERED_MARKETS,
                 profiles,
