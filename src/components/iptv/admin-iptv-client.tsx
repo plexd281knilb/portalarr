@@ -102,7 +102,8 @@ function mergeUsersWithAudit(users: any[], auditReport: any): any[] {
 
         const dvrGranted = Boolean(
             u.hasPlexDvrAccess ||
-            match?.allowDvr
+            match?.allowDvr ||
+            match?.allowTuners
         );
 
         const missingLiveTv = Boolean(isPlexHome && !isOwner && !liveTvGranted);
@@ -369,7 +370,13 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                 setUsersList(
                     usersList.map((u) =>
                         u.id === targetUserOrPlexId || u.plexHomeUserId === targetUserOrPlexId
-                            ? { ...u, hasPlexLiveTvAccess: !current, missingPlexLiveTvPrivilege: false }
+                            ? {
+                                ...u,
+                                hasPlexLiveTvAccess: !current,
+                                hasPlexDvrAccess: !current ? true : u.hasPlexDvrAccess,
+                                missingPlexLiveTvPrivilege: false,
+                                missingPlexDvrPrivilege: !current ? false : u.missingPlexDvrPrivilege
+                            }
                             : u
                     )
                 );

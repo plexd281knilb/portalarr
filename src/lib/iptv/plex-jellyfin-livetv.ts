@@ -496,13 +496,17 @@ export async function auditPlexHomeAndLiveTvPrivileges(): Promise<LiveTvEcosyste
 
                     let allowTuners = attrs.match(/\ballowTuners="([^"]*)"/i)?.[1] === "1";
                     let allowChannels = attrs.match(/\ballowChannels="([^"]*)"/i)?.[1] === "1";
-                    let allowDvr = attrs.match(/\ballowDvr="([^"]*)"/i)?.[1] === "1";
+                    // In Plex Web, "Allow Live TV and DVR access" is governed by allowTuners
+                    let allowDvr = attrs.match(/\ballowDvr="([^"]*)"/i)?.[1] === "1" || allowTuners;
 
                     if (inner) {
                         const srvMatches = inner.matchAll(/<Server\b([^>]*?)(?:\/>|>[\s\S]*?<\/Server>)/gi);
                         for (const sm of srvMatches) {
                             const sAttrs = sm[1] || "";
-                            if (sAttrs.match(/\ballowTuners="([^"]*)"/i)?.[1] === "1") allowTuners = true;
+                            if (sAttrs.match(/\ballowTuners="([^"]*)"/i)?.[1] === "1") {
+                                allowTuners = true;
+                                allowDvr = true;
+                            }
                             if (sAttrs.match(/\ballowChannels="([^"]*)"/i)?.[1] === "1") allowChannels = true;
                             if (sAttrs.match(/\ballowDvr="([^"]*)"/i)?.[1] === "1") allowDvr = true;
                         }
@@ -590,7 +594,10 @@ export async function auditPlexHomeAndLiveTvPrivileges(): Promise<LiveTvEcosyste
                             existing.allowChannels = true;
                             existing.allowDvr = true;
                         } else {
-                            if (huAllowTuners) existing.allowTuners = true;
+                            if (huAllowTuners) {
+                                existing.allowTuners = true;
+                                existing.allowDvr = true;
+                            }
                             if (huAllowChannels) existing.allowChannels = true;
                             if (huAllowDvr) existing.allowDvr = true;
                         }
@@ -605,7 +612,7 @@ export async function auditPlexHomeAndLiveTvPrivileges(): Promise<LiveTvEcosyste
                             isPlexHomeMember: true,
                             allowTuners: isAdmin ? true : huAllowTuners,
                             allowChannels: isAdmin ? true : huAllowChannels,
-                            allowDvr: isAdmin ? true : huAllowDvr
+                            allowDvr: isAdmin ? true : (huAllowDvr || huAllowTuners)
                         });
                     }
                 }
@@ -637,7 +644,10 @@ export async function auditPlexHomeAndLiveTvPrivileges(): Promise<LiveTvEcosyste
                         (uName && val.username.toLowerCase() === uName)
                     ) {
                         matched = true;
-                        if (shAllowTuners) val.allowTuners = true;
+                        if (shAllowTuners) {
+                            val.allowTuners = true;
+                            val.allowDvr = true;
+                        }
                         if (shAllowChannels) val.allowChannels = true;
                         if (shAllowDvr) val.allowDvr = true;
                     }
@@ -656,7 +666,7 @@ export async function auditPlexHomeAndLiveTvPrivileges(): Promise<LiveTvEcosyste
                         isPlexHomeMember: false,
                         allowTuners: shAllowTuners,
                         allowChannels: shAllowChannels,
-                        allowDvr: shAllowDvr
+                        allowDvr: shAllowDvr || shAllowTuners
                     });
                 }
             }
@@ -724,6 +734,7 @@ export async function auditPlexHomeAndLiveTvPrivileges(): Promise<LiveTvEcosyste
         const dvrGranted = Boolean(
             isOwner ||
             item.allowDvr ||
+            item.allowTuners ||
             matchedPortalUser?.hasPlexDvrAccess
         );
 
@@ -949,6 +960,7 @@ export async function setPlexUserLiveTvPrivilege(
             where: { id: portalUser.id },
             data: {
                 hasPlexLiveTvAccess: allow,
+                hasPlexDvrAccess: allow,
                 ...(plexUserId ? { plexHomeUserId: plexUserId } : {}),
                 ...(allow ? { canAccessIptv: true } : {})
             }
@@ -958,6 +970,7 @@ export async function setPlexUserLiveTvPrivilege(
             where: { plexHomeUserId: plexUserId },
             data: {
                 hasPlexLiveTvAccess: allow,
+                hasPlexDvrAccess: allow,
                 ...(allow ? { canAccessIptv: true } : {})
             }
         });
