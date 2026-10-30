@@ -14,6 +14,8 @@
 - **📖 Step-by-Step Device Setup Guides:** Tailored walkthroughs for Apple TV, Roku, Fire TV, Samsung & LG Smart TVs, Android TV, iOS, and Web players.
 - **⚡ Advanced Queue & Release Management (Super Users):** Advanced queue and release management for authorized power users to monitor downloads, inspect releases, and manage queue priorities.
 - **📬 Outbound Communications & Email Audit (Admin):** Complete outbound communications ledger tracking messages sent automatically by system workflows versus those vetted and approved via the Action Approval Queue.
+- **🔄 Background Scheduler Mutex & Automation Engine (Admin):** Concurrency timer mutex flags resolved in `prisma.ts` so automated hourly overlay scans and 6-hour Agregarr collection syncs execute smoothly on schedule without internal self-collision.
+- **🌐 Plex Server Connection Debouncing & Quiet Logging (Admin):** In-flight promise deduplication and throttled logging implemented in `plex.ts` to eliminate repetitive server connection resolution log bursts on dashboard load.
 
 ---
 
@@ -28,5 +30,3 @@
 - **📊 Personal Year-in-Review ("DomsHomeLab Wrapped"):** Interactive annual streaming recaps showcasing your top-watched genres, directors, actors, total hours streamed, and reading milestones.
 - **📱 Progressive Web App (PWA) Push Notifications:** Native mobile notifications when your requested movies, TV episodes, or Kindle books finish downloading.
 - **🔁 Cross-Device Watchlist & Reading Sync:** Unified watchlist across Movies, TV Series, Ebooks, and Audiobooks synced directly with your accounts.
-- **🔄 Background Scheduler Mutex & Automation Engine (Admin):** Resolve background scheduler timer concurrency flags so automated hourly overlay scans and 6-hour Agregarr collection syncs execute smoothly on schedule without internal self-collision.
-- **🌐 Plex Server Connection Debouncing & Quiet Logging (Admin):** Implement in-flight promise deduplication and throttled logging in `plex.ts` to eliminate repetitive server connection resolution log bursts on dashboard load.

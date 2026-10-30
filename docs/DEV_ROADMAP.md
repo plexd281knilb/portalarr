@@ -8,8 +8,8 @@ This document tracks prioritized backend fixes, scheduler alignment, and mainten
 
 ### 🔄 1. Self-Collision in Background Scheduler (Curation / Overlays)
 
-**Status:** Ready to Implement  
-**Impact:** Harmless skip of automated runs; manual triggers work normally.  
+**Status:** Completed (Fixed in v1.3.81)  
+**Impact:** Automated runs execute smoothly on schedule without internal self-collision.  
 **Target Files:**
 - [`src/lib/prisma.ts`](file:///C:/Users/kyraj/Documents/Github/portalarr/src/lib/prisma.ts#L2321) (lines 2321, 2350, 2379, 2408)
 - [`src/app/curation-actions.ts`](file:///C:/Users/kyraj/Documents/Github/portalarr/src/app/curation-actions.ts#L7483)
@@ -37,15 +37,15 @@ if ((global as any).__PORTALARR_OVERLAY_INC_RUNNING) {
 ```
 Because the caller already flipped the flag to `true`, the function immediately detects itself as "already running" and aborts before executing. The same pattern repeats for the Agregarr collection sync timer at line 2350 (`__PORTALARR_COLLECTION_SYNC_RUNNING`).
 
-#### Planned Fix
-Remove the premature `(global as any).__PORTALARR_... = true` assignments inside the timer callbacks in `src/lib/prisma.ts`, allowing the invoked internal functions (`runOverlayIncrementalSyncInternal`, etc.) to cleanly control their own mutex acquisition and release in their `try ... finally` blocks.
+#### Resolution Implemented
+Removed the premature `(global as any).__PORTALARR_... = true` assignments inside the timer callbacks in `src/lib/prisma.ts`. The outer lock is held by `setCurationTaskRunning`, allowing the invoked internal functions (`runOverlayIncrementalSyncInternal`, etc.) to cleanly control their own mutex acquisition and release in their `try ... finally` blocks.
 
 ---
 
 ### 🌐 2. Plex Server Isolation In-Flight Connection Resolution Debouncing
 
-**Status:** Ready to Implement  
-**Impact:** Harmless informational log volume; connections are 100% healthy.  
+**Status:** Completed (Fixed in v1.3.81)  
+**Impact:** Bursts of duplicate connection resolution logs eliminated; parallel queries share in-flight pings.  
 **Target Files:**
 - [`src/lib/plex.ts`](file:///C:/Users/kyraj/Documents/Github/portalarr/src/lib/plex.ts#L1169) (`resolveWorkingPlexServerConnection`)
 
