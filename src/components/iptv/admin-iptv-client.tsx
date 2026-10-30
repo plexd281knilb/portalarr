@@ -102,8 +102,7 @@ function mergeUsersWithAudit(users: any[], auditReport: any): any[] {
 
         const dvrGranted = Boolean(
             u.hasPlexDvrAccess ||
-            match?.allowDvr ||
-            match?.allowTuners
+            match?.allowDvr
         );
 
         const missingLiveTv = Boolean(isPlexHome && !isOwner && !liveTvGranted);
@@ -373,9 +372,9 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                             ? {
                                 ...u,
                                 hasPlexLiveTvAccess: !current,
-                                hasPlexDvrAccess: !current ? true : u.hasPlexDvrAccess,
-                                missingPlexLiveTvPrivilege: false,
-                                missingPlexDvrPrivilege: !current ? false : u.missingPlexDvrPrivilege
+                                hasPlexDvrAccess: !current ? u.hasPlexDvrAccess : false,
+                                missingPlexLiveTvPrivilege: !current ? false : true,
+                                missingPlexDvrPrivilege: !current ? u.missingPlexDvrPrivilege : true
                             }
                             : u
                     )
@@ -395,7 +394,13 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                 setUsersList(
                     usersList.map((u) =>
                         u.id === targetUserOrPlexId || u.plexHomeUserId === targetUserOrPlexId
-                            ? { ...u, hasPlexDvrAccess: !current, missingPlexDvrPrivilege: false }
+                            ? {
+                                ...u,
+                                hasPlexDvrAccess: !current,
+                                hasPlexLiveTvAccess: !current ? true : u.hasPlexLiveTvAccess,
+                                missingPlexDvrPrivilege: !current ? false : true,
+                                missingPlexLiveTvPrivilege: !current ? false : u.missingPlexLiveTvPrivilege
+                            }
                             : u
                     )
                 );
@@ -1173,20 +1178,20 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                                 )}
                                                 {u.isPlexHomeMember && !isOwner && (
                                                     u.hasPlexLiveTvAccess && u.hasPlexDvrAccess ? (
-                                                        <Badge className="text-[10px] bg-emerald-500/20 text-emerald-300 border-emerald-500/30 font-bold">
+                                                        <Badge className="text-[10px] bg-emerald-500/20 text-emerald-300 border-emerald-500/30 font-bold" title="Plex: Allow Live TV and DVR access">
                                                             Live TV + DVR
                                                         </Badge>
                                                     ) : u.hasPlexLiveTvAccess ? (
-                                                        <Badge className="text-[10px] bg-sky-500/20 text-sky-300 border-sky-500/30 font-bold">
-                                                            Live TV
+                                                        <Badge className="text-[10px] bg-sky-500/20 text-sky-300 border-sky-500/30 font-bold" title="Plex: Allow Live TV only">
+                                                            Live TV Only
                                                         </Badge>
                                                     ) : u.hasPlexDvrAccess ? (
                                                         <Badge className="text-[10px] bg-amber-500/20 text-amber-300 border-amber-500/30 font-bold">
                                                             DVR Only
                                                         </Badge>
                                                     ) : (
-                                                        <Badge className="text-[10px] bg-rose-500/20 text-rose-300 border-rose-500/30 font-bold">
-                                                            ⚠️ Missing Live TV
+                                                        <Badge className="text-[10px] bg-rose-500/20 text-rose-300 border-rose-500/30 font-bold" title="Plex: No Live TV and DVR access">
+                                                            ⚠️ Missing Live TV & DVR
                                                         </Badge>
                                                     )
                                                 )}
@@ -1235,6 +1240,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                                                         ? "bg-sky-600 hover:bg-sky-500 text-white"
                                                                         : "border-sky-500/40 text-sky-300 hover:bg-sky-500/10"
                                                                 }`}
+                                                                title={u.hasPlexLiveTvAccess ? "Revoke Live TV (sets Plex restriction to: No Live TV and DVR access)" : "Grant Live TV (sets Plex restriction to: Allow Live TV only)"}
                                                             >
                                                                 {u.hasPlexLiveTvAccess ? "Live TV: ON" : "Enable Live TV"}
                                                             </Button>
@@ -1249,6 +1255,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                                                         ? "bg-amber-600 hover:bg-amber-500 text-white"
                                                                         : "border-amber-500/40 text-amber-300 hover:bg-amber-500/10"
                                                                 }`}
+                                                                title={u.hasPlexDvrAccess ? "Revoke DVR privilege (sets Plex restriction to: Allow Live TV only)" : "Grant DVR recording privilege (sets Plex restriction to: Allow Live TV and DVR access)"}
                                                             >
                                                                 {u.hasPlexDvrAccess ? "DVR: ON" : "Enable DVR"}
                                                             </Button>

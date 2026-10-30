@@ -479,8 +479,8 @@ export async function getIptvUsersAccessAction() {
                     const isOwner = u.role === "ADMIN";
                     const isPlexHome = isOwner ? true : Boolean(u.isPlexHomeMember);
                     const hasPlexLiveTv = isOwner ? true : Boolean(u.hasPlexLiveTvAccess);
-                    // In Plex, "Allow Live TV and DVR access" grants both Live TV and DVR privileges
-                    const hasPlexDvr = isOwner ? true : Boolean(u.hasPlexDvrAccess || (u.isPlexHomeMember && u.hasPlexLiveTvAccess));
+                    // Plex 3-tier: 1. No Live TV & DVR | 2. Allow Live TV only | 3. Allow Live TV and DVR access
+                    const hasPlexDvr = isOwner ? true : Boolean(u.hasPlexDvrAccess);
                     const missingPlexLiveTvPrivilege = isPlexHome && !isOwner && !hasPlexLiveTv;
                     const missingPlexDvrPrivilege = isPlexHome && !isOwner && !hasPlexDvr;
 

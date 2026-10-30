@@ -496,17 +496,14 @@ export async function auditPlexHomeAndLiveTvPrivileges(): Promise<LiveTvEcosyste
 
                     let allowTuners = attrs.match(/\ballowTuners="([^"]*)"/i)?.[1] === "1";
                     let allowChannels = attrs.match(/\ballowChannels="([^"]*)"/i)?.[1] === "1";
-                    // In Plex Web, "Allow Live TV and DVR access" is governed by allowTuners
-                    let allowDvr = attrs.match(/\ballowDvr="([^"]*)"/i)?.[1] === "1" || allowTuners;
+                    // Plex 3-tier: 1. No Live TV & DVR | 2. Allow Live TV only | 3. Allow Live TV and DVR access
+                    let allowDvr = attrs.match(/\ballowDvr="([^"]*)"/i)?.[1] === "1";
 
                     if (inner) {
                         const srvMatches = inner.matchAll(/<Server\b([^>]*?)(?:\/>|>[\s\S]*?<\/Server>)/gi);
                         for (const sm of srvMatches) {
                             const sAttrs = sm[1] || "";
-                            if (sAttrs.match(/\ballowTuners="([^"]*)"/i)?.[1] === "1") {
-                                allowTuners = true;
-                                allowDvr = true;
-                            }
+                            if (sAttrs.match(/\ballowTuners="([^"]*)"/i)?.[1] === "1") allowTuners = true;
                             if (sAttrs.match(/\ballowChannels="([^"]*)"/i)?.[1] === "1") allowChannels = true;
                             if (sAttrs.match(/\ballowDvr="([^"]*)"/i)?.[1] === "1") allowDvr = true;
                         }
@@ -895,7 +892,7 @@ export async function setPlexUserLiveTvPrivilege(
         // 1. Update via canonical /api/friends/{plexUserId} endpoint (sets allowTuners & allowChannels)
         if (plexUserId && /^\d+$/.test(plexUserId)) {
             try {
-                const friendUrl = `https://plex.tv/api/friends/${encodeURIComponent(plexUserId)}?allowTuners=${flagVal}&allowChannels=${flagVal}&X-Plex-Token=${encodeURIComponent(adminToken)}`;
+                const friendUrl = `https://plex.tv/api/friends/${encodeURIComponent(plexUserId)}?allowTuners=${flagVal}&allowChannels=${flagVal}${!allow ? "&allowDvr=0" : ""}&X-Plex-Token=${encodeURIComponent(adminToken)}`;
                 const res = await fetch(friendUrl, {
                     method: "PUT",
                     headers: {
@@ -939,11 +936,13 @@ export async function setPlexUserLiveTvPrivilege(
                         server_id: sh.serverId,
                         shared_server: {
                             allowTuners: flagVal,
-                            allowChannels: flagVal
+                            allowChannels: flagVal,
+                            ...(!allow ? { allowDvr: "0" } : {})
                         },
                         sharing_settings: {
                             allowTuners: flagVal,
-                            allowChannels: flagVal
+                            allowChannels: flagVal,
+                            ...(!allow ? { allowDvr: "0" } : {})
                         }
                     })
                 }).catch(() => null);
@@ -960,7 +959,7 @@ export async function setPlexUserLiveTvPrivilege(
             where: { id: portalUser.id },
             data: {
                 hasPlexLiveTvAccess: allow,
-                hasPlexDvrAccess: allow,
+                ...(!allow ? { hasPlexDvrAccess: false } : {}),
                 ...(plexUserId ? { plexHomeUserId: plexUserId } : {}),
                 ...(allow ? { canAccessIptv: true } : {})
             }
@@ -970,7 +969,7 @@ export async function setPlexUserLiveTvPrivilege(
             where: { plexHomeUserId: plexUserId },
             data: {
                 hasPlexLiveTvAccess: allow,
-                hasPlexDvrAccess: allow,
+                ...(!allow ? { hasPlexDvrAccess: false } : {}),
                 ...(allow ? { canAccessIptv: true } : {})
             }
         });
@@ -1036,10 +1035,12 @@ export async function setPlexUserDvrPrivilege(
 
         const dvrVal = allow ? "1" : "0";
 
-        // 1. Update friend parameters
+        // 1. Update friend parameters (if enabling DVR, Plex requires tuner privilege)
         if (plexUserId && /^\d+$/.test(plexUserId)) {
             try {
-                const friendUrl = `https://plex.tv/api/friends/${encodeURIComponent(plexUserId)}?allowDvr=${dvrVal}&X-Plex-Token=${encodeURIComponent(adminToken)}`;
+                const friendUrl = allow
+                    ? `https://plex.tv/api/friends/${encodeURIComponent(plexUserId)}?allowDvr=1&allowTuners=1&allowChannels=1&X-Plex-Token=${encodeURIComponent(adminToken)}`
+                    : `https://plex.tv/api/friends/${encodeURIComponent(plexUserId)}?allowDvr=0&X-Plex-Token=${encodeURIComponent(adminToken)}`;
                 const res = await fetch(friendUrl, {
                     method: "PUT",
                     headers: {
@@ -1071,6 +1072,9 @@ export async function setPlexUserDvrPrivilege(
             for (const sh of matchingShares) {
                 if (!sh.id || !sh.serverId) continue;
                 const url = `https://plex.tv/api/servers/${encodeURIComponent(sh.serverId)}/shared_servers/${encodeURIComponent(String(sh.id))}`;
+                const payloadSettings = allow
+                    ? { allowDvr: "1", allowTuners: "1", allowChannels: "1" }
+                    : { allowDvr: "0" };
                 const putRes = await fetch(url, {
                     method: "PUT",
                     headers: {
@@ -1081,12 +1085,8 @@ export async function setPlexUserDvrPrivilege(
                     },
                     body: JSON.stringify({
                         server_id: sh.serverId,
-                        shared_server: {
-                            allowDvr: dvrVal
-                        },
-                        sharing_settings: {
-                            allowDvr: dvrVal
-                        }
+                        shared_server: payloadSettings,
+                        sharing_settings: payloadSettings
                     })
                 }).catch(() => null);
 
@@ -1102,6 +1102,7 @@ export async function setPlexUserDvrPrivilege(
             where: { id: portalUser.id },
             data: {
                 hasPlexDvrAccess: allow,
+                ...(allow ? { hasPlexLiveTvAccess: true, canAccessIptv: true } : {}),
                 ...(plexUserId ? { plexHomeUserId: plexUserId } : {})
             }
         });
@@ -1109,7 +1110,8 @@ export async function setPlexUserDvrPrivilege(
         await prisma.user.updateMany({
             where: { plexHomeUserId: plexUserId },
             data: {
-                hasPlexDvrAccess: allow
+                hasPlexDvrAccess: allow,
+                ...(allow ? { hasPlexLiveTvAccess: true, canAccessIptv: true } : {})
             }
         });
     }

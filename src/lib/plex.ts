@@ -1619,7 +1619,7 @@ export async function getPlexSharedServersList(adminToken: string): Promise<Plex
                     const allLibraries = sAttrs.match(/\ballLibraries="([^"]*)"/i)?.[1] === "1";
                     const allowTuners = sAttrs.match(/\ballowTuners="([^"]*)"/i)?.[1] === "1" || uAttrs.match(/\ballowTuners="([^"]*)"/i)?.[1] === "1";
                     const allowChannels = sAttrs.match(/\ballowChannels="([^"]*)"/i)?.[1] === "1" || uAttrs.match(/\ballowChannels="([^"]*)"/i)?.[1] === "1";
-                    const allowDvr = sAttrs.match(/\ballowDvr="([^"]*)"/i)?.[1] === "1" || uAttrs.match(/\ballowDvr="([^"]*)"/i)?.[1] === "1" || allowTuners;
+                    const allowDvr = sAttrs.match(/\ballowDvr="([^"]*)"/i)?.[1] === "1" || uAttrs.match(/\ballowDvr="([^"]*)"/i)?.[1] === "1";
                     const allowSync = sAttrs.match(/\ballowSync="([^"]*)"/i)?.[1] === "1" || uAttrs.match(/\ballowSync="([^"]*)"/i)?.[1] === "1";
 
                     const secIds: number[] = [];
