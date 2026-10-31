@@ -1368,6 +1368,35 @@ export function classifyChannelForProfile(name: string, tvgId: string): string[]
 }
 
 /**
+ * Performs a fetch request to Dispatcharr with automatic backoff and retry on HTTP 429 rate limiting.
+ */
+async function dispatcharrFetchWithRetry(
+    url: string,
+    options?: RequestInit,
+    maxRetries = 2
+): Promise<Response> {
+    let attempt = 0;
+    while (attempt <= maxRetries) {
+        try {
+            const res = await fetch(url, options);
+            if (res.status === 429 && attempt < maxRetries) {
+                const retryAfterHeader = res.headers.get("retry-after");
+                const waitMs = retryAfterHeader ? Math.min(Number(retryAfterHeader) * 1000, 3000) : (attempt + 1) * 1000;
+                await new Promise((resolve) => setTimeout(resolve, waitMs));
+                attempt++;
+                continue;
+            }
+            return res;
+        } catch (err) {
+            if (attempt >= maxRetries) throw err;
+            await new Promise((resolve) => setTimeout(resolve, (attempt + 1) * 500));
+            attempt++;
+        }
+    }
+    return fetch(url, options);
+}
+
+/**
  * Helper to run async tasks in concurrent batches.
  */
 async function runConcurrentBatches<T, R>(
@@ -1448,8 +1477,23 @@ export async function cleanupAndMergeDispatcharrChannels(): Promise<DispatcharrC
     };
 
     // 1. Fetch all profiles from Dispatcharr
-    const profRes = await fetch(`${baseUrl}/api/channels/profiles/`, { headers });
+    const profRes = await dispatcharrFetchWithRetry(`${baseUrl}/api/channels/profiles/`, { headers });
     if (!profRes.ok) {
+        if (profRes.status === 429) {
+            const localDups = await prisma.iptvChannel.findMany();
+            return {
+                success: true,
+                duplicateGroupsFound: 0,
+                channelsMerged: 0,
+                channelsDeleted: 0,
+                streamsConsolidated: 0,
+                profilesUpdated: 0,
+                survivingChannelsCount: localDups.length,
+                durationMs: Date.now() - startTime,
+                message: `Dispatcharr API rate limited (HTTP 429). Local channel catalog preserved (${localDups.length} channels).`,
+                sampleGroups: []
+            };
+        }
         return {
             success: false,
             duplicateGroupsFound: 0,
@@ -1471,8 +1515,23 @@ export async function cleanupAndMergeDispatcharrChannels(): Promise<DispatcharrC
     }
 
     // 2. Fetch all channels from Dispatcharr
-    const chanRes = await fetch(`${baseUrl}/api/channels/channels/?page_size=5000`, { headers });
+    const chanRes = await dispatcharrFetchWithRetry(`${baseUrl}/api/channels/channels/?page_size=5000`, { headers });
     if (!chanRes.ok) {
+        if (chanRes.status === 429) {
+            const localDups = await prisma.iptvChannel.findMany();
+            return {
+                success: true,
+                duplicateGroupsFound: 0,
+                channelsMerged: 0,
+                channelsDeleted: 0,
+                streamsConsolidated: 0,
+                profilesUpdated: 0,
+                survivingChannelsCount: localDups.length,
+                durationMs: Date.now() - startTime,
+                message: `Dispatcharr API rate limited (HTTP 429). Local channel catalog preserved (${localDups.length} channels).`,
+                sampleGroups: []
+            };
+        }
         return {
             success: false,
             duplicateGroupsFound: 0,

@@ -3136,6 +3136,7 @@ async function runTestSuite() {
             delete process.env.PORTALARR_TEST_USER_ID;
 
             // 3. Admin invocation: Deduplication engine execution
+            await new Promise((r) => setTimeout(r, 1000));
             const adminCleanupRes = await cleanupDispatcharrDuplicatesAction();
             if (!adminCleanupRes.success || !adminCleanupRes.data) {
                 throw new Error(`Expected admin cleanup to succeed, got: ${JSON.stringify(adminCleanupRes)}`);
