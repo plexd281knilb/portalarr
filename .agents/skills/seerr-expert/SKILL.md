@@ -74,6 +74,10 @@ Portalarr's native Seerr engine features deep per-episode monitoring synchroniza
   - Reconciles active requests (`PROCESSING`, `APPROVED`, `PENDING`) against the Plex library GUID index.
   - Queries `/api/v3/queue?page=1&pageSize=1000` on enabled Radarr and Sonarr instances to compute exact download progress percentages:
     $$\text{progress} = \max\left(1, \min\left(99, \text{round}\left(\frac{\text{size} - \text{sizeleft}}{\text{size}} \times 100\right)\right)\right)$$
+  - **Truthful Status Badge Semantics**: Requests in `PROCESSING`, `DOWNLOADING`, or `SEARCHING` are differentiated between active transfers vs monitored missing items:
+    - **Active Queue Transfer (`downloadProgress > 0`)**: Renders `Downloading • X%` in cyan with active progress bar and pulse icon.
+    - **Monitored Missing Release (`!downloadProgress || downloadProgress <= 0`)**: Renders `Looking for Media` and `Missing (Searching)` in amber with a search icon, avoiding misleading users into believing unavailable media is already transferring.
+    - **Queue Progress Cleanup**: Reconciles and resets `downloadProgress: null` whenever an item is no longer actively transferring in downloader queues.
   - Updates requests to `AVAILABLE` with `100%` progress when media is detected on PMS.
 
 ### 6. Kids Profile Isolation & Filtered Media Discovery

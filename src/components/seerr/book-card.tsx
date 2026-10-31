@@ -13,13 +13,14 @@ import {
     Download, 
     Plus, 
     Info, 
-    Bookmark 
+    Bookmark,
+    Search 
 } from "lucide-react";
 
 interface BookCardProps {
     item: BookDiscoveryItem;
     availability?: {
-        status: "AVAILABLE" | "REQUESTED" | "DOWNLOADING" | "NOT_AVAILABLE";
+        status: "AVAILABLE" | "REQUESTED" | "DOWNLOADING" | "SEARCHING" | "NOT_AVAILABLE";
         bookId?: string;
         requestId?: string;
         libraryName?: string;
@@ -51,6 +52,14 @@ export function BookCard({ item, availability, onSelect, onRequest, compact = fa
                 <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 text-[10px] font-bold backdrop-blur-md shadow-sm animate-pulse">
                     <Download className="h-3 w-3 shrink-0" />
                     <span>Downloading</span>
+                </div>
+            );
+        }
+        if (status === "SEARCHING") {
+            return (
+                <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-bold backdrop-blur-md shadow-sm">
+                    <Search className="h-3 w-3 shrink-0" />
+                    <span>Missing (Searching)</span>
                 </div>
             );
         }
