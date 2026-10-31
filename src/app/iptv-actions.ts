@@ -1411,18 +1411,20 @@ export async function requestMarketLocalChannelsAction(input: {
         let autoProvisioned = false;
         let provisionCount = 0;
         try {
-            const scanRes = await provisionMarketChannelsFromDispatcharr(input.marketSlug);
-            if (scanRes.success && scanRes.createdCount > 0) {
-                autoProvisioned = true;
-                provisionCount = scanRes.createdCount;
-                if (requestId) {
-                    await prisma.iptvChannelRequest.update({
-                        where: { id: requestId },
-                        data: {
-                            status: "ACTIVATED",
-                            adminNotes: `${aiPrompt}\n\n[AUTO-PROVISIONED]: Successfully linked ${provisionCount} streams in Dispatcharr: ${scanRes.matchedStreams.join(", ")}.`
-                        }
-                    });
+            if (process.env.PORTALARR_TEST !== "true" && process.env.NODE_ENV !== "test") {
+                const scanRes = await provisionMarketChannelsFromDispatcharr(input.marketSlug);
+                if (scanRes.success && scanRes.createdCount > 0) {
+                    autoProvisioned = true;
+                    provisionCount = scanRes.createdCount;
+                    if (requestId) {
+                        await prisma.iptvChannelRequest.update({
+                            where: { id: requestId },
+                            data: {
+                                status: "ACTIVATED",
+                                adminNotes: `${aiPrompt}\n\n[AUTO-PROVISIONED]: Successfully linked ${provisionCount} streams in Dispatcharr: ${scanRes.matchedStreams.join(", ")}.`
+                            }
+                        });
+                    }
                 }
             }
         } catch {}
