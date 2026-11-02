@@ -1055,7 +1055,7 @@ export const DEFAULT_EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
 <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px; margin: 20px 0;">
     <p style="margin: 0 0 6px 0; font-size: 15px;"><strong>Title:</strong> {title} ({releaseYear})</p>
     <p style="margin: 0 0 6px 0; font-size: 14px; color: #166534;"><strong>Format:</strong> {mediaLabel} • {quality}</p>
-    <p style="margin: 0; font-size: 13px; color: #475569;"><strong>Status:</strong> Queued & Downloading</p>
+    <p style="margin: 0; font-size: 13px; color: #475569;"><strong>Status:</strong> Approved & Searching for Release</p>
 </div>
 
 <p style="font-size: 13px; color: #64748b;">You will receive another notification as soon as the media is ready to stream on Plex!</p>`,

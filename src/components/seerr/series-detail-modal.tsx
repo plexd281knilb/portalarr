@@ -30,7 +30,8 @@ import {
     Sparkles, 
     Loader2, 
     Radio,
-    AlertCircle
+    AlertCircle,
+    Search
 } from "lucide-react";
 
 interface SeriesDetailModalProps {
@@ -336,6 +337,11 @@ export function SeriesDetailModal({
                                             <Badge className="bg-cyan-500/15 text-cyan-300 border-cyan-500/30 text-[10px] font-bold gap-1 animate-pulse">
                                                 <Download className="h-3 w-3" />
                                                 <span>Downloading</span>
+                                            </Badge>
+                                        ) : (vol.status === "SEARCHING" || vol.status === "PROCESSING") ? (
+                                            <Badge className="bg-amber-500/15 text-amber-300 border-amber-500/30 text-[10px] font-bold gap-1">
+                                                <Search className="h-3 w-3" />
+                                                <span>Missing (Searching)</span>
                                             </Badge>
                                         ) : vol.status === "REQUESTED" ? (
                                             <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30 text-[10px] font-bold gap-1">

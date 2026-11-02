@@ -1860,9 +1860,9 @@ export async function syncMediaRequestsQueueAndAvailabilityInternal(): Promise<{
             }
         }
 
-        // 2. Poll Radarr and Sonarr queues for remaining processing requests
+        // 2. Poll Radarr and Sonarr queues for remaining processing/downloading requests
         const remainingProcessing = await prisma.mediaRequest.findMany({
-            where: { status: "PROCESSING" }
+            where: { status: { in: ["PROCESSING", "DOWNLOADING", "SEARCHING", "APPROVED"] } }
         });
 
         if (remainingProcessing.length > 0) {
@@ -1872,6 +1872,8 @@ export async function syncMediaRequestsQueueAndAvailabilityInternal(): Promise<{
             const radarrApps = (radarrAppsRes.success && radarrAppsRes.data) ? radarrAppsRes.data : [];
             const sonarrApps = (sonarrAppsRes.success && sonarrAppsRes.data) ? sonarrAppsRes.data : [];
 
+            const activeDownloadingReqIds = new Set<string>();
+
             // Poll Radarr Queues
             for (const app of radarrApps) {
                 const queueRes = await arrApiGet(app, "/api/v3/queue?page=1&pageSize=1000");
@@ -1880,13 +1882,16 @@ export async function syncMediaRequestsQueueAndAvailabilityInternal(): Promise<{
                         const movieId = record.movieId;
                         const matchReq = remainingProcessing.find(r => r.mediaType === "movie" && r.servarrId === movieId);
                         if (matchReq) {
+                            activeDownloadingReqIds.add(matchReq.id);
                             const sizeleft = record.sizeleft || 0;
                             const size = record.size || 1;
                             const progress = Math.min(99, Math.max(1, Math.round(((size - sizeleft) / size) * 100)));
-                            await prisma.mediaRequest.update({
-                                where: { id: matchReq.id },
-                                data: { downloadProgress: progress }
-                            });
+                            if (matchReq.downloadProgress !== progress) {
+                                await prisma.mediaRequest.update({
+                                    where: { id: matchReq.id },
+                                    data: { downloadProgress: progress }
+                                });
+                            }
                         }
                     }
                 }
@@ -1900,15 +1905,28 @@ export async function syncMediaRequestsQueueAndAvailabilityInternal(): Promise<{
                         const seriesId = record.seriesId;
                         const matchReq = remainingProcessing.find(r => r.mediaType === "tv" && r.servarrId === seriesId);
                         if (matchReq) {
+                            activeDownloadingReqIds.add(matchReq.id);
                             const sizeleft = record.sizeleft || 0;
                             const size = record.size || 1;
                             const progress = Math.min(99, Math.max(1, Math.round(((size - sizeleft) / size) * 100)));
-                            await prisma.mediaRequest.update({
-                                where: { id: matchReq.id },
-                                data: { downloadProgress: progress }
-                            });
+                            if (matchReq.downloadProgress !== progress) {
+                                await prisma.mediaRequest.update({
+                                    where: { id: matchReq.id },
+                                    data: { downloadProgress: progress }
+                                });
+                            }
                         }
                     }
+                }
+            }
+
+            // Cleanly clear downloadProgress if item is no longer actively transferring in queues
+            for (const req of remainingProcessing) {
+                if (!activeDownloadingReqIds.has(req.id) && req.downloadProgress !== null) {
+                    await prisma.mediaRequest.update({
+                        where: { id: req.id },
+                        data: { downloadProgress: null }
+                    });
                 }
             }
         }

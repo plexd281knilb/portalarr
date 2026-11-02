@@ -686,7 +686,7 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                                                         publishYear: req.releaseYear || undefined,
                                                         mediaType: isAudiobook ? "audiobook" : "ebook",
                                                         availability: {
-                                                            status: (req.status === "AVAILABLE" || req.status === "Downloaded") ? "AVAILABLE" : (req.status === "PROCESSING" || req.status === "SEARCHING" || req.status === "DOWNLOADING") ? "DOWNLOADING" : "REQUESTED",
+                                                            status: (req.status === "AVAILABLE" || req.status === "Downloaded") ? "AVAILABLE" : (req.status === "PROCESSING" || req.status === "SEARCHING" || req.status === "DOWNLOADING") ? (req.downloadProgress && req.downloadProgress > 0 ? "DOWNLOADING" : "SEARCHING") : "REQUESTED",
                                                             requestId: req.id
                                                         }
                                                     });
@@ -770,7 +770,7 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                                                     publishYear: req.releaseYear || undefined,
                                                     mediaType: isAudiobook ? "audiobook" : "ebook",
                                                     availability: {
-                                                        status: (req.status === "AVAILABLE" || req.status === "Downloaded") ? "AVAILABLE" : (req.status === "PROCESSING" || req.status === "SEARCHING" || req.status === "DOWNLOADING") ? "DOWNLOADING" : "REQUESTED",
+                                                        status: (req.status === "AVAILABLE" || req.status === "Downloaded") ? "AVAILABLE" : (req.status === "PROCESSING" || req.status === "SEARCHING" || req.status === "DOWNLOADING") ? (req.downloadProgress && req.downloadProgress > 0 ? "DOWNLOADING" : "SEARCHING") : "REQUESTED",
                                                         requestId: req.id
                                                     }
                                                 });
@@ -805,24 +805,33 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                                             </span>
                                         )}
                                         {(req.status === "PROCESSING" || req.status === "SEARCHING" || req.status === "DOWNLOADING") && (
-                                            <div className="space-y-1 w-full min-w-0">
-                                                <div className="flex items-center justify-between text-[11px] font-bold text-cyan-300 gap-1.5 flex-wrap">
-                                                    <span className="flex items-center gap-1 shrink-0">
-                                                        <Download className="h-3.5 w-3.5 animate-pulse" /> Downloading
-                                                    </span>
-                                                    <span className="shrink-0 text-right font-mono text-[10px]">
-                                                        {req.downloadProgress ? `${Math.round(req.downloadProgress)}%` : "Queued"}
-                                                    </span>
-                                                </div>
-                                                {req.downloadProgress ? (
+                                            req.downloadProgress && req.downloadProgress > 0 ? (
+                                                <div className="space-y-1 w-full min-w-0">
+                                                    <div className="flex items-center justify-between text-[11px] font-bold text-cyan-300 gap-1.5 flex-wrap">
+                                                        <span className="flex items-center gap-1 shrink-0">
+                                                            <Download className="h-3.5 w-3.5 animate-pulse" /> Downloading
+                                                        </span>
+                                                        <span className="shrink-0 text-right font-mono text-[10px]">
+                                                            {Math.round(req.downloadProgress)}%
+                                                        </span>
+                                                    </div>
                                                     <div className="w-full h-1.5 bg-muted/40 rounded-full overflow-hidden">
                                                         <div 
                                                             className="h-full bg-cyan-400 rounded-full transition-all duration-300"
                                                             style={{ width: `${Math.min(100, Math.max(0, req.downloadProgress))}%` }}
                                                         />
                                                     </div>
-                                                ) : null}
-                                            </div>
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-center justify-between text-[11px] font-bold text-amber-400 gap-1.5 flex-wrap w-full min-w-0">
+                                                    <span className="flex items-center gap-1 shrink-0">
+                                                        <Search className="h-3.5 w-3.5 text-amber-400 animate-pulse" /> Looking for Media
+                                                    </span>
+                                                    <span className="shrink-0 text-right font-medium text-[10px] text-amber-300 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-md">
+                                                        Missing (Searching)
+                                                    </span>
+                                                </div>
+                                            )
                                         )}
                                         {req.status === "APPROVED" && (
                                             <span className="flex items-center gap-1 text-[11px] font-bold text-blue-400 shrink-0">

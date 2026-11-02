@@ -6,7 +6,7 @@ import { TmdbMediaItem, isNc17OrDisallowedRating } from "@/lib/curation/tmdb-typ
 import { MediaAvailabilityStatus } from "@/lib/seerr/availability";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Film, Tv, Star, CheckCircle2, Clock, Download, Plus, Info, AlertCircle } from "lucide-react";
+import { Film, Tv, Star, CheckCircle2, Clock, Download, Plus, Info, AlertCircle, Search } from "lucide-react";
 
 interface MediaCardProps {
     item: TmdbMediaItem;
@@ -72,10 +72,18 @@ export function MediaCard({ item, availability, onSelect, onRequest, compact = f
         }
         if (isRequested) {
             if (requestStatus === "PROCESSING" || requestStatus === "DOWNLOADING") {
+                if (downloadProgress && downloadProgress > 0) {
+                    return (
+                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 text-[10px] font-bold backdrop-blur-md shadow-sm animate-pulse">
+                            <Download className="h-3 w-3 shrink-0" />
+                            <span>Downloading {Math.round(downloadProgress)}%</span>
+                        </div>
+                    );
+                }
                 return (
-                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 text-[10px] font-bold backdrop-blur-md shadow-sm animate-pulse">
-                        <Download className="h-3 w-3 shrink-0" />
-                        <span>{downloadProgress ? `Downloading ${downloadProgress}%` : "Processing"}</span>
+                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-bold backdrop-blur-md shadow-sm">
+                        <Search className="h-3 w-3 shrink-0" />
+                        <span>Missing (Searching)</span>
                     </div>
                 );
             }
