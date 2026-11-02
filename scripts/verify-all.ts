@@ -315,6 +315,33 @@ async function runTestSuite() {
                 if (!redirectLocation || !redirectLocation.includes("returnTo=%2Frequests%3Ftab%3Dbooks%26query%3Ddune")) {
                     throw new Error(`Proxy failed to preserve returnTo parameter: ${redirectLocation}`);
                 }
+
+                // Security Audit: Prevent privilege escalation & Plex token hijacking via handlePlexCallback
+                const { handlePlexCallback } = await import("../src/app/auth-actions");
+                const { encryptData: testEncrypt } = await import("../src/lib/encryption");
+
+                // Ensure initial global settings has an admin token
+                const originalAdminTokenEnc = testEncrypt("initial_secure_admin_token_test");
+                await prisma.settings.upsert({
+                    where: { id: "global" },
+                    update: { mainPlexToken: originalAdminTokenEnc },
+                    create: { id: "global", mainPlexToken: originalAdminTokenEnc }
+                });
+
+                // 1. Regular existing user logging in via Plex must NEVER be promoted to ADMIN
+                const mockUserAuthToken = "mock_unprivileged_user_plex_token_xyz";
+                await handlePlexCallback(mockUserAuthToken, aliasUser.plexUsername!, aliasUser.plexEmail!, false);
+
+                const recheckedUser = await prisma.user.findUnique({ where: { id: aliasUser.id } });
+                if (recheckedUser?.role !== "USER") {
+                    throw new Error(`CRITICAL SECURITY BREACH: Regular user was escalated to role "${recheckedUser?.role}" via Plex login!`);
+                }
+
+                // 2. Regular user must NEVER overwrite settings.mainPlexToken
+                const recheckedSettings = await prisma.settings.findFirst({ where: { id: "global" } });
+                if (recheckedSettings?.mainPlexToken !== originalAdminTokenEnc) {
+                    throw new Error("CRITICAL SECURITY BREACH: settings.mainPlexToken was hijacked by regular user Plex login!");
+                }
             } finally {
                 await prisma.user.delete({ where: { id: aliasUser.id } }).catch(() => {});
             }

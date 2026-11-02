@@ -172,6 +172,12 @@ See detailed runbook: [tags-collections-and-hubs.md](./references/tags-collectio
     - **Direct PMS Session History Scan**: Accumulates watch hours across discovered PMS instances via `/status/sessions/history/all?sort=viewedAt:desc` without loop-scoped cutoff bugs.
     - **Local SQLite `WatchHistory` Fallback**: If Tautulli is offline, queries Prisma `WatchHistory` using exact and lowercased alias arrays (avoiding SQLite `mode: "insensitive"` crashes) to accurately aggregate watch hours, movies finished, and episodes watched.
 
+26. **Strict Plex Authentication & Admin Immunity Safeguards (`handlePlexCallback`)**:
+    - **Arbitrary Plex Resources Privilege Escalation Elimination**: Never query arbitrary Plex account resources (`/api/v2/resources`) to infer administrative privileges. Owning an arbitrary personal Plex Media Server (e.g. on a laptop, desktop, or test machine) MUST NEVER grant homelab administrator status or overwrite `settings.mainPlexToken`.
+    - **Immutable User Roles During Plex Login**: Existing user roles in `prisma.user` are strictly immutable during Plex login. Login callbacks must never alter `user.role` (`updateData.role` is strictly prohibited).
+    - **Auto-Provisioned User Defaults**: All auto-provisioned new users created via Plex login are strictly assigned `role: "USER"`, except during initial system setup when 0 administrators exist in the database.
+    - **Plex Admin Token Protection**: Global `settings.mainPlexToken` can only be updated/refreshed by verified existing `ADMIN` users who own a configured homelab server in `prisma.plexServer` or match the existing token owner identity. Regular users can never touch or overwrite `mainPlexToken`.
+
 ---
 
 ## 🚨 Mandatory Task Completion Protocol (Strict SemVer)

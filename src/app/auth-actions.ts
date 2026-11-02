@@ -5,7 +5,7 @@ import { cookies, headers } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 import { redirect } from "next/navigation";
 import { decryptData, encryptData } from "@/lib/encryption";
-import { getPlexServerFriends } from "@/lib/plex";
+import { getPlexServerFriends, getPlexOwnerUser } from "@/lib/plex";
 import prisma from "@/lib/prisma";
 
 import { getJwtSecret } from "@/lib/auth-secret";
@@ -304,29 +304,7 @@ export async function handlePlexCallback(authToken: string, rawUsername: string,
     return { error: "Plex account profile is missing email and username details." };
   }
 
-  // 2. Discover if logging-in account owns a Plex Media Server
-  let ownsPlexServer = false;
-  try {
-    const resRes = await fetch("https://plex.tv/api/v2/resources?includeHttps=1&includeRelay=1", {
-      headers: {
-        "Accept": "application/json",
-        "X-Plex-Token": authToken,
-        "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
-      }
-    });
-    if (resRes.ok) {
-      const resources = await resRes.json();
-      if (Array.isArray(resources)) {
-        ownsPlexServer = resources.some((r: any) => 
-          r.provides && r.provides.includes("server") && (r.owned === true || r.owned === "1" || r.isOwner === true)
-        );
-      }
-    }
-  } catch (rErr) {
-    console.warn("[AUTH] Failed to fetch Plex resources for owner check:", rErr);
-  }
-
-  // 3. Find existing user in database
+  // 2. Discover user in database and determine admin status
   const allUsers = await prisma.user.findMany();
   let user = allUsers.find(
     (u) =>
@@ -338,34 +316,92 @@ export async function handlePlexCallback(authToken: string, rawUsername: string,
 
   const totalDbAdmins = allUsers.filter(u => u.role === "ADMIN").length;
   const isExistingAdmin = user?.role === "ADMIN";
-  const isFirstUserSetup = allUsers.length === 0 || totalDbAdmins === 0 || isSetupMode;
-  const isAdminOwner = ownsPlexServer || isExistingAdmin || isFirstUserSetup;
+  const isFirstUserSetup = (allUsers.length === 0 || totalDbAdmins === 0);
 
-  // 4. If Admin/Server Owner logs in, automatically save and refresh Admin Plex Token in settings!
-  if (isAdminOwner && authToken) {
+  // 3. Load effective admin token for friend verification and admin refresh
+  const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+  let adminToken = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
+  if (!adminToken) {
     try {
-      const encryptedToken = encryptData(authToken);
-      await prisma.settings.upsert({
-        where: { id: "global" },
-        update: { mainPlexToken: encryptedToken },
-        create: { id: "global", mainPlexToken: encryptedToken }
-      });
-      console.log(`[AUTH] Automatically saved/refreshed Admin Plex Token in settings for ${plexUsername || plexEmail}.`);
-    } catch (saveErr) {
-      console.error("[AUTH] Failed to auto-save Admin Plex Token:", saveErr);
+      const { resolveActivePlexAdminToken } = await import("@/lib/iptv/plex-jellyfin-livetv");
+      adminToken = await resolveActivePlexAdminToken();
+    } catch {}
+  }
+
+  // 4. Save/refresh Admin Plex Token ONLY for verified administrators who own the homelab or match the active token
+  if ((isFirstUserSetup || isExistingAdmin) && authToken) {
+    let canUpdateAdminToken = false;
+
+    if (isFirstUserSetup) {
+      canUpdateAdminToken = true;
+    } else if (isExistingAdmin) {
+      if (!adminToken) {
+        canUpdateAdminToken = true;
+      } else {
+        // Check if logging-in admin matches the existing token owner
+        try {
+          const ownerUser = await getPlexOwnerUser(adminToken);
+          if (ownerUser && (
+            (plexEmail && ownerUser.email && ownerUser.email.toLowerCase() === plexEmail) ||
+            (plexUsername && ownerUser.username && ownerUser.username.toLowerCase() === plexUsername.toLowerCase())
+          )) {
+            canUpdateAdminToken = true;
+          }
+        } catch {}
+
+        // Fallback: Check if logging-in admin owns any of the homelab's configured Plex servers
+        if (!canUpdateAdminToken) {
+          try {
+            const dbServers = await prisma.plexServer.findMany({ select: { clientIdentifier: true } });
+            const configuredClientIds = new Set(dbServers.map(s => s.clientIdentifier).filter(Boolean));
+            if (configuredClientIds.size > 0) {
+              const resRes = await fetch("https://plex.tv/api/v2/resources?includeHttps=1&includeRelay=1", {
+                headers: {
+                  "Accept": "application/json",
+                  "X-Plex-Token": authToken,
+                  "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app"
+                }
+              });
+              if (resRes.ok) {
+                const resources = await resRes.json();
+                if (Array.isArray(resources)) {
+                  const ownsHomelabServer = resources.some((r: any) =>
+                    r.provides && r.provides.includes("server") &&
+                    (r.owned === true || r.owned === "1" || r.isOwner === true) &&
+                    r.clientIdentifier && configuredClientIds.has(r.clientIdentifier)
+                  );
+                  if (ownsHomelabServer) {
+                    canUpdateAdminToken = true;
+                  }
+                }
+              }
+            }
+          } catch (rErr) {
+            console.warn("[AUTH] Failed to verify homelab server ownership for admin token refresh:", rErr);
+          }
+        }
+      }
+    }
+
+    if (canUpdateAdminToken) {
+      try {
+        const encryptedToken = encryptData(authToken);
+        await prisma.settings.upsert({
+          where: { id: "global" },
+          update: { mainPlexToken: encryptedToken },
+          create: { id: "global", mainPlexToken: encryptedToken }
+        });
+        adminToken = authToken;
+        console.log(`[AUTH] Automatically saved/refreshed Admin Plex Token in settings for admin ${plexUsername || plexEmail}.`);
+      } catch (saveErr) {
+        console.error("[AUTH] Failed to auto-save Admin Plex Token:", saveErr);
+      }
     }
   }
 
-  // Load effective admin token for friend verification
-  const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-  let adminToken = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
-  if (!adminToken && authToken && isAdminOwner) {
-    adminToken = authToken;
-  }
-
-  // Check if logging-in user is a verified Plex Friend across all endpoints
+  // 5. Check if logging-in user is a verified Plex Friend across all endpoints
   let isFriend = false;
-  if (!isAdminOwner && adminToken) {
+  if (!isExistingAdmin && !isFirstUserSetup && adminToken) {
     try {
       const serverFriends = await getPlexServerFriends(adminToken);
       isFriend = serverFriends.some((f) => 
@@ -377,7 +413,7 @@ export async function handlePlexCallback(authToken: string, rawUsername: string,
     }
   }
 
-  // 5. If user already exists in DB:
+  // 6. If user already exists in DB:
   if (user) {
     console.log(`[AUTH] Existing user matched: ${user.username} (${user.id}) status=${user.status} role=${user.role}`);
 
@@ -385,12 +421,15 @@ export async function handlePlexCallback(authToken: string, rawUsername: string,
     if (plexEmail && user.plexEmail !== plexEmail) updateData.plexEmail = plexEmail;
     if (plexUsername && user.plexUsername !== plexUsername) updateData.plexUsername = plexUsername;
 
-    if (isAdminOwner) {
-      updateData.role = "ADMIN";
-      updateData.status = "APPROVED";
-    } else if (isFriend && (user.status === "PENDING" || user.status === "REJECTED")) {
+    // Auto-approve pending or rejected users if they are on the Plex friends list
+    if (isFriend && (user.status === "PENDING" || user.status === "REJECTED")) {
       updateData.status = "APPROVED";
     }
+
+    // CRITICAL SECURITY ENFORCEMENT:
+    // NEVER alter user.role during Plex login for existing users!
+    // A regular user, trial user, or super user must NEVER be promoted to ADMIN on login.
+    // Roles can ONLY be modified by an administrator in the Access Settings panel.
 
     if (Object.keys(updateData).length > 0) {
       user = await prisma.user.update({
@@ -400,17 +439,17 @@ export async function handlePlexCallback(authToken: string, rawUsername: string,
     }
 
     // Check account status
-    if (user.status === "REJECTED" && !isAdminOwner && !isFriend) {
+    if (user.status === "REJECTED" && !isExistingAdmin && !isFriend) {
       return { error: "Your account request was declined by the administrator." };
     }
-    if (user.status === "PENDING" && !isAdminOwner && !isFriend) {
+    if (user.status === "PENDING" && !isExistingAdmin && !isFriend) {
       return { error: "Your account is currently pending administrator approval." };
     }
     if (user.status === "SUSPENDED" || user.status === "EXPIRED") {
       // Allow them into the portal so proxy/client displays access renewal or suspended state
     }
 
-    if (isAdminOwner) {
+    if (isExistingAdmin) {
       import("./actions").then(({ syncPlexFriendsInternal }) => {
         syncPlexFriendsInternal().catch(e => console.error("[AUTH] Post-login Plex sync error:", e));
       });
@@ -420,8 +459,8 @@ export async function handlePlexCallback(authToken: string, rawUsername: string,
     return { success: true };
   }
 
-  // 6. New User: Must be Plex Server Owner or verified Friend to auto-provision
-  if (!isAdminOwner && !isFriend) {
+  // 7. New User: Must be verified Friend to auto-provision (unless first system setup)
+  if (!isFirstUserSetup && !isFriend) {
     console.warn(`[AUTH] BLOCKED: ${plexUsername || plexEmail} is not on the shared Plex friends list.`);
     return { error: "Access Denied. You are not on the shared Plex friends list. If you are requesting access to ebooks & audiobooks, please create an account on the Register tab." };
   }
@@ -447,7 +486,8 @@ export async function handlePlexCallback(authToken: string, rawUsername: string,
   const randomPassword = Math.random().toString(36).slice(-16) + "Plex!1";
   const hashedPassword = await hash(randomPassword, 10);
 
-  const role = isAdminOwner ? "ADMIN" : "USER";
+  // New users are ALWAYS "USER" unless it's the very first system setup
+  const role = isFirstUserSetup ? "ADMIN" : "USER";
   const status = "APPROVED";
 
   user = await prisma.user.create({
@@ -464,8 +504,8 @@ export async function handlePlexCallback(authToken: string, rawUsername: string,
 
   console.log(`[AUTH] Successfully auto-provisioned Plex user: ${user.username} (${user.role})`);
 
-  // Trigger background Plex friends sync if owner logged in
-  if (isAdminOwner) {
+  // Trigger background Plex friends sync if first setup admin logged in
+  if (isFirstUserSetup) {
     import("./actions").then(({ syncPlexFriendsInternal }) => {
       syncPlexFriendsInternal().catch(e => console.error("[AUTH] Post-login Plex sync error:", e));
     });
