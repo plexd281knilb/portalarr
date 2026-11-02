@@ -315,6 +315,17 @@ async function runTestSuite() {
                 if (!redirectLocation || !redirectLocation.includes("returnTo=%2Frequests%3Ftab%3Dbooks%26query%3Ddune")) {
                     throw new Error(`Proxy failed to preserve returnTo parameter: ${redirectLocation}`);
                 }
+
+                // Test Plex login privilege escalation immunity: regular user owning PMS cannot be promoted to ADMIN
+                const { handlePlexCallback } = await import("../src/app/auth-actions");
+                const callbackRes = await handlePlexCallback("mock_user_token_abc", `plexmaster_${testId}`, `plex_real_${testId}@gmail.com`);
+                if (!callbackRes.success) {
+                    throw new Error(`handlePlexCallback failed: ${JSON.stringify(callbackRes)}`);
+                }
+                const reloadedUser = await prisma.user.findUnique({ where: { id: aliasUser.id } });
+                if (reloadedUser?.role !== "USER") {
+                    throw new Error(`Security breach: regular user was promoted to ${reloadedUser?.role} on Plex login!`);
+                }
             } finally {
                 await prisma.user.delete({ where: { id: aliasUser.id } }).catch(() => {});
             }

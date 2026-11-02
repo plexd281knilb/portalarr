@@ -143,7 +143,12 @@ See detailed runbook: [tags-collections-and-hubs.md](./references/tags-collectio
     - **Direct Plex Media Server History Scan**: Accumulates watch time (ms) and counts across all discovered PMS instances without loop-scoped cutoff bugs.
     - **Local SQLite `WatchHistory` Fallback**: If Tautulli is offline or unconfigured, queries Prisma `WatchHistory` using exact and lowercased alias arrays (avoiding SQLite `mode: "insensitive"` crashes) to accurately aggregate watch hours, movies finished, and episodes watched.
 
-23. **Mandatory 4-Step Verification & Delivery Protocol (Strict SemVer)**:
+24. **Strict Plex Authentication & Admin Immunity Safeguards (`handlePlexCallback`)**:
+    - **No Role Escalation on PMS Ownership**: A logging-in Plex account owning an external or personal Plex Media Server (e.g. `Josh's MacBook Pro`) must NEVER elevate `user.role` to `ADMIN`. Existing user roles are immutable on login and can only be modified by a verified administrator in Access Control.
+    - **Safe Token Refreshing**: Standard users cannot overwrite `prisma.settings.mainPlexToken`. Auto-saving or refreshing admin tokens is strictly restricted to verified pre-existing administrators whose identity matches the current token owner profile or whose owned servers match a configured homelab instance in `prisma.plexServer`.
+    - **Zero-Admins First Setup Only**: Auto-provisioning an account with `ADMIN` privileges is strictly restricted to the initial first-time system setup when zero administrators exist in the database (`totalDbAdmins === 0`). All subsequent auto-provisioned Plex accounts strictly receive `role: "USER"`.
+
+25. **Mandatory 4-Step Verification & Delivery Protocol (Strict SemVer)**:
     - Step 1: `cmd /c "npm test"` (18+ suites, 100% pass, 0 failures).
     - Step 2: `cmd /c "npm run build"` (Next.js production build, 0 TS errors, 100% clean).
     - Step 3: Skills & Documentation Sync.
