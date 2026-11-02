@@ -61,10 +61,11 @@ Portalarr's native Seerr engine features deep per-episode monitoring synchroniza
 
 ### 4. Multi-Channel Notification Engine (Discord Webhooks & HTML Emails)
 - **Discord Webhook Cards**: Dispatches embed cards for `PENDING`, `AUTO_APPROVED`, `APPROVED`, `DECLINED`, `AVAILABLE`, and `FAILED` events. Embeds feature poster artwork, format badges (🎬 Movie, 📺 TV Series, 📖 Book, 🎧 Audiobook), author credits, requester username, season counts, and direct action links.
-- **Rich HTML Emails & Auto-Approved Admin Routing**:
-  - Automatically notifies all `ADMIN` and `SUPER_USER` accounts on **both** `PENDING` (needs manual review) and `AUTO_APPROVED` (automatically approved and queued) request events.
-  - Formats movie & TV show requests via `seerr_request_new_admin` and book/audiobook requests via `media_request_admin`.
-  - Sends user transactional status confirmations (`seerr_request_auto_approved`, `seerr_request_approved`, `seerr_request_available`).
+- **Rich HTML Emails & Auto-Approval Quota Protection**:
+  - **Auto-Approved Email Suppression**: To protect SMTP/Resend daily quotas (e.g. 100 emails/day) and eliminate inbox flooding, requests that are `AUTO_APPROVED` do NOT dispatch emails to administrators or users by default.
+  - **Admin Alerts Restricted to PENDING**: `seerrEmailNotifyAdminNewRequest` alerts (`seerr_request_new_admin`, `media_request_admin`) are strictly reserved for requests with status `PENDING` that require manual review and approval by an administrator.
+  - **User Notifications on High-Value Milestones**: Users receive emails when their requested media is actually available and ready to stream (`seerr_request_available`, `media_ready`), or when a pending request is manually approved or declined by an administrator. Transactional `seerr_request_auto_approved` emails default to `false`.
+  - **Discord Webhook Continuity**: Discord webhooks continue to post rich embed cards for all request milestones (including `AUTO_APPROVED`), allowing communities to track requests in real time with zero email quota consumption.
   - Sets `bypassApproval: true` on administrative alerts and user transactional status updates to prevent request notifications from being trapped in the `AdminApproval` queue.
   - Automatically logs diagnostic warnings to Live System Logs (`logger.addLog("WARN", "EMAIL", ...)`) whenever SMTP credentials (`smtpHost`, `smtpUser`, `smtpPass`) or email delivery are unconfigured in Settings.
 

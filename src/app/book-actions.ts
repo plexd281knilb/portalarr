@@ -442,7 +442,7 @@ export async function submitBookOrAudiobookRequestAction(input: BookRequestInput
         if (mediaReq?.id) {
             const { notifyMediaRequestEvent } = await import("@/lib/seerr/notifications");
             notifyMediaRequestEvent(autoApprove ? "AUTO_APPROVED" : "PENDING", mediaReq.id).catch(() => {});
-        } else {
+        } else if (!autoApprove) {
             const { sendRequestNotificationToAdmins } = await import("./actions");
             sendRequestNotificationToAdmins({
                 title,

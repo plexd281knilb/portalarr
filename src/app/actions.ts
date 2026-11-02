@@ -11546,7 +11546,7 @@ export async function sendRequestApprovalNotification(requestIdOrBook: any) {
 export async function sendRequestCompletionNotification(requestIdOrBook: any, matchedBook?: any) {
     try {
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-        if (!isEmailDeliveryConfigured(settings) || settings?.emailNotificationsEnabled === false || settings?.notifyMediaRequests === false) {
+        if (!isEmailDeliveryConfigured(settings) || settings?.emailNotificationsEnabled === false || settings?.notifyMediaRequests === false || settings?.seerrEmailNotifyAdminNewRequest === false) {
             return;
         }
 
@@ -11750,16 +11750,18 @@ export async function createBookRequest(formData: FormData) {
                     }
                 });
 
-                sendRequestNotificationToAdmins({
-                    title: `${finalTitle} (${mediaType === "audiobook" ? "Audiobook" : "Book"} Series)`,
-                    author: finalAuthor,
-                    requestedBy: targetUser,
-                    type: "series",
-                    mediaType,
-                    publishYear: finalYear || null
-                }).catch(err => {
-                    console.error(`[SMTP-NOTIFICATION] Series request email notification failed:`, err);
-                });
+                if (!isApproved) {
+                    sendRequestNotificationToAdmins({
+                        title: `${finalTitle} (${mediaType === "audiobook" ? "Audiobook" : "Book"} Series)`,
+                        author: finalAuthor,
+                        requestedBy: targetUser,
+                        type: "series",
+                        mediaType,
+                        publishYear: finalYear || null
+                    }).catch(err => {
+                        console.error(`[SMTP-NOTIFICATION] Series request email notification failed:`, err);
+                    });
+                }
                 revalidatePath("/library");
                 return { 
                     success: true, 
@@ -11831,16 +11833,18 @@ export async function createBookRequest(formData: FormData) {
             });
         }
 
-        sendRequestNotificationToAdmins({
-            title,
-            author,
-            requestedBy: targetUser,
-            type,
-            mediaType,
-            publishYear
-        }).catch(err => {
-            console.error(`[SMTP-NOTIFICATION] Email notification failed for request "${title}":`, err);
-        });
+        if (!isApproved) {
+            sendRequestNotificationToAdmins({
+                title,
+                author,
+                requestedBy: targetUser,
+                type,
+                mediaType,
+                publishYear
+            }).catch(err => {
+                console.error(`[SMTP-NOTIFICATION] Email notification failed for request "${title}":`, err);
+            });
+        }
 
         revalidatePath("/library");
         return { 

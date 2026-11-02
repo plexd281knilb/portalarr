@@ -109,7 +109,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
     const [discordNotifyFailed, setDiscordNotifyFailed] = useState(true);
 
     const [emailNotifyAdminNewRequest, setEmailNotifyAdminNewRequest] = useState(true);
-    const [emailNotifyUserAutoApproved, setEmailNotifyUserAutoApproved] = useState(true);
+    const [emailNotifyUserAutoApproved, setEmailNotifyUserAutoApproved] = useState(false);
     const [emailNotifyUserApproved, setEmailNotifyUserApproved] = useState(true);
     const [emailNotifyUserDeclined, setEmailNotifyUserDeclined] = useState(true);
     const [emailNotifyUserAvailable, setEmailNotifyUserAvailable] = useState(true);
@@ -343,7 +343,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                 setDiscordNotifyFailed(d.seerrDiscordNotifyFailed ?? true);
 
                 setEmailNotifyAdminNewRequest(d.seerrEmailNotifyAdminNewRequest ?? true);
-                setEmailNotifyUserAutoApproved(d.seerrEmailNotifyUserAutoApproved ?? true);
+                setEmailNotifyUserAutoApproved(d.seerrEmailNotifyUserAutoApproved ?? false);
                 setEmailNotifyUserApproved(d.seerrEmailNotifyUserApproved ?? true);
                 setEmailNotifyUserDeclined(d.seerrEmailNotifyUserDeclined ?? true);
                 setEmailNotifyUserAvailable(d.seerrEmailNotifyUserAvailable ?? true);
@@ -412,7 +412,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                     discordNotifyAvailable: d.seerrDiscordNotifyAvailable ?? true,
                     discordNotifyFailed: d.seerrDiscordNotifyFailed ?? true,
                     emailNotifyAdminNewRequest: d.seerrEmailNotifyAdminNewRequest ?? true,
-                    emailNotifyUserAutoApproved: d.seerrEmailNotifyUserAutoApproved ?? true,
+                    emailNotifyUserAutoApproved: d.seerrEmailNotifyUserAutoApproved ?? false,
                     emailNotifyUserApproved: d.seerrEmailNotifyUserApproved ?? true,
                     emailNotifyUserDeclined: d.seerrEmailNotifyUserDeclined ?? true,
                     emailNotifyUserAvailable: d.seerrEmailNotifyUserAvailable ?? true,

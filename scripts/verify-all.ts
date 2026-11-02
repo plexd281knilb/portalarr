@@ -736,6 +736,19 @@ async function runTestSuite() {
             throw new Error("Expected tv search to only return tv shows");
         }
 
+        // Auto-approved email suppression verification (quota preservation)
+        const { sendSeerrEmailNotification } = await import("../src/lib/seerr/notifications");
+        const autoApprovedRes = await sendSeerrEmailNotification("AUTO_APPROVED", {
+            id: testReq.id,
+            mediaType: "movie",
+            title: "Dune: Part Two",
+            requestedByUsername: "test_member",
+            status: "APPROVED"
+        });
+        if (!autoApprovedRes.success) {
+            throw new Error(`sendSeerrEmailNotification failed on AUTO_APPROVED: ${JSON.stringify(autoApprovedRes)}`);
+        }
+
         await prisma.mediaRequest.delete({ where: { id: testReq.id } });
     });
 

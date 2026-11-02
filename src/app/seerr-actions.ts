@@ -2032,7 +2032,7 @@ export async function getSeerrSettingsAction() {
 
                 // Seerr Email Notification Settings
                 seerrEmailNotifyAdminNewRequest: settings?.seerrEmailNotifyAdminNewRequest ?? true,
-                seerrEmailNotifyUserAutoApproved: settings?.seerrEmailNotifyUserAutoApproved ?? true,
+                seerrEmailNotifyUserAutoApproved: settings?.seerrEmailNotifyUserAutoApproved ?? false,
                 seerrEmailNotifyUserApproved: settings?.seerrEmailNotifyUserApproved ?? true,
                 seerrEmailNotifyUserDeclined: settings?.seerrEmailNotifyUserDeclined ?? true,
                 seerrEmailNotifyUserAvailable: settings?.seerrEmailNotifyUserAvailable ?? true,
