@@ -6109,10 +6109,11 @@ export async function syncUserPlexShareInternal(
         if (isTestUser) {
             return { success: true };
         }
+        let srvSections: any[] = [];
         let servers = knownServers;
         if (!servers || servers.length === 0) {
             const settings = await prisma.settings.findUnique({ where: { id: "global" } });
-            const srvSections = await getPlexServerLibrarySections(adminToken, settings?.mainPlexUrl || undefined);
+            srvSections = await getPlexServerLibrarySections(adminToken, settings?.mainPlexUrl || undefined);
             servers = srvSections.map(s => ({
                 name: s.serverName,
                 clientIdentifier: s.serverId,
@@ -6143,10 +6144,26 @@ export async function syncUserPlexShareInternal(
             } else {
                 const secId = parseInt(strKey, 10);
                 if (!isNaN(secId) && servers && servers.length > 0) {
-                    const primaryId = servers[0].clientIdentifier;
-                    const list = serverSectionsMap.get(primaryId) || [];
+                    // Intelligently assign bare section IDs to the true server that owns them, never arbitrarily to servers[0] (Kids Server)
+                    let matchedSrvId = "";
+                    if (srvSections && Array.isArray(srvSections)) {
+                        for (const s of srvSections) {
+                            if (s.sections && s.sections.some((sec) => sec.id === secId || String(sec.key) === strKey)) {
+                                matchedSrvId = s.serverId;
+                                break;
+                            }
+                        }
+                    }
+                    if (!matchedSrvId) {
+                        const mainSrv = servers.find((s) => {
+                            const nm = (s.name || "").toLowerCase();
+                            return !nm.includes("kid") && !nm.includes("backup");
+                        });
+                        matchedSrvId = mainSrv ? mainSrv.clientIdentifier : servers[0].clientIdentifier;
+                    }
+                    const list = serverSectionsMap.get(matchedSrvId) || [];
                     list.push(secId);
-                    serverSectionsMap.set(primaryId, list);
+                    serverSectionsMap.set(matchedSrvId, list);
                 }
             }
         }
@@ -8651,6 +8668,8 @@ export async function toggleFreeAddonAction(addonId: string, enabled: boolean) {
             data: { enabledAddons: JSON.stringify(enabledList) }
         });
 
+        logger.addLog("INFO", "SETTINGS", `User "${user.username}" ${enabled ? "enabled" : "disabled"} add-on "${targetAddon.name}".`);
+
         // Live Audiobooks Plex Library Sync
         if (addonId === "audiobooks") {
             try {
@@ -10914,12 +10933,44 @@ export async function syncAudiobooksPlexLibraryAccessForUser(userId: string, ena
         }
     });
 
+    const requireApproval = (settings?.requireApprovalForPlexChanges !== false) && dbUser.role !== "ADMIN";
+
     if (adminToken && discoveredAudiobookKeys.length > 0) {
-        try {
-            await syncUserPlexShareInternal(adminToken, updatedUser, currentSelected);
-            logger.addLog("INFO", "PLEX", `Synced live Audiobooks library access on Plex for "${dbUser.username}": ${enable ? "GRANTED" : "REVOKED"}`);
-        } catch (pErr) {
-            console.warn("[AUDIOBOOKS-PLEX-SYNC-WARN]:", pErr?.message || pErr);
+        if (requireApproval) {
+            const existing = await prisma.adminApproval.findFirst({
+                where: {
+                    userId: dbUser.id,
+                    type: "PLEX_ACCESS_GRANT",
+                    status: "PENDING"
+                }
+            });
+            if (!existing) {
+                const approval = await prisma.adminApproval.create({
+                    data: {
+                        type: "PLEX_ACCESS_GRANT",
+                        status: "PENDING",
+                        title: `Audiobooks Access Change: ${dbUser.username}`,
+                        description: `User ${enable ? "enabled" : "disabled"} Audiobooks add-on. Pending admin approval before updating live Plex shares.`,
+                        targetUser: dbUser.username,
+                        targetEmail: dbUser.email,
+                        userId: dbUser.id,
+                        payload: JSON.stringify({
+                            userId: dbUser.id,
+                            action: "SYNC_SHARE",
+                            selectedKeys: currentSelected
+                        })
+                    }
+                });
+                logger.addLog("INFO", "APPROVAL", `Audiobooks library preference for "${dbUser.username}" staged in Admin Approval Queue (ID: ${approval.id}).`);
+                notifyAdminsOnPendingApproval(approval).catch(e => console.warn("[APPROVAL-NOTIFY-ERROR]:", e?.message || e));
+            }
+        } else {
+            try {
+                await syncUserPlexShareInternal(adminToken, updatedUser, currentSelected);
+                logger.addLog("INFO", "PLEX", `Synced live Audiobooks library access on Plex for "${dbUser.username}": ${enable ? "GRANTED" : "REVOKED"}`);
+            } catch (pErr: any) {
+                console.warn("[AUDIOBOOKS-PLEX-SYNC-WARN]:", pErr?.message || pErr);
+            }
         }
     }
 
