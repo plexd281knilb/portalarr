@@ -10823,6 +10823,30 @@ export async function syncAudiobooksPlexLibraryAccessForUser(userId: string, ena
     let currentSelected = (dbUser.selectedPlexLibrarySectionIds || "").split(",").map(s => s.trim()).filter(Boolean);
     let currentAllowed = (dbUser.plexLibrarySectionIds || "").split(",").map(s => s.trim()).filter(Boolean);
 
+    // If user has not yet customized selected libraries, inherit from their allowed/existing libraries or default libraries
+    // so enabling/disabling audiobooks does not wipe out their access to Movies, TV Shows, and other Plex servers.
+    if (currentSelected.length === 0) {
+        if (currentAllowed.length > 0) {
+            currentSelected = [...currentAllowed];
+        } else if (settings?.defaultPlexLibraries) {
+            currentSelected = settings.defaultPlexLibraries.split(",").map(s => s.trim()).filter(Boolean);
+        } else if (adminToken) {
+            try {
+                const liveShares = await getPlexSharedServersList(adminToken);
+                const userShares = liveShares.filter(s => matchesPlexUser(dbUser, s));
+                for (const share of userShares) {
+                    if (share.serverId && share.librarySectionIds) {
+                        for (const secId of share.librarySectionIds) {
+                            currentSelected.push(`${share.serverId}:${secId}`);
+                        }
+                    }
+                }
+            } catch (sErr) {
+                console.warn("[AUDIOBOOKS-LIVE-SHARE-DISCOVERY-WARN]:", sErr);
+            }
+        }
+    }
+
     const discoveredAudiobookKeys: string[] = [];
     if (adminToken) {
         try {
@@ -10833,7 +10857,6 @@ export async function syncAudiobooksPlexLibraryAccessForUser(userId: string, ena
                     const isAudiobook = titleLower.includes("audiobook") || titleLower.includes("audio book") || (sec.type === "music" && titleLower.includes("audio"));
                     if (isAudiobook) {
                         discoveredAudiobookKeys.push(`${srv.serverId}:${sec.id}`);
-                        discoveredAudiobookKeys.push(String(sec.id));
                     }
                 }
             }
@@ -10848,30 +10871,38 @@ export async function syncAudiobooksPlexLibraryAccessForUser(userId: string, ena
             if (currentAllowed.length > 0 && !currentAllowed.includes(key)) currentAllowed.push(key);
         }
     } else {
-        currentSelected = currentSelected.filter(k => !discoveredAudiobookKeys.includes(k));
-        currentAllowed = currentAllowed.filter(k => !discoveredAudiobookKeys.includes(k));
+        currentSelected = currentSelected.filter(k => {
+            return !discoveredAudiobookKeys.includes(k) &&
+                   !discoveredAudiobookKeys.some(dk => dk === k || dk.endsWith(`:${k}`) || k.endsWith(`:${dk}`));
+        });
+        currentAllowed = currentAllowed.filter(k => {
+            return !discoveredAudiobookKeys.includes(k) &&
+                   !discoveredAudiobookKeys.some(dk => dk === k || dk.endsWith(`:${k}`) || k.endsWith(`:${dk}`));
+        });
     }
 
     const updatedSelectedStr = Array.from(new Set(currentSelected)).join(",");
     const updatedAllowedStr = currentAllowed.length > 0 ? Array.from(new Set(currentAllowed)).join(",") : dbUser.plexLibrarySectionIds;
 
-    let currentMediaLibs: string[] = [];
+    let updatedMediaLibraryKeys = dbUser.selectedMediaLibraryKeys;
     if (dbUser.selectedMediaLibraryKeys) {
+        let currentMediaLibs = [];
         try { currentMediaLibs = JSON.parse(dbUser.selectedMediaLibraryKeys); } catch {}
-    }
-    if (enable) {
-        for (const k of discoveredAudiobookKeys) {
-            if (k.includes(":")) {
-                const parts = k.split(":");
-                const mLibKey = `plex:${parts[0]}:${parts[1]}`;
-                if (!currentMediaLibs.includes(mLibKey)) currentMediaLibs.push(mLibKey);
+        if (enable) {
+            for (const k of discoveredAudiobookKeys) {
+                if (k.includes(":")) {
+                    const parts = k.split(":");
+                    const mLibKey = `plex:${parts[0]}:${parts[1]}`;
+                    if (!currentMediaLibs.includes(mLibKey)) currentMediaLibs.push(mLibKey);
+                }
             }
+        } else {
+            currentMediaLibs = currentMediaLibs.filter(k => {
+                const parts = k.split(":");
+                return !discoveredAudiobookKeys.includes(`${parts[1]}:${parts[2]}`) && !discoveredAudiobookKeys.some(dk => dk.endsWith(`:${parts[2]}`));
+            });
         }
-    } else {
-        currentMediaLibs = currentMediaLibs.filter(k => {
-            const parts = k.split(":");
-            return !discoveredAudiobookKeys.includes(parts[2]) && !discoveredAudiobookKeys.includes(`${parts[1]}:${parts[2]}`);
-        });
+        updatedMediaLibraryKeys = JSON.stringify(currentMediaLibs);
     }
 
     const updatedUser = await prisma.user.update({
@@ -10879,7 +10910,7 @@ export async function syncAudiobooksPlexLibraryAccessForUser(userId: string, ena
         data: {
             selectedPlexLibrarySectionIds: updatedSelectedStr,
             plexLibrarySectionIds: updatedAllowedStr,
-            selectedMediaLibraryKeys: currentMediaLibs.length > 0 ? JSON.stringify(currentMediaLibs) : dbUser.selectedMediaLibraryKeys
+            selectedMediaLibraryKeys: updatedMediaLibraryKeys
         }
     });
 
@@ -10887,7 +10918,7 @@ export async function syncAudiobooksPlexLibraryAccessForUser(userId: string, ena
         try {
             await syncUserPlexShareInternal(adminToken, updatedUser, currentSelected);
             logger.addLog("INFO", "PLEX", `Synced live Audiobooks library access on Plex for "${dbUser.username}": ${enable ? "GRANTED" : "REVOKED"}`);
-        } catch (pErr: any) {
+        } catch (pErr) {
             console.warn("[AUDIOBOOKS-PLEX-SYNC-WARN]:", pErr?.message || pErr);
         }
     }
