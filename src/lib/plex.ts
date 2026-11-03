@@ -2056,8 +2056,14 @@ export async function resolveServerSectionIds(
                 resolved.push(targetId);
             }
         } else {
-            if (inputId > 0 && !resolved.includes(inputId)) {
-                resolved.push(inputId);
+            // CRITICAL FIX: If cloud sections are known for this server, do NOT pass foreign section IDs
+            // that do not belong to this server! Passing foreign section IDs creates ghost/corrupted libraries on Plex (e.g. pushing Main Server audiobook ID to Kids Server).
+            if (!cloudSrv || !cloudSrv.sections || cloudSrv.sections.length === 0) {
+                if (inputId > 0 && !resolved.includes(inputId)) {
+                    resolved.push(inputId);
+                }
+            } else {
+                logger.addLog("WARN", "PLEX", `[SERVER-ISOLATION-GUARD] Dropped foreign section ID ${inputId} for server "${cloudSrv.serverName || serverId}" because it does not exist on this server.`);
             }
         }
     }
