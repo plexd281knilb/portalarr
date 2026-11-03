@@ -1446,7 +1446,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
         setLibSuccessMsg("");
         setLibErrMsg("");
 
-        const res = await updateUserPlexLibraries(libModalUser.id, normalizedKeys, activationType, customDateOrDays);
+        const res = await updateUserPlexLibraries(libModalUser.id, normalizedKeys, activationType, customDateOrDays, true);
         setSavingUserLibs(false);
         setShowActivationPrompt(false);
         if (res.success) {
