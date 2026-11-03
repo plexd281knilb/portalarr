@@ -2486,10 +2486,11 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                             if (isAdmin && serverLibraries && serverLibraries.length > 0) {
                                                 return serverLibraries.reduce((acc, srv) => acc + (srv.sections?.length || 0), 0);
                                             }
-                                            if (!user.plexLibrarySectionIds || !user.plexLibrarySectionIds.trim()) {
+                                            const plexSourceKeys = (user.plexLibrarySectionIds || user.selectedPlexLibrarySectionIds || "").trim();
+                                            if (!plexSourceKeys) {
                                                 return 0;
                                             }
-                                            const rawKeys = user.plexLibrarySectionIds.split(",").map((s: string) => s.trim()).filter(Boolean);
+                                            const rawKeys = plexSourceKeys.split(",").map((s: string) => s.trim()).filter(Boolean);
                                             if (rawKeys.length === 0) return 0;
                                             if (serverLibraries && serverLibraries.length > 0) {
                                                 let count = 0;
@@ -2505,8 +2506,14 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                             rawKeys.includes(rawKey) || 
                                                             (altRawKey && rawKeys.includes(altRawKey)) ||
                                                             rawKeys.some((k: string) => {
-                                                                const clean = k.includes(":") ? k.split(":")[1] : k;
-                                                                return clean === String(sec.id) || (sec.key && clean === String(sec.key));
+                                                                if (k.includes(":")) {
+                                                                    const [kSrv, kSec] = k.split(":");
+                                                                    const srvMatches = kSrv.toLowerCase() === srv.serverId.toLowerCase() || 
+                                                                                       (srv.serverName && kSrv.toLowerCase() === srv.serverName.toLowerCase());
+                                                                    if (!srvMatches) return false;
+                                                                    return kSec === String(sec.id) || (sec.key && kSec === String(sec.key));
+                                                                }
+                                                                return k === String(sec.id) || (sec.key && k === String(sec.key));
                                                             })
                                                         ) {
                                                             count++;
@@ -2515,7 +2522,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                 }
                                                 if (count > 0) return count;
                                             }
-                                            return new Set(rawKeys.map((k: string) => k.split(":").pop())).size;
+                                            return new Set(rawKeys).size;
                                         })();
 
                                         // Security leak: inactive account that still retains active shares on Plex
@@ -2558,8 +2565,14 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                             rawKeys.includes(rawKey) || 
                                                             (altRawKey && rawKeys.includes(altRawKey)) ||
                                                             rawKeys.some((k: string) => {
-                                                                const clean = k.includes(":") ? k.split(":")[1] : k;
-                                                                return clean === String(sec.id) || (sec.key && clean === String(sec.key));
+                                                                if (k.includes(":")) {
+                                                                    const [kSrv, kSec] = k.split(":");
+                                                                    const srvMatches = kSrv.toLowerCase() === srv.serverId.toLowerCase() || 
+                                                                                       (srv.serverName && kSrv.toLowerCase() === srv.serverName.toLowerCase());
+                                                                    if (!srvMatches) return false;
+                                                                    return kSec === String(sec.id) || (sec.key && kSec === String(sec.key));
+                                                                }
+                                                                return k === String(sec.id) || (sec.key && k === String(sec.key));
                                                             })
                                                         ) {
                                                             count++;
@@ -2569,7 +2582,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                 return count;
                                             }
 
-                                            return new Set(rawKeys.map((k: string) => k.split(":").pop())).size;
+                                            return new Set(rawKeys).size;
                                         })();
 
                                         return (

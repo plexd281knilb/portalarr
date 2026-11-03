@@ -3488,7 +3488,7 @@ export async function revokePlexAccessForUserInternal(
         if (user.id) {
             await prisma.user.update({
                 where: { id: user.id },
-                data: { plexLibrarySectionIds: "" }
+                data: { plexLibrarySectionIds: "", selectedPlexLibrarySectionIds: "" }
             }).catch(() => {});
         }
 
@@ -3696,7 +3696,8 @@ export async function expireDueTrialsAndSubscriptionsInternal() {
                     where: { id: u.id },
                     data: {
                         status: "EXPIRED",
-                        plexLibrarySectionIds: ""
+                        plexLibrarySectionIds: "",
+                        selectedPlexLibrarySectionIds: ""
                     }
                 });
 
@@ -3753,7 +3754,8 @@ export async function expireDueTrialsAndSubscriptionsInternal() {
                             where: { id: sub.id },
                             data: {
                                 status: "EXPIRED",
-                                plexLibrarySectionIds: ""
+                                plexLibrarySectionIds: "",
+                        selectedPlexLibrarySectionIds: ""
                             }
                         });
                         await revokePlexAccessForUserInternal(sub, "Parent account subscription has expired.");
@@ -4432,10 +4434,10 @@ export async function fetchUserPlexLibrariesAction(userId: string) {
         // If we found live keys on Plex, sync them to SQLite
         if (hasPlexShare) {
             const keysStr = selectedKeys.join(",");
-            if (user.plexLibrarySectionIds !== keysStr) {
+            if (user.plexLibrarySectionIds !== keysStr || user.selectedPlexLibrarySectionIds !== keysStr) {
                 await prisma.user.update({
                     where: { id: userId },
-                    data: { plexLibrarySectionIds: keysStr }
+                    data: { plexLibrarySectionIds: keysStr, selectedPlexLibrarySectionIds: keysStr }
                 });
             }
             return { 
@@ -4446,10 +4448,10 @@ export async function fetchUserPlexLibrariesAction(userId: string) {
             };
         } else {
             // User has 0 active shares on Plex: synchronize SQLite to empty string to prevent false counts
-            if (user.plexLibrarySectionIds) {
+            if (user.plexLibrarySectionIds || user.selectedPlexLibrarySectionIds) {
                 await prisma.user.update({
                     where: { id: userId },
-                    data: { plexLibrarySectionIds: "" }
+                    data: { plexLibrarySectionIds: "", selectedPlexLibrarySectionIds: "" }
                 });
             }
             return {
@@ -6418,7 +6420,7 @@ export async function restoreAllUsersPlexAccessAction() {
                     if (res.success) {
                         await prisma.user.update({
                             where: { id: user.id },
-                            data: { plexLibrarySectionIds: targetKeys.join(",") }
+                            data: { plexLibrarySectionIds: targetKeys.join(","), selectedPlexLibrarySectionIds: targetKeys.join(",") }
                         }).catch(() => {});
                         restoredCount++;
                     } else if (res.error) {
@@ -18492,12 +18494,13 @@ export async function syncPlexFriendsInternal() {
                             securityAlertUsers.push(existingUser.username);
                         }
                     }
-                    if (existingUser.plexLibrarySectionIds !== "") {
+                    if (existingUser.plexLibrarySectionIds !== "" || existingUser.selectedPlexLibrarySectionIds !== "") {
                         await prisma.user.update({
                             where: { id: existingUser.id },
-                            data: { plexLibrarySectionIds: "" }
+                            data: { plexLibrarySectionIds: "", selectedPlexLibrarySectionIds: "" }
                         }).catch(() => {});
                         existingUser.plexLibrarySectionIds = "";
+                        existingUser.selectedPlexLibrarySectionIds = "";
                     }
                     continue;
                 }
@@ -18544,9 +18547,11 @@ export async function syncPlexFriendsInternal() {
                 }
 
                 // Update live scanned library access from Plex (accurately syncing empty "" if 0 shares)
-                if ((existingUser.plexLibrarySectionIds || "") !== userLibraryKeyStr) {
+                if ((existingUser.plexLibrarySectionIds || "") !== userLibraryKeyStr || (existingUser.selectedPlexLibrarySectionIds || "") !== userLibraryKeyStr) {
                     updateData.plexLibrarySectionIds = userLibraryKeyStr;
+                    updateData.selectedPlexLibrarySectionIds = userLibraryKeyStr;
                     existingUser.plexLibrarySectionIds = userLibraryKeyStr;
+                    existingUser.selectedPlexLibrarySectionIds = userLibraryKeyStr;
                     needsUpdate = true;
                 }
 
@@ -18595,7 +18600,8 @@ export async function syncPlexFriendsInternal() {
                         status: "APPROVED",
                         plexEmail: fEmail || null,
                         plexUsername: fUsername || null,
-                        plexLibrarySectionIds: userLibraryKeyStr
+                        plexLibrarySectionIds: userLibraryKeyStr,
+                        selectedPlexLibrarySectionIds: userLibraryKeyStr
                     }
                 });
 
@@ -18632,22 +18638,24 @@ export async function syncPlexFriendsInternal() {
                         securityAlertUsers.push(u.username);
                     }
                 }
-                if (u.plexLibrarySectionIds !== "") {
+                if (u.plexLibrarySectionIds !== "" || u.selectedPlexLibrarySectionIds !== "") {
                     await prisma.user.update({
                         where: { id: u.id },
-                        data: { plexLibrarySectionIds: "" }
+                        data: { plexLibrarySectionIds: "", selectedPlexLibrarySectionIds: "" }
                     }).catch(() => {});
                     u.plexLibrarySectionIds = "";
+                    u.selectedPlexLibrarySectionIds = "";
                 }
                 continue;
             }
 
-            if (!isImmuneRole && (u.plexLibrarySectionIds || "") !== liveKeysStr) {
+            if (!isImmuneRole && ((u.plexLibrarySectionIds || "") !== liveKeysStr || (u.selectedPlexLibrarySectionIds || "") !== liveKeysStr)) {
                 await prisma.user.update({
                     where: { id: u.id },
-                    data: { plexLibrarySectionIds: liveKeysStr }
+                    data: { plexLibrarySectionIds: liveKeysStr, selectedPlexLibrarySectionIds: liveKeysStr }
                 }).catch(() => {});
                 u.plexLibrarySectionIds = liveKeysStr;
+                u.selectedPlexLibrarySectionIds = liveKeysStr;
                 updatedCount++;
             }
         }
