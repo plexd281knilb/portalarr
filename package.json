@@ -45,7 +45,7 @@
     "@types/react-dom": "^19",
     "@types/ws": "^8.5.14",
     "eslint": "^9",
-    "eslint-config-next": "16.2.10",
+    "eslint-config-next": "^16.1.6",
     "postcss": "^8",
     "prisma": "6.2.1",
     "tailwindcss": "^4.1.11",
