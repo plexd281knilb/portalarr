@@ -7,8 +7,7 @@ Portalarr is a centralized, self-hosted dashboard designed to manage a media ser
 ## 🏷️ Version Numbering & Strict SemVer Standard
 
 Portalarr adheres to strict Semantic Versioning (`MAJOR.MINOR.PATCH`):
-- **Released Baseline**: `v1.0.0` is the production milestone baseline release.
-- **Active Feature Release**: `v1.4.3` is the current active release.
+- **Active Feature Release**: `v1.4.4` is the production hotfix release on `stable`.
 - **Strict SemVer Policy**:
   - **PATCH increments (`1.3.22` ➔ `1.3.23`)**: Bug fixes, security patches, styling polish, telemetry adjustments, and non-breaking corrections.
   - **MINOR increments (`1.1.2` ➔ `1.2.0`)**: Backwards-compatible new features, new curation studios, new third-party integrations, or major enhancements.
@@ -400,3 +399,4 @@ The persistent volume ensures your `dev.db` file is maintained across updates, a
 - `src/components/sidebar.tsx`: Main navigation component.
 - `src/lib/encryption.ts`: AES-256-GCM encryption utilities.
 - `.github/workflows/docker-publish.yml`: GitHub Actions CI/CD workflow for automated Docker build and push to GHCR.
+
