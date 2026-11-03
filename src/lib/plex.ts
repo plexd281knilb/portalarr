@@ -223,9 +223,11 @@ export async function getPlexServerFriends(adminToken: string): Promise<PlexFrie
                     for (const m of matches) {
                         const attrs = m[1] || "";
                         const email = attrs.match(/\bemail="([^"]*)"/i)?.[1] || attrs.match(/\binvitedEmail="([^"]*)"/i)?.[1];
-                        const username = attrs.match(/\busername="([^"]*)"/i)?.[1];
+
                         const title = attrs.match(/\btitle="([^"]*)"/i)?.[1] || attrs.match(/\bname="([^"]*)"/i)?.[1];
+                        const username = attrs.match(/\busername="([^"]*)"/i)?.[1];
                         const userId = attrs.match(/\buserID="([^"]*)"/i)?.[1];
+
                         addFriend(email, username || title, userId, undefined, title);
                     }
                 }
