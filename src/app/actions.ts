@@ -4510,7 +4510,7 @@ export async function executePlexLibraryAccessUpdateInternal(
         const savedStr = Array.from(new Set(stringKeys)).join(",");
         await prisma.user.update({
             where: { id: userId },
-            data: { plexLibrarySectionIds: savedStr }
+            data: { plexLibrarySectionIds: savedStr, selectedPlexLibrarySectionIds: savedStr }
         });
 
         // If user is suspended/expired and admin chose KEEP_SUSPENDED (or no activation was provided):
@@ -5441,7 +5441,7 @@ export async function approveAdminApprovalAction(approvalId: string) {
                     if (rawKeys.length > 0) {
                         await prisma.user.update({
                             where: { id: targetUser.id },
-                            data: { plexLibrarySectionIds: rawKeys.join(",") }
+                            data: { plexLibrarySectionIds: rawKeys.join(","), selectedPlexLibrarySectionIds: rawKeys.join(",") }
                         }).catch(() => {});
                     }
                 }
