@@ -94,10 +94,10 @@ export async function login(formData: FormData) {
   let currentStatus = user.status;
   if (currentStatus === "TRIAL" && user.trialEndsAt && new Date(user.trialEndsAt) < now) {
     currentStatus = "EXPIRED";
-    await prisma.user.update({ where: { id: user.id }, data: { status: "EXPIRED", plexLibrarySectionIds: "" } }).catch(() => {});
+    await prisma.user.update({ where: { id: user.id }, data: { status: "EXPIRED", plexLibrarySectionIds: "", selectedPlexLibrarySectionIds: "" } }).catch(() => {});
   } else if (currentStatus === "APPROVED" && user.subscriptionEndsAt && new Date(user.subscriptionEndsAt) < now) {
     currentStatus = "EXPIRED";
-    await prisma.user.update({ where: { id: user.id }, data: { status: "EXPIRED", plexLibrarySectionIds: "" } }).catch(() => {});
+    await prisma.user.update({ where: { id: user.id }, data: { status: "EXPIRED", plexLibrarySectionIds: "", selectedPlexLibrarySectionIds: "" } }).catch(() => {});
     if (!user) return null;
 }
 
@@ -641,7 +641,7 @@ export async function getCurrentUser() {
     console.log(`[AUTH] Trial expired for ${user.username}. Updating status to EXPIRED and revoking Plex access.`);
     user = await prisma.user.update({
       where: { id: user.id },
-      data: { status: "EXPIRED", plexLibrarySectionIds: "" },
+      data: { status: "EXPIRED", plexLibrarySectionIds: "", selectedPlexLibrarySectionIds: "" },
       select: {
         id: true,
         username: true,
@@ -684,7 +684,7 @@ export async function getCurrentUser() {
     console.log(`[AUTH] Subscription expired for ${user.username}. Updating status to EXPIRED and revoking Plex access.`);
     user = await prisma.user.update({
       where: { id: user.id },
-      data: { status: "EXPIRED", plexLibrarySectionIds: "" },
+      data: { status: "EXPIRED", plexLibrarySectionIds: "", selectedPlexLibrarySectionIds: "" },
       select: {
         id: true,
         username: true,
