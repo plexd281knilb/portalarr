@@ -17,6 +17,7 @@
 - **🔄 Background Scheduler Mutex & Automation Engine (Admin):** Concurrency timer mutex flags resolved in `prisma.ts` so automated hourly overlay scans and 6-hour Agregarr collection syncs execute smoothly on schedule without internal self-collision.
 - **🌐 Plex Server Connection Debouncing & Quiet Logging (Admin):** In-flight promise deduplication and throttled logging implemented in `plex.ts` to eliminate repetitive server connection resolution log bursts on dashboard load.
 - **📬 Linked Inboxes & Family Email Routing:** Add alternate or secondary email addresses (such as a spouse, partner, or daily work inbox) with granular routing controls in Account Settings. Choose exactly which updates each inbox receives—such as routing subscription renewal notices to a spouse, sending movie/TV request availability alerts to the household, or directing server announcements to your primary daily email instead of your Plex account login.
+- **⏱️ System Schedules Matrix & Automation Hub (Admin):** Dedicated Schedules & Automation mission control in System Settings displaying real-time countdowns, exact next run timestamps, and 1-click manual triggers across all 13 background runners (Plex friends sync, book library scans, subscription renewal checks, payment scrapers, media request queues, poster overlays, collection curations, and smart Unraid maintenance protection).
 
 ---
 

@@ -44,6 +44,15 @@ export function formatScheduleLabel(scheduleKey: string): string {
     const match = SCHEDULE_OPTIONS.find(o => o.value === scheduleKey);
     if (match) return match.label;
     if (!scheduleKey) return "Every 6 Hours";
+    const minMatch = scheduleKey.match(/^(?:interval_|every_)?(\d+)(?:_minutes|_mins|_min|m)?$/);
+    if (minMatch) {
+        const mins = parseInt(minMatch[1], 10);
+        if (mins >= 60 && mins % 60 === 0) {
+            const hrs = mins / 60;
+            return `Every ${mins} Minutes (${hrs} ${hrs === 1 ? 'Hour' : 'Hours'})`;
+        }
+        return `Every ${mins} Minutes`;
+    }
     return scheduleKey
         .replace(/every_/g, "Every ")
         .replace(/daily_/g, "Daily at ")
@@ -102,7 +111,44 @@ export function calculateNextRunTime(
         const diffMins = Math.round(diffMs / (60 * 1000));
         const diffHrs = Math.floor(diffMins / 60);
         const remMins = diffMins % 60;
-        const relText = diffHrs > 0 ? `in ${diffHrs}h ${remMins}m` : `in ${diffMins} mins`;
+        const timeStr = nextDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        const relText = diffHrs > 0 ? `in ${diffHrs}h ${remMins}m (${timeStr})` : `in ${diffMins} mins (${timeStr})`;
+        return { nextRunDate: nextDate, relativeText: relText, isDue: false };
+    }
+
+    // 1b. Minute-based interval options (e.g. 15m, 60m, 360m, every_15m, 1m, 2m, 30m, or pure numbers)
+    let intervalMins: number | null = null;
+    const minMatch = s.match(/^(?:interval_|every_)?(\d+)(?:_minutes|_mins|_min|m)?$/);
+    if (minMatch && !intervalMap[s]) {
+        const parsed = parseInt(minMatch[1], 10);
+        if (!isNaN(parsed) && parsed > 0) {
+            intervalMins = parsed;
+        }
+    }
+
+    if (intervalMins !== null) {
+        const nextDate = lastRun 
+            ? new Date(lastRun.getTime() + intervalMins * 60 * 1000)
+            : new Date(now.getTime() + Math.min(intervalMins * 60 * 1000, 60 * 1000));
+
+        const diffMs = nextDate.getTime() - now.getTime();
+        if (diffMs <= 0) {
+            if (isPlexMaintenanceWindow(now)) {
+                return {
+                    nextRunDate: nextDate,
+                    relativeText: "Paused for Unraid Plex maintenance (resumes 5:30 AM)",
+                    isDue: false
+                };
+            }
+            return { nextRunDate: nextDate, relativeText: "Due on next scheduler tick", isDue: true };
+        }
+        const diffTotalMins = Math.round(diffMs / (60 * 1000));
+        const diffHrs = Math.floor(diffTotalMins / 60);
+        const remMins = diffTotalMins % 60;
+        const timeStr = nextDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        const relText = diffHrs > 0 
+            ? `in ${diffHrs}h ${remMins}m (${timeStr})` 
+            : `in ${diffTotalMins}m (${timeStr})`;
         return { nextRunDate: nextDate, relativeText: relText, isDue: false };
     }
 

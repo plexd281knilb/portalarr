@@ -35,7 +35,7 @@ import {
     Trash2, UserPlus, Shield, User, Send, Pencil, X, Loader2, 
     AlertTriangle, PlaySquare, Activity, Sliders, Megaphone, Beaker, 
     CheckCircle2, XCircle, MailCheck, RefreshCw, Mail, FolderCheck, 
-    Radio, ExternalLink, FileCode, Check, Bot, Sparkles, Key, Cpu, Eye, EyeOff, Terminal, Zap, Tv,
+    Radio, ExternalLink, FileCode, Check, Bot, Sparkles, Key, Cpu, Eye, EyeOff, Terminal, Zap, Tv, CalendarClock, Clock,
     Bell, BellOff, UserCheck, BookOpen, LifeBuoy, Save, RotateCcw, Star, Globe, Compass, MessageSquare, History, Search, Server, ArrowUpRight, Wrench
 } from "lucide-react";
 import { 
@@ -50,6 +50,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import AccessSettingsPage from "@/app/settings/access/page";
 import SystemLogsViewer from "@/components/system-logs-viewer";
+import { SystemSchedulesDashboard } from "@/components/system-schedules-dashboard";
 import EmailManagement from "@/components/email-management";
 import { SeerrSettingsPanel, SeerrSettingsPanelHandle } from "@/components/seerr/seerr-settings-panel";
 import DiscordSettingsPanel, { DiscordSettingsPanelHandle } from "@/components/discord/discord-settings-panel";
@@ -98,6 +99,7 @@ function SettingsPageContent() {
         if (!tabParam) return { hub: "general", subTab: subTabParam || "platform" };
         const t = tabParam.toLowerCase();
         if (t === "general" || t === "platform") return { hub: "general", subTab: subTabParam || "platform" };
+        if (t === "schedules" || t === "schedule" || t === "automation") return { hub: "general", subTab: "schedules" };
         if (t === "announcements" || t === "beta" || t === "roadmap") return { hub: "general", subTab: "announcements" };
         if (t === "logs") return { hub: "general", subTab: "logs" };
 
@@ -336,7 +338,8 @@ function SettingsPageContent() {
     const [saveAiMsg, setSaveAiMsg] = useState("");
     const [saveSmtpMsg, setSaveSmtpMsg] = useState("");
     const [savePlexMsg, setSavePlexMsg] = useState("");
-    const [saveAutomationMsg, setSaveAutomationMsg] = useState("");
+    const [saveDownloadsMsg, setSaveDownloadsMsg] = useState("");
+    const [saveScanIntervalMsg, setSaveScanIntervalMsg] = useState("");
     const [saveGoogleBooksMsg, setSaveGoogleBooksMsg] = useState("");
     const [syncingPlexFriends, setSyncingPlexFriends] = useState(false);
     const [syncPlexFriendsMsg, setSyncPlexFriendsMsg] = useState("");
@@ -416,10 +419,15 @@ function SettingsPageContent() {
         mainPlexTokenInput !== initialDataRef.current.mainPlexToken
     ) : false;
 
-    const isAutomationDirty = initialDataRef.current ? (
-        String(autoSyncIntervalInput) !== String(initialDataRef.current.autoSyncInterval) ||
+    const isDownloadsPathDirty = initialDataRef.current ? (
         inputDownloadsPath !== initialDataRef.current.downloadsPath
     ) : false;
+
+    const isAutoSyncIntervalDirty = initialDataRef.current ? (
+        String(autoSyncIntervalInput) !== String(initialDataRef.current.autoSyncInterval)
+    ) : false;
+
+    const isAutomationDirty = isDownloadsPathDirty || isAutoSyncIntervalDirty;
 
     const isGoogleBooksDirty = initialDataRef.current ? (
         googleBooksKey !== initialDataRef.current.googleBooksKey
@@ -460,7 +468,8 @@ function SettingsPageContent() {
     if (isSmtpDirty) unsavedSections.push("Global SMTP Settings");
     if (isPlexDirty) unsavedSections.push("Plex Server & Admin Token");
     if (isSnapshotPathDirty) unsavedSections.push(`Plex DB Snapshot Path (${targetSnapshotServer?.name || "Server"})`);
-    if (isAutomationDirty) unsavedSections.push("Automation & Directory Paths");
+    if (isDownloadsPathDirty) unsavedSections.push("Completed Downloads Path");
+    if (isAutoSyncIntervalDirty) unsavedSections.push("Library Auto-Scan Interval");
     if (isGoogleBooksDirty) unsavedSections.push("Google Books API Key");
     if (isCurationDirty) unsavedSections.push("Curation & Discovery API Keys");
     if (isAiDirty) unsavedSections.push("AI Metadata Agent");
@@ -1319,10 +1328,15 @@ function SettingsPageContent() {
                 promises.push(savePlexSettingsAction(formData));
             }
 
-            if (isAutomationDirty) {
+            if (isDownloadsPathDirty) {
+                const formData = new FormData();
+                formData.append("downloadsPath", inputDownloadsPath);
+                promises.push(saveJobSettings(formData));
+            }
+
+            if (isAutoSyncIntervalDirty) {
                 const formData = new FormData();
                 formData.append("autoSyncInterval", String(autoSyncIntervalInput));
-                formData.append("downloadsPath", inputDownloadsPath);
                 promises.push(saveJobSettings(formData));
             }
 
@@ -1610,8 +1624,23 @@ function SettingsPageContent() {
                             }`}
                         >
                             <Globe className="h-3.5 w-3.5" />
-                            <span>Web & Automation Paths</span>
-                            {(isAppUrlDirty || isAutomationDirty) && (
+                            <span>Web & Storage Paths</span>
+                            {(isAppUrlDirty || isDownloadsPathDirty) && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse ml-0.5" />
+                            )}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleSubTabChange("general", "schedules")}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                                hubSubTabs.general === "schedules"
+                                    ? "bg-orange-500/20 text-orange-400 border border-orange-500/40 shadow-xs"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05]"
+                            }`}
+                        >
+                            <CalendarClock className="h-3.5 w-3.5" />
+                            <span>Schedules & Automation</span>
+                            {isAutoSyncIntervalDirty && (
                                 <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse ml-0.5" />
                             )}
                         </button>
@@ -1820,17 +1849,17 @@ function SettingsPageContent() {
                     </Card>
 
                                                         <Card className={`bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
-                                isAutomationDirty ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" : ""
+                                isDownloadsPathDirty ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" : ""
                             }`}>
                                 <CardHeader>
                                     <div className="flex justify-between items-start">
                                         <div>
                                             <CardTitle className="flex items-center gap-2">
-                                                <FolderCheck className="h-5 w-5 text-primary" /> Automation & Directory Paths
+                                                <FolderCheck className="h-5 w-5 text-primary" /> Completed Downloads Directory
                                             </CardTitle>
-                                            <CardDescription>Configure scan intervals and inspect completed downloads path access.</CardDescription>
+                                            <CardDescription>Configure filesystem storage directory path and verify read, write, and delete permissions.</CardDescription>
                                         </div>
-                                        {isAutomationDirty && (
+                                        {isDownloadsPathDirty && (
                                             <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
                                                 ● Unsaved Changes
                                             </Badge>
@@ -1841,31 +1870,23 @@ function SettingsPageContent() {
                                     <form 
                                         onSubmit={async (e) => {
                                             e.preventDefault();
-                                            const formData = new FormData(e.currentTarget);
+                                            const formData = new FormData();
+                                            formData.append("downloadsPath", inputDownloadsPath);
                                             const res = await saveJobSettings(formData);
                                             if (res.success) {
-                                                setSaveAutomationMsg("Automation settings saved successfully!");
-                                                setTimeout(() => setSaveAutomationMsg(""), 4000);
+                                                setSaveDownloadsMsg("Completed downloads path saved successfully!");
+                                                setTimeout(() => setSaveDownloadsMsg(""), 4000);
                                                 loadAllData();
                                             }
                                         }} 
                                         className="space-y-4"
                                     >
-                                        {saveAutomationMsg && (
+                                        {saveDownloadsMsg && (
                                             <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
                                                 <CheckCircle2 className="h-4 w-4 shrink-0" />
-                                                <span>{saveAutomationMsg}</span>
+                                                <span>{saveDownloadsMsg}</span>
                                             </div>
                                         )}
-                                        <div className="space-y-2">
-                                            <Label>Library Auto-Scan Interval (Minutes)</Label>
-                                            <Input 
-                                                name="autoSyncInterval" 
-                                                type="number" 
-                                                value={autoSyncIntervalInput} 
-                                                onChange={(e) => setAutoSyncIntervalInput(e.target.value)} 
-                                            />
-                                        </div>
                                         <div className="space-y-3">
                                             <div className="flex justify-between items-center">
                                                 <Label>Completed Downloads Folder Path</Label>
@@ -1997,7 +2018,7 @@ function SettingsPageContent() {
                                             )}
                                         </div>
                                         <Button type="submit" variant="secondary" className="w-full font-semibold hover:ring-2 hover:ring-primary/30 active:scale-95 transition-all">
-                                            Save Automation Settings
+                                            Save Storage Path
                                         </Button>
                                     </form>
                                 </CardContent>
@@ -2032,6 +2053,107 @@ function SettingsPageContent() {
                                     <ArrowUpRight className="h-3.5 w-3.5" />
                                 </Button>
                             </div>
+                        </div>
+                    )}
+
+                                        {hubSubTabs.general === "schedules" && (
+                        <div className="space-y-6">
+                            {/* LIBRARY AUTO-SCAN & SYNC FREQUENCY CARD */}
+                            <Card className={`bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
+                                isAutoSyncIntervalDirty ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" : ""
+                            }`}>
+                                <CardHeader>
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <CardTitle className="flex items-center gap-2">
+                                                <RefreshCw className="h-5 w-5 text-indigo-400" /> Library Auto-Scan & Sync Frequency
+                                            </CardTitle>
+                                            <CardDescription>
+                                                Configure how frequently Portalarr scans filesystem storage for media updates and syncs live Plex friends.
+                                            </CardDescription>
+                                        </div>
+                                        {isAutoSyncIntervalDirty && (
+                                            <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
+                                                ● Unsaved Changes
+                                            </Badge>
+                                        )}
+                                    </div>
+                                </CardHeader>
+                                <CardContent>
+                                    <form 
+                                        onSubmit={async (e) => {
+                                            e.preventDefault();
+                                            const formData = new FormData();
+                                            formData.append("autoSyncInterval", String(autoSyncIntervalInput));
+                                            const res = await saveJobSettings(formData);
+                                            if (res.success) {
+                                                setSaveScanIntervalMsg("Auto-scan interval saved successfully!");
+                                                setTimeout(() => setSaveScanIntervalMsg(""), 4000);
+                                                loadAllData();
+                                            }
+                                        }} 
+                                        className="space-y-4"
+                                    >
+                                        {saveScanIntervalMsg && (
+                                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
+                                                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                                <span>{saveScanIntervalMsg}</span>
+                                            </div>
+                                        )}
+                                        <div className="space-y-3">
+                                            <div className="flex justify-between items-center">
+                                                <Label>Library Auto-Scan Interval (Minutes)</Label>
+                                                <div className="flex gap-1.5 flex-wrap">
+                                                    {[
+                                                        { value: "15", label: "15m" },
+                                                        { value: "30", label: "30m" },
+                                                        { value: "60", label: "60m (Default)" },
+                                                        { value: "120", label: "120m (2h)" },
+                                                        { value: "360", label: "360m (6h)" }
+                                                    ].map((preset) => (
+                                                        <Button
+                                                            key={preset.value}
+                                                            type="button"
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className={`h-6 px-2 text-[10px] font-mono border-muted/50 transition-all ${
+                                                                String(autoSyncIntervalInput) === preset.value
+                                                                    ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/50"
+                                                                    : "text-muted-foreground hover:text-indigo-300 hover:border-indigo-500/40"
+                                                            }`}
+                                                            onClick={() => setAutoSyncIntervalInput(preset.value)}
+                                                        >
+                                                            {preset.label}
+                                                        </Button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <Input 
+                                                name="autoSyncInterval" 
+                                                type="number" 
+                                                value={autoSyncIntervalInput} 
+                                                onChange={(e) => setAutoSyncIntervalInput(e.target.value)} 
+                                                placeholder="60"
+                                            />
+                                            <div className="p-3 rounded-lg bg-indigo-950/30 border border-indigo-900/40 text-[11px] text-slate-300 space-y-1">
+                                                <div className="font-semibold text-indigo-300 flex items-center gap-1.5">
+                                                    <Clock className="h-3.5 w-3.5 text-indigo-400" />
+                                                    Storage & Spinning Disk Best Practices
+                                                </div>
+                                                <p className="text-slate-400">
+                                                    If your Plex media files reside on spinning hard drives (e.g. Unraid array), a longer interval such as <strong>360 minutes (6 hours)</strong> prevents drive wake-ups and avoids spin-up delays during routine parity checks.
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <Button type="submit" variant="secondary" className="w-full font-semibold hover:ring-2 hover:ring-indigo-500/30 active:scale-95 transition-all">
+                                            Save Scan Frequency
+                                        </Button>
+                                    </form>
+                                </CardContent>
+                            </Card>
+
+                            {/* SYSTEM SCHEDULES DASHBOARD */}
+                            <SystemSchedulesDashboard />
                         </div>
                     )}
 

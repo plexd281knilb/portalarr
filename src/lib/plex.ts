@@ -227,6 +227,7 @@ export async function getPlexServerFriends(adminToken: string): Promise<PlexFrie
                         // Never accept the server name as the friend title (SharedServer name attribute is the server's name)
                         const title = (rawTitle && rawTitle !== srv.name && !/server/i.test(rawTitle)) ? rawTitle : undefined;
                         const userId = attrs.match(/\buserID="([^"]*)"/i)?.[1];
+                        const username = attrs.match(/\busername="([^"]*)"/i)?.[1];
                         addFriend(email, username || title, userId, undefined, title);
                     }
                 }
