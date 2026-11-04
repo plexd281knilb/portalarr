@@ -10,10 +10,10 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
+COPY prisma ./prisma
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --prefer-offline --no-audit
 
-COPY prisma ./prisma
 RUN ./node_modules/.bin/prisma generate
 
 # 2. Builder stage
