@@ -2153,7 +2153,7 @@ function SettingsPageContent() {
                             </Card>
 
                             {/* SYSTEM SCHEDULES DASHBOARD */}
-                            <SystemSchedulesDashboard />
+                            <SystemSchedulesDashboard onFrequencyUpdated={loadAllData} />
                         </div>
                     )}
 

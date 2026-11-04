@@ -23,18 +23,31 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { 
+    Select, 
+    SelectContent, 
+    SelectItem, 
+    SelectTrigger, 
+    SelectValue 
+} from "@/components/ui/select";
+import { 
     getSystemSchedulesStatusAction, 
     triggerManualScheduleRunAction, 
+    updateSystemScheduleFrequencyAction,
     type SystemScheduleItem 
 } from "@/app/schedule-actions";
 
 type CategoryFilter = "all" | "plex" | "curation" | "billing" | "requests" | "bookshelf" | "system";
 
-export function SystemSchedulesDashboard() {
+interface SystemSchedulesDashboardProps {
+    onFrequencyUpdated?: () => void;
+}
+
+export function SystemSchedulesDashboard({ onFrequencyUpdated }: SystemSchedulesDashboardProps = {}) {
     const [tasks, setTasks] = useState<SystemScheduleItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [runningTaskId, setRunningTaskId] = useState<string | null>(null);
+    const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null);
     const [actionMsg, setActionMsg] = useState<{ id: string; text: string; success: boolean } | null>(null);
     const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>("all");
     const [isMaintenanceWindow, setIsMaintenanceWindow] = useState(false);
@@ -86,6 +99,36 @@ export function SystemSchedulesDashboard() {
             setRunningTaskId(null);
             setTimeout(() => {
                 setActionMsg((prev) => (prev?.id === task.id ? null : prev));
+            }, 6000);
+        }
+    };
+
+    const handleFrequencyChange = async (taskId: string, newCadence: string) => {
+        setUpdatingTaskId(taskId);
+        setActionMsg(null);
+        try {
+            const res = await updateSystemScheduleFrequencyAction({ taskId, cadence: newCadence });
+            setActionMsg({
+                id: taskId,
+                text: res.message,
+                success: res.success
+            });
+            if (res.success) {
+                await loadSchedules();
+                if (onFrequencyUpdated) {
+                    onFrequencyUpdated();
+                }
+            }
+        } catch (err: any) {
+            setActionMsg({
+                id: taskId,
+                text: err.message || "Failed to update schedule frequency",
+                success: false
+            });
+        } finally {
+            setUpdatingTaskId(null);
+            setTimeout(() => {
+                setActionMsg((prev) => (prev?.id === taskId ? null : prev));
             }, 6000);
         }
     };
@@ -314,9 +357,43 @@ export function SystemSchedulesDashboard() {
                                                     <Badge variant="outline" className={`text-[10px] font-medium ${getCategoryBadgeClass(task.category)}`}>
                                                         {task.categoryLabel}
                                                     </Badge>
-                                                    <Badge variant="outline" className="text-[10px] font-mono bg-slate-900/60 border-slate-700/60 text-slate-300">
-                                                        ⏱️ {task.cadenceLabel}
-                                                    </Badge>
+                                                    {task.isConfigurable && task.availableFrequencies ? (
+                                                        <div className="inline-flex items-center gap-1.5">
+                                                            <Select
+                                                                value={task.currentFrequencyValue || task.cadence}
+                                                                onValueChange={(val) => handleFrequencyChange(task.id, val)}
+                                                                disabled={updatingTaskId === task.id}
+                                                            >
+                                                                <SelectTrigger className="h-6 text-[10px] font-mono bg-slate-900/90 border-slate-700/80 text-indigo-300 hover:border-indigo-500/50 hover:bg-slate-800/80 px-2 py-0 w-auto min-w-[130px] gap-1 focus:ring-1 focus:ring-indigo-500">
+                                                                    {updatingTaskId === task.id ? (
+                                                                        <Loader2 className="h-3 w-3 animate-spin text-indigo-400" />
+                                                                    ) : (
+                                                                        <Clock className="h-3 w-3 text-indigo-400 shrink-0" />
+                                                                    )}
+                                                                    <SelectValue />
+                                                                </SelectTrigger>
+                                                                <SelectContent position="popper" className="bg-slate-950 border-slate-800 text-slate-200 z-50">
+                                                                    {task.availableFrequencies.map((opt) => (
+                                                                        <SelectItem key={opt.value} value={opt.value} className="text-xs font-mono py-1.5 focus:bg-indigo-600/20 focus:text-indigo-200 cursor-pointer">
+                                                                            {opt.label}
+                                                                        </SelectItem>
+                                                                    ))}
+                                                                </SelectContent>
+                                                            </Select>
+                                                            <Badge variant="outline" className="text-[9px] font-mono uppercase bg-indigo-500/10 text-indigo-300 border-indigo-500/30 hidden sm:inline-flex">
+                                                                Editable
+                                                            </Badge>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="inline-flex items-center gap-1.5">
+                                                            <Badge variant="outline" className="text-[10px] font-mono bg-slate-900/60 border-slate-700/60 text-slate-300">
+                                                                ⏱️ {task.cadenceLabel}
+                                                            </Badge>
+                                                            <Badge variant="outline" className="text-[9px] font-mono uppercase bg-slate-800/40 text-slate-400 border-slate-700/30 hidden sm:inline-flex">
+                                                                Core Runner
+                                                            </Badge>
+                                                        </div>
+                                                    )}
                                                 </div>
                                                 <p className="text-xs text-muted-foreground line-clamp-2">
                                                     {task.description}
@@ -340,7 +417,7 @@ export function SystemSchedulesDashboard() {
                                                     </Badge>
                                                 ) : !task.enabled ? (
                                                     <Badge variant="outline" className="bg-slate-900/40 text-slate-400 border-slate-800 text-xs">
-                                                        Disabled in Studio
+                                                        Disabled
                                                     </Badge>
                                                 ) : task.isDue ? (
                                                     <Badge className="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-mono animate-pulse">

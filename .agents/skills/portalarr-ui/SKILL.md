@@ -33,7 +33,7 @@ Portalarr uses a **Modern Cinematic Dark Theme** powered by Tailwind CSS, Radix 
   Settings are consolidated into 5 high-level mission hubs, each organized with responsive sub-tab switchers, dirty-state indicators, and full backward-compatible routing:
   1. **General & Platform (`general`)**:
      - `platform`: Web & Storage Paths (Base URL, Webhook URL, Completed Downloads Directory, filesystem permissions matrix).
-     - `schedules`: Schedules & Automation (Library Auto-Scan & Sync Frequency with spinning disk optimizations, and System Schedules Dashboard matrix displaying all 13 background runners, relative countdowns, next run timestamps, and 1-click manual triggers).
+     - `schedules`: Schedules & Automation (Library Auto-Scan & Sync Frequency with spinning disk optimizations, and interactive System Schedules Dashboard matrix displaying all 13 background runners, real-time frequency selector dropdowns with instant persistence for configurable tasks, relative countdowns, next run timestamps, and 1-click manual triggers).
      - `announcements`: Announcements & Roadmap (Feature broadcast banner, maintenance alert, roadmap cards).
      - `logs`: Live System Logs (Real-time colored terminal log viewer, category filters, auto-refresh toggle).
   2. **Servers & Fleet (`servers`)**:

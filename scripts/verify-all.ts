@@ -262,10 +262,11 @@ async function runTestSuite() {
             }
 
             // Seamless Multi-Alias User Login & Identity Matching Test
-            const { hash } = await import("bcryptjs");
+            const bcryptModule: any = await import("bcryptjs");
+            const hashFn = bcryptModule.hash || bcryptModule.default?.hash;
             const { login, requestForgotPassword } = await import("../src/app/auth-actions");
             const testPassword = "SeamlessPassword123!";
-            const hashedPassword = await hash(testPassword, 10);
+            const hashedPassword = await hashFn(testPassword, 10);
 
             const aliasUser = await prisma.user.create({
                 data: {
@@ -888,6 +889,52 @@ async function runTestSuite() {
         const nextRun = calculateNextRunTime("daily_3am", new Date("2026-10-15T12:00:00Z"));
         if (!nextRun?.nextRunDate || nextRun.nextRunDate.getHours() !== 3) {
             throw new Error(`Expected next run at 3 AM, got: ${JSON.stringify(nextRun)}`);
+        }
+
+        // 4. System Automation Schedules Dashboard & Real-Time Frequency Configuration
+        const { getSystemSchedulesStatusAction, updateSystemScheduleFrequencyAction } = await import("../src/app/schedule-actions");
+        const statusRes = await getSystemSchedulesStatusAction();
+        if (!statusRes.success || !statusRes.tasks || statusRes.tasks.length < 13) {
+            throw new Error(`getSystemSchedulesStatusAction failed or returned incomplete tasks: ${JSON.stringify(statusRes)}`);
+        }
+
+        const plexTask = statusRes.tasks.find(t => t.id === "plex_friends_sync");
+        if (!plexTask?.isConfigurable || !plexTask.availableFrequencies || plexTask.availableFrequencies.length < 5) {
+            throw new Error(`plex_friends_sync should be configurable with frequency options: ${JSON.stringify(plexTask)}`);
+        }
+
+        const coreTask = statusRes.tasks.find(t => t.id === "user_access_expirations");
+        if (coreTask?.isConfigurable) {
+            throw new Error("user_access_expirations must NOT be configurable");
+        }
+
+        // Test updating frequency for configurable task
+        const updatePlex = await updateSystemScheduleFrequencyAction({ taskId: "plex_friends_sync", cadence: "30m" });
+        if (!updatePlex.success) {
+            throw new Error(`updateSystemScheduleFrequencyAction failed for plex_friends_sync: ${JSON.stringify(updatePlex)}`);
+        }
+        const updatedSettings = await prisma.settings.findUnique({ where: { id: "global" } });
+        if (updatedSettings?.autoSyncInterval !== 30) {
+            throw new Error(`Expected autoSyncInterval 30, got ${updatedSettings?.autoSyncInterval}`);
+        }
+
+        // Test updating disabled cadence
+        const disableOverlay = await updateSystemScheduleFrequencyAction({ taskId: "kometa_incremental_overlays", cadence: "disabled" });
+        if (!disableOverlay.success) {
+            throw new Error(`updateSystemScheduleFrequencyAction failed to disable overlays: ${JSON.stringify(disableOverlay)}`);
+        }
+        const disabledSettings = await prisma.settings.findUnique({ where: { id: "global" } });
+        if (disabledSettings?.overlayIncrementalEnabled !== false) {
+            throw new Error("Expected overlayIncrementalEnabled to be false");
+        }
+
+        // Re-enable overlay
+        await updateSystemScheduleFrequencyAction({ taskId: "kometa_incremental_overlays", cadence: "every_hour" });
+
+        // Non-configurable task rejection test
+        const nonConfigRes = await updateSystemScheduleFrequencyAction({ taskId: "user_access_expirations", cadence: "10m" });
+        if (nonConfigRes.success) {
+            throw new Error("Expected updateSystemScheduleFrequencyAction to reject non-configurable task");
         }
     });
 

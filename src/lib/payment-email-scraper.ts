@@ -50,7 +50,7 @@ export async function testPaymentEmailConnection(config: {
         let count = 0;
         try {
             const status = await client.status(mailboxName, { messages: true, unseen: true });
-            count = status.messages || 0;
+            count = (status && typeof status === "object" && "messages" in status) ? status.messages || 0 : 0;
         } finally {
             lock.release();
         }
@@ -1248,7 +1248,7 @@ export async function scanPaymentEmailsInternal(sourceId?: string, lookbackDays?
                     );
                 } else {
                     const status = await client.status(mailboxName, { messages: true });
-                    const totalMsgs = status.messages || 0;
+                    const totalMsgs = (status && typeof status === "object" && "messages" in status) ? status.messages || 0 : 0;
                     const startSeq = Math.max(1, totalMsgs - 300);
                     logger.addLog("INFO", "SYSTEM", `[PAYMENT-SCRAPER] Scanning source "${src.name}" (${src.user}) in mailbox "${mailboxName}" across sequence ${startSeq}:* (last ${totalMsgs - startSeq + 1} messages)`);
                     messages = client.fetch(
