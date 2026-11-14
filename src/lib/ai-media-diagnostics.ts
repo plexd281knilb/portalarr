@@ -54,6 +54,18 @@ export interface CleanedMediaQuery {
 export function cleanMediaSearchQuery(rawQuery: string, context?: MediaSearchContext): CleanedMediaQuery {
     let clean = (rawQuery || "").trim();
 
+    // 0. Detect sentence / clause boundary where problem description follows
+    // e.g. "Street Fighter 2026. Reds to be redownloaded. A Chinese copy is currently downloaded so has Asian subtitles"
+    const sentenceSplit = clean.split(/\s*(?:[\.\!\?\;\n]+|\s+-\s+)\s*/);
+    if (sentenceSplit.length > 1) {
+        const first = sentenceSplit[0].trim();
+        const remainder = sentenceSplit.slice(1).join(" ").trim();
+        const isProblemExplanation = /\b(needs?|reds?|redownload|re-download|download|chinese|asian|korean|spanish|foreign|subtitles?|hardcoded|hc|audio|track|copy|version|wrong|broken|corrupt|plays?|runs?|buffering)\b/i.test(remainder);
+        if (isProblemExplanation && first.length > 1) {
+            clean = first;
+        }
+    }
+
     // 0. Detect if this is an explicit conversational correction e.g. "no the sandlot", "actually the sandlot"
     const hasCorrectionPrefix = /^(no\s*,?\s*|actually\s*,?\s*|i\s+meant\s+|sorry\s*,?\s*|try\s+|switch\s+to\s+|check\s+out\s+)/i.test(clean);
     clean = clean.replace(/^(no\s*,?\s*|actually\s*,?\s*|i\s+meant\s+|sorry\s*,?\s*|try\s+|switch\s+to\s+|check\s+out\s+)/i, "").trim();
@@ -332,14 +344,23 @@ export function getFuzzyTitleVariants(title: string): string[] {
  * Robust title matching comparing alphanumeric tokens, ignoring punctuation, case, and leading "The".
  */
 export function isMediaTitleMatch(candidate: string, query: string): boolean {
-    const a = (candidate || "").toLowerCase().replace(/[^a-z0-9]/g, "").trim();
-    const b = (query || "").toLowerCase().replace(/[^a-z0-9]/g, "").trim();
+    const normalize = (s: string) => (s || "").toLowerCase().replace(/^(the|a|an)\s+/i, "").replace(/[^a-z0-9]/g, "").trim();
+    const a = normalize(candidate);
+    const b = normalize(query);
     if (!a || !b) return false;
     if (a === b) return true;
-    const aNoThe = a.replace(/^the/, "");
-    const bNoThe = b.replace(/^the/, "");
-    if (aNoThe === bNoThe) return true;
-    if (a.length >= 4 && b.length >= 4 && (a.includes(b) || b.includes(a))) return true;
+
+    // Word token exact and prefix comparisons
+    const wordsA = (candidate || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(w => w.length > 0 && !["the", "a", "an"].includes(w));
+    const wordsB = (query || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(w => w.length > 0 && !["the", "a", "an"].includes(w));
+    if (wordsA.length > 0 && wordsB.length > 0) {
+        const strA = wordsA.join(" ");
+        const strB = wordsB.join(" ");
+        if (strA === strB) return true;
+        if (wordsA.length >= wordsB.length && wordsB.length >= 2) {
+            if (strA.startsWith(strB)) return true;
+        }
+    }
     return false;
 }
 
@@ -761,6 +782,18 @@ export async function inspectMediaStreams(
                 } else {
                     // Standard movie or general media match
                     const movieMatches = results.filter(r => isMediaTitleMatch(r.title, qTitle));
+                    movieMatches.sort((a, b) => {
+                        const aYearMatch = Boolean(year && a.year === year);
+                        const bYearMatch = Boolean(year && b.year === year);
+                        if (aYearMatch && !bYearMatch) return -1;
+                        if (!aYearMatch && bYearMatch) return 1;
+                        const cleanQNorm = qTitle.toLowerCase().replace(/[^a-z0-9]/g, "");
+                        const aExact = (a.title || "").toLowerCase().replace(/[^a-z0-9]/g, "") === cleanQNorm;
+                        const bExact = (b.title || "").toLowerCase().replace(/[^a-z0-9]/g, "") === cleanQNorm;
+                        if (aExact && !bExact) return -1;
+                        if (!aExact && bExact) return 1;
+                        return 0;
+                    });
                     for (const candMovie of movieMatches) {
                         const candDetails = await inspectPlexMediaItemFull(activeUri, srvToken, candMovie.ratingKey);
                         let candProbe: PlaybackProbeResult | undefined;
@@ -1078,11 +1111,8 @@ export async function searchAndGrabRadarrReplacement(
     try {
         const lookupRes = await arrApiGet(app, `/api/v3/movie/lookup?term=${encodeURIComponent(title)}`);
         if (lookupRes.success && Array.isArray(lookupRes.data) && lookupRes.data.length > 0) {
-            const matchedMovie = lookupRes.data.find((m: any) => 
-                m.title.toLowerCase() === title.toLowerCase() ||
-                (year && m.year === year)
-            ) || lookupRes.data[0];
-
+            const titleMatches = lookupRes.data.filter((m: any) => isMediaTitleMatch(m.title, title));
+            const matchedMovie = (year ? titleMatches.find((m: any) => m.year === year) : null) || titleMatches[0];
             if (matchedMovie && matchedMovie.id) {
                 targetMovieId = matchedMovie.id;
             }
@@ -1094,10 +1124,8 @@ export async function searchAndGrabRadarrReplacement(
         try {
             const libRes = await arrApiGet(app, "/api/v3/movie");
             if (libRes.success && Array.isArray(libRes.data)) {
-                const libMovie = libRes.data.find((m: any) => 
-                    m.title.toLowerCase() === title.toLowerCase() ||
-                    (year && m.year === year)
-                );
+                const titleMatches = libRes.data.filter((m: any) => isMediaTitleMatch(m.title, title));
+                const libMovie = (year ? titleMatches.find((m: any) => m.year === year) : null) || titleMatches[0];
                 if (libMovie && libMovie.id) {
                     targetMovieId = libMovie.id;
                 }
@@ -1304,10 +1332,7 @@ export async function searchAndGrabSonarrReplacement(
         try {
             const seriesRes = await arrApiGet(app, "/api/v3/series");
             if (seriesRes.success && Array.isArray(seriesRes.data)) {
-                const matched = seriesRes.data.find((s: any) => {
-                    const sClean = (s.cleanTitle || s.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-                    return sClean === cleanQ || sClean.includes(cleanQ) || cleanQ.includes(sClean);
-                });
+                const matched = seriesRes.data.find((s: any) => isMediaTitleMatch(s.title, effectiveTitle));
                 if (matched?.id) {
                     matchedApp = app;
                     seriesId = matched.id;
