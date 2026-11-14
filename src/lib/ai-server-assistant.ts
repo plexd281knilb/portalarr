@@ -1906,6 +1906,23 @@ ${(mediaInspection.recommendedClientSteps || [
 > **💡 Pro Tip:** To permanently default to English for all movies, open **Plex Web / Client Settings ⚙️ → Audio & Subtitles**, and set **Preferred Audio Language** to **English**.`;
     }
 
+    // --- CASE 1.8: PRE-RELEASE CAM DELETED (DIGITAL RELEASE NOT OUT YET) ---
+    const camAction = actionsTaken.find(a => a.action === "DELETE_PRE_RELEASE_CAM");
+    if (camAction) {
+        const releaseDate = camAction.details?.digitalReleaseDate || "the official digital release date";
+        return `### 🗑️ Pre-Release CAM Removed: *${camAction.target}*
+
+I verified that **${camAction.target}** does not have an official digital release yet. The official digital streaming release date is **${releaseDate}**.
+
+---
+
+#### 🤖 Autonomous Actions Taken:
+1. **Release Schedule Check:** Verified against release metadata that the digital version is not released until **${releaseDate}**.
+2. **CAM / Leak Identification:** The file currently downloaded was an early CAM / bootleg rip with hardcoded subtitles.
+3. **Automated Cleanup:** Deleted the low-quality pre-release file from the server so you won't have to deal with hardcoded foreign subtitles.
+4. **Monitoring Confirmed:** The movie remains monitored in Radarr and will automatically download a clean, high-quality official English release on **${releaseDate}**.`;
+    }
+
     // --- CASE 2: MEDIA INSPECTION VERDICT: MISSING LANGUAGE TRACK (RADARR SEARCH / ESCALATION) ---
     if (mediaInspection && mediaInspection.verdict === "MISSING_LANGUAGE_TRACK") {
         const radarrGrab = actionsTaken.find(a => a.action === "RADARR_SEARCH_GRAB" && a.status === "SUCCESS");

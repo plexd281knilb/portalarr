@@ -16,8 +16,8 @@ import {
     logAgentEvent 
 } from "@/lib/ai-agent-guardrails";
 import { getPlexServers } from "@/lib/plex";
-import { searchPlexLibraryItems, inspectPlexMediaItemFull, type PlexMediaStreamInfo } from "@/lib/curation/plex-analyzer";
-import { getEnabledArrInstancesInternal, arrApiGet, arrApiPost } from "@/app/arr-actions";
+import { searchPlexLibraryItems, inspectPlexMediaItemFull, deleteMediaFromPlexServer, type PlexMediaStreamInfo } from "@/lib/curation/plex-analyzer";
+import { getEnabledArrInstancesInternal, arrApiGet, arrApiPost, arrApiPut, arrApiDelete } from "@/app/arr-actions";
 export { validateMediaReleaseCandidate } from "@/lib/ai-agent-guardrails";
 
 /**
@@ -1051,10 +1051,14 @@ export async function searchAndGrabRadarrReplacement(
     title: string,
     year?: number,
     reason: string = "Spanish only / Missing English audio track",
-    user?: any
+    user?: any,
+    mediaInspection?: any
 ): Promise<{
     success: boolean;
     alreadyOptimal?: boolean;
+    deletedCam?: boolean;
+    isPreRelease?: boolean;
+    digitalReleaseDate?: string;
     existingFile?: string;
     existingScore?: number;
     releaseTitle?: string;
@@ -1063,6 +1067,7 @@ export async function searchAndGrabRadarrReplacement(
     sizeFormatted?: string;
     escalated?: boolean;
     ticketId?: string;
+    message?: string;
     error?: string;
 }> {
     const userIdentifier = user?.username || user?.email || "anonymous";
@@ -1104,44 +1109,60 @@ export async function searchAndGrabRadarrReplacement(
         };
     }
 
-    const app = appsRes.data[0]; // Primary Radarr instance
-
-    // 3. Locate movie in Radarr
+    // 3. Locate movie across ALL enabled Radarr instances
+    let matchedApp: any = null;
+    let targetMovie: any = null;
     let targetMovieId = 0;
-    try {
-        const lookupRes = await arrApiGet(app, `/api/v3/movie/lookup?term=${encodeURIComponent(title)}`);
-        if (lookupRes.success && Array.isArray(lookupRes.data) && lookupRes.data.length > 0) {
-            const titleMatches = lookupRes.data.filter((m: any) => isMediaTitleMatch(m.title, title));
-            const matchedMovie = (year ? titleMatches.find((m: any) => m.year === year) : null) || titleMatches[0];
-            if (matchedMovie && matchedMovie.id) {
-                targetMovieId = matchedMovie.id;
-            }
-        }
-    } catch (e) {}
 
-    // Fallback: check Radarr existing library
-    if (targetMovieId === 0) {
+    // Priority 1: Check existing Radarr library across all instances
+    for (const curApp of appsRes.data) {
         try {
-            const libRes = await arrApiGet(app, "/api/v3/movie");
+            const libRes = await arrApiGet(curApp, "/api/v3/movie");
             if (libRes.success && Array.isArray(libRes.data)) {
                 const titleMatches = libRes.data.filter((m: any) => isMediaTitleMatch(m.title, title));
                 const libMovie = (year ? titleMatches.find((m: any) => m.year === year) : null) || titleMatches[0];
-                if (libMovie && libMovie.id) {
-                    targetMovieId = libMovie.id;
+                if (libMovie) {
+                    matchedApp = curApp;
+                    targetMovie = libMovie;
+                    if (libMovie.id) {
+                        targetMovieId = libMovie.id;
+                        break;
+                    }
                 }
             }
         } catch (e) {}
     }
 
-    if (targetMovieId === 0) {
-        logAgentEvent("WARN", `Movie "${title}" not found in Radarr library or lookup.`);
+    // Priority 2: If not in library, check lookup across all instances
+    if (!targetMovie) {
+        for (const curApp of appsRes.data) {
+            try {
+                const lookupRes = await arrApiGet(curApp, `/api/v3/movie/lookup?term=${encodeURIComponent(title)}`);
+                if (lookupRes.success && Array.isArray(lookupRes.data) && lookupRes.data.length > 0) {
+                    const titleMatches = lookupRes.data.filter((m: any) => isMediaTitleMatch(m.title, title));
+                    const matchedMovie = (year ? titleMatches.find((m: any) => m.year === year) : null) || titleMatches[0];
+                    if (matchedMovie) {
+                        matchedApp = curApp;
+                        targetMovie = matchedMovie;
+                        if (matchedMovie.id) {
+                            targetMovieId = matchedMovie.id;
+                        }
+                        break;
+                    }
+                }
+            } catch (e) {}
+        }
+    }
+
+    if (!targetMovie) {
+        logAgentEvent("WARN", `Movie "${title}" not found in Radarr library or lookup across ${appsRes.data.length} instance(s).`);
         const escalation = await escalateToAdminTicket({
             user,
             title,
             issue: `User reported issue with "${title}" (${reason}). Movie was not found in Radarr library to trigger an automated release search.`,
             stepsTaken: [
                 `1. Inspected Plex media: English audio track missing.`,
-                `2. Looked up movie in Radarr: Movie "${title}" is not registered in Radarr instance.`
+                `2. Looked up movie in Radarr: Movie "${title}" is not registered in any enabled Radarr instance.`
             ],
             recommendation: `Add "${title}" to Radarr and search indexers for an English 1080p release.`
         });
@@ -1150,6 +1171,103 @@ export async function searchAndGrabRadarrReplacement(
             escalated: true,
             ticketId: escalation.ticketId,
             error: `Movie "${title}" could not be located in Radarr. A ticket was created for your server administrator.`
+        };
+    }
+
+    const app = matchedApp || appsRes.data[0];
+
+    // 3.5 Check Pre-Release / Unreleased Digital Status:
+    // If digitalRelease date is in the future, or status is inCinemas with no past digital/physical release,
+    // any current download on the server is an unreleased CAM / bootleg rip with hardcoded subtitles.
+    // Clean digital releases do NOT exist yet; delete the CAM file from disk/Radarr and leave monitored.
+    const now = new Date();
+    const digitalReleaseStr = targetMovie.digitalRelease;
+    const digitalDate = digitalReleaseStr ? new Date(digitalReleaseStr) : null;
+    const physicalDate = targetMovie.physicalRelease ? new Date(targetMovie.physicalRelease) : null;
+    const isDigitalOut = Boolean(digitalDate && digitalDate <= now);
+    const isPhysicalOut = Boolean(physicalDate && physicalDate <= now);
+    const isReleased = isDigitalOut || isPhysicalOut;
+    const isUnreleasedDigital = Boolean((digitalDate && digitalDate > now) || (!isReleased && targetMovie.status === "inCinemas"));
+
+    if (isUnreleasedDigital) {
+        const formattedDate = digitalDate
+            ? digitalDate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" })
+            : "in theaters / upcoming";
+
+        logAgentEvent("INFO", `Detected pre-release CAM/leak for unreleased movie "${targetMovie.title || title}". Digital release is ${formattedDate}. Deleting file and keeping monitored.`);
+
+        let deletedFilesCount = 0;
+
+        // A. Delete movie file from Radarr instance
+        if (targetMovieId > 0) {
+            try {
+                const filesRes = await arrApiGet(app, `/api/v3/moviefile?movieId=${targetMovieId}`);
+                if (filesRes.success && Array.isArray(filesRes.data) && filesRes.data.length > 0) {
+                    for (const f of filesRes.data) {
+                        if (f.id) {
+                            const delRes = await arrApiDelete(app, `/api/v3/moviefile/${f.id}`);
+                            if (delRes.success) deletedFilesCount++;
+                        }
+                    }
+                } else if (targetMovie.movieFileId && targetMovie.movieFileId > 0) {
+                    const delRes = await arrApiDelete(app, `/api/v3/moviefile/${targetMovie.movieFileId}`);
+                    if (delRes.success) deletedFilesCount++;
+                }
+
+                // Ensure movie remains monitored in Radarr so official clean copy is grabbed upon release
+                targetMovie.monitored = true;
+                await arrApiPut(app, `/api/v3/movie/${targetMovieId}`, targetMovie).catch(() => {});
+            } catch (err: any) {
+                logAgentEvent("WARN", `Error deleting Radarr movie file for ${targetMovieId}: ${err?.message}`);
+            }
+        }
+
+        // B. Delete from Plex if ratingKey is available
+        if (mediaInspection?.ratingKey) {
+            try {
+                let plexToken = "";
+                if (settings?.mainPlexToken) {
+                    try { plexToken = decryptData(settings.mainPlexToken); } catch {}
+                }
+                const servers = plexToken ? await getPlexServers(plexToken).catch(() => []) : [];
+                const targetServer = (mediaInspection.serverName ? servers.find(s => s.name === mediaInspection.serverName) : null) || servers[0];
+                const token = targetServer?.accessToken || plexToken;
+                const conn = targetServer?.connections?.[0]?.uri || (targetServer as any)?.uri || settings?.mainPlexUrl || "";
+                if (conn && token) {
+                    await deleteMediaFromPlexServer(conn, token, mediaInspection.ratingKey, targetServer?.name);
+                }
+            } catch (plexErr: any) {
+                logAgentEvent("WARN", `Could not delete from Plex: ${plexErr?.message}`);
+            }
+        }
+
+        return {
+            success: true,
+            deletedCam: true,
+            isPreRelease: true,
+            digitalReleaseDate: formattedDate,
+            releaseTitle: `CAM / Pre-Release Rip (Official Digital Release: ${formattedDate})`,
+            message: `The official digital release for "${targetMovie.title || title}" is not out until ${formattedDate}. The version currently downloaded was a pre-release CAM/leak with hardcoded subtitles and has been deleted. The title remains monitored in Radarr and will automatically download a clean, official copy upon release.`
+        };
+    }
+
+    if (targetMovieId === 0) {
+        logAgentEvent("WARN", `Movie "${title}" found in lookup but not added to Radarr library.`);
+        const escalation = await escalateToAdminTicket({
+            user,
+            title,
+            issue: `User reported issue with "${title}" (${reason}). Movie was not found in Radarr library to trigger an automated release search.`,
+            stepsTaken: [
+                `1. Inspected Plex media: English audio track missing.`,
+                `2. Looked up movie in Radarr: Movie "${title}" is not registered in Radarr library.`
+            ],
+            recommendation: `Add "${title}" to Radarr and search indexers for an English 1080p release.`
+        });
+        return {
+            success: false,
+            escalated: true,
+            ticketId: escalation.ticketId,
+            error: `Movie "${title}" could not be located in Radarr library. A ticket was created for your server administrator.`
         };
     }
 
