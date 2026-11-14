@@ -924,18 +924,33 @@ ${serverListMarkdown}
             historyContext.lastWasPlaybackTest
         ));
 
+        const isRedownloadOrForeignSubRequest = 
+            lowerQ.includes("redownload") ||
+            lowerQ.includes("re-download") ||
+            lowerQ.includes("replace") ||
+            lowerQ.includes("chinese") ||
+            lowerQ.includes("asian") ||
+            lowerQ.includes("korean") ||
+            lowerQ.includes("subtitle") ||
+            lowerQ.includes("subtitles") ||
+            lowerQ.includes("hardcoded") ||
+            lowerQ.includes("hc") ||
+            lowerQ.includes("subs") ||
+            lowerQ.includes("wrong copy") ||
+            lowerQ.includes("wrong version") ||
+            lowerQ.includes("wrong movie") ||
+            lowerQ.includes("reds to be redownloaded");
+
         const isLanguageOrMediaIssue = 
             isSpecificMediaPlaybackTest ||
             isTitleCorrection ||
+            isRedownloadOrForeignSubRequest ||
             lowerQ.includes("spanish") ||
             lowerQ.includes("language") ||
             lowerQ.includes("audio") ||
             lowerQ.includes("soundtrack") ||
             lowerQ.includes("dub") ||
             lowerQ.includes("track") ||
-            lowerQ.includes("redownload") ||
-            lowerQ.includes("re-download") ||
-            lowerQ.includes("replace") ||
             lowerQ.includes("broken") ||
             lowerQ.includes("corrupt") ||
             lowerQ.includes("wrong audio") ||
@@ -966,8 +981,9 @@ ${serverListMarkdown}
                     timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                 });
 
-                // If English audio is truly missing, handle based on autonomy level
-                if (mediaInspection.verdict === "MISSING_LANGUAGE_TRACK") {
+                // If English audio is missing OR user requested redownload / reported foreign hardcoded subtitles
+                const needsReplacement = mediaInspection.verdict === "MISSING_LANGUAGE_TRACK" || isRedownloadOrForeignSubRequest;
+                if (needsReplacement) {
                     if (autonomyLevel === "autonomous") {
                         const isEpisode = mediaInspection.mediaType === "episode" || cleanedMedia.season !== undefined;
                         const targetSeason = cleanedMedia.season ?? mediaInspection.season ?? 1;
@@ -979,13 +995,13 @@ ${serverListMarkdown}
                                 seriesOrShowTitle,
                                 targetSeason,
                                 targetEpisode,
-                                "Missing English audio track / Spanish only file",
+                                isRedownloadOrForeignSubRequest ? "Hardcoded Asian/Chinese subtitles on current release / Clean English copy requested" : "Missing English audio track / Spanish only file",
                                 user
                             )
                             : await searchAndGrabRadarrReplacement(
                                 mediaInspection.title, 
                                 candidateYear || (mediaInspection.year ? parseInt(mediaInspection.year, 10) : undefined),
-                                "Missing English audio track / Spanish only file",
+                                isRedownloadOrForeignSubRequest ? "Hardcoded Asian/Chinese subtitles on current release / Clean English copy requested" : "Missing English audio track / Spanish only file",
                                 user
                             );
 

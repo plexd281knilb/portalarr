@@ -98,6 +98,18 @@ export function validateMediaReleaseCandidate(
     const lowerTitle = title.toLowerCase();
 
     // 1. Hard rejection of low-quality / bootleg / cam formats
+    // 1.5 Hard rejection of hardcoded foreign subtitle / early foreign rips (HC, KORSUB, etc.)
+    const hardcodedSubPatterns = [
+        /\b(hc|hcsub|hcsubs|hardcoded|korsub|chinesesub|csub|zhsub)\b/i,
+        /\.hc\./i,
+        /\b(hc-hdrip|hc-webrip|hc-web|hdrip-hc)\b/i
+    ];
+    for (const pat of hardcodedSubPatterns) {
+        if (pat.test(lowerTitle)) {
+            return { ok: false, score: -100, reason: "Rejected release with hardcoded foreign subtitles (HC/KORSUB)" };
+        }
+    }
+
     const lowQualityTerms = [
         "cam", "telesync", "hdcam", "hd-ts", "hdts", "tc", "telecine", 
         "screener", "scr", "dvdscr", "workprint", "wp", "r5"
@@ -113,7 +125,7 @@ export function validateMediaReleaseCandidate(
     if (requestedLanguage.toLowerCase() === "english") {
         const foreignOnlyTerms = [
             "spanish.only", "castellano.only", "french.only", "vostfr", "truefrench",
-            "german.only", "italian.only", "ita.sub", "rus.sub", "hindi.only", "dublado"
+            "german.only", "italian.only", "ita.sub", "rus.sub", "hindi.only", "dublado", "chinese.sub", "asian.sub", "korean.sub", "chinesesub", "korsub", "mandarin.sub"
         ];
         for (const foreign of foreignOnlyTerms) {
             if (lowerTitle.includes(foreign)) {
