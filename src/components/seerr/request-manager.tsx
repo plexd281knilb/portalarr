@@ -686,7 +686,7 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                                                         publishYear: req.releaseYear || undefined,
                                                         mediaType: isAudiobook ? "audiobook" : "ebook",
                                                         availability: {
-                                                            status: (req.status === "AVAILABLE" || req.status === "Downloaded") ? "AVAILABLE" : (req.status === "PROCESSING" || req.status === "SEARCHING" || req.status === "DOWNLOADING") ? (req.downloadProgress && req.downloadProgress > 0 ? "DOWNLOADING" : "SEARCHING") : "REQUESTED",
+                                                            status: (req.status === "AVAILABLE" || req.status === "Downloaded") ? "AVAILABLE" : (req.status === "PROCESSING" || req.status === "SEARCHING" || req.status === "DOWNLOADING") ? (req.downloadProgress && req.downloadProgress > 0 ? "DOWNLOADING" : "REQUESTED") : "REQUESTED",
                                                             requestId: req.id
                                                         }
                                                     });
@@ -770,7 +770,7 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                                                     publishYear: req.releaseYear || undefined,
                                                     mediaType: isAudiobook ? "audiobook" : "ebook",
                                                     availability: {
-                                                        status: (req.status === "AVAILABLE" || req.status === "Downloaded") ? "AVAILABLE" : (req.status === "PROCESSING" || req.status === "SEARCHING" || req.status === "DOWNLOADING") ? (req.downloadProgress && req.downloadProgress > 0 ? "DOWNLOADING" : "SEARCHING") : "REQUESTED",
+                                                        status: (req.status === "AVAILABLE" || req.status === "Downloaded") ? "AVAILABLE" : (req.status === "PROCESSING" || req.status === "SEARCHING" || req.status === "DOWNLOADING") ? (req.downloadProgress && req.downloadProgress > 0 ? "DOWNLOADING" : "REQUESTED") : "REQUESTED",
                                                         requestId: req.id
                                                     }
                                                 });

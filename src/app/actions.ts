@@ -6150,7 +6150,7 @@ export async function syncUserPlexShareInternal(
                     let matchedSrvId = "";
                     if (srvSections && Array.isArray(srvSections)) {
                         for (const s of srvSections) {
-                            if (s.sections && s.sections.some((sec) => sec.id === secId || String(sec.key) === strKey)) {
+                            if (s.sections && s.sections.some((sec: any) => sec.id === secId || String(sec.key) === strKey)) {
                                 matchedSrvId = s.serverId;
                                 break;
                             }
@@ -10918,7 +10918,7 @@ export async function syncAudiobooksPlexLibraryAccessForUser(userId: string, ena
                 }
             }
         } else {
-            currentMediaLibs = currentMediaLibs.filter(k => {
+            currentMediaLibs = currentMediaLibs.filter((k: string) => {
                 const parts = k.split(":");
                 return !discoveredAudiobookKeys.includes(`${parts[1]}:${parts[2]}`) && !discoveredAudiobookKeys.some(dk => dk.endsWith(`:${parts[2]}`));
             });
@@ -18536,7 +18536,7 @@ export async function syncPlexFriendsInternal() {
                     !/server/i.test(friend.title)
                 );
 
-                if (!existingUser.name && isValidFriendName) {
+                if (!existingUser.name && isValidFriendName && friend.title) {
                     updateData.name = friend.title.trim();
                     needsUpdate = true;
                 } else if (existingUser.name && /server/i.test(existingUser.name)) {
@@ -18593,7 +18593,7 @@ export async function syncPlexFriendsInternal() {
                 const newUser = await prisma.user.create({
                     data: {
                         username: safeUsername,
-                        name: isValidNewFriendName ? friend.title.trim() : null,
+                        name: isValidNewFriendName && friend.title ? friend.title.trim() : null,
                         email: safeEmail,
                         password: hashedPassword,
                         role: "USER",

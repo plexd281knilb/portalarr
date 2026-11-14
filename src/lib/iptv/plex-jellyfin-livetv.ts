@@ -79,6 +79,8 @@ export async function syncUsersLastIptvActivity(force = false): Promise<void> {
             email: true,
             plexUsername: true,
             plexEmail: true,
+            name: true,
+            plexHomeUserId: true,
             lastIptvWatchedAt: true
         }
     });
@@ -862,7 +864,7 @@ export async function auditPlexHomeAndLiveTvPrivileges(): Promise<LiveTvEcosyste
 export async function setPlexUserLiveTvPrivilege(
     targetUserOrPlexId: string,
     allow: boolean
-): Promise<{ success: boolean; message: string; plexApiUpdated: boolean }> {
+): Promise<{ success: boolean; message: string; plexApiUpdated: boolean; error?: string }> {
     const portalUser = await prisma.user.findUnique({ where: { id: targetUserOrPlexId } });
     const adminToken = await resolveActivePlexAdminToken();
 
@@ -1005,7 +1007,7 @@ export async function setPlexUserLiveTvPrivilege(
 export async function setPlexUserDvrPrivilege(
     targetUserOrPlexId: string,
     allow: boolean
-): Promise<{ success: boolean; message: string; plexApiUpdated: boolean }> {
+): Promise<{ success: boolean; message: string; plexApiUpdated: boolean; error?: string }> {
     const portalUser = await prisma.user.findUnique({ where: { id: targetUserOrPlexId } });
     const adminToken = await resolveActivePlexAdminToken();
 

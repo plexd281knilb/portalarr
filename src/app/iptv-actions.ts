@@ -555,7 +555,7 @@ export async function inviteUserToPlexHomeAction(userId: string, grantLiveTv = t
         }
         return res;
     } catch (err: any) {
-        return { success: false, error: err?.message || "Failed to add user to Plex Home" };
+        return { success: false, message: err?.message || "Failed to add user to Plex Home", error: err?.message || "Failed to add user to Plex Home" };
     }
 }
 
@@ -570,7 +570,7 @@ export async function removeUserFromPlexHomeAction(userId: string) {
         }
         return res;
     } catch (err: any) {
-        return { success: false, error: err?.message || "Failed to remove user from Plex Home" };
+        return { success: false, message: err?.message || "Failed to remove user from Plex Home", error: err?.message || "Failed to remove user from Plex Home" };
     }
 }
 
@@ -585,7 +585,7 @@ export async function setPlexUserLiveTvPrivilegeAction(targetUserOrPlexId: strin
         }
         return res;
     } catch (err: any) {
-        return { success: false, error: err?.message || "Failed to update Plex Live TV privilege" };
+        return { success: false, message: err?.message || "Failed to update Plex Live TV privilege", error: err?.message || "Failed to update Plex Live TV privilege", plexApiUpdated: false };
     }
 }
 
@@ -600,7 +600,7 @@ export async function setPlexUserDvrPrivilegeAction(targetUserOrPlexId: string, 
         }
         return res;
     } catch (err: any) {
-        return { success: false, error: err?.message || "Failed to update Plex DVR privilege" };
+        return { success: false, message: err?.message || "Failed to update Plex DVR privilege", error: err?.message || "Failed to update Plex DVR privilege", plexApiUpdated: false };
     }
 }
 
@@ -615,7 +615,7 @@ export async function setJellyfinUserLiveTvAccessAction(userId: string, enableLi
         }
         return res;
     } catch (err: any) {
-        return { success: false, error: err?.message || "Failed to update Jellyfin Live TV policy" };
+        return { success: false, message: err?.message || "Failed to update Jellyfin Live TV policy", error: err?.message || "Failed to update Jellyfin Live TV policy" };
     }
 }
 
@@ -972,7 +972,7 @@ export async function recordIptvWatchSessionAction(input: {
             const distinctPublicIps = new Set(
                 otherActive
                     .map((s) => s.ipAddress)
-                    .filter((ip): ip is string => Boolean(ip) && !ip.startsWith("192.168.") && !ip.startsWith("10.") && ip !== "127.0.0.1")
+                    .filter((ip): ip is string => typeof ip === "string" && !ip.startsWith("192.168.") && !ip.startsWith("10.") && ip !== "127.0.0.1")
             );
             if (!input.ipAddress.startsWith("192.168.") && !input.ipAddress.startsWith("10.") && input.ipAddress !== "127.0.0.1") {
                 distinctPublicIps.add(input.ipAddress);
@@ -1463,7 +1463,7 @@ export async function scanAndProvisionMarketChannelsAction(marketSlug: string) {
         safeRevalidate("/admin/iptv");
         return res;
     } catch (err: any) {
-        return { success: false, createdCount: 0, message: err?.message || "Failed to scan Dispatcharr" };
+        return { success: false, createdCount: 0, message: err?.message || "Failed to scan Dispatcharr", matchedStreams: [] as string[] };
     }
 }
 

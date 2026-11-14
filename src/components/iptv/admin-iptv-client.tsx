@@ -460,6 +460,23 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
         });
     };
 
+    const handleToggleJellyfinLiveTv = (userId: string, current: boolean) => {
+        startTransition(async () => {
+            const res = await setJellyfinUserLiveTvAccessAction(userId, !current);
+            if (res.success) {
+                setUsersList(
+                    usersList.map((u) =>
+                        u.id === userId ? { ...u, hasJellyfinLiveTvAccess: !current } : u
+                    )
+                );
+                showMsg(res.message);
+                handleRunEcosystemAudit();
+            } else {
+                showMsg(res.error || "Failed to update Jellyfin Live TV access", "error");
+            }
+        });
+    };
+
     const handleFixAllMissingLiveTv = () => {
         if (!auditReport?.plexMembers) return;
         const missing = auditReport.plexMembers.filter((m: any) => m.missingLiveTvPrivilege);
@@ -1624,12 +1641,12 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                                             variant="ghost"
                                                             onClick={() => {
                                                                 navigator.clipboard.writeText(r.adminNotes);
-                                                                setCopiedToken(`prompt-${r.id}`);
-                                                                setTimeout(() => setCopiedToken(null), 2000);
+                                                                setCopiedKey(`prompt-${r.id}`);
+                                                                setTimeout(() => setCopiedKey(null), 2000);
                                                             }}
                                                             className="h-6 text-[10px] text-teal-300 hover:text-teal-200 px-2"
                                                         >
-                                                            {copiedToken === `prompt-${r.id}` ? "✓ Copied!" : "📋 Copy AI Prompt"}
+                                                            {copiedKey === `prompt-${r.id}` ? "✓ Copied!" : "📋 Copy AI Prompt"}
                                                         </Button>
                                                     </div>
                                                     <pre className="p-2.5 rounded-lg bg-slate-950/80 border border-border/60 text-[10px] font-mono text-teal-200/90 whitespace-pre-wrap leading-relaxed max-h-40 overflow-y-auto select-all">

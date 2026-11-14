@@ -961,7 +961,7 @@ export async function addChannelToDispatcharrProfile(
                 const profData = await profRes.json();
                 const profList = Array.isArray(profData) ? profData : (profData?.results || []);
                 const targetDProf = profList.find(
-                    (p) =>
+                    (p: any) =>
                         String(p.name || "").toLowerCase() === profile.name.toLowerCase() ||
                         String(p.slug || "").toLowerCase() === profile.slug.toLowerCase() ||
                         p.id === profile.id
@@ -977,7 +977,7 @@ export async function addChannelToDispatcharrProfile(
                         const chanData = await chanRes.json();
                         const chanList = Array.isArray(chanData) ? chanData : (chanData?.results || []);
                         const targetDChan = chanList.find(
-                            (c) =>
+                            (c: any) =>
                                 (c.effective_name || c.name || "").toLowerCase() === channel.name.toLowerCase() ||
                                 c.tvg_id === channel.xmltvId ||
                                 c.channel_number === channel.channelNumber
@@ -1190,7 +1190,7 @@ export async function moveChannelDispatcharrProfile(
                     const chanData = await chanRes.json();
                     const chanList = Array.isArray(chanData) ? chanData : (chanData?.results || []);
                     const targetDChan = chanList.find(
-                        (c) =>
+                        (c: any) =>
                             (c.effective_name || c.name || "").toLowerCase() === channel.name.toLowerCase() ||
                             c.tvg_id === channel.xmltvId ||
                             c.channel_number === channel.channelNumber
@@ -1201,7 +1201,7 @@ export async function moveChannelDispatcharrProfile(
                         for (const oldLink of existingLinks) {
                             if (oldLink.profile.id === targetProfile.id) continue;
                             const oldDProf = profList.find(
-                                (p) =>
+                                (p: any) =>
                                     String(p.name || "").toLowerCase() === oldLink.profile.name.toLowerCase() ||
                                     String(p.slug || "").toLowerCase() === oldLink.profile.slug.toLowerCase() ||
                                     p.id === oldLink.profile.id
@@ -1218,7 +1218,7 @@ export async function moveChannelDispatcharrProfile(
 
                         // B. Add channel to target Dispatcharr profile
                         const targetDProf = profList.find(
-                            (p) =>
+                            (p: any) =>
                                 String(p.name || "").toLowerCase() === targetProfile.name.toLowerCase() ||
                                 String(p.slug || "").toLowerCase() === targetProfile.slug.toLowerCase() ||
                                 p.id === targetProfile.id

@@ -69,7 +69,7 @@ export async function GET(req: NextRequest) {
             `#EXTM3U url-tvg="${dispatcharrBase}/output/epg/" x-tvg-url="${dispatcharrBase}/output/epg/"`
         ];
 
-        const origin = request.nextUrl.origin;
+        const origin = req.nextUrl.origin;
         for (const ch of channels) {
             const chNum = ch.channelNumber || 100;
             const tvgId = ch.xmltvId || ch.callsign || ch.name;
