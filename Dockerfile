@@ -67,12 +67,18 @@ RUN groupadd --system --gid 1001 nodejs && \
 ARG GIT_BRANCH=dev
 ARG GIT_SHA=dev
 ARG BUILD_NUMBER=local
+ARG CONTAINER_ICON_URL=https://raw.githubusercontent.com/plexd281knilb/portalarr/prod/public/icons/portalarr-prod.png
 ENV GIT_BRANCH=${GIT_BRANCH}
 ENV GIT_SHA=${GIT_SHA}
 ENV BUILD_NUMBER=${BUILD_NUMBER}
 ENV NEXT_PUBLIC_GIT_BRANCH=${GIT_BRANCH}
 ENV NEXT_PUBLIC_GIT_SHA=${GIT_SHA}
 ENV NEXT_PUBLIC_BUILD_NUMBER=${BUILD_NUMBER}
+
+LABEL net.unraid.docker.icon="${CONTAINER_ICON_URL}" \
+      org.opencontainers.image.icon="${CONTAINER_ICON_URL}" \
+      net.unraid.docker.webui="http://[IP]:[PORT:3000]/" \
+      org.opencontainers.image.title="Portalarr (${GIT_BRANCH})"
 
 # Copy standalone build artifacts
 COPY --from=builder /app/public ./public

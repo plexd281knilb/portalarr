@@ -13,6 +13,7 @@ import ImpersonationBanner from "@/components/impersonation-banner";
 import FloatingAiLauncher from "@/components/floating-ai-launcher";
 import FloatingSuggestFixLauncher from "@/components/floating-suggest-fix-launcher";
 import { BuildBadge } from "@/components/build-badge";
+import { getBuildTelemetry } from "@/lib/version";
 
 export default function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -163,7 +164,11 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
           <header className="flex items-center justify-between px-3 sm:px-6 h-14 sm:h-16 border-b bg-muted/20 shrink-0">
             <div className="flex items-center gap-2">
               <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-                  <Server className="h-5 w-5 sm:h-6 sm:w-6 text-primary shrink-0" />
+                  <img
+                    src={getBuildTelemetry().iconSvgPath}
+                    alt="DomsHomeLab"
+                    className="h-6 w-6 sm:h-7 sm:w-7 rounded-lg shrink-0"
+                  />
                   <span className="font-bold text-lg sm:text-xl tracking-tight">DomsHomeLab</span>
               </Link>
               <BuildBadge variant="compact" isAdmin={isAdmin} />
@@ -258,6 +263,11 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
                 <Suspense fallback={<div className="w-9 h-9" />}>
                   <MobileSidebar />
                 </Suspense>
+                <img
+                  src={getBuildTelemetry().iconSvgPath}
+                  alt="DomsHomeLab"
+                  className="h-6 w-6 rounded-md shrink-0"
+                />
                 <span className="font-bold text-base sm:text-lg truncate">{getMobileTitle()}</span>
                 <BuildBadge variant="compact" isAdmin={isAdmin} />
              </div>

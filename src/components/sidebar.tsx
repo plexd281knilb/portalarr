@@ -1,6 +1,7 @@
 "use client";
 
 import { BuildBadge } from "@/components/build-badge";
+import { getBuildTelemetry } from "@/lib/version";
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -124,13 +125,17 @@ function SidebarNavContent({ onItemClick }: SidebarNavContentProps) {
   }, [pathname]);
 
 
+  const telemetry = getBuildTelemetry();
+
   return (
     <div className="space-y-3">
       {/* Brand Header - Vertical Lockup so DomsHomeLab NEVER truncates */}
       <div className="flex items-center gap-3 px-1 py-1 pb-3 border-b border-border/40 select-none">
-        <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-primary/20 via-purple-500/20 to-blue-500/20 border border-primary/30 flex items-center justify-center shrink-0 shadow-sm">
-          <BookOpen className="h-4.5 w-4.5 text-primary" />
-        </div>
+        <img
+          src={telemetry.iconSvgPath}
+          alt={`DomsHomeLab ${telemetry.iconKey.toUpperCase()}`}
+          className="h-9 w-9 rounded-xl shrink-0 shadow-sm"
+        />
         <div className="flex flex-col min-w-0 flex-1">
           <div className="flex items-center justify-between gap-1">
             <span className="font-bold text-base tracking-tight text-foreground whitespace-nowrap">

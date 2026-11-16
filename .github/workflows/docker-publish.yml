@@ -47,6 +47,23 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Resolve branch-specific container icon URL
+        id: branch_icon
+        run: |
+          BRANCH="${{ github.ref_name }}"
+          case "$BRANCH" in
+            beta)
+              ICON_URL="https://raw.githubusercontent.com/${{ github.repository }}/beta/public/icons/portalarr-beta.png"
+              ;;
+            dev|main)
+              ICON_URL="https://raw.githubusercontent.com/${{ github.repository }}/dev/public/icons/portalarr-dev.png"
+              ;;
+            *)
+              ICON_URL="https://raw.githubusercontent.com/${{ github.repository }}/prod/public/icons/portalarr-prod.png"
+              ;;
+          esac
+          echo "icon_url=$ICON_URL" >> "$GITHUB_OUTPUT"
+
       - name: Extract metadata (tags, labels) for Docker
         id: meta
         uses: docker/metadata-action@v5
@@ -56,6 +73,9 @@ jobs:
             type=ref,event=branch
             type=ref,event=tag
             type=raw,value=latest,enable={{is_default_branch}}
+          labels: |
+            net.unraid.docker.icon=${{ steps.branch_icon.outputs.icon_url }}
+            org.opencontainers.image.icon=${{ steps.branch_icon.outputs.icon_url }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
@@ -70,5 +90,6 @@ jobs:
             GIT_BRANCH=${{ github.ref_name }}
             GIT_SHA=${{ github.sha }}
             BUILD_NUMBER=${{ github.run_number }}
+            CONTAINER_ICON_URL=${{ steps.branch_icon.outputs.icon_url }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
