@@ -1458,3 +1458,23 @@ Detailed guide on updating: [updating-this-skill.md](./references/updating-this-
   - Dedicated `[🛠️ Dev Roadmap]` button (`DevRoadmapModal`) is mounted on the Home Dashboard (`src/app/page.tsx`) header lockup and inside `AdminDetailedStreams` (`src/components/admin-detailed-streams.tsx`).
   - **Settings Management**: In `/settings?tab=announcements`, administrators can edit, preview, and save both `roadmap.md` and `docs/DEV_ROADMAP.md` via a dual-tab Markdown editor with dirty state tracking.
   - **Container Packaging**: `Dockerfile` copies `/app/docs` to the runtime container so developer maintenance logs persist in Docker homelab deployments.
+
+
+### 50. Global Stale-Deployment Auto-Recovery & Non-Blocking Navigation (`src/lib/client-recovery.ts`)
+- **Global Deployment Skew Recovery**: `LayoutWrapper` (`src/components/layout-wrapper.tsx`) registers global `unhandledrejection` and `error` listeners calling `isStaleDeploymentError()` + `triggerDeploymentRecoveryReload()`. Both Next.js Server Action ID mismatches (`Failed to find Server Action`, `was not found on the server`, `older or newer deployment`) and chunk load errors automatically refresh stale browser tabs with a 15-second `sessionStorage` cooldown (`portalarr_stale_reload_ts`) to prevent reload loops.
+- **Non-Blocking Client Transitions**: `LayoutWrapper` and `SidebarNavContent` cache session/access checks across fast in-app route switches (<60s outside auth boundaries) and defer `prewarmUserSessionAction()` behind a 2.5s timer so navigation data loaders never wait behind background prewarming in Next.js's sequential Server Action queue.
+- **Access Directory Fast Path & Error Visibility**: `AccessSettingsPage` (`src/app/settings/access/page.tsx`) loads users in parallel via `GET /api/users` using `fetchJsonWithTimeout` (12s abort guard + 13s `safetyUnlock`), while `getAppUsersResult()` executes a pure DB read without awaiting synchronous trial/subscription sweeps. Failed loads display an explicit error card with a 1-click **Retry** button rather than showing `User Directory (0)` indefinitely, and `SettingsPageContent` uses `window.history.replaceState` for initial URL sync.
+
+
+---
+
+## 🚨 Mandatory Task Completion Protocol (Strict SemVer)
+
+To guarantee 100% reliability, quality control, and consistency, the following 5-step protocol MUST be executed at the end of every task or feature change before considering the work complete:
+
+0. **Step 0: Read Skill Upfront**: Call `read_file` on the relevant `SKILL.md` before writing code.
+1. **Step 1: Integration Testing**: Execute `cmd /c "npm test"` to run the verification suite (`scripts/verify-all.ts`). All test suites must pass (0 failures).
+2. **Step 2: Production Build Verification**: Execute `cmd /c "npm run build"`. Ensure 100% clean compilation, zero TypeScript errors, and zero Turbopack runtime errors.
+3. **Step 3: Edge Security & Cloudflare Policy Audit**: Whenever ANY page route (`src/app/**/page.tsx`) or API route (`src/app/api/**/route.ts`) is created, moved, or updated, register it in `src/lib/edge-policy-paths.ts` and inform the user.
+4. **Step 4: Skills & Documentation Sync**: Review and update relevant `.agents/skills/` documents to record any new UI patterns, API contracts, formulas, or operational guidelines **BEFORE** committing.
+5. **Step 5: SemVer Version Increment & Git Deployment Push**: Increment version in `package.json` according to SemVer (PATCH `+1` for fixes/polish, MINOR `+1` for features), stage all changes (`git add -A`), commit with freshly incremented semantic version prefix (`[v<version>] feat/fix(scope): message`), push strictly to `origin/main` (Beta). NEVER push to `stable` unless the user explicitly instructs.

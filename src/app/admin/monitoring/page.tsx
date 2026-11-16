@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useTransition } from "react";
 import Link from "next/link";
+import { isStaleDeploymentError, triggerDeploymentRecoveryReload, withTimeout } from "@/lib/client-recovery";
 import { 
     getFleetMonitoringDataAction, 
     restartDockerContainerAction, 
@@ -167,7 +168,7 @@ export default function AdminFleetMonitoringPage() {
     const loadData = async (isManual = false) => {
         if (isManual) setRefreshing(true);
         try {
-            const res = await getFleetMonitoringDataAction();
+            const res = await withTimeout(getFleetMonitoringDataAction(), 15000, "Fleet monitoring");
             if (res && res.success) {
                 setServices(res.services);
                 setContainers(res.containers);
@@ -179,6 +180,10 @@ export default function AdminFleetMonitoringPage() {
                 setLastProbeTime(res.lastProbeTime);
             }
         } catch (err) {
+            if (isStaleDeploymentError(err)) {
+                triggerDeploymentRecoveryReload();
+                return;
+            }
             console.error("Failed to load fleet monitoring telemetry:", err);
         } finally {
             setLoading(false);

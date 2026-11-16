@@ -23,6 +23,7 @@ import {
 } from "@/app/actions";
 import { getPlexPin, checkPlexPin } from "@/app/plex-auth";
 import { testArrConfig } from "@/app/arr-actions";
+import { isStaleDeploymentError, triggerDeploymentRecoveryReload } from "@/lib/client-recovery";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -167,11 +168,11 @@ function SettingsPageContent() {
             return next;
         });
 
-        if (!activeTabParam && savedTab) {
+        if (!activeTabParam && savedTab && typeof window !== "undefined") {
             const params = new URLSearchParams(window.location.search);
             params.set("tab", resolved.hub);
             if (resolved.subTab) params.set("subtab", resolved.subTab);
-            router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+            window.history.replaceState(null, "", `${pathname}?${params.toString()}`);
         }
     }, [activeTabParam, activeSubTabParam, router, pathname]);
     const [loading, setLoading] = useState(true);
@@ -1223,6 +1224,10 @@ function SettingsPageContent() {
                 betaText: betaTextVal,
             };
         } catch (error) {
+            if (isStaleDeploymentError(error)) {
+                triggerDeploymentRecoveryReload();
+                return;
+            }
             console.error("Failed to load settings data:", error);
         } finally {
             clearTimeout(safetyUnlock);

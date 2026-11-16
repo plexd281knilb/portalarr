@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { UnsavedChangesPrompt } from "@/components/ui/unsaved-changes-prompt";
+import { isStaleDeploymentError, triggerDeploymentRecoveryReload, withTimeout } from "@/lib/client-recovery";
 import { getCurrentUser, changeUserPassword } from "@/app/auth-actions";
 import { 
     getUserProfileBootstrapAction,
@@ -442,9 +443,9 @@ export default function UserProfilePage() {
         async function fetchProfile() {
             setLoading(true);
             try {
-                const bootstrap = await getUserProfileBootstrapAction();
+                const bootstrap = await withTimeout(getUserProfileBootstrapAction(), 15000, "Profile bootstrap");
                 if (!bootstrap || !bootstrap.success || !bootstrap.data) {
-                    const u = await getCurrentUser();
+                    const u = await withTimeout(getCurrentUser(), 10000, "Current user");
                     if (!u) {
                         window.location.href = "/login";
                         return;
@@ -575,6 +576,10 @@ export default function UserProfilePage() {
                     }
                 };
             } catch (e) {
+                if (isStaleDeploymentError(e)) {
+                    triggerDeploymentRecoveryReload();
+                    return;
+                }
                 console.error("fetchProfile error:", e);
             } finally {
                 setLoading(false);

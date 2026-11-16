@@ -2677,6 +2677,109 @@ async function runTestSuite() {
     });
 
 
+    // =========================================================================
+    // SUITE 23: Database Build Parity, Stale Deployment Recovery & Non-Blocking User Directory
+    // =========================================================================
+    await assertTest("Suite 23: Database Build Parity, Stale Recovery & Non-Blocking Directory", async () => {
+        const schemaSrc = fs.readFileSync(path.join(process.cwd(), "prisma/schema.prisma"), "utf8");
+        const prismaLibSrc = fs.readFileSync(path.join(process.cwd(), "src/lib/prisma.ts"), "utf8");
+        const dockerfileSrc = fs.readFileSync(path.join(process.cwd(), "Dockerfile"), "utf8");
+        const entrypointSrc = fs.readFileSync(path.join(process.cwd(), "docker-entrypoint.sh"), "utf8");
+        const pkgJson = JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8"));
+
+        // 1. Every Prisma model & scalar field must have runtime schema parity in ensureSchemaColumns()
+        const modelMatches = [...schemaSrc.matchAll(/model\s+(\w+)\s*\{([\s\S]*?)\r?\n\}/g)];
+        if (modelMatches.length === 0) throw new Error("Failed to parse models from prisma/schema.prisma");
+        const modelNames = new Set(modelMatches.map(m => m[1]));
+
+        for (const m of modelMatches) {
+            const modelName = m[1];
+            const createRe = new RegExp(`CREATE TABLE IF NOT EXISTS\\s+"?${modelName}"?\\s*\\(`);
+            if (!createRe.test(prismaLibSrc)) {
+                throw new Error(`Prisma model "${modelName}" is missing CREATE TABLE coverage in src/lib/prisma.ts ensureSchemaColumns()`);
+            }
+            const alterRe = new RegExp(`ALTER TABLE\\s+"${modelName}"\\s+ADD COLUMN\\s+"(\\w+)"`, "g");
+            const coveredCols = new Set([...prismaLibSrc.matchAll(alterRe)].map(x => x[1]));
+            const createBlockMatch = prismaLibSrc.match(new RegExp(`CREATE TABLE IF NOT EXISTS\\s+"${modelName}"\\s*\\(([\\s\\S]*?)\\);`, "m"));
+            if (createBlockMatch) {
+                for (const cm of createBlockMatch[1].matchAll(/^\s*"(\w+)"\s+/gm)) {
+                    coveredCols.add(cm[1]);
+                }
+            }
+            const lines = m[2].split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith("//") && !l.startsWith("@@"));
+            for (const line of lines) {
+                const tokens = line.split(/\s+/);
+                const col = tokens[0];
+                const typeTok = (tokens[1] || "").replace(/[\[\]\?]/g, "");
+                if (!col || modelNames.has(typeTok)) continue;
+                if (!coveredCols.has(col)) {
+                    throw new Error(`Column "${modelName}.${col}" exists in schema.prisma but is missing from ensureSchemaColumns()`);
+                }
+            }
+        }
+
+        // 2. Dockerfile & entrypoint DB build hygiene
+        const prismaIdx = dockerfileSrc.indexOf("COPY prisma ./prisma");
+        const npmCiIdx = dockerfileSrc.indexOf("npm ci");
+        if (prismaIdx === -1 || npmCiIdx === -1 || prismaIdx > npmCiIdx) {
+            throw new Error("Dockerfile must copy prisma/schema before running npm ci for guarded postinstall");
+        }
+        const pkgPrismaVer = String(pkgJson.devDependencies?.prisma || "").replace(/^[^\d]*/, "");
+        if (!pkgPrismaVer || !dockerfileSrc.includes(`prisma@${pkgPrismaVer}`)) {
+            throw new Error(`Dockerfile global Prisma CLI must match package.json prisma@${pkgPrismaVer}`);
+        }
+        if (!dockerfileSrc.includes("rm -f /app/prisma/dev.db*")) {
+            throw new Error("Dockerfile builder stage must clean ephemeral build-time /app/prisma/dev.db* artifacts");
+        }
+        if (!entrypointSrc.includes("prisma db push")) {
+            throw new Error("docker-entrypoint.sh must initialize new databases via prisma db push");
+        }
+        if (!prismaLibSrc.includes('NEXT_PHASE !== "phase-production-build"')) {
+            throw new Error("src/lib/prisma.ts must skip auto-boot schema sync & scheduler during phase-production-build");
+        }
+        if (!String(pkgJson.scripts?.postinstall || "").includes("prisma/schema.prisma")) {
+            throw new Error("package.json postinstall must guard prisma generate on prisma/schema.prisma existence");
+        }
+
+        // 3. Global stale-deployment recovery & non-blocking client navigation
+        const recoverySrc = fs.readFileSync(path.join(process.cwd(), "src/lib/client-recovery.ts"), "utf8");
+        const layoutSrc = fs.readFileSync(path.join(process.cwd(), "src/components/layout-wrapper.tsx"), "utf8");
+        const accessSrc = fs.readFileSync(path.join(process.cwd(), "src/app/settings/access/page.tsx"), "utf8");
+        const usersApiSrc = fs.readFileSync(path.join(process.cwd(), "src/app/api/users/route.ts"), "utf8");
+        const settingsPageSrc = fs.readFileSync(path.join(process.cwd(), "src/app/settings/page.tsx"), "utf8");
+
+        if (!recoverySrc.includes("portalarr_stale_reload_ts") || !layoutSrc.includes("unhandledrejection") || !layoutSrc.includes("triggerDeploymentRecoveryReload")) {
+            throw new Error("LayoutWrapper must register cooldown-protected global stale deployment auto-recovery");
+        }
+        if (!accessSrc.includes('"/api/users"') || !accessSrc.includes("usersError") || !accessSrc.includes("safetyUnlock")) {
+            throw new Error("AccessSettingsPage must load via /api/users with timeout safetyUnlock and explicit error/retry UI");
+        }
+        if (!usersApiSrc.includes("getAppUsersResult") || !usersApiSrc.includes("status = res.error === \"Unauthorized\" ? 401 : 500")) {
+            throw new Error("GET /api/users must surface auth/DB errors with proper HTTP status instead of empty array");
+        }
+        if (!settingsPageSrc.includes('window.history.replaceState(null, "", `${pathname}?${params.toString()}`)')) {
+            throw new Error("SettingsPageContent initial URL sync must use window.history.replaceState to avoid aborting fetches");
+        }
+
+        // 4. Verify getAppUsersResult() executes non-blockingly under test auth
+        const prevTestAuth = process.env.PORTALARR_TEST_AUTH;
+        process.env.PORTALARR_TEST_AUTH = "true";
+        try {
+            const { getAppUsersResult } = await import("../src/app/actions");
+            const startMs = Date.now();
+            const res = await getAppUsersResult();
+            const elapsed = Date.now() - startMs;
+            if (!res || !res.success || !Array.isArray(res.users)) {
+                throw new Error(`getAppUsersResult failed: ${res?.error || "invalid payload"}`);
+            }
+            if (elapsed > 1000) {
+                throw new Error(`Expected getAppUsersResult() to complete fast (<1000ms), took ${elapsed}ms`);
+            }
+        } finally {
+            process.env.PORTALARR_TEST_AUTH = prevTestAuth;
+        }
+    });
+
     console.log("\n==========================================================");
     console.log(`   INTEGRATION TEST SUMMARY: ${passedTests} PASSED, ${failedTests} FAILED   `);
     console.log("==========================================================\n");

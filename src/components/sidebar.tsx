@@ -1,7 +1,7 @@
 "use client";
 
 import { BuildBadge } from "@/components/build-badge";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -82,10 +82,19 @@ function SidebarNavContent({ onItemClick }: SidebarNavContentProps) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSuperUser, setIsSuperUser] = useState(false);
   const [isTrial, setIsTrial] = useState(false);
+  const lastSessionCheckRef = useRef<{ ts: number; hasSession: boolean }>({ ts: 0, hasSession: false });
 
   useEffect(() => {
+    const isAuthBoundary = pathname === "/login" || pathname === "/pending" || pathname.startsWith("/join");
+    const now = Date.now();
+    if (!isAuthBoundary && lastSessionCheckRef.current.hasSession && now - lastSessionCheckRef.current.ts < 60000) {
+      return;
+    }
+    let cancelled = false;
     getSession().then((session) => {
+      if (cancelled) return;
       if (session) {
+        lastSessionCheckRef.current = { ts: Date.now(), hasSession: true };
         const userRole = (session.role as string) || "";
         const userStatus = (session.status as string) || "";
         const trial = (userStatus === "TRIAL" || userRole === "TRIAL" || (session as any).isTrial === true) && userStatus !== "APPROVED" && userRole !== "ADMIN";
@@ -93,15 +102,20 @@ function SidebarNavContent({ onItemClick }: SidebarNavContentProps) {
         setIsSuperUser(userRole === "SUPER_USER" || userRole === "ADMIN");
         setIsTrial(trial);
       } else {
+        lastSessionCheckRef.current = { ts: Date.now(), hasSession: false };
         setIsAdmin(false);
         setIsSuperUser(false);
         setIsTrial(false);
       }
     }).catch(() => {
+      if (cancelled) return;
       setIsAdmin(false);
       setIsSuperUser(false);
       setIsTrial(false);
     });
+    return () => {
+      cancelled = true;
+    };
   }, [pathname]);
 
 

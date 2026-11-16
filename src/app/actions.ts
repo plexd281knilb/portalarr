@@ -3785,13 +3785,23 @@ export async function expireDueTrialsAndSubscriptionsInternal() {
     }
 }
 
-export async function getAppUsers() {
-    try {
-        await verifyAdmin();
-        await ensureSchemaColumns();
-        // Automatically evaluate and expire any elapsed trials or subscriptions
-        await expireDueTrialsAndSubscriptionsInternal().catch(() => {});
+let lastBgTrialExpirationCheckMs = 0;
 
+async function queryAppUsersFromDb() {
+    await verifyAdmin();
+    await ensureSchemaColumns();
+
+    // Trigger due trial/subscription evaluation asynchronously at most once per minute
+    // so synchronous directory reads never block on Plex/Discord/SMTP side-effects.
+    const nowMs = Date.now();
+    if (process.env.NODE_ENV !== "test" && process.env.PORTALARR_TEST !== "true" && nowMs - lastBgTrialExpirationCheckMs > 60_000) {
+        lastBgTrialExpirationCheckMs = nowMs;
+        setTimeout(() => {
+            expireDueTrialsAndSubscriptionsInternal().catch(() => {});
+        }, 0);
+    }
+
+    try {
         return await prisma.user.findMany({
             orderBy: { createdAt: 'desc' },
             select: { 
@@ -3949,8 +3959,27 @@ export async function getAppUsers() {
             });
         } catch (innerErr) {
             console.error("[GET-APP-USERS-FALLBACK-ERROR]:", innerErr);
-            return [];
+            throw innerErr;
         }
+    }
+}
+
+export async function getAppUsersResult(): Promise<{ success: boolean; users: any[]; error?: string }> {
+    try {
+        const users = await queryAppUsersFromDb();
+        return { success: true, users: users || [] };
+    } catch (e: any) {
+        console.error("[GET-APP-USERS-RESULT-ERROR]:", e?.message || e);
+        return { success: false, users: [], error: e?.message || "Failed to fetch user directory" };
+    }
+}
+
+export async function getAppUsers() {
+    try {
+        return await queryAppUsersFromDb();
+    } catch (e: any) {
+        console.error("[GET-APP-USERS-FATAL]:", e?.message || e);
+        return [];
     }
 }
 

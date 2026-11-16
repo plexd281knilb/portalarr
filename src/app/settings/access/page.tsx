@@ -48,6 +48,7 @@ import {
 import { changeUserPassword, impersonateUserAction } from "@/app/auth-actions";
 import { calculateProratedBilling } from "@/lib/prorated-billing";
 import { calculateUserRenewalSummary } from "@/lib/referral-rewards";
+import { fetchJsonWithTimeout, isStaleDeploymentError, triggerDeploymentRecoveryReload, withTimeout } from "@/lib/client-recovery";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -92,6 +93,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
     const [activeTab, setActiveTab] = useState(initialTab || "users");
     const [users, setUsers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [usersError, setUsersError] = useState<string | null>(null);
     const [syncingPlex, setSyncingPlex] = useState(false);
     const [syncMessage, setSyncMessage] = useState("");
     const [restoringAccess, setRestoringAccess] = useState(false);
@@ -628,12 +630,22 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
 
     const loadUsers = async () => {
         setLoading(true);
+        setUsersError(null);
+        const safetyUnlock = setTimeout(() => {
+            setLoading(false);
+        }, 13000);
         try {
-            const data = await getAppUsers();
-            setUsers(data || []);
-        } catch (e) {
+            const payload = await fetchJsonWithTimeout<{ users?: any[]; error?: string }>("/api/users", {}, 12000);
+            setUsers(Array.isArray(payload?.users) ? payload.users : []);
+        } catch (e: any) {
+            if (isStaleDeploymentError(e)) {
+                triggerDeploymentRecoveryReload();
+                return;
+            }
             console.error("loadUsers error:", e);
+            setUsersError(e?.message || "Failed to load user directory. Please retry.");
         } finally {
+            clearTimeout(safetyUnlock);
             setLoading(false);
         }
     };
@@ -641,11 +653,12 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
     const loadLibraries = async () => {
         setLoadingLibraries(true);
         try {
-            const res = await fetchPlexServerLibraries();
+            const res = await withTimeout(fetchPlexServerLibraries(), 15000, "Plex library scan");
             if (res && res.success && res.servers) {
                 setServerLibraries(res.servers);
             }
         } catch (e) {
+            if (isStaleDeploymentError(e)) triggerDeploymentRecoveryReload();
             console.error("loadLibraries error:", e);
         } finally {
             setLoadingLibraries(false);
@@ -655,11 +668,12 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
     const loadReferrals = async () => {
         setLoadingReferrals(true);
         try {
-            const res = await getReferralStats();
+            const res = await withTimeout(getReferralStats(), 12000, "Referral stats");
             if (res && res.success && res.stats) {
                 setReferralStats(res.stats);
             }
         } catch (e) {
+            if (isStaleDeploymentError(e)) triggerDeploymentRecoveryReload();
             console.error("loadReferrals error:", e);
         } finally {
             setLoadingReferrals(false);
@@ -2458,13 +2472,32 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                     </div>
                                 )}
 
+                                {usersError && (
+                                    <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-xs flex flex-wrap items-center justify-between gap-3 text-red-200">
+                                        <div className="flex items-center gap-2">
+                                            <AlertTriangle className="h-4 w-4 text-red-400 shrink-0" />
+                                            <span><strong className="font-semibold">User directory failed to load:</strong> {usersError}</span>
+                                        </div>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => loadUsers()}
+                                            className="h-7 text-xs border-red-500/40 bg-red-500/15 hover:bg-red-500/25 text-red-200 gap-1.5 cursor-pointer"
+                                        >
+                                            <RefreshCw className="h-3.5 w-3.5" />
+                                            Retry
+                                        </Button>
+                                    </div>
+                                )}
+
                                 {loading ? (
                                     <div className="text-sm text-muted-foreground flex items-center gap-2 p-6 justify-center">
                                         <Loader2 className="h-5 w-5 animate-spin text-emerald-400" /> Loading user directory...
                                     </div>
                                 ) : sortedAndFilteredUsers.length === 0 ? (
                                     <div className="text-sm text-muted-foreground italic p-8 text-center border border-dashed border-border/40 rounded-xl bg-muted/10">
-                                        No matching users found.
+                                        {usersError ? "Unable to display users until the directory request succeeds." : "No matching users found."}
                                     </div>
                                 ) : (
                                     sortedAndFilteredUsers.map((user) => {

@@ -5,7 +5,8 @@ import { Sidebar, MobileSidebar } from "@/components/sidebar";
 import { LogOut, LogIn, Settings, LayoutDashboard, Server, BookOpen, User, HelpCircle } from "lucide-react";
 import { logout, getSession, getCurrentUser } from "@/app/auth-actions";
 import { checkUserLibraryAccess } from "@/app/actions";
-import { useState, useEffect, Suspense } from "react";
+import { isStaleDeploymentError, triggerDeploymentRecoveryReload } from "@/lib/client-recovery";
+import { useState, useEffect, useRef, Suspense } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import ImpersonationBanner from "@/components/impersonation-banner";
@@ -21,11 +22,54 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
   const [username, setUsername] = useState("");
   const [isTrial, setIsTrial] = useState(false);
   const [userRole, setUserRole] = useState("USER");
+  const lastAuthCheckRef = useRef<{ ts: number; hasSession: boolean }>({ ts: 0, hasSession: false });
+  const lastPrewarmTriggerRef = useRef<number>(0);
+
+  // Global stale deployment / Server Action mismatch & ChunkLoad recovery across ALL routes
+  useEffect(() => {
+    const handleGlobalError = (event: PromiseRejectionEvent | ErrorEvent) => {
+      const reason =
+        (event as PromiseRejectionEvent).reason ||
+        (event as ErrorEvent).error ||
+        (event as ErrorEvent).message;
+      if (isStaleDeploymentError(reason)) {
+        console.warn("[PORTALARR] Stale build session detected across deployment. Auto-refreshing tab...");
+        triggerDeploymentRecoveryReload();
+      }
+    };
+
+    window.addEventListener("unhandledrejection", handleGlobalError);
+    window.addEventListener("error", handleGlobalError);
+    return () => {
+      window.removeEventListener("unhandledrejection", handleGlobalError);
+      window.removeEventListener("error", handleGlobalError);
+    };
+  }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    let prewarmTimer: ReturnType<typeof setTimeout> | undefined;
+    const isAuthBoundary = pathname === "/login" || pathname.startsWith("/pending") || pathname.startsWith("/join");
+    const now = Date.now();
+
     async function checkAccess() {
+      // Skip redundant layout Server Actions during fast internal page switches
+      if (!isAuthBoundary && lastAuthCheckRef.current.hasSession && now - lastAuthCheckRef.current.ts < 60000) {
+        return;
+      }
       try {
-        const user = await getCurrentUser().catch(() => null);
+        const [user, session] = await Promise.all([
+          getCurrentUser().catch((err) => {
+            if (isStaleDeploymentError(err)) triggerDeploymentRecoveryReload();
+            return null;
+          }),
+          getSession().catch((err) => {
+            if (isStaleDeploymentError(err)) triggerDeploymentRecoveryReload();
+            return null;
+          }),
+        ]);
+        if (cancelled) return;
+
         if (user && (user.status === "EXPIRED" || user.status === "PENDING" || user.status === "REJECTED" || user.status === "SUSPENDED")) {
           if (!pathname.startsWith("/pending") && pathname !== "/login" && !pathname.startsWith("/join")) {
             window.location.href = "/pending";
@@ -33,8 +77,8 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
           }
         }
 
-        const session = await getSession();
         if (session) {
+          lastAuthCheckRef.current = { ts: Date.now(), hasSession: true };
           setIsLoggedIn(true);
           const isAdm = session.role === "ADMIN";
           setIsAdmin(isAdm);
@@ -44,16 +88,23 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
           setIsTrial(isTr);
           setUsername((session.username as string) || (user?.username as string) || "");
 
-          // Asynchronously prewarm user data in background (debounced to once every 3 min)
-          import("@/app/actions").then(m => m.prewarmUserSessionAction?.()).catch(() => {});
+          // Defer prewarming outside the route-navigation critical path so page loaders run first
+          if (Date.now() - lastPrewarmTriggerRef.current > 3 * 60 * 1000) {
+            prewarmTimer = setTimeout(() => {
+              if (cancelled) return;
+              lastPrewarmTriggerRef.current = Date.now();
+              import("@/app/actions").then((m) => m.prewarmUserSessionAction?.()).catch(() => {});
+            }, 2500);
+          }
 
           if (isAdm) {
             setHasLibraryAccess(true);
           } else {
-            const hasAcc = await checkUserLibraryAccess();
-            setHasLibraryAccess(hasAcc);
+            const hasAcc = await checkUserLibraryAccess().catch(() => false);
+            if (!cancelled) setHasLibraryAccess(hasAcc);
           }
         } else {
+          lastAuthCheckRef.current = { ts: Date.now(), hasSession: false };
           setIsLoggedIn(false);
           setIsAdmin(false);
           setIsTrial(false);
@@ -62,10 +113,19 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
           setHasLibraryAccess(false);
         }
       } catch (e) {
+        if (isStaleDeploymentError(e)) {
+          triggerDeploymentRecoveryReload();
+          return;
+        }
         console.error("Failed to check layout library access:", e);
       }
     }
     checkAccess();
+
+    return () => {
+      cancelled = true;
+      if (prewarmTimer !== undefined) clearTimeout(prewarmTimer);
+    };
   }, [pathname]);
   
   const isPublicRoute = pathname === "/login" || pathname === "/join" || pathname.startsWith("/join/") || pathname === "/pending";
