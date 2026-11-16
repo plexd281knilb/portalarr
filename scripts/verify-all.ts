@@ -1710,6 +1710,24 @@ async function runTestSuite() {
             if (prodTelemetry.version !== "3.0.0") throw new Error(`Expected stripped version 3.0.0, got ${prodTelemetry.version}`);
             if (!prodTelemetry.displayBadge.includes("PROD")) throw new Error(`Expected displayBadge to contain PROD, got ${prodTelemetry.displayBadge}`);
             if (!prodTelemetry.dockerImageTag.includes(":prod")) throw new Error(`Expected docker tag to include :prod, got ${prodTelemetry.dockerImageTag}`);
+
+            // 3b. Verify branch-specific webpage & container icon mapping and generated files
+            if (betaTelemetry.iconKey !== "beta" || betaTelemetry.iconSvgPath !== "/icons/portalarr-beta.svg") {
+                throw new Error(`Expected beta iconKey/svg, got ${betaTelemetry.iconKey} / ${betaTelemetry.iconSvgPath}`);
+            }
+            if (devTelemetry.iconKey !== "dev" || devTelemetry.iconSvgPath !== "/icons/portalarr-dev.svg") {
+                throw new Error(`Expected dev iconKey/svg, got ${devTelemetry.iconKey} / ${devTelemetry.iconSvgPath}`);
+            }
+            if (prodTelemetry.iconKey !== "prod" || prodTelemetry.iconSvgPath !== "/icons/portalarr-prod.svg") {
+                throw new Error(`Expected prod iconKey/svg, got ${prodTelemetry.iconKey} / ${prodTelemetry.iconSvgPath}`);
+            }
+            for (const k of ["prod", "beta", "dev"] as const) {
+                for (const rel of [`public/icons/portalarr-${k}.svg`, `public/icons/portalarr-${k}.png`, `public/icons/favicon-${k}.ico`]) {
+                    if (!fs.existsSync(path.join(process.cwd(), rel))) {
+                        throw new Error(`Missing branch icon asset: ${rel}`);
+                    }
+                }
+            }
         } finally {
             process.env = originalEnv;
         }

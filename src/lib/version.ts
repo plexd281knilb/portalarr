@@ -14,6 +14,11 @@ export interface VersionInfo {
     fullDisplay: string;
     workflowUrl?: string;
     dockerImageTag: string;
+    iconKey: "prod" | "beta" | "dev";
+    iconSvgPath: string;
+    iconPngPath: string;
+    faviconIcoPath: string;
+    containerIconUrl: string;
 }
 
 /**
@@ -76,6 +81,12 @@ export function getBuildTelemetry(): VersionInfo {
         : isBeta ? "beta" : isStable ? "prod" : "dev";
     const dockerImageTag = `ghcr.io/plexd281knilb/portalarr:${tagBranch}`;
 
+    const iconKey: "prod" | "beta" | "dev" = isBeta ? "beta" : isStable ? "prod" : "dev";
+    const iconSvgPath = `/icons/portalarr-${iconKey}.svg`;
+    const iconPngPath = `/icons/portalarr-${iconKey}.png`;
+    const faviconIcoPath = `/icons/favicon-${iconKey}.ico`;
+    const containerIconUrl = `https://raw.githubusercontent.com/plexd281knilb/portalarr/${iconKey}/public/icons/portalarr-${iconKey}.png`;
+
     const workflowUrl = buildNumber 
         ? `https://github.com/plexd281knilb/portalarr/actions` 
         : undefined;
@@ -93,6 +104,11 @@ export function getBuildTelemetry(): VersionInfo {
         displayBadge,
         fullDisplay,
         workflowUrl,
-        dockerImageTag
+        dockerImageTag,
+        iconKey,
+        iconSvgPath,
+        iconPngPath,
+        faviconIcoPath,
+        containerIconUrl
     };
 }
