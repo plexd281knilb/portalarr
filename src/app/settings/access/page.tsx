@@ -864,12 +864,65 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
         }
     };
 
+    const loadAccessBootstrap = async () => {
+        try {
+            const payload = await fetchJsonWithTimeout<{
+                referrals?: any;
+                paymentSettings?: any;
+                addons?: any;
+                approvalCounts?: { success?: boolean; pendingCount: number; totalCount: number };
+            }>("/api/admin/access-bootstrap", {}, 15000);
+
+            if (payload?.referrals?.success && payload.referrals.stats) {
+                setReferralStats(payload.referrals.stats);
+            }
+
+            const pRes = payload?.paymentSettings;
+            if (pRes && pRes.success && pRes.settings) {
+                setPaymentSettings(pRes.settings);
+                const loadedKeys = pRes.settings.defaultPlexLibraries
+                    ? pRes.settings.defaultPlexLibraries.split(",").map((s: string) => s.trim()).filter(Boolean)
+                    : [];
+                setDefaultSelectedKeys(loadedKeys);
+
+                const loadedTrialKeys = pRes.settings.defaultTrialPlexLibraries
+                    ? pRes.settings.defaultTrialPlexLibraries.split(",").map((s: string) => s.trim()).filter(Boolean)
+                    : [];
+                setDefaultTrialSelectedKeys(loadedTrialKeys);
+
+                const loadedKidsKeys = pRes.settings.defaultKidsPlexLibraries
+                    ? pRes.settings.defaultKidsPlexLibraries.split(",").map((s: string) => s.trim()).filter(Boolean)
+                    : [];
+                setDefaultKidsSelectedKeys(loadedKidsKeys);
+
+                initialPaymentSettingsRef.current = {
+                    paymentSettings: { ...pRes.settings },
+                    defaultSelectedKeys: loadedKeys,
+                    defaultTrialSelectedKeys: loadedTrialKeys,
+                    defaultKidsSelectedKeys: loadedKidsKeys
+                };
+            }
+
+            if (payload?.addons?.success && payload.addons.catalog) {
+                setAdminAddonsCatalog(payload.addons.catalog);
+            }
+            if (payload?.approvalCounts?.success) {
+                const counts = payload.approvalCounts;
+                setApprovalCounts(prev => ({ ...prev, pendingCount: counts.pendingCount, totalCount: counts.totalCount }));
+            }
+        } catch (e) {
+            if (isStaleDeploymentError(e)) {
+                triggerDeploymentRecoveryReload();
+                return;
+            }
+            console.error("loadAccessBootstrap error:", e);
+        }
+    };
+
     useEffect(() => {
         loadUsers();
+        loadAccessBootstrap();
         loadLibraries();
-        loadReferrals();
-        loadPaymentSettings();
-        loadApprovalCounts();
 
         if (typeof window !== "undefined") {
             const params = new URLSearchParams(window.location.search);

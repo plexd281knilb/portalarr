@@ -51,7 +51,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # CRITICAL: Install libraries required for Prisma engines, Calibre for EPUB sanitation, Font packages for Kometa poster overlay rendering, and ffmpeg/yt-dlp for placeholder trailers
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update && apt-get install -y openssl sqlite3 calibre bash ffmpeg curl python3 fontconfig fonts-dejavu-core fonts-liberation fonts-freefont-ttf && \
+    apt-get update && apt-get install -y openssl sqlite3 calibre bash ffmpeg curl python3 gosu fontconfig fonts-dejavu-core fonts-liberation fonts-freefont-ttf && \
     curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp && \
     chmod a+rx /usr/local/bin/yt-dlp
 
@@ -87,8 +87,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/docs ./docs
 COPY --chmod=755 docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod 755 /app/docker-entrypoint.sh && chown nextjs:nodejs /app/docker-entrypoint.sh
 
-USER nextjs
-
+# Entrypoint runs briefly as root to normalize bind-mount permissions (and optional PUID/PGID),
+# then drops privileges to non-root via gosu before launching node server.js.
 EXPOSE 3000
 
 ENV PORT=3000

@@ -45,7 +45,7 @@ export default function ImpersonationBanner() {
 
   useEffect(() => {
     checkStatus();
-  }, [pathname, checkStatus]);
+  }, [checkStatus]);
 
   const handleExit = async () => {
     setExiting(true);

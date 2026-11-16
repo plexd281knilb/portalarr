@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useTransition } from "react";
-import { isStaleDeploymentError, triggerDeploymentRecoveryReload, withTimeout } from "@/lib/client-recovery";
+import { fetchJsonWithTimeout, isStaleDeploymentError, triggerDeploymentRecoveryReload } from "@/lib/client-recovery";
 import { 
     getScriptsAction, 
     saveScriptAction, 
@@ -45,6 +45,7 @@ export default function AdminScriptsPage() {
     const [scripts, setScripts] = useState<UserScript[]>([]);
     const [recentRuns, setRecentRuns] = useState<ScriptRunRecord[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [refreshing, setRefreshing] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedCategory, setSelectedCategory] = useState("all");
@@ -66,19 +67,25 @@ export default function AdminScriptsPage() {
     const loadScripts = async (isManualRefresh: boolean = false) => {
         if (isManualRefresh) setRefreshing(true);
         try {
-            const data = await withTimeout(getScriptsAction(), 15000, "User scripts");
+            const data = await fetchJsonWithTimeout<{ scripts?: UserScript[]; recentRuns?: ScriptRunRecord[] }>(
+                "/api/admin/scripts",
+                {},
+                15000
+            );
             if (data?.scripts) {
                 setScripts(data.scripts);
             }
             if (data?.recentRuns) {
                 setRecentRuns(data.recentRuns);
             }
-        } catch (e) {
+            setLoadError(null);
+        } catch (e: any) {
             if (isStaleDeploymentError(e)) {
                 triggerDeploymentRecoveryReload();
                 return;
             }
             console.error("Failed to load scripts:", e);
+            setLoadError(e?.message || "Failed to load user scripts.");
         } finally {
             setLoading(false);
             if (isManualRefresh) setRefreshing(false);
@@ -189,6 +196,17 @@ export default function AdminScriptsPage() {
 
     return (
         <div className="w-full max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[2200px] mx-auto space-y-4 sm:space-y-6 min-w-0">
+            {loadError && scripts.length === 0 && (
+                <div className="p-4 rounded-xl border border-rose-500/30 bg-rose-500/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 text-xs text-rose-300">
+                        <AlertCircle className="h-4 w-4 shrink-0" />
+                        <span>{loadError}</span>
+                    </div>
+                    <Button size="sm" variant="outline" onClick={() => loadScripts(true)} className="gap-1.5 text-xs shrink-0 cursor-pointer">
+                        <RefreshCw className="h-3.5 w-3.5" /> Retry
+                    </Button>
+                </div>
+            )}
             {/* Notification Banner */}
             {bannerMessage && (
                 <div className="p-3 bg-zinc-900 border border-emerald-500/30 text-emerald-300 rounded-lg text-xs font-medium flex items-center justify-between shadow-lg animate-in fade-in duration-200">

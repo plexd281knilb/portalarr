@@ -64,8 +64,18 @@ if (typeof window === "undefined" && !(global as any).__loggerPatched) {
 
 function getDatabaseFilePath(): string {
     const dbUrl = process.env.DATABASE_URL || "file:./prisma/dev.db";
-    const rawPath = dbUrl.replace(/^file:/, "").trim();
+    const rawPath = dbUrl.replace(/^file:/, "").replace(/\?.*$/, "").trim();
     return path.isAbsolute(rawPath) ? rawPath : path.join(process.cwd(), rawPath);
+}
+
+function getSqliteDatasourceUrl(): string {
+    const raw = (process.env.DATABASE_URL || "file:./prisma/dev.db").trim();
+    if (!raw.startsWith("file:")) return raw;
+    const sep = raw.includes("?") ? "&" : "?";
+    const params: string[] = [];
+    if (!raw.includes("connection_limit=")) params.push("connection_limit=1");
+    if (!raw.includes("socket_timeout=")) params.push("socket_timeout=15");
+    return params.length > 0 ? `${raw}${sep}${params.join("&")}` : raw;
 }
 
 export function createDatabaseBackup() {
@@ -168,24 +178,27 @@ function ensureDatabaseFile() {
 
 ensureDatabaseFile();
 
-const globalForPrisma = global as unknown as { prisma: PrismaClient };
+const globalForPrisma = global as unknown as {
+  prisma?: PrismaClient;
+  schemaPatchPromise?: Promise<void> | null;
+  schemaPatchCompleted?: boolean;
+};
 
 export const prisma =
   globalForPrisma.prisma ||
   new PrismaClient({
+    datasourceUrl: getSqliteDatasourceUrl(),
     log: process.env.NODE_ENV === "development" ? ["query", "error", "warn"] : ["error"],
   });
 
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
-
-let schemaPatchPromise: Promise<void> | null = null;
-let schemaPatchCompleted = false;
+// Always reuse a single PrismaClient across all server chunks in production and development
+globalForPrisma.prisma = prisma;
 
 export async function ensureSchemaColumns(): Promise<void> {
-    if (schemaPatchCompleted) return;
-    if (schemaPatchPromise) return schemaPatchPromise;
+    if (globalForPrisma.schemaPatchCompleted) return;
+    if (globalForPrisma.schemaPatchPromise) return globalForPrisma.schemaPatchPromise;
 
-    schemaPatchPromise = (async () => {
+    globalForPrisma.schemaPatchPromise = (async () => {
         try {
             await prisma.$queryRawUnsafe(`PRAGMA journal_mode = WAL;`).catch(() => {});
             await prisma.$queryRawUnsafe(`PRAGMA busy_timeout = 10000;`).catch(() => {});
@@ -2113,15 +2126,15 @@ export async function ensureSchemaColumns(): Promise<void> {
 
 
 
-        schemaPatchCompleted = true;
+        globalForPrisma.schemaPatchCompleted = true;
     } catch (globalErr: any) {
         console.error("[DB-SCHEMA-AUTOFIX] Critical error in ensureSchemaColumns:", globalErr.message || globalErr);
     } finally {
-        schemaPatchPromise = null;
+        globalForPrisma.schemaPatchPromise = null;
     }
 })();
 
-return schemaPatchPromise;
+return globalForPrisma.schemaPatchPromise;
 }
 
 if (process.env.NEXT_PHASE !== "phase-production-build") {

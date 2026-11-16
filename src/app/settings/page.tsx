@@ -23,7 +23,7 @@ import {
 } from "@/app/actions";
 import { getPlexPin, checkPlexPin } from "@/app/plex-auth";
 import { testArrConfig } from "@/app/arr-actions";
-import { isStaleDeploymentError, triggerDeploymentRecoveryReload } from "@/lib/client-recovery";
+import { fetchJsonWithTimeout, isStaleDeploymentError, triggerDeploymentRecoveryReload } from "@/lib/client-recovery";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -176,6 +176,7 @@ function SettingsPageContent() {
         }
     }, [activeTabParam, activeSubTabParam, router, pathname]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
     
     // Data States
     const [users, setUsers] = useState<any[]>([]);
@@ -1056,34 +1057,45 @@ function SettingsPageContent() {
 
     const loadAllData = async () => {
         setLoading(true);
-
-        const safetyUnlock = setTimeout(() => {
-            setLoading(false);
-        }, 2500);
+        setLoadError(null);
 
         try {
-            const [u, s, t, g, m, bt, bc, rt, devRt, ab, ai, ps, adminEmailRes] = await Promise.all([
-                getAppUsers().catch(err => { console.error("getAppUsers error:", err); return []; }),
-                getSettings().catch(err => { console.error("getSettings error:", err); return {}; }),
-                getTautulliInstances().catch(err => { console.error("getTautulliInstances error:", err); return []; }),
-                getGlancesInstances().catch(err => { console.error("getGlancesInstances error:", err); return []; }),
-                getMediaApps().catch(err => { console.error("getMediaApps error:", err); return []; }),
-                getBetaDashboardText().catch(() => ""), 
-                getBetaCards().catch(() => []),
-                getRoadmapText().catch(() => ""),
-                getDevRoadmapText().catch(() => ""),
+            const payload = await fetchJsonWithTimeout<{
+                users?: any[];
+                settings?: any;
+                tautulli?: any[];
+                glances?: any[];
+                mediaApps?: any[];
+                betaText?: string;
+                betaCards?: any[];
+                roadmapText?: string;
+                devRoadmapText?: string;
+                alertBanner?: { enabled: boolean; text: string };
+                aiSettings?: any;
+                plexServers?: any[];
+                adminEmailRes?: { success?: boolean; email?: string } | null;
+            }>("/api/admin/settings", {}, 15000);
 
-                getAlertBanner().catch(() => ({ enabled: false, text: "" })),
-                getAiAgentSettings().catch(() => null),
-                getPlexServersAction().catch(err => { console.error("getPlexServersAction error:", err); return []; }),
-                getAdminNotificationEmailAction().catch(() => null)
-            ]);
-            setUsers(u || []);
-            setSystemSettings(s || {});
+            const u = payload?.users || [];
+            const s = payload?.settings || {};
+            const t = payload?.tautulli || [];
+            const g = payload?.glances || [];
+            const m = payload?.mediaApps || [];
+            const bt = payload?.betaText || "";
+            const bc = payload?.betaCards || [];
+            const rt = payload?.roadmapText || "";
+            const devRt = payload?.devRoadmapText || "";
+            const ab = payload?.alertBanner || { enabled: false, text: "" };
+            const ai = payload?.aiSettings || null;
+            const ps = payload?.plexServers || [];
+            const adminEmailRes = payload?.adminEmailRes || null;
+
+            setUsers(u);
+            setSystemSettings(s);
             if (adminEmailRes?.success && adminEmailRes.email) {
                 setAdminNotificationEmail(adminEmailRes.email);
             }
-            setPlexServers(ps || []);
+            setPlexServers(ps);
             if (ps && ps.length > 0) {
                 setSnapshotTargetServerId(prev => {
                     if (prev && ps.some((srv: any) => srv.id === prev)) return prev;
@@ -1223,14 +1235,14 @@ function SettingsPageContent() {
                 devRoadmapText: devRoadmapTextVal,
                 betaText: betaTextVal,
             };
-        } catch (error) {
+        } catch (error: any) {
             if (isStaleDeploymentError(error)) {
                 triggerDeploymentRecoveryReload();
                 return;
             }
             console.error("Failed to load settings data:", error);
+            setLoadError(error?.message || "Failed to load system settings. Please retry.");
         } finally {
-            clearTimeout(safetyUnlock);
             setLoading(false);
         }
     };
@@ -1545,6 +1557,28 @@ function SettingsPageContent() {
                         <Card className="p-6 space-y-4"><Skeleton className="h-6 w-1/3"/><Skeleton className="h-32 w-full"/></Card>
                     </div>
                 </div>
+            </div>
+        );
+    }
+
+    if (loadError) {
+        return (
+            <div className="flex-1 p-8 max-w-2xl mx-auto">
+                <Card className="border-rose-500/30 bg-rose-500/5">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2 text-rose-400">
+                            <AlertTriangle className="h-5 w-5" />
+                            Failed to Load System Settings
+                        </CardTitle>
+                        <CardDescription>{loadError}</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Button onClick={loadAllData} variant="outline" className="gap-2 cursor-pointer">
+                            <RefreshCw className="h-4 w-4" />
+                            Retry Loading Settings
+                        </Button>
+                    </CardContent>
+                </Card>
             </div>
         );
     }

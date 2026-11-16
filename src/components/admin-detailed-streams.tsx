@@ -2,7 +2,7 @@
 
 import WhatsNewModal from "@/components/whats-new-modal";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { getAdminDetailedStreamsAction, killUserStream, getWatchHistoryAction, clearWatchHistoryAction } from "@/app/actions";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -34,6 +34,7 @@ export default function AdminDetailedStreams({ devRoadmapText = "", roadmapText 
     const [data, setData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const inFlightRef = useRef(false);
     const [killingSessionKey, setKillingSessionKey] = useState<string | null>(null);
     const [selectedServerFilter, setSelectedServerFilter] = useState<string | null>(null);
 
@@ -64,6 +65,8 @@ export default function AdminDetailedStreams({ devRoadmapText = "", roadmapText 
     const [historySearch, setHistorySearch] = useState<string>("");
 
     const loadStreams = async (isManual = false) => {
+        if (!isManual && inFlightRef.current) return;
+        inFlightRef.current = true;
         if (isManual) setRefreshing(true);
         try {
             const res = await getAdminDetailedStreamsAction();
@@ -73,6 +76,7 @@ export default function AdminDetailedStreams({ devRoadmapText = "", roadmapText 
         } catch (err) {
             console.error("Failed to load admin streams:", err);
         } finally {
+            inFlightRef.current = false;
             setLoading(false);
             setRefreshing(false);
         }
@@ -80,7 +84,10 @@ export default function AdminDetailedStreams({ devRoadmapText = "", roadmapText 
 
     useEffect(() => {
         loadStreams();
-        const timer = setInterval(() => loadStreams(), 8000);
+        const timer = setInterval(() => {
+            if (typeof document !== "undefined" && document.hidden) return;
+            loadStreams();
+        }, 8000);
         return () => clearInterval(timer);
     }, []);
 

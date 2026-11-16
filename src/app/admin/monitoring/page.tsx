@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useMemo, useTransition } from "react";
+import { useState, useEffect, useMemo, useTransition, useRef } from "react";
 import Link from "next/link";
-import { isStaleDeploymentError, triggerDeploymentRecoveryReload, withTimeout } from "@/lib/client-recovery";
+import { fetchJsonWithTimeout, isStaleDeploymentError, triggerDeploymentRecoveryReload } from "@/lib/client-recovery";
 import { 
     getFleetMonitoringDataAction, 
     restartDockerContainerAction, 
@@ -105,8 +105,10 @@ function getContainerAppBranding(name: any, image: any): AppBranding {
 export default function AdminFleetMonitoringPage() {
     const [activeTab, setActiveTab] = useState<"systems" | "containers" | "incidents">("systems");
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [refreshing, setRefreshing] = useState(false);
     const [isPending, startTransition] = useTransition();
+    const inFlightRef = useRef(false);
 
     useEffect(() => {
         if (typeof window !== "undefined") {
@@ -166,9 +168,12 @@ export default function AdminFleetMonitoringPage() {
     };
 
     const loadData = async (isManual = false) => {
+        if (!isManual && inFlightRef.current) return;
+        inFlightRef.current = true;
         if (isManual) setRefreshing(true);
         try {
-            const res = await withTimeout(getFleetMonitoringDataAction(), 15000, "Fleet monitoring");
+            const payload = await fetchJsonWithTimeout<{ telemetry?: any; config?: any }>("/api/admin/monitoring", {}, 15000);
+            const res = payload?.telemetry;
             if (res && res.success) {
                 setServices(res.services);
                 setContainers(res.containers);
@@ -178,33 +183,34 @@ export default function AdminFleetMonitoringPage() {
                 setOverall24h(res.overallUptime24h);
                 setOverall7d(res.overallUptime7d);
                 setLastProbeTime(res.lastProbeTime);
+                setLoadError(null);
+            } else if (res?.error) {
+                setLoadError(res.error);
             }
-        } catch (err) {
+            if (payload?.config) {
+                setConfig(payload.config);
+                setWebhookUrlInput(payload.config.discordWebhookUrl || "");
+            }
+        } catch (err: any) {
             if (isStaleDeploymentError(err)) {
                 triggerDeploymentRecoveryReload();
                 return;
             }
             console.error("Failed to load fleet monitoring telemetry:", err);
+            setLoadError(err?.message || "Failed to load fleet monitoring telemetry.");
         } finally {
+            inFlightRef.current = false;
             setLoading(false);
             setRefreshing(false);
         }
     };
 
-    const loadConfig = async () => {
-        try {
-            const cfg = await getMonitoringConfigAction();
-            if (cfg) {
-                setConfig(cfg);
-                setWebhookUrlInput(cfg.discordWebhookUrl || "");
-            }
-        } catch (_) {}
-    };
-
     useEffect(() => {
         loadData();
-        loadConfig();
-        const interval = setInterval(() => loadData(), 20000);
+        const interval = setInterval(() => {
+            if (typeof document !== "undefined" && document.hidden) return;
+            loadData();
+        }, 20000);
         return () => clearInterval(interval);
     }, []);
 
@@ -369,6 +375,17 @@ export default function AdminFleetMonitoringPage() {
 
     return (
         <div className="p-3 sm:p-6 lg:p-8 max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[2200px] mx-auto w-full space-y-6 min-w-0">
+            {loadError && services.length === 0 && (
+                <div className="p-4 rounded-xl border border-rose-500/30 bg-rose-500/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 text-xs text-rose-300">
+                        <AlertTriangle className="h-4 w-4 shrink-0" />
+                        <span>{loadError}</span>
+                    </div>
+                    <Button size="sm" variant="outline" onClick={() => loadData(true)} className="gap-1.5 text-xs shrink-0 cursor-pointer">
+                        <RefreshCw className="h-3.5 w-3.5" /> Retry
+                    </Button>
+                </div>
+            )}
             {/* FLOATING TOAST NOTIFICATION */}
             {toastMessage && (
                 <div className={`fixed top-4 right-4 z-50 px-4 py-2.5 rounded-xl shadow-2xl backdrop-blur-xl border text-xs font-semibold flex items-center gap-2 animate-in fade-in slide-in-from-top-2 duration-200 ${

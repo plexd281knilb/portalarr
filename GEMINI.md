@@ -8,7 +8,7 @@ Portalarr is a centralized, self-hosted dashboard designed to manage a media ser
 
 Portalarr adheres to strict Semantic Versioning (`MAJOR.MINOR.PATCH`):
 - **Production Release (`prod` branch, formerly `stable`)**: `v1.4.15` is the production milestone baseline release on `prod`.
-- **Beta Testing (`beta` branch)**: `v1.4.15` — fixes for `prod` that need testing before production deployment.
+- **Beta Testing (`beta` branch)**: `v1.4.16` — fixes for `prod` (non-blocking API page bootstraps, production Prisma singleton, and Unraid PUID/PGID Docker entrypoint) undergoing testing before production deployment.
 - **Active Feature Development (`dev` branch, formerly `main`)**: `v1.5.35` is the active feature release (future releases in testing on `dev`).
 - **Strict SemVer Policy**:
   - **PATCH increments (`1.3.22` ➔ `1.3.23`)**: Bug fixes, security patches, styling polish, telemetry adjustments, and non-breaking corrections.

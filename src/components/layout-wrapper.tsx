@@ -88,13 +88,13 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
           setIsTrial(isTr);
           setUsername((session.username as string) || (user?.username as string) || "");
 
-          // Defer prewarming outside the route-navigation critical path so page loaders run first
+          // Defer prewarming well outside route-navigation critical path so page loaders run first
           if (Date.now() - lastPrewarmTriggerRef.current > 3 * 60 * 1000) {
             prewarmTimer = setTimeout(() => {
               if (cancelled) return;
               lastPrewarmTriggerRef.current = Date.now();
               import("@/app/actions").then((m) => m.prewarmUserSessionAction?.()).catch(() => {});
-            }, 2500);
+            }, 5000);
           }
 
           if (isAdm) {

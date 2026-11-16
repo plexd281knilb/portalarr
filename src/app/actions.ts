@@ -11490,7 +11490,10 @@ export async function getBookRequests() {
         });
         
         if (pendingReqs.length > 0 || downloadedReqs.length > 0) {
-            const allBooks = await prisma.book.findMany();
+            const allBooks = await prisma.book.findMany({
+                where: { fileType: { not: "missing" } },
+                select: { id: true, title: true, mediaType: true, libraryId: true, fileType: true }
+            });
             
             for (const req of pendingReqs) {
                 const normReq = req.title.toLowerCase().replace(/[^a-z0-9]/g, "");

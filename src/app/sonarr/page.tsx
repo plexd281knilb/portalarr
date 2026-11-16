@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   getEnabledArrInstances,
   getArrProfilesAndFolders,
@@ -377,8 +377,12 @@ export default function SonarrPage() {
     setLibraryLoading(false);
   };
 
+  const queueInFlightRef = useRef(false);
+
   const fetchQueue = async (silent = false) => {
     if (!selectedAppId) return;
+    if (silent && queueInFlightRef.current) return;
+    queueInFlightRef.current = true;
     if (!silent) setQueueLoading(true);
     try {
       const res = await getSonarrQueue(selectedAppId);
@@ -389,8 +393,10 @@ export default function SonarrPage() {
       }
     } catch (e) {
       console.error("Queue fetch error", e);
+    } finally {
+      queueInFlightRef.current = false;
+      if (!silent) setQueueLoading(false);
     }
-    if (!silent) setQueueLoading(false);
   };
 
   useEffect(() => {
@@ -439,6 +445,7 @@ export default function SonarrPage() {
     if (activeTab === "queue" && selectedAppId) {
       fetchQueue(true);
       const timer = setInterval(() => {
+        if (typeof document !== "undefined" && document.hidden) return;
         fetchQueue(true);
       }, 5000);
       return () => clearInterval(timer);
