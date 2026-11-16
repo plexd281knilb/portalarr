@@ -1665,38 +1665,51 @@ async function runTestSuite() {
         if (!telemetry.fullDisplay) throw new Error("Telemetry fullDisplay missing");
         if (!telemetry.dockerImageTag) throw new Error("Telemetry dockerImageTag missing");
 
-        // 2. Test Beta branch identification
+        // 2. Test Beta, Dev, and Production branch identification
         const originalEnv = { ...process.env };
         try {
-            process.env.NEXT_PUBLIC_GIT_BRANCH = "main";
+            // 2a. Beta branch (prod fixes in testing)
+            process.env.NEXT_PUBLIC_GIT_BRANCH = "beta";
             process.env.NEXT_PUBLIC_PORTALARR_VERSION = "3.0.0-beta.2";
             process.env.NEXT_PUBLIC_GIT_SHA = "2cf7cdfe1234567890abcdef";
             process.env.NEXT_PUBLIC_BUILD_NUMBER = "142";
             
             const betaTelemetry = getBuildTelemetry();
-            if (betaTelemetry.branch !== "main") throw new Error(`Expected branch main, got ${betaTelemetry.branch}`);
-            if (betaTelemetry.isBeta !== true) throw new Error("Expected isBeta to be true for main branch");
-            if (betaTelemetry.isStable !== false) throw new Error("Expected isStable to be false for main branch");
+            if (betaTelemetry.branch !== "beta") throw new Error(`Expected branch beta, got ${betaTelemetry.branch}`);
+            if (betaTelemetry.isBeta !== true) throw new Error("Expected isBeta to be true for beta branch");
+            if (betaTelemetry.isStable !== false) throw new Error("Expected isStable to be false for beta branch");
             if (betaTelemetry.channel !== "beta") throw new Error(`Expected channel beta, got ${betaTelemetry.channel}`);
             if (!betaTelemetry.displayBadge.includes("BETA")) throw new Error(`Expected displayBadge to contain BETA, got ${betaTelemetry.displayBadge}`);
             if (betaTelemetry.commitShortSha !== "2cf7cdf") throw new Error(`Expected short SHA 2cf7cdf, got ${betaTelemetry.commitShortSha}`);
             if (betaTelemetry.buildNumber !== "142") throw new Error(`Expected buildNumber 142, got ${betaTelemetry.buildNumber}`);
-            if (!betaTelemetry.dockerImageTag.includes(":main")) throw new Error(`Expected docker tag to include :main, got ${betaTelemetry.dockerImageTag}`);
+            if (!betaTelemetry.dockerImageTag.includes(":beta")) throw new Error(`Expected docker tag to include :beta, got ${betaTelemetry.dockerImageTag}`);
             if (!betaTelemetry.workflowUrl) throw new Error("Expected workflowUrl to be populated when buildNumber is present");
 
-            // 3. Test Production / Stable branch identification
-            process.env.NEXT_PUBLIC_GIT_BRANCH = "stable";
-            process.env.NEXT_PUBLIC_PORTALARR_VERSION = "3.0.0";
+            // 2b. Dev branch (future releases in testing)
+            process.env.NEXT_PUBLIC_GIT_BRANCH = "dev";
+            process.env.NEXT_PUBLIC_PORTALARR_VERSION = "1.5.35";
+            const devTelemetry = getBuildTelemetry();
+            if (devTelemetry.branch !== "dev") throw new Error(`Expected branch dev, got ${devTelemetry.branch}`);
+            if (devTelemetry.isBeta !== false) throw new Error("Expected isBeta to be false for dev branch");
+            if (devTelemetry.isStable !== false) throw new Error("Expected isStable to be false for dev branch");
+            if (devTelemetry.channel !== "dev") throw new Error(`Expected channel dev, got ${devTelemetry.channel}`);
+            if (!devTelemetry.displayBadge.includes("DEV")) throw new Error(`Expected displayBadge to contain DEV, got ${devTelemetry.displayBadge}`);
+            if (!devTelemetry.dockerImageTag.includes(":dev")) throw new Error(`Expected docker tag to include :dev, got ${devTelemetry.dockerImageTag}`);
+
+            // 3. Test Production (prod) branch identification & suffix stripping
+            process.env.NEXT_PUBLIC_GIT_BRANCH = "prod";
+            process.env.NEXT_PUBLIC_PORTALARR_VERSION = "3.0.0-beta.2";
             delete process.env.NEXT_PUBLIC_BUILD_NUMBER;
             delete process.env.BUILD_NUMBER;
 
-            const stableTelemetry = getBuildTelemetry();
-            if (stableTelemetry.branch !== "stable") throw new Error(`Expected branch stable, got ${stableTelemetry.branch}`);
-            if (stableTelemetry.isBeta !== false) throw new Error("Expected isBeta to be false for stable branch");
-            if (stableTelemetry.isStable !== true) throw new Error("Expected isStable to be true for stable branch");
-            if (stableTelemetry.channel !== "stable") throw new Error(`Expected channel stable, got ${stableTelemetry.channel}`);
-            if (!stableTelemetry.displayBadge.includes("PROD")) throw new Error(`Expected displayBadge to contain PROD, got ${stableTelemetry.displayBadge}`);
-            if (!stableTelemetry.dockerImageTag.includes(":stable")) throw new Error(`Expected docker tag to include :stable, got ${stableTelemetry.dockerImageTag}`);
+            const prodTelemetry = getBuildTelemetry();
+            if (prodTelemetry.branch !== "prod") throw new Error(`Expected branch prod, got ${prodTelemetry.branch}`);
+            if (prodTelemetry.isBeta !== false) throw new Error("Expected isBeta to be false for prod branch");
+            if (prodTelemetry.isStable !== true) throw new Error("Expected isStable to be true for prod branch");
+            if (prodTelemetry.channel !== "stable") throw new Error(`Expected channel stable, got ${prodTelemetry.channel}`);
+            if (prodTelemetry.version !== "3.0.0") throw new Error(`Expected stripped version 3.0.0, got ${prodTelemetry.version}`);
+            if (!prodTelemetry.displayBadge.includes("PROD")) throw new Error(`Expected displayBadge to contain PROD, got ${prodTelemetry.displayBadge}`);
+            if (!prodTelemetry.dockerImageTag.includes(":prod")) throw new Error(`Expected docker tag to include :prod, got ${prodTelemetry.dockerImageTag}`);
         } finally {
             process.env = originalEnv;
         }

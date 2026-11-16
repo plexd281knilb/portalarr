@@ -7,16 +7,18 @@ Portalarr is a centralized, self-hosted dashboard designed to manage a media ser
 ## 🏷️ Version Numbering & Strict SemVer Standard
 
 Portalarr adheres to strict Semantic Versioning (`MAJOR.MINOR.PATCH`):
-- **Released Baseline**: `v1.4.11` is the production milestone baseline release on `stable`.
-- **Active Feature Release**: `v1.5.34` is the active feature release (IPTV & Live TV + client navigation/DB build resilience on `main`).
+- **Production Release (`prod` branch, formerly `stable`)**: `v1.4.14` is the production milestone baseline release on `prod`.
+- **Beta Testing (`beta` branch)**: Fixes for `prod` that need testing before production deployment.
+- **Active Feature Development (`dev` branch, formerly `main`)**: `v1.5.35` is the active feature release (IPTV & Live TV + client navigation/DB build resilience + 3-branch CI/telemetry on `dev`).
 - **Strict SemVer Policy**:
   - **PATCH increments (`1.3.22` ➔ `1.3.23`)**: Bug fixes, security patches, styling polish, telemetry adjustments, and non-breaking corrections.
   - **MINOR increments (`1.1.2` ➔ `1.2.0`)**: Backwards-compatible new features, new curation studios, new third-party integrations, or major enhancements.
   - **MAJOR increments (`1.2.0` ➔ `2.0.0`)**: Breaking architectural changes, major database redesigns, or backwards-incompatible API shifts.
 - **Automatic Environment Branch Telemetry**:
-  - **Beta Preview Environment (`main` branch)**: `BuildBadge` renders `BETA • v<version>` with a glowing, pulsing purple dot (`bg-purple-400 animate-pulse`). Targets Docker tag `ghcr.io/plexd281knilb/portalarr:main`.
-  - **Production Release Environment (`stable` branch)**: `BuildBadge` renders `PROD • v<version>` with a solid emerald green dot (`bg-emerald-400`). Targets Docker tag `ghcr.io/plexd281knilb/portalarr:stable`.
-  - **Automatic `-beta.x` Suffix Stripping**: When running on the `stable` branch, `src/lib/version.ts` automatically strips `-beta(\.\d+)?` from `rawVersion`, ensuring production builds display a pristine semantic version without manual package tampering.
+  - **Development Environment (`dev` branch)**: `BuildBadge` renders `DEV • v<version>` with an amber pulsing dot (`bg-amber-400 animate-pulse`). Targets Docker tag `ghcr.io/plexd281knilb/portalarr:dev`.
+  - **Beta Preview Environment (`beta` branch)**: `BuildBadge` renders `BETA • v<version>` with a glowing, pulsing purple dot (`bg-purple-400 animate-pulse`). Targets Docker tag `ghcr.io/plexd281knilb/portalarr:beta`.
+  - **Production Release Environment (`prod` branch)**: `BuildBadge` renders `PROD • v<version>` with a solid emerald green dot (`bg-emerald-400`). Targets Docker tag `ghcr.io/plexd281knilb/portalarr:prod` (and `:latest`).
+  - **Automatic `-beta.x` / `-dev.x` Suffix Stripping**: When running on the `prod` branch, `src/lib/version.ts` automatically strips `-(beta|dev)(\.\d+)?` from `rawVersion`, ensuring production builds display a pristine semantic version without manual package tampering.
 
 ## 🛡️ Security & Privacy Gating on Build Telemetry (`BuildBadge`)
 
@@ -71,11 +73,11 @@ To guarantee 100% reliability, quality control, and consistency, the following p
 5. **SemVer Version Increment & Git Deployment Push:**
    - **MANDATORY VERSION INCREMENT**: ALWAYS increment the version in `package.json` (and `package-lock.json` / `GEMINI.md`) BEFORE staging and committing according to SemVer rules (PATCH `+1` e.g. `1.1.0` ➔ `1.1.1` for bug fixes, polish, and non-breaking corrections; MINOR `+1` e.g. `1.1.0` ➔ `1.2.0` for new features and capabilities; MAJOR `+1` for breaking changes). Never reuse an existing release version on a new task or commit!
    - **Staging, Verification & Push**:
-     Inspect `git status` to verify all touched and new files, stage all changes (`git add -A`), commit with a clear, descriptive message adhering to conventional commit style that ALWAYS includes the freshly incremented active version from `package.json` at the FRONT in brackets (e.g. `[v1.1.0] feat(scope): descriptive message` or `[v1.1.0] fix(scope): fix bug`), and push strictly to `origin/main` (Beta preview environment). **CRITICAL RULE**: NEVER merge or push to `stable` / `origin/stable` unless the user explicitly instructs to push to `stable`! Automatic git hook enforcement via `scripts/git-commit-msg-hook.js` is verified in `npm test` and executed by Git on every commit to guarantee version prefixing.
+     Inspect `git status` to verify all touched and new files, stage all changes (`git add -A`), commit with a clear, descriptive message adhering to conventional commit style that ALWAYS includes the freshly incremented active version from `package.json` at the FRONT in brackets (e.g. `[v1.1.0] feat(scope): descriptive message` or `[v1.1.0] fix(scope): fix bug`), and push to the appropriate working branch (`origin/dev` for future releases in testing, or `origin/beta` for production fixes needing verification). **CRITICAL RULE**: NEVER merge or push to `prod` / `origin/prod` unless the user explicitly instructs to push to `prod`! Automatic git hook enforcement via `scripts/git-commit-msg-hook.js` is verified in `npm test` and executed by Git on every commit to guarantee version prefixing.
 
-### 🛑 Mandatory Extended Build Verification for Stable Releases (`npm run test:extended`)
+### 🛑 Mandatory Extended Build Verification for Production Releases (`npm run test:extended`)
 
-Whenever the user instructs to merge or push to the `stable` branch (production release environment), you MUST execute the 8-tier Extended Build Verification suite via `cmd /c "npm run test:extended"` (`scripts/verify-extended.ts`). Pushing to `stable` is strictly blocked unless all 8 tiers are 100% green:
+Whenever the user instructs to merge or push to the `prod` branch (production release environment), you MUST execute the 8-tier Extended Build Verification suite via `cmd /c "npm run test:extended"` (`scripts/verify-extended.ts`). Pushing to `prod` is strictly blocked unless all 8 tiers are 100% green:
 1. **Tier 1: Prisma Schema & Database Build Integrity (`npx prisma validate`)**: Validates `prisma/schema.prisma` syntax, datasource readiness, and model constraints.
 2. **Tier 2: Strict TypeScript Type Integrity (`npx tsc --noEmit`)**: Validates complete type safety with zero compiler errors across the entire codebase.
 3. **Tier 3: Curation Presets & Schedule Validator (`scripts/test-all-presets.ts`)**: Audits all 49 curation presets, seasonal date ranges, and TMDb query definitions.
@@ -372,19 +374,19 @@ The persistent volume ensures your `dev.db` file is maintained across updates, a
 
 
 ### 7. Mandatory Pre-Push Testing & Verification Protocol
-- **Strict Requirement Before Every Git Push:** NEVER push untested code to `origin/main` or remote. Before committing and pushing any code changes, the agent/developer MUST perform and pass the complete 6-step verification suite:
+- **Strict Requirement Before Every Git Push:** NEVER push untested code to `origin/dev`, `origin/beta`, or `origin/prod`. Before committing and pushing any code changes, the agent/developer MUST perform and pass the complete 6-step verification suite:
   1. **Prisma Schema Validation:** Run `npx prisma validate` and verify the schema is clean with 0 syntax errors.
   2. **TypeScript Typecheck:** Run `npx tsc --noEmit` and confirm **0 compile errors**.
   3. **Full System Integration Test Suite:** Run `npx tsx scripts/verify-all.ts` (or `npm test` / scratch verification) and confirm **100% of integration & database assertion tests pass**.
   4. **Production Turbopack Build:** Run `npm run build` (`next build`) and confirm Turbopack compiler, static route generation, and NFT dependency tracing exit with **code 0**.
   5. **Continuous Documentation & Skill Knowledge Sync:** Document all architectural decisions, bug root causes, API gotchas, UI patterns, and learned domain knowledge in `GEMINI.md` and the relevant `.agents/skills/` reference guides (e.g. `seerr-expert`, `portalarr-ui`, `plex-api-expert`, `agregarr-expert`, `kometa-expert`, `maintainerr-expert`, etc.) so future agent sessions immediately possess the accumulated learnings.
-  6. **Git Sanity Check & Clean Atomic Push:** Run `git status` and `git diff` to confirm only intended changes are staged, commit with semantic prefixes (`feat:`, `fix:`, `refactor:`, `chore:`), and push to `origin/main`.
+  6. **Git Sanity Check & Clean Atomic Push:** Run `git status` and `git diff` to confirm only intended changes are staged, commit with semantic prefixes (`feat:`, `fix:`, `refactor:`, `chore:`), and push to the target branch (`origin/dev` or `origin/beta`).
 - **Fix Before Push:** If any step fails or reports an error, resolve the underlying issue immediately and re-run all verification tiers until 100% clean before committing or pushing to git.
 
 - **Git Workflow Overrides & Daily Multi-Device Sync:**
-  - **Daily Git Pull & Sync First:** Always check and pull the latest changes from `origin/main` (`git pull origin main` or `git fetch`) at the start of each day or session before modifying files to ensure synchronization across multiple development computers/devices.
+  - **Daily Git Pull & Sync First:** Always check and pull the latest changes from the active remote branch (`git pull` or `git fetch`) at the start of each day or session before modifying files to ensure synchronization across multiple development computers/devices.
   - **Mandatory Pre-Push Verification:** Always run the complete 6-step verification protocol (`npx prisma validate`, `npx tsc --noEmit`, `npm run build`, documentation & skills sync) before pushing commits.
-  - **Main Branch Pushes:** Always push completed updates directly to `origin/main` unless `stable` is explicitly requested by the user. Pushing to `stable` is strictly forbidden to protect production unless explicitly commanded.
+  - **3-Branch Strategy (`dev`, `beta`, `prod`):** Push future releases in testing to `origin/dev`, push production fixes needing testing to `origin/beta`, and NEVER push to `origin/prod` unless explicitly requested by the user (and after running `npm run test:extended`).
 - **Autonomous Agent Directives & Auto-Approve:**
   - **Always Proceed:** Automatically execute all file edits, refactors, and code modifications immediately using write tools without asking for confirmation.
   - **Direct Command Execution:** Run required terminal commands (builds, migrations, tests, git operations) directly and proactively.

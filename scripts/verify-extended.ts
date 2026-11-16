@@ -2,7 +2,7 @@
  * PORTALARR EXTENDED BUILD & PRODUCTION VERIFICATION SUITE
  * 
  * Executes the complete 8-tier extended testing battery required before
- * pushing production milestone releases to the 'stable' branch.
+ * pushing production milestone releases to the 'prod' branch.
  */
 
 import { execSync } from "child_process";
@@ -67,7 +67,7 @@ const TIERS: ExtendedTier[] = [
 
 async function runExtendedVerification() {
     console.log("==========================================================");
-    console.log("   PORTALARR EXTENDED BUILD VERIFICATION (STABLE GATE)    ");
+    console.log("   PORTALARR EXTENDED BUILD VERIFICATION (PROD GATE)      ");
     console.log("==========================================================\n");
 
     const startTime = Date.now();
@@ -106,7 +106,7 @@ async function runExtendedVerification() {
     const totalSeconds = ((Date.now() - startTime) / 1000).toFixed(2);
     console.log("==========================================================");
     console.log(`   EXTENDED VERIFICATION PASSED: ${passedTiers}/${TIERS.length} TIERS GREEN (${totalSeconds}s)   `);
-    console.log("   100% READY FOR PRODUCTION DEPLOYMENT ON STABLE BRANCH  ");
+    console.log("   100% READY FOR PRODUCTION DEPLOYMENT ON PROD BRANCH    ");
     console.log("==========================================================\n");
 }
 

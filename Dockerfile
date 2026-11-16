@@ -25,7 +25,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Build environment variables (placed right before build so earlier layers stay 100% cached)
-ARG GIT_BRANCH=main
+ARG GIT_BRANCH=dev
 ARG GIT_SHA=dev
 ARG BUILD_NUMBER=local
 ENV GIT_BRANCH=${GIT_BRANCH}
@@ -64,7 +64,7 @@ RUN groupadd --system --gid 1001 nodejs && \
     mkdir -p /app/data && chown -R nextjs:nodejs /app/data
 
 # Inject commit-specific telemetry env vars only after all heavy layers are cached
-ARG GIT_BRANCH=main
+ARG GIT_BRANCH=dev
 ARG GIT_SHA=dev
 ARG BUILD_NUMBER=local
 ENV GIT_BRANCH=${GIT_BRANCH}

@@ -190,7 +190,7 @@ export function BuildBadge({
                         <Workflow className="h-3.5 w-3.5 text-amber-400 shrink-0" />
                     )}
                     <span className="font-bold tracking-tight">
-                        {isBeta ? "BETA (main)" : isStable ? "PROD (stable)" : "DEV"}
+                        {isBeta ? `BETA (${telemetry.branch})` : isStable ? `PROD (${telemetry.branch})` : `DEV (${telemetry.branch})`}
                     </span>
                     <span className="opacity-40">•</span>
                     <span className="font-mono text-[11px]">v{telemetry.version}</span>
@@ -252,8 +252,8 @@ export function BuildBadge({
                                 : "bg-amber-500/10 border-amber-500/30 text-amber-300"
                         }`}>
                             <div className="flex items-center gap-2">
-                                <span className={`h-2.5 w-2.5 rounded-full ${isBeta ? "bg-purple-400 animate-pulse" : "bg-emerald-400"}`} />
-                                <span>Running {isBeta ? "Beta (main branch)" : isStable ? "Production (stable branch)" : "Local Development"}</span>
+                                <span className={`h-2.5 w-2.5 rounded-full ${isBeta ? "bg-purple-400 animate-pulse" : isStable ? "bg-emerald-400" : "bg-amber-400 animate-pulse"}`} />
+                                <span>Running {isBeta ? `Beta (${telemetry.branch} branch)` : isStable ? `Production (${telemetry.branch} branch)` : `Development (${telemetry.branch} branch)`}</span>
                             </div>
                             <span className="font-mono text-[11px] font-bold">v{telemetry.version}</span>
                         </div>
@@ -328,12 +328,14 @@ export function BuildBadge({
                         {/* Branch info summary */}
                         <div className="p-3 rounded-xl bg-white/[0.02] border border-border/30 text-[11px] text-muted-foreground space-y-1">
                             <p className="font-semibold text-foreground">
-                                {isBeta ? "🧪 Beta Channel (Main Branch)" : "🛡️ Production Channel (Stable Branch)"}
+                                {isBeta ? `🧪 Beta Channel (${telemetry.branch} branch)` : isStable ? `🛡️ Production Channel (${telemetry.branch} branch)` : `🔧 Development Channel (${telemetry.branch} branch)`}
                             </p>
                             <p>
                                 {isBeta 
-                                    ? "Receives rolling feature updates, new diagnostics, and experimental curation tools directly from active commits."
-                                    : "Locked to verified production releases. Fully tested for rock-solid stability in daily homelab operation."}
+                                    ? "Pre-release fixes and release candidates for production undergoing final testing before deployment."
+                                    : isStable
+                                    ? "Locked to verified production releases. Fully tested for rock-solid stability in daily homelab operation."
+                                    : "Rolling future feature releases, new diagnostics, and experimental tooling still in testing."}
                             </p>
                         </div>
 

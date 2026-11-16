@@ -53,7 +53,11 @@ function getGitMetadata() {
   } catch {}
 
   if (!branch) {
-    branch = packageJson.version.includes("beta") ? "main" : "stable";
+    branch = packageJson.version.includes("beta")
+      ? "beta"
+      : packageJson.version.includes("dev")
+      ? "dev"
+      : "prod";
   }
 
   return { branch, sha, buildNumber };
