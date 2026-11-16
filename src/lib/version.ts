@@ -27,19 +27,24 @@ export function getBuildTelemetry(): VersionInfo {
     let rawBranch = (process.env.NEXT_PUBLIC_GIT_BRANCH || process.env.GIT_BRANCH || "").trim();
     if (!rawBranch) {
         if (rawVersion.includes("beta")) {
-            rawBranch = "main";
+            rawBranch = "beta";
+        } else if (rawVersion.includes("dev")) {
+            rawBranch = "dev";
         } else if (process.env.NODE_ENV === "production") {
-            rawBranch = "stable";
+            rawBranch = "prod";
         } else {
             rawBranch = "dev";
         }
     }
     const branch = rawBranch.toLowerCase();
 
-    // Determine channel: when branch is explicitly "stable", it is always production and strips any -beta suffix
-    const isStable = branch === "stable" || (!rawVersion.includes("beta") && !rawVersion.includes("dev") && branch !== "main");
-    const isBeta = !isStable && (branch === "main" || branch.includes("beta") || rawVersion.includes("beta"));
-    const version = isStable ? rawVersion.replace(/-beta(\.\d+)?$/i, "") : rawVersion;
+    // Determine channel:
+    // - prod / stable -> Production ("stable" channel, strips any -beta/-dev suffix)
+    // - beta (or main with -beta suffix) -> Beta ("beta" channel, prod fixes in testing)
+    // - dev (or main) -> Development ("dev" channel, future releases in testing)
+    const isStable = branch === "prod" || branch === "stable" || (!rawVersion.includes("beta") && !rawVersion.includes("dev") && branch !== "dev" && branch !== "beta" && branch !== "main");
+    const isBeta = !isStable && (branch === "beta" || rawVersion.includes("beta"));
+    const version = isStable ? rawVersion.replace(/-(beta|dev)(\.\d+)?$/i, "") : rawVersion;
     const channel: "beta" | "stable" | "dev" = isBeta ? "beta" : isStable ? "stable" : "dev";
 
     // Git commit hash
@@ -64,9 +69,12 @@ export function getBuildTelemetry(): VersionInfo {
     const shaPart = commitShortSha !== "dev" && commitShortSha !== "latest" ? ` (${commitShortSha})` : "";
     const fullDisplay = `${isBeta ? "Beta" : isStable ? "Prod" : "Dev"} v${version} [${branch}${buildPart}${shaPart}]`;
 
-    const dockerImageTag = isBeta 
-        ? "ghcr.io/plexd281knilb/portalarr:main" 
-        : "ghcr.io/plexd281knilb/portalarr:stable";
+    const tagBranch = branch === "prod" || branch === "stable"
+        ? branch
+        : branch === "beta" || branch === "dev" || branch === "main"
+        ? branch
+        : isBeta ? "beta" : isStable ? "prod" : "dev";
+    const dockerImageTag = `ghcr.io/plexd281knilb/portalarr:${tagBranch}`;
 
     const workflowUrl = buildNumber 
         ? `https://github.com/plexd281knilb/portalarr/actions` 

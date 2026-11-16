@@ -2,7 +2,7 @@ name: Build and Push Portalarr
 
 on:
   push:
-    branches: [ "main", "stable" ] # Triggers on push to main or stable branch
+    branches: [ "dev", "beta", "prod", "main", "stable" ] # Triggers on push to dev, beta, prod (plus legacy main/stable)
     tags: [ 'v*.*.*' ]
 
 concurrency:
