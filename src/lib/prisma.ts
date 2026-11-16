@@ -2366,7 +2366,9 @@ export async function ensureSchemaColumns(): Promise<void> {
 return schemaPatchPromise;
 }
 
-ensureSchemaColumns().catch(() => {});
+if (process.env.NEXT_PHASE !== "phase-production-build") {
+  ensureSchemaColumns().catch(() => {});
+}
 
 // --- UNIVERSAL SCHEDULE HELPER ---
 export function isScheduleDue(
@@ -2492,7 +2494,7 @@ export function isScheduleDue(
 // --- BACKGROUND SCHEDULER ---
 const globalForScheduler = global as unknown as { schedulerInitialized?: boolean; lastSeerrSyncTime?: number };
 
-if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDULER_INITIALIZED && process.env.NODE_ENV !== "test" && process.env.PORTALARR_TEST !== "true") {
+if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDULER_INITIALIZED && process.env.NODE_ENV !== "test" && process.env.PORTALARR_TEST !== "true" && process.env.NEXT_PHASE !== "phase-production-build") {
   globalForScheduler.schedulerInitialized = true;
   process.env.__PORTALARR_SCHEDULER_INITIALIZED = "true";
 

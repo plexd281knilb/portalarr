@@ -132,15 +132,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-
-function isServerActionMismatch(err: any): boolean {
-  const msg = String(err?.message || err || "").toLowerCase();
-  return (
-    msg.includes("was not found on the server") ||
-    msg.includes("failed to find server action") ||
-    msg.includes("older or newer deployment")
-  );
-}
+import { isStaleDeploymentError, triggerDeploymentRecoveryReload } from "@/lib/client-recovery";
 
 function getAccessBadge(lib: any) {
   if (lib.allowedUsers === "*") {
@@ -326,22 +318,6 @@ function BookLibraryPageContent() {
   const isKidUser = Boolean(user?.accountType === "KID" || fullUser?.accountType === "KID");
 
   useEffect(() => {
-    const handleGlobalError = (event: PromiseRejectionEvent | ErrorEvent) => {
-      const reason =
-        (event as PromiseRejectionEvent).reason ||
-        (event as ErrorEvent).error ||
-        (event as ErrorEvent).message;
-      if (isServerActionMismatch(reason)) {
-        console.warn(
-          "[PORTALARR] Stale build session detected (Server Action hash mismatch). Auto-refreshing tab to sync client bundle...",
-        );
-        window.location.reload();
-      }
-    };
-
-    window.addEventListener("unhandledrejection", handleGlobalError);
-    window.addEventListener("error", handleGlobalError);
-
     const savedTab =
       typeof window !== "undefined"
         ? localStorage.getItem("book-library-active-tab")
@@ -354,11 +330,6 @@ function BookLibraryPageContent() {
       targetTab = "libs";
     }
     setActiveTab(targetTab);
-
-    return () => {
-      window.removeEventListener("unhandledrejection", handleGlobalError);
-      window.removeEventListener("error", handleGlobalError);
-    };
   }, [activeTabParam, isAdmin, user]);
 
   const handleTabChange = (val: string) => {
@@ -1629,11 +1600,8 @@ function BookLibraryPageContent() {
       const bList = await getLibraryBooks(libId);
       setBooks(bList || []);
     } catch (e: any) {
-      if (
-        e?.message?.includes("Failed to find Server Action") ||
-        String(e).includes("older or newer deployment")
-      ) {
-        window.location.reload();
+      if (isStaleDeploymentError(e)) {
+        triggerDeploymentRecoveryReload();
       } else {
         console.error("Failed to load books:", e);
       }
@@ -1857,8 +1825,8 @@ function BookLibraryPageContent() {
       }
       await loadBooks(libId);
     } catch (e: any) {
-      if (isServerActionMismatch(e)) {
-        window.location.reload();
+      if (isStaleDeploymentError(e)) {
+        triggerDeploymentRecoveryReload();
         return;
       }
       alert(e.message || "Failed to scan library folder");
@@ -1878,8 +1846,8 @@ function BookLibraryPageContent() {
       }
       await loadBooks(libId);
     } catch (e: any) {
-      if (isServerActionMismatch(e)) {
-        window.location.reload();
+      if (isStaleDeploymentError(e)) {
+        triggerDeploymentRecoveryReload();
         return;
       }
       alert(e.message || "Failed AI library scan");

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useTransition } from "react";
+import { isStaleDeploymentError, triggerDeploymentRecoveryReload, withTimeout } from "@/lib/client-recovery";
 import { 
     getScriptsAction, 
     saveScriptAction, 
@@ -65,7 +66,7 @@ export default function AdminScriptsPage() {
     const loadScripts = async (isManualRefresh: boolean = false) => {
         if (isManualRefresh) setRefreshing(true);
         try {
-            const data = await getScriptsAction();
+            const data = await withTimeout(getScriptsAction(), 15000, "User scripts");
             if (data?.scripts) {
                 setScripts(data.scripts);
             }
@@ -73,6 +74,10 @@ export default function AdminScriptsPage() {
                 setRecentRuns(data.recentRuns);
             }
         } catch (e) {
+            if (isStaleDeploymentError(e)) {
+                triggerDeploymentRecoveryReload();
+                return;
+            }
             console.error("Failed to load scripts:", e);
         } finally {
             setLoading(false);

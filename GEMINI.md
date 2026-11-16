@@ -8,7 +8,7 @@ Portalarr is a centralized, self-hosted dashboard designed to manage a media ser
 
 Portalarr adheres to strict Semantic Versioning (`MAJOR.MINOR.PATCH`):
 - **Released Baseline**: `v1.4.11` is the production milestone baseline release on `stable`.
-- **Active Feature Release**: `v1.5.30` is the active feature release (IPTV & Live TV subsystem on `main`).
+- **Active Feature Release**: `v1.5.34` is the active feature release (IPTV & Live TV + client navigation/DB build resilience on `main`).
 - **Strict SemVer Policy**:
   - **PATCH increments (`1.3.22` ➔ `1.3.23`)**: Bug fixes, security patches, styling polish, telemetry adjustments, and non-breaking corrections.
   - **MINOR increments (`1.1.2` ➔ `1.2.0`)**: Backwards-compatible new features, new curation studios, new third-party integrations, or major enhancements.
@@ -75,14 +75,15 @@ To guarantee 100% reliability, quality control, and consistency, the following p
 
 ### 🛑 Mandatory Extended Build Verification for Stable Releases (`npm run test:extended`)
 
-Whenever the user instructs to merge or push to the `stable` branch (production release environment), you MUST execute the 7-tier Extended Build Verification suite via `cmd /c "npm run test:extended"` (`scripts/verify-extended.ts`). Pushing to `stable` is strictly blocked unless all 7 tiers are 100% green:
-1. **Tier 1: Strict TypeScript Type Integrity (`npx tsc --noEmit`)**: Validates complete type safety with zero compiler errors across the entire codebase.
-2. **Tier 2: Curation Presets & Schedule Validator (`scripts/test-all-presets.ts`)**: Audits all 49 curation presets, seasonal date ranges, and TMDb query definitions.
-3. **Tier 3: AI Server Assistant & Security Guardrails (`scripts/test-ai-agent.ts`)**: Audits all 30 security guardrails, cross-user stream termination blocks, query extraction, and diagnostic tools.
-4. **Tier 4: Payment Scraper Lookback & Financial Engine (`scripts/test-payment-lookback.ts`)**: Audits payment parsing, lookback retention, and settings synchronization (12 assertions).
-5. **Tier 5: Plex User Matching & Identity Resolution (`scripts/test-plex-lookup.ts`)**: Audits identity collision guards, alphanumeric tokens, and user aliases (7 assertions).
-6. **Tier 6: Core System & Architecture 22-Suite Battery (`scripts/verify-all.ts`)**: Full 22 integration suites (79 core assertions) covering DB schema, encryption, Cloudflare Access coverage, user accounts, Plex sync, billing, and subscriptions.
-7. **Tier 7: Production Turbopack Next.js Build (`next build`)**: 100% clean production compilation across all 40 static and dynamic routes.
+Whenever the user instructs to merge or push to the `stable` branch (production release environment), you MUST execute the 8-tier Extended Build Verification suite via `cmd /c "npm run test:extended"` (`scripts/verify-extended.ts`). Pushing to `stable` is strictly blocked unless all 8 tiers are 100% green:
+1. **Tier 1: Prisma Schema & Database Build Integrity (`npx prisma validate`)**: Validates `prisma/schema.prisma` syntax, datasource readiness, and model constraints.
+2. **Tier 2: Strict TypeScript Type Integrity (`npx tsc --noEmit`)**: Validates complete type safety with zero compiler errors across the entire codebase.
+3. **Tier 3: Curation Presets & Schedule Validator (`scripts/test-all-presets.ts`)**: Audits all 49 curation presets, seasonal date ranges, and TMDb query definitions.
+4. **Tier 4: AI Server Assistant & Security Guardrails (`scripts/test-ai-agent.ts`)**: Audits all 30 security guardrails, cross-user stream termination blocks, query extraction, and diagnostic tools.
+5. **Tier 5: Payment Scraper Lookback & Financial Engine (`scripts/test-payment-lookback.ts`)**: Audits payment parsing, lookback retention, and settings synchronization (12 assertions).
+6. **Tier 6: Plex User Matching & Identity Resolution (`scripts/test-plex-lookup.ts`)**: Audits identity collision guards, alphanumeric tokens, and user aliases (7 assertions).
+7. **Tier 7: Core System & Architecture 24-Suite Battery (`scripts/verify-all.ts`)**: Full 24 integration suites covering DB schema & Docker build parity, encryption, Cloudflare Access coverage, navigation recovery, user directory, Plex sync, billing, and subscriptions.
+8. **Tier 8: Production Turbopack Next.js Build (`next build`)**: 100% clean production compilation across all static and dynamic routes.
 
 ## 🧠🤖 Multi-Tier Gemini Subagent Orchestration Architecture
 

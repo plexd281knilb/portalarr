@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useTransition, useMemo } from "react";
+import { isStaleDeploymentError, triggerDeploymentRecoveryReload, withTimeout } from "@/lib/client-recovery";
 import { 
     getStreamIntelligenceDataAction, 
     backfillTautulliHistoryAction, 
@@ -179,18 +180,22 @@ export default function StreamIntelligencePage() {
         if (isManual) setRefreshing(true);
         try {
             const isCustom = dateRange === "custom" && appliedCustomDates;
-            const res = await getStreamIntelligenceDataAction({
+            const res = await withTimeout(getStreamIntelligenceDataAction({
                 search: historySearch || undefined,
                 serverFilter: serverFilter || undefined,
                 range: dateRange,
                 startDate: isCustom ? appliedCustomDates?.start : undefined,
                 endDate: isCustom ? appliedCustomDates?.end : undefined,
                 userSort
-            });
+            }), 15000, "Stream intelligence");
             if (res.success) {
                 setData(res);
             }
         } catch (e) {
+            if (isStaleDeploymentError(e)) {
+                triggerDeploymentRecoveryReload();
+                return;
+            }
             console.error("Failed to load stream intelligence data:", e);
         } finally {
             setLoading(false);

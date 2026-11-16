@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getTicketsDashboardAction, updateTicketStatus, deleteSupportTicket, submitSupportTicket } from "@/app/actions";
+import { isStaleDeploymentError, triggerDeploymentRecoveryReload, withTimeout } from "@/lib/client-recovery";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -83,11 +84,15 @@ export default function TicketsPage() {
     const loadDashboard = async () => {
         setLoading(true);
         try {
-            const data = await getTicketsDashboardAction();
+            const data = await withTimeout(getTicketsDashboardAction(), 15000, "Support tickets");
             setIsAdmin(data.isAdmin);
             setCurrentUser(data.currentUser);
             setTickets(data.tickets);
         } catch (e: any) {
+            if (isStaleDeploymentError(e)) {
+                triggerDeploymentRecoveryReload();
+                return;
+            }
             setErrorMessage(e?.message || "Failed to load support tickets.");
         } finally {
             setLoading(false);

@@ -37,9 +37,9 @@ ENV NEXT_PUBLIC_BUILD_NUMBER=${BUILD_NUMBER}
 ENV DATABASE_URL="file:./prisma/dev.db"
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Build the application with persistent Next.js/Turbopack compiler cache
+# Build the application with persistent Next.js/Turbopack compiler cache (clean any ephemeral build-time SQLite files)
 RUN --mount=type=cache,target=/app/.next/cache \
-    npm run build
+    npm run build && rm -f /app/prisma/dev.db*
 
 # 3. Production image (heavy OS packages & global Prisma CLI placed BEFORE volatile git args so they are 100% cached!)
 FROM ${BASE_IMAGE} AS runner
