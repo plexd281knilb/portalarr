@@ -375,6 +375,8 @@ model MediaApp {
   allowedRootFolderIds String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @default(now()) @updatedAt
+
+  @@index([type])
 }
 
 model User {
@@ -471,6 +473,11 @@ model User {
   iptvChannelRequests         IptvChannelRequest[]
   sentEmailLogs          SentEmailLog[]
   linkedEmails           UserLinkedEmail[]
+
+  @@index([role])
+  @@index([status])
+  @@index([parentUserId])
+  @@index([plexUsername])
 }
 
 model UserLinkedEmail {
@@ -603,6 +610,8 @@ model Book {
   @@index([seriesId])
   @@index([libraryId])
   @@index([mediaType])
+  @@index([filePath])
+  @@index([title])
 }
 
 model BookRequest {
@@ -627,6 +636,11 @@ model BookRequest {
   libraryId           String?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
+
+  @@index([status])
+  @@index([requestedBy])
+  @@index([title])
+  @@index([libraryId])
 }
 
 model KindleDeliveryLog {
@@ -643,6 +657,9 @@ model KindleDeliveryLog {
   fileType       String?  // "epub", "pdf", etc.
   diagnostics    String?  // JSON or text summary of pre-flight/dispatch checks
   createdAt      DateTime @default(now())
+
+  @@index([status, createdAt])
+  @@index([username])
 }
 
 model FailedRelease {
@@ -727,6 +744,9 @@ model MediaCollection {
   isIgnored            Boolean   @default(false) // If true, skipped during discovery & auto-sync
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
+
+  @@index([serverId, sectionKey])
+  @@index([isIgnored])
 }
 
 model MediaOverlayRule {
@@ -775,6 +795,9 @@ model MediaOverlayRule {
   lastAppliedAt     DateTime?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
+
+  @@index([serverId, sectionKey])
+  @@index([enabled])
 }
 
 model CustomBadge {
@@ -807,6 +830,7 @@ model MediaArtBackup {
   updatedAt      DateTime  @updatedAt
 
   @@unique([serverId, ratingKey])
+  @@index([ratingKey])
 }
 
 model UserContentPreference {
@@ -867,6 +891,8 @@ model MediaContentAdvisory {
   updatedAt             DateTime  @updatedAt
 
   @@unique([ratingKey, serverId])
+  @@index([isLeavingSoon])
+  @@index([serverId, isLeavingSoon])
 }
 
 model PaymentEmailSource {
@@ -976,6 +1002,8 @@ model MediaRequest {
   @@index([requestedByUsername])
   @@index([requestedByUserId])
   @@index([mediaType])
+  @@index([createdAt])
+  @@index([parent4kRequestId])
 }
 
 model AdminApproval {

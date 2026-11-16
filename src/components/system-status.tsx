@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Activity, WifiOff, Cpu, HardDrive, PlaySquare } from "lucide-react";
@@ -9,26 +9,33 @@ import { Skeleton } from "@/components/ui/skeleton";
 export default function SystemStatus() {
     const [stats, setStats] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+    const inFlightRef = useRef(false);
 
     useEffect(() => {
-        const fetchStats = async () => {
+        const fetchStats = async (force = false) => {
+            if (!force && inFlightRef.current) return;
+            inFlightRef.current = true;
             try {
-                const res = await fetch("/api/stats", { cache: "no-store" });
+                const res = await fetch("/api/stats", { cache: "no-store", signal: AbortSignal.timeout(10000) });
                 if (!res.ok) throw new Error("Failed to fetch");
                 const fresh = await res.json();
                 if (fresh) setStats(fresh);
             } catch (e) {
                 console.error("Failed to fetch stats", e);
             } finally {
+                inFlightRef.current = false;
                 setLoading(false);
             }
         };
 
         // Initial fetch
-        fetchStats();
+        fetchStats(true);
 
-        // Auto-refresh every 5 seconds
-        const interval = setInterval(fetchStats, 5000);
+        // Auto-refresh every 5 seconds while tab is visible
+        const interval = setInterval(() => {
+            if (typeof document !== "undefined" && document.hidden) return;
+            fetchStats();
+        }, 5000);
         return () => clearInterval(interval);
     }, []);
 

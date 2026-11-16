@@ -1,28 +1,69 @@
 import { NextRequest, NextResponse } from "next/server";
-import { jwtVerify } from "jose";
-import prisma from "@/lib/prisma";
 import fs from "fs";
 import path from "path";
 import JSZip from "jszip";
 import { createExtractorFromData } from "node-unrar-js";
-import { getJwtSecret } from "@/lib/auth-secret";
+import { verifyBookFileRequest } from "@/lib/book-route-auth";
 
-async function checkLibraryAccess(allowedUsersStr: string, restrictedUsersStr: string = "", username: string = "", email: string = "", role: string = "") {
-    if ((role || "").toUpperCase() === "ADMIN") return true;
+type CachedComicArchive =
+    | { kind: "cbz"; zip: JSZip; imageEntries: string[]; expiresAt: number }
+    | { kind: "cbr"; fileData: Buffer; imageEntries: string[]; expiresAt: number };
 
-    const safeUsername = (username || "").toLowerCase();
-    const safeEmail = (email || "").toLowerCase();
+const COMIC_ARCHIVE_CACHE_MAX = 6;
+const COMIC_ARCHIVE_TTL_MS = 2 * 60 * 1000;
+const comicArchiveCache = new Map<string, CachedComicArchive>();
+const comicInFlightLoads = new Map<string, Promise<CachedComicArchive>>();
 
-    if (restrictedUsersStr && restrictedUsersStr.trim() !== "") {
-        const restricted = restrictedUsersStr.split(",").map(u => u.trim().toLowerCase()).filter(Boolean);
-        if ((safeUsername && restricted.includes(safeUsername)) || (safeEmail && restricted.includes(safeEmail))) {
-            return false;
-        }
+function setBoundedComicCache(key: string, val: CachedComicArchive) {
+    if (comicArchiveCache.has(key)) comicArchiveCache.delete(key);
+    while (comicArchiveCache.size >= COMIC_ARCHIVE_CACHE_MAX) {
+        const oldestKey = comicArchiveCache.keys().next().value;
+        if (!oldestKey) break;
+        comicArchiveCache.delete(oldestKey);
+    }
+    comicArchiveCache.set(key, val);
+}
+
+async function getParsedComicArchive(targetPath: string, isZip: boolean, mtimeMs: number, size: number): Promise<CachedComicArchive> {
+    const cacheKey = `${targetPath}:${mtimeMs}:${size}`;
+    const existing = comicArchiveCache.get(cacheKey);
+    if (existing && existing.expiresAt > Date.now()) {
+        return existing;
     }
 
-    if (!allowedUsersStr || allowedUsersStr.trim() === "" || allowedUsersStr.trim() === "*") return true;
-    const allowed = allowedUsersStr.split(",").map(u => u.trim().toLowerCase()).filter(Boolean);
-    return allowed.includes("*") || (safeUsername && allowed.includes(safeUsername)) || (safeEmail && allowed.includes(safeEmail));
+    const pending = comicInFlightLoads.get(cacheKey);
+    if (pending) return pending;
+
+    const loader = (async (): Promise<CachedComicArchive> => {
+        const fileData = await fs.promises.readFile(targetPath);
+        if (isZip) {
+            const zip = await JSZip.loadAsync(fileData);
+            const imageEntries = Object.keys(zip.files)
+                .filter(name => !zip.files[name].dir && /\.(?:jpe?g|png|webp|gif|bmp|avif)$/i.test(name))
+                .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
+            const entry: CachedComicArchive = { kind: "cbz", zip, imageEntries, expiresAt: Date.now() + COMIC_ARCHIVE_TTL_MS };
+            setBoundedComicCache(cacheKey, entry);
+            return entry;
+        }
+
+        const extractor = await createExtractorFromData({
+            data: fileData.buffer.slice(fileData.byteOffset, fileData.byteOffset + fileData.byteLength)
+        });
+        const list = extractor.getFileList();
+        const fileHeaders = [...list.fileHeaders];
+        const imageEntries = fileHeaders
+            .map(h => h.name)
+            .filter(name => /\.(?:jpe?g|png|webp|gif|bmp|avif)$/i.test(name))
+            .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
+        const entry: CachedComicArchive = { kind: "cbr", fileData, imageEntries, expiresAt: Date.now() + COMIC_ARCHIVE_TTL_MS };
+        setBoundedComicCache(cacheKey, entry);
+        return entry;
+    })().finally(() => {
+        comicInFlightLoads.delete(cacheKey);
+    });
+
+    comicInFlightLoads.set(cacheKey, loader);
+    return loader;
 }
 
 function getImageContentType(filename: string): string {
@@ -41,65 +82,32 @@ export async function GET(
 ) {
     const { id } = await context.params;
 
-    const session = req.cookies.get("session")?.value;
-    if (!session) {
-        return new NextResponse("Unauthorized", { status: 401 });
-    }
-
-    let payload;
     try {
-        const decoded = await jwtVerify(session, getJwtSecret());
-        payload = decoded.payload;
-    } catch (e) {
-        return new NextResponse("Unauthorized", { status: 401 });
-    }
-
-    const userStatus = (payload.status as string) || "APPROVED";
-    if (userStatus === "PENDING" || userStatus === "REJECTED") {
-        return new NextResponse("Account Pending Approval", { status: 403 });
-    }
-
-    try {
-        const book = await prisma.book.findUnique({
-            where: { id },
-            include: { library: true }
-        });
-
-        if (!book) {
-            return new NextResponse("Book Not Found", { status: 404 });
+        const auth = await verifyBookFileRequest(req, id);
+        if ("error" in auth) {
+            return auth.error;
         }
-
-        const hasAccess = await checkLibraryAccess(
-            book.library.allowedUsers,
-            book.library.restrictedUsers || "",
-            (payload.username || "") as string,
-            (payload.email || "") as string,
-            (payload.role || "") as string
-        );
-
-        if (!hasAccess) {
-            return new NextResponse("Access Denied", { status: 403 });
-        }
+        const { book } = auth;
 
         if (!fs.existsSync(book.filePath)) {
             return new NextResponse("File Not Found on Disk", { status: 404 });
         }
 
         let targetPath = book.filePath;
-        const stat = fs.statSync(targetPath);
+        let stat = await fs.promises.stat(targetPath);
         if (stat.isDirectory()) {
-            const files = fs.readdirSync(targetPath).filter(f => /\.(?:cbz|cbr|zip|rar)$/i.test(f));
+            const entries = await fs.promises.readdir(targetPath);
+            const files = entries.filter(f => /\.(?:cbz|cbr|zip|rar)$/i.test(f));
             if (files.length > 0) {
                 targetPath = path.join(targetPath, files[0]);
+                stat = await fs.promises.stat(targetPath);
             } else {
-                // Check if directory directly contains loose comic images
-                const rawImages = fs.readdirSync(targetPath)
+                const rawImages = entries
                     .filter(f => /\.(?:jpe?g|png|webp|gif|bmp|avif)$/i.test(f))
                     .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
 
                 if (rawImages.length > 0) {
-                    const searchParams = req.nextUrl.searchParams;
-                    const pageParam = searchParams.get("page");
+                    const pageParam = req.nextUrl.searchParams.get("page");
 
                     if (!pageParam) {
                         return NextResponse.json({
@@ -121,7 +129,7 @@ export async function GET(
 
                     const targetImageName = rawImages[pageNum - 1];
                     const targetImagePath = path.join(targetPath, targetImageName);
-                    const imgBuffer = fs.readFileSync(targetImagePath);
+                    const imgBuffer = await fs.promises.readFile(targetImagePath);
                     const contentType = getImageContentType(targetImageName);
 
                     return new NextResponse(imgBuffer as any, {
@@ -147,108 +155,57 @@ export async function GET(
             }, { status: 400 });
         }
 
-        const searchParams = req.nextUrl.searchParams;
-        const pageParam = searchParams.get("page");
+        const pageParam = req.nextUrl.searchParams.get("page");
+        const parsed = await getParsedComicArchive(targetPath, isZip, stat.mtimeMs, stat.size);
 
-        // Handle CBZ / ZIP
-        if (isZip) {
-            const fileData = fs.readFileSync(targetPath);
-            const zip = await JSZip.loadAsync(fileData);
-            const imageEntries = Object.keys(zip.files)
-                .filter(name => !zip.files[name].dir && /\.(?:jpe?g|png|webp|gif|bmp|avif)$/i.test(name))
-                .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
+        if (parsed.imageEntries.length === 0) {
+            return NextResponse.json({
+                success: false,
+                error: isZip ? "No comic pages/images found in archive" : "No comic pages/images found in RAR archive"
+            }, { status: 404 });
+        }
 
-            if (imageEntries.length === 0) {
-                return NextResponse.json({ success: false, error: "No comic pages/images found in archive" }, { status: 404 });
-            }
-
-            if (!pageParam) {
-                return NextResponse.json({
-                    success: true,
-                    format: "cbz",
-                    title: book.title,
-                    totalPages: imageEntries.length,
-                    pages: imageEntries.map((name, idx) => ({
-                        pageNumber: idx + 1,
-                        name: path.basename(name)
-                    }))
-                });
-            }
-
-            const pageNum = parseInt(pageParam, 10);
-            if (isNaN(pageNum) || pageNum < 1 || pageNum > imageEntries.length) {
-                return new NextResponse("Invalid Page Number", { status: 400 });
-            }
-
-            const targetEntry = imageEntries[pageNum - 1];
-            const imgBuffer = await zip.file(targetEntry)!.async("nodebuffer");
-            const contentType = getImageContentType(targetEntry);
-
-            return new NextResponse(imgBuffer as any, {
-                headers: {
-                    "Content-Type": contentType,
-                    "Content-Length": String(imgBuffer.length),
-                    "Cache-Control": "public, max-age=86400, immutable"
-                }
+        if (!pageParam) {
+            return NextResponse.json({
+                success: true,
+                format: parsed.kind,
+                title: book.title,
+                totalPages: parsed.imageEntries.length,
+                pages: parsed.imageEntries.map((name, idx) => ({
+                    pageNumber: idx + 1,
+                    name: path.basename(name)
+                }))
             });
         }
 
-        // Handle CBR / RAR
-        if (isRar) {
-            const fileData = fs.readFileSync(targetPath);
+        const pageNum = parseInt(pageParam, 10);
+        if (isNaN(pageNum) || pageNum < 1 || pageNum > parsed.imageEntries.length) {
+            return new NextResponse("Invalid Page Number", { status: 400 });
+        }
+
+        const targetEntry = parsed.imageEntries[pageNum - 1];
+        let imgBuffer: Buffer;
+        if (parsed.kind === "cbz") {
+            imgBuffer = await parsed.zip.file(targetEntry)!.async("nodebuffer");
+        } else {
             const extractor = await createExtractorFromData({
-                data: fileData.buffer.slice(fileData.byteOffset, fileData.byteOffset + fileData.byteLength)
+                data: Uint8Array.from(parsed.fileData).buffer
             });
-            const list = extractor.getFileList();
-            const fileHeaders = [...list.fileHeaders];
-            const imageEntries = fileHeaders
-                .map(h => h.name)
-                .filter(name => /\.(?:jpe?g|png|webp|gif|bmp|avif)$/i.test(name))
-                .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
-
-            if (imageEntries.length === 0) {
-                return NextResponse.json({ success: false, error: "No comic pages/images found in RAR archive" }, { status: 404 });
-            }
-
-            if (!pageParam) {
-                return NextResponse.json({
-                    success: true,
-                    format: "cbr",
-                    title: book.title,
-                    totalPages: imageEntries.length,
-                    pages: imageEntries.map((name, idx) => ({
-                        pageNumber: idx + 1,
-                        name: path.basename(name)
-                    }))
-                });
-            }
-
-            const pageNum = parseInt(pageParam, 10);
-            if (isNaN(pageNum) || pageNum < 1 || pageNum > imageEntries.length) {
-                return new NextResponse("Invalid Page Number", { status: 400 });
-            }
-
-            const targetEntry = imageEntries[pageNum - 1];
             const extracted = extractor.extract({ files: [targetEntry] });
             const file = [...extracted.files][0];
-
             if (!file || !file.extraction) {
                 return new NextResponse("Failed to extract page from archive", { status: 500 });
             }
-
-            const imgBuffer = Buffer.from(file.extraction);
-            const contentType = getImageContentType(targetEntry);
-
-            return new NextResponse(imgBuffer as any, {
-                headers: {
-                    "Content-Type": contentType,
-                    "Content-Length": String(imgBuffer.length),
-                    "Cache-Control": "public, max-age=86400, immutable"
-                }
-            });
+            imgBuffer = Buffer.from(file.extraction);
         }
 
-        return NextResponse.json({ success: false, error: "Unsupported format" }, { status: 400 });
+        return new NextResponse(imgBuffer as any, {
+            headers: {
+                "Content-Type": getImageContentType(targetEntry),
+                "Content-Length": String(imgBuffer.length),
+                "Cache-Control": "public, max-age=86400, immutable"
+            }
+        });
     } catch (e: any) {
         console.error("Comic processing error:", e);
         return NextResponse.json({ success: false, error: e.message || "Failed to process comic file" }, { status: 500 });

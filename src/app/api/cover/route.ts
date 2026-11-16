@@ -84,7 +84,7 @@ export async function GET(req: NextRequest) {
             if (book.coverUrl && book.coverUrl.startsWith("http")) {
                 const cleanRemoteUrl = book.coverUrl.replace(/[\?&]lib=[a-zA-Z0-9_\-]+/, "");
                 try {
-                    const imgRes = await fetch(cleanRemoteUrl);
+                    const imgRes = await fetch(cleanRemoteUrl, { signal: AbortSignal.timeout(8000) });
                     if (imgRes.ok) {
                         const imgBuffer = await imgRes.arrayBuffer();
                         const cType = imgRes.headers.get("content-type") || "image/jpeg";
@@ -104,7 +104,7 @@ export async function GET(req: NextRequest) {
                 const { fetchBookCover } = await import("@/app/actions");
                 const dynamicCover = await fetchBookCover(book.title, book.author || "Unknown Author", book.mediaType || "ebook");
                 if (dynamicCover && dynamicCover !== "local" && dynamicCover.startsWith("http")) {
-                    const imgRes = await fetch(dynamicCover);
+                    const imgRes = await fetch(dynamicCover, { signal: AbortSignal.timeout(8000) });
                     if (imgRes.ok) {
                         const imgBuffer = await imgRes.arrayBuffer();
                         const cType = imgRes.headers.get("content-type") || "image/jpeg";

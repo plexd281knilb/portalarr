@@ -822,17 +822,23 @@ export async function applyParentalTagsToPlexItem(
 
             // 4. Send PUT request to Plex metadata endpoint
             const metaUrl = `${cleanBase}/library/metadata/${encodeURIComponent(item.ratingKey)}?${metaParams.toString()}&X-Plex-Token=${encodeURIComponent(token)}`;
-            await fetch(metaUrl, {
+            const metaRes = await fetch(metaUrl, {
                 method: "PUT",
-                headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+                headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" },
+                signal: AbortSignal.timeout(10000)
             });
 
             // Send PUT request to Plex sections endpoint
             const secUrl = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?${secParams.toString()}&X-Plex-Token=${encodeURIComponent(token)}`;
-            await fetch(secUrl, {
+            const secRes = await fetch(secUrl, {
                 method: "PUT",
-                headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+                headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" },
+                signal: AbortSignal.timeout(10000)
             });
+
+            if (!metaRes.ok && !secRes.ok) {
+                throw new Error(`Plex PUT failed (${metaRes.status}/${secRes.status})`);
+            }
 
             // Pacing pause to let PMS SQLite write transaction commit cleanly
             await new Promise(r => setTimeout(r, 40));
@@ -934,17 +940,23 @@ export async function clearParentalTagsFromPlexItem(
 
             // 1. PUT to metadata
             const metaUrl = `${cleanBase}/library/metadata/${encodeURIComponent(item.ratingKey)}?${metaParams.toString()}&X-Plex-Token=${encodeURIComponent(token)}`;
-            await fetch(metaUrl, {
+            const putMetaRes = await fetch(metaUrl, {
                 method: "PUT",
-                headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+                headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" },
+                signal: AbortSignal.timeout(10000)
             });
 
             // 2. PUT to sections/all
             const secUrl = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?${secParams.toString()}&X-Plex-Token=${encodeURIComponent(token)}`;
-            await fetch(secUrl, {
+            const putSecRes = await fetch(secUrl, {
                 method: "PUT",
-                headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+                headers: { "X-Plex-Token": token, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" },
+                signal: AbortSignal.timeout(10000)
             });
+
+            if (!putMetaRes.ok && !putSecRes.ok) {
+                throw new Error(`Plex clear PUT failed (${putMetaRes.status}/${putSecRes.status})`);
+            }
 
             return { success: true, clearedCount: removedLabels.length + removedGenres.length };
         } catch (e: any) {
@@ -1376,14 +1388,16 @@ export async function applyCustomTagRuleToLibrary(
                 const metaUrl = `${cleanBase}/library/metadata/${encodeURIComponent(item.ratingKey)}?${params.toString()}&X-Plex-Token=${encodeURIComponent(serverToken)}`;
                 await fetch(metaUrl, {
                     method: "PUT",
-                    headers: { "X-Plex-Token": serverToken, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+                    headers: { "X-Plex-Token": serverToken, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" },
+                    signal: AbortSignal.timeout(10000)
                 });
 
                 // 2. Send PUT to sections endpoint
                 const secUrl = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?${params.toString()}&X-Plex-Token=${encodeURIComponent(serverToken)}`;
                 const putRes = await fetch(secUrl, {
                     method: "PUT",
-                    headers: { "X-Plex-Token": serverToken, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+                    headers: { "X-Plex-Token": serverToken, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" },
+                    signal: AbortSignal.timeout(10000)
                 });
 
                 if (putRes.ok) {
@@ -1483,14 +1497,16 @@ export async function clearCustomTagFromLibrary(
                 // 1. PUT to metadata
                 await fetch(`${cleanBase}/library/metadata/${encodeURIComponent(item.ratingKey)}?${metaParams.toString()}&X-Plex-Token=${encodeURIComponent(serverToken)}`, {
                     method: "PUT",
-                    headers: { "X-Plex-Token": serverToken, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+                    headers: { "X-Plex-Token": serverToken, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" },
+                    signal: AbortSignal.timeout(10000)
                 });
 
                 // 2. PUT to sections
                 const secUrl = `${cleanBase}/library/sections/${encodeURIComponent(String(sectionKey))}/all?${secParams.toString()}&X-Plex-Token=${encodeURIComponent(serverToken)}`;
                 const putRes = await fetch(secUrl, {
                     method: "PUT",
-                    headers: { "X-Plex-Token": serverToken, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" }
+                    headers: { "X-Plex-Token": serverToken, "X-Plex-Client-Identifier": "portalarr-custom-dashboard-app" },
+                    signal: AbortSignal.timeout(10000)
                 });
 
                 if (putRes.ok) {

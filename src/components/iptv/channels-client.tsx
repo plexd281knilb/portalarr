@@ -150,7 +150,6 @@ function ChannelCard({ ch, specialBadge, badgeColor = "teal", onAddToProfile }: 
                     <div className="flex items-center gap-2.5">
                         <div className="h-9 w-9 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400 group-hover:scale-105 transition-transform overflow-hidden shrink-0">
                             {logoSrc && !imgError ? (
-                                /* eslint-disable-next-line @next/next/no-img-element */
                                 <img
                                     src={logoSrc}
                                     alt={ch.name}

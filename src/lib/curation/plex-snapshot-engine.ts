@@ -12,7 +12,6 @@ const execFileAsync = promisify(execFile);
 // Dynamic wrapper for Node 22.5+ node:sqlite
 let DatabaseSyncClass: any = null;
 try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const sqliteMod = require("node:sqlite");
     DatabaseSyncClass = sqliteMod.DatabaseSync;
 } catch (e) {

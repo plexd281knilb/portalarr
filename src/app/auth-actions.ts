@@ -60,7 +60,21 @@ export async function login(formData: FormData) {
   const normalizedInput = input.toLowerCase();
 
   // Support login by Username, Email, Plex Username, or Plex Email (case-insensitive & trimmed)
-  const allUsers = await prisma.user.findMany();
+  const allUsers = await prisma.user.findMany({
+    select: {
+      id: true,
+      username: true,
+      email: true,
+      password: true,
+      role: true,
+      status: true,
+      membershipTier: true,
+      trialEndsAt: true,
+      subscriptionEndsAt: true,
+      plexUsername: true,
+      plexEmail: true
+    }
+  });
   const user = allUsers.find((u) => {
     const dbUsername = u.username?.trim().toLowerCase();
     const dbEmail = u.email?.trim().toLowerCase();
@@ -98,8 +112,7 @@ export async function login(formData: FormData) {
   } else if (currentStatus === "APPROVED" && user.subscriptionEndsAt && new Date(user.subscriptionEndsAt) < now) {
     currentStatus = "EXPIRED";
     await prisma.user.update({ where: { id: user.id }, data: { status: "EXPIRED", plexLibrarySectionIds: "", selectedPlexLibrarySectionIds: "" } }).catch(() => {});
-    if (!user) return null;
-}
+  }
 
   // Auto-heal membership tier for approved members or admins whose tier is still marked as TRIAL
   let currentTier = user.membershipTier;
@@ -135,7 +148,9 @@ export async function requestAccount(formData: FormData) {
     return { error: "Username, email, and password are required." };
   }
 
-  const allUsers = await prisma.user.findMany();
+  const allUsers = await prisma.user.findMany({
+    select: { id: true, username: true, email: true }
+  });
   const existing = allUsers.find(
     (u) => u.username.toLowerCase() === username.toLowerCase() || u.email.toLowerCase() === email
   );
@@ -305,7 +320,20 @@ export async function handlePlexCallback(authToken: string, rawUsername: string,
   }
 
   // 2. Discover user in database and determine admin status
-  const allUsers = await prisma.user.findMany();
+  const allUsers = await prisma.user.findMany({
+    select: {
+      id: true,
+      username: true,
+      email: true,
+      role: true,
+      status: true,
+      membershipTier: true,
+      trialEndsAt: true,
+      subscriptionEndsAt: true,
+      plexUsername: true,
+      plexEmail: true
+    }
+  });
   let user = allUsers.find(
     (u) =>
       (plexEmail && u.email.toLowerCase() === plexEmail) ||
@@ -813,7 +841,9 @@ export async function requestForgotPassword(formData: FormData) {
   }
 
   const normalizedInput = input.toLowerCase();
-  const allUsers = await prisma.user.findMany();
+  const allUsers = await prisma.user.findMany({
+    select: { id: true, username: true, email: true, plexUsername: true, plexEmail: true }
+  });
   const user = allUsers.find((u) => {
     const dbUsername = u.username?.trim().toLowerCase();
     const dbEmail = u.email?.trim().toLowerCase();

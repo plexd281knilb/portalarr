@@ -1167,18 +1167,22 @@ export async function recordActivePlexSessions(
                             { email: { equals: s.email || "" } }
                         ]
                     },
-                    select: { id: true, sharingAlertCount: true }
+                    select: { id: true, sharingAlertCount: true, lastSharingAlertAt: true }
                 });
                 if (matchedUser) {
                     userId = matchedUser.id;
                     if (isSharingAlert) {
-                        await prisma.user.update({
-                            where: { id: matchedUser.id },
-                            data: {
-                                sharingAlertCount: { increment: 1 },
-                                lastSharingAlertAt: new Date()
-                            }
-                        }).catch(() => {});
+                        const lastAlertMs = matchedUser.lastSharingAlertAt ? new Date(matchedUser.lastSharingAlertAt).getTime() : 0;
+                        const shouldCountNewIncident = !lastAlertMs || (Date.now() - lastAlertMs) >= 5 * 60 * 1000;
+                        if (shouldCountNewIncident) {
+                            await prisma.user.update({
+                                where: { id: matchedUser.id },
+                                data: {
+                                    sharingAlertCount: { increment: 1 },
+                                    lastSharingAlertAt: new Date()
+                                }
+                            }).catch(() => {});
+                        }
                     }
                 }
             } catch {}

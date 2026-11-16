@@ -1,12 +1,9 @@
-"use client";
-
-import ProfilePage from "@/app/profile/page";
+import { redirect } from "next/navigation";
 
 /**
  * Legacy Settings Profile Route (/settings/profile)
- * Re-exports the primary ProfilePage for backward compatibility.
- * All end-user links target /profile directly (kept open at the Cloudflare edge, while /settings* is locked down).
+ * Redirects to the canonical /profile route.
  */
 export default function SettingsProfilePage() {
-    return <ProfilePage />;
+    redirect("/profile");
 }

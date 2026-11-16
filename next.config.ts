@@ -68,8 +68,14 @@ const availableCores = Math.max(2, cpus().length - 1);
 
 const nextConfig: NextConfig = {
   output: "standalone",
-  typescript: {
-    ignoreBuildErrors: true,
+  outputFileTracingExcludes: {
+    "*": [
+      "./data/**",
+      "./prisma/backups/**",
+      "./scratch/**",
+      "./scripts/**",
+      "./.git/**",
+    ],
   },
   env: {
     PORTALARR_BUILD_TIMESTAMP: buildTimestamp,

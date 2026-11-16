@@ -37,7 +37,23 @@ function generateFallbackPosterSvg(title: string, year: string): string {
     </svg>`;
 }
 
+function isSafeExternalImageUrl(rawUrl: string): boolean {
+    try {
+        const parsed = new URL(rawUrl);
+        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+        const host = parsed.hostname.toLowerCase();
+        // Block cloud instance metadata / link-local endpoints
+        if (host === "metadata.google.internal" || host.startsWith("169.254.") || host.startsWith("fe80:")) {
+            return false;
+        }
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 async function tryFetchImage(url: string, headers: Record<string, string> = {}, timeoutMs = 3500): Promise<NextResponse | null> {
+    if (!isSafeExternalImageUrl(url)) return null;
     try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeoutMs);

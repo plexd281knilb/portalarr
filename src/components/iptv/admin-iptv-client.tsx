@@ -185,14 +185,6 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
     const [usersList, setUsersList] = useState(() => mergeUsersWithAudit(initialData.users || [], initialData.auditReport));
     const [pendingApprovals, setPendingApprovals] = useState(initialData.pendingApprovals || []);
 
-    useEffect(() => {
-        if (auditReport) {
-            setUsersList((prev) => mergeUsersWithAudit(prev, auditReport));
-        } else {
-            handleRunEcosystemAudit();
-        }
-    }, [auditReport]);
-
     // Telemetry State
     const [activeSessions, setActiveSessions] = useState(initialData.telemetry?.activeSessions || []);
 
@@ -371,6 +363,14 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
             }
         });
     };
+
+    useEffect(() => {
+        if (auditReport) {
+            setUsersList((prev) => mergeUsersWithAudit(prev, auditReport));
+        } else {
+            handleRunEcosystemAudit();
+        }
+    }, [auditReport]);
 
     const handleInvitePlexHome = (userId: string) => {
         startTransition(async () => {
