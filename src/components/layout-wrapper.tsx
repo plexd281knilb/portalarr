@@ -5,7 +5,7 @@ import { Sidebar, MobileSidebar } from "@/components/sidebar";
 import { LogOut, LogIn, Settings, LayoutDashboard, Server, BookOpen, User, HelpCircle } from "lucide-react";
 import { logout, getSession, getCurrentUser } from "@/app/auth-actions";
 import { checkUserLibraryAccess } from "@/app/actions";
-import { isStaleDeploymentError, triggerDeploymentRecoveryReload } from "@/lib/client-recovery";
+import { isStaleDeploymentError, triggerDeploymentRecoveryReload, withTimeout } from "@/lib/client-recovery";
 import { useState, useEffect, useRef, Suspense } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -59,11 +59,11 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
       }
       try {
         const [user, session] = await Promise.all([
-          getCurrentUser().catch((err) => {
+          withTimeout(getCurrentUser(), 10000, "Layout user").catch((err) => {
             if (isStaleDeploymentError(err)) triggerDeploymentRecoveryReload();
             return null;
           }),
-          getSession().catch((err) => {
+          withTimeout(getSession(), 10000, "Layout session").catch((err) => {
             if (isStaleDeploymentError(err)) triggerDeploymentRecoveryReload();
             return null;
           }),
@@ -100,7 +100,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
           if (isAdm) {
             setHasLibraryAccess(true);
           } else {
-            const hasAcc = await checkUserLibraryAccess().catch(() => false);
+            const hasAcc = await withTimeout(checkUserLibraryAccess(), 10000, "Library access").catch(() => false);
             if (!cancelled) setHasLibraryAccess(hasAcc);
           }
         } else {

@@ -16,6 +16,7 @@ import {
 import { BookDetailModal } from "@/components/seerr/book-detail-modal";
 import { AuthorDetailModal } from "@/components/seerr/author-detail-modal";
 import { SeriesDetailModal } from "@/components/seerr/series-detail-modal";
+import { withTimeout, isStaleDeploymentError, triggerDeploymentRecoveryReload } from "@/lib/client-recovery";
 import KindleSenderUpdateBanner from "@/components/kindle-sender-update-banner";
 import { BookDiscoveryItem } from "@/lib/books/book-types";
 import { Badge } from "@/components/ui/badge";
@@ -69,6 +70,7 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
 
     // Toast Notification State
     const [toast, setToast] = useState<{ type: "success" | "error" | "info"; text: string } | null>(null);
+    const [loadError, setLoadError] = useState<string>("");
     const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
 
     const showToast = (type: "success" | "error" | "info", text: string, duration = 4000) => {
@@ -86,29 +88,39 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
         if (forceFresh) {
             cachedRequests = null;
         }
+        setLoadError("");
         if (!cachedRequests) {
             setLoading(true);
         }
         try {
             if (isAdmin) {
-                const res = await getAllMediaRequestsAction({
+                const res = await withTimeout(getAllMediaRequestsAction({
                     limit: 500
-                });
+                }), 15000, "Media requests");
                 if (res.success && res.data) {
                     setRequests(res.data);
                     cachedRequests = res.data;
                     lastRequestsFetchTime = Date.now();
+                } else {
+                    setLoadError(res.error || "Failed to load media requests.");
                 }
             } else {
-                const res = await getUserMediaRequestsAction();
+                const res = await withTimeout(getUserMediaRequestsAction(), 15000, "Media requests");
                 if (res.success && res.data) {
                     setRequests(res.data);
                     cachedRequests = res.data;
                     lastRequestsFetchTime = Date.now();
+                } else {
+                    setLoadError(res.error || "Failed to load your media requests.");
                 }
             }
         } catch (e: any) {
+            if (isStaleDeploymentError(e)) {
+                triggerDeploymentRecoveryReload();
+                return;
+            }
             console.error("[REQUESTS] Failed loading requests:", e);
+            setLoadError(e?.message || "Timed out loading media requests.");
         } finally {
             setLoading(false);
         }
@@ -545,6 +557,18 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
             {/* Outbound Sender Notice when Ebooks filter is active */}
             {mediaTypeFilter === "book" && (
                 <KindleSenderUpdateBanner autoOpenModal={false} />
+            )}
+
+            {loadError && (
+                <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                        <AlertCircle className="h-4 w-4 shrink-0 text-rose-400" />
+                        <span>{loadError}</span>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => loadRequests(true)} className="h-7 text-[11px] shrink-0">
+                        Retry
+                    </Button>
+                </div>
             )}
 
             {/* STICKY / FLOATING BULK ACTIONS TOOLBAR */}

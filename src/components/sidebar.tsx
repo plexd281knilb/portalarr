@@ -7,6 +7,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { logout, getSession } from "@/app/auth-actions";
+import { withTimeout, isStaleDeploymentError, triggerDeploymentRecoveryReload } from "@/lib/client-recovery";
 import { 
   LayoutDashboard, 
   Settings, 
@@ -91,7 +92,7 @@ function SidebarNavContent({ onItemClick }: SidebarNavContentProps) {
       return;
     }
     let cancelled = false;
-    getSession().then((session) => {
+    withTimeout(getSession(), 10000, "Sidebar session").then((session) => {
       if (cancelled) return;
       if (session) {
         lastSessionCheckRef.current = { ts: Date.now(), hasSession: true };
@@ -107,7 +108,11 @@ function SidebarNavContent({ onItemClick }: SidebarNavContentProps) {
         setIsSuperUser(false);
         setIsTrial(false);
       }
-    }).catch(() => {
+    }).catch((err) => {
+      if (isStaleDeploymentError(err)) {
+        triggerDeploymentRecoveryReload();
+        return;
+      }
       if (cancelled) return;
       setIsAdmin(false);
       setIsSuperUser(false);

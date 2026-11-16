@@ -4,7 +4,8 @@ import WhatsNewModal from "@/components/whats-new-modal";
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
-import { getAdminDetailedStreamsAction, killUserStream, getWatchHistoryAction, clearWatchHistoryAction } from "@/app/actions";
+import { killUserStream, getWatchHistoryAction, clearWatchHistoryAction } from "@/app/actions";
+import { fetchJsonWithTimeout, isStaleDeploymentError, triggerDeploymentRecoveryReload } from "@/lib/client-recovery";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -69,11 +70,15 @@ export default function AdminDetailedStreams({ devRoadmapText = "", roadmapText 
         inFlightRef.current = true;
         if (isManual) setRefreshing(true);
         try {
-            const res = await getAdminDetailedStreamsAction();
+            const res = await fetchJsonWithTimeout<any>("/api/admin/streams-live", {}, 15000);
             if (res && res.success) {
                 setData(res);
             }
         } catch (err) {
+            if (isStaleDeploymentError(err)) {
+                triggerDeploymentRecoveryReload();
+                return;
+            }
             console.error("Failed to load admin streams:", err);
         } finally {
             inFlightRef.current = false;

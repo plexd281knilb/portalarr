@@ -19,7 +19,10 @@ export default function PlexSetupGuides({ trigger }: PlexSetupGuidesProps = {}) 
     const [activeTab, setActiveTab] = useState<string>("appletv");
 
     useEffect(() => {
+        if (!isOpen || guides.length > 0) return;
+        let cancelled = false;
         getPlexSetupGuides().then(g => {
+            if (cancelled) return;
             if (g && Array.isArray(g)) {
                 setGuides(g);
                 if (g.length > 0 && !activeTab) {
@@ -27,7 +30,10 @@ export default function PlexSetupGuides({ trigger }: PlexSetupGuidesProps = {}) 
                 }
             }
         }).catch(() => {});
-    }, []);
+        return () => {
+            cancelled = true;
+        };
+    }, [isOpen, guides.length, activeTab]);
 
     const getDeviceIcon = (id: string) => {
         switch (id) {

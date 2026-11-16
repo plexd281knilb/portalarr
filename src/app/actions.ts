@@ -21874,7 +21874,10 @@ export async function prewarmAllCachesAction() {
  * Runs all account profile queries in parallel and caches in memory (SWR).
  * Slashing profile settings load times from seconds down to <50ms.
  */
-export async function getUserProfileBootstrapAction(bypassCache = false): Promise<{
+export async function getUserProfileBootstrapAction(
+    bypassCache = false,
+    options?: { skipLiveMediaServers?: boolean }
+): Promise<{
     success: boolean;
     data?: {
         user: any;
@@ -21895,6 +21898,7 @@ export async function getUserProfileBootstrapAction(bypassCache = false): Promis
         hasAudiobooksAccess: boolean;
         audiobookLibraries: any[];
         mediaServersData?: any;
+        liveMediaDeferred?: boolean;
     };
     error?: string;
 }> {
@@ -21902,6 +21906,7 @@ export async function getUserProfileBootstrapAction(bypassCache = false): Promis
         await ensureSchemaColumns();
         const session: any = await verifyUser();
         const userId = session.id;
+        const skipLiveMedia = Boolean(options?.skipLiveMediaServers);
 
         const cacheKey = `user_profile_bootstrap:${userId}`;
         if (!bypassCache) {
@@ -21946,13 +21951,13 @@ export async function getUserProfileBootstrapAction(bypassCache = false): Promis
             getPublicJoinConfig(),
             getUserNotificationPreferencesAction(),
             getUserContentPreferencesAction(),
-            getUserAllowedPlexLibrariesAction(),
+            skipLiveMedia ? Promise.resolve({ success: false, deferred: true } as any) : getUserAllowedPlexLibrariesAction(),
             getUserSubAccountsAction(),
             getAvailableAddonsAction(),
             getUserKidsLibraryAccessAction(),
             getUserAudiobooksLibraryAccessAction(),
             getDiscordServerInviteUrlAction(),
-            getUserMediaServersAndLibrariesAction(bypassCache)
+            skipLiveMedia ? Promise.resolve({ success: false, deferred: true } as any) : getUserMediaServersAndLibrariesAction(bypassCache)
         ]);
 
         const dbUser = userLookupRes.status === "fulfilled" ? userLookupRes.value : session;
@@ -22025,10 +22030,13 @@ export async function getUserProfileBootstrapAction(bypassCache = false): Promis
             kidsLibraries,
             hasAudiobooksAccess,
             audiobookLibraries,
-            mediaServersData
+            mediaServersData,
+            liveMediaDeferred: skipLiveMedia
         };
 
-        setUserCache(cacheKey, payload, 3 * 60 * 1000);
+        if (!skipLiveMedia) {
+            setUserCache(cacheKey, payload, 3 * 60 * 1000);
+        }
         return { success: true, data: payload };
     } catch (e: any) {
         return { success: false, error: e.message || "Failed to bootstrap user profile" };

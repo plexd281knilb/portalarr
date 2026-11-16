@@ -8,7 +8,7 @@ Portalarr is a centralized, self-hosted dashboard designed to manage a media ser
 
 Portalarr adheres to strict Semantic Versioning (`MAJOR.MINOR.PATCH`):
 - **Production Release (`prod` branch, formerly `stable`)**: `v1.4.15` is the production milestone baseline release on `prod`.
-- **Beta Testing (`beta` branch)**: `v1.4.17` — fixes for `prod` (non-blocking API bootstraps across Approval Queue, Email Templates, Sent Logs, Payment Emails, Schedules, Panels, Curation, & Unraid PUID/PGID Docker entrypoint) undergoing testing before production deployment.
+- **Beta Testing (`beta` branch)**: `v1.4.18` — fixes for `prod` (full-app page/component loading audit: SSR hydration across Profile, Tickets, Guides, Radarr, Sonarr, Pending, Join, Login; non-blocking `/profile` DB bootstrap decoupled from external Plex/Jellyfin probes; `/api/admin/streams-live` and `/api/admin/infrastructure-status` GET pollers; Radarr queue polling guards; timeout/retry/stale-deployment recovery across remaining pages and components) undergoing testing before production deployment.
 - **Active Feature Development (`dev` branch, formerly `main`)**: `v1.5.35` is the active feature release (future releases in testing on `dev`).
 - **Strict SemVer Policy**:
   - **PATCH increments (`1.3.22` ➔ `1.3.23`)**: Bug fixes, security patches, styling polish, telemetry adjustments, and non-breaking corrections.

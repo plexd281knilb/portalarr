@@ -36,6 +36,7 @@ import {
     Captions
 } from "lucide-react";
 import { getFeatureSuggestions, toggleFeatureVote, createFeatureSuggestion, deleteFeatureSuggestion } from "@/app/actions";
+import { withTimeout, isStaleDeploymentError, triggerDeploymentRecoveryReload } from "@/lib/client-recovery";
 
 interface Suggestion {
     id: string;
@@ -61,6 +62,7 @@ const CATEGORY_ICONS: Record<string, React.ReactNode> = {
 export default function FeatureVotingPoll({ isAdmin = false }: { isAdmin?: boolean }) {
     const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState("");
     const [sortBy, setSortBy] = useState<"votes" | "recent">("votes");
     const [activeCategory, setActiveCategory] = useState<string>("All");
     const [searchQuery, setSearchQuery] = useState("");
@@ -78,13 +80,22 @@ export default function FeatureVotingPoll({ isAdmin = false }: { isAdmin?: boole
     const [votingId, setVotingId] = useState<string | null>(null);
 
     const loadSuggestions = async () => {
+        setLoading(true);
+        setLoadError("");
         try {
-            const res = await getFeatureSuggestions();
+            const res = await withTimeout(getFeatureSuggestions(), 12000, "Feature suggestions");
             if (res.success && res.suggestions) {
                 setSuggestions(res.suggestions as Suggestion[]);
+            } else if (!res.success) {
+                setLoadError((res as any).error || "Failed to load feature suggestions.");
             }
-        } catch (e) {
+        } catch (e: any) {
+            if (isStaleDeploymentError(e)) {
+                triggerDeploymentRecoveryReload();
+                return;
+            }
             console.error("Failed to load suggestions:", e);
+            setLoadError(e?.message || "Timed out loading feature suggestions.");
         } finally {
             setLoading(false);
         }
@@ -398,6 +409,13 @@ export default function FeatureVotingPoll({ isAdmin = false }: { isAdmin?: boole
                         {[1, 2, 3, 4].map(n => (
                             <div key={n} className="h-20 bg-zinc-900/40 border border-border/40 rounded-xl animate-pulse" />
                         ))}
+                    </div>
+                ) : loadError && suggestions.length === 0 ? (
+                    <div className="text-center py-8 px-4 border border-rose-500/30 rounded-xl bg-rose-500/10 space-y-3">
+                        <p className="text-xs text-rose-300">{loadError}</p>
+                        <Button variant="outline" size="sm" onClick={loadSuggestions} className="h-8 text-xs">
+                            Retry
+                        </Button>
                     </div>
                 ) : filteredSuggestions.length === 0 ? (
                     <div className="text-center py-10 px-4 border border-dashed border-border/50 rounded-xl bg-zinc-900/20">

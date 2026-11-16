@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
-import { getAdminInfrastructureStatusAction, type InfrastructureServiceItem } from "@/app/actions";
+import { type InfrastructureServiceItem } from "@/app/actions";
+import { fetchJsonWithTimeout, isStaleDeploymentError, triggerDeploymentRecoveryReload } from "@/lib/client-recovery";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -55,12 +56,16 @@ export default function AdminSystemHealthGrid() {
         inFlightRef.current = true;
         if (isManual) setRefreshing(true);
         try {
-            const res = await getAdminInfrastructureStatusAction();
+            const res = await fetchJsonWithTimeout<any>("/api/admin/infrastructure-status", {}, 15000);
             if (res && res.success) {
                 setServices(res.services);
                 setSummary(res.summary);
             }
         } catch (err) {
+            if (isStaleDeploymentError(err)) {
+                triggerDeploymentRecoveryReload();
+                return;
+            }
             console.error("Failed to load infrastructure status:", err);
         } finally {
             inFlightRef.current = false;
