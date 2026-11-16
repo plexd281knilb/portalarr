@@ -11265,7 +11265,8 @@ export async function getLibraryBooks(libraryId?: string) {
         where: whereClause,
         orderBy: { createdAt: "desc" }
     });
-    // Evaluate and repair ratings and cover URLs dynamically
+    // Evaluate and repair ratings and cover URLs dynamically (batch DB writes cleanly instead of loop contention)
+    const pendingRatingUpdates: Array<{ id: string; ageRating: string; maturityRating: string }> = [];
     for (const b of books) {
         if (!b.coverUrl || b.coverUrl === "local" || b.coverUrl.trim() === "") {
             b.coverUrl = `/api/cover?id=${b.id}`;
@@ -11280,15 +11281,26 @@ export async function getLibraryBooks(libraryId?: string) {
             if (inferred.isMature && b.ageRating !== "18+ Mature") {
                 b.ageRating = inferred.ageRating;
                 b.maturityRating = inferred.maturityRating;
-                prisma.book.update({
-                    where: { id: b.id },
-                    data: { ageRating: inferred.ageRating, maturityRating: inferred.maturityRating }
-                }).catch(() => {});
+                pendingRatingUpdates.push({
+                    id: b.id,
+                    ageRating: inferred.ageRating,
+                    maturityRating: inferred.maturityRating
+                });
             } else if (!b.ageRating) {
                 b.ageRating = inferred.ageRating;
                 b.maturityRating = inferred.maturityRating;
             }
         }
+    }
+    if (pendingRatingUpdates.length > 0) {
+        prisma.$transaction(
+            pendingRatingUpdates.map(u =>
+                prisma.book.update({
+                    where: { id: u.id },
+                    data: { ageRating: u.ageRating, maturityRating: u.maturityRating }
+                })
+            )
+        ).catch(() => {});
     }
 
     let resultBooks = books;
@@ -12787,6 +12799,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
             return null;
         }
 
+        const dbBooksByExactPath = new Map<string, any>();
         const dbBooksByPathLower = new Map<string, any[]>();
         const dbBooksByParentDirLower = new Map<string, any[]>();
         const dbBooksByDedupKey = new Map<string, any[]>();
@@ -12797,6 +12810,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
 
         for (const b of dbBooks) {
             if (b.filePath) {
+                if (!dbBooksByExactPath.has(b.filePath)) dbBooksByExactPath.set(b.filePath, b);
                 const normP = normalizePathForLookup(b.filePath);
                 if (!dbBooksByPathLower.has(normP)) dbBooksByPathLower.set(normP, []);
                 dbBooksByPathLower.get(normP)!.push(b);
@@ -13552,9 +13566,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
 
                 try {
                     let newBook: any = null;
-                    const pathMatched = await prisma.book.findFirst({
-                        where: { filePath: fullPath }
-                    });
+                    const pathMatched = dbBooksByExactPath.get(fullPath);
                     if (pathMatched && !matchedDbBookIds.has(pathMatched.id)) {
                         newBook = pathMatched;
                     }
@@ -13638,23 +13650,19 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                         newBook = selectMatchingCandidate(fallbackCandidates);
                     }
 
-                    // 6. Direct database query fallback for parent directory / stub with title verification
+                    // 6. Direct in-memory lookup for parent directory / stub with title verification
                     if (!newBook) {
-                        const directDbMatches = await prisma.book.findMany({
-                            where: {
-                                OR: [
-                                    { filePath: fullPath },
-                                    { filePath: path.dirname(fullPath) }
-                                ]
-                            }
-                        }).catch(() => []);
-                        if (directDbMatches && directDbMatches.length > 0) {
+                        const fullDir = path.dirname(fullPath);
+                        const directDbMatches = dbBooks.filter(
+                            m => m.filePath === fullPath || m.filePath === fullDir
+                        );
+                        if (directDbMatches.length > 0) {
                             const validDirect = directDbMatches.filter(m => !matchedDbBookIds.has(m.id) && (isTitleMatch(m.title, title) || m.filePath === fullPath));
                             newBook = selectMatchingCandidate(validDirect);
                         }
                     }
 
-                    // 7. Comprehensive DB candidate lookup by composite key, title key, or isTitleMatch & isAuthorMatch
+                    // 7. Comprehensive in-memory candidate lookup by composite key, title key, or isTitleMatch & isAuthorMatch
                     if (!newBook) {
                         const candidateDedupKey = getBookCompositeDedupKey({
                             mediaType: targetMediaType,
@@ -13665,13 +13673,7 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                         const normTargetMedia = targetMediaType === "audiobook" ? "audiobook" : "ebook";
                         const allAuthorKey = `${normTargetMedia}:::all:::${candidateTitleKey}`;
 
-                        const existingCandidates = await prisma.book.findMany({
-                            where: targetMediaType === "audiobook"
-                                ? { mediaType: "audiobook" }
-                                : { mediaType: { not: "audiobook" } }
-                        }).catch(() => []);
-
-                        const validCandidates = existingCandidates.filter(cand => {
+                        const validCandidates = dbBooks.filter(cand => {
                             if (matchedDbBookIds.has(cand.id)) return false;
                             const candMedia = cand.mediaType === "audiobook" ? "audiobook" : "ebook";
                             if (candMedia !== normTargetMedia) return false;
@@ -13692,23 +13694,20 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                         newBook = selectMatchingCandidate(validCandidates);
                     }
 
-                    // 8. FINAL AUTHORITATIVE SAFEGUARD: Search entire Book table for any record with matching clean title and author
+                    // 8. Final safeguard: in-memory substring / clean-title lookup across preloaded dbBooks
                     if (!newBook) {
                         const cleanTKey = getBookCleanTitleKey(title);
                         if (cleanTKey) {
-                            const titleSubstringMatches = await prisma.book.findMany({
-                                where: {
-                                    OR: [
-                                        { title: { contains: title } },
-                                        ...(author && author !== "Unknown Author" ? [{ author: { contains: author } }] : [])
-                                    ]
-                                }
-                            }).catch(() => []);
+                            const lowerTitle = title.toLowerCase();
+                            const lowerAuthor = author && author !== "Unknown Author" ? author.toLowerCase() : "";
                             const normTargetMedia = targetMediaType === "audiobook" ? "audiobook" : "ebook";
-                            const validMatches = titleSubstringMatches.filter(m => {
+                            const validMatches = dbBooks.filter(m => {
                                 if (matchedDbBookIds.has(m.id)) return false;
                                 const mMedia = m.mediaType === "audiobook" ? "audiobook" : "ebook";
                                 if (mMedia !== normTargetMedia) return false;
+                                const titleSub = (m.title || "").toLowerCase().includes(lowerTitle);
+                                const authorSub = lowerAuthor && (m.author || "").toLowerCase().includes(lowerAuthor);
+                                if (!titleSub && !authorSub) return false;
                                 const mTKey = getBookCleanTitleKey(m.title);
                                 return ((mTKey === cleanTKey || isTitleMatch(m.title, title)) && isAuthorMatch(m.author, author));
                             });
@@ -13968,19 +13967,19 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                 });
                 for (const r of activeBookReqs) {
                     if (r.author) {
-                        protectedFolderSet.add(path.resolve(path.join(scanPath, r.author)).toLowerCase());
+                        protectedFolderSet.add(path.resolve(/*turbopackIgnore: true*/ scanPath, r.author).toLowerCase());
                         if (r.title) {
-                            protectedFolderSet.add(path.resolve(path.join(scanPath, r.author, r.title)).toLowerCase());
+                            protectedFolderSet.add(path.resolve(/*turbopackIgnore: true*/ scanPath, r.author, r.title).toLowerCase());
                         }
                     }
                     if (r.title) {
-                        protectedFolderSet.add(path.resolve(path.join(scanPath, r.title)).toLowerCase());
+                        protectedFolderSet.add(path.resolve(/*turbopackIgnore: true*/ scanPath, r.title).toLowerCase());
                     }
                 }
 
                 const topLevelDirs = fs.readdirSync(scanPath);
                 for (const d of topLevelDirs) {
-                    const fullD = path.join(scanPath, d);
+                    const fullD = path.join(/*turbopackIgnore: true*/ scanPath, d);
                     if (fs.statSync(fullD).isDirectory()) {
                         purgeEmptyDirectories(fullD, protectedFolderSet);
                     }
@@ -17187,12 +17186,20 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
         if (!skipAuth) {
             await verifyAdmin();
         }
+        let cachedUserProfiles = getUserCache<any[]>("admin_user_stream_profiles");
         const [tautulliInstances, glances, plexServers, settings, userProfiles, dbMediaServers] = await Promise.all([
             prisma.tautulliInstance.findMany({ orderBy: { createdAt: 'asc' } }).catch(() => []),
             prisma.glancesInstance.findMany({ orderBy: { createdAt: 'asc' } }).catch(() => []),
             prisma.plexServer.findMany({ orderBy: { createdAt: 'asc' } }).catch(() => []),
             prisma.settings.findFirst({ where: { id: "global" } }).catch(() => null),
-            getUserStreamProfiles().catch(() => []),
+            cachedUserProfiles
+                ? Promise.resolve(cachedUserProfiles)
+                : getUserStreamProfiles().then((profiles) => {
+                    if (Array.isArray(profiles)) {
+                        setUserCache("admin_user_stream_profiles", profiles, 30000);
+                    }
+                    return profiles;
+                }).catch(() => []),
             prisma.mediaServer.findMany({ orderBy: { createdAt: 'asc' } }).catch(() => [])
         ]);
 
@@ -17400,7 +17407,7 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
                                 mediaType: isEpisode ? "episode" : "movie",
                                 year: s.year || "",
                                 thumb: (s.grandparentThumb || s.parentThumb || s.thumb || s.art || (s.ratingKey ? `/library/metadata/${s.ratingKey}/thumb` : "") || (s.grandparentTitle || s.title || ""))
-                                    ? `/api/media/image?serverId=${encodeURIComponent(srv.serverId)}&serverName=${encodeURIComponent(srv.serverName)}&serverUrl=${encodeURIComponent(srv.serverUrl)}&thumb=${encodeURIComponent(s.grandparentThumb || s.parentThumb || s.thumb || s.art || (s.ratingKey ? `/library/metadata/${s.ratingKey}/thumb` : ""))}&title=${encodeURIComponent(s.grandparentTitle || s.title || "")}&year=${encodeURIComponent(String(s.year || ""))}&type=${encodeURIComponent(isEpisode ? "episode" : "movie")}&token=${encodeURIComponent(srv.token || "")}`
+                                    ? `/api/media/image?serverId=${encodeURIComponent(srv.serverId)}&serverName=${encodeURIComponent(srv.serverName)}&serverUrl=${encodeURIComponent(srv.serverUrl)}&thumb=${encodeURIComponent(s.grandparentThumb || s.parentThumb || s.thumb || s.art || (s.ratingKey ? `/library/metadata/${s.ratingKey}/thumb` : ""))}&title=${encodeURIComponent(s.grandparentTitle || s.title || "")}&year=${encodeURIComponent(String(s.year || ""))}&type=${encodeURIComponent(isEpisode ? "episode" : "movie")}`
                                     : null,
                                 player: s.Player?.title || s.Player?.device || "Plex Client",
                                 device: s.Player?.platform || s.Player?.device || "",
@@ -17421,8 +17428,8 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
                             sessionItem.deviceDiagnosis = diagnoseStreamSettings(sessionItem);
                             const telemetry = extractStreamTelemetry(s);
                             Object.assign(sessionItem, telemetry);
-                            if (telemetry.userThumb && telemetry.userThumb.startsWith("/") && srv.serverUrl && srv.token) {
-                                sessionItem.userThumb = `${srv.serverUrl}${telemetry.userThumb}?X-Plex-Token=${encodeURIComponent(srv.token)}`;
+                            if (telemetry.userThumb && telemetry.userThumb.startsWith("/") && srv.serverUrl) {
+                                sessionItem.userThumb = `/api/media/image?serverId=${encodeURIComponent(srv.serverId)}&serverUrl=${encodeURIComponent(srv.serverUrl)}&thumb=${encodeURIComponent(telemetry.userThumb)}`;
                             }
                             allSessions.push(sessionItem);
                         }

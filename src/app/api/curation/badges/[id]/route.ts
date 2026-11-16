@@ -4,12 +4,13 @@ import fs from "fs";
 import path from "path";
 import { getCurrentUser } from "@/app/auth-actions";
 import { DEFAULT_BUILTIN_BADGE_DEFINITIONS } from "@/lib/curation/presets";
+import { resolveContainedPath } from "@/lib/book-route-auth";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
         const decodedId = decodeURIComponent(id || "").trim();
-        if (!decodedId) {
+        if (!decodedId || decodedId.includes("..") || decodedId.includes("\0")) {
             return new NextResponse("Badge not found", { status: 404 });
         }
 
@@ -26,23 +27,32 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         const targetFilePath = badge?.filePath || "";
         let mimeType = badge?.mimeType || "image/png";
 
-        // 2. Resolve candidate file paths across data/custom_badges and public/kometa_stock
+        // 2. Resolve candidate file paths safely constrained within data/custom_badges and public/kometa_stock
+        const badgesBase = path.join(/*turbopackIgnore: true*/ process.cwd(), "data", "custom_badges");
+        const stockBase = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "kometa_stock");
         const candidatePaths: string[] = [];
+
+        const pushIfContained = (base: string, rel: string) => {
+            const p = resolveContainedPath(base, rel);
+            if (p) candidatePaths.push(p);
+        };
+
         if (targetFilePath) {
-            candidatePaths.push(targetFilePath);
-            candidatePaths.push(path.join(process.cwd(), targetFilePath));
-            candidatePaths.push(path.join(process.cwd(), "data", "custom_badges", path.basename(targetFilePath)));
-            candidatePaths.push(path.join(process.cwd(), "public", "kometa_stock", path.basename(targetFilePath)));
-            candidatePaths.push(path.join(process.cwd(), "public", targetFilePath));
+            pushIfContained(badgesBase, path.basename(targetFilePath));
+            pushIfContained(stockBase, path.basename(targetFilePath));
+            pushIfContained(path.join(/*turbopackIgnore: true*/ process.cwd(), "data"), targetFilePath);
+            pushIfContained(path.join(/*turbopackIgnore: true*/ process.cwd(), "public"), targetFilePath);
         }
 
-        // Also check decodedId in common folders
-        candidatePaths.push(path.join(process.cwd(), "data", "custom_badges", `${decodedId}.png`));
-        candidatePaths.push(path.join(process.cwd(), "data", "custom_badges", `${decodedId}.svg`));
-        candidatePaths.push(path.join(process.cwd(), "data", "custom_badges", decodedId));
-        candidatePaths.push(path.join(process.cwd(), "public", "kometa_stock", `${decodedId}.png`));
-        candidatePaths.push(path.join(process.cwd(), "public", "kometa_stock", `${decodedId}.svg`));
-        candidatePaths.push(path.join(process.cwd(), "public", "kometa_stock", decodedId));
+        // Only probe direct ID filenames if decodedId contains no path separators
+        if (!decodedId.includes("/") && !decodedId.includes("\\")) {
+            pushIfContained(badgesBase, `${decodedId}.png`);
+            pushIfContained(badgesBase, `${decodedId}.svg`);
+            pushIfContained(badgesBase, decodedId);
+            pushIfContained(stockBase, `${decodedId}.png`);
+            pushIfContained(stockBase, `${decodedId}.svg`);
+            pushIfContained(stockBase, decodedId);
+        }
 
         for (const cand of candidatePaths) {
             if (cand && fs.existsSync(cand)) {

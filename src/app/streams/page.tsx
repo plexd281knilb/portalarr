@@ -1,7 +1,5 @@
-"use client";
-
-import StreamIntelligencePage from "@/app/admin/tautulli/page";
+import { redirect } from "next/navigation";
 
 export default function StreamsAliasPage() {
-    return <StreamIntelligencePage />;
+    redirect("/admin/tautulli");
 }

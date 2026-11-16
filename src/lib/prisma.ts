@@ -2124,6 +2124,35 @@ export async function ensureSchemaColumns(): Promise<void> {
             console.error("[DB-SCHEMA-AUTOFIX] UserLinkedEmail table check error:", e.message || e);
         }
 
+        // Performance indexes for frequent filters across SQLite tables
+        const perfIndexes = [
+            `CREATE INDEX IF NOT EXISTS "MediaApp_type_idx" ON "MediaApp"("type")`,
+            `CREATE INDEX IF NOT EXISTS "User_role_idx" ON "User"("role")`,
+            `CREATE INDEX IF NOT EXISTS "User_status_idx" ON "User"("status")`,
+            `CREATE INDEX IF NOT EXISTS "User_parentUserId_idx" ON "User"("parentUserId")`,
+            `CREATE INDEX IF NOT EXISTS "User_plexUsername_idx" ON "User"("plexUsername")`,
+            `CREATE INDEX IF NOT EXISTS "Book_filePath_idx" ON "Book"("filePath")`,
+            `CREATE INDEX IF NOT EXISTS "Book_title_idx" ON "Book"("title")`,
+            `CREATE INDEX IF NOT EXISTS "BookRequest_status_idx" ON "BookRequest"("status")`,
+            `CREATE INDEX IF NOT EXISTS "BookRequest_requestedBy_idx" ON "BookRequest"("requestedBy")`,
+            `CREATE INDEX IF NOT EXISTS "BookRequest_title_idx" ON "BookRequest"("title")`,
+            `CREATE INDEX IF NOT EXISTS "BookRequest_libraryId_idx" ON "BookRequest"("libraryId")`,
+            `CREATE INDEX IF NOT EXISTS "KindleDeliveryLog_status_createdAt_idx" ON "KindleDeliveryLog"("status", "createdAt")`,
+            `CREATE INDEX IF NOT EXISTS "KindleDeliveryLog_username_idx" ON "KindleDeliveryLog"("username")`,
+            `CREATE INDEX IF NOT EXISTS "MediaCollection_serverId_sectionKey_idx" ON "MediaCollection"("serverId", "sectionKey")`,
+            `CREATE INDEX IF NOT EXISTS "MediaCollection_isIgnored_idx" ON "MediaCollection"("isIgnored")`,
+            `CREATE INDEX IF NOT EXISTS "MediaOverlayRule_serverId_sectionKey_idx" ON "MediaOverlayRule"("serverId", "sectionKey")`,
+            `CREATE INDEX IF NOT EXISTS "MediaOverlayRule_enabled_idx" ON "MediaOverlayRule"("enabled")`,
+            `CREATE INDEX IF NOT EXISTS "MediaArtBackup_ratingKey_idx" ON "MediaArtBackup"("ratingKey")`,
+            `CREATE INDEX IF NOT EXISTS "MediaContentAdvisory_isLeavingSoon_idx" ON "MediaContentAdvisory"("isLeavingSoon")`,
+            `CREATE INDEX IF NOT EXISTS "MediaContentAdvisory_serverId_isLeavingSoon_idx" ON "MediaContentAdvisory"("serverId", "isLeavingSoon")`,
+            `CREATE INDEX IF NOT EXISTS "MediaRequest_createdAt_idx" ON "MediaRequest"("createdAt")`,
+            `CREATE INDEX IF NOT EXISTS "MediaRequest_parent4kRequestId_idx" ON "MediaRequest"("parent4kRequestId")`,
+        ];
+        for (const ddl of perfIndexes) {
+            await prisma.$executeRawUnsafe(`${ddl};`).catch(() => {});
+        }
+
 
 
         globalForPrisma.schemaPatchCompleted = true;
@@ -2305,8 +2334,8 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
       console.error(`[BACKGROUND-SCHEDULER] Boot scan failed:`, bootErr.message || bootErr);
     }
 
-    // Trigger initial pre-warming of Global System & Discovery Caches
-    (async () => {
+    // Stagger initial Global System & Discovery Cache pre-warming to avoid boot-time SQLite contention
+    setTimeout(async () => {
       try {
         const { prewarmGlobalSystem } = await import("./prewarm");
         console.log("[BACKGROUND-SCHEDULER] Pre-warming Global System & Discovery Caches...");
@@ -2314,7 +2343,7 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
       } catch (pwErr: any) {
         console.warn("[BACKGROUND-SCHEDULER] Boot system pre-warming error:", pwErr.message || pwErr);
       }
-    })();
+    }, 15000);
     
     // Main periodic scheduler loop: checks every 60 seconds
     setInterval(async () => {

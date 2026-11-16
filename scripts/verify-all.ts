@@ -2313,7 +2313,7 @@ async function runTestSuite() {
             }
 
             // 4. Verify Access Control page UI integrates Sent Emails tab
-            const accessPagePath = path.join(process.cwd(), "src", "app", "settings", "access", "page.tsx");
+            const accessPagePath = path.join(process.cwd(), "src", "components", "settings", "access-settings-client.tsx");
             const accessPageContent = fs.readFileSync(accessPagePath, "utf-8");
             if (!accessPageContent.includes('TabsTrigger value="sent-emails"')) {
                 throw new Error("Access Control page.tsx missing TabsTrigger for 'sent-emails'");
@@ -2775,7 +2775,7 @@ async function runTestSuite() {
         // 3. Global stale-deployment recovery & non-blocking client navigation
         const recoverySrc = fs.readFileSync(path.join(process.cwd(), "src/lib/client-recovery.ts"), "utf8");
         const layoutSrc = fs.readFileSync(path.join(process.cwd(), "src/components/layout-wrapper.tsx"), "utf8");
-        const accessSrc = fs.readFileSync(path.join(process.cwd(), "src/app/settings/access/page.tsx"), "utf8");
+        const accessSrc = fs.readFileSync(path.join(process.cwd(), "src/components/settings/access-settings-client.tsx"), "utf8");
         const usersApiSrc = fs.readFileSync(path.join(process.cwd(), "src/app/api/users/route.ts"), "utf8");
         const settingsPageSrc = fs.readFileSync(path.join(process.cwd(), "src/app/settings/page.tsx"), "utf8");
 

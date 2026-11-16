@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle2, AlertTriangle, ShieldCheck, RefreshCw, Activity } from "lucide-react";
@@ -8,12 +8,15 @@ import { CheckCircle2, AlertTriangle, ShieldCheck, RefreshCw, Activity } from "l
 export default function SimpleSystemHealth() {
     const [stats, setStats] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+    const inFlightRef = useRef(false);
 
     useEffect(() => {
         let mounted = true;
-        const fetchStats = async () => {
+        const fetchStats = async (force = false) => {
+            if (!force && inFlightRef.current) return;
+            inFlightRef.current = true;
             try {
-                const res = await fetch("/api/stats", { cache: "no-store" });
+                const res = await fetch("/api/stats", { cache: "no-store", signal: AbortSignal.timeout(10000) });
                 if (res.ok) {
                     const data = await res.json();
                     if (mounted) setStats(data);
@@ -21,12 +24,16 @@ export default function SimpleSystemHealth() {
             } catch (err) {
                 console.error("Failed to load simple system health:", err);
             } finally {
+                inFlightRef.current = false;
                 if (mounted) setLoading(false);
             }
         };
 
-        fetchStats();
-        const interval = setInterval(fetchStats, 10000);
+        fetchStats(true);
+        const interval = setInterval(() => {
+            if (typeof document !== "undefined" && document.hidden) return;
+            fetchStats();
+        }, 10000);
         return () => {
             mounted = false;
             clearInterval(interval);

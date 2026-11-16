@@ -5226,7 +5226,6 @@ function BookLibraryPageContent() {
                 <div className="flex items-start gap-3">
                   <div className="h-16 w-16 rounded-lg bg-slate-900 border border-slate-800 shrink-0 overflow-hidden flex items-center justify-center">
                     {chaptersModalBook.coverUrl ? (
-                      /* eslint-disable-next-line @next/next/no-img-element */
                       <img
                         src={chaptersModalBook.coverUrl}
                         alt={chaptersModalBook.title}

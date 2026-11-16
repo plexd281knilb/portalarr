@@ -47,16 +47,27 @@ import {
     DialogDescription, 
     DialogFooter 
 } from "@/components/ui/dialog";
+import dynamic from "next/dynamic";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import AccessSettingsPage from "@/app/settings/access/page";
-import SystemLogsViewer from "@/components/system-logs-viewer";
-import { SystemSchedulesDashboard } from "@/components/system-schedules-dashboard";
-import EmailManagement from "@/components/email-management";
 import { SeerrSettingsPanel, SeerrSettingsPanelHandle } from "@/components/seerr/seerr-settings-panel";
 import DiscordSettingsPanel, { DiscordSettingsPanelHandle } from "@/components/discord/discord-settings-panel";
 
 import { AdminMediaServersPanel, AdminMediaServersPanelHandle } from "@/components/settings/admin-media-servers-panel";
+
+const AccessSettingsPage = dynamic(() => import("@/components/settings/access-settings-client"), {
+    loading: () => <div className="flex min-h-[240px] items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>,
+});
+const SystemLogsViewer = dynamic(() => import("@/components/system-logs-viewer"), {
+    loading: () => <div className="flex min-h-[240px] items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>,
+});
+const SystemSchedulesDashboard = dynamic(
+    () => import("@/components/system-schedules-dashboard").then((m) => m.SystemSchedulesDashboard),
+    { loading: () => <div className="flex min-h-[240px] items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div> }
+);
+const EmailManagement = dynamic(() => import("@/components/email-management"), {
+    loading: () => <div className="flex min-h-[240px] items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>,
+});
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
