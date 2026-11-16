@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useImperativeHandle } from "react";
 import { useRouter } from "next/navigation";
 import { UnsavedChangesPrompt } from "@/components/ui/unsaved-changes-prompt";
+import { fetchJsonWithTimeout, isStaleDeploymentError, triggerDeploymentRecoveryReload } from "@/lib/client-recovery";
 import { 
     getSeerrSettingsAction, 
     updateSeerrSettingsAction, 
@@ -312,7 +313,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
     const loadSettings = async () => {
         setLoading(true);
         try {
-            const res = await getSeerrSettingsAction();
+            const res = await fetchJsonWithTimeout<any>("/api/admin/panels?panel=seerr", {}, 15000);
             if (res.success && res.data) {
                 const d = res.data;
                 // Full Accounts

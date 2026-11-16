@@ -373,28 +373,43 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
     const loadEmailTemplates = async () => {
         setLoadingEmailTemplates(true);
         try {
-            const res = await getEmailTemplatesAction();
+            const payload = await fetchJsonWithTimeout<{ templates?: { success?: boolean; templates?: any[] } }>(
+                "/api/admin/approvals?status=PENDING&type=ALL&page=1&pageSize=1&includeTemplates=1",
+                {},
+                15000
+            );
+            const res = payload?.templates;
             if (res && res.success && res.templates) {
                 setEmailTemplatesList(res.templates);
             } else {
                 setEmailTemplatesList([]);
             }
         } catch (e) {
+            if (isStaleDeploymentError(e)) triggerDeploymentRecoveryReload();
             console.error("loadEmailTemplates error:", e);
         } finally {
             setLoadingEmailTemplates(false);
         }
     };
 
-    const loadApprovals = async () => {
+    const loadApprovals = async (includeTemplates = false) => {
         setLoadingApprovals(true);
+        if (includeTemplates) setLoadingEmailTemplates(true);
         try {
-            const res = await getAdminApprovalsAction({
+            const params = new URLSearchParams({
                 status: approvalFilterStatus,
                 type: approvalFilterType,
-                page: 1,
-                pageSize: 50
+                page: "1",
+                pageSize: "50",
+                includeTemplates: includeTemplates ? "1" : "0",
             });
+            const payload = await fetchJsonWithTimeout<{
+                approvals?: any;
+                approvalSettings?: any;
+                templates?: { success?: boolean; templates?: any[] } | null;
+            }>(`/api/admin/approvals?${params.toString()}`, {}, 15000);
+
+            const res = payload?.approvals;
             if (res && res.success && res.approvals) {
                 setApprovals(res.approvals);
                 setApprovalCounts({
@@ -404,7 +419,8 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                     totalCount: res.totalCount || 0
                 });
             }
-            const settingsRes = await getApprovalSettingsAction();
+
+            const settingsRes = payload?.approvalSettings;
             if (settingsRes && settingsRes.success) {
                 setApprovalSettings({
                     requireApprovalForPlexChanges: settingsRes.requireApprovalForPlexChanges ?? true,
@@ -415,10 +431,21 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                     adminApprovalEmailNotify: settingsRes.adminApprovalEmailNotify ?? true
                 });
             }
+
+            if (includeTemplates) {
+                const tplRes = payload?.templates;
+                if (tplRes && tplRes.success && tplRes.templates) {
+                    setEmailTemplatesList(tplRes.templates);
+                } else {
+                    setEmailTemplatesList([]);
+                }
+            }
         } catch (e: any) {
+            if (isStaleDeploymentError(e)) triggerDeploymentRecoveryReload();
             console.error("loadApprovals error:", e);
         } finally {
             setLoadingApprovals(false);
+            if (includeTemplates) setLoadingEmailTemplates(false);
         }
     };
 
@@ -653,7 +680,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
     const loadLibraries = async () => {
         setLoadingLibraries(true);
         try {
-            const res = await withTimeout(fetchPlexServerLibraries(), 15000, "Plex library scan");
+            const res = await fetchJsonWithTimeout<{ success?: boolean; servers?: any[] }>("/api/admin/plex-libraries", {}, 20000);
             if (res && res.success && res.servers) {
                 setServerLibraries(res.servers);
             }
@@ -970,8 +997,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
 
     useEffect(() => {
         if (activeTab === "approvals") {
-            loadApprovals();
-            loadEmailTemplates();
+            loadApprovals(true);
         }
     }, [activeTab, approvalFilterStatus, approvalFilterType]);
 
@@ -4592,7 +4618,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                 type="button"
                                 variant="outline"
                                 size="sm"
-                                onClick={loadApprovals}
+                                onClick={() => loadApprovals(true)}
                                 disabled={loadingApprovals}
                                 className="h-9 gap-1.5 text-xs font-semibold"
                             >

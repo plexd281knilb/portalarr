@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useImperativeHandle } from "react";
 import { UnsavedChangesPrompt } from "@/components/ui/unsaved-changes-prompt";
+import { fetchJsonWithTimeout, isStaleDeploymentError, triggerDeploymentRecoveryReload } from "@/lib/client-recovery";
 import {
     getDiscordBotSettingsAction,
     saveDiscordBotSettingsAction,
@@ -77,7 +78,7 @@ export default function DiscordSettingsPanel({ onDirtyChange, ref }: DiscordSett
     const loadSettings = async () => {
         try {
             setLoading(true);
-            const res = await getDiscordBotSettingsAction();
+            const res = await fetchJsonWithTimeout<any>("/api/admin/panels?panel=discord", {}, 15000);
             if (res.success) {
                 setBotToken(res.botTokenMasked || "");
                 setGuildId(res.guildId || "");

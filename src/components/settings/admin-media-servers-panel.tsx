@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useImperativeHandle } from "react";
 import Link from "next/link";
 import { UnsavedChangesPrompt } from "@/components/ui/unsaved-changes-prompt";
+import { fetchJsonWithTimeout, isStaleDeploymentError, triggerDeploymentRecoveryReload } from "@/lib/client-recovery";
 import { 
     getAdminMediaServersAction, 
     saveMediaServerAction, 
@@ -73,7 +74,7 @@ export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServers
         else setLoading(true);
         setError("");
         try {
-            const res = await getAdminMediaServersAction();
+            const res = await fetchJsonWithTimeout<any>("/api/admin/panels?panel=media-servers", {}, 15000);
             if (res.success) {
                 setServers(res.servers);
                 const deepCopy = JSON.parse(JSON.stringify(res.servers));

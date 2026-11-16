@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { fetchJsonWithTimeout, isStaleDeploymentError, triggerDeploymentRecoveryReload } from "@/lib/client-recovery";
 import { 
     getPaymentEmailSources, 
     savePaymentEmailSource, 
@@ -121,13 +122,17 @@ export default function PaymentEmailManager() {
     const loadData = async () => {
         setLoading(true);
         try {
-            const [sourcesRes, txRes, usersRes] = await Promise.all([
-                getPaymentEmailSources(),
-                getPaymentTransactions(txFilter),
-                getAppUsers()
-            ]);
+            const payload = await fetchJsonWithTimeout<{
+                sources?: any;
+                transactions?: any;
+                users?: any[];
+            }>(`/api/admin/payment-emails?filter=${encodeURIComponent(txFilter)}`, {}, 15000);
 
-            if (sourcesRes.success) {
+            const sourcesRes = payload?.sources;
+            const txRes = payload?.transactions;
+            const usersList = payload?.users;
+
+            if (sourcesRes?.success) {
                 setSources(sourcesRes.sources || []);
                 if (sourcesRes.config) {
                     setConfig(sourcesRes.config);
@@ -136,15 +141,17 @@ export default function PaymentEmailManager() {
                     }
                 }
             }
-            if (txRes.success) {
+            if (txRes?.success) {
                 setTransactions(txRes.transactions || []);
             }
-            if (Array.isArray(usersRes)) {
-                setAllUsers(usersRes);
-            } else if ((usersRes as any)?.users) {
-                setAllUsers((usersRes as any).users);
+            if (Array.isArray(usersList)) {
+                setAllUsers(usersList);
             }
         } catch (err) {
+            if (isStaleDeploymentError(err)) {
+                triggerDeploymentRecoveryReload();
+                return;
+            }
             console.error("Failed to load payment email data:", err);
         } finally {
             setLoading(false);
