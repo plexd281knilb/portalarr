@@ -50,13 +50,13 @@ interface Suggestion {
 }
 
 const CATEGORY_ICONS: Record<string, React.ReactNode> = {
-    "Live TV": <Tv className="h-3.5 w-3.5 text-amber-400" />,
-    "Audiobooks": <Headphones className="h-3.5 w-3.5 text-cyan-400" />,
-    "Plex": <Sliders className="h-3.5 w-3.5 text-orange-400" />,
-    "Subtitles": <Captions className="h-3.5 w-3.5 text-pink-400" />,
-    "Notifications": <BellRing className="h-3.5 w-3.5 text-blue-400" />,
-    "Stats": <BarChart3 className="h-3.5 w-3.5 text-emerald-400" />,
-    "Ebooks": <BookOpen className="h-3.5 w-3.5 text-emerald-400" />,
+    "Live TV": <Tv className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />,
+    "Audiobooks": <Headphones className="h-3.5 w-3.5 text-cyan-700 dark:text-cyan-400" />,
+    "Plex": <Sliders className="h-3.5 w-3.5 text-orange-700 dark:text-orange-400" />,
+    "Subtitles": <Captions className="h-3.5 w-3.5 text-pink-700 dark:text-pink-400" />,
+    "Notifications": <BellRing className="h-3.5 w-3.5 text-blue-700 dark:text-blue-400" />,
+    "Stats": <BarChart3 className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />,
+    "Ebooks": <BookOpen className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />,
 };
 
 export default function FeatureVotingPoll({ isAdmin = false }: { isAdmin?: boolean }) {
@@ -221,12 +221,12 @@ export default function FeatureVotingPoll({ isAdmin = false }: { isAdmin?: boole
         });
 
     return (
-        <Card className="w-full bg-[#121218]/80 border-cyan-500/20 backdrop-blur-md shadow-sm hover:shadow-md transition-all duration-200">
+        <Card className="w-full bg-card/95 dark:bg-[#121218]/80 border-cyan-500/20 backdrop-blur-md shadow-sm hover:shadow-md transition-all duration-200">
             <CardHeader className="pb-4 border-b border-border/40">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div className="space-y-1.5">
-                        <CardTitle className="text-xl sm:text-2xl font-bold flex items-center gap-2.5 text-cyan-400">
-                            <Vote className="h-6 w-6 text-cyan-400 shrink-0" />
+                        <CardTitle className="text-xl sm:text-2xl font-bold flex items-center gap-2.5 text-cyan-700 dark:text-cyan-400">
+                            <Vote className="h-6 w-6 text-cyan-700 dark:text-cyan-400 shrink-0" />
                             <span>Community Feature Suggestions & Voting</span>
                         </CardTitle>
                         <CardDescription className="text-sm sm:text-base text-muted-foreground max-w-2xl leading-relaxed">
@@ -245,9 +245,9 @@ export default function FeatureVotingPoll({ isAdmin = false }: { isAdmin?: boole
                                 <span>Suggest Feature</span>
                             </Button>
                         </DialogTrigger>
-                        <DialogContent className="sm:max-w-lg bg-[#14141d] border-cyan-500/30 text-foreground max-h-[90vh] overflow-y-auto">
+                        <DialogContent className="sm:max-w-lg bg-popover dark:bg-[#14141d] border-cyan-500/30 text-foreground max-h-[90vh] overflow-y-auto">
                             <DialogHeader>
-                                <DialogTitle className="text-xl font-bold flex items-center gap-2 text-cyan-400">
+                                <DialogTitle className="text-xl font-bold flex items-center gap-2 text-cyan-700 dark:text-cyan-400">
                                     💡 Suggest a New Feature
                                 </DialogTitle>
                                 <DialogDescription className="text-muted-foreground text-sm">
@@ -257,12 +257,12 @@ export default function FeatureVotingPoll({ isAdmin = false }: { isAdmin?: boole
 
                             <form onSubmit={handleCreateSuggestion} className="space-y-4 py-2">
                                 {formError && (
-                                    <div className="p-3 bg-red-500/15 border border-red-500/40 rounded-lg text-red-400 text-sm">
+                                    <div className="p-3 bg-red-500/15 border border-red-500/40 rounded-lg text-red-700 dark:text-red-400 text-sm">
                                         {formError}
                                     </div>
                                 )}
                                 {formSuccess && (
-                                    <div className="p-3 bg-emerald-500/15 border border-emerald-500/40 rounded-lg text-emerald-400 text-sm flex items-center gap-2 font-medium">
+                                    <div className="p-3 bg-emerald-500/15 border border-emerald-500/40 rounded-lg text-emerald-700 dark:text-emerald-400 text-sm flex items-center gap-2 font-medium">
                                         <CheckCircle2 className="h-4 w-4" /> Feature suggested successfully!
                                     </div>
                                 )}
@@ -273,7 +273,7 @@ export default function FeatureVotingPoll({ isAdmin = false }: { isAdmin?: boole
                                         value={newTitle}
                                         onChange={e => setNewTitle(e.target.value)}
                                         placeholder="e.g. Discord Notifications for New Downloads"
-                                        className="bg-zinc-900/80 border-border/60 focus-visible:ring-cyan-400"
+                                        className="bg-card/95 dark:bg-zinc-900/80 border-border/60 focus-visible:ring-cyan-400"
                                         required
                                         maxLength={100}
                                     />
@@ -289,8 +289,8 @@ export default function FeatureVotingPoll({ isAdmin = false }: { isAdmin?: boole
                                                 onClick={() => setNewCategory(cat)}
                                                 className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all text-center ${
                                                     newCategory === cat
-                                                        ? "bg-cyan-500/20 border-cyan-400 text-cyan-300 ring-1 ring-cyan-400/50 font-semibold"
-                                                        : "bg-zinc-900/50 border-border/50 text-muted-foreground hover:bg-zinc-800"
+                                                        ? "bg-cyan-500/20 border-cyan-400 text-cyan-800 dark:text-cyan-300 ring-1 ring-cyan-400/50 font-semibold"
+                                                        : "bg-muted/70 dark:bg-zinc-900/50 border-border/50 text-muted-foreground hover:bg-accent dark:hover:bg-zinc-800"
                                                 }`}
                                             >
                                                 {cat}
@@ -306,7 +306,7 @@ export default function FeatureVotingPoll({ isAdmin = false }: { isAdmin?: boole
                                         onChange={e => setNewDesc(e.target.value)}
                                         placeholder="Explain what this feature would do and how it helps you..."
                                         rows={3}
-                                        className="bg-zinc-900/80 border-border/60 focus-visible:ring-cyan-400 resize-none text-sm"
+                                        className="bg-card/95 dark:bg-zinc-900/80 border-border/60 focus-visible:ring-cyan-400 resize-none text-sm"
                                         maxLength={500}
                                     />
                                 </div>
@@ -350,7 +350,7 @@ export default function FeatureVotingPoll({ isAdmin = false }: { isAdmin?: boole
                             className={`h-8 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-all ${
                                 sortBy === "votes"
                                     ? "bg-cyan-600 hover:bg-cyan-500 text-white"
-                                    : "border-border/60 hover:bg-zinc-800 text-muted-foreground hover:text-foreground"
+                                    : "border-border/60 hover:bg-accent dark:hover:bg-zinc-800 text-muted-foreground hover:text-foreground"
                             }`}
                         >
                             <Flame className="h-3.5 w-3.5 text-amber-400" />
@@ -363,7 +363,7 @@ export default function FeatureVotingPoll({ isAdmin = false }: { isAdmin?: boole
                             className={`h-8 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-all ${
                                 sortBy === "recent"
                                     ? "bg-cyan-600 hover:bg-cyan-500 text-white"
-                                    : "border-border/60 hover:bg-zinc-800 text-muted-foreground hover:text-foreground"
+                                    : "border-border/60 hover:bg-accent dark:hover:bg-zinc-800 text-muted-foreground hover:text-foreground"
                             }`}
                         >
                             <Sparkles className="h-3.5 w-3.5 text-amber-400" />
@@ -380,8 +380,8 @@ export default function FeatureVotingPoll({ isAdmin = false }: { isAdmin?: boole
                                     onClick={() => setActiveCategory(cat)}
                                     className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
                                         activeCategory === cat
-                                            ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
-                                            : "bg-zinc-900/40 text-muted-foreground border border-border/30 hover:text-foreground hover:bg-zinc-800/60"
+                                            ? "bg-cyan-500/20 text-cyan-800 dark:text-cyan-300 border border-cyan-500/40"
+                                            : "bg-muted/70 dark:bg-zinc-900/40 text-muted-foreground border border-border/30 hover:text-foreground hover:bg-accent dark:hover:bg-zinc-800/60"
                                     }`}
                                 >
                                     {cat}
@@ -397,7 +397,7 @@ export default function FeatureVotingPoll({ isAdmin = false }: { isAdmin?: boole
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
                             placeholder="Search ideas..."
-                            className="h-8 pl-8 text-xs bg-zinc-900/60 border-border/50 focus-visible:ring-cyan-400 rounded-lg"
+                            className="h-8 pl-8 text-xs bg-muted/70 dark:bg-zinc-900/60 border-border/50 focus-visible:ring-cyan-400 rounded-lg"
                         />
                     </div>
                 </div>
@@ -407,18 +407,18 @@ export default function FeatureVotingPoll({ isAdmin = false }: { isAdmin?: boole
                 {loading ? (
                     <div className="space-y-3">
                         {[1, 2, 3, 4].map(n => (
-                            <div key={n} className="h-20 bg-zinc-900/40 border border-border/40 rounded-xl animate-pulse" />
+                            <div key={n} className="h-20 bg-muted/70 dark:bg-zinc-900/40 border border-border/40 rounded-xl animate-pulse" />
                         ))}
                     </div>
                 ) : loadError && suggestions.length === 0 ? (
                     <div className="text-center py-8 px-4 border border-rose-500/30 rounded-xl bg-rose-500/10 space-y-3">
-                        <p className="text-xs text-rose-300">{loadError}</p>
+                        <p className="text-xs text-rose-800 dark:text-rose-300">{loadError}</p>
                         <Button variant="outline" size="sm" onClick={loadSuggestions} className="h-8 text-xs">
                             Retry
                         </Button>
                     </div>
                 ) : filteredSuggestions.length === 0 ? (
-                    <div className="text-center py-10 px-4 border border-dashed border-border/50 rounded-xl bg-zinc-900/20">
+                    <div className="text-center py-10 px-4 border border-dashed border-border/50 rounded-xl bg-muted/70 dark:bg-zinc-900/20">
                         <Vote className="h-10 w-10 text-muted-foreground mx-auto mb-2 opacity-50" />
                         <h4 className="text-base font-semibold text-foreground">No feature suggestions found</h4>
                         <p className="text-xs sm:text-sm text-muted-foreground mt-1 max-w-sm mx-auto">
@@ -436,8 +436,8 @@ export default function FeatureVotingPoll({ isAdmin = false }: { isAdmin?: boole
                                     key={s.id}
                                     className={`group relative flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border transition-all duration-200 ${
                                         isVoted
-                                            ? "bg-cyan-950/20 border-cyan-500/40 shadow-sm ring-1 ring-cyan-500/30"
-                                            : "bg-[#161622]/60 border-border/50 hover:border-cyan-500/30 hover:bg-[#161622]/90 hover:shadow-md"
+                                            ? "bg-cyan-500/10 dark:bg-cyan-950/20 border-cyan-500/40 shadow-sm ring-1 ring-cyan-500/30"
+                                            : "bg-muted/80 dark:bg-[#161622]/60 border-border/50 hover:border-cyan-500/30 hover:bg-card/95 dark:hover:bg-[#161622]/90 hover:shadow-md"
                                     }`}
                                 >
                                     {/* Left: Checkbox / Vote Toggle & Content */}
@@ -450,7 +450,7 @@ export default function FeatureVotingPoll({ isAdmin = false }: { isAdmin?: boole
                                             className={`mt-0.5 shrink-0 flex flex-col items-center justify-center min-w-[56px] px-2 py-1.5 rounded-lg border transition-all duration-200 active:scale-95 ${
                                                 isVoted
                                                     ? "bg-cyan-500 text-white border-cyan-400 shadow-md shadow-cyan-500/20 hover:bg-cyan-600"
-                                                    : "bg-zinc-900/70 border-border/60 text-muted-foreground hover:border-cyan-400/60 hover:text-cyan-300 hover:bg-zinc-800"
+                                                    : "bg-card/95 dark:bg-zinc-900/70 border-border/60 text-muted-foreground hover:border-cyan-400/60 hover:text-cyan-800 dark:hover:text-cyan-300 hover:bg-accent dark:hover:bg-zinc-800"
                                             }`}
                                         >
                                             <div className="flex items-center gap-1">
@@ -473,17 +473,17 @@ export default function FeatureVotingPoll({ isAdmin = false }: { isAdmin?: boole
                                         {/* Text Info */}
                                         <div className="flex-1 min-w-0 space-y-1">
                                             <div className="flex flex-wrap items-center gap-2">
-                                                <h4 className="text-base font-semibold text-foreground group-hover:text-cyan-300 transition-colors">
+                                                <h4 className="text-base font-semibold text-foreground group-hover:text-cyan-800 dark:group-hover:text-cyan-300 transition-colors">
                                                     {s.title}
                                                 </h4>
                                                 {s.category && (
-                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-zinc-800/80 text-zinc-300 border border-border/50">
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-muted/80 dark:bg-zinc-800/80 text-slate-700 dark:text-zinc-300 border border-border/50">
                                                         {CATEGORY_ICONS[s.category] || <Tag className="h-3 w-3 text-muted-foreground" />}
                                                         {s.category}
                                                     </span>
                                                 )}
                                                 {isVoted && (
-                                                    <Badge className="bg-cyan-500/20 text-cyan-300 border-cyan-500/40 text-[10px] py-0 px-1.5 h-4 font-semibold">
+                                                    <Badge className="bg-cyan-500/20 text-cyan-800 dark:text-cyan-300 border-cyan-500/40 text-[10px] py-0 px-1.5 h-4 font-semibold">
                                                         ✓ You Voted
                                                     </Badge>
                                                 )}
@@ -507,7 +507,7 @@ export default function FeatureVotingPoll({ isAdmin = false }: { isAdmin?: boole
                                             size="icon"
                                             variant="ghost"
                                             onClick={() => handleDelete(s.id)}
-                                            className="h-8 w-8 text-muted-foreground hover:text-red-400 hover:bg-red-500/10 shrink-0 self-end sm:self-center"
+                                            className="h-8 w-8 text-muted-foreground hover:text-red-700 dark:hover:text-red-400 hover:bg-red-500/10 shrink-0 self-end sm:self-center"
                                             title="Delete suggestion (Admin)"
                                         >
                                             <Trash2 className="h-4 w-4" />

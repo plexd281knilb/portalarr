@@ -58,10 +58,10 @@ export function PaidThroughHeader({ user, referralInfo, className = "" }: PaidTh
         <div 
             className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-3 sm:px-4 sm:py-2.5 rounded-2xl border backdrop-blur-md shadow-xs transition-all ${
                 isExpiringSoon
-                    ? "bg-amber-500/[0.08] dark:bg-[#151310]/90 border-amber-500/40 text-amber-300"
+                    ? "bg-amber-500/[0.08] dark:bg-[#151310]/90 border-amber-500/40 text-amber-800 dark:text-amber-300"
                     : isExpired
-                    ? "bg-rose-500/[0.08] dark:bg-[#181113]/90 border-rose-500/40 text-rose-300"
-                    : "bg-emerald-500/[0.06] dark:bg-[#101714]/90 border-emerald-500/30 text-emerald-300"
+                    ? "bg-rose-500/[0.08] dark:bg-[#181113]/90 border-rose-500/40 text-rose-800 dark:text-rose-300"
+                    : "bg-emerald-500/[0.06] dark:bg-[#101714]/90 border-emerald-500/30 text-emerald-800 dark:text-emerald-300"
             } ${className}`}
         >
             {/* Left: Glowing Indicator & Paid Through Info */}

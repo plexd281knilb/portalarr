@@ -104,19 +104,19 @@ export default function ImpersonationBanner() {
   return (
     <div className="sticky top-0 z-[9999] w-full bg-gradient-to-r from-amber-600 via-amber-500 to-orange-600 text-black px-3 sm:px-4 py-2 shadow-lg border-b border-amber-400/50 flex flex-wrap items-center justify-between gap-2.5 text-xs sm:text-sm font-medium animate-in slide-in-from-top-2 duration-300 shrink-0">
       <div className="flex items-center gap-2.5 min-w-0">
-        <span className="p-1 rounded-md bg-black/20 text-white shrink-0 shadow-inner">
-          <Eye className="w-4 h-4 animate-pulse text-amber-200" />
+        <span className="p-1 rounded-md bg-muted/40 dark:bg-black/20 text-foreground dark:text-white shrink-0 shadow-inner">
+          <Eye className="w-4 h-4 animate-pulse text-amber-900 dark:text-amber-200" />
         </span>
-        <div className="truncate text-white font-medium flex items-center gap-1.5 flex-wrap">
+        <div className="truncate text-foreground dark:text-white font-medium flex items-center gap-1.5 flex-wrap">
           <span>Viewing site as</span>
-          <strong className="font-bold text-amber-100 underline decoration-amber-300/60 decoration-2 underline-offset-2 truncate">
+          <strong className="font-bold text-amber-900 dark:text-amber-100 underline decoration-amber-300/60 decoration-2 underline-offset-2 truncate">
             {status.currentUsername || "User"}
           </strong>
-          <span className="px-1.5 py-0.5 rounded bg-black/30 text-amber-200 text-[10px] font-extrabold uppercase tracking-wider border border-amber-400/30">
+          <span className="px-1.5 py-0.5 rounded bg-muted/60 dark:bg-black/30 text-amber-900 dark:text-amber-200 text-[10px] font-extrabold uppercase tracking-wider border border-amber-400/30">
             {status.currentRole || "USER"}
           </span>
           {status.adminUsername && (
-            <span className="hidden md:inline-flex items-center gap-1 text-amber-100/85 text-xs ml-1 font-normal">
+            <span className="hidden md:inline-flex items-center gap-1 text-amber-900/85 dark:text-amber-100/85 text-xs ml-1 font-normal">
               • Admin: <span className="font-semibold">{status.adminUsername}</span>
             </span>
           )}
@@ -132,9 +132,9 @@ export default function ImpersonationBanner() {
               onValueChange={handleQuickSwitch} 
               disabled={exiting || switching}
             >
-              <SelectTrigger className="h-7 text-xs bg-black/40 text-amber-200 border-amber-400/50 hover:bg-black/60 focus:ring-0 focus:ring-offset-0 px-2 py-0">
+              <SelectTrigger className="h-7 text-xs bg-muted/60 dark:bg-black/40 text-amber-900 dark:text-amber-200 border-amber-400/50 hover:bg-muted/60 dark:hover:bg-black/60 focus:ring-0 focus:ring-offset-0 px-2 py-0">
                 {switching ? (
-                  <span className="flex items-center gap-1.5 text-amber-200">
+                  <span className="flex items-center gap-1.5 text-amber-900 dark:text-amber-200">
                     <Loader2 className="w-3 h-3 animate-spin" />
                     <span>Switching...</span>
                   </span>
@@ -142,10 +142,10 @@ export default function ImpersonationBanner() {
                   <SelectValue placeholder="Switch user..." />
                 )}
               </SelectTrigger>
-              <SelectContent className="max-h-64 bg-[#14141c] border-amber-500/30 text-foreground">
-                <SelectItem value="admin" className="text-xs font-bold text-amber-400 border-b border-border/40 py-1.5">
+              <SelectContent className="max-h-64 bg-popover dark:bg-[#14141c] border-amber-500/30 text-foreground">
+                <SelectItem value="admin" className="text-xs font-bold text-amber-700 dark:text-amber-400 border-b border-border/40 py-1.5">
                   <span className="flex items-center gap-1.5">
-                    <Undo2 className="h-3 w-3 text-amber-400" />
+                    <Undo2 className="h-3 w-3 text-amber-700 dark:text-amber-400" />
                     <span>Return to Admin</span>
                   </span>
                 </SelectItem>
@@ -154,7 +154,7 @@ export default function ImpersonationBanner() {
                   const label = u.role === "SUPER_USER" ? "Super" : u.status === "TRIAL" ? "Trial" : "Full";
                   return (
                     <SelectItem key={u.id} value={u.id} className="text-xs py-1.5">
-                      <span className={isCurrent ? "font-bold text-amber-300" : ""}>
+                      <span className={isCurrent ? "font-bold text-amber-800 dark:text-amber-300" : ""}>
                         {u.username} ({label}) {isCurrent && "✓"}
                       </span>
                     </SelectItem>
@@ -173,9 +173,9 @@ export default function ImpersonationBanner() {
           className="h-7 px-3 bg-black/85 hover:bg-black text-amber-300 hover:text-white border border-amber-400/40 text-xs font-bold gap-1.5 shadow-md active:scale-95 transition-all hover:ring-2 hover:ring-amber-300/40 cursor-pointer"
         >
           {exiting ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-300" />
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-800 dark:text-amber-300" />
           ) : (
-            <Undo2 className="w-3.5 h-3.5 text-amber-300" />
+            <Undo2 className="w-3.5 h-3.5 text-amber-800 dark:text-amber-300" />
           )}
           <span className="hidden sm:inline">Return to Admin ({status.adminUsername || "Admin"})</span>
           <span className="sm:hidden">Exit ({status.adminUsername || "Admin"})</span>

@@ -168,18 +168,18 @@ export function SystemSchedulesDashboard({ onFrequencyUpdated }: SystemSchedules
     const getCategoryIcon = (category: string) => {
         switch (category) {
             case "plex":
-                return <Server className="h-4 w-4 text-amber-400" />;
+                return <Server className="h-4 w-4 text-amber-700 dark:text-amber-400" />;
             case "curation":
-                return <Sparkles className="h-4 w-4 text-amber-400" />;
+                return <Sparkles className="h-4 w-4 text-amber-700 dark:text-amber-400" />;
             case "billing":
-                return <CreditCard className="h-4 w-4 text-emerald-400" />;
+                return <CreditCard className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />;
             case "requests":
-                return <Film className="h-4 w-4 text-rose-400" />;
+                return <Film className="h-4 w-4 text-rose-700 dark:text-rose-400" />;
             case "bookshelf":
-                return <BookOpen className="h-4 w-4 text-sky-400" />;
+                return <BookOpen className="h-4 w-4 text-sky-700 dark:text-sky-400" />;
             case "system":
             default:
-                return <ShieldCheck className="h-4 w-4 text-cyan-400" />;
+                return <ShieldCheck className="h-4 w-4 text-cyan-700 dark:text-cyan-400" />;
         }
     };
 
@@ -202,12 +202,12 @@ export function SystemSchedulesDashboard({ onFrequencyUpdated }: SystemSchedules
     };
 
     return (
-        <Card className="bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
+        <Card className="bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
             <CardHeader className="pb-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
                         <CardTitle className="flex items-center gap-2 text-lg sm:text-xl font-bold">
-                            <CalendarClock className="h-5 w-5 text-sky-400" />
+                            <CalendarClock className="h-5 w-5 text-sky-700 dark:text-sky-400" />
                             <span>System Automation Schedules</span>
                         </CardTitle>
                         <CardDescription className="text-xs sm:text-sm mt-1">
@@ -216,8 +216,8 @@ export function SystemSchedulesDashboard({ onFrequencyUpdated }: SystemSchedules
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                         {serverTime && (
-                            <Badge variant="outline" className="h-8 px-2.5 bg-slate-900/60 border-slate-700/60 text-slate-300 font-mono text-[11px] flex items-center gap-1.5">
-                                <Clock className="h-3 w-3 text-sky-400" />
+                            <Badge variant="outline" className="h-8 px-2.5 bg-muted/70 dark:bg-slate-900/60 border-border dark:border-slate-700/60 text-slate-700 dark:text-slate-300 font-mono text-[11px] flex items-center gap-1.5">
+                                <Clock className="h-3 w-3 text-sky-700 dark:text-sky-400" />
                                 <span>Host: {serverTime}</span>
                             </Badge>
                         )}
@@ -225,11 +225,11 @@ export function SystemSchedulesDashboard({ onFrequencyUpdated }: SystemSchedules
                             type="button"
                             variant="outline"
                             size="sm"
-                            className="h-8 px-2.5 text-xs font-semibold gap-1.5 border-slate-700/60 hover:bg-slate-800/60"
+                            className="h-8 px-2.5 text-xs font-semibold gap-1.5 border-border dark:border-slate-700/60 hover:bg-accent dark:hover:bg-slate-800/60"
                             disabled={refreshing || loading}
                             onClick={() => loadSchedules(true)}
                         >
-                            <RefreshCw className={`h-3.5 w-3.5 text-sky-400 ${refreshing ? "animate-spin" : ""}`} />
+                            <RefreshCw className={`h-3.5 w-3.5 text-sky-700 dark:text-sky-400 ${refreshing ? "animate-spin" : ""}`} />
                             <span>Refresh</span>
                         </Button>
                     </div>
@@ -239,9 +239,9 @@ export function SystemSchedulesDashboard({ onFrequencyUpdated }: SystemSchedules
             <CardContent className="space-y-5">
                 {/* METRICS HEADER CARDS */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-                    <div className="p-3 rounded-lg bg-slate-950/60 border border-slate-800/80">
+                    <div className="p-3 rounded-lg bg-muted/60 dark:bg-slate-950/60 border border-border dark:border-slate-800/80">
                         <div className="text-[11px] font-medium text-muted-foreground flex items-center gap-1.5">
-                            <CalendarClock className="h-3.5 w-3.5 text-sky-400" /> Total Background Jobs
+                            <CalendarClock className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400" /> Total Background Jobs
                         </div>
                         <div className="text-xl font-black mt-1 text-foreground font-mono">
                             {tasks.length || 13}
@@ -249,22 +249,22 @@ export function SystemSchedulesDashboard({ onFrequencyUpdated }: SystemSchedules
                         <div className="text-[10px] text-muted-foreground mt-0.5">Automated services</div>
                     </div>
 
-                    <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80">
+                    <div className="p-3 rounded-xl bg-muted/60 dark:bg-slate-950/60 border border-border dark:border-slate-800/80">
                         <div className="text-[11px] font-medium text-muted-foreground flex items-center gap-1.5">
-                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> Active & Scheduled
+                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" /> Active & Scheduled
                         </div>
-                        <div className="text-xl font-black mt-1 text-emerald-400 font-mono flex items-center gap-1.5">
+                        <div className="text-xl font-black mt-1 text-emerald-700 dark:text-emerald-400 font-mono flex items-center gap-1.5">
                             <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
                             {activeCount} Active
                         </div>
                         <div className="text-[10px] text-muted-foreground mt-0.5">Operating normally</div>
                     </div>
 
-                    <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80">
+                    <div className="p-3 rounded-xl bg-muted/60 dark:bg-slate-950/60 border border-border dark:border-slate-800/80">
                         <div className="text-[11px] font-medium text-muted-foreground flex items-center gap-1.5">
-                            <Clock className="h-3.5 w-3.5 text-sky-400" /> Next Upcoming Task
+                            <Clock className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400" /> Next Upcoming Task
                         </div>
-                        <div className="text-sm font-bold mt-1 text-sky-300 truncate" title={nextUpcomingTask?.name || "Evaluating"}>
+                        <div className="text-sm font-bold mt-1 text-sky-800 dark:text-sky-300 truncate" title={nextUpcomingTask?.name || "Evaluating"}>
                             {nextUpcomingTask ? nextUpcomingTask.nextRunRelative : "Calculating..."}
                         </div>
                         <div className="text-[10px] text-muted-foreground mt-0.5 truncate" title={nextUpcomingTask?.name}>
@@ -272,17 +272,17 @@ export function SystemSchedulesDashboard({ onFrequencyUpdated }: SystemSchedules
                         </div>
                     </div>
 
-                    <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80">
+                    <div className="p-3 rounded-xl bg-muted/60 dark:bg-slate-950/60 border border-border dark:border-slate-800/80">
                         <div className="text-[11px] font-medium text-muted-foreground flex items-center gap-1.5">
-                            <ShieldCheck className="h-3.5 w-3.5 text-amber-400" /> Unraid Maintenance
+                            <ShieldCheck className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" /> Unraid Maintenance
                         </div>
                         <div className="text-sm font-bold mt-1 font-mono">
                             {isMaintenanceWindow ? (
-                                <span className="text-amber-400 flex items-center gap-1">
+                                <span className="text-amber-700 dark:text-amber-400 flex items-center gap-1">
                                     <AlertTriangle className="h-3.5 w-3.5 animate-pulse" /> Active (Paused)
                                 </span>
                             ) : (
-                                <span className="text-slate-300">Standby (5:00 AM)</span>
+                                <span className="text-slate-700 dark:text-slate-300">Standby (5:00 AM)</span>
                             )}
                         </div>
                         <div className="text-[10px] text-muted-foreground mt-0.5">Daily 5:00–5:30 AM blackout</div>
@@ -291,17 +291,17 @@ export function SystemSchedulesDashboard({ onFrequencyUpdated }: SystemSchedules
 
                 {/* UNRAID MAINTENANCE WINDOW BANNER */}
                 {isMaintenanceWindow ? (
-                    <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex items-start gap-2.5">
-                        <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+                    <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 text-xs flex items-start gap-2.5">
+                        <AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5" />
                         <div>
-                            <span className="font-bold text-amber-300">Unraid Host Maintenance Blackout Active:</span>{" "}
+                            <span className="font-bold text-amber-800 dark:text-amber-300">Unraid Host Maintenance Blackout Active:</span>{" "}
                             Portalarr has safely paused all automated Plex server scans, friend syncs, and media requests until 5:30 AM to safeguard automated Unraid database integrity checks and Docker restarts.
                         </div>
                     </div>
                 ) : (
-                    <div className="p-3 rounded-lg bg-sky-950/25 border border-sky-500/25 text-slate-300 text-xs flex items-center justify-between gap-3">
+                    <div className="p-3 rounded-lg bg-sky-500/10 dark:bg-sky-950/25 border border-sky-500/25 text-slate-700 dark:text-slate-300 text-xs flex items-center justify-between gap-3">
                         <div className="flex items-center gap-2">
-                            <Info className="h-4 w-4 text-sky-400 shrink-0" />
+                            <Info className="h-4 w-4 text-sky-700 dark:text-sky-400 shrink-0" />
                             <span>
                                 <strong>Smart Host Protection:</strong> Background runners automatically pause every morning between <strong>5:00 AM – 5:30 AM</strong> to prevent spinning disk wakeups and container lockups during scheduled Unraid parity and database checks.
                             </span>
@@ -326,12 +326,12 @@ export function SystemSchedulesDashboard({ onFrequencyUpdated }: SystemSchedules
                             onClick={() => setSelectedCategory(pill.key as CategoryFilter)}
                             className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
                                 selectedCategory === pill.key
-                                    ? "bg-sky-500/20 text-sky-300 border border-sky-500/40 shadow-xs"
-                                    : "text-muted-foreground hover:text-foreground bg-white/[0.03] border border-white/5 hover:bg-white/[0.06]"
+                                    ? "bg-sky-500/20 text-sky-800 dark:text-sky-300 border border-sky-500/40 shadow-xs"
+                                    : "text-muted-foreground hover:text-foreground bg-muted/50 dark:bg-white/[0.03] border border-border/70 dark:border-white/5 hover:bg-accent dark:hover:bg-white/[0.06]"
                             }`}
                         >
                             <span>{pill.label}</span>
-                            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-900/80 border border-slate-700/40 text-slate-400 font-mono tabular-nums">
+                            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-card/95 dark:bg-slate-900/80 border border-border dark:border-slate-700/40 text-slate-600 dark:text-slate-400 font-mono tabular-nums">
                                 {pill.count}
                             </span>
                         </button>
@@ -341,7 +341,7 @@ export function SystemSchedulesDashboard({ onFrequencyUpdated }: SystemSchedules
                 {/* SCHEDULES TASK LIST */}
                 {loading ? (
                     <div className="py-12 flex flex-col items-center justify-center gap-3 text-muted-foreground">
-                        <Loader2 className="h-6 w-6 animate-spin text-sky-400" />
+                        <Loader2 className="h-6 w-6 animate-spin text-sky-700 dark:text-sky-400" />
                         <span className="text-xs">Loading system automation schedules...</span>
                     </div>
                 ) : (
@@ -355,14 +355,14 @@ export function SystemSchedulesDashboard({ onFrequencyUpdated }: SystemSchedules
                                     key={task.id}
                                     className={`p-4 rounded-xl transition-all duration-200 border ${
                                         !task.enabled
-                                            ? "bg-slate-950/40 border-slate-800/40 opacity-70"
-                                            : "bg-[#161622]/90 border-slate-800/80 hover:border-slate-700/90 shadow-xs"
+                                            ? "bg-muted/40 dark:bg-slate-950/40 border-border dark:border-slate-800/40 opacity-70"
+                                            : "bg-card/95 dark:bg-[#161622]/90 border-border dark:border-slate-800/80 hover:border-border dark:hover:border-slate-700/90 shadow-xs"
                                     }`}
                                 >
                                     <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                                         {/* LEFT: Task Info */}
                                         <div className="flex items-start gap-3 min-w-0 flex-1">
-                                            <div className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 shrink-0 mt-0.5">
+                                            <div className="p-2.5 rounded-xl bg-card/95 dark:bg-slate-900/80 border border-border dark:border-slate-800 shrink-0 mt-0.5">
                                                 {getCategoryIcon(task.category)}
                                             </div>
                                             <div className="space-y-1 min-w-0">
@@ -380,33 +380,33 @@ export function SystemSchedulesDashboard({ onFrequencyUpdated }: SystemSchedules
                                                                 onValueChange={(val) => handleFrequencyChange(task.id, val)}
                                                                 disabled={updatingTaskId === task.id}
                                                             >
-                                                                <SelectTrigger className="h-6 text-[10px] font-mono bg-slate-900/90 border-slate-700/80 text-sky-300 hover:border-sky-500/50 hover:bg-slate-800/80 px-2 py-0 w-auto min-w-[130px] gap-1 focus:ring-1 focus:ring-sky-500">
+                                                                <SelectTrigger className="h-6 text-[10px] font-mono bg-card/95 dark:bg-slate-900/90 border-border dark:border-slate-700/80 text-sky-800 dark:text-sky-300 hover:border-sky-500/50 hover:bg-accent dark:hover:bg-slate-800/80 px-2 py-0 w-auto min-w-[130px] gap-1 focus:ring-1 focus:ring-sky-500">
                                                                     {updatingTaskId === task.id ? (
-                                                                        <Loader2 className="h-3 w-3 animate-spin text-sky-400" />
+                                                                        <Loader2 className="h-3 w-3 animate-spin text-sky-700 dark:text-sky-400" />
                                                                     ) : (
-                                                                        <Clock className="h-3 w-3 text-sky-400 shrink-0" />
+                                                                        <Clock className="h-3 w-3 text-sky-700 dark:text-sky-400 shrink-0" />
                                                                     )}
                                                                     <SelectValue />
                                                                 </SelectTrigger>
-                                                                <SelectContent position="popper" className="bg-slate-950 border-slate-800 text-slate-200 z-50">
+                                                                <SelectContent position="popper" className="bg-popover dark:bg-slate-950 border-border dark:border-slate-800 text-foreground dark:text-slate-200 z-50">
                                                                     {task.availableFrequencies.map((opt) => (
-                                                                        <SelectItem key={opt.value} value={opt.value} className="text-xs font-mono py-1.5 focus:bg-sky-600/20 focus:text-sky-200 cursor-pointer">
+                                                                        <SelectItem key={opt.value} value={opt.value} className="text-xs font-mono py-1.5 focus:bg-sky-600/20 focus:text-sky-900 dark:focus:text-sky-200 cursor-pointer">
                                                                             {opt.label}
                                                                         </SelectItem>
                                                                     ))}
                                                                 </SelectContent>
                                                             </Select>
-                                                            <Badge variant="outline" className="text-[9px] font-mono uppercase bg-sky-500/10 text-sky-300 border-sky-500/30 hidden sm:inline-flex">
+                                                            <Badge variant="outline" className="text-[9px] font-mono uppercase bg-sky-500/10 text-sky-800 dark:text-sky-300 border-sky-500/30 hidden sm:inline-flex">
                                                                 Editable
                                                             </Badge>
                                                         </div>
                                                     ) : (
                                                         <div className="inline-flex items-center gap-1.5">
-                                                            <Badge variant="outline" className="text-[10px] font-mono bg-slate-900/60 border-slate-700/60 text-slate-300 inline-flex items-center gap-1">
-                                                                <Clock className="h-3 w-3 text-slate-400 shrink-0" />
+                                                            <Badge variant="outline" className="text-[10px] font-mono bg-muted/70 dark:bg-slate-900/60 border-border dark:border-slate-700/60 text-slate-700 dark:text-slate-300 inline-flex items-center gap-1">
+                                                                <Clock className="h-3 w-3 text-slate-600 dark:text-slate-400 shrink-0" />
                                                                 <span>{task.cadenceLabel}</span>
                                                             </Badge>
-                                                            <Badge variant="outline" className="text-[9px] font-mono uppercase bg-slate-800/40 text-slate-400 border-slate-700/30 hidden sm:inline-flex">
+                                                            <Badge variant="outline" className="text-[9px] font-mono uppercase bg-muted/40 dark:bg-slate-800/40 text-slate-600 dark:text-slate-400 border-border dark:border-slate-700/30 hidden sm:inline-flex">
                                                                 Core Runner
                                                             </Badge>
                                                         </div>
@@ -415,35 +415,35 @@ export function SystemSchedulesDashboard({ onFrequencyUpdated }: SystemSchedules
                                                 <p className="text-xs text-muted-foreground line-clamp-2">
                                                     {task.description}
                                                 </p>
-                                                <div className="flex flex-wrap items-center gap-3 pt-1 text-[11px] text-slate-400">
+                                                <div className="flex flex-wrap items-center gap-3 pt-1 text-[11px] text-slate-600 dark:text-slate-400">
                                                     <div className="flex items-center gap-1 font-mono">
                                                         <span className="text-slate-500">Last run:</span>
-                                                        <span className="text-slate-300">{task.lastRunDisplay}</span>
+                                                        <span className="text-slate-700 dark:text-slate-300">{task.lastRunDisplay}</span>
                                                     </div>
                                                 </div>
                                             </div>
                                         </div>
 
                                         {/* RIGHT: Next Run Countdown & Run Now Button */}
-                                        <div className="flex flex-wrap items-center lg:flex-col lg:items-end justify-between gap-2 shrink-0 border-t lg:border-t-0 border-slate-800/60 pt-3 lg:pt-0">
+                                        <div className="flex flex-wrap items-center lg:flex-col lg:items-end justify-between gap-2 shrink-0 border-t lg:border-t-0 border-border dark:border-slate-800/60 pt-3 lg:pt-0">
                                             <div className="flex items-center gap-2">
                                                 <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Next Run:</span>
                                                 {task.status === "blackout" ? (
-                                                    <Badge className="bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-mono inline-flex items-center gap-1">
+                                                    <Badge className="bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/30 text-xs font-mono inline-flex items-center gap-1">
                                                         <AlertTriangle className="h-3 w-3 shrink-0" />
                                                         <span>Paused (Resumes 5:30 AM)</span>
                                                     </Badge>
                                                 ) : !task.enabled ? (
-                                                    <Badge variant="outline" className="bg-slate-900/40 text-slate-400 border-slate-800 text-xs">
+                                                    <Badge variant="outline" className="bg-muted/70 dark:bg-slate-900/40 text-slate-600 dark:text-slate-400 border-border dark:border-slate-800 text-xs">
                                                         Disabled
                                                     </Badge>
                                                 ) : task.isDue ? (
-                                                    <Badge className="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-mono inline-flex items-center gap-1">
+                                                    <Badge className="bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/40 text-xs font-mono inline-flex items-center gap-1">
                                                         <Zap className="h-3 w-3 shrink-0" />
                                                         <span>Due on next tick</span>
                                                     </Badge>
                                                 ) : (
-                                                    <Badge className="bg-sky-500/15 text-sky-300 border border-sky-500/30 text-xs font-mono inline-flex items-center gap-1">
+                                                    <Badge className="bg-sky-500/15 text-sky-800 dark:text-sky-300 border border-sky-500/30 text-xs font-mono inline-flex items-center gap-1">
                                                         <Clock className="h-3 w-3 shrink-0" />
                                                         <span>{task.nextRunRelative}</span>
                                                     </Badge>
@@ -456,12 +456,12 @@ export function SystemSchedulesDashboard({ onFrequencyUpdated }: SystemSchedules
                                                 size="sm"
                                                 disabled={isRunning}
                                                 onClick={() => handleRunTask(task)}
-                                                className="h-7 px-2.5 text-xs font-semibold gap-1.5 border-sky-500/30 text-sky-300 hover:bg-sky-500/10 hover:border-sky-500/50 active:scale-95 transition-all"
+                                                className="h-7 px-2.5 text-xs font-semibold gap-1.5 border-sky-500/30 text-sky-800 dark:text-sky-300 hover:bg-sky-500/10 hover:border-sky-500/50 active:scale-95 transition-all"
                                             >
                                                 {isRunning ? (
-                                                    <Loader2 className="h-3 w-3 animate-spin text-sky-400" />
+                                                    <Loader2 className="h-3 w-3 animate-spin text-sky-700 dark:text-sky-400" />
                                                 ) : (
-                                                    <Play className="h-3 w-3 text-sky-400 fill-sky-400/30" />
+                                                    <Play className="h-3 w-3 text-sky-700 dark:text-sky-400 fill-sky-400/30" />
                                                 )}
                                                 <span>{isRunning ? "Executing..." : "Run Now"}</span>
                                             </Button>
@@ -472,13 +472,13 @@ export function SystemSchedulesDashboard({ onFrequencyUpdated }: SystemSchedules
                                     {isMsgTarget && actionMsg && (
                                         <div className={`mt-3 p-2.5 rounded-lg border text-xs flex items-center gap-2 animate-in fade-in duration-200 ${
                                             actionMsg.success 
-                                                ? "bg-emerald-950/40 text-emerald-300 border-emerald-800/40" 
-                                                : "bg-red-950/40 text-red-300 border-red-800/40"
+                                                ? "bg-emerald-500/10 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-500/40 dark:border-emerald-800/40" 
+                                                : "bg-red-500/10 dark:bg-red-950/40 text-red-800 dark:text-red-300 border-red-500/40 dark:border-red-800/40"
                                         }`}>
                                             {actionMsg.success ? (
-                                                <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                                                <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0" />
                                             ) : (
-                                                <AlertCircle className="h-4 w-4 text-red-400 shrink-0" />
+                                                <AlertCircle className="h-4 w-4 text-red-700 dark:text-red-400 shrink-0" />
                                             )}
                                             <span className="font-medium">{actionMsg.text}</span>
                                         </div>

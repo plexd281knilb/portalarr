@@ -149,7 +149,7 @@ function ChannelCard({ ch, specialBadge, badgeColor = "teal", onAddToProfile }: 
             <div className="space-y-2.5">
                 <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2.5">
-                        <div className="h-9 w-9 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400 group-hover:scale-105 transition-transform overflow-hidden shrink-0">
+                        <div className="h-9 w-9 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-700 dark:text-teal-400 group-hover:scale-105 transition-transform overflow-hidden shrink-0">
                             {logoSrc && !imgError ? (
                                 <img
                                     src={logoSrc}
@@ -170,7 +170,7 @@ function ChannelCard({ ch, specialBadge, badgeColor = "teal", onAddToProfile }: 
                                     </span>
                                 )}
                                 {ch.callsign && (
-                                    <span className="text-xs font-bold text-teal-300">
+                                    <span className="text-xs font-bold text-teal-800 dark:text-teal-300">
                                         {ch.callsign}
                                     </span>
                                 )}
@@ -189,7 +189,7 @@ function ChannelCard({ ch, specialBadge, badgeColor = "teal", onAddToProfile }: 
                 </div>
 
                 <div>
-                    <h4 className="text-sm font-bold text-foreground group-hover:text-teal-200 transition-colors line-clamp-1">
+                    <h4 className="text-sm font-bold text-foreground group-hover:text-teal-900 dark:group-hover:text-teal-200 transition-colors line-clamp-1">
                         {ch.name}
                     </h4>
                     <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1">
@@ -201,7 +201,7 @@ function ChannelCard({ ch, specialBadge, badgeColor = "teal", onAddToProfile }: 
                 {/* Dispatcharr Profile Badges or Unmapped Indicator */}
                 <div className="pt-1 flex flex-wrap items-center gap-1">
                     {hasNoProfiles ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30">
                             <AlertCircle className="h-2.5 w-2.5" />
                             Not in a Profile
                         </span>
@@ -209,7 +209,7 @@ function ChannelCard({ ch, specialBadge, badgeColor = "teal", onAddToProfile }: 
                         profilesList.slice(0, 3).map((p) => (
                             <span
                                 key={p.slug}
-                                className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-teal-500/10 text-teal-300 border border-teal-500/20"
+                                className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-teal-500/10 text-teal-800 dark:text-teal-300 border border-teal-500/20"
                             >
                                 {p.name}
                             </span>
@@ -242,7 +242,7 @@ function ChannelCard({ ch, specialBadge, badgeColor = "teal", onAddToProfile }: 
                             size="sm"
                             variant="ghost"
                             onClick={() => onAddToProfile(ch)}
-                            className="h-6 px-2 text-[10px] font-semibold text-teal-400 hover:text-teal-300 hover:bg-teal-500/10 border border-teal-500/25 rounded-lg flex items-center gap-1"
+                            className="h-6 px-2 text-[10px] font-semibold text-teal-700 dark:text-teal-400 hover:text-teal-800 dark:hover:text-teal-300 hover:bg-teal-500/10 border border-teal-500/25 rounded-lg flex items-center gap-1"
                             title="Move or reassign channel to a different Dispatcharr profile"
                         >
                             <ArrowRightLeft className="h-2.5 w-2.5" />
@@ -658,13 +658,13 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border/40 pb-6">
                 <div>
                     <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-xl bg-teal-500/15 border border-teal-500/30 flex items-center justify-center text-teal-400 shadow-sm">
+                        <div className="h-10 w-10 rounded-xl bg-teal-500/15 border border-teal-500/30 flex items-center justify-center text-teal-700 dark:text-teal-400 shadow-sm">
                             <Tv className="h-5 w-5" />
                         </div>
                         <div>
                             <h1 className="text-2xl md:text-3xl font-extrabold text-foreground tracking-tight flex items-center gap-2.5">
                                 Live TV & Channels
-                                <Badge variant="outline" className="text-xs font-semibold bg-teal-500/10 border-teal-500/30 text-teal-300">
+                                <Badge variant="outline" className="text-xs font-semibold bg-teal-500/10 border-teal-500/30 text-teal-800 dark:text-teal-300">
                                     v1.5 Feature
                                 </Badge>
                             </h1>
@@ -682,7 +682,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                                 onClick={handleSyncLineup}
                                 disabled={isPending}
                                 variant="outline"
-                                className="border-teal-500/40 text-teal-300 hover:bg-teal-500/10 text-xs font-bold gap-1.5 shadow-sm"
+                                className="border-teal-500/40 text-teal-800 dark:text-teal-300 hover:bg-teal-500/10 text-xs font-bold gap-1.5 shadow-sm"
                             >
                                 <RefreshCw className={`h-3.5 w-3.5 ${isPending ? "animate-spin" : ""}`} />
                                 Sync Lineup ({channelsList.length})
@@ -691,13 +691,13 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                                 onClick={handleProvisionMissingChannels}
                                 disabled={isPending}
                                 variant="outline"
-                                className="border-sky-500/40 text-sky-300 hover:bg-sky-500/10 text-xs font-bold gap-1.5 shadow-sm"
+                                className="border-sky-500/40 text-sky-800 dark:text-sky-300 hover:bg-sky-500/10 text-xs font-bold gap-1.5 shadow-sm"
                             >
                                 <Wand2 className={`h-3.5 w-3.5 ${isPending ? "animate-spin" : ""}`} />
                                 Auto-Provision Streams
                             </Button>
                             <Link href="/admin/iptv">
-                                <Button variant="outline" className="border-amber-500/30 text-amber-300 hover:bg-amber-500/10 text-xs font-bold gap-2">
+                                <Button variant="outline" className="border-amber-500/30 text-amber-800 dark:text-amber-300 hover:bg-amber-500/10 text-xs font-bold gap-2">
                                     <ShieldCheck className="h-4 w-4" />
                                     Admin IPTV Control
                                 </Button>
@@ -724,21 +724,21 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
 
             {/* Sync Status Banner */}
             {syncMsg && (
-                <div className="p-3.5 rounded-xl bg-teal-500/15 border border-teal-500/40 text-teal-200 text-xs font-semibold flex items-center justify-between shadow-sm animate-in fade-in duration-200">
+                <div className="p-3.5 rounded-xl bg-teal-500/15 border border-teal-500/40 text-teal-900 dark:text-teal-200 text-xs font-semibold flex items-center justify-between shadow-sm animate-in fade-in duration-200">
                     <span className="flex items-center gap-2">
-                        <CheckCircle2 className="h-4 w-4 text-teal-400 shrink-0" />
+                        <CheckCircle2 className="h-4 w-4 text-teal-700 dark:text-teal-400 shrink-0" />
                         {syncMsg}
                     </span>
-                    <button onClick={() => setSyncMsg("")} className="text-teal-400 hover:text-teal-200 text-xs font-bold">✕</button>
+                    <button onClick={() => setSyncMsg("")} className="text-teal-700 dark:text-teal-400 hover:text-teal-900 dark:hover:text-teal-200 text-xs font-bold">✕</button>
                 </div>
             )}
 
             {/* Access Gating Notice (For Users/Trials without Live TV unlocked) */}
             {!canAccess && (
                 initialData.userAccess.isPlexHomeFull && initialData.userAccess.jellyfinAvailable ? (
-                    <div className="p-6 rounded-xl border border-sky-500/30 bg-gradient-to-r from-slate-900/95 via-sky-950/20 to-card text-foreground flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
+                    <div className="p-6 rounded-xl border border-sky-500/30 bg-gradient-to-r from-muted/60 dark:from-slate-900/95 via-sky-500/10 dark:via-sky-950/20 to-card text-foreground flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
                         <div className="flex items-start gap-3.5">
-                            <div className="p-2.5 rounded-lg bg-sky-500/15 border border-sky-500/35 text-sky-400 shrink-0">
+                            <div className="p-2.5 rounded-lg bg-sky-500/15 border border-sky-500/35 text-sky-700 dark:text-sky-400 shrink-0">
                                 <Layers className="h-5 w-5" />
                             </div>
                             <div>
@@ -746,7 +746,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                                     <h3 className="font-bold text-base text-foreground">
                                         Plex Home Slots Full ({initialData.userAccess.plexHomeTotalMembers || 14}/14) — Stream Instantly on Jellyfin!
                                     </h3>
-                                    <Badge className="bg-sky-500/15 text-sky-300 border-sky-500/35 text-[10px] font-bold">
+                                    <Badge className="bg-sky-500/15 text-sky-800 dark:text-sky-300 border-sky-500/35 text-[10px] font-bold">
                                         Unlimited Viewer Slots
                                     </Badge>
                                 </div>
@@ -754,7 +754,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                                     Plex limits shared tuner pools to 14 members, which are currently at capacity. However, DomsHomeLab also operates Jellyfin, which has <b>unlimited simultaneous Live TV slots</b> and direct audio/video passthrough for Apple TV, Roku, Fire TV, and mobile! Activate below to start streaming immediately.
                                 </p>
                                 {accessRequestMsg && (
-                                    <p className="text-xs font-semibold text-emerald-400 mt-2 flex items-center gap-1.5">
+                                    <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 mt-2 flex items-center gap-1.5">
                                         <CheckCircle2 className="h-4 w-4" />
                                         {accessRequestMsg}
                                     </p>
@@ -776,7 +776,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                                     size="sm"
                                     onClick={handleRequestAccess}
                                     disabled={isPending}
-                                    className="text-xs border-sky-500/40 text-sky-300 hover:bg-sky-500/10 whitespace-nowrap"
+                                    className="text-xs border-sky-500/40 text-sky-800 dark:text-sky-300 hover:bg-sky-500/10 whitespace-nowrap"
                                 >
                                     Plex Waitlist
                                 </Button>
@@ -784,18 +784,18 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                         </div>
                     </div>
                 ) : (
-                    <div className="p-6 rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent text-amber-200 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
+                    <div className="p-6 rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent text-amber-900 dark:text-amber-200 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
                         <div className="flex items-start gap-3.5">
-                            <div className="p-2.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 shrink-0">
+                            <div className="p-2.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-800 dark:text-amber-300 shrink-0">
                                 <Lock className="h-5 w-5" />
                             </div>
                             <div>
-                                <h3 className="font-bold text-base text-amber-100">Live TV Access is Available Upon Request</h3>
-                                <p className="text-xs text-amber-300/80 mt-1 max-w-2xl">
+                                <h3 className="font-bold text-base text-amber-900 dark:text-amber-100">Live TV Access is Available Upon Request</h3>
+                                <p className="text-xs text-amber-800/80 dark:text-amber-300/80 mt-1 max-w-2xl">
                                     To protect upstream provider bandwidth and guarantee smooth streaming, Live TV access is allocated individually. You can preview the channel catalog below and request activation with 1 click.
                                 </p>
                                 {accessRequestMsg && (
-                                    <p className="text-xs font-semibold text-emerald-400 mt-2 flex items-center gap-1.5">
+                                    <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 mt-2 flex items-center gap-1.5">
                                         <CheckCircle2 className="h-4 w-4" />
                                         {accessRequestMsg}
                                     </p>
@@ -804,7 +804,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                         </div>
                         <div>
                             {hasPendingRequest ? (
-                                <Badge className="bg-amber-500/20 border-amber-500/40 text-amber-200 px-3 py-1.5 text-xs font-bold flex items-center gap-1.5">
+                                <Badge className="bg-amber-500/20 border-amber-500/40 text-amber-900 dark:text-amber-200 px-3 py-1.5 text-xs font-bold flex items-center gap-1.5">
                                     <Clock className="h-3.5 w-3.5 animate-spin" />
                                     Access Request Pending Review
                                 </Badge>
@@ -827,7 +827,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                 <div className="flex items-center justify-between">
                     <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground/80 flex items-center gap-2">
                         <span>Select Channel Hub</span>
-                        <span className="text-[10px] text-teal-400/80 lowercase font-medium">
+                        <span className="text-[10px] text-teal-700/80 dark:text-teal-400/80 lowercase font-medium">
                             • click any hub to explore lineup
                         </span>
                     </span>
@@ -845,28 +845,28 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                         }}
                         className={`p-3 rounded-2xl border text-left transition-all duration-200 flex flex-col justify-between group relative overflow-hidden ${
                             activeHub === "local"
-                                ? "bg-gradient-to-br from-sky-500/25 via-sky-950/40 to-card border-sky-500/60 shadow-md ring-1 ring-sky-500/30"
+                                ? "bg-gradient-to-br from-sky-500/25 via-sky-500/10 dark:via-sky-950/40 to-card border-sky-500/60 shadow-md ring-1 ring-sky-500/30"
                                 : "bg-card/60 hover:bg-card border-border/50 hover:border-sky-500/40"
                         }`}
                     >
                         <div className="flex items-center justify-between w-full mb-2">
                             <div className={`p-1.5 rounded-xl transition-colors ${
                                 activeHub === "local"
-                                    ? "bg-sky-500/30 text-sky-200"
-                                    : "bg-sky-500/10 text-sky-400 group-hover:bg-sky-500/20"
+                                    ? "bg-sky-500/30 text-sky-900 dark:text-sky-200"
+                                    : "bg-sky-500/10 text-sky-700 dark:text-sky-400 group-hover:bg-sky-500/20"
                             }`}>
                                 <MapPin className="h-4 w-4" />
                             </div>
                             <span className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-full ${
                                 activeHub === "local"
                                     ? "bg-sky-400 text-slate-950"
-                                    : "bg-sky-500/15 text-sky-300 border border-sky-500/30"
+                                    : "bg-sky-500/15 text-sky-800 dark:text-sky-300 border border-sky-500/30"
                             }`}>
                                 {localMarketChannels.length}
                             </span>
                         </div>
                         <div>
-                            <h4 className="text-xs font-extrabold text-foreground tracking-tight group-hover:text-sky-200 transition-colors">
+                            <h4 className="text-xs font-extrabold text-foreground tracking-tight group-hover:text-sky-900 dark:group-hover:text-sky-200 transition-colors">
                                 Local Hub
                             </h4>
                             <p className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5">
@@ -883,28 +883,28 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                         }}
                         className={`p-3 rounded-2xl border text-left transition-all duration-200 flex flex-col justify-between group relative overflow-hidden ${
                             activeHub === "sports"
-                                ? "bg-gradient-to-br from-rose-500/25 via-rose-950/40 to-card border-rose-500/60 shadow-md ring-1 ring-rose-500/30"
+                                ? "bg-gradient-to-br from-rose-500/25 via-rose-500/10 dark:via-rose-950/40 to-card border-rose-500/60 shadow-md ring-1 ring-rose-500/30"
                                 : "bg-card/60 hover:bg-card border-border/50 hover:border-rose-500/40"
                         }`}
                     >
                         <div className="flex items-center justify-between w-full mb-2">
                             <div className={`p-1.5 rounded-xl transition-colors ${
                                 activeHub === "sports"
-                                    ? "bg-rose-500/30 text-rose-200"
-                                    : "bg-rose-500/10 text-rose-400 group-hover:bg-rose-500/20"
+                                    ? "bg-rose-500/30 text-rose-900 dark:text-rose-200"
+                                    : "bg-rose-500/10 text-rose-700 dark:text-rose-400 group-hover:bg-rose-500/20"
                             }`}>
                                 <Trophy className="h-4 w-4" />
                             </div>
                             <span className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-full ${
                                 activeHub === "sports"
                                     ? "bg-rose-400 text-slate-950"
-                                    : "bg-rose-500/15 text-rose-300 border border-rose-500/30"
+                                    : "bg-rose-500/15 text-rose-800 dark:text-rose-300 border border-rose-500/30"
                             }`}>
                                 {sportsCount}
                             </span>
                         </div>
                         <div>
-                            <h4 className="text-xs font-extrabold text-foreground tracking-tight group-hover:text-rose-200 transition-colors">
+                            <h4 className="text-xs font-extrabold text-foreground tracking-tight group-hover:text-rose-900 dark:group-hover:text-rose-200 transition-colors">
                                 Sports
                             </h4>
                             <p className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5">
@@ -921,28 +921,28 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                         }}
                         className={`p-3 rounded-2xl border text-left transition-all duration-200 flex flex-col justify-between group relative overflow-hidden ${
                             activeHub === "news"
-                                ? "bg-gradient-to-br from-blue-500/25 via-blue-950/40 to-card border-blue-500/60 shadow-md ring-1 ring-blue-500/30"
+                                ? "bg-gradient-to-br from-blue-500/25 via-blue-500/10 dark:via-blue-950/40 to-card border-blue-500/60 shadow-md ring-1 ring-blue-500/30"
                                 : "bg-card/60 hover:bg-card border-border/50 hover:border-blue-500/40"
                         }`}
                     >
                         <div className="flex items-center justify-between w-full mb-2">
                             <div className={`p-1.5 rounded-xl transition-colors ${
                                 activeHub === "news"
-                                    ? "bg-blue-500/30 text-blue-200"
-                                    : "bg-blue-500/10 text-blue-400 group-hover:bg-blue-500/20"
+                                    ? "bg-blue-500/30 text-blue-900 dark:text-blue-200"
+                                    : "bg-blue-500/10 text-blue-700 dark:text-blue-400 group-hover:bg-blue-500/20"
                             }`}>
                                 <Newspaper className="h-4 w-4" />
                             </div>
                             <span className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-full ${
                                 activeHub === "news"
                                     ? "bg-blue-400 text-slate-950"
-                                    : "bg-blue-500/15 text-blue-300 border border-blue-500/30"
+                                    : "bg-blue-500/15 text-blue-800 dark:text-blue-300 border border-blue-500/30"
                             }`}>
                                 {newsCount}
                             </span>
                         </div>
                         <div>
-                            <h4 className="text-xs font-extrabold text-foreground tracking-tight group-hover:text-blue-200 transition-colors">
+                            <h4 className="text-xs font-extrabold text-foreground tracking-tight group-hover:text-blue-900 dark:group-hover:text-blue-200 transition-colors">
                                 News
                             </h4>
                             <p className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5">
@@ -959,28 +959,28 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                         }}
                         className={`p-3 rounded-xl border text-left transition-all duration-200 flex flex-col justify-between group relative overflow-hidden ${
                             activeHub === "entertainment"
-                                ? "bg-gradient-to-br from-amber-500/20 via-slate-900/80 to-card border-amber-500/50 shadow-md ring-1 ring-amber-500/25"
+                                ? "bg-gradient-to-br from-amber-500/20 via-card dark:via-slate-900/80 to-card border-amber-500/50 shadow-md ring-1 ring-amber-500/25"
                                 : "bg-card/60 hover:bg-card border-border/50 hover:border-amber-500/40"
                         }`}
                     >
                         <div className="flex items-center justify-between w-full mb-2">
                             <div className={`p-1.5 rounded-lg transition-colors ${
                                 activeHub === "entertainment"
-                                    ? "bg-amber-500/25 text-amber-300"
-                                    : "bg-amber-500/10 text-amber-400 group-hover:bg-amber-500/20"
+                                    ? "bg-amber-500/25 text-amber-800 dark:text-amber-300"
+                                    : "bg-amber-500/10 text-amber-700 dark:text-amber-400 group-hover:bg-amber-500/20"
                             }`}>
                                 <Film className="h-4 w-4" />
                             </div>
                             <span className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-full ${
                                 activeHub === "entertainment"
                                     ? "bg-amber-400 text-slate-950"
-                                    : "bg-amber-500/15 text-amber-300 border border-amber-500/30"
+                                    : "bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30"
                             }`}>
                                 {entertainmentCount}
                             </span>
                         </div>
                         <div>
-                            <h4 className="text-xs font-extrabold text-foreground tracking-tight group-hover:text-amber-300 transition-colors">
+                            <h4 className="text-xs font-extrabold text-foreground tracking-tight group-hover:text-amber-800 dark:group-hover:text-amber-300 transition-colors">
                                 Entertainment
                             </h4>
                             <p className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5">
@@ -997,28 +997,28 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                         }}
                         className={`p-3 rounded-2xl border text-left transition-all duration-200 flex flex-col justify-between group relative overflow-hidden ${
                             activeHub === "kids"
-                                ? "bg-gradient-to-br from-emerald-500/25 via-emerald-950/40 to-card border-emerald-500/60 shadow-md ring-1 ring-emerald-500/30"
+                                ? "bg-gradient-to-br from-emerald-500/25 via-emerald-500/10 dark:via-emerald-950/40 to-card border-emerald-500/60 shadow-md ring-1 ring-emerald-500/30"
                                 : "bg-card/60 hover:bg-card border-border/50 hover:border-emerald-500/40"
                         }`}
                     >
                         <div className="flex items-center justify-between w-full mb-2">
                             <div className={`p-1.5 rounded-xl transition-colors ${
                                 activeHub === "kids"
-                                    ? "bg-emerald-500/30 text-emerald-200"
-                                    : "bg-emerald-500/10 text-emerald-400 group-hover:bg-emerald-500/20"
+                                    ? "bg-emerald-500/30 text-emerald-900 dark:text-emerald-200"
+                                    : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 group-hover:bg-emerald-500/20"
                             }`}>
                                 <Baby className="h-4 w-4" />
                             </div>
                             <span className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-full ${
                                 activeHub === "kids"
                                     ? "bg-emerald-400 text-slate-950"
-                                    : "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
+                                    : "bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30"
                             }`}>
                                 {kidsCount}
                             </span>
                         </div>
                         <div>
-                            <h4 className="text-xs font-extrabold text-foreground tracking-tight group-hover:text-emerald-200 transition-colors">
+                            <h4 className="text-xs font-extrabold text-foreground tracking-tight group-hover:text-emerald-900 dark:group-hover:text-emerald-200 transition-colors">
                                 Kids & Family
                             </h4>
                             <p className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5">
@@ -1035,28 +1035,28 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                         }}
                         className={`p-3 rounded-2xl border text-left transition-all duration-200 flex flex-col justify-between group relative overflow-hidden ${
                             activeHub === "all"
-                                ? "bg-gradient-to-br from-teal-500/25 via-teal-950/40 to-card border-teal-500/60 shadow-md ring-1 ring-teal-500/30"
+                                ? "bg-gradient-to-br from-teal-500/25 via-teal-500/10 dark:via-teal-950/40 to-card border-teal-500/60 shadow-md ring-1 ring-teal-500/30"
                                 : "bg-card/60 hover:bg-card border-border/50 hover:border-teal-500/40"
                         }`}
                     >
                         <div className="flex items-center justify-between w-full mb-2">
                             <div className={`p-1.5 rounded-xl transition-colors ${
                                 activeHub === "all"
-                                    ? "bg-teal-500/30 text-teal-200"
-                                    : "bg-teal-500/10 text-teal-400 group-hover:bg-teal-500/20"
+                                    ? "bg-teal-500/30 text-teal-900 dark:text-teal-200"
+                                    : "bg-teal-500/10 text-teal-700 dark:text-teal-400 group-hover:bg-teal-500/20"
                             }`}>
                                 <Layers className="h-4 w-4" />
                             </div>
                             <span className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-full ${
                                 activeHub === "all"
                                     ? "bg-teal-400 text-slate-950"
-                                    : "bg-teal-500/15 text-teal-300 border border-teal-500/30"
+                                    : "bg-teal-500/15 text-teal-800 dark:text-teal-300 border border-teal-500/30"
                             }`}>
                                 {channelsList.length}
                             </span>
                         </div>
                         <div>
-                            <h4 className="text-xs font-extrabold text-foreground tracking-tight group-hover:text-teal-200 transition-colors">
+                            <h4 className="text-xs font-extrabold text-foreground tracking-tight group-hover:text-teal-900 dark:group-hover:text-teal-200 transition-colors">
                                 All Lineups
                             </h4>
                             <p className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5">
@@ -1073,7 +1073,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                         }}
                         className={`p-3 rounded-2xl border text-left transition-all duration-200 flex flex-col justify-between group relative overflow-hidden ${
                             activeHub === "unassigned"
-                                ? "bg-gradient-to-br from-amber-500/25 via-amber-950/40 to-card border-amber-500/60 shadow-md ring-1 ring-amber-500/30"
+                                ? "bg-gradient-to-br from-amber-500/25 via-amber-500/10 dark:via-amber-950/40 to-card border-amber-500/60 shadow-md ring-1 ring-amber-500/30"
                                 : unassignedChannels.length > 0
                                 ? "bg-amber-500/5 hover:bg-card border-amber-500/30 hover:border-amber-500/50"
                                 : "bg-card/60 hover:bg-card border-border/50 hover:border-amber-500/40"
@@ -1082,8 +1082,8 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                         <div className="flex items-center justify-between w-full mb-2">
                             <div className={`p-1.5 rounded-xl transition-colors ${
                                 activeHub === "unassigned"
-                                    ? "bg-amber-500/30 text-amber-200"
-                                    : "bg-amber-500/10 text-amber-400 group-hover:bg-amber-500/20"
+                                    ? "bg-amber-500/30 text-amber-900 dark:text-amber-200"
+                                    : "bg-amber-500/10 text-amber-700 dark:text-amber-400 group-hover:bg-amber-500/20"
                             }`}>
                                 <AlertCircle className="h-4 w-4" />
                             </div>
@@ -1091,14 +1091,14 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                                 activeHub === "unassigned"
                                     ? "bg-amber-400 text-slate-950"
                                     : unassignedChannels.length > 0
-                                    ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                                    ? "bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/40"
                                     : "bg-muted text-muted-foreground"
                             }`}>
                                 {unassignedChannels.length}
                             </span>
                         </div>
                         <div>
-                            <h4 className="text-xs font-extrabold text-foreground tracking-tight group-hover:text-amber-200 transition-colors">
+                            <h4 className="text-xs font-extrabold text-foreground tracking-tight group-hover:text-amber-900 dark:group-hover:text-amber-200 transition-colors">
                                 Not in Profile
                             </h4>
                             <p className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5">
@@ -1123,7 +1123,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                                 }}
                                 className={`px-2.5 py-1 rounded-xl text-xs font-semibold border transition-all flex items-center gap-1.5 ${
                                     activeHub === p.slug
-                                        ? "bg-teal-500/20 border-teal-500/50 text-teal-200 shadow-sm"
+                                        ? "bg-teal-500/20 border-teal-500/50 text-teal-900 dark:text-teal-200 shadow-sm"
                                         : "bg-card/40 border-border/40 text-muted-foreground hover:text-foreground hover:bg-card"
                                 }`}
                             >
@@ -1140,10 +1140,10 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
 
             {/* Sub-Header Toolbar when "Local Hub" is active */}
             {activeHub === "local" && (
-                <div className="p-4 md:p-5 rounded-2xl border border-sky-500/30 bg-gradient-to-r from-sky-950/30 via-card/60 to-card/40 space-y-3.5 shadow-sm animate-in fade-in duration-200">
+                <div className="p-4 md:p-5 rounded-2xl border border-sky-500/30 bg-gradient-to-r from-sky-500/10 dark:from-sky-950/30 via-card/60 to-card/40 space-y-3.5 shadow-sm animate-in fade-in duration-200">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
                         <div className="flex items-center gap-3">
-                            <div className="h-9 w-9 rounded-xl bg-sky-500/20 border border-sky-500/40 flex items-center justify-center text-sky-300 shrink-0">
+                            <div className="h-9 w-9 rounded-xl bg-sky-500/20 border border-sky-500/40 flex items-center justify-center text-sky-800 dark:text-sky-300 shrink-0">
                                 <MapPin className="h-4.5 w-4.5" />
                             </div>
                             <div>
@@ -1152,11 +1152,11 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                                         {currentMarket.name}
                                     </h3>
                                     {currentMarket.isHostServer ? (
-                                        <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-300 border-amber-500/30">
+                                        <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30">
                                             ⭐️ Host Server Anchored (DFW)
                                         </Badge>
                                     ) : (
-                                        <Badge variant="outline" className="text-[10px] bg-sky-500/10 text-sky-300 border-sky-500/30">
+                                        <Badge variant="outline" className="text-[10px] bg-sky-500/10 text-sky-800 dark:text-sky-300 border-sky-500/30">
                                             📍 Selected Media Market
                                         </Badge>
                                     )}
@@ -1188,7 +1188,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                                 disabled={isPending}
                                 size="sm"
                                 variant="outline"
-                                className="h-8 text-xs font-bold gap-1.5 border-teal-500/40 text-teal-300 hover:bg-teal-500/10 rounded-xl"
+                                className="h-8 text-xs font-bold gap-1.5 border-teal-500/40 text-teal-800 dark:text-teal-300 hover:bg-teal-500/10 rounded-xl"
                             >
                                 <Crosshair className={`h-3.5 w-3.5 ${isPending ? "animate-spin" : ""}`} />
                                 Auto-Detect from IP
@@ -1209,7 +1209,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                     </div>
 
                     {marketDetectMsg && (
-                        <div className="text-xs text-emerald-400 font-semibold flex items-center gap-1.5 animate-in fade-in duration-200">
+                        <div className="text-xs text-emerald-700 dark:text-emerald-400 font-semibold flex items-center gap-1.5 animate-in fade-in duration-200">
                             <CheckCircle2 className="h-3.5 w-3.5" />
                             {marketDetectMsg}
                         </div>
@@ -1219,15 +1219,15 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
 
             {/* Sub-Header Banner when "Not in a Profile" Hub is active */}
             {activeHub === "unassigned" && (
-                <div className="p-4 md:p-5 rounded-2xl border border-amber-500/40 bg-gradient-to-r from-amber-950/25 via-card/60 to-card/40 space-y-2 shadow-sm animate-in fade-in duration-200">
+                <div className="p-4 md:p-5 rounded-2xl border border-amber-500/40 bg-gradient-to-r from-amber-500/10 dark:from-amber-950/25 via-card/60 to-card/40 space-y-2 shadow-sm animate-in fade-in duration-200">
                     <div className="flex items-center gap-2.5">
-                        <div className="h-8 w-8 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-300">
+                        <div className="h-8 w-8 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-800 dark:text-amber-300">
                             <AlertCircle className="h-4 w-4" />
                         </div>
                         <div>
                             <h3 className="font-bold text-sm text-foreground flex items-center gap-2">
                                 Channels Not in Any Profile ({unassignedChannels.length})
-                                <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-300 border-amber-500/30">
+                                <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30">
                                     Needs Profile Mapping
                                 </Badge>
                             </h3>
@@ -1241,15 +1241,15 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
 
             {/* Sub-Header Banner when "Sports" Hub is active */}
             {activeHub === "sports" && (
-                <div className="p-3.5 rounded-2xl border border-rose-500/25 bg-gradient-to-r from-rose-950/20 via-card/50 to-card/30 flex items-center justify-between shadow-sm animate-in fade-in duration-200">
+                <div className="p-3.5 rounded-2xl border border-rose-500/25 bg-gradient-to-r from-rose-500/10 dark:from-rose-950/20 via-card/50 to-card/30 flex items-center justify-between shadow-sm animate-in fade-in duration-200">
                     <div className="flex items-center gap-2.5">
-                        <div className="h-7 w-7 rounded-lg bg-rose-500/20 border border-rose-500/30 flex items-center justify-center text-rose-300">
+                        <div className="h-7 w-7 rounded-lg bg-rose-500/20 border border-rose-500/30 flex items-center justify-center text-rose-800 dark:text-rose-300">
                             <Trophy className="h-3.5 w-3.5" />
                         </div>
                         <div>
                             <h3 className="font-bold text-xs text-foreground flex items-center gap-2">
                                 Sports Command Center Lineup
-                                <Badge variant="outline" className="text-[9px] bg-rose-500/10 text-rose-300 border-rose-500/30">
+                                <Badge variant="outline" className="text-[9px] bg-rose-500/10 text-rose-800 dark:text-rose-300 border-rose-500/30">
                                     RedZone • NFL • College • ESPN
                                 </Badge>
                             </h3>
@@ -1336,7 +1336,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                 <div className="text-center py-12 border border-dashed border-border/60 rounded-xl bg-card/20 space-y-3">
                     {activeHub === "local" ? (
                         <>
-                            <MapPin className="h-8 w-8 text-sky-400 mx-auto opacity-70" />
+                            <MapPin className="h-8 w-8 text-sky-700 dark:text-sky-400 mx-auto opacity-70" />
                             <p className="text-sm font-semibold text-foreground">
                                 No local broadcast stations are currently mapped for {currentMarket.name}.
                             </p>
@@ -1355,8 +1355,8 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                         </>
                     ) : activeHub === "unassigned" ? (
                         <>
-                            <CheckCircle2 className="h-8 w-8 text-emerald-400 mx-auto" />
-                            <p className="text-sm font-semibold text-emerald-300">
+                            <CheckCircle2 className="h-8 w-8 text-emerald-700 dark:text-emerald-400 mx-auto" />
+                            <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">
                                 All Channels Are Assigned!
                             </p>
                             <p className="text-xs text-muted-foreground max-w-md mx-auto">
@@ -1387,7 +1387,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                     <Button
                         onClick={() => setVisibleCount((prev) => prev + 64)}
                         variant="outline"
-                        className="border-teal-500/30 text-teal-300 hover:bg-teal-500/10 text-xs font-bold gap-2 px-5 py-2 rounded-xl"
+                        className="border-teal-500/30 text-teal-800 dark:text-teal-300 hover:bg-teal-500/10 text-xs font-bold gap-2 px-5 py-2 rounded-xl"
                     >
                         Load Next 64 Channels (Showing {displayedChannels.length} of {activeHubChannels.length})
                     </Button>
@@ -1405,13 +1405,13 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
             {canAccess && (
                 <div className="mt-8 p-6 rounded-2xl border border-border/50 bg-card/40 space-y-4 shadow-sm">
                     <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-400">
+                        <div className="h-10 w-10 rounded-xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-700 dark:text-sky-400">
                             <Tv className="h-5 w-5" />
                         </div>
                         <div>
                             <h3 className="font-bold text-base text-foreground flex items-center gap-2">
                                 How to Stream Live Channels
-                                <Badge variant="outline" className="text-[10px] bg-sky-500/10 text-sky-300 border-sky-500/30">
+                                <Badge variant="outline" className="text-[10px] bg-sky-500/10 text-sky-800 dark:text-sky-300 border-sky-500/30">
                                     Plex & Jellyfin Verified
                                 </Badge>
                             </h3>
@@ -1424,7 +1424,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
                         {/* Plex Guide Card */}
                         <div className="p-4 rounded-xl border border-amber-500/20 bg-amber-500/5 space-y-2">
-                            <div className="flex items-center gap-2 font-bold text-sm text-amber-300">
+                            <div className="flex items-center gap-2 font-bold text-sm text-amber-800 dark:text-amber-300">
                                 <Tv className="h-4 w-4" />
                                 <span>Plex Media Player & Apps</span>
                             </div>
@@ -1436,7 +1436,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                                     size="sm"
                                     variant="outline"
                                     onClick={() => setShowPlexHomeGuide(true)}
-                                    className="h-7 text-xs border-amber-500/40 text-amber-300 hover:bg-amber-500/10 font-bold gap-1.5 rounded-lg"
+                                    className="h-7 text-xs border-amber-500/40 text-amber-800 dark:text-amber-300 hover:bg-amber-500/10 font-bold gap-1.5 rounded-lg"
                                 >
                                     <Tv className="h-3.5 w-3.5" />
                                     Plex Home Login & Setup Guide
@@ -1446,7 +1446,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
 
                         {/* Jellyfin Guide Card */}
                         <div className="p-4 rounded-xl border border-sky-500/20 bg-sky-500/5 space-y-2">
-                            <div className="flex items-center gap-2 font-bold text-sm text-sky-300">
+                            <div className="flex items-center gap-2 font-bold text-sm text-sky-800 dark:text-sky-300">
                                 <Layers className="h-4 w-4" />
                                 <span>Jellyfin &amp; Swiftfin</span>
                             </div>
@@ -1454,11 +1454,11 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                                 Launch Jellyfin or Swiftfin on your streaming device. Click <b className="text-foreground">Live TV</b> from the home screen dashboard to view all active tuner feeds and watch live events with direct audio/video passthrough.
                             </p>
                             <div className="pt-2 flex items-center gap-2">
-                                <Badge className="bg-sky-500/15 text-sky-300 border-sky-500/30 text-[10px] font-bold">
+                                <Badge className="bg-sky-500/15 text-sky-800 dark:text-sky-300 border-sky-500/30 text-[10px] font-bold">
                                     Unlimited Viewer Slots
                                 </Badge>
                                 {hasJellyfinState && (
-                                    <Badge className="bg-emerald-500/15 text-emerald-300 border-emerald-500/30 text-[10px] font-bold">
+                                    <Badge className="bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border-emerald-500/30 text-[10px] font-bold">
                                         ✓ Live TV Active
                                     </Badge>
                                 )}
@@ -1470,21 +1470,21 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
 
             {/* Market Action Feedback Banner */}
             {marketActionMsg && (
-                <div className="p-3.5 rounded-xl bg-teal-500/15 border border-teal-500/40 text-teal-200 text-xs font-semibold flex items-center justify-between shadow-sm animate-in fade-in duration-200">
+                <div className="p-3.5 rounded-xl bg-teal-500/15 border border-teal-500/40 text-teal-900 dark:text-teal-200 text-xs font-semibold flex items-center justify-between shadow-sm animate-in fade-in duration-200">
                     <span className="flex items-center gap-2">
-                        <CheckCircle2 className="h-4 w-4 text-teal-400 shrink-0" />
+                        <CheckCircle2 className="h-4 w-4 text-teal-700 dark:text-teal-400 shrink-0" />
                         {marketActionMsg}
                     </span>
                     <div className="flex items-center gap-2">
                         {marketActionPrompt && (
                             <button
                                 onClick={() => {}}
-                                className="underline text-teal-300 hover:text-teal-100 text-xs font-bold"
+                                className="underline text-teal-800 dark:text-teal-300 hover:text-teal-900 dark:hover:text-teal-100 text-xs font-bold"
                             >
                                 AI Prompt Ready
                             </button>
                         )}
-                        <button onClick={() => setMarketActionMsg("")} className="text-teal-400 hover:text-teal-200 text-xs font-bold">✕</button>
+                        <button onClick={() => setMarketActionMsg("")} className="text-teal-700 dark:text-teal-400 hover:text-teal-900 dark:hover:text-teal-200 text-xs font-bold">✕</button>
                     </div>
                 </div>
             )}
@@ -1494,7 +1494,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="w-full max-w-lg rounded-2xl border border-teal-500/40 bg-card p-6 shadow-2xl space-y-4">
                         <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2 text-teal-300 font-bold text-sm">
+                            <div className="flex items-center gap-2 text-teal-800 dark:text-teal-300 font-bold text-sm">
                                 <Sparkles className="h-4 w-4" />
                                 <span>AI Prompt for Dispatcharr Generated</span>
                             </div>
@@ -1515,7 +1515,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                             </p>
                         </div>
 
-                        <div className="p-3.5 rounded-xl bg-slate-950 border border-border/80 font-mono text-[11px] text-teal-200/90 whitespace-pre-wrap max-h-60 overflow-y-auto leading-relaxed select-all">
+                        <div className="p-3.5 rounded-xl bg-muted dark:bg-slate-950 border border-border/80 font-mono text-[11px] text-teal-900/90 dark:text-teal-200/90 whitespace-pre-wrap max-h-60 overflow-y-auto leading-relaxed select-all">
                             {marketActionPrompt.prompt}
                         </div>
 
@@ -1532,7 +1532,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                             >
                                 {copiedToken === "prompt-modal" ? (
                                     <>
-                                        <Check className="h-3.5 w-3.5 text-emerald-400" />
+                                        <Check className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
                                         <span>Copied to Clipboard!</span>
                                     </>
                                 ) : (
@@ -1560,7 +1560,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                     <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl space-y-4">
                         <div className="flex items-center justify-between">
                             <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
-                                <Sparkles className="h-5 w-5 text-teal-400" />
+                                <Sparkles className="h-5 w-5 text-teal-700 dark:text-teal-400" />
                                 Request a Live TV Channel
                             </h3>
                             <button
@@ -1576,7 +1576,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                         </p>
 
                         {requestSuccessMsg ? (
-                            <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center gap-2">
+                            <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300 text-xs font-semibold flex items-center gap-2">
                                 <CheckCircle2 className="h-4 w-4 shrink-0" />
                                 {requestSuccessMsg}
                             </div>
@@ -1667,7 +1667,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                         <div className="w-full max-w-md rounded-2xl border border-teal-500/40 bg-card p-6 shadow-2xl space-y-4">
                             <div className="flex items-center justify-between border-b border-border/40 pb-3">
                                 <div className="flex items-center gap-2.5">
-                                    <div className="h-9 w-9 rounded-xl bg-teal-500/15 border border-teal-500/30 flex items-center justify-center text-teal-400">
+                                    <div className="h-9 w-9 rounded-xl bg-teal-500/15 border border-teal-500/30 flex items-center justify-center text-teal-700 dark:text-teal-400">
                                         {isMove ? <ArrowRightLeft className="h-5 w-5" /> : <Layers className="h-5 w-5" />}
                                     </div>
                                     <div>
@@ -1704,18 +1704,18 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                                     )}
                                 </div>
                                 <p className="text-[11px] text-muted-foreground">
-                                    Callsign: <b className="text-teal-300">{targetChannelForProfile.callsign || "N/A"}</b> • Genre: {targetChannelForProfile.genre || "Entertainment"}
+                                    Callsign: <b className="text-teal-800 dark:text-teal-300">{targetChannelForProfile.callsign || "N/A"}</b> • Genre: {targetChannelForProfile.genre || "Entertainment"}
                                 </p>
                                 <div className="pt-1 flex items-center gap-1.5 flex-wrap">
                                     <span className="text-[10px] text-muted-foreground">Current Profiles:</span>
                                     {targetChannelForProfile.profiles?.length ? (
                                         targetChannelForProfile.profiles.map((p: any) => (
-                                            <Badge key={p.slug} variant="outline" className="text-[9px] bg-teal-500/10 text-teal-300 border-teal-500/20">
+                                            <Badge key={p.slug} variant="outline" className="text-[9px] bg-teal-500/10 text-teal-800 dark:text-teal-300 border-teal-500/20">
                                                 {p.name}
                                             </Badge>
                                         ))
                                     ) : (
-                                        <Badge variant="outline" className="text-[9px] bg-amber-500/10 text-amber-300 border-amber-500/30">
+                                        <Badge variant="outline" className="text-[9px] bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30">
                                             None (Unassigned)
                                         </Badge>
                                     )}
@@ -1760,13 +1760,13 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                                 {profileAddMsg && (
                                     <div className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center gap-2 ${
                                         profileAddMsg.isError
-                                            ? "bg-rose-500/10 border-rose-500/30 text-rose-300"
-                                            : "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                                            ? "bg-rose-500/10 border-rose-500/30 text-rose-800 dark:text-rose-300"
+                                            : "bg-emerald-500/10 border-emerald-500/30 text-emerald-800 dark:text-emerald-300"
                                     }`}>
                                         {profileAddMsg.isError ? (
-                                            <AlertCircle className="h-4 w-4 shrink-0 text-rose-400" />
+                                            <AlertCircle className="h-4 w-4 shrink-0 text-rose-700 dark:text-rose-400" />
                                         ) : (
-                                            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                                            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-400" />
                                         )}
                                         <span>{profileAddMsg.text}</span>
                                     </div>

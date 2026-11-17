@@ -394,7 +394,7 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
     return (
         <div className="space-y-4 w-full min-w-0">
             {/* Header Controls & Filter Bar */}
-            <div className="flex flex-col gap-3 p-4 rounded-2xl bg-[#121218] border border-border/50 shadow-sm">
+            <div className="flex flex-col gap-3 p-4 rounded-2xl bg-card dark:bg-[#121218] border border-border/50 shadow-sm">
                 {/* Media Type Tabs & Search */}
                 <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-border/40">
                     <div className="flex flex-wrap items-center gap-1.5">
@@ -561,9 +561,9 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
             )}
 
             {loadError && (
-                <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 flex items-center justify-between gap-3">
+                <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-800 dark:text-rose-300 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
-                        <AlertCircle className="h-4 w-4 shrink-0 text-rose-400" />
+                        <AlertCircle className="h-4 w-4 shrink-0 text-rose-700 dark:text-rose-400" />
                         <span>{loadError}</span>
                     </div>
                     <Button variant="outline" size="sm" onClick={() => loadRequests(true)} className="h-7 text-[11px] shrink-0">
@@ -574,7 +574,7 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
 
             {/* STICKY / FLOATING BULK ACTIONS TOOLBAR */}
             {selectedIds.size > 0 && (
-                <div className="sticky top-3 z-30 p-3 sm:p-4 rounded-2xl bg-[#14141c]/95 backdrop-blur-xl border border-primary/50 shadow-2xl flex flex-wrap items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="sticky top-3 z-30 p-3 sm:p-4 rounded-2xl bg-card/95 dark:bg-[#14141c]/95 backdrop-blur-xl border border-primary/50 shadow-2xl flex flex-wrap items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
                     <div className="flex items-center gap-2.5">
                         <Badge variant="outline" className="bg-primary/20 text-primary-foreground border-primary/50 text-xs font-bold px-3 py-1">
                             {selectedIds.size} Selected
@@ -607,7 +607,7 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                                     variant="outline"
                                     disabled={bulkActionLoading}
                                     onClick={handleBulkDecline}
-                                    className="h-8 px-3 text-xs font-bold border-rose-500/40 text-rose-300 hover:bg-rose-500/20 gap-1.5 cursor-pointer"
+                                    className="h-8 px-3 text-xs font-bold border-rose-500/40 text-rose-800 dark:text-rose-300 hover:bg-rose-500/20 gap-1.5 cursor-pointer"
                                 >
                                     {bulkActionLoading ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <XCircle className="h-3.5 w-3.5" />}
                                     <span>Mass Reject ({selectedIds.size})</span>
@@ -670,9 +670,9 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                         return (
                             <div
                                 key={req.id}
-                                className={`p-3 sm:p-3.5 rounded-2xl bg-[#14141c] border transition-all flex gap-3 sm:gap-3.5 items-start justify-between shadow-sm relative group overflow-hidden min-w-0 ${
+                                className={`p-3 sm:p-3.5 rounded-2xl bg-card dark:bg-[#14141c] border transition-all flex gap-3 sm:gap-3.5 items-start justify-between shadow-sm relative group overflow-hidden min-w-0 ${
                                     isSelected 
-                                        ? "border-primary ring-1 ring-primary/40 bg-[#161626]" 
+                                        ? "border-primary ring-1 ring-primary/40 bg-card dark:bg-[#161626]" 
                                         : "border-border/40 hover:border-border/80"
                                 }`}
                             >
@@ -717,7 +717,7 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                                                     });
                                                 }
                                             }}
-                                            className="w-16 sm:w-20 aspect-[2/3] rounded-xl overflow-hidden bg-muted/20 shrink-0 border border-white/5 cursor-pointer hover:opacity-90 transition-opacity relative"
+                                            className="w-16 sm:w-20 aspect-[2/3] rounded-xl overflow-hidden bg-muted/20 shrink-0 border border-border/70 dark:border-white/5 cursor-pointer hover:opacity-90 transition-opacity relative"
                                         >
                                             {showImage ? (
                                                 <img 
@@ -729,13 +729,13 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                                             ) : (
                                                 <div className="w-full h-full flex flex-col items-center justify-center p-1.5 text-center bg-gradient-to-b from-muted/30 to-muted/80 text-muted-foreground/70">
                                                     {isAudiobook ? (
-                                                        <Headphones className="h-6 w-6 text-amber-400 mb-1 shrink-0" />
+                                                        <Headphones className="h-6 w-6 text-amber-700 dark:text-amber-400 mb-1 shrink-0" />
                                                     ) : isBook ? (
-                                                        <BookOpen className="h-6 w-6 text-emerald-400 mb-1 shrink-0" />
+                                                        <BookOpen className="h-6 w-6 text-emerald-700 dark:text-emerald-400 mb-1 shrink-0" />
                                                     ) : isTv ? (
-                                                        <Tv className="h-6 w-6 text-cyan-400 mb-1 shrink-0" />
+                                                        <Tv className="h-6 w-6 text-cyan-700 dark:text-cyan-400 mb-1 shrink-0" />
                                                     ) : (
-                                                        <Film className="h-6 w-6 text-blue-400 mb-1 shrink-0" />
+                                                        <Film className="h-6 w-6 text-blue-700 dark:text-blue-400 mb-1 shrink-0" />
                                                     )}
                                                     <span className="text-[9px] font-semibold line-clamp-2 text-foreground/80 leading-tight px-0.5 break-words">
                                                         {req.title}
@@ -753,7 +753,7 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                                             {formatLabel}
                                         </Badge>
                                         {isTv && req.seasons && (
-                                            <Badge variant="outline" className="text-[9px] font-semibold px-1.5 py-0.2 rounded bg-cyan-950/40 text-cyan-300 border-cyan-500/30 shrink-0">
+                                            <Badge variant="outline" className="text-[9px] font-semibold px-1.5 py-0.2 rounded bg-cyan-500/10 dark:bg-cyan-950/40 text-cyan-800 dark:text-cyan-300 border-cyan-500/30 shrink-0">
                                                 {req.seasons === "all" ? "All Seasons" : (() => {
                                                     try {
                                                         const parsed = JSON.parse(req.seasons);
@@ -765,12 +765,12 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                                             </Badge>
                                         )}
                                         {req.is4k && (
-                                            <Badge variant="outline" className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-300 border-sky-500/40 shrink-0">
+                                            <Badge variant="outline" className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-800 dark:text-sky-300 border-sky-500/40 shrink-0">
                                                 4K
                                             </Badge>
                                         )}
                                         {req.sendToKindle && isBook && (
-                                            <Badge variant="outline" className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-900/30 text-emerald-300 border-emerald-500/30 gap-1 shrink-0">
+                                            <Badge variant="outline" className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-500/10 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300 border-emerald-500/30 gap-1 shrink-0">
                                                 <Send className="h-2.5 w-2.5" />
                                                 <span>Kindle</span>
                                             </Badge>
@@ -820,19 +820,19 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                                     {/* Status Badge & Download Progress */}
                                     <div className="flex flex-wrap items-center gap-1.5 min-w-0 w-full">
                                         {req.status === "AVAILABLE" && (
-                                            <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-400 shrink-0">
+                                            <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-400 shrink-0">
                                                 <CheckCircle2 className="h-3.5 w-3.5" /> Available in {isBook || isAudiobook ? "Shelf" : "Plex"}
                                             </span>
                                         )}
                                         {req.status === "PARTIALLY_AVAILABLE" && (
-                                            <span className="flex items-center gap-1 text-[11px] font-bold text-teal-400 shrink-0">
+                                            <span className="flex items-center gap-1 text-[11px] font-bold text-teal-700 dark:text-teal-400 shrink-0">
                                                 <CheckCircle2 className="h-3.5 w-3.5" /> Partial in Plex
                                             </span>
                                         )}
                                         {(req.status === "PROCESSING" || req.status === "SEARCHING" || req.status === "DOWNLOADING") && (
                                             req.downloadProgress && req.downloadProgress > 0 ? (
                                                 <div className="space-y-1 w-full min-w-0">
-                                                    <div className="flex items-center justify-between text-[11px] font-bold text-cyan-300 gap-1.5 flex-wrap">
+                                                    <div className="flex items-center justify-between text-[11px] font-bold text-cyan-800 dark:text-cyan-300 gap-1.5 flex-wrap">
                                                         <span className="flex items-center gap-1 shrink-0">
                                                             <Download className="h-3.5 w-3.5 animate-pulse" /> Downloading
                                                         </span>
@@ -848,28 +848,28 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                                                     </div>
                                                 </div>
                                             ) : (
-                                                <div className="flex items-center justify-between text-[11px] font-bold text-amber-400 gap-1.5 flex-wrap w-full min-w-0">
+                                                <div className="flex items-center justify-between text-[11px] font-bold text-amber-700 dark:text-amber-400 gap-1.5 flex-wrap w-full min-w-0">
                                                     <span className="flex items-center gap-1 shrink-0">
-                                                        <Search className="h-3.5 w-3.5 text-amber-400 animate-pulse" /> Looking for Media
+                                                        <Search className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400 animate-pulse" /> Looking for Media
                                                     </span>
-                                                    <span className="shrink-0 text-right font-medium text-[10px] text-amber-300 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-md">
+                                                    <span className="shrink-0 text-right font-medium text-[10px] text-amber-800 dark:text-amber-300 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-md">
                                                         Missing (Searching)
                                                     </span>
                                                 </div>
                                             )
                                         )}
                                         {req.status === "APPROVED" && (
-                                            <span className="flex items-center gap-1 text-[11px] font-bold text-blue-400 shrink-0">
+                                            <span className="flex items-center gap-1 text-[11px] font-bold text-blue-700 dark:text-blue-400 shrink-0">
                                                 <Clock className="h-3.5 w-3.5" /> Approved
                                             </span>
                                         )}
                                         {req.status === "PENDING" && (
-                                            <span className="flex items-center gap-1 text-[11px] font-bold text-amber-400 shrink-0">
+                                            <span className="flex items-center gap-1 text-[11px] font-bold text-amber-700 dark:text-amber-400 shrink-0">
                                                 <Clock className="h-3.5 w-3.5" /> Awaiting Approval
                                             </span>
                                         )}
                                         {(req.status === "FAILED" || req.status === "DECLINED") && (
-                                            <span className="flex items-center gap-1 text-[11px] font-bold text-rose-400 shrink-0">
+                                            <span className="flex items-center gap-1 text-[11px] font-bold text-rose-700 dark:text-rose-400 shrink-0">
                                                 <AlertCircle className="h-3.5 w-3.5" /> {req.status === "DECLINED" ? "Declined / Rejected" : "Failed"}
                                             </span>
                                         )}
@@ -884,7 +884,7 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                                             </span>
                                         </div>
                                         {req.kindleEmail && isBook && (
-                                            <span className="text-[10px] text-emerald-300/90 truncate max-w-[140px] sm:max-w-[200px]" title={req.kindleEmail}>
+                                            <span className="text-[10px] text-emerald-800/90 dark:text-emerald-300/90 truncate max-w-[140px] sm:max-w-[200px]" title={req.kindleEmail}>
                                                 ({req.kindleEmail})
                                             </span>
                                         )}
@@ -894,7 +894,7 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
 
                                     {req.errorMessage && (
                                         <p 
-                                            className="text-[10px] text-rose-400 line-clamp-2 bg-rose-500/10 px-2 py-1 rounded border border-rose-500/20 break-words overflow-hidden"
+                                            className="text-[10px] text-rose-700 dark:text-rose-400 line-clamp-2 bg-rose-500/10 px-2 py-1 rounded border border-rose-500/20 break-words overflow-hidden"
                                             title={req.errorMessage}
                                         >
                                             {req.errorMessage}
@@ -918,7 +918,7 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                                             <Button
                                                 size="icon"
                                                 variant="outline"
-                                                className="h-7 w-7 rounded-lg border-rose-500/40 text-rose-400 hover:bg-rose-500/20 cursor-pointer"
+                                                className="h-7 w-7 rounded-lg border-rose-500/40 text-rose-700 dark:text-rose-400 hover:bg-rose-500/20 cursor-pointer"
                                                 onClick={() => handleDecline(req.id)}
                                                 disabled={isLoading}
                                                 title="Decline / Reject Request"
@@ -932,7 +932,7 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                                         <Button
                                             size="icon"
                                             variant="outline"
-                                            className="h-7 w-7 rounded-lg border-cyan-500/40 text-cyan-400 hover:bg-cyan-500/20 cursor-pointer"
+                                            className="h-7 w-7 rounded-lg border-cyan-500/40 text-cyan-700 dark:text-cyan-400 hover:bg-cyan-500/20 cursor-pointer"
                                             onClick={() => handleRetry(req.id)}
                                             disabled={isLoading}
                                             title="Retry Dispatch"
@@ -945,7 +945,7 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                                         <Button
                                             size="icon"
                                             variant="ghost"
-                                            className="h-7 w-7 rounded-lg text-muted-foreground hover:text-rose-400 hover:bg-rose-500/10 cursor-pointer"
+                                            className="h-7 w-7 rounded-lg text-muted-foreground hover:text-rose-700 dark:hover:text-rose-400 hover:bg-rose-500/10 cursor-pointer"
                                             onClick={() => handleDelete(req.id)}
                                             disabled={isLoading}
                                             title="Delete Request"
@@ -964,18 +964,18 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
             {toast && (
                 <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-2xl border backdrop-blur-xl animate-in slide-in-from-bottom-5 duration-200 text-xs font-semibold ${
                     toast.type === "success" 
-                        ? "bg-emerald-950/90 border-emerald-500/50 text-emerald-200 shadow-emerald-900/30"
+                        ? "bg-emerald-500/15 dark:bg-emerald-950/90 border-emerald-500/50 text-emerald-900 dark:text-emerald-200 shadow-emerald-900/30"
                         : toast.type === "error"
-                        ? "bg-rose-950/90 border-rose-500/50 text-rose-200 shadow-rose-900/30"
-                        : "bg-blue-950/90 border-blue-500/50 text-blue-200 shadow-blue-900/30"
+                        ? "bg-rose-500/15 dark:bg-rose-950/90 border-rose-500/50 text-rose-900 dark:text-rose-200 shadow-rose-900/30"
+                        : "bg-blue-500/15 dark:bg-blue-950/90 border-blue-500/50 text-blue-900 dark:text-blue-200 shadow-blue-900/30"
                 }`}>
-                    {toast.type === "success" && <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />}
-                    {toast.type === "error" && <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />}
-                    {toast.type === "info" && <Sparkles className="h-4 w-4 text-blue-400 shrink-0" />}
+                    {toast.type === "success" && <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0" />}
+                    {toast.type === "error" && <AlertCircle className="h-4 w-4 text-rose-700 dark:text-rose-400 shrink-0" />}
+                    {toast.type === "info" && <Sparkles className="h-4 w-4 text-blue-700 dark:text-blue-400 shrink-0" />}
                     <span>{toast.text}</span>
                     <button 
                         onClick={() => setToast(null)}
-                        className="ml-2 text-white/60 hover:text-white p-0.5 cursor-pointer"
+                        className="ml-2 text-white/60 hover:text-foreground dark:hover:text-white p-0.5 cursor-pointer"
                         aria-label="Dismiss notice"
                     >
                         ✕

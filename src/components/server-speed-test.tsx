@@ -148,12 +148,12 @@ export default function ServerSpeedTest({ trigger }: ServerSpeedTestProps = {}) 
                         size="sm" 
                         className="h-8 text-xs font-semibold gap-1.5 border-primary/30 hover:border-primary hover:bg-primary/10 transition-all active:scale-95 shadow-sm"
                     >
-                        <Zap className="h-3.5 w-3.5 text-amber-400" />
+                        <Zap className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
                         Speed Test
                     </Button>
                 )}
             </DialogTrigger>
-            <DialogContent className="w-[95vw] sm:max-w-lg max-h-[85vh] overflow-y-auto bg-[#121218]/95 border-border/60 backdrop-blur-xl shadow-2xl p-4 sm:p-6">
+            <DialogContent className="w-[95vw] sm:max-w-lg max-h-[85vh] overflow-y-auto bg-popover/95 dark:bg-[#121218]/95 border-border/60 backdrop-blur-xl shadow-2xl p-4 sm:p-6">
                 <DialogHeader className="pb-3 border-b border-border/40">
                     <DialogTitle className="flex items-center gap-2 text-lg font-bold text-foreground">
                         <Gauge className="h-5 w-5 text-primary" />
@@ -167,30 +167,30 @@ export default function ServerSpeedTest({ trigger }: ServerSpeedTestProps = {}) 
                 <div className="space-y-5 py-3">
                     {/* Live Speedometer / Metrics Grid */}
                     <div className="grid grid-cols-3 gap-3">
-                        <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.06] text-center space-y-1">
+                        <div className="p-3.5 rounded-xl bg-muted/50 dark:bg-white/[0.03] border border-border/70 dark:border-white/[0.06] text-center space-y-1">
                             <div className="flex items-center justify-center gap-1 text-[11px] font-semibold text-muted-foreground uppercase">
-                                <Activity className="h-3 w-3 text-cyan-400" /> Ping
+                                <Activity className="h-3 w-3 text-cyan-700 dark:text-cyan-400" /> Ping
                             </div>
                             <div className="text-xl font-bold tracking-tight text-foreground">
                                 {pingMs !== null ? `${pingMs} ms` : testing ? <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /> : "--"}
                             </div>
                         </div>
 
-                        <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.06] text-center space-y-1">
+                        <div className="p-3.5 rounded-xl bg-muted/50 dark:bg-white/[0.03] border border-border/70 dark:border-white/[0.06] text-center space-y-1">
                             <div className="flex items-center justify-center gap-1 text-[11px] font-semibold text-muted-foreground uppercase">
-                                <ArrowDown className="h-3 w-3 text-emerald-400" /> Download
+                                <ArrowDown className="h-3 w-3 text-emerald-700 dark:text-emerald-400" /> Download
                             </div>
-                            <div className="text-xl font-bold tracking-tight text-emerald-400">
-                                {downloadMbps !== null ? `${downloadMbps} Mbps` : testing ? <Loader2 className="h-5 w-5 animate-spin mx-auto text-emerald-400" /> : "--"}
+                            <div className="text-xl font-bold tracking-tight text-emerald-700 dark:text-emerald-400">
+                                {downloadMbps !== null ? `${downloadMbps} Mbps` : testing ? <Loader2 className="h-5 w-5 animate-spin mx-auto text-emerald-700 dark:text-emerald-400" /> : "--"}
                             </div>
                         </div>
 
-                        <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.06] text-center space-y-1">
+                        <div className="p-3.5 rounded-xl bg-muted/50 dark:bg-white/[0.03] border border-border/70 dark:border-white/[0.06] text-center space-y-1">
                             <div className="flex items-center justify-center gap-1 text-[11px] font-semibold text-muted-foreground uppercase">
-                                <ArrowUp className="h-3 w-3 text-blue-400" /> Upload
+                                <ArrowUp className="h-3 w-3 text-blue-700 dark:text-blue-400" /> Upload
                             </div>
-                            <div className="text-xl font-bold tracking-tight text-blue-400">
-                                {uploadMbps !== null ? `${uploadMbps} Mbps` : testing ? <Loader2 className="h-5 w-5 animate-spin mx-auto text-blue-400" /> : "--"}
+                            <div className="text-xl font-bold tracking-tight text-blue-700 dark:text-blue-400">
+                                {uploadMbps !== null ? `${uploadMbps} Mbps` : testing ? <Loader2 className="h-5 w-5 animate-spin mx-auto text-blue-700 dark:text-blue-400" /> : "--"}
                             </div>
                         </div>
                     </div>

@@ -22,17 +22,17 @@ export function UserLaunchpad({ isSuperUser = false }: UserLaunchpadProps) {
             }`}>
                 {/* 1. Browse & Request */}
                 <Link href="/discover" className="block group h-full">
-                    <div className="h-full flex flex-col justify-between p-3 sm:p-3.5 rounded-xl border bg-rose-500/10 border-rose-500/30 text-rose-400 hover:border-rose-500/60 hover:bg-rose-500/15 transition-all duration-200 active:scale-98 shadow-sm hover:shadow-md">
+                    <div className="h-full flex flex-col justify-between p-3 sm:p-3.5 rounded-xl border bg-rose-500/10 border-rose-500/30 text-rose-700 dark:text-rose-400 hover:border-rose-500/60 hover:bg-rose-500/15 transition-all duration-200 active:scale-98 shadow-sm hover:shadow-md">
                         <div className="flex items-center justify-between gap-1.5 mb-2">
                             <div className="p-2 rounded-lg bg-background/50 border border-border/40 shadow-xs">
-                                <Compass className="h-5 w-5 text-rose-400" />
+                                <Compass className="h-5 w-5 text-rose-700 dark:text-rose-400" />
                             </div>
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border tracking-wide uppercase bg-rose-500/15 text-rose-300 border-rose-500/30">
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border tracking-wide uppercase bg-rose-500/15 text-rose-800 dark:text-rose-300 border-rose-500/30">
                                 Requests
                             </span>
                         </div>
                         <div className="space-y-0.5">
-                            <h3 className="text-xs sm:text-sm font-bold text-foreground group-hover:text-rose-300 transition-colors flex items-center justify-between">
+                            <h3 className="text-xs sm:text-sm font-bold text-foreground group-hover:text-rose-800 dark:group-hover:text-rose-300 transition-colors flex items-center justify-between">
                                 <span>Browse &amp; Request</span>
                                 <ArrowRight className="h-3.5 w-3.5 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all shrink-0" />
                             </h3>
@@ -46,17 +46,17 @@ export function UserLaunchpad({ isSuperUser = false }: UserLaunchpadProps) {
                 {/* 2. SuperUser Only: Radarr Movies */}
                 {isSuperUser && (
                     <Link href="/radarr" className="block group h-full">
-                        <div className="h-full flex flex-col justify-between p-3 sm:p-3.5 rounded-xl border bg-amber-500/10 border-amber-500/30 text-amber-400 hover:border-amber-500/60 hover:bg-amber-500/15 transition-all duration-200 active:scale-98 shadow-sm hover:shadow-md">
+                        <div className="h-full flex flex-col justify-between p-3 sm:p-3.5 rounded-xl border bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400 hover:border-amber-500/60 hover:bg-amber-500/15 transition-all duration-200 active:scale-98 shadow-sm hover:shadow-md">
                             <div className="flex items-center justify-between gap-1.5 mb-2">
                                 <div className="p-2 rounded-lg bg-background/50 border border-border/40 shadow-xs">
-                                    <Film className="h-5 w-5 text-amber-400" />
+                                    <Film className="h-5 w-5 text-amber-700 dark:text-amber-400" />
                                 </div>
-                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border tracking-wide uppercase bg-amber-500/15 text-amber-300 border-amber-500/30">
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border tracking-wide uppercase bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30">
                                     Movies
                                 </span>
                             </div>
                             <div className="space-y-0.5">
-                                <h3 className="text-xs sm:text-sm font-bold text-foreground group-hover:text-amber-300 transition-colors flex items-center justify-between">
+                                <h3 className="text-xs sm:text-sm font-bold text-foreground group-hover:text-amber-800 dark:group-hover:text-amber-300 transition-colors flex items-center justify-between">
                                     <span>Movie Manager (Radarr)</span>
                                     <ArrowRight className="h-3.5 w-3.5 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all shrink-0" />
                                 </h3>
@@ -71,17 +71,17 @@ export function UserLaunchpad({ isSuperUser = false }: UserLaunchpadProps) {
                 {/* 3. SuperUser Only: Sonarr TV Shows */}
                 {isSuperUser && (
                     <Link href="/sonarr" className="block group h-full">
-                        <div className="h-full flex flex-col justify-between p-3 sm:p-3.5 rounded-xl border bg-sky-500/10 border-sky-500/30 text-sky-400 hover:border-sky-500/60 hover:bg-sky-500/15 transition-all duration-200 active:scale-98 shadow-sm hover:shadow-md">
+                        <div className="h-full flex flex-col justify-between p-3 sm:p-3.5 rounded-xl border bg-sky-500/10 border-sky-500/30 text-sky-700 dark:text-sky-400 hover:border-sky-500/60 hover:bg-sky-500/15 transition-all duration-200 active:scale-98 shadow-sm hover:shadow-md">
                             <div className="flex items-center justify-between gap-1.5 mb-2">
                                 <div className="p-2 rounded-lg bg-background/50 border border-border/40 shadow-xs">
-                                    <Tv className="h-5 w-5 text-sky-400" />
+                                    <Tv className="h-5 w-5 text-sky-700 dark:text-sky-400" />
                                 </div>
-                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border tracking-wide uppercase bg-sky-500/15 text-sky-300 border-sky-500/30">
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border tracking-wide uppercase bg-sky-500/15 text-sky-800 dark:text-sky-300 border-sky-500/30">
                                     TV Shows
                                 </span>
                             </div>
                             <div className="space-y-0.5">
-                                <h3 className="text-xs sm:text-sm font-bold text-foreground group-hover:text-sky-300 transition-colors flex items-center justify-between">
+                                <h3 className="text-xs sm:text-sm font-bold text-foreground group-hover:text-sky-800 dark:group-hover:text-sky-300 transition-colors flex items-center justify-between">
                                     <span>TV Manager (Sonarr)</span>
                                     <ArrowRight className="h-3.5 w-3.5 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all shrink-0" />
                                 </h3>
@@ -95,17 +95,17 @@ export function UserLaunchpad({ isSuperUser = false }: UserLaunchpadProps) {
 
                 {/* 4. Books & Audio */}
                 <Link href="/library" className="block group h-full">
-                    <div className="h-full flex flex-col justify-between p-3 sm:p-3.5 rounded-xl border bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:border-emerald-500/60 hover:bg-emerald-500/15 transition-all duration-200 active:scale-98 shadow-sm hover:shadow-md">
+                    <div className="h-full flex flex-col justify-between p-3 sm:p-3.5 rounded-xl border bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:border-emerald-500/60 hover:bg-emerald-500/15 transition-all duration-200 active:scale-98 shadow-sm hover:shadow-md">
                         <div className="flex items-center justify-between gap-1.5 mb-2">
                             <div className="p-2 rounded-lg bg-background/50 border border-border/40 shadow-xs">
-                                <BookOpen className="h-5 w-5 text-emerald-400" />
+                                <BookOpen className="h-5 w-5 text-emerald-700 dark:text-emerald-400" />
                             </div>
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border tracking-wide uppercase bg-emerald-500/15 text-emerald-300 border-emerald-500/30">
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border tracking-wide uppercase bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border-emerald-500/30">
                                 Books
                             </span>
                         </div>
                         <div className="space-y-0.5">
-                            <h3 className="text-xs sm:text-sm font-bold text-foreground group-hover:text-emerald-300 transition-colors flex items-center justify-between">
+                            <h3 className="text-xs sm:text-sm font-bold text-foreground group-hover:text-emerald-800 dark:group-hover:text-emerald-300 transition-colors flex items-center justify-between">
                                 <span>Books &amp; Audio</span>
                                 <ArrowRight className="h-3.5 w-3.5 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all shrink-0" />
                             </h3>
@@ -118,17 +118,17 @@ export function UserLaunchpad({ isSuperUser = false }: UserLaunchpadProps) {
 
                 {/* Servers, Libraries & Add-ons */}
                 <Link href="/profile" className="block group h-full">
-                    <div className="h-full flex flex-col justify-between p-3 sm:p-3.5 rounded-xl border bg-blue-500/10 border-blue-500/30 text-blue-400 hover:border-blue-500/60 hover:bg-blue-500/15 transition-all duration-200 active:scale-98 shadow-sm hover:shadow-md">
+                    <div className="h-full flex flex-col justify-between p-3 sm:p-3.5 rounded-xl border bg-blue-500/10 border-blue-500/30 text-blue-700 dark:text-blue-400 hover:border-blue-500/60 hover:bg-blue-500/15 transition-all duration-200 active:scale-98 shadow-sm hover:shadow-md">
                         <div className="flex items-center justify-between gap-1.5 mb-2">
                             <div className="p-2 rounded-lg bg-background/50 border border-border/40 shadow-xs">
-                                <Server className="h-5 w-5 text-blue-400" />
+                                <Server className="h-5 w-5 text-blue-700 dark:text-blue-400" />
                             </div>
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border tracking-wide uppercase bg-blue-500/15 text-blue-300 border-blue-500/30">
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border tracking-wide uppercase bg-blue-500/15 text-blue-800 dark:text-blue-300 border-blue-500/30">
                                 Access
                             </span>
                         </div>
                         <div className="space-y-0.5">
-                            <h3 className="text-xs sm:text-sm font-bold text-foreground group-hover:text-blue-300 transition-colors flex items-center justify-between">
+                            <h3 className="text-xs sm:text-sm font-bold text-foreground group-hover:text-blue-800 dark:group-hover:text-blue-300 transition-colors flex items-center justify-between">
                                 <span>Servers &amp; Libraries</span>
                                 <ArrowRight className="h-3.5 w-3.5 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all shrink-0" />
                             </h3>
@@ -150,17 +150,17 @@ export function UserLaunchpad({ isSuperUser = false }: UserLaunchpadProps) {
                     }}
                     className="block group h-full cursor-pointer"
                 >
-                    <div className="h-full flex flex-col justify-between p-3 sm:p-3.5 rounded-xl border bg-cyan-500/10 border-cyan-500/30 text-cyan-400 hover:border-cyan-500/60 hover:bg-cyan-500/15 transition-all duration-200 active:scale-98 shadow-sm hover:shadow-md">
+                    <div className="h-full flex flex-col justify-between p-3 sm:p-3.5 rounded-xl border bg-cyan-500/10 border-cyan-500/30 text-cyan-700 dark:text-cyan-400 hover:border-cyan-500/60 hover:bg-cyan-500/15 transition-all duration-200 active:scale-98 shadow-sm hover:shadow-md">
                         <div className="flex items-center justify-between gap-1.5 mb-2">
                             <div className="p-2 rounded-lg bg-background/50 border border-border/40 shadow-xs">
-                                <Activity className="h-5 w-5 text-cyan-400" />
+                                <Activity className="h-5 w-5 text-cyan-700 dark:text-cyan-400" />
                             </div>
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border tracking-wide uppercase bg-cyan-500/15 text-cyan-300 border-cyan-500/30">
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border tracking-wide uppercase bg-cyan-500/15 text-cyan-800 dark:text-cyan-300 border-cyan-500/30">
                                 Activity
                             </span>
                         </div>
                         <div className="space-y-0.5">
-                            <h3 className="text-xs sm:text-sm font-bold text-foreground group-hover:text-cyan-300 transition-colors flex items-center justify-between">
+                            <h3 className="text-xs sm:text-sm font-bold text-foreground group-hover:text-cyan-800 dark:group-hover:text-cyan-300 transition-colors flex items-center justify-between">
                                 <span>My Streams</span>
                                 <ArrowRight className="h-3.5 w-3.5 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all shrink-0" />
                             </h3>
@@ -175,17 +175,17 @@ export function UserLaunchpad({ isSuperUser = false }: UserLaunchpadProps) {
                 <div className="h-full">
                     <ServerSpeedTest 
                         trigger={
-                            <button type="button" className="w-full h-full text-left flex flex-col justify-between p-3 sm:p-3.5 rounded-xl border bg-sky-500/10 border-sky-500/30 text-sky-400 hover:border-sky-500/60 hover:bg-sky-500/15 transition-all duration-200 active:scale-98 shadow-sm hover:shadow-md cursor-pointer group">
+                            <button type="button" className="w-full h-full text-left flex flex-col justify-between p-3 sm:p-3.5 rounded-xl border bg-sky-500/10 border-sky-500/30 text-sky-700 dark:text-sky-400 hover:border-sky-500/60 hover:bg-sky-500/15 transition-all duration-200 active:scale-98 shadow-sm hover:shadow-md cursor-pointer group">
                                 <div className="flex items-center justify-between gap-1.5 mb-2 w-full">
                                     <div className="p-2 rounded-lg bg-background/50 border border-border/40 shadow-xs">
-                                        <Zap className="h-5 w-5 text-sky-400" />
+                                        <Zap className="h-5 w-5 text-sky-700 dark:text-sky-400" />
                                     </div>
-                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border tracking-wide uppercase bg-sky-500/15 text-sky-300 border-sky-500/30">
+                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border tracking-wide uppercase bg-sky-500/15 text-sky-800 dark:text-sky-300 border-sky-500/30">
                                         Bandwidth
                                     </span>
                                 </div>
                                 <div className="space-y-0.5 w-full">
-                                    <h3 className="text-xs sm:text-sm font-bold text-foreground group-hover:text-sky-300 transition-colors flex items-center justify-between">
+                                    <h3 className="text-xs sm:text-sm font-bold text-foreground group-hover:text-sky-800 dark:group-hover:text-sky-300 transition-colors flex items-center justify-between">
                                         <span>Speed Test</span>
                                         <ArrowRight className="h-3.5 w-3.5 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all shrink-0" />
                                     </h3>
@@ -202,17 +202,17 @@ export function UserLaunchpad({ isSuperUser = false }: UserLaunchpadProps) {
                 <div className="h-full">
                     <PlexSetupGuides 
                         trigger={
-                            <button type="button" className="w-full h-full text-left flex flex-col justify-between p-3 sm:p-3.5 rounded-xl border bg-amber-500/10 border-amber-500/30 text-amber-400 hover:border-amber-500/60 hover:bg-amber-500/15 transition-all duration-200 active:scale-98 shadow-sm hover:shadow-md cursor-pointer group">
+                            <button type="button" className="w-full h-full text-left flex flex-col justify-between p-3 sm:p-3.5 rounded-xl border bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400 hover:border-amber-500/60 hover:bg-amber-500/15 transition-all duration-200 active:scale-98 shadow-sm hover:shadow-md cursor-pointer group">
                                 <div className="flex items-center justify-between gap-1.5 mb-2 w-full">
                                     <div className="p-2 rounded-lg bg-background/50 border border-border/40 shadow-xs">
-                                        <Tv2 className="h-5 w-5 text-amber-400" />
+                                        <Tv2 className="h-5 w-5 text-amber-700 dark:text-amber-400" />
                                     </div>
-                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border tracking-wide uppercase bg-amber-500/15 text-amber-300 border-amber-500/30">
+                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border tracking-wide uppercase bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30">
                                         Guides
                                     </span>
                                 </div>
                                 <div className="space-y-0.5 w-full">
-                                    <h3 className="text-xs sm:text-sm font-bold text-foreground group-hover:text-amber-300 transition-colors flex items-center justify-between">
+                                    <h3 className="text-xs sm:text-sm font-bold text-foreground group-hover:text-amber-800 dark:group-hover:text-amber-300 transition-colors flex items-center justify-between">
                                         <span>Plex Setup</span>
                                         <ArrowRight className="h-3.5 w-3.5 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all shrink-0" />
                                     </h3>
@@ -227,17 +227,17 @@ export function UserLaunchpad({ isSuperUser = false }: UserLaunchpadProps) {
 
                 {/* 8. Support */}
                 <Link href="/tickets" className="block group h-full">
-                    <div className="h-full flex flex-col justify-between p-3 sm:p-3.5 rounded-xl border bg-sky-500/10 border-sky-500/30 text-sky-400 hover:border-sky-500/60 hover:bg-sky-500/15 transition-all duration-200 active:scale-98 shadow-sm hover:shadow-md">
+                    <div className="h-full flex flex-col justify-between p-3 sm:p-3.5 rounded-xl border bg-sky-500/10 border-sky-500/30 text-sky-700 dark:text-sky-400 hover:border-sky-500/60 hover:bg-sky-500/15 transition-all duration-200 active:scale-98 shadow-sm hover:shadow-md">
                         <div className="flex items-center justify-between gap-1.5 mb-2">
                             <div className="p-2 rounded-lg bg-background/50 border border-border/40 shadow-xs">
-                                <LifeBuoy className="h-5 w-5 text-sky-400" />
+                                <LifeBuoy className="h-5 w-5 text-sky-700 dark:text-sky-400" />
                             </div>
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border tracking-wide uppercase bg-sky-500/15 text-sky-300 border-sky-500/30">
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border tracking-wide uppercase bg-sky-500/15 text-sky-800 dark:text-sky-300 border-sky-500/30">
                                 Help
                             </span>
                         </div>
                         <div className="space-y-0.5">
-                            <h3 className="text-xs sm:text-sm font-bold text-foreground group-hover:text-sky-300 transition-colors flex items-center justify-between">
+                            <h3 className="text-xs sm:text-sm font-bold text-foreground group-hover:text-sky-800 dark:group-hover:text-sky-300 transition-colors flex items-center justify-between">
                                 <span>Support</span>
                                 <ArrowRight className="h-3.5 w-3.5 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all shrink-0" />
                             </h3>

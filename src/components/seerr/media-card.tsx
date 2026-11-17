@@ -33,7 +33,7 @@ export function MediaCard({ item, availability, onSelect, onRequest, compact = f
     const renderAvailabilityBadge = () => {
         if (inLibrary) {
             return (
-                <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-[10px] font-bold backdrop-blur-md shadow-sm">
+                <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/40 text-[10px] font-bold backdrop-blur-md shadow-sm">
                     <CheckCircle2 className="h-3 w-3 shrink-0" />
                     <span>In Library</span>
                 </div>
@@ -41,14 +41,14 @@ export function MediaCard({ item, availability, onSelect, onRequest, compact = f
         }
         if (availability?.inMainLibraryOnly) {
             return (
-                <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-bold backdrop-blur-md shadow-sm">
+                <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/40 text-[10px] font-bold backdrop-blur-md shadow-sm">
                     <span>Main Library</span>
                 </div>
             );
         }
         if (availability?.isMonitored1080p && availability?.isMonitored4k) {
             return (
-                <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 text-[10px] font-bold backdrop-blur-md shadow-sm">
+                <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-800 dark:text-cyan-300 border border-cyan-500/40 text-[10px] font-bold backdrop-blur-md shadow-sm">
                     <Clock className="h-3 w-3 shrink-0" />
                     <span>Monitored (Dual)</span>
                 </div>
@@ -56,7 +56,7 @@ export function MediaCard({ item, availability, onSelect, onRequest, compact = f
         }
         if (availability?.isMonitored4k && !availability?.isMonitored1080p) {
             return (
-                <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/40 text-[10px] font-bold backdrop-blur-md shadow-sm">
+                <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-800 dark:text-sky-300 border border-sky-500/40 text-[10px] font-bold backdrop-blur-md shadow-sm">
                     <Clock className="h-3 w-3 shrink-0" />
                     <span>4K Monitored</span>
                 </div>
@@ -64,7 +64,7 @@ export function MediaCard({ item, availability, onSelect, onRequest, compact = f
         }
         if (availability?.isMonitored1080p && !availability?.isMonitored4k) {
             return (
-                <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/40 text-[10px] font-bold backdrop-blur-md shadow-sm">
+                <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-800 dark:text-blue-300 border border-blue-500/40 text-[10px] font-bold backdrop-blur-md shadow-sm">
                     <Clock className="h-3 w-3 shrink-0" />
                     <span>1080p Monitored</span>
                 </div>
@@ -74,14 +74,14 @@ export function MediaCard({ item, availability, onSelect, onRequest, compact = f
             if (requestStatus === "PROCESSING" || requestStatus === "DOWNLOADING") {
                 if (downloadProgress && downloadProgress > 0) {
                     return (
-                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 text-[10px] font-bold backdrop-blur-md shadow-sm animate-pulse">
+                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-800 dark:text-cyan-300 border border-cyan-500/40 text-[10px] font-bold backdrop-blur-md shadow-sm animate-pulse">
                             <Download className="h-3 w-3 shrink-0" />
                             <span>Downloading {Math.round(downloadProgress)}%</span>
                         </div>
                     );
                 }
                 return (
-                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-bold backdrop-blur-md shadow-sm">
+                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/40 text-[10px] font-bold backdrop-blur-md shadow-sm">
                         <Search className="h-3 w-3 shrink-0" />
                         <span>Missing (Searching)</span>
                     </div>
@@ -89,7 +89,7 @@ export function MediaCard({ item, availability, onSelect, onRequest, compact = f
             }
             if (requestStatus === "APPROVED") {
                 return (
-                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/40 text-[10px] font-bold backdrop-blur-md shadow-sm">
+                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-800 dark:text-blue-300 border border-blue-500/40 text-[10px] font-bold backdrop-blur-md shadow-sm">
                         <Clock className="h-3 w-3 shrink-0" />
                         <span>Approved</span>
                     </div>
@@ -97,7 +97,7 @@ export function MediaCard({ item, availability, onSelect, onRequest, compact = f
             }
             if (requestStatus === "PENDING") {
                 return (
-                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-bold backdrop-blur-md shadow-sm">
+                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/40 text-[10px] font-bold backdrop-blur-md shadow-sm">
                         <Clock className="h-3 w-3 shrink-0" />
                         <span>Requested</span>
                     </div>
@@ -105,7 +105,7 @@ export function MediaCard({ item, availability, onSelect, onRequest, compact = f
             }
             if (requestStatus === "FAILED" || requestStatus === "DECLINED") {
                 return (
-                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 text-[10px] font-bold backdrop-blur-md shadow-sm">
+                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-800 dark:text-rose-300 border border-rose-500/40 text-[10px] font-bold backdrop-blur-md shadow-sm">
                         <AlertCircle className="h-3 w-3 shrink-0" />
                         <span>{requestStatus === "DECLINED" ? "Declined" : "Failed"}</span>
                     </div>
@@ -118,10 +118,10 @@ export function MediaCard({ item, availability, onSelect, onRequest, compact = f
     return (
         <div 
             onClick={() => onSelect(item)}
-            className="group relative cursor-pointer flex flex-col rounded-xl overflow-hidden bg-[#14141c] border border-border/40 hover:border-primary/60 transition-all duration-300 hover:shadow-xl hover:shadow-primary/10 hover:-translate-y-1 select-none"
+            className="group relative cursor-pointer flex flex-col rounded-xl overflow-hidden bg-card dark:bg-[#14141c] border border-border/40 hover:border-primary/60 transition-all duration-300 hover:shadow-xl hover:shadow-primary/10 hover:-translate-y-1 select-none"
         >
             {/* 2:3 Vertical Poster Container */}
-            <div className="relative aspect-[2/3] w-full bg-[#101018] overflow-hidden">
+            <div className="relative aspect-[2/3] w-full bg-card dark:bg-[#101018] overflow-hidden">
                 {item.posterPath && !imageError ? (
                     <img
                         src={item.posterPath}
@@ -151,8 +151,8 @@ export function MediaCard({ item, availability, onSelect, onRequest, compact = f
                         variant="outline" 
                         className={`text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded-md backdrop-blur-md border shadow-sm ${
                             isTv 
-                                ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40" 
-                                : "bg-blue-500/20 text-blue-300 border-blue-500/40"
+                                ? "bg-cyan-500/20 text-cyan-800 dark:text-cyan-300 border-cyan-500/40" 
+                                : "bg-blue-500/20 text-blue-800 dark:text-blue-300 border-blue-500/40"
                         }`}
                     >
                         {isTv ? "TV" : "Movie"}
@@ -160,13 +160,13 @@ export function MediaCard({ item, availability, onSelect, onRequest, compact = f
 
                     <div className="flex items-center gap-1">
                         {has4k && (
-                            <Badge variant="outline" className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-sky-500/25 text-sky-300 border-sky-500/40 backdrop-blur-md">
+                            <Badge variant="outline" className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-sky-500/25 text-sky-800 dark:text-sky-300 border-sky-500/40 backdrop-blur-md">
                                 4K
                             </Badge>
                         )}
                         {rating && Number(rating) > 0 && (
-                            <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-md border border-amber-500/30 text-amber-300 text-[10px] font-bold shadow-sm">
-                                <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-400" />
+                            <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-muted/60 dark:bg-black/60 backdrop-blur-md border border-amber-500/30 text-amber-800 dark:text-amber-300 text-[10px] font-bold shadow-sm">
+                                <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-700 dark:text-amber-400" />
                                 <span>{rating}</span>
                             </div>
                         )}
@@ -179,7 +179,7 @@ export function MediaCard({ item, availability, onSelect, onRequest, compact = f
                 </div>
 
                 {/* Dark Gradient Overlay for Typography */}
-                <div className="absolute inset-0 bg-gradient-to-t from-[#14141c] via-[#14141c]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                <div className="absolute inset-0 bg-gradient-to-t from-muted/60 dark:from-[#14141c] via-card dark:via-[#14141c]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
 
                 {/* Quick Action Overlay on Hover */}
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-4 bg-black/60 backdrop-blur-xs opacity-0 group-hover:opacity-100 transition-all duration-200">
@@ -198,7 +198,7 @@ export function MediaCard({ item, availability, onSelect, onRequest, compact = f
                         <Button 
                             size="sm" 
                             variant="secondary"
-                            className="w-full h-8 text-xs font-semibold rounded-lg bg-white/10 hover:bg-white/20 text-white border border-white/20 shadow-md transition-all active:scale-95 flex items-center justify-center gap-1.5"
+                            className="w-full h-8 text-xs font-semibold rounded-lg bg-muted/50 dark:bg-white/10 hover:bg-white/20 text-foreground dark:text-white border border-border/70 dark:border-white/20 shadow-md transition-all active:scale-95 flex items-center justify-center gap-1.5"
                             onClick={(e) => {
                                 e.stopPropagation();
                                 onRequest(item);
@@ -212,7 +212,7 @@ export function MediaCard({ item, availability, onSelect, onRequest, compact = f
             </div>
 
             {/* Bottom Meta Info */}
-            <div className="p-3 flex-1 flex flex-col justify-between space-y-1 bg-[#14141c]">
+            <div className="p-3 flex-1 flex flex-col justify-between space-y-1 bg-card dark:bg-[#14141c]">
                 <h3 className="text-xs sm:text-sm font-bold text-foreground line-clamp-1 group-hover:text-primary transition-colors">
                     {item.title}
                 </h3>

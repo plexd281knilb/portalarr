@@ -119,9 +119,9 @@ export function MediaServerSetupGuideModal({
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
-            <DialogContent className="w-[95vw] sm:max-w-2xl max-h-[90vh] flex flex-col bg-[#121218]/95 border-border/60 backdrop-blur-xl shadow-2xl p-0 overflow-hidden">
+            <DialogContent className="w-[95vw] sm:max-w-2xl max-h-[90vh] flex flex-col bg-popover/95 dark:bg-[#121218]/95 border-border/60 backdrop-blur-xl shadow-2xl p-0 overflow-hidden">
                 {/* Header */}
-                <DialogHeader className="p-5 pb-4 border-b border-border/40 bg-white/[0.01]">
+                <DialogHeader className="p-5 pb-4 border-b border-border/40 bg-muted/50 dark:bg-white/[0.01]">
                     <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3">
                             <div className={`h-10 w-10 rounded-xl flex items-center justify-center border shrink-0 ${themeColor.iconBg}`}>
@@ -147,7 +147,7 @@ export function MediaServerSetupGuideModal({
                 {/* Body Content */}
                 <div className="flex-1 overflow-y-auto p-5 space-y-4">
                     {/* Step 1: Connect to Server Address */}
-                    <div className="p-4 rounded-xl bg-white/[0.02] border border-border/40 space-y-2.5">
+                    <div className="p-4 rounded-xl bg-muted/50 dark:bg-white/[0.02] border border-border/40 space-y-2.5">
                         <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2">
                                 <span className={`text-xs font-bold uppercase tracking-wider ${themeColor.accentText}`}>
@@ -162,7 +162,7 @@ export function MediaServerSetupGuideModal({
                             When opening your {serverType} app for the first time, enter this server address:
                         </p>
                         <div className="flex items-center gap-2">
-                            <div className="flex-1 px-3 py-2 rounded-lg bg-black/40 border border-border/50 font-mono text-xs text-foreground truncate select-all">
+                            <div className="flex-1 px-3 py-2 rounded-lg bg-muted/60 dark:bg-black/40 border border-border/50 font-mono text-xs text-foreground truncate select-all">
                                 {resolvedUrl}
                             </div>
                             <Button
@@ -174,8 +174,8 @@ export function MediaServerSetupGuideModal({
                             >
                                 {copiedUrl ? (
                                     <>
-                                        <Check className="h-3.5 w-3.5 text-emerald-400" />
-                                        <span className="text-emerald-400">Copied!</span>
+                                        <Check className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
+                                        <span className="text-emerald-700 dark:text-emerald-400">Copied!</span>
                                     </>
                                 ) : (
                                     <>
@@ -202,7 +202,7 @@ export function MediaServerSetupGuideModal({
                     </div>
 
                     {/* Step 2: Sign In with Your Username & Password */}
-                    <div className="p-4 rounded-xl bg-white/[0.02] border border-border/40 space-y-3">
+                    <div className="p-4 rounded-xl bg-muted/50 dark:bg-white/[0.02] border border-border/40 space-y-3">
                         <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2">
                                 <span className={`text-xs font-bold uppercase tracking-wider ${themeColor.accentText}`}>
@@ -211,16 +211,16 @@ export function MediaServerSetupGuideModal({
                             </div>
                             <div className="flex items-center gap-1.5">
                                 {isProvisioning ? (
-                                    <Badge variant="outline" className="text-[10px] text-sky-300 border-sky-500/30 gap-1 bg-sky-500/10">
+                                    <Badge variant="outline" className="text-[10px] text-sky-800 dark:text-sky-300 border-sky-500/30 gap-1 bg-sky-500/10">
                                         <Loader2 className="h-2.5 w-2.5 animate-spin" /> Provisioning...
                                     </Badge>
                                 ) : provisionSuccess ? (
-                                    <Badge variant="outline" className="text-[10px] text-emerald-300 border-emerald-500/40 bg-emerald-500/10 gap-1">
-                                        <CheckCircle2 className="h-3 w-3 text-emerald-400" /> Account Active on {serverType}
+                                    <Badge variant="outline" className="text-[10px] text-emerald-800 dark:text-emerald-300 border-emerald-500/40 bg-emerald-500/10 gap-1">
+                                        <CheckCircle2 className="h-3 w-3 text-emerald-700 dark:text-emerald-400" /> Account Active on {serverType}
                                     </Badge>
                                 ) : provisionSuccess === false ? (
-                                    <Badge variant="outline" className="text-[10px] text-amber-300 border-amber-500/40 bg-amber-500/10 gap-1">
-                                        <AlertCircle className="h-3 w-3 text-amber-400" /> Pending Server Sync
+                                    <Badge variant="outline" className="text-[10px] text-amber-800 dark:text-amber-300 border-amber-500/40 bg-amber-500/10 gap-1">
+                                        <AlertCircle className="h-3 w-3 text-amber-700 dark:text-amber-400" /> Pending Server Sync
                                     </Badge>
                                 ) : null}
                             </div>
@@ -230,7 +230,7 @@ export function MediaServerSetupGuideModal({
                         <div className="space-y-1.5">
                             <Label className="text-xs text-muted-foreground">Server Username</Label>
                             <div className="flex items-center gap-2">
-                                <div className="flex-1 px-3 py-2 rounded-lg bg-black/40 border border-border/50 font-mono text-xs text-foreground truncate select-all font-bold">
+                                <div className="flex-1 px-3 py-2 rounded-lg bg-muted/60 dark:bg-black/40 border border-border/50 font-mono text-xs text-foreground truncate select-all font-bold">
                                     {username || "Your Portal Username"}
                                 </div>
                                 {username && (
@@ -243,8 +243,8 @@ export function MediaServerSetupGuideModal({
                                     >
                                         {copiedUser ? (
                                             <>
-                                                <Check className="h-3.5 w-3.5 text-emerald-400" />
-                                                <span className="text-emerald-400">Copied!</span>
+                                                <Check className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
+                                                <span className="text-emerald-700 dark:text-emerald-400">Copied!</span>
                                             </>
                                         ) : (
                                             <>
@@ -258,9 +258,9 @@ export function MediaServerSetupGuideModal({
                         </div>
 
                         {/* Password Guidance Callout */}
-                        <div className="p-3 rounded-lg bg-blue-950/20 border border-blue-500/30 space-y-1.5 text-xs">
-                            <div className="flex items-center gap-1.5 font-bold text-blue-300">
-                                <ShieldCheck className="h-3.5 w-3.5 text-blue-400" />
+                        <div className="p-3 rounded-lg bg-blue-500/10 dark:bg-blue-950/20 border border-blue-500/30 space-y-1.5 text-xs">
+                            <div className="flex items-center gap-1.5 font-bold text-blue-800 dark:text-blue-300">
+                                <ShieldCheck className="h-3.5 w-3.5 text-blue-700 dark:text-blue-400" />
                                 <span>Initial Sign-In Password: (None / Blank)</span>
                             </div>
                             <p className="text-[11px] text-muted-foreground leading-relaxed">
@@ -269,23 +269,23 @@ export function MediaServerSetupGuideModal({
                         </div>
 
                         {/* Quick Connect TV & Device Pairing */}
-                        <div className="p-3.5 rounded-xl bg-amber-950/20 border border-amber-500/30 space-y-2.5">
+                        <div className="p-3.5 rounded-xl bg-amber-500/10 dark:bg-amber-950/20 border border-amber-500/30 space-y-2.5">
                             <div className="flex items-center justify-between">
-                                <Label className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
-                                    <Sparkles className="h-3.5 w-3.5 text-amber-400" />
+                                <Label className="text-xs font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                                    <Sparkles className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
                                     <span>Quick Connect (TV &amp; Player Apps)</span>
                                 </Label>
-                                <Badge variant="outline" className="text-[10px] text-amber-300 border-amber-500/40 bg-amber-500/10 font-medium">
+                                <Badge variant="outline" className="text-[10px] text-amber-800 dark:text-amber-300 border-amber-500/40 bg-amber-500/10 font-medium">
                                     No Remote Typing
                                 </Badge>
                             </div>
                             <div className="text-[11px] text-muted-foreground leading-relaxed space-y-1">
                                 <p>
-                                    Opening <strong className="text-amber-300">{serverType}</strong> on an Apple TV, Roku, Fire TV, Android TV, or Smart TV? Skip typing passwords with the TV remote:
+                                    Opening <strong className="text-amber-800 dark:text-amber-300">{serverType}</strong> on an Apple TV, Roku, Fire TV, Android TV, or Smart TV? Skip typing passwords with the TV remote:
                                 </p>
                                 <ol className="list-decimal list-inside space-y-0.5 text-[10.5px] text-muted-foreground/90 pl-0.5">
                                     <li>Open {serverType} on your TV and select <strong className="text-foreground">"Quick Connect"</strong> on the sign-in screen.</li>
-                                    <li>Your TV will display a temporary <strong className="text-amber-300 font-mono">6-character pairing code</strong> (e.g. <code>834912</code>).</li>
+                                    <li>Your TV will display a temporary <strong className="text-amber-800 dark:text-amber-300 font-mono">6-character pairing code</strong> (e.g. <code>834912</code>).</li>
                                     <li>Type that TV code below and click <strong className="text-foreground">Authorize TV</strong>. Your TV logs in immediately!</li>
                                 </ol>
                             </div>
@@ -299,7 +299,7 @@ export function MediaServerSetupGuideModal({
                                         setQuickConnectSuccess(null);
                                     }}
                                     maxLength={12}
-                                    className="h-8 text-xs font-mono tracking-widest uppercase flex-1 bg-black/40 border-amber-500/30"
+                                    className="h-8 text-xs font-mono tracking-widest uppercase flex-1 bg-muted/60 dark:bg-black/40 border-amber-500/30"
                                 />
                                 <Button
                                     type="button"
@@ -339,14 +339,14 @@ export function MediaServerSetupGuideModal({
                                 </Button>
                             </div>
                             {quickConnectSuccess && (
-                                <div className="text-[11px] text-emerald-400 flex items-center gap-1 font-medium">
-                                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
+                                <div className="text-[11px] text-emerald-700 dark:text-emerald-400 flex items-center gap-1 font-medium">
+                                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-700 dark:text-emerald-400" />
                                     <span>{quickConnectSuccess}</span>
                                 </div>
                             )}
                             {quickConnectErr && (
-                                <div className="text-[11px] text-red-400 flex items-center gap-1">
-                                    <XCircle className="h-3.5 w-3.5 shrink-0 text-red-400" />
+                                <div className="text-[11px] text-red-700 dark:text-red-400 flex items-center gap-1">
+                                    <XCircle className="h-3.5 w-3.5 shrink-0 text-red-700 dark:text-red-400" />
                                     <span>{quickConnectErr}</span>
                                 </div>
                             )}
@@ -357,7 +357,7 @@ export function MediaServerSetupGuideModal({
                                     variant="ghost"
                                     size="sm"
                                     asChild
-                                    className="h-6 px-1.5 text-[11px] text-amber-300 hover:text-amber-200 gap-1"
+                                    className="h-6 px-1.5 text-[11px] text-amber-800 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-200 gap-1"
                                 >
                                     <a href={`${resolvedUrl}/web/index.html#!/quickconnect.html`} target="_blank" rel="noopener noreferrer">
                                         <span>Open Web Quick Connect</span>
@@ -377,14 +377,14 @@ export function MediaServerSetupGuideModal({
                                     onClick={() => setShowPasswordSetup(true)}
                                     className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground gap-1.5 cursor-pointer"
                                 >
-                                    <Key className="h-3.5 w-3.5 text-amber-400" />
+                                    <Key className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
                                     <span>Set a dedicated streaming password (Optional)</span>
                                 </Button>
                             ) : (
-                                <div className="p-3 rounded-lg bg-black/40 border border-border/50 space-y-2.5">
+                                <div className="p-3 rounded-lg bg-muted/60 dark:bg-black/40 border border-border/50 space-y-2.5">
                                     <div className="flex items-center justify-between">
                                         <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                                            <Key className="h-3.5 w-3.5 text-amber-400" />
+                                            <Key className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
                                             <span>Set {serverType} Streaming Password (Optional)</span>
                                         </Label>
                                         <Button
@@ -442,13 +442,13 @@ export function MediaServerSetupGuideModal({
                                         </Button>
                                     </div>
                                     {passwordSuccess && (
-                                        <div className="text-[11px] text-emerald-400 flex items-center gap-1">
+                                        <div className="text-[11px] text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
                                             <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
                                             <span>Streaming password saved! You can now use this password in your {serverType} apps.</span>
                                         </div>
                                     )}
                                     {passwordErr && (
-                                        <div className="text-[11px] text-red-400 flex items-center gap-1">
+                                        <div className="text-[11px] text-red-700 dark:text-red-400 flex items-center gap-1">
                                             <XCircle className="h-3.5 w-3.5 shrink-0" />
                                             <span>{passwordErr}</span>
                                         </div>
@@ -459,7 +459,7 @@ export function MediaServerSetupGuideModal({
                     </div>
 
                     {/* Step 3: Recommended Client Apps for Every Device */}
-                    <div className="p-4 rounded-xl bg-white/[0.02] border border-border/40 space-y-3">
+                    <div className="p-4 rounded-xl bg-muted/50 dark:bg-white/[0.02] border border-border/40 space-y-3">
                         <div className="flex items-center justify-between gap-2">
                             <span className={`text-xs font-bold uppercase tracking-wider ${themeColor.accentText}`}>
                                 Step 3: Recommended Apps for Every Screen
@@ -471,9 +471,9 @@ export function MediaServerSetupGuideModal({
                         
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                             {/* Apple TV / iOS */}
-                            <div className="p-3 rounded-lg bg-black/20 border border-border/30 space-y-1">
+                            <div className="p-3 rounded-lg bg-muted/40 dark:bg-black/20 border border-border/30 space-y-1">
                                 <div className="flex items-center gap-2 text-xs font-bold text-foreground">
-                                    <Tv className="h-3.5 w-3.5 text-cyan-400" />
+                                    <Tv className="h-3.5 w-3.5 text-cyan-700 dark:text-cyan-400" />
                                     <span>Apple TV &amp; iOS</span>
                                 </div>
                                 <p className="text-[11px] text-muted-foreground leading-relaxed">
@@ -490,9 +490,9 @@ export function MediaServerSetupGuideModal({
                             </div>
 
                             {/* Roku */}
-                            <div className="p-3 rounded-lg bg-black/20 border border-border/30 space-y-1">
+                            <div className="p-3 rounded-lg bg-muted/40 dark:bg-black/20 border border-border/30 space-y-1">
                                 <div className="flex items-center gap-2 text-xs font-bold text-foreground">
-                                    <Monitor className="h-3.5 w-3.5 text-sky-400" />
+                                    <Monitor className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400" />
                                     <span>Roku Streaming Devices</span>
                                 </div>
                                 <p className="text-[11px] text-muted-foreground leading-relaxed">
@@ -501,9 +501,9 @@ export function MediaServerSetupGuideModal({
                             </div>
 
                             {/* Fire TV & Android TV */}
-                            <div className="p-3 rounded-lg bg-black/20 border border-border/30 space-y-1">
+                            <div className="p-3 rounded-lg bg-muted/40 dark:bg-black/20 border border-border/30 space-y-1">
                                 <div className="flex items-center gap-2 text-xs font-bold text-foreground">
-                                    <Smartphone className="h-3.5 w-3.5 text-emerald-400" />
+                                    <Smartphone className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
                                     <span>Fire TV &amp; Android TV / Shield</span>
                                 </div>
                                 <p className="text-[11px] text-muted-foreground leading-relaxed">
@@ -512,9 +512,9 @@ export function MediaServerSetupGuideModal({
                             </div>
 
                             {/* Web Browser */}
-                            <div className="p-3 rounded-lg bg-black/20 border border-border/30 space-y-1">
+                            <div className="p-3 rounded-lg bg-muted/40 dark:bg-black/20 border border-border/30 space-y-1">
                                 <div className="flex items-center gap-2 text-xs font-bold text-foreground">
-                                    <Globe className="h-3.5 w-3.5 text-amber-400" />
+                                    <Globe className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
                                     <span>Web Browser / PC / Mac</span>
                                 </div>
                                 <p className="text-[11px] text-muted-foreground leading-relaxed">
@@ -527,8 +527,8 @@ export function MediaServerSetupGuideModal({
                     {/* Step 4: Direct Play & Zero-Buffering Optimization */}
                     <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/25 space-y-2">
                         <div className="flex items-center gap-2">
-                            <Sparkles className="h-4 w-4 text-amber-400 shrink-0" />
-                            <span className="text-xs font-bold text-amber-300 uppercase tracking-wider">
+                            <Sparkles className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0" />
+                            <span className="text-xs font-bold text-amber-800 dark:text-amber-300 uppercase tracking-wider">
                                 Step 4: Direct Play &amp; Zero-Buffering Optimization
                             </span>
                         </div>
@@ -547,7 +547,7 @@ export function MediaServerSetupGuideModal({
                 </div>
 
                 {/* Footer */}
-                <DialogFooter className="p-4 border-t border-border/40 bg-white/[0.01] flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+                <DialogFooter className="p-4 border-t border-border/40 bg-muted/50 dark:bg-white/[0.01] flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
                     <p className="text-[11px] text-muted-foreground">
                         Need help? Open a <a href="/tickets" className="text-primary hover:underline">Support Ticket</a> anytime.
                     </p>

@@ -162,9 +162,9 @@ export function SeriesDetailModal({
     return (
         <>
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="w-[95vw] sm:w-[92vw] md:w-[90vw] max-w-4xl lg:max-w-5xl max-h-[90vh] sm:max-h-[92vh] bg-[#0c0c12] border border-border/60 shadow-2xl p-0 overflow-y-auto overflow-x-hidden sm:rounded-xl flex flex-col min-w-0 scrollbar-thin text-foreground">
+            <DialogContent className="w-[95vw] sm:w-[92vw] md:w-[90vw] max-w-4xl lg:max-w-5xl max-h-[90vh] sm:max-h-[92vh] bg-popover dark:bg-[#0c0c12] border border-border/60 shadow-2xl p-0 overflow-y-auto overflow-x-hidden sm:rounded-xl flex flex-col min-w-0 scrollbar-thin text-foreground">
                 {/* Header Banner */}
-                <div className="relative h-28 sm:h-36 w-full bg-gradient-to-r from-slate-900/90 via-background/95 to-background flex items-end p-4 sm:p-6 overflow-hidden border-b border-border/40 shrink-0">
+                <div className="relative h-28 sm:h-36 w-full bg-gradient-to-r from-muted/60 dark:from-slate-900/90 via-background/95 to-background flex items-end p-4 sm:p-6 overflow-hidden border-b border-border/40 shrink-0">
                     <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-sky-500/15 via-transparent to-transparent" />
                 </div>
 
@@ -173,7 +173,7 @@ export function SeriesDetailModal({
                     <div className="flex flex-col sm:flex-row items-center sm:items-end justify-between gap-4">
                         <div className="flex flex-col sm:flex-row items-center sm:items-end gap-4 text-center sm:text-left">
                             {/* Series Cover Artwork */}
-                            <div className="w-24 sm:w-28 aspect-[2/3] rounded-lg overflow-hidden shadow-2xl border-2 border-white/20 bg-muted/80 shrink-0 relative">
+                            <div className="w-24 sm:w-28 aspect-[2/3] rounded-lg overflow-hidden shadow-2xl border-2 border-border/70 dark:border-white/20 bg-muted/80 shrink-0 relative">
                                 {series?.coverUrl ? (
                                     <img
                                         src={series.coverUrl}
@@ -181,7 +181,7 @@ export function SeriesDetailModal({
                                         className="w-full h-full object-cover"
                                     />
                                 ) : (
-                                    <div className="w-full h-full flex flex-col items-center justify-center p-2 text-center bg-slate-900/90 text-sky-400/80">
+                                    <div className="w-full h-full flex flex-col items-center justify-center p-2 text-center bg-card/95 dark:bg-slate-900/90 text-sky-700/80 dark:text-sky-400/80">
                                         <Layers className="h-8 w-8 opacity-60" />
                                         <span className="text-[10px] mt-1 font-semibold">{series?.title || seriesTitle}</span>
                                     </div>
@@ -236,7 +236,7 @@ export function SeriesDetailModal({
                             )}
 
                             <div className="flex items-center gap-2 p-2 rounded-xl bg-background/60 border border-border/50 text-xs shadow-sm">
-                                <Radio className={`h-3.5 w-3.5 ${monitored ? "text-emerald-400 animate-pulse" : "text-muted-foreground"}`} />
+                                <Radio className={`h-3.5 w-3.5 ${monitored ? "text-emerald-700 dark:text-emerald-400 animate-pulse" : "text-muted-foreground"}`} />
                                 <span className="font-medium text-foreground">Monitor Series</span>
                                 <Switch
                                     checked={monitored}
@@ -252,11 +252,11 @@ export function SeriesDetailModal({
                             Completion: <strong className="text-foreground">{ownedCount} of {totalCount}</strong> volumes owned
                         </span>
                         <div className="flex items-center gap-2">
-                            <Badge variant="secondary" className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 text-[10px]">
+                            <Badge variant="secondary" className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 text-[10px]">
                                 {ownedCount} Owned
                             </Badge>
                             {missingCount > 0 && (
-                                <Badge variant="secondary" className="bg-amber-500/15 text-amber-400 border-amber-500/30 text-[10px]">
+                                <Badge variant="secondary" className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30 text-[10px]">
                                     {missingCount} Missing
                                 </Badge>
                             )}
@@ -265,13 +265,13 @@ export function SeriesDetailModal({
 
                     {/* Status Messages */}
                     {batchMessage && (
-                        <div className="flex items-center gap-2 p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-medium">
+                        <div className="flex items-center gap-2 p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400 text-xs font-medium">
                             <CheckCircle2 className="h-4 w-4 shrink-0" />
                             <span>{batchMessage}</span>
                         </div>
                     )}
                     {batchError && (
-                        <div className="flex items-center gap-2 p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-400 text-xs font-medium">
+                        <div className="flex items-center gap-2 p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-700 dark:text-rose-400 text-xs font-medium">
                             <AlertCircle className="h-4 w-4 shrink-0" />
                             <span>{batchError}</span>
                         </div>
@@ -329,22 +329,22 @@ export function SeriesDetailModal({
                                     {/* Status Badge */}
                                     <div className="shrink-0 flex items-center gap-2">
                                         {vol.status === "AVAILABLE" ? (
-                                            <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 text-[10px] font-bold gap-1">
+                                            <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 text-[10px] font-bold gap-1">
                                                 <CheckCircle2 className="h-3 w-3" />
                                                 <span>In Library</span>
                                             </Badge>
                                         ) : vol.status === "DOWNLOADING" ? (
-                                            <Badge className="bg-cyan-500/15 text-cyan-300 border-cyan-500/30 text-[10px] font-bold gap-1 animate-pulse">
+                                            <Badge className="bg-cyan-500/15 text-cyan-800 dark:text-cyan-300 border-cyan-500/30 text-[10px] font-bold gap-1 animate-pulse">
                                                 <Download className="h-3 w-3" />
                                                 <span>Downloading</span>
                                             </Badge>
                                         ) : (vol.status === "SEARCHING" || vol.status === "PROCESSING") ? (
-                                            <Badge className="bg-amber-500/15 text-amber-300 border-amber-500/30 text-[10px] font-bold gap-1">
+                                            <Badge className="bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30 text-[10px] font-bold gap-1">
                                                 <Search className="h-3 w-3" />
                                                 <span>Missing (Searching)</span>
                                             </Badge>
                                         ) : vol.status === "REQUESTED" ? (
-                                            <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30 text-[10px] font-bold gap-1">
+                                            <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30 text-[10px] font-bold gap-1">
                                                 <Clock className="h-3 w-3" />
                                                 <span>Requested</span>
                                             </Badge>

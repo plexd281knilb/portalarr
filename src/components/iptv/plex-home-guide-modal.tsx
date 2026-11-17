@@ -65,10 +65,10 @@ export function PlexHomeGuideModal({ open, onOpenChange, isAdminView }: PlexHome
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-2xl bg-slate-950/95 border-amber-500/30 text-foreground backdrop-blur-xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-w-2xl bg-popover dark:bg-slate-950/95 border-amber-500/30 text-foreground backdrop-blur-xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader className="space-y-2">
                     <div className="flex items-center gap-2 flex-wrap">
-                        <Badge className="bg-amber-500/15 text-amber-300 border-amber-500/30 text-[10px] uppercase font-bold tracking-wider">
+                        <Badge className="bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30 text-[10px] uppercase font-bold tracking-wider">
                             Plex Home Member Onboarding
                         </Badge>
                         <Badge variant="outline" className="text-[10px] text-muted-foreground border-border/40">
@@ -76,7 +76,7 @@ export function PlexHomeGuideModal({ open, onOpenChange, isAdminView }: PlexHome
                         </Badge>
                     </div>
                     <DialogTitle className="text-xl font-black text-foreground flex items-center gap-2.5">
-                        <div className="h-8 w-8 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-300">
+                        <div className="h-8 w-8 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-800 dark:text-amber-300">
                             <Tv className="h-4.5 w-4.5" />
                         </div>
                         Plex Home Setup &amp; Login Guide
@@ -89,7 +89,7 @@ export function PlexHomeGuideModal({ open, onOpenChange, isAdminView }: PlexHome
                 <div className="space-y-3.5 my-2">
                     {/* Step 1: Accept Email */}
                     <div className="p-4 rounded-xl border border-amber-500/20 bg-amber-500/5 space-y-2">
-                        <div className="flex items-center gap-2.5 font-bold text-sm text-amber-300">
+                        <div className="flex items-center gap-2.5 font-bold text-sm text-amber-800 dark:text-amber-300">
                             <div className="h-7 w-7 rounded-lg bg-amber-500/20 flex items-center justify-center shrink-0">
                                 <Mail className="h-4 w-4" />
                             </div>
@@ -101,7 +101,7 @@ export function PlexHomeGuideModal({ open, onOpenChange, isAdminView }: PlexHome
                                 href="https://app.plex.tv/desktop/#!/settings/account"
                                 target="_blank"
                                 rel="noreferrer"
-                                className="text-amber-300 underline font-semibold inline-flex items-center gap-1 hover:text-amber-200"
+                                className="text-amber-800 dark:text-amber-300 underline font-semibold inline-flex items-center gap-1 hover:text-amber-900 dark:hover:text-amber-200"
                             >
                                 plex.tv/desktop <ExternalLink className="h-3 w-3" />
                             </a>{" "}
@@ -111,7 +111,7 @@ export function PlexHomeGuideModal({ open, onOpenChange, isAdminView }: PlexHome
 
                     {/* Step 2: Fast User Switching */}
                     <div className="p-4 rounded-xl border border-sky-500/20 bg-sky-500/5 space-y-2">
-                        <div className="flex items-center gap-2.5 font-bold text-sm text-sky-300">
+                        <div className="flex items-center gap-2.5 font-bold text-sm text-sky-800 dark:text-sky-300">
                             <div className="h-7 w-7 rounded-lg bg-sky-500/20 flex items-center justify-center shrink-0">
                                 <Users className="h-4 w-4" />
                             </div>
@@ -124,7 +124,7 @@ export function PlexHomeGuideModal({ open, onOpenChange, isAdminView }: PlexHome
 
                     {/* Step 3: PIN Protection */}
                     <div className="p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 space-y-2">
-                        <div className="flex items-center gap-2.5 font-bold text-sm text-emerald-300">
+                        <div className="flex items-center gap-2.5 font-bold text-sm text-emerald-800 dark:text-emerald-300">
                             <div className="h-7 w-7 rounded-lg bg-emerald-500/20 flex items-center justify-center shrink-0">
                                 <Lock className="h-4 w-4" />
                             </div>
@@ -137,7 +137,7 @@ export function PlexHomeGuideModal({ open, onOpenChange, isAdminView }: PlexHome
 
                     {/* Step 4: Pin Live TV */}
                     <div className="p-4 rounded-xl border border-sky-500/20 bg-sky-500/5 space-y-2">
-                        <div className="flex items-center gap-2.5 font-bold text-sm text-sky-300">
+                        <div className="flex items-center gap-2.5 font-bold text-sm text-sky-800 dark:text-sky-300">
                             <div className="h-7 w-7 rounded-lg bg-sky-500/20 flex items-center justify-center shrink-0">
                                 <Bookmark className="h-4 w-4" />
                             </div>
@@ -150,7 +150,7 @@ export function PlexHomeGuideModal({ open, onOpenChange, isAdminView }: PlexHome
 
                     {/* Step 5: Browse & DVR */}
                     <div className="p-4 rounded-xl border border-teal-500/20 bg-teal-500/5 space-y-2">
-                        <div className="flex items-center gap-2.5 font-bold text-sm text-teal-300">
+                        <div className="flex items-center gap-2.5 font-bold text-sm text-teal-800 dark:text-teal-300">
                             <div className="h-7 w-7 rounded-lg bg-teal-500/20 flex items-center justify-center shrink-0">
                                 <Sparkles className="h-4 w-4" />
                             </div>
@@ -171,11 +171,11 @@ export function PlexHomeGuideModal({ open, onOpenChange, isAdminView }: PlexHome
                             size="sm"
                             variant="outline"
                             onClick={handleCopy}
-                            className="h-8 text-xs border-amber-500/40 text-amber-300 hover:bg-amber-500/10 font-bold gap-1.5"
+                            className="h-8 text-xs border-amber-500/40 text-amber-800 dark:text-amber-300 hover:bg-amber-500/10 font-bold gap-1.5"
                         >
                             {copied ? (
                                 <>
-                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
                                     <span>✓ Copied!</span>
                                 </>
                             ) : (

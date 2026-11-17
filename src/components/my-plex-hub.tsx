@@ -96,7 +96,7 @@ export default function MyPlexHub() {
 
     if (loading && !data) {
         return (
-            <Card className="w-full bg-[#121218]/80 border-primary/20 backdrop-blur-md shadow-sm">
+            <Card className="w-full bg-card/95 dark:bg-[#121218]/80 border-primary/20 backdrop-blur-md shadow-sm">
                 <CardContent className="py-12 flex flex-col items-center justify-center gap-3 text-muted-foreground">
                     <Loader2 className="h-7 w-7 animate-spin text-primary" />
                     <p className="text-xs font-medium">Loading My Plex Hub...</p>
@@ -123,7 +123,7 @@ export default function MyPlexHub() {
     return (
         <div className="w-full space-y-4">
             {/* Header with Tools */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#121218]/80 border border-border/50 rounded-2xl p-4 backdrop-blur-md shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-card/95 dark:bg-[#121218]/80 border border-border/50 rounded-2xl p-4 backdrop-blur-md shadow-sm">
                 <div className="space-y-0.5">
                     <div className="flex flex-wrap items-center gap-2">
                         <h2 className="text-lg sm:text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
@@ -143,7 +143,7 @@ export default function MyPlexHub() {
                                     variant="outline"
                                     size="sm"
                                     onClick={() => setServersModalOpen(true)}
-                                    className={`h-5 px-2 text-[10px] font-semibold bg-white/[0.04] hover:bg-white/[0.08] ${allOnline ? "border-border/60 text-muted-foreground" : "border-amber-500/40 text-amber-400"} hover:text-foreground gap-1.5 transition-all rounded-full cursor-pointer shadow-xs`}
+                                    className={`h-5 px-2 text-[10px] font-semibold bg-muted/50 dark:bg-white/[0.04] hover:bg-accent dark:hover:bg-white/[0.08] ${allOnline ? "border-border/60 text-muted-foreground" : "border-amber-500/40 text-amber-700 dark:text-amber-400"} hover:text-foreground gap-1.5 transition-all rounded-full cursor-pointer shadow-xs`}
                                     title="Click to view connected servers"
                                 >
                                     <span className={`w-1.5 h-1.5 rounded-full ${allOnline ? "bg-emerald-400 animate-pulse" : "bg-amber-400 animate-pulse"}`} />
@@ -178,7 +178,7 @@ export default function MyPlexHub() {
             {/* --- ACTIVE STREAMS & TRANSCODE DOCTOR --- */}
             {activeStreams.length > 0 ? (
                 <div className="space-y-3">
-                    <div className="flex items-center justify-between p-3.5 bg-gradient-to-r from-emerald-950/30 via-[#14141c] to-[#101017] border border-emerald-500/30 rounded-xl">
+                    <div className="flex items-center justify-between p-3.5 bg-gradient-to-r from-emerald-500/10 dark:from-emerald-950/30 via-card dark:via-[#14141c] to-muted/60 dark:to-[#101017] border border-emerald-500/30 rounded-xl">
                         <div className="flex items-center gap-2.5">
                             <span className="relative flex h-2.5 w-2.5">
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
@@ -187,7 +187,7 @@ export default function MyPlexHub() {
                             <span className="text-xs sm:text-sm font-semibold text-foreground">
                                 {activeStreams.length} Active Stream{activeStreams.length > 1 ? "s" : ""} in Progress
                             </span>
-                            <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                            <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">
                                 Live Now
                             </Badge>
                         </div>
@@ -195,7 +195,7 @@ export default function MyPlexHub() {
                             variant="outline"
                             size="sm"
                             onClick={() => setShowActiveStreams(!showActiveStreams)}
-                            className="text-xs h-7 gap-1.5 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 active:scale-95 transition-all"
+                            className="text-xs h-7 gap-1.5 border-emerald-500/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 active:scale-95 transition-all"
                         >
                             {showActiveStreams ? "Hide Streams" : `View Active Streams (${activeStreams.length})`}
                             <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${showActiveStreams ? "rotate-180" : ""}`} />
@@ -210,14 +210,14 @@ export default function MyPlexHub() {
                         return (
                             <Card 
                                 key={stream.uniqueStreamKey || `${stream.instanceId || stream.instanceName}_${stream.sessionKey}_${idx}`} 
-                                className="relative overflow-hidden bg-gradient-to-br from-[#14141c] via-[#101017] to-[#0d0d12] border-primary/30 backdrop-blur-md shadow-md hover:border-primary/50 transition-all"
+                                className="relative overflow-hidden bg-gradient-to-br from-muted/60 dark:from-[#14141c] via-card dark:via-[#101017] to-muted/60 dark:to-[#0d0d12] border-primary/30 backdrop-blur-md shadow-md hover:border-primary/50 transition-all"
                             >
                                 <div className="absolute top-0 left-0 h-1 bg-gradient-to-r from-primary via-emerald-400 to-cyan-400 w-full" />
                                 <CardContent className="p-4 sm:p-5">
                                     <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                                         {/* Left: Poster & Info */}
                                         <div className="flex items-start sm:items-center gap-3.5 flex-1 min-w-0">
-                                            <div className="relative w-14 h-20 sm:w-16 sm:h-24 rounded-lg overflow-hidden shrink-0 border border-white/10 shadow-md bg-muted/30 flex items-center justify-center">
+                                            <div className="relative w-14 h-20 sm:w-16 sm:h-24 rounded-lg overflow-hidden shrink-0 border border-border/70 dark:border-white/10 shadow-md bg-muted/30 flex items-center justify-center">
                                                 {stream.thumb && (
                                                     <img 
                                                         src={stream.thumb} 
@@ -233,21 +233,21 @@ export default function MyPlexHub() {
                                                 </div>
                                                 <div className="absolute bottom-1 right-1 p-1 rounded-full bg-black/70 backdrop-blur-xs z-20">
                                                     {stream.state === "playing" ? (
-                                                        <Play className="h-3 w-3 text-emerald-400 fill-emerald-400" />
+                                                        <Play className="h-3 w-3 text-emerald-700 dark:text-emerald-400 fill-emerald-400" />
                                                     ) : (
-                                                        <Pause className="h-3 w-3 text-amber-400 fill-amber-400" />
+                                                        <Pause className="h-3 w-3 text-amber-700 dark:text-amber-400 fill-amber-400" />
                                                     )}
                                                 </div>
                                             </div>
 
                                             <div className="space-y-1.5 min-w-0 flex-1">
                                                 <div className="flex flex-wrap items-center gap-1.5">
-                                                    <Badge className="text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border-emerald-500/30">
+                                                    <Badge className="text-[10px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">
                                                         <Activity className="h-3 w-3 mr-1 animate-pulse" /> LIVE NOW
                                                     </Badge>
                                                     <Badge variant="outline" className={`text-[10px] ${
-                                                        stream.serverType === "JELLYFIN" ? "bg-sky-500/10 text-sky-400 border-sky-500/30 font-semibold" :
-                                                        stream.serverType === "EMBY" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-semibold" :
+                                                        stream.serverType === "JELLYFIN" ? "bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-500/30 font-semibold" :
+                                                        stream.serverType === "EMBY" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 font-semibold" :
                                                         "text-muted-foreground"
                                                     }`}>
                                                         {stream.instanceName}
@@ -255,10 +255,10 @@ export default function MyPlexHub() {
                                                     <Badge 
                                                         variant="outline" 
                                                         className={`text-[10px] font-semibold ${
-                                                            diagnosis.badgeColor === "emerald" ? "bg-emerald-950/40 text-emerald-400 border-emerald-500/40" :
-                                                            diagnosis.badgeColor === "blue" ? "bg-blue-950/40 text-blue-400 border-blue-500/40" :
-                                                            diagnosis.badgeColor === "amber" ? "bg-amber-950/40 text-amber-400 border-amber-500/40" :
-                                                            "bg-rose-950/40 text-rose-400 border-rose-500/40"
+                                                            diagnosis.badgeColor === "emerald" ? "bg-emerald-500/10 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-500/40" :
+                                                            diagnosis.badgeColor === "blue" ? "bg-blue-500/10 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border-blue-500/40" :
+                                                            diagnosis.badgeColor === "amber" ? "bg-amber-500/10 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border-amber-500/40" :
+                                                            "bg-rose-500/10 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 border-rose-500/40"
                                                         }`}
                                                     >
                                                         {diagnosis.badgeText}
@@ -306,7 +306,7 @@ export default function MyPlexHub() {
                                             <Button 
                                                 size="sm"
                                                 variant="ghost"
-                                                className="text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 active:scale-95 transition-all gap-1.5"
+                                                className="text-xs font-semibold text-rose-700 dark:text-rose-400 hover:text-rose-800 dark:hover:text-rose-300 hover:bg-rose-500/10 active:scale-95 transition-all gap-1.5"
                                                 onClick={() => setStreamToKill(stream)}
                                             >
                                                 <XCircle className="h-3.5 w-3.5 text-rose-500" />
@@ -320,7 +320,7 @@ export default function MyPlexHub() {
                     })}
                 </div>
             ) : (
-                <div className="p-3.5 sm:p-4 rounded-xl bg-[#121218]/60 border border-border/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="p-3.5 sm:p-4 rounded-xl bg-muted/80 dark:bg-[#121218]/60 border border-border/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
                         <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0">
                             <Tv className="h-5 w-5" />
@@ -340,7 +340,7 @@ export default function MyPlexHub() {
 
             {/* --- PERSONAL STATS BAR --- */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="p-3.5 rounded-xl bg-[#121218]/80 border border-border/40 backdrop-blur-md space-y-1">
+                <div className="p-3.5 rounded-xl bg-card/95 dark:bg-[#121218]/80 border border-border/40 backdrop-blur-md space-y-1">
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
                         <Clock className="h-3.5 w-3.5 text-primary" /> Time Streamed
                     </div>
@@ -379,29 +379,29 @@ export default function MyPlexHub() {
                     </div>
                 </div>
 
-                <div className="p-3.5 rounded-xl bg-[#121218]/80 border border-border/40 backdrop-blur-md space-y-1">
+                <div className="p-3.5 rounded-xl bg-card/95 dark:bg-[#121218]/80 border border-border/40 backdrop-blur-md space-y-1">
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
-                        <Film className="h-3.5 w-3.5 text-cyan-400" /> Movies Finished
+                        <Film className="h-3.5 w-3.5 text-cyan-700 dark:text-cyan-400" /> Movies Finished
                     </div>
-                    <div className="text-xl font-bold tracking-tight text-cyan-400">
+                    <div className="text-xl font-bold tracking-tight text-cyan-700 dark:text-cyan-400">
                         {stats.moviesWatched || 0}
                     </div>
                 </div>
 
-                <div className="p-3.5 rounded-xl bg-[#121218]/80 border border-border/40 backdrop-blur-md space-y-1">
+                <div className="p-3.5 rounded-xl bg-card/95 dark:bg-[#121218]/80 border border-border/40 backdrop-blur-md space-y-1">
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
-                        <Tv className="h-3.5 w-3.5 text-amber-400" /> Episodes Watched
+                        <Tv className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" /> Episodes Watched
                     </div>
-                    <div className="text-xl font-bold tracking-tight text-amber-400 tabular-nums">
+                    <div className="text-xl font-bold tracking-tight text-amber-700 dark:text-amber-400 tabular-nums">
                         {stats.episodesWatched || 0}
                     </div>
                 </div>
 
-                <div className="p-3.5 rounded-xl bg-[#121218]/80 border border-border/40 backdrop-blur-md space-y-1">
+                <div className="p-3.5 rounded-xl bg-card/95 dark:bg-[#121218]/80 border border-border/40 backdrop-blur-md space-y-1">
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
-                        <BookOpen className="h-3.5 w-3.5 text-emerald-400" /> Books Available
+                        <BookOpen className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" /> Books Available
                     </div>
-                    <div className="text-xl font-bold tracking-tight text-emerald-400">
+                    <div className="text-xl font-bold tracking-tight text-emerald-700 dark:text-emerald-400">
                         {reading.totalBooksAvailable || 0}
                     </div>
                 </div>
@@ -420,7 +420,7 @@ export default function MyPlexHub() {
                         {watchHistory.map((item: any) => (
                             <div 
                                 key={item.id} 
-                                className="group relative rounded-xl bg-[#121218]/70 border border-border/40 overflow-hidden hover:border-primary/40 hover:shadow-md transition-all flex flex-col"
+                                className="group relative rounded-xl bg-card dark:bg-[#121218]/70 border border-border/40 overflow-hidden hover:border-primary/40 hover:shadow-md transition-all flex flex-col"
                             >
                                 <div className="relative aspect-[2/3] w-full bg-muted/20 overflow-hidden flex items-center justify-center">
                                     {item.thumb && (
@@ -441,7 +441,7 @@ export default function MyPlexHub() {
                                             {item.instanceName}
                                         </Badge>
                                     </div>
-                                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/40">
+                                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-muted/60 dark:bg-black/40">
                                         <div 
                                             className="h-full bg-primary" 
                                             style={{ width: `${item.percentComplete}%` }} 
@@ -467,7 +467,7 @@ export default function MyPlexHub() {
             {/* --- TRANSCODE DOCTOR MODAL --- */}
             {selectedStreamForDiagnosis && (
                 <Dialog open={!!selectedStreamForDiagnosis} onOpenChange={(open) => !open && setSelectedStreamForDiagnosis(null)}>
-                    <DialogContent className="w-[95vw] sm:max-w-xl max-h-[85vh] flex flex-col bg-[#121218]/95 border-border/60 backdrop-blur-xl shadow-2xl p-4 sm:p-6 overflow-hidden">
+                    <DialogContent className="w-[95vw] sm:max-w-xl max-h-[85vh] flex flex-col bg-popover/95 dark:bg-[#121218]/95 border-border/60 backdrop-blur-xl shadow-2xl p-4 sm:p-6 overflow-hidden">
                         <DialogHeader className="pb-3 border-b border-border/40 shrink-0">
                             <DialogTitle className="flex items-center gap-2 text-base sm:text-lg font-bold text-foreground">
                                 <Stethoscope className="h-5 w-5 text-primary shrink-0" />
@@ -489,9 +489,9 @@ export default function MyPlexHub() {
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2 font-bold text-sm text-foreground">
                                         {selectedStreamForDiagnosis.diagnosis.badgeColor === "emerald" ? (
-                                            <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                                            <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
                                         ) : (
-                                            <AlertTriangle className="h-4 w-4 text-amber-400" />
+                                            <AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-400" />
                                         )}
                                         {selectedStreamForDiagnosis.diagnosis.title}
                                     </div>
@@ -506,7 +506,7 @@ export default function MyPlexHub() {
 
                             {/* Technical Metrics Grid */}
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                                <div className="p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.05] space-y-0.5">
+                                <div className="p-2.5 rounded-lg bg-muted/50 dark:bg-white/[0.02] border border-border/70 dark:border-white/[0.05] space-y-0.5">
                                     <div className="text-[10px] text-muted-foreground uppercase font-semibold">Video Stream</div>
                                     <div className="font-bold text-foreground capitalize">
                                         {selectedStreamForDiagnosis.videoDecision}
@@ -518,7 +518,7 @@ export default function MyPlexHub() {
                                     </div>
                                 </div>
 
-                                <div className="p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.05] space-y-0.5">
+                                <div className="p-2.5 rounded-lg bg-muted/50 dark:bg-white/[0.02] border border-border/70 dark:border-white/[0.05] space-y-0.5">
                                     <div className="text-[10px] text-muted-foreground uppercase font-semibold">Audio Stream</div>
                                     <div className="font-bold text-foreground capitalize">
                                         {selectedStreamForDiagnosis.audioDecision}
@@ -528,7 +528,7 @@ export default function MyPlexHub() {
                                     </div>
                                 </div>
 
-                                <div className="p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.05] space-y-0.5">
+                                <div className="p-2.5 rounded-lg bg-muted/50 dark:bg-white/[0.02] border border-border/70 dark:border-white/[0.05] space-y-0.5">
                                     <div className="text-[10px] text-muted-foreground uppercase font-semibold">Bitrate</div>
                                     <div className="font-bold text-foreground">
                                         {selectedStreamForDiagnosis.streamBitrateMbps} Mbps
@@ -538,7 +538,7 @@ export default function MyPlexHub() {
                                     </div>
                                 </div>
 
-                                <div className="p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.05] space-y-0.5">
+                                <div className="p-2.5 rounded-lg bg-muted/50 dark:bg-white/[0.02] border border-border/70 dark:border-white/[0.05] space-y-0.5">
                                     <div className="text-[10px] text-muted-foreground uppercase font-semibold">Server Processing</div>
                                     <div className="font-bold text-foreground">
                                         {selectedStreamForDiagnosis.videoDecision === "transcode"
@@ -581,9 +581,9 @@ export default function MyPlexHub() {
             {/* --- KILL STREAM CONFIRMATION MODAL --- */}
             {streamToKill && (
                 <Dialog open={!!streamToKill} onOpenChange={(open) => !open && setStreamToKill(null)}>
-                    <DialogContent className="w-[95vw] sm:max-w-md max-h-[85vh] overflow-y-auto bg-[#121218]/95 border-rose-500/30 backdrop-blur-xl shadow-2xl p-4 sm:p-6">
+                    <DialogContent className="w-[95vw] sm:max-w-md max-h-[85vh] overflow-y-auto bg-popover/95 dark:bg-[#121218]/95 border-rose-500/30 backdrop-blur-xl shadow-2xl p-4 sm:p-6">
                         <DialogHeader className="pb-3 border-b border-border/40">
-                            <DialogTitle className="flex items-center gap-2 text-base sm:text-lg font-bold text-rose-400">
+                            <DialogTitle className="flex items-center gap-2 text-base sm:text-lg font-bold text-rose-700 dark:text-rose-400">
                                 <ShieldAlert className="h-5 w-5 text-rose-500 shrink-0" />
                                 Terminate Stuck Playback Session?
                             </DialogTitle>
@@ -598,7 +598,7 @@ export default function MyPlexHub() {
                             </p>
 
                             {killMessage && (
-                                <div className={`p-2.5 rounded-lg text-xs font-semibold ${killMessage.startsWith("Error") ? "bg-rose-500/10 text-rose-400 border border-rose-500/30" : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"}`}>
+                                <div className={`p-2.5 rounded-lg text-xs font-semibold ${killMessage.startsWith("Error") ? "bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/30" : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30"}`}>
                                     {killMessage}
                                 </div>
                             )}
@@ -631,7 +631,7 @@ export default function MyPlexHub() {
 
             {/* --- CONNECTED SERVERS MODAL --- */}
             <Dialog open={serversModalOpen} onOpenChange={setServersModalOpen}>
-                <DialogContent className="w-[95vw] sm:max-w-md max-h-[85vh] overflow-y-auto bg-[#121218]/95 border-border/60 backdrop-blur-xl shadow-2xl p-4 sm:p-6">
+                <DialogContent className="w-[95vw] sm:max-w-md max-h-[85vh] overflow-y-auto bg-popover/95 dark:bg-[#121218]/95 border-border/60 backdrop-blur-xl shadow-2xl p-4 sm:p-6">
                     <DialogHeader className="pb-3 border-b border-border/40">
                         <DialogTitle className="flex items-center gap-2 text-base sm:text-lg font-bold text-foreground">
                             <Server className="h-5 w-5 text-primary shrink-0" />
@@ -649,7 +649,7 @@ export default function MyPlexHub() {
                                 displayServers.map((srv: any, idx: number) => (
                                     <div 
                                         key={srv.id || idx}
-                                        className="p-3 rounded-xl bg-white/[0.02] border border-border/50 hover:border-border transition-all space-y-1.5"
+                                        className="p-3 rounded-xl bg-muted/50 dark:bg-white/[0.02] border border-border/50 hover:border-border transition-all space-y-1.5"
                                     >
                                         <div className="flex items-center justify-between gap-2">
                                             <div className="flex items-center gap-2.5 min-w-0">
@@ -663,9 +663,9 @@ export default function MyPlexHub() {
                                                     <div className="text-[10px] text-muted-foreground flex items-center gap-1.5">
                                                         <span className={`w-1.5 h-1.5 rounded-full ${srv.online ? "bg-emerald-400" : "bg-rose-500 animate-pulse"}`} />
                                                         {srv.online ? (
-                                                            <span className="text-emerald-400 font-medium">Online & Active</span>
+                                                            <span className="text-emerald-700 dark:text-emerald-400 font-medium">Online & Active</span>
                                                         ) : (
-                                                            <span className="text-rose-400 font-semibold">Offline / Unreachable</span>
+                                                            <span className="text-rose-700 dark:text-rose-400 font-semibold">Offline / Unreachable</span>
                                                         )}
                                                     </div>
                                                 </div>
@@ -678,7 +678,7 @@ export default function MyPlexHub() {
                                                     </Badge>
                                                 )}
                                                 {srv.tautulli && (
-                                                    <Badge variant="outline" className="text-[9px] font-semibold bg-sky-500/10 text-sky-400 border-sky-500/30">
+                                                    <Badge variant="outline" className="text-[9px] font-semibold bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-500/30">
                                                         Stream Monitor
                                                     </Badge>
                                                 )}

@@ -87,24 +87,24 @@ export default function PlexInviteBanner({
     };
 
     return (
-        <Card className="w-full border-border/40 bg-[#121218]/60 backdrop-blur-xs shadow-xs relative overflow-hidden transition-all duration-200 hover:border-amber-500/30 rounded-xl">
+        <Card className="w-full border-border/40 bg-muted/80 dark:bg-[#121218]/60 backdrop-blur-xs shadow-xs relative overflow-hidden transition-all duration-200 hover:border-amber-500/30 rounded-xl">
             <CardContent className="p-3 sm:p-4 space-y-2.5">
                 {/* Header Row */}
                 <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
-                        <div className="p-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 shrink-0">
+                        <div className="p-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 shrink-0">
                             <Gift className="h-4 w-4" />
                         </div>
                         <div className="flex items-center gap-2 flex-wrap min-w-0">
                             <h2 className="text-xs sm:text-sm font-bold text-foreground truncate">
                                 Invite Friends &amp; Family
                             </h2>
-                            <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-300 border-amber-500/20 px-1.5 py-0 font-medium">
+                            <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/20 px-1.5 py-0 font-medium">
                                 {trialDays}-Day Free Trial
                             </Badge>
                             {totalReferrals > 0 && (
                                 <span className="text-[10px] text-muted-foreground hidden sm:inline-flex items-center gap-1">
-                                    <Users className="h-3 w-3 text-amber-400" />
+                                    <Users className="h-3 w-3 text-amber-700 dark:text-amber-400" />
                                     {totalReferrals} invited
                                 </span>
                             )}
@@ -174,7 +174,7 @@ export default function PlexInviteBanner({
                                 size="sm"
                                 variant="outline"
                                 onClick={handleShare}
-                                className="border-border/50 hover:bg-amber-500/10 text-amber-300 text-xs h-9 px-2.5 rounded-lg transition-all active:scale-95"
+                                className="border-border/50 hover:bg-amber-500/10 text-amber-800 dark:text-amber-300 text-xs h-9 px-2.5 rounded-lg transition-all active:scale-95"
                                 title="Share link"
                             >
                                 <Share2 className="h-3.5 w-3.5" />
@@ -188,11 +188,11 @@ export default function PlexInviteBanner({
                     <div className="pt-2.5 border-t border-border/30 space-y-2.5 animate-in fade-in-50 slide-in-from-top-1 duration-200">
                         <div className="flex items-center justify-between">
                             <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                                <Sparkles className="h-3 w-3 text-amber-400" /> How It Works
+                                <Sparkles className="h-3 w-3 text-amber-700 dark:text-amber-400" /> How It Works
                             </span>
                             <Link 
                                 href="/profile#referral" 
-                                className="text-[11px] text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1 hover:underline"
+                                className="text-[11px] text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 font-semibold flex items-center gap-1 hover:underline"
                             >
                                 Referral Stats <ArrowRight className="h-3 w-3" />
                             </Link>
@@ -202,10 +202,10 @@ export default function PlexInviteBanner({
                             {/* Step 1 */}
                             <div className="p-2.5 rounded-lg bg-background/40 border border-border/40 space-y-1">
                                 <div className="flex items-center justify-between">
-                                    <span className="text-[9px] font-bold uppercase tracking-wider text-amber-400 px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20">
+                                    <span className="text-[9px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400 px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20">
                                         Step 1
                                     </span>
-                                    <Share2 className="h-3.5 w-3.5 text-amber-400/70" />
+                                    <Share2 className="h-3.5 w-3.5 text-amber-700/70 dark:text-amber-400/70" />
                                 </div>
                                 <h3 className="text-xs font-semibold text-foreground">Share Your Link</h3>
                                 <p className="text-[10px] text-muted-foreground leading-normal">
@@ -216,10 +216,10 @@ export default function PlexInviteBanner({
                             {/* Step 2 */}
                             <div className="p-2.5 rounded-lg bg-background/40 border border-border/40 space-y-1">
                                 <div className="flex items-center justify-between">
-                                    <span className="text-[9px] font-bold uppercase tracking-wider text-sky-400 px-1.5 py-0.5 rounded bg-sky-500/10 border border-sky-500/20">
+                                    <span className="text-[9px] font-bold uppercase tracking-wider text-sky-700 dark:text-sky-400 px-1.5 py-0.5 rounded bg-sky-500/10 border border-sky-500/20">
                                         Step 2
                                     </span>
-                                    <Clock className="h-3.5 w-3.5 text-sky-400/70" />
+                                    <Clock className="h-3.5 w-3.5 text-sky-700/70 dark:text-sky-400/70" />
                                 </div>
                                 <h3 className="text-xs font-semibold text-foreground">{trialDays}-Day Free Trial</h3>
                                 <p className="text-[10px] text-muted-foreground leading-normal">
@@ -230,10 +230,10 @@ export default function PlexInviteBanner({
                             {/* Step 3 */}
                             <div className="p-2.5 rounded-lg bg-background/40 border border-border/40 space-y-1">
                                 <div className="flex items-center justify-between">
-                                    <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-400 px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20">
+                                    <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400 px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20">
                                         Step 3
                                     </span>
-                                    <Tv className="h-3.5 w-3.5 text-emerald-400/70" />
+                                    <Tv className="h-3.5 w-3.5 text-emerald-700/70 dark:text-emerald-400/70" />
                                 </div>
                                 <h3 className="text-xs font-semibold text-foreground">Instant Server Access</h3>
                                 <p className="text-[10px] text-muted-foreground leading-normal">
@@ -251,11 +251,11 @@ export default function PlexInviteBanner({
                                 </div>
                                 <div className="p-1.5 rounded-md bg-background/40 border border-border/30">
                                     <span className="text-[9px] text-muted-foreground uppercase font-bold block">Active Trials</span>
-                                    <span className="font-bold text-blue-400 text-xs">{activeTrials}</span>
+                                    <span className="font-bold text-blue-700 dark:text-blue-400 text-xs">{activeTrials}</span>
                                 </div>
                                 <div className="p-1.5 rounded-md bg-background/40 border border-border/30">
                                     <span className="text-[9px] text-muted-foreground uppercase font-bold block">Conversions</span>
-                                    <span className="font-bold text-emerald-400 text-xs">{conversions}</span>
+                                    <span className="font-bold text-emerald-700 dark:text-emerald-400 text-xs">{conversions}</span>
                                 </div>
                             </div>
                         )}

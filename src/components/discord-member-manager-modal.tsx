@@ -280,7 +280,7 @@ export function DiscordMemberManagerModal({
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="w-[96vw] sm:max-w-4xl max-h-[90vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-[#0d0e15] border border-border/60 shadow-2xl rounded-2xl">
+            <DialogContent className="w-[96vw] sm:max-w-4xl max-h-[90vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-popover dark:bg-[#0d0e15] border border-border/60 shadow-2xl rounded-2xl">
                 {/* HEADER */}
                 <DialogHeader className="shrink-0 space-y-2 pb-2 border-b border-border/40">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -336,13 +336,13 @@ export function DiscordMemberManagerModal({
                             size="sm"
                             onClick={handleBatchPushRoles}
                             disabled={actionLoading !== null || linkedCount === 0}
-                            className="h-8 px-3 text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border-emerald-500/30 gap-1.5 cursor-pointer active:scale-95"
+                            className="h-8 px-3 text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border-emerald-500/30 gap-1.5 cursor-pointer active:scale-95"
                             title="Pushes active membership status to Discord for all linked members"
                         >
                             {actionLoading === "batch-push" ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-400" />
+                                <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-700 dark:text-emerald-400" />
                             ) : (
-                                <UploadCloud className="h-3.5 w-3.5 text-emerald-400" />
+                                <UploadCloud className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
                             )}
                             Push Roles to Discord
                         </Button>
@@ -352,13 +352,13 @@ export function DiscordMemberManagerModal({
                             size="sm"
                             onClick={handleBatchPullRoles}
                             disabled={actionLoading !== null || linkedCount === 0}
-                            className="h-8 px-3 text-xs font-semibold bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border-blue-500/30 gap-1.5 cursor-pointer active:scale-95"
+                            className="h-8 px-3 text-xs font-semibold bg-blue-500/10 hover:bg-blue-500/20 text-blue-800 dark:text-blue-300 border-blue-500/30 gap-1.5 cursor-pointer active:scale-95"
                             title="Pulls server roles from Discord into DomsHomeLab accounts"
                         >
                             {actionLoading === "batch-pull" ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-400" />
+                                <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-700 dark:text-blue-400" />
                             ) : (
-                                <DownloadCloud className="h-3.5 w-3.5 text-blue-400" />
+                                <DownloadCloud className="h-3.5 w-3.5 text-blue-700 dark:text-blue-400" />
                             )}
                             Pull Roles from Discord
                         </Button>
@@ -366,14 +366,14 @@ export function DiscordMemberManagerModal({
 
                     {/* ALERTS */}
                     {successMsg && (
-                        <div className="p-2.5 rounded-lg bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 text-xs flex items-center gap-2">
-                            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                        <div className="p-2.5 rounded-lg bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/40 text-emerald-800 dark:text-emerald-300 text-xs flex items-center gap-2">
+                            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-400" />
                             <span>{successMsg}</span>
                         </div>
                     )}
                     {errorMsg && (
-                        <div className="p-2.5 rounded-lg bg-red-950/40 border border-red-500/40 text-red-300 text-xs flex items-center gap-2">
-                            <XCircle className="h-4 w-4 shrink-0 text-red-400" />
+                        <div className="p-2.5 rounded-lg bg-red-500/10 dark:bg-red-950/40 border border-red-500/40 text-red-800 dark:text-red-300 text-xs flex items-center gap-2">
+                            <XCircle className="h-4 w-4 shrink-0 text-red-700 dark:text-red-400" />
                             <span>{errorMsg}</span>
                         </div>
                     )}
@@ -386,7 +386,7 @@ export function DiscordMemberManagerModal({
                                 placeholder="Search Discord username or ID..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="h-8 pl-8 pr-3 text-xs bg-black/40 border-border/50"
+                                className="h-8 pl-8 pr-3 text-xs bg-muted/60 dark:bg-black/40 border-border/50"
                             />
                         </div>
 
@@ -435,7 +435,7 @@ export function DiscordMemberManagerModal({
                             <p className="text-xs text-muted-foreground">Connecting to Discord guild and fetching members...</p>
                         </div>
                     ) : filteredMembers.length === 0 ? (
-                        <div className="p-8 text-center text-xs text-muted-foreground bg-black/20 rounded-xl border border-dashed border-border/40 space-y-1">
+                        <div className="p-8 text-center text-xs text-muted-foreground bg-muted/40 dark:bg-black/20 rounded-xl border border-dashed border-border/40 space-y-1">
                             <AlertCircle className="h-5 w-5 mx-auto text-muted-foreground/60 mb-2" />
                             <p className="font-semibold text-foreground">No Discord members match your filter.</p>
                             <p className="text-[11px]">Try adjusting your search query or tab selection above.</p>
@@ -451,10 +451,10 @@ export function DiscordMemberManagerModal({
                                     key={m.id}
                                     className={`p-3 rounded-xl border transition-all text-xs flex flex-col md:flex-row md:items-center justify-between gap-3 ${
                                         isLinked
-                                            ? "bg-emerald-950/10 border-emerald-500/25 hover:border-emerald-500/40"
+                                            ? "bg-emerald-500/10 dark:bg-emerald-950/10 border-emerald-500/25 hover:border-emerald-500/40"
                                             : match
-                                                ? "bg-sky-950/15 border-sky-500/30 hover:border-sky-500/50"
-                                                : "bg-black/25 border-border/40 hover:border-border/60"
+                                                ? "bg-sky-500/10 dark:bg-sky-950/15 border-sky-500/30 hover:border-sky-500/50"
+                                                : "bg-muted/40 dark:bg-black/25 border-border/40 hover:border-border/60"
                                     }`}
                                 >
                                     {/* DISCORD USER INFO */}
@@ -464,7 +464,7 @@ export function DiscordMemberManagerModal({
                                                 <img
                                                     src={m.avatarUrl}
                                                     alt={m.username}
-                                                    className="h-10 w-10 rounded-full object-cover border border-white/10"
+                                                    className="h-10 w-10 rounded-full object-cover border border-border/70 dark:border-white/10"
                                                 />
                                             ) : (
                                                 <div className="h-10 w-10 rounded-full bg-[#5865F2]/20 border border-[#5865F2]/40 flex items-center justify-center text-[#5865F2] font-bold text-sm">
@@ -484,7 +484,7 @@ export function DiscordMemberManagerModal({
                                                     </span>
                                                 )}
                                                 {m.globalName && m.globalName !== m.username && (
-                                                    <Badge variant="outline" className="text-[10px] bg-white/5 border-white/10 text-muted-foreground">
+                                                    <Badge variant="outline" className="text-[10px] bg-muted/50 dark:bg-white/5 border-border/70 dark:border-white/10 text-muted-foreground">
                                                         {m.globalName}
                                                     </Badge>
                                                 )}
@@ -499,8 +499,8 @@ export function DiscordMemberManagerModal({
                                     <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
                                         {isLinked ? (
                                             <div className="flex items-center gap-2">
-                                                <Badge variant="outline" className="bg-emerald-500/15 text-emerald-300 border-emerald-500/30 text-xs font-semibold gap-1.5 py-1">
-                                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                                                <Badge variant="outline" className="bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border-emerald-500/30 text-xs font-semibold gap-1.5 py-1">
+                                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
                                                     Linked: <span className="font-bold">@{m.linkedUsername}</span>
                                                 </Badge>
 
@@ -509,7 +509,7 @@ export function DiscordMemberManagerModal({
                                                     size="sm"
                                                     onClick={() => handleSyncSingle(m)}
                                                     disabled={isProcessing}
-                                                    className="h-7 px-2.5 text-[11px] font-semibold text-emerald-300 hover:bg-emerald-500/10 border-emerald-500/30 gap-1 cursor-pointer"
+                                                    className="h-7 px-2.5 text-[11px] font-semibold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-500/10 border-emerald-500/30 gap-1 cursor-pointer"
                                                     title="Re-push role to Discord"
                                                 >
                                                     <RefreshCw className={`h-3 w-3 ${actionLoading === `sync-${m.id}` ? "animate-spin" : ""}`} />
@@ -521,7 +521,7 @@ export function DiscordMemberManagerModal({
                                                     size="sm"
                                                     onClick={() => handleUnlink(m)}
                                                     disabled={isProcessing}
-                                                    className="h-7 px-2 text-[11px] font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/10 gap-1 cursor-pointer"
+                                                    className="h-7 px-2 text-[11px] font-semibold text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 hover:bg-red-500/10 gap-1 cursor-pointer"
                                                     title="Unlink this Discord account"
                                                 >
                                                     <Unlink className="h-3 w-3" />
@@ -530,8 +530,8 @@ export function DiscordMemberManagerModal({
                                         ) : match ? (
                                             <div className="flex items-center gap-2">
                                                 <div className="text-right">
-                                                    <div className="text-[11px] text-sky-300 font-semibold flex items-center gap-1 justify-end">
-                                                        <Sparkles className="h-3 w-3 text-sky-400" />
+                                                    <div className="text-[11px] text-sky-800 dark:text-sky-300 font-semibold flex items-center gap-1 justify-end">
+                                                        <Sparkles className="h-3 w-3 text-sky-700 dark:text-sky-400" />
                                                         Match: <strong className="text-foreground">@{match.username}</strong> ({match.confidence}%)
                                                     </div>
                                                     <span className="text-[9px] text-muted-foreground">{match.matchReason}</span>
@@ -555,7 +555,7 @@ export function DiscordMemberManagerModal({
                                         ) : (
                                             <div className="flex items-center gap-2">
                                                 <select
-                                                    className="h-7 px-2 text-[11px] rounded-lg bg-black/50 border border-border/50 text-foreground max-w-[180px] focus:outline-none focus:ring-1 focus:ring-primary"
+                                                    className="h-7 px-2 text-[11px] rounded-lg bg-muted/60 dark:bg-black/50 border border-border/50 text-foreground max-w-[180px] focus:outline-none focus:ring-1 focus:ring-primary"
                                                     value={selectedUserToLink[m.id] || ""}
                                                     onChange={(e) => setSelectedUserToLink({ ...selectedUserToLink, [m.id]: e.target.value })}
                                                 >
@@ -596,7 +596,7 @@ export function DiscordMemberManagerModal({
                 {/* FOOTER */}
                 <DialogFooter className="shrink-0 pt-2.5 border-t border-border/40 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2.5">
                     <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
-                        <Shield className="h-3.5 w-3.5 text-emerald-400" />
+                        <Shield className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
                         Role assignments strictly conceal internal tiers into a unified <strong>⭐ Member</strong> role.
                     </p>
                     <Button

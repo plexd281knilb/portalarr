@@ -296,20 +296,20 @@ export default function DiscordSettingsPanel({ onDirtyChange, ref }: DiscordSett
     return (
         <div className="space-y-6">
             {/* HEADER BANNER */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-xl bg-gradient-to-r from-slate-900/95 via-sky-950/20 to-slate-900/95 border border-sky-500/25">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-xl bg-gradient-to-r from-muted/60 dark:from-slate-900/95 via-sky-500/10 dark:via-sky-950/20 to-muted/60 dark:to-slate-900/95 border border-sky-500/25">
                 <div className="flex items-center gap-3">
-                    <div className="p-2.5 rounded-lg bg-sky-500/15 text-sky-400 border border-sky-500/30">
+                    <div className="p-2.5 rounded-lg bg-sky-500/15 text-sky-700 dark:text-sky-400 border border-sky-500/30">
                         <MessageSquare className="h-6 w-6" />
                     </div>
                     <div>
                         <div className="flex items-center gap-2">
                             <h2 className="text-lg font-bold tracking-tight">Discord Bot & Server Mission Control</h2>
                             {isConfigured ? (
-                                <Badge variant="outline" className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-xs gap-1 font-semibold">
+                                <Badge variant="outline" className="bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border-emerald-500/40 text-xs gap-1 font-semibold">
                                     <CheckCircle2 className="h-3 w-3" /> CONNECTED
                                 </Badge>
                             ) : (
-                                <Badge variant="outline" className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-xs gap-1 font-semibold">
+                                <Badge variant="outline" className="bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/40 text-xs gap-1 font-semibold">
                                     <AlertTriangle className="h-3 w-3" /> SETUP REQUIRED
                                 </Badge>
                             )}
@@ -327,7 +327,7 @@ export default function DiscordSettingsPanel({ onDirtyChange, ref }: DiscordSett
                         className="h-8 text-xs gap-1.5 border-border/60 hover:bg-muted/60"
                         onClick={() => setShowSetupGuide(!showSetupGuide)}
                     >
-                        <BookOpen className="h-3.5 w-3.5 text-sky-400" />
+                        <BookOpen className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400" />
                         {showSetupGuide ? "Hide Setup Guide" : "3-Step Setup Guide"}
                         {showSetupGuide ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                     </Button>
@@ -347,10 +347,10 @@ export default function DiscordSettingsPanel({ onDirtyChange, ref }: DiscordSett
             {bannerMsg && (
                 <div className={`p-3.5 rounded-lg text-xs font-medium flex items-center justify-between border ${
                     bannerMsg.type === "success" 
-                        ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30" 
+                        ? "bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border-emerald-500/30" 
                         : bannerMsg.type === "error"
-                        ? "bg-red-500/10 text-red-300 border-red-500/30"
-                        : "bg-blue-500/10 text-blue-300 border-blue-500/30"
+                        ? "bg-red-500/10 text-red-800 dark:text-red-300 border-red-500/30"
+                        : "bg-blue-500/10 text-blue-800 dark:text-blue-300 border-blue-500/30"
                 }`}>
                     <div className="flex items-center gap-2">
                         {bannerMsg.type === "success" ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <AlertTriangle className="h-4 w-4 shrink-0" />}
@@ -364,7 +364,7 @@ export default function DiscordSettingsPanel({ onDirtyChange, ref }: DiscordSett
             {showSetupGuide && (
                 <Card className="border-sky-500/30 bg-background/60 shadow-md">
                     <CardHeader className="pb-3">
-                        <CardTitle className="text-sm font-semibold flex items-center gap-2 text-sky-300">
+                        <CardTitle className="text-sm font-semibold flex items-center gap-2 text-sky-800 dark:text-sky-300">
                             <Bot className="h-4 w-4" /> 3-Step Discord Developer Portal Setup Guide
                         </CardTitle>
                         <CardDescription className="text-xs">
@@ -374,17 +374,17 @@ export default function DiscordSettingsPanel({ onDirtyChange, ref }: DiscordSett
                     <CardContent className="space-y-3 text-xs text-muted-foreground">
                         <div className="p-2.5 rounded-lg bg-muted/40 border border-border/40 space-y-1.5">
                             <div className="font-semibold text-foreground flex items-center gap-2">
-                                <span className="h-5 w-5 rounded-full bg-sky-500/20 text-sky-300 flex items-center justify-center text-[11px] font-bold tabular-nums">1</span>
+                                <span className="h-5 w-5 rounded-full bg-sky-500/20 text-sky-800 dark:text-sky-300 flex items-center justify-center text-[11px] font-bold tabular-nums">1</span>
                                 Create Application & Bot
                             </div>
                             <p className="pl-7">
-                                Go to the <a href="https://discord.com/developers/applications" target="_blank" rel="noreferrer" className="text-sky-400 underline font-medium hover:text-sky-300 inline-flex items-center gap-1">Discord Developer Portal <ExternalLink className="h-3 w-3" /></a> → Click <strong>New Application</strong> → Name it <strong>DomsHomeLab</strong> (<span className="font-mono">d281knilb</span>).
+                                Go to the <a href="https://discord.com/developers/applications" target="_blank" rel="noreferrer" className="text-sky-700 dark:text-sky-400 underline font-medium hover:text-sky-800 dark:hover:text-sky-300 inline-flex items-center gap-1">Discord Developer Portal <ExternalLink className="h-3 w-3" /></a> → Click <strong>New Application</strong> → Name it <strong>DomsHomeLab</strong> (<span className="font-mono">d281knilb</span>).
                             </p>
                         </div>
 
                         <div className="p-2.5 rounded-lg bg-muted/40 border border-border/40 space-y-1.5">
                             <div className="font-semibold text-foreground flex items-center gap-2">
-                                <span className="h-5 w-5 rounded-full bg-sky-500/20 text-sky-300 flex items-center justify-center text-[11px] font-bold tabular-nums">2</span>
+                                <span className="h-5 w-5 rounded-full bg-sky-500/20 text-sky-800 dark:text-sky-300 flex items-center justify-center text-[11px] font-bold tabular-nums">2</span>
                                 Copy Token & Enable Privileged Intents
                             </div>
                             <p className="pl-7">
@@ -394,7 +394,7 @@ export default function DiscordSettingsPanel({ onDirtyChange, ref }: DiscordSett
 
                         <div className="p-2.5 rounded-lg bg-muted/40 border border-border/40 space-y-1.5">
                             <div className="font-semibold text-foreground flex items-center gap-2">
-                                <span className="h-5 w-5 rounded-full bg-sky-500/20 text-sky-300 flex items-center justify-center text-[11px] font-bold tabular-nums">3</span>
+                                <span className="h-5 w-5 rounded-full bg-sky-500/20 text-sky-800 dark:text-sky-300 flex items-center justify-center text-[11px] font-bold tabular-nums">3</span>
                                 Invite Bot & Copy Server ID
                             </div>
                             <p className="pl-7">
@@ -410,7 +410,7 @@ export default function DiscordSettingsPanel({ onDirtyChange, ref }: DiscordSett
                 <Card className="lg:col-span-2 shadow-sm border-border/60">
                     <CardHeader className="pb-3">
                         <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                            <Key className="h-4 w-4 text-amber-400" /> Bot Credentials & Server Association
+                            <Key className="h-4 w-4 text-amber-700 dark:text-amber-400" /> Bot Credentials & Server Association
                         </CardTitle>
                         <CardDescription className="text-xs">
                             Bot tokens are securely stored using AES-256-GCM encryption in server memory.
@@ -467,8 +467,8 @@ export default function DiscordSettingsPanel({ onDirtyChange, ref }: DiscordSett
                         {clientId && (
                             <div className="flex items-center justify-between p-2.5 rounded-lg bg-sky-500/10 border border-sky-500/25">
                                 <div className="flex items-center gap-2">
-                                    <Bot className="h-4 w-4 text-sky-400 shrink-0" />
-                                    <span className="text-[11px] font-medium text-sky-200">
+                                    <Bot className="h-4 w-4 text-sky-700 dark:text-sky-400 shrink-0" />
+                                    <span className="text-[11px] font-medium text-sky-900 dark:text-sky-200">
                                         Bot Invite Link Ready with Administrator permissions
                                     </span>
                                 </div>
@@ -476,10 +476,10 @@ export default function DiscordSettingsPanel({ onDirtyChange, ref }: DiscordSett
                                     <Button
                                         size="sm"
                                         variant="outline"
-                                        className="h-7 px-2 text-[11px] border-sky-500/30 text-sky-300 hover:bg-sky-500/20 gap-1"
+                                        className="h-7 px-2 text-[11px] border-sky-500/30 text-sky-800 dark:text-sky-300 hover:bg-sky-500/20 gap-1"
                                         onClick={handleCopyInvite}
                                     >
-                                        {copiedInvite ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                                        {copiedInvite ? <Check className="h-3 w-3 text-emerald-700 dark:text-emerald-400" /> : <Copy className="h-3 w-3" />}
                                         {copiedInvite ? "Copied" : "Copy Link"}
                                     </Button>
                                     <a
@@ -502,7 +502,7 @@ export default function DiscordSettingsPanel({ onDirtyChange, ref }: DiscordSett
                             onClick={handleTestConnection}
                             disabled={testing || (!botToken && !guildId)}
                         >
-                            {testing ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Activity className="h-3.5 w-3.5 text-blue-400" />}
+                            {testing ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Activity className="h-3.5 w-3.5 text-blue-700 dark:text-blue-400" />}
                             {testing ? "Testing..." : "Test Connection"}
                         </Button>
 
@@ -522,7 +522,7 @@ export default function DiscordSettingsPanel({ onDirtyChange, ref }: DiscordSett
                 <Card className="shadow-sm border-border/60 flex flex-col justify-between">
                     <CardHeader className="pb-3">
                         <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                            <Bot className="h-4 w-4 text-sky-400" /> Bot Status & Sync Telemetry
+                            <Bot className="h-4 w-4 text-sky-700 dark:text-sky-400" /> Bot Status & Sync Telemetry
                         </CardTitle>
                         <CardDescription className="text-xs">
                             Live connection status and last server sync summary.
@@ -534,7 +534,7 @@ export default function DiscordSettingsPanel({ onDirtyChange, ref }: DiscordSett
                                 {testResult.bot.avatarUrl ? (
                                     <img src={testResult.bot.avatarUrl} alt="Bot" className="h-10 w-10 rounded-full border border-sky-500/40" />
                                 ) : (
-                                    <div className="h-10 w-10 rounded-full bg-sky-500/20 text-sky-400 flex items-center justify-center font-bold">
+                                    <div className="h-10 w-10 rounded-full bg-sky-500/20 text-sky-700 dark:text-sky-400 flex items-center justify-center font-bold">
                                         <Bot className="h-5 w-5" />
                                     </div>
                                 )}
@@ -544,11 +544,11 @@ export default function DiscordSettingsPanel({ onDirtyChange, ref }: DiscordSett
                                         <span className="text-muted-foreground text-[10px] ml-1 font-mono">#{testResult.bot.discriminator}</span>
                                     </div>
                                     <div className="text-[11px] text-muted-foreground flex items-center gap-1.5 mt-0.5">
-                                        <Badge variant="outline" className="text-[9px] bg-emerald-500/10 text-emerald-300 border-emerald-500/30 px-1 py-0">
+                                        <Badge variant="outline" className="text-[9px] bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border-emerald-500/30 px-1 py-0">
                                             ACTIVE BOT
                                         </Badge>
                                         {testResult.guild?.hasAdminPermission && (
-                                            <Badge variant="outline" className="text-[9px] bg-amber-500/10 text-amber-300 border-amber-500/30 px-1 py-0">
+                                            <Badge variant="outline" className="text-[9px] bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30 px-1 py-0">
                                                 ADMINISTRATOR
                                             </Badge>
                                         )}
@@ -589,7 +589,7 @@ export default function DiscordSettingsPanel({ onDirtyChange, ref }: DiscordSett
                             <Button
                                 size="sm"
                                 variant="outline"
-                                className="w-full h-8 text-xs gap-1.5 border-sky-500/30 text-sky-300 hover:bg-sky-500/15"
+                                className="w-full h-8 text-xs gap-1.5 border-sky-500/30 text-sky-800 dark:text-sky-300 hover:bg-sky-500/15"
                                 onClick={handleUpdateLiveStatus}
                                 disabled={updatingStatus || !isConfigured}
                             >
@@ -607,7 +607,7 @@ export default function DiscordSettingsPanel({ onDirtyChange, ref }: DiscordSett
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
                             <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                                <Layers className="h-4 w-4 text-sky-400" /> Canonical Server Architecture & Channel Blueprint
+                                <Layers className="h-4 w-4 text-sky-700 dark:text-sky-400" /> Canonical Server Architecture & Channel Blueprint
                             </CardTitle>
                             <CardDescription className="text-xs">
                                 DomsHomeLab automatically provisions these categories, channels, permissions, and pinned embeds to ensure consistency.
@@ -643,17 +643,17 @@ export default function DiscordSettingsPanel({ onDirtyChange, ref }: DiscordSett
                                             </div>
                                             <div className="flex items-center gap-1 shrink-0">
                                                 {ch.readOnlyForEveryone && (
-                                                    <span className="text-[9px] bg-amber-500/10 text-amber-300 border border-amber-500/20 px-1 rounded font-mono" title="Read-only for regular members">
+                                                    <span className="text-[9px] bg-amber-500/10 text-amber-800 dark:text-amber-300 border border-amber-500/20 px-1 rounded font-mono" title="Read-only for regular members">
                                                         READ-ONLY
                                                     </span>
                                                 )}
                                                 {ch.adminOnly && (
-                                                    <span className="text-[9px] bg-red-500/10 text-red-300 border border-red-500/20 px-1 rounded font-mono" title="Admin only">
+                                                    <span className="text-[9px] bg-red-500/10 text-red-800 dark:text-red-300 border border-red-500/20 px-1 rounded font-mono" title="Admin only">
                                                         ADMIN
                                                     </span>
                                                 )}
                                                 {ch.pinnedEmbedKey && (
-                                                    <span className="text-[9px] bg-sky-500/10 text-sky-300 border border-sky-500/20 px-1 rounded font-mono" title="Contains pinned guide embed">
+                                                    <span className="text-[9px] bg-sky-500/10 text-sky-800 dark:text-sky-300 border border-sky-500/20 px-1 rounded font-mono" title="Contains pinned guide embed">
                                                         EMBED
                                                     </span>
                                                 )}
@@ -668,7 +668,7 @@ export default function DiscordSettingsPanel({ onDirtyChange, ref }: DiscordSett
                     {/* ROLES TEMPLATE */}
                     <div className="pt-2 border-t border-border/30">
                         <h4 className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
-                            <Shield className="h-3.5 w-3.5 text-emerald-400" /> Provisioned Server Roles
+                            <Shield className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" /> Provisioned Server Roles
                         </h4>
                         <div className="flex flex-wrap items-center gap-2">
                             {rolesBlueprint.map((role, idx) => (

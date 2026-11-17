@@ -366,16 +366,16 @@ export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServers
     return (
         <div className="space-y-6">
             {/* Header & Quick Actions */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-gradient-to-r from-slate-900/95 via-background to-slate-900/80 border border-amber-500/30">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-gradient-to-r from-muted/60 dark:from-slate-900/95 via-background to-muted/60 dark:to-slate-900/80 border border-amber-500/30">
                 <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                        <Layers className="h-5 w-5 text-amber-400" />
+                        <Layers className="h-5 w-5 text-amber-700 dark:text-amber-400" />
                         <h2 className="text-base sm:text-lg font-bold text-foreground">
                             Multi-Platform Media Servers &amp; Library Whitelist
                         </h2>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                        Configure Plex, Jellyfin, and Emby instances. Control strictly which servers and libraries your Full Members are allowed to self-select. (Trial member access is managed via the <Link href="/settings/access?tab=onboarding#trial-safe-pool" className="text-amber-400 hover:text-amber-300 underline font-semibold">Trial Safe Pool</Link> in Access Control).
+                        Configure Plex, Jellyfin, and Emby instances. Control strictly which servers and libraries your Full Members are allowed to self-select. (Trial member access is managed via the <Link href="/settings/access?tab=onboarding#trial-safe-pool" className="text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 underline font-semibold">Trial Safe Pool</Link> in Access Control).
                     </p>
                 </div>
 
@@ -385,7 +385,7 @@ export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServers
                         size="sm"
                         onClick={() => loadServers(true)}
                         disabled={refreshing || loading}
-                        className="h-9 text-xs border-border/60 hover:bg-white/[0.04] gap-1.5"
+                        className="h-9 text-xs border-border/60 hover:bg-accent dark:hover:bg-white/[0.04] gap-1.5"
                     >
                         <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
                         <span>Refresh</span>
@@ -402,15 +402,15 @@ export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServers
             </div>
 
             {successMsg && (
-                <div className="p-3 text-xs bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 rounded-lg flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                <div className="p-3 text-xs bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/40 text-emerald-800 dark:text-emerald-300 rounded-lg flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-400" />
                     <span>{successMsg}</span>
                 </div>
             )}
 
             {error && (
-                <div className="p-3 text-xs bg-red-950/40 border border-red-500/40 text-red-300 rounded-lg flex items-center gap-2">
-                    <XCircle className="h-4 w-4 shrink-0 text-red-400" />
+                <div className="p-3 text-xs bg-red-500/10 dark:bg-red-950/40 border border-red-500/40 text-red-800 dark:text-red-300 rounded-lg flex items-center gap-2">
+                    <XCircle className="h-4 w-4 shrink-0 text-red-700 dark:text-red-400" />
                     <span>{error}</span>
                 </div>
             )}
@@ -421,7 +421,7 @@ export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServers
                     <p className="text-xs text-muted-foreground">Loading media servers and discovering libraries...</p>
                 </div>
             ) : servers.length === 0 ? (
-                <Card className="border-border/50 bg-[#121218]/80 text-center p-8">
+                <Card className="border-border/50 bg-card/95 dark:bg-[#121218]/80 text-center p-8">
                     <Server className="h-10 w-10 text-muted-foreground/60 mx-auto mb-3" />
                     <h3 className="text-sm font-bold text-foreground">No Media Servers Configured</h3>
                     <p className="text-xs text-muted-foreground max-w-md mx-auto mt-1 mb-4">
@@ -448,14 +448,14 @@ export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServers
                             : "bg-emerald-500/15 text-emerald-300 border-emerald-500/40";
 
                         return (
-                            <Card key={srv.id} className="border-border/60 bg-[#121218]/90 backdrop-blur-md shadow-sm overflow-hidden">
+                            <Card key={srv.id} className="border-border/60 bg-card/95 dark:bg-[#121218]/90 backdrop-blur-md shadow-sm overflow-hidden">
                                 <CardHeader className="pb-3 border-b border-border/30">
                                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                                         <div className="flex items-center gap-3">
                                             <div className={`h-10 w-10 rounded-xl flex items-center justify-center border shrink-0 ${
-                                                isPlex ? "bg-amber-500/10 border-amber-500/30 text-amber-400" :
-                                                isJellyfin ? "bg-sky-500/10 border-sky-500/30 text-sky-400" :
-                                                "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                                                isPlex ? "bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400" :
+                                                isJellyfin ? "bg-sky-500/10 border-sky-500/30 text-sky-700 dark:text-sky-400" :
+                                                "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400"
                                             }`}>
                                                 <Server className="h-5 w-5" />
                                             </div>
@@ -466,21 +466,21 @@ export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServers
                                                         {srv.type}
                                                     </Badge>
                                                     {srv.isMonitored && (
-                                                        <Badge variant="outline" className="text-[10px] bg-cyan-500/10 text-cyan-400 border-cyan-500/30">
+                                                        <Badge variant="outline" className="text-[10px] bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border-cyan-500/30">
                                                             Monitored
                                                         </Badge>
                                                     )}
                                                 </div>
                                                 <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground font-mono">
-                                                    <span className="flex items-center gap-1 text-slate-300">
-                                                        <Globe className="h-3 w-3 text-cyan-400" />
+                                                    <span className="flex items-center gap-1 text-slate-700 dark:text-slate-300">
+                                                        <Globe className="h-3 w-3 text-cyan-700 dark:text-cyan-400" />
                                                         <span className="truncate max-w-[200px] sm:max-w-xs">{srv.url}</span>
                                                     </span>
                                                     {srv.internalUrl && (
-                                                        <span className="flex items-center gap-1 text-slate-400 border-l border-border/50 pl-2">
-                                                            <Network className="h-3 w-3 text-emerald-400" />
-                                                            <span className="text-[11px] text-emerald-400/90 truncate max-w-[180px]">{srv.internalUrl}</span>
-                                                            <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5 border-emerald-500/30 text-emerald-400 bg-emerald-500/10">LAN Direct</Badge>
+                                                        <span className="flex items-center gap-1 text-slate-600 dark:text-slate-400 border-l border-border/50 pl-2">
+                                                            <Network className="h-3 w-3 text-emerald-700 dark:text-emerald-400" />
+                                                            <span className="text-[11px] text-emerald-700/90 dark:text-emerald-400/90 truncate max-w-[180px]">{srv.internalUrl}</span>
+                                                            <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5 border-emerald-500/30 text-emerald-700 dark:text-emerald-400 bg-emerald-500/10">LAN Direct</Badge>
                                                         </span>
                                                     )}
                                                 </div>
@@ -493,12 +493,12 @@ export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServers
                                                 size="sm"
                                                 onClick={() => handleTestServer(srv)}
                                                 disabled={testState?.testing}
-                                                className="h-8 text-xs border-border/60 hover:bg-white/[0.04] gap-1.5"
+                                                className="h-8 text-xs border-border/60 hover:bg-accent dark:hover:bg-white/[0.04] gap-1.5"
                                             >
                                                 {testState?.testing ? (
-                                                    <Loader2 className="h-3 w-3 animate-spin text-cyan-400" />
+                                                    <Loader2 className="h-3 w-3 animate-spin text-cyan-700 dark:text-cyan-400" />
                                                 ) : (
-                                                    <Activity className="h-3 w-3 text-cyan-400" />
+                                                    <Activity className="h-3 w-3 text-cyan-700 dark:text-cyan-400" />
                                                 )}
                                                 <span>Test Connection</span>
                                             </Button>
@@ -509,13 +509,13 @@ export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServers
                                                     size="sm"
                                                     onClick={() => handleBulkProvisionUsers(srv)}
                                                     disabled={bulkProvisioningMap[srv.id]}
-                                                    className="h-8 text-xs border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 gap-1.5 cursor-pointer"
+                                                    className="h-8 text-xs border-emerald-500/40 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-500/10 gap-1.5 cursor-pointer"
                                                     title={`Provision & sync all Full Members to ${srv.name}`}
                                                 >
                                                     {bulkProvisioningMap[srv.id] ? (
-                                                        <Loader2 className="h-3 w-3 animate-spin text-emerald-400" />
+                                                        <Loader2 className="h-3 w-3 animate-spin text-emerald-700 dark:text-emerald-400" />
                                                     ) : (
-                                                        <Users className="h-3.5 w-3.5 text-emerald-400" />
+                                                        <Users className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
                                                     )}
                                                     <span>Provision Users</span>
                                                 </Button>
@@ -526,9 +526,9 @@ export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServers
                                                     variant="outline"
                                                     size="sm"
                                                     onClick={() => handleOpenEdit(srv)}
-                                                    className="h-8 text-xs border-border/60 hover:bg-white/[0.04] gap-1.5 text-foreground"
+                                                    className="h-8 text-xs border-border/60 hover:bg-accent dark:hover:bg-white/[0.04] gap-1.5 text-foreground"
                                                 >
-                                                    <Pencil className="h-3.5 w-3.5 text-amber-400" />
+                                                    <Pencil className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
                                                     <span>Edit</span>
                                                 </Button>
                                             )}
@@ -538,7 +538,7 @@ export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServers
                                                     variant="ghost"
                                                     size="sm"
                                                     onClick={() => handleDeleteServer(srv.id, srv.name)}
-                                                    className="h-8 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/15"
+                                                    className="h-8 text-xs text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 hover:bg-red-500/15"
                                                 >
                                                     <Trash2 className="h-3.5 w-3.5" />
                                                 </Button>
@@ -550,14 +550,14 @@ export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServers
                                     {testState?.result && (
                                         <div className={`mt-2 p-2 rounded-lg text-xs flex items-center justify-between gap-2 ${
                                             testState.result.ok 
-                                                ? "bg-emerald-950/30 border border-emerald-500/30 text-emerald-300"
-                                                : "bg-red-950/30 border border-red-500/30 text-red-300"
+                                                ? "bg-emerald-500/10 dark:bg-emerald-950/30 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300"
+                                                : "bg-red-500/10 dark:bg-red-950/30 border border-red-500/30 text-red-800 dark:text-red-300"
                                         }`}>
                                             <div className="flex items-center gap-1.5 truncate">
                                                 {testState.result.ok ? (
-                                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400 shrink-0" />
                                                 ) : (
-                                                    <XCircle className="h-3.5 w-3.5 text-red-400 shrink-0" />
+                                                    <XCircle className="h-3.5 w-3.5 text-red-700 dark:text-red-400 shrink-0" />
                                                 )}
                                                 <span className="truncate">
                                                     {testState.result.summary ? (
@@ -580,7 +580,7 @@ export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServers
 
                                 <CardContent className="pt-4 space-y-4">
                                     {/* Permission Configuration & Policies */}
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl bg-white/[0.02] border border-border/40">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl bg-muted/50 dark:bg-white/[0.02] border border-border/40">
                                         <div className="flex items-center justify-between gap-3">
                                             <div className="space-y-0.5">
                                                 <Label className="text-xs font-semibold text-foreground">
@@ -599,17 +599,17 @@ export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServers
                                         <div className="flex items-center justify-between gap-3 border-t sm:border-t-0 sm:border-l border-border/30 sm:pl-3 pt-2 sm:pt-0">
                                             <div className="space-y-0.5">
                                                 <div className="flex items-center gap-1.5">
-                                                    <Shield className="h-3.5 w-3.5 text-amber-400" />
+                                                    <Shield className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
                                                     <Label className="text-xs font-semibold text-foreground">
                                                         Trial Accounts Policy
                                                     </Label>
                                                 </div>
                                                 <p className="text-[11px] text-muted-foreground">
-                                                    Governed centrally via the <Link href="/settings/access?tab=onboarding#trial-safe-pool" className="text-amber-300 hover:text-amber-200 underline font-semibold inline-flex items-center gap-1">Trial Safe Pool in Access Control <ExternalLink className="h-2.5 w-2.5 inline" /></Link>.
+                                                    Governed centrally via the <Link href="/settings/access?tab=onboarding#trial-safe-pool" className="text-amber-800 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-200 underline font-semibold inline-flex items-center gap-1">Trial Safe Pool in Access Control <ExternalLink className="h-2.5 w-2.5 inline" /></Link>.
                                                 </p>
                                             </div>
                                             <Link href="/settings/access?tab=onboarding#trial-safe-pool">
-                                                <Badge variant="outline" className="text-[10px] bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30 shrink-0 cursor-pointer transition-colors flex items-center gap-1">
+                                                <Badge variant="outline" className="text-[10px] bg-amber-500/10 hover:bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/30 shrink-0 cursor-pointer transition-colors flex items-center gap-1">
                                                     Configure Access <ExternalLink className="h-2.5 w-2.5" />
                                                 </Badge>
                                             </Link>
@@ -650,7 +650,7 @@ export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServers
                                                                 variant="ghost"
                                                                 size="sm"
                                                                 onClick={() => handleSelectAllLibraries(srv.id)}
-                                                                className="h-6 px-2 text-[10px] text-cyan-300 hover:text-cyan-200"
+                                                                className="h-6 px-2 text-[10px] text-cyan-800 dark:text-cyan-300 hover:text-cyan-900 dark:hover:text-cyan-200"
                                                             >
                                                                 <CheckSquare className="h-2.5 w-2.5 mr-1" /> Select All
                                                             </Button>
@@ -667,7 +667,7 @@ export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServers
                                                     </div>
 
                                                     {libraries.length === 0 ? (
-                                                        <div className="p-3 text-xs text-muted-foreground bg-white/[0.01] border border-border/30 rounded-lg text-center">
+                                                        <div className="p-3 text-xs text-muted-foreground bg-muted/50 dark:bg-white/[0.01] border border-border/30 rounded-lg text-center">
                                                             No libraries discovered yet. Click &quot;Test Connection&quot; above to scan virtual folders from {srv.name}.
                                                         </div>
                                                     ) : (
@@ -682,26 +682,26 @@ export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServers
                                                                         onClick={() => handleToggleAllowedLibrary(srv.id, lib.id)}
                                                                         className={`p-2 rounded-lg border text-left flex items-center justify-between gap-1.5 transition-all cursor-pointer ${
                                                                             isAllowed
-                                                                                ? "bg-primary/20 border-primary/60 text-white font-semibold shadow-xs"
-                                                                                : "bg-white/[0.04] border-white/10 text-slate-200 hover:text-white hover:border-white/20 hover:bg-white/[0.08]"
+                                                                                ? "bg-primary/20 border-primary/60 text-foreground dark:text-white font-semibold shadow-xs"
+                                                                                : "bg-muted/50 dark:bg-white/[0.04] border-border/70 dark:border-white/10 text-foreground dark:text-slate-200 hover:text-foreground dark:hover:text-white hover:border-border/70 dark:hover:border-white/20 hover:bg-accent dark:hover:bg-white/[0.08]"
                                                                         }`}
                                                                     >
                                                                         <div className="flex items-center gap-1.5 min-w-0">
                                                                             {lib.type.includes("movie") ? (
-                                                                                <Film className="h-3 w-3 text-cyan-400 shrink-0" />
+                                                                                <Film className="h-3 w-3 text-cyan-700 dark:text-cyan-400 shrink-0" />
                                                                             ) : lib.type.includes("show") || lib.type.includes("tv") ? (
-                                                                                <Tv className="h-3 w-3 text-sky-400 shrink-0" />
+                                                                                <Tv className="h-3 w-3 text-sky-700 dark:text-sky-400 shrink-0" />
                                                                             ) : lib.type.includes("music") ? (
-                                                                                <Music className="h-3 w-3 text-emerald-400 shrink-0" />
+                                                                                <Music className="h-3 w-3 text-emerald-700 dark:text-emerald-400 shrink-0" />
                                                                             ) : (
-                                                                                <FolderCheck className="h-3 w-3 text-amber-400 shrink-0" />
+                                                                                <FolderCheck className="h-3 w-3 text-amber-700 dark:text-amber-400 shrink-0" />
                                                                             )}
-                                                                            <span className={`text-xs truncate ${isAllowed ? "font-bold text-white" : "font-medium text-slate-200"}`}>
+                                                                            <span className={`text-xs truncate ${isAllowed ? "font-bold text-foreground dark:text-white" : "font-medium text-foreground dark:text-slate-200"}`}>
                                                                                 {lib.title}
                                                                             </span>
                                                                         </div>
                                                                         <div className={`h-3.5 w-3.5 rounded shrink-0 flex items-center justify-center border ${
-                                                                            isAllowed ? "bg-primary border-primary text-primary-foreground" : "border-slate-500/50 bg-black/20"
+                                                                            isAllowed ? "bg-primary border-primary text-primary-foreground" : "border-slate-500/50 bg-muted/40 dark:bg-black/20"
                                                                         }`}>
                                                                             {isAllowed && <Check className="h-2.5 w-2.5 stroke-[3]" />}
                                                                         </div>
@@ -716,7 +716,7 @@ export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServers
                                     </div>
                                 </CardContent>
 
-                                <CardFooter className="pt-2 pb-3 px-4 bg-white/[0.01] border-t border-border/30 flex items-center justify-between">
+                                <CardFooter className="pt-2 pb-3 px-4 bg-muted/50 dark:bg-white/[0.01] border-t border-border/30 flex items-center justify-between">
                                     <span className="text-[11px] text-muted-foreground">
                                         Members will strictly see only the allowed libraries on this server.
                                     </span>
@@ -742,7 +742,7 @@ export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServers
 
             {/* Add / Edit Media Server Modal */}
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-                <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto bg-[#121218] border-border/60">
+                <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto bg-popover dark:bg-[#121218] border-border/60">
                     <DialogHeader>
                         <DialogTitle className="text-base font-bold text-foreground flex items-center gap-2">
                             {editingServer ? (
@@ -763,8 +763,8 @@ export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServers
                     </DialogHeader>
 
                     {dialogErr && (
-                        <div className="p-2.5 text-xs bg-red-950/40 border border-red-500/40 text-red-300 rounded-lg flex items-center gap-2">
-                            <XCircle className="h-3.5 w-3.5 text-red-400 shrink-0" />
+                        <div className="p-2.5 text-xs bg-red-500/10 dark:bg-red-950/40 border border-red-500/40 text-red-800 dark:text-red-300 rounded-lg flex items-center gap-2">
+                            <XCircle className="h-3.5 w-3.5 text-red-700 dark:text-red-400 shrink-0" />
                             <span>{dialogErr}</span>
                         </div>
                     )}
@@ -795,7 +795,7 @@ export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServers
 
                         <div className="space-y-1.5">
                             <Label className="text-xs font-semibold flex items-center gap-1.5">
-                                <Globe className="h-3.5 w-3.5 text-cyan-400" />
+                                <Globe className="h-3.5 w-3.5 text-cyan-700 dark:text-cyan-400" />
                                 <span>Public Client URL (Shown in Setup Guides)</span>
                             </Label>
                             <Input
@@ -812,7 +812,7 @@ export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServers
                         <div className="space-y-1.5">
                             <div className="flex items-center justify-between">
                                 <Label className="text-xs font-semibold flex items-center gap-1.5">
-                                    <Network className="h-3.5 w-3.5 text-emerald-400" />
+                                    <Network className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
                                     <span>Internal LAN Fallback URL (Local Direct Routing)</span>
                                 </Label>
                                 <span className="text-[10px] text-muted-foreground">Optional</span>
@@ -832,7 +832,7 @@ export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServers
                             <div className="flex items-center justify-between">
                                 <Label className="text-xs font-semibold">API Key (Administrator Token)</Label>
                                 {editingServer && formApiKey ? (
-                                    <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
+                                    <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-medium flex items-center gap-1">
                                         <Check className="h-3 w-3" /> Saved Key Loaded
                                     </span>
                                 ) : editingServer ? (
@@ -865,7 +865,7 @@ export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServers
                                             className="h-7 w-7 text-muted-foreground hover:text-foreground cursor-pointer"
                                             title="Copy API Key"
                                         >
-                                            {copiedKey ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                                            {copiedKey ? <Check className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
                                         </Button>
                                     )}
                                     <Button

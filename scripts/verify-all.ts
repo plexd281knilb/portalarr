@@ -4553,6 +4553,65 @@ async function runTestSuite() {
                 throw new Error(`Unexpected decorative UI emoji found in ${relComp}`);
             }
         }
+
+        // 7. Kindle modals & URL helpers must expand cleanly on wide screens and never overflow horizontally
+        const dialogSrc = fs.readFileSync(path.join(process.cwd(), "src/components/ui/dialog.tsx"), "utf8");
+        if (!dialogSrc.includes("grid-cols-[minmax(0,1fr)]") || !dialogSrc.includes("overflow-x-hidden")) {
+            throw new Error("Base DialogContent must enforce grid-cols-[minmax(0,1fr)] and overflow-x-hidden to prevent horizontal modal scroll");
+        }
+        for (const kindleModalPath of [
+            "src/components/kindle-sender-update-modal.tsx",
+            "src/components/kindle-setup-guide-modal.tsx",
+        ]) {
+            const modalSrc = fs.readFileSync(path.join(process.cwd(), kindleModalPath), "utf8");
+            if (!modalSrc.includes("sm:max-w-2xl") || !modalSrc.includes("overflow-x-hidden")) {
+                throw new Error(`${kindleModalPath} must use responsive sm:max-w-2xl width and overflow-x-hidden`);
+            }
+        }
+        for (const amazonLinkFile of [
+            "src/components/kindle-sender-update-modal.tsx",
+            "src/components/kindle-setup-guide-modal.tsx",
+            "src/components/kindle-sender-update-banner.tsx",
+            "src/components/request-library-access.tsx",
+        ]) {
+            const src = fs.readFileSync(path.join(process.cwd(), amazonLinkFile), "utf8");
+            const rawUrlAnchorRe = /<a\b([^>]*)>\s*<span>https:\/\/www\.amazon\.com\/hz\/mycd\/myx/g;
+            let match: RegExpExecArray | null;
+            let foundRawUrlAnchor = false;
+            while ((match = rawUrlAnchorRe.exec(src)) !== null) {
+                foundRawUrlAnchor = true;
+                const attrs = match[1];
+                if (attrs.includes("inline-flex") || !attrs.includes("break-all")) {
+                    throw new Error(`${amazonLinkFile} raw Amazon URL anchor must use inline + break-all (never inline-flex) to wrap cleanly on narrow viewports`);
+                }
+            }
+            if (!foundRawUrlAnchor) {
+                throw new Error(`Expected raw Amazon URL anchor check to match inside ${amazonLinkFile}`);
+            }
+        }
+
+        // 8. Light-mode readability regression guard (no dark-only card hexes or un-scoped prose-invert)
+        const globalsCss = fs.readFileSync(path.join(process.cwd(), "src/app/globals.css"), "utf8");
+        if (!globalsCss.includes("color-scheme: light;") || !globalsCss.includes("@variant dark")) {
+            throw new Error("globals.css must declare light root color-scheme and @variant dark selector");
+        }
+        const unprefixedDarkSurfaceRe = /(?<![\w:-])(?:bg-\[#(?:0e0e15|121218)\]|prose-invert)\b/;
+        for (const relUiFile of [
+            "src/app/page.tsx",
+            "src/components/layout-wrapper.tsx",
+            "src/components/sidebar.tsx",
+            "src/components/admin-detailed-streams.tsx",
+            "src/components/error-ticket-modal.tsx",
+            "src/components/ai-server-assistant.tsx",
+            "src/components/curation/curation-nav-header.tsx",
+            "src/components/kindle-sender-update-modal.tsx",
+            "src/components/kindle-setup-guide-modal.tsx",
+        ]) {
+            const uiSrc = fs.readFileSync(path.join(process.cwd(), relUiFile), "utf8");
+            if (unprefixedDarkSurfaceRe.test(uiSrc)) {
+                throw new Error(`${relUiFile} contains un-scoped dark-only surface/prose classes that break Light Mode readability`);
+            }
+        }
     });
 
     console.log("\n==========================================================");

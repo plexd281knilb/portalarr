@@ -147,14 +147,14 @@ export function UnsavedChangesPrompt({
             {/* FLOATING DOCKED SAVE BAR */}
             {hasUnsavedChanges && (
                 <div className="fixed bottom-6 right-6 z-50 animate-in fade-in slide-in-from-bottom-5 duration-300">
-                    <div className="flex flex-col sm:flex-row items-center gap-3 bg-[#13131a]/95 backdrop-blur-xl border-2 border-amber-500/70 p-3.5 sm:px-5 sm:py-3.5 rounded-xl shadow-[0_10px_35px_rgba(245,158,11,0.25)] text-foreground">
+                    <div className="flex flex-col sm:flex-row items-center gap-3 bg-card/95 dark:bg-[#13131a]/95 backdrop-blur-xl border-2 border-amber-500/70 p-3.5 sm:px-5 sm:py-3.5 rounded-xl shadow-[0_10px_35px_rgba(245,158,11,0.25)] text-foreground">
                         <div className="flex items-center gap-2.5">
                             <span className="relative flex h-3 w-3">
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
                                 <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
                             </span>
                             <div className="text-xs">
-                                <span className="font-bold text-amber-400">
+                                <span className="font-bold text-amber-700 dark:text-amber-400">
                                     {title} ({unsavedSections.length})
                                 </span>
                                 <p className="text-[10px] text-muted-foreground hidden sm:block max-w-[220px] truncate">
@@ -169,7 +169,7 @@ export function UnsavedChangesPrompt({
                                 size="sm" 
                                 onClick={onDiscard}
                                 disabled={savingActive}
-                                className="h-8 text-xs text-muted-foreground hover:text-foreground hover:bg-white/5 active:scale-95 transition-all"
+                                className="h-8 text-xs text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-white/5 active:scale-95 transition-all"
                             >
                                 <RotateCcw className="h-3.5 w-3.5 mr-1" /> Discard
                             </Button>
@@ -194,7 +194,7 @@ export function UnsavedChangesPrompt({
 
             {/* UNSAVED CHANGES MODAL */}
             <Dialog open={isModalOpen} onOpenChange={(open) => { if (!open) handleStayOnPage(); }}>
-                <DialogContent className="w-[96vw] sm:max-w-md max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-[#13131a] border-amber-500/40 text-foreground shadow-2xl">
+                <DialogContent className="w-[96vw] sm:max-w-md max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-popover dark:bg-[#13131a] border-amber-500/40 text-foreground shadow-2xl">
                     <DialogHeader className="shrink-0">
                         <div className="flex items-center gap-2 text-amber-500 mb-1">
                             <AlertTriangle className="h-5 w-5" />
@@ -207,13 +207,13 @@ export function UnsavedChangesPrompt({
 
                     {unsavedSections.length > 0 && (
                         <div className="space-y-2 py-2 flex-1 overflow-y-auto min-h-0">
-                            <div className="text-xs font-semibold text-slate-300">Modified Sections:</div>
+                            <div className="text-xs font-semibold text-slate-700 dark:text-slate-300">Modified Sections:</div>
                             <div className="flex flex-wrap gap-1.5">
                                 {unsavedSections.map((sec) => (
                                     <Badge 
                                         key={sec} 
                                         variant="outline" 
-                                        className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-[11px] font-medium"
+                                        className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 text-[11px] font-medium"
                                     >
                                         ● {sec}
                                     </Badge>

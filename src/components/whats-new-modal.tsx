@@ -227,11 +227,11 @@ export default function WhatsNewModal({
                         }}
                         variant="outline"
                         size="sm"
-                        className={buttonClassName || "h-8 px-3 text-xs font-semibold gap-1.5 rounded-full border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 hover:text-amber-200 hover:ring-2 hover:ring-amber-400/50 active:scale-95 transition-all shadow-sm"}
+                        className={buttonClassName || "h-8 px-3 text-xs font-semibold gap-1.5 rounded-full border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-300 hover:bg-amber-500/20 hover:text-amber-900 dark:hover:text-amber-200 hover:ring-2 hover:ring-amber-400/50 active:scale-95 transition-all shadow-sm"}
                     >
-                        <Wrench className="h-3.5 w-3.5 text-amber-400" />
+                        <Wrench className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
                         <span>Dev Roadmap</span>
-                        <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 uppercase font-bold bg-amber-500/20 text-amber-300 border-amber-500/40 ml-0.5">
+                        <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 uppercase font-bold bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/40 ml-0.5">
                             Admin
                         </Badge>
                     </Button>
@@ -243,9 +243,9 @@ export default function WhatsNewModal({
                         }}
                         variant="outline"
                         size="sm"
-                        className={buttonClassName || "h-8 px-3 text-xs font-semibold gap-1.5 rounded-full border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 hover:text-amber-200 hover:ring-2 hover:ring-amber-400/50 active:scale-95 transition-all shadow-sm"}
+                        className={buttonClassName || "h-8 px-3 text-xs font-semibold gap-1.5 rounded-full border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-300 hover:bg-amber-500/20 hover:text-amber-900 dark:hover:text-amber-200 hover:ring-2 hover:ring-amber-400/50 active:scale-95 transition-all shadow-sm"}
                     >
-                        <Sparkles className="h-3.5 w-3.5 text-amber-400" />
+                        <Sparkles className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
                         <span>What&apos;s New</span>
                         {hasUnseenUpdate && (
                             <span className="relative flex h-2 w-2 ml-0.5">
@@ -261,21 +261,21 @@ export default function WhatsNewModal({
                 if (!val) handleDismiss();
                 else setOpen(true);
             }}>
-                <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col bg-[#121218]/95 border-border/60 backdrop-blur-xl shadow-2xl p-0 overflow-hidden">
+                <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col bg-popover/95 dark:bg-[#121218]/95 border-border/60 backdrop-blur-xl shadow-2xl p-0 overflow-hidden">
                     {/* Header */}
                     <div className={`p-5 sm:p-6 border-b border-border/40 transition-colors ${
                         activeTab === "dev" 
-                            ? "bg-gradient-to-r from-amber-950/35 via-background to-slate-900/90 border-amber-500/30" 
-                            : "bg-gradient-to-r from-slate-900/95 via-background to-slate-900/80"
+                            ? "bg-gradient-to-r from-amber-500/10 dark:from-amber-950/35 via-background to-muted/60 dark:to-slate-900/90 border-amber-500/30" 
+                            : "bg-gradient-to-r from-muted/60 dark:from-slate-900/95 via-background to-muted/60 dark:to-slate-900/80"
                     }`}>
                         <DialogHeader className="text-left space-y-2">
                             <div className="flex items-center gap-2 flex-wrap">
                                 {activeTab === "dev" ? (
-                                    <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-[10px] font-bold uppercase tracking-wider py-0.5">
-                                        <Wrench className="h-3 w-3 mr-1 text-amber-400" /> Developer Backlog
+                                    <Badge className="bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/40 text-[10px] font-bold uppercase tracking-wider py-0.5">
+                                        <Wrench className="h-3 w-3 mr-1 text-amber-700 dark:text-amber-400" /> Developer Backlog
                                     </Badge>
                                 ) : (
-                                    <Badge className="bg-sky-500/15 text-sky-300 border-sky-500/35 text-[10px] font-bold uppercase tracking-wider py-0.5">
+                                    <Badge className="bg-sky-500/15 text-sky-800 dark:text-sky-300 border-sky-500/35 text-[10px] font-bold uppercase tracking-wider py-0.5">
                                         <Rocket className="h-3 w-3 mr-1" /> Latest Updates
                                     </Badge>
                                 )}
@@ -285,12 +285,12 @@ export default function WhatsNewModal({
                             <DialogTitle className="text-xl sm:text-2xl font-extrabold tracking-tight flex items-center gap-2 text-foreground">
                                 {activeTab === "dev" ? (
                                     <>
-                                        <Wrench className="h-5 w-5 text-amber-400" />
+                                        <Wrench className="h-5 w-5 text-amber-700 dark:text-amber-400" />
                                         <span>Developer Roadmap & Maintenance Backlog</span>
                                     </>
                                 ) : (
                                     <>
-                                        <Sparkles className="h-5 w-5 text-sky-400" />
+                                        <Sparkles className="h-5 w-5 text-sky-700 dark:text-sky-400" />
                                         <span>What&apos;s New in DomsHomeLab</span>
                                     </>
                                 )}
@@ -303,17 +303,17 @@ export default function WhatsNewModal({
 
                             {/* DUAL ROADMAP TAB SWITCHER (STRICTLY FOR ADMINS) */}
                             {isAdmin && (
-                                <div className="flex items-center gap-1.5 p-1 bg-black/50 rounded-xl border border-white/[0.08] w-fit pt-1 mt-2 shadow-inner">
+                                <div className="flex items-center gap-1.5 p-1 bg-muted/60 dark:bg-black/50 rounded-xl border border-border/70 dark:border-white/[0.08] w-fit pt-1 mt-2 shadow-inner">
                                     <button
                                         type="button"
                                         onClick={() => setActiveTab("user")}
                                         className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                                             activeTab === "user"
-                                                ? "bg-sky-500/25 text-sky-200 border border-sky-500/40 shadow-xs"
-                                                : "text-muted-foreground hover:text-foreground hover:bg-white/[0.04]"
+                                                ? "bg-sky-500/25 text-sky-900 dark:text-sky-200 border border-sky-500/40 shadow-xs"
+                                                : "text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-white/[0.04]"
                                         }`}
                                     >
-                                        <Sparkles className="h-3.5 w-3.5 text-sky-400" />
+                                        <Sparkles className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400" />
                                         <span>User Roadmap</span>
                                     </button>
                                     <button
@@ -321,13 +321,13 @@ export default function WhatsNewModal({
                                         onClick={() => setActiveTab("dev")}
                                         className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                                             activeTab === "dev"
-                                                ? "bg-amber-500/25 text-amber-200 border border-amber-500/40 shadow-xs"
-                                                : "text-muted-foreground hover:text-foreground hover:bg-white/[0.04]"
+                                                ? "bg-amber-500/25 text-amber-900 dark:text-amber-200 border border-amber-500/40 shadow-xs"
+                                                : "text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-white/[0.04]"
                                         }`}
                                     >
-                                        <Wrench className="h-3.5 w-3.5 text-amber-400" />
+                                        <Wrench className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
                                         <span>Developer Roadmap</span>
-                                        <span className="text-[9px] px-1 py-0 rounded bg-amber-500/30 text-amber-300 border border-amber-500/40 font-mono font-bold">
+                                        <span className="text-[9px] px-1 py-0 rounded bg-amber-500/30 text-amber-800 dark:text-amber-300 border border-amber-500/40 font-mono font-bold">
                                             ADMIN
                                         </span>
                                     </button>
@@ -345,13 +345,13 @@ export default function WhatsNewModal({
                                     rehypePlugins={[rehypeRaw]}
                                     components={{
                                         h1: ({ node, ...props }) => (
-                                            <h1 className="text-lg sm:text-xl font-extrabold text-foreground tracking-tight mt-4 mb-2 border-b border-border/40 pb-2 flex items-center gap-2 text-amber-300" {...props} />
+                                            <h1 className="text-lg sm:text-xl font-extrabold text-foreground tracking-tight mt-4 mb-2 border-b border-border/40 pb-2 flex items-center gap-2 text-amber-800 dark:text-amber-300" {...props} />
                                         ),
                                         h2: ({ node, ...props }) => (
-                                            <h2 className="text-base sm:text-lg font-bold text-amber-400 mt-5 mb-2.5 border-b border-amber-500/20 pb-1.5 flex items-center gap-2" {...props} />
+                                            <h2 className="text-base sm:text-lg font-bold text-amber-700 dark:text-amber-400 mt-5 mb-2.5 border-b border-amber-500/20 pb-1.5 flex items-center gap-2" {...props} />
                                         ),
                                         h3: ({ node, ...props }) => (
-                                            <h3 className="text-sm sm:text-base font-bold text-foreground mt-4 mb-1.5 flex items-center gap-2 text-amber-300/95" {...props} />
+                                            <h3 className="text-sm sm:text-base font-bold text-foreground mt-4 mb-1.5 flex items-center gap-2 text-amber-800/95 dark:text-amber-300/95" {...props} />
                                         ),
                                         h4: ({ node, ...props }) => (
                                             <h4 className="text-xs sm:text-sm font-bold text-muted-foreground uppercase tracking-wider mt-3 mb-1" {...props} />
@@ -375,14 +375,14 @@ export default function WhatsNewModal({
                                             <blockquote className="border-l-2 border-amber-500/70 pl-3 py-1.5 my-2 bg-amber-500/5 rounded-r text-xs text-foreground/90" {...props} />
                                         ),
                                         a: ({ node, ...props }) => (
-                                            <a className="text-cyan-400 underline hover:text-cyan-300 transition-colors" target="_blank" rel="noopener noreferrer" {...props} />
+                                            <a className="text-cyan-700 dark:text-cyan-400 underline hover:text-cyan-800 dark:hover:text-cyan-300 transition-colors" target="_blank" rel="noopener noreferrer" {...props} />
                                         ),
                                         pre: ({ node, ...props }) => (
-                                            <pre className="p-3 my-2.5 rounded-xl bg-black/60 border border-white/[0.08] overflow-x-auto text-xs font-mono text-cyan-300 shadow-inner" {...props} />
+                                            <pre className="p-3 my-2.5 rounded-xl bg-muted/60 dark:bg-black/60 border border-border/70 dark:border-white/[0.08] overflow-x-auto text-xs font-mono text-cyan-800 dark:text-cyan-300 shadow-inner" {...props} />
                                         ),
                                         code: ({ node, inline, ...props }: any) => (
                                             inline 
-                                                ? <code className="px-1.5 py-0.5 rounded bg-black/40 border border-white/[0.08] font-mono text-[11px] text-amber-300" {...props} />
+                                                ? <code className="px-1.5 py-0.5 rounded bg-muted/60 dark:bg-black/40 border border-border/70 dark:border-white/[0.08] font-mono text-[11px] text-amber-800 dark:text-amber-300" {...props} />
                                                 : <code className="font-mono text-xs" {...props} />
                                         ),
                                     }}
@@ -404,7 +404,7 @@ export default function WhatsNewModal({
                                             <h1 className="text-lg sm:text-xl font-extrabold text-foreground tracking-tight mt-4 mb-2 border-b border-border/40 pb-2 flex items-center gap-2" {...props} />
                                         ),
                                         h2: ({ node, ...props }) => (
-                                            <h2 className="text-base sm:text-lg font-bold text-amber-300 mt-4 mb-2 border-b border-amber-500/25 pb-1.5 flex items-center gap-2" {...props} />
+                                            <h2 className="text-base sm:text-lg font-bold text-amber-800 dark:text-amber-300 mt-4 mb-2 border-b border-amber-500/25 pb-1.5 flex items-center gap-2" {...props} />
                                         ),
                                         h3: ({ node, ...props }) => (
                                             <h3 className="text-sm sm:text-base font-bold text-foreground mt-3 mb-1.5 flex items-center gap-2 text-primary/95" {...props} />
@@ -419,7 +419,7 @@ export default function WhatsNewModal({
                                             <ol className="space-y-1.5 my-2 pl-4 list-decimal text-xs sm:text-sm text-muted-foreground/95" {...props} />
                                         ),
                                         li: ({ node, ...props }) => (
-                                            <li className="text-xs leading-relaxed text-muted-foreground/95 p-2.5 rounded-lg bg-white/[0.02] border border-border/40 hover:border-amber-500/35 transition-all block" {...props} />
+                                            <li className="text-xs leading-relaxed text-muted-foreground/95 p-2.5 rounded-lg bg-muted/50 dark:bg-white/[0.02] border border-border/40 hover:border-amber-500/35 transition-all block" {...props} />
                                         ),
                                         strong: ({ node, ...props }) => (
                                             <strong className="font-semibold text-foreground" {...props} />
@@ -428,7 +428,7 @@ export default function WhatsNewModal({
                                             <blockquote className="border-l-2 border-amber-500/70 pl-3 py-1.5 my-2 bg-amber-500/5 rounded-r text-xs text-foreground/90" {...props} />
                                         ),
                                         a: ({ node, ...props }) => (
-                                            <a className="text-sky-400 underline hover:text-sky-300 transition-colors" target="_blank" rel="noopener noreferrer" {...props} />
+                                            <a className="text-sky-700 dark:text-sky-400 underline hover:text-sky-800 dark:hover:text-sky-300 transition-colors" target="_blank" rel="noopener noreferrer" {...props} />
                                         ),
                                     }}
                                 >
@@ -445,14 +445,14 @@ export default function WhatsNewModal({
                     {/* Footer */}
                     <div className="p-4 sm:p-5 border-t border-border/40 bg-muted/10 flex flex-col sm:flex-row items-center justify-between gap-3">
                         {activeTab === "dev" ? (
-                            <Button asChild variant="ghost" size="sm" className="text-xs text-amber-400 hover:text-amber-300 gap-1.5 order-2 sm:order-1">
+                            <Button asChild variant="ghost" size="sm" className="text-xs text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 gap-1.5 order-2 sm:order-1">
                                 <Link href="/settings?tab=announcements">
                                     <Wrench className="h-3.5 w-3.5" />
                                     <span>Edit Roadmaps in Settings</span>
                                 </Link>
                             </Button>
                         ) : (
-                            <Button asChild variant="ghost" size="sm" className="text-xs text-sky-400 hover:text-sky-300 gap-1.5 order-2 sm:order-1">
+                            <Button asChild variant="ghost" size="sm" className="text-xs text-sky-700 dark:text-sky-400 hover:text-sky-800 dark:hover:text-sky-300 gap-1.5 order-2 sm:order-1">
                                 <Link href="/guides">
                                     <span>View Device Setup Guides</span>
                                     <ArrowRight className="h-3.5 w-3.5" />

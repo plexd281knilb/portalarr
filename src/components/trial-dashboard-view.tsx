@@ -34,14 +34,14 @@ export default function TrialDashboardView({ user, quota, billing }: TrialDashbo
             {/* --- COMPACT TRIAL STATUS & LAUNCHPAD --- */}
             <div className="space-y-3">
                 {/* Status Bar Header: Glowing Countdown Pill */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-3 sm:px-4 sm:py-2.5 rounded-2xl bg-[#121218]/90 border border-amber-500/30 backdrop-blur-md shadow-sm">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-3 sm:px-4 sm:py-2.5 rounded-2xl bg-card/95 dark:bg-[#121218]/90 border border-amber-500/30 backdrop-blur-md shadow-sm">
                     <div className="flex items-center gap-2.5">
                         <span className="relative flex h-3 w-3 shrink-0">
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
                             <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500" />
                         </span>
                         <div className="flex flex-wrap items-center gap-2">
-                            <Badge variant="outline" className="bg-amber-500/15 text-amber-300 border-amber-500/40 text-xs sm:text-sm font-bold px-2.5 py-0.5 shadow-xs">
+                            <Badge variant="outline" className="bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/40 text-xs sm:text-sm font-bold px-2.5 py-0.5 shadow-xs">
                                 ⏳ Free Trial: {daysRemaining} {daysRemaining === 1 ? "Day" : "Days"} Remaining
                             </Badge>
                             {trialEndsAt && (
@@ -64,17 +64,17 @@ export default function TrialDashboardView({ user, quota, billing }: TrialDashbo
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3.5">
                     {/* 1. Request Media */}
                     <Link href="/discover" className="block group h-full">
-                        <div className="h-full flex flex-col justify-between p-3 sm:p-3.5 rounded-xl border bg-rose-500/10 border-rose-500/30 text-rose-400 hover:border-rose-500/60 hover:bg-rose-500/15 transition-all duration-200 active:scale-98 shadow-sm hover:shadow-md">
+                        <div className="h-full flex flex-col justify-between p-3 sm:p-3.5 rounded-xl border bg-rose-500/10 border-rose-500/30 text-rose-700 dark:text-rose-400 hover:border-rose-500/60 hover:bg-rose-500/15 transition-all duration-200 active:scale-98 shadow-sm hover:shadow-md">
                             <div className="flex items-center justify-between gap-1.5 mb-2">
                                 <div className="p-2 rounded-lg bg-background/50 border border-border/40 shadow-xs">
-                                    <Compass className="h-5 w-5 text-rose-400" />
+                                    <Compass className="h-5 w-5 text-rose-700 dark:text-rose-400" />
                                 </div>
-                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border tracking-wide uppercase bg-rose-500/15 text-rose-300 border-rose-500/30 line-clamp-1">
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border tracking-wide uppercase bg-rose-500/15 text-rose-800 dark:text-rose-300 border-rose-500/30 line-clamp-1">
                                     {movieQuota.remaining ?? 0} Movies • {tvQuota.remaining ?? 0} TV Left
                                 </span>
                             </div>
                             <div className="space-y-0.5">
-                                <h3 className="text-xs sm:text-sm font-bold text-foreground group-hover:text-rose-300 transition-colors flex items-center justify-between">
+                                <h3 className="text-xs sm:text-sm font-bold text-foreground group-hover:text-rose-800 dark:group-hover:text-rose-300 transition-colors flex items-center justify-between">
                                     <span>Request Media</span>
                                     <ArrowRight className="h-3.5 w-3.5 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all shrink-0" />
                                 </h3>
@@ -89,17 +89,17 @@ export default function TrialDashboardView({ user, quota, billing }: TrialDashbo
                     <div className="h-full">
                         <PlexSetupGuides 
                             trigger={
-                                <button type="button" className="w-full h-full text-left flex flex-col justify-between p-3 sm:p-3.5 rounded-xl border bg-amber-500/10 border-amber-500/30 text-amber-400 hover:border-amber-500/60 hover:bg-amber-500/15 transition-all duration-200 active:scale-98 shadow-sm hover:shadow-md cursor-pointer group">
+                                <button type="button" className="w-full h-full text-left flex flex-col justify-between p-3 sm:p-3.5 rounded-xl border bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400 hover:border-amber-500/60 hover:bg-amber-500/15 transition-all duration-200 active:scale-98 shadow-sm hover:shadow-md cursor-pointer group">
                                     <div className="flex items-center justify-between gap-1.5 mb-2 w-full">
                                         <div className="p-2 rounded-lg bg-background/50 border border-border/40 shadow-xs">
-                                            <Tv2 className="h-5 w-5 text-amber-400" />
+                                            <Tv2 className="h-5 w-5 text-amber-700 dark:text-amber-400" />
                                         </div>
-                                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border tracking-wide uppercase bg-amber-500/15 text-amber-300 border-amber-500/30">
+                                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border tracking-wide uppercase bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30">
                                             Setup
                                         </span>
                                     </div>
                                     <div className="space-y-0.5 w-full">
-                                        <h3 className="text-xs sm:text-sm font-bold text-foreground group-hover:text-amber-300 transition-colors flex items-center justify-between">
+                                        <h3 className="text-xs sm:text-sm font-bold text-foreground group-hover:text-amber-800 dark:group-hover:text-amber-300 transition-colors flex items-center justify-between">
                                             <span>Plex Setup Guides</span>
                                             <ArrowRight className="h-3.5 w-3.5 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all shrink-0" />
                                         </h3>
@@ -116,17 +116,17 @@ export default function TrialDashboardView({ user, quota, billing }: TrialDashbo
                     <div className="h-full">
                         <ServerSpeedTest 
                             trigger={
-                                <button type="button" className="w-full h-full text-left flex flex-col justify-between p-3 sm:p-3.5 rounded-xl border bg-sky-500/10 border-sky-500/30 text-sky-400 hover:border-sky-500/60 hover:bg-sky-500/15 transition-all duration-200 active:scale-98 shadow-sm hover:shadow-md cursor-pointer group">
+                                <button type="button" className="w-full h-full text-left flex flex-col justify-between p-3 sm:p-3.5 rounded-xl border bg-sky-500/10 border-sky-500/30 text-sky-700 dark:text-sky-400 hover:border-sky-500/60 hover:bg-sky-500/15 transition-all duration-200 active:scale-98 shadow-sm hover:shadow-md cursor-pointer group">
                                     <div className="flex items-center justify-between gap-1.5 mb-2 w-full">
                                         <div className="p-2 rounded-lg bg-background/50 border border-border/40 shadow-xs">
-                                            <Zap className="h-5 w-5 text-sky-400" />
+                                            <Zap className="h-5 w-5 text-sky-700 dark:text-sky-400" />
                                         </div>
-                                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border tracking-wide uppercase bg-sky-500/15 text-sky-300 border-sky-500/30">
+                                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border tracking-wide uppercase bg-sky-500/15 text-sky-800 dark:text-sky-300 border-sky-500/30">
                                             Bandwidth
                                         </span>
                                     </div>
                                     <div className="space-y-0.5 w-full">
-                                        <h3 className="text-xs sm:text-sm font-bold text-foreground group-hover:text-sky-300 transition-colors flex items-center justify-between">
+                                        <h3 className="text-xs sm:text-sm font-bold text-foreground group-hover:text-sky-800 dark:group-hover:text-sky-300 transition-colors flex items-center justify-between">
                                             <span>Server Speed Test</span>
                                             <ArrowRight className="h-3.5 w-3.5 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all shrink-0" />
                                         </h3>
@@ -143,17 +143,17 @@ export default function TrialDashboardView({ user, quota, billing }: TrialDashbo
                     <div className="h-full">
                         <Dialog>
                             <DialogTrigger asChild>
-                                <button type="button" className="w-full h-full text-left flex flex-col justify-between p-3 sm:p-3.5 rounded-xl border bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:border-emerald-500/60 hover:bg-emerald-500/15 transition-all duration-200 active:scale-98 shadow-sm hover:shadow-md cursor-pointer group">
+                                <button type="button" className="w-full h-full text-left flex flex-col justify-between p-3 sm:p-3.5 rounded-xl border bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:border-emerald-500/60 hover:bg-emerald-500/15 transition-all duration-200 active:scale-98 shadow-sm hover:shadow-md cursor-pointer group">
                                     <div className="flex items-center justify-between gap-1.5 mb-2 w-full">
                                         <div className="p-2 rounded-lg bg-background/50 border border-border/40 shadow-xs">
-                                            <CreditCard className="h-5 w-5 text-emerald-400" />
+                                            <CreditCard className="h-5 w-5 text-emerald-700 dark:text-emerald-400" />
                                         </div>
-                                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border tracking-wide uppercase bg-emerald-500/15 text-emerald-300 border-emerald-500/30">
+                                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border tracking-wide uppercase bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border-emerald-500/30">
                                             Pricing
                                         </span>
                                     </div>
                                     <div className="space-y-0.5 w-full">
-                                        <h3 className="text-xs sm:text-sm font-bold text-foreground group-hover:text-emerald-300 transition-colors flex items-center justify-between">
+                                        <h3 className="text-xs sm:text-sm font-bold text-foreground group-hover:text-emerald-800 dark:group-hover:text-emerald-300 transition-colors flex items-center justify-between">
                                             <span>Membership Pricing</span>
                                             <ArrowRight className="h-3.5 w-3.5 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all shrink-0" />
                                         </h3>
@@ -163,10 +163,10 @@ export default function TrialDashboardView({ user, quota, billing }: TrialDashbo
                                     </div>
                                 </button>
                             </DialogTrigger>
-                            <DialogContent className="sm:max-w-lg bg-[#121218]/95 border-border/60 backdrop-blur-xl shadow-2xl p-4 sm:p-6 max-h-[85vh] overflow-y-auto">
+                            <DialogContent className="sm:max-w-lg bg-popover/95 dark:bg-[#121218]/95 border-border/60 backdrop-blur-xl shadow-2xl p-4 sm:p-6 max-h-[85vh] overflow-y-auto">
                                 <DialogHeader className="pb-3 border-b border-border/40">
                                     <DialogTitle className="flex items-center gap-2 text-lg font-bold text-foreground">
-                                        <CreditCard className="h-5 w-5 text-emerald-400" />
+                                        <CreditCard className="h-5 w-5 text-emerald-700 dark:text-emerald-400" />
                                         Membership Plans &amp; Activation
                                     </DialogTitle>
                                     <DialogDescription className="text-xs text-muted-foreground">
@@ -176,13 +176,13 @@ export default function TrialDashboardView({ user, quota, billing }: TrialDashbo
 
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 py-3">
                                     {/* Monthly */}
-                                    <div className="p-4 rounded-xl bg-white/[0.03] border border-amber-500/25 space-y-2 flex flex-col justify-between">
+                                    <div className="p-4 rounded-xl bg-muted/50 dark:bg-white/[0.03] border border-amber-500/25 space-y-2 flex flex-col justify-between">
                                         <div>
                                             <div className="flex items-center justify-between">
                                                 <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                                                    <Calendar className="h-3.5 w-3.5 text-amber-400" /> Monthly Plan
+                                                    <Calendar className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" /> Monthly Plan
                                                 </span>
-                                                <Badge variant="outline" className="text-[10px] text-amber-300 border-amber-500/30">
+                                                <Badge variant="outline" className="text-[10px] text-amber-800 dark:text-amber-300 border-amber-500/30">
                                                     Flexible
                                                 </Badge>
                                             </div>
@@ -194,7 +194,7 @@ export default function TrialDashboardView({ user, quota, billing }: TrialDashbo
                                             </p>
                                         </div>
                                         <div className="pt-2">
-                                            <Button asChild size="sm" variant="outline" className="w-full text-xs font-semibold border-amber-500/30 hover:bg-amber-500/10 text-amber-300">
+                                            <Button asChild size="sm" variant="outline" className="w-full text-xs font-semibold border-amber-500/30 hover:bg-amber-500/10 text-amber-800 dark:text-amber-300">
                                                 <Link href="/profile">
                                                     Payment Instructions
                                                 </Link>
@@ -203,17 +203,17 @@ export default function TrialDashboardView({ user, quota, billing }: TrialDashbo
                                     </div>
 
                                     {/* Annual Prorated */}
-                                    <div className="p-4 rounded-xl bg-white/[0.03] border border-emerald-500/25 space-y-2 flex flex-col justify-between">
+                                    <div className="p-4 rounded-xl bg-muted/50 dark:bg-white/[0.03] border border-emerald-500/25 space-y-2 flex flex-col justify-between">
                                         <div>
                                             <div className="flex items-center justify-between">
                                                 <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                                                    <DollarSign className="h-3.5 w-3.5 text-emerald-400" /> Rest of Year
+                                                    <DollarSign className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" /> Rest of Year
                                                 </span>
-                                                <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                                                <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">
                                                     Best Value
                                                 </Badge>
                                             </div>
-                                            <div className="text-2xl font-black text-emerald-400 pt-1">
+                                            <div className="text-2xl font-black text-emerald-700 dark:text-emerald-400 pt-1">
                                                 {billing?.amountDueText || "$180/year"}
                                             </div>
                                             <p className="text-xs text-muted-foreground pt-1 leading-relaxed">

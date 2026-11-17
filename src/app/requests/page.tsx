@@ -29,7 +29,7 @@ export default async function RequestsPage() {
             <section className="space-y-1 sm:space-y-2 py-2 sm:py-4">
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                     <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-xl bg-sky-500/15 border border-sky-500/35 flex items-center justify-center text-sky-300">
+                        <div className="h-10 w-10 rounded-xl bg-sky-500/15 border border-sky-500/35 flex items-center justify-center text-sky-800 dark:text-sky-300">
                             <Inbox className="h-5 w-5" />
                         </div>
                         <div>

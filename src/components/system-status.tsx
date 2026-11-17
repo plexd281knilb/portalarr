@@ -96,7 +96,7 @@ export default function SystemStatus() {
     };
 
     return (
-        <Card className="h-full border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm hover:shadow-md transition-all duration-200 animate-in fade-in duration-700">
+        <Card className="h-full border-border/50 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md shadow-sm hover:shadow-md transition-all duration-200 animate-in fade-in duration-700">
             <CardHeader>
                 <div className="flex justify-between items-start">
                     <div>
@@ -128,7 +128,7 @@ export default function SystemStatus() {
                 </div>
                 
                 {stats.downApps && stats.downApps.length > 0 && (
-                    <div className="text-xs text-red-400 bg-red-950/40 p-3 rounded-xl border border-red-800/40">
+                    <div className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 dark:bg-red-950/40 p-3 rounded-xl border border-red-500/40 dark:border-red-800/40">
                         <strong>Down:</strong> {stats.downApps.join(", ")}
                     </div>
                 )}
@@ -167,17 +167,17 @@ export default function SystemStatus() {
                             <div key={server.name} className="space-y-1.5 p-2.5 rounded-xl bg-muted/15 border border-border/30">
                                 <div className="flex justify-between text-xs font-semibold text-muted-foreground">
                                     <span className="text-foreground">{server.name}</span>
-                                    <span className={server.online ? "text-emerald-400 font-bold" : "text-red-400 font-bold"}>
+                                    <span className={server.online ? "text-emerald-700 dark:text-emerald-400 font-bold" : "text-red-700 dark:text-red-400 font-bold"}>
                                         {server.online ? "ONLINE" : "OFFLINE"}
                                     </span>
                                 </div>
                                 {server.online && (
                                     <div className="grid grid-cols-2 gap-2 text-xs font-mono pt-1">
                                         <div className="flex items-center gap-1.5 bg-background/60 border border-border/30 p-1.5 rounded-lg">
-                                            <Cpu className="h-3 w-3 text-sky-400"/> {server.cpu?.toFixed(1) || 0}% CPU
+                                            <Cpu className="h-3 w-3 text-sky-700 dark:text-sky-400"/> {server.cpu?.toFixed(1) || 0}% CPU
                                         </div>
                                         <div className="flex items-center gap-1.5 bg-background/60 border border-border/30 p-1.5 rounded-lg">
-                                            <HardDrive className="h-3 w-3 text-amber-400"/> {server.ram?.toFixed(1) || 0}% RAM
+                                            <HardDrive className="h-3 w-3 text-amber-700 dark:text-amber-400"/> {server.ram?.toFixed(1) || 0}% RAM
                                         </div>
                                     </div>
                                 )}

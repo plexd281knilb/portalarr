@@ -612,7 +612,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
     return (
         <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-300">
             {/* Top Section Switcher: Main Discovery vs Kids & Family */}
-            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 p-2 sm:p-2.5 rounded-xl bg-[#0e0e14] border border-border/60 shadow-lg min-w-0">
+            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 p-2 sm:p-2.5 rounded-xl bg-card dark:bg-[#0e0e14] border border-border/60 shadow-lg min-w-0">
                 <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full xl:w-auto">
                     <button
                         onClick={() => handleSectionChange("main")}
@@ -636,7 +636,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                     >
                         <Smile className="h-4 w-4 shrink-0" />
                         <span className="truncate">Kids & Family</span>
-                        <Badge variant="outline" className="text-[10px] font-extrabold px-1.5 py-0 rounded bg-white/20 text-white border-white/40 hidden sm:inline-flex shrink-0">
+                        <Badge variant="outline" className="text-[10px] font-extrabold px-1.5 py-0 rounded bg-white/20 text-foreground dark:text-white border-white/40 hidden sm:inline-flex shrink-0">
                             PG Safe
                         </Badge>
                     </button>
@@ -645,13 +645,13 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                 {/* Section Mode Indicator Badge */}
                 <div className="hidden xl:flex items-center gap-2 pr-3 shrink-0">
                     {section === "kids" ? (
-                        <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-300 bg-amber-500/15 border border-amber-500/30 px-3 py-1 rounded-full whitespace-nowrap">
-                            <ShieldCheck className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                        <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-800 dark:text-amber-300 bg-amber-500/15 border border-amber-500/30 px-3 py-1 rounded-full whitespace-nowrap">
+                            <ShieldCheck className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
                             <span>Kids Mode: PG & Below Auto-Approved • R/TV-MA Filtered</span>
                         </div>
                     ) : (
-                        <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-300 bg-blue-500/15 border border-blue-500/30 px-3 py-1 rounded-full whitespace-nowrap">
-                            <Sparkles className="h-3.5 w-3.5 text-blue-400 shrink-0" />
+                        <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-800 dark:text-blue-300 bg-blue-500/15 border border-blue-500/30 px-3 py-1 rounded-full whitespace-nowrap">
+                            <Sparkles className="h-3.5 w-3.5 text-blue-700 dark:text-blue-400 shrink-0" />
                             <span>Unified Media Request Engine</span>
                         </div>
                     )}
@@ -659,7 +659,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
             </div>
 
             {/* Navigation & Search Bar */}
-            <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 sm:gap-4 p-3 sm:p-4 rounded-2xl bg-[#101016] border border-border/50 backdrop-blur-md shadow-sm">
+            <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 sm:gap-4 p-3 sm:p-4 rounded-2xl bg-card dark:bg-[#101016] border border-border/50 backdrop-blur-md shadow-sm">
                 {/* Navigation Pills */}
                 <div className="flex flex-wrap items-center gap-1.5">
                     <Button
@@ -792,7 +792,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
             )}
 
             {loadError && activeTab !== "requests" && (
-                <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 flex items-center justify-between gap-3">
+                <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-800 dark:text-rose-300 flex items-center justify-between gap-3">
                     <span>{loadError}</span>
                     <Button
                         variant="outline"
@@ -867,7 +867,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                             </p>
                         </div>
                     ) : (movieResults.length + tvResults.length + bookResults.length + audiobookResults.length) === 0 && !(isSearching || isSearchingMovies || isSearchingTv || isSearchingBooks || isSearchingAudiobooks) ? (
-                        <div className="p-12 text-center rounded-2xl bg-[#121218]/60 border border-dashed border-border/50 space-y-2">
+                        <div className="p-12 text-center rounded-2xl bg-muted/80 dark:bg-[#121218]/60 border border-dashed border-border/50 space-y-2">
                             <Search className="h-8 w-8 mx-auto text-muted-foreground opacity-40" />
                             <h3 className="text-sm font-bold text-foreground">No Titles Found</h3>
                             <p className="text-xs text-muted-foreground max-w-sm mx-auto">
@@ -881,11 +881,11 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                                 <div className="space-y-3 animate-in fade-in duration-300">
                                     <div className="flex items-center justify-between">
                                         <h3 className="text-sm font-bold text-muted-foreground flex items-center gap-1.5">
-                                            <Film className="h-4 w-4 text-blue-400" />
+                                            <Film className="h-4 w-4 text-blue-700 dark:text-blue-400" />
                                             <span>Movies {movieResults.length > 0 && `(${movieResults.length})`}</span>
                                         </h3>
                                         {isSearchingMovies && (
-                                            <div className="flex items-center gap-1.5 text-xs text-blue-400">
+                                            <div className="flex items-center gap-1.5 text-xs text-blue-700 dark:text-blue-400">
                                                 <div className="w-3 h-3 border-2 border-blue-400/30 border-t-blue-400 rounded-full animate-spin" />
                                                 <span>Searching movies...</span>
                                             </div>
@@ -912,11 +912,11 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                                 <div className="space-y-3 animate-in fade-in duration-300">
                                     <div className="flex items-center justify-between">
                                         <h3 className="text-sm font-bold text-muted-foreground flex items-center gap-1.5">
-                                            <Tv className="h-4 w-4 text-cyan-400" />
+                                            <Tv className="h-4 w-4 text-cyan-700 dark:text-cyan-400" />
                                             <span>TV Shows {tvResults.length > 0 && `(${tvResults.length})`}</span>
                                         </h3>
                                         {isSearchingTv && (
-                                            <div className="flex items-center gap-1.5 text-xs text-cyan-400">
+                                            <div className="flex items-center gap-1.5 text-xs text-cyan-700 dark:text-cyan-400">
                                                 <div className="w-3 h-3 border-2 border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin" />
                                                 <span>Searching TV shows...</span>
                                             </div>
@@ -943,11 +943,11 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                                 <div className="space-y-3 animate-in fade-in duration-300">
                                     <div className="flex items-center justify-between">
                                         <h3 className="text-sm font-bold text-muted-foreground flex items-center gap-1.5">
-                                            <BookOpen className="h-4 w-4 text-emerald-400" />
+                                            <BookOpen className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
                                             <span>Books {bookResults.length > 0 && `(${bookResults.length})`}</span>
                                         </h3>
                                         {isSearchingBooks && (
-                                            <div className="flex items-center gap-1.5 text-xs text-emerald-400">
+                                            <div className="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400">
                                                 <div className="w-3 h-3 border-2 border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin" />
                                                 <span>Searching books...</span>
                                             </div>
@@ -973,11 +973,11 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                                 <div className="space-y-3 animate-in fade-in duration-300">
                                     <div className="flex items-center justify-between">
                                         <h3 className="text-sm font-bold text-muted-foreground flex items-center gap-1.5">
-                                            <Headphones className="h-4 w-4 text-amber-400" />
+                                            <Headphones className="h-4 w-4 text-amber-700 dark:text-amber-400" />
                                             <span>Audiobooks {audiobookResults.length > 0 && `(${audiobookResults.length})`}</span>
                                         </h3>
                                         {isSearchingAudiobooks && (
-                                            <div className="flex items-center gap-1.5 text-xs text-amber-400">
+                                            <div className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">
                                                 <div className="w-3 h-3 border-2 border-amber-400/30 border-t-amber-400 rounded-full animate-spin" />
                                                 <span>Searching audiobooks...</span>
                                             </div>
@@ -1052,9 +1052,9 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                                 <div key={bsec.id} className="space-y-3">
                                     <div className="flex items-center gap-2">
                                         {bsec.mediaType === "audiobook" ? (
-                                            <Headphones className="h-5 w-5 text-amber-400" />
+                                            <Headphones className="h-5 w-5 text-amber-700 dark:text-amber-400" />
                                         ) : (
-                                            <BookOpen className="h-5 w-5 text-emerald-400" />
+                                            <BookOpen className="h-5 w-5 text-emerald-700 dark:text-emerald-400" />
                                         )}
                                         <h3 className="text-base sm:text-lg font-bold text-foreground tracking-tight">
                                             {bsec.title}
@@ -1079,7 +1079,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
             ) : activeTab === "movies" || activeTab === "tv" ? (
                 /* MOVIES OR TV TAB: Category Grid */
                 <div className="space-y-4">
-                    <div className="flex items-center gap-1.5 p-1 rounded-xl bg-[#121218] border border-border/40 w-fit">
+                    <div className="flex items-center gap-1.5 p-1 rounded-xl bg-card dark:bg-[#121218] border border-border/40 w-fit">
                         <Button
                             size="sm"
                             variant={gridCategory === "popular" ? "secondary" : "ghost"}
@@ -1147,9 +1147,9 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                                 <div key={sec.id} className="space-y-3">
                                     <div className="flex items-center gap-2">
                                         {activeTab === "audiobooks" ? (
-                                            <Headphones className="h-5 w-5 text-amber-400" />
+                                            <Headphones className="h-5 w-5 text-amber-700 dark:text-amber-400" />
                                         ) : (
-                                            <BookOpen className="h-5 w-5 text-emerald-400" />
+                                            <BookOpen className="h-5 w-5 text-emerald-700 dark:text-emerald-400" />
                                         )}
                                         <h3 className="text-base sm:text-lg font-bold text-foreground tracking-tight">
                                             {sec.title}

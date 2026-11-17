@@ -225,9 +225,9 @@ export function BookMatchModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200">
-      <Card className="w-[96vw] sm:max-w-3xl border-zinc-800 bg-[#121318]/95 shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+      <Card className="w-[96vw] sm:max-w-3xl border-border dark:border-zinc-800 bg-card/95 dark:bg-[#121318]/95 shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
         {/* Modal Header */}
-        <CardHeader className="pb-3 border-b border-zinc-800/80 bg-zinc-900/50 flex-shrink-0">
+        <CardHeader className="pb-3 border-b border-border dark:border-zinc-800/80 bg-muted/70 dark:bg-zinc-900/50 flex-shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <div className="p-2 rounded-lg bg-primary/10 border border-primary/20 text-primary">
@@ -249,7 +249,7 @@ export function BookMatchModal({
             <Button
               variant="ghost"
               size="sm"
-              className="h-8 w-8 p-0 rounded-full hover:bg-zinc-800 text-muted-foreground hover:text-foreground"
+              className="h-8 w-8 p-0 rounded-full hover:bg-accent dark:hover:bg-zinc-800 text-muted-foreground hover:text-foreground"
               onClick={onClose}
               disabled={isSubmitting}
             >
@@ -261,10 +261,10 @@ export function BookMatchModal({
         {/* Modal Scrollable Body */}
         <div className="overflow-y-auto flex-1 p-4 sm:p-5 space-y-5 custom-scrollbar">
           {/* File Inspector Header Bar */}
-          <div className="p-3 rounded-lg bg-zinc-900/80 border border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div className="p-3 rounded-lg bg-card/95 dark:bg-zinc-900/80 border border-border dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
             <div className="space-y-1 min-w-0">
-              <div className="flex items-center gap-2 text-zinc-300 font-medium truncate">
-                <FileText className="h-4 w-4 text-zinc-400 flex-shrink-0" />
+              <div className="flex items-center gap-2 text-slate-700 dark:text-zinc-300 font-medium truncate">
+                <FileText className="h-4 w-4 text-slate-600 dark:text-zinc-400 flex-shrink-0" />
                 <span className="truncate">{book.filePath ? book.filePath.split(/[/\\]/).pop() : book.title}</span>
               </div>
               <div className="flex items-center gap-3 text-[11px] text-zinc-500 font-mono">
@@ -277,7 +277,7 @@ export function BookMatchModal({
             </div>
             <Badge
               variant="outline"
-              className="text-[10px] bg-amber-500/10 border-amber-500/30 text-amber-400 flex-shrink-0 self-start sm:self-center"
+              className="text-[10px] bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400 flex-shrink-0 self-start sm:self-center"
             >
               <AlertCircle className="h-3 w-3 mr-1" />
               {book.series ? "Manual Remap" : "Unlinked File"}
@@ -286,13 +286,13 @@ export function BookMatchModal({
 
           {/* Feedback Messages */}
           {errorMessage && (
-            <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-xs font-medium flex items-center gap-2">
+            <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-700 dark:text-red-400 text-xs font-medium flex items-center gap-2">
               <AlertCircle className="h-4 w-4 flex-shrink-0" />
               <span>{errorMessage}</span>
             </div>
           )}
           {successMessage && (
-            <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-emerald-400 text-xs font-medium flex items-center gap-2">
+            <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-emerald-700 dark:text-emerald-400 text-xs font-medium flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
               <span>{successMessage}</span>
             </div>
@@ -301,7 +301,7 @@ export function BookMatchModal({
           {/* Interactive Registry Search Bar */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
+              <Label className="text-xs font-semibold text-slate-700 dark:text-zinc-300 flex items-center gap-1.5">
                 <Search className="h-3.5 w-3.5 text-primary" />
                 Search Book Registry (OpenLibrary / Audible / Google Books)
               </Label>
@@ -313,14 +313,14 @@ export function BookMatchModal({
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="e.g. Harry Potter and the Chamber of Secrets J.K. Rowling..."
-                  className="bg-zinc-950/60 border-zinc-800 text-xs h-9 pl-3 pr-8 focus-visible:ring-primary/50"
+                  className="bg-muted/60 dark:bg-zinc-950/60 border-border dark:border-zinc-800 text-xs h-9 pl-3 pr-8 focus-visible:ring-primary/50"
                 />
               </div>
               <Button
                 type="submit"
                 size="sm"
                 variant="outline"
-                className="h-9 px-3 text-xs border-zinc-700 bg-zinc-800/80 hover:bg-zinc-800 font-medium"
+                className="h-9 px-3 text-xs border-border dark:border-zinc-700 bg-muted/80 dark:bg-zinc-800/80 hover:bg-accent dark:hover:bg-zinc-800 font-medium"
                 disabled={searchingRegistry || !searchQuery.trim()}
               >
                 {searchingRegistry ? (
@@ -338,8 +338,8 @@ export function BookMatchModal({
           {/* Suggested Matches Carousel / List */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
-                <Sparkles className="h-3.5 w-3.5 text-amber-400" />
+              <Label className="text-xs font-semibold text-slate-700 dark:text-zinc-300 flex items-center gap-1.5">
+                <Sparkles className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
                 Detected Metadata Suggestions
               </Label>
               {loadingSuggestions && (
@@ -360,11 +360,11 @@ export function BookMatchModal({
                       className={`p-2.5 rounded-lg border text-left cursor-pointer transition-all flex items-start gap-3 relative ${
                         isSelected
                           ? "bg-primary/10 border-primary/60 shadow-sm"
-                          : "bg-zinc-900/50 border-zinc-800/80 hover:bg-zinc-800/50 hover:border-zinc-700"
+                          : "bg-muted/70 dark:bg-zinc-900/50 border-border dark:border-zinc-800/80 hover:bg-accent dark:hover:bg-zinc-800/50 hover:border-border dark:hover:border-zinc-700"
                       }`}
                     >
                       {/* Cover Thumbnail */}
-                      <div className="w-10 h-14 bg-zinc-950 rounded border border-zinc-800/60 overflow-hidden flex-shrink-0 flex items-center justify-center">
+                      <div className="w-10 h-14 bg-muted dark:bg-zinc-950 rounded border border-border dark:border-zinc-800/60 overflow-hidden flex-shrink-0 flex items-center justify-center">
                         {sug.coverUrl ? (
                           <img
                             src={sug.coverUrl}
@@ -375,9 +375,9 @@ export function BookMatchModal({
                             }}
                           />
                         ) : isAudiobook ? (
-                          <Headphones className="h-5 w-5 text-zinc-400" />
+                          <Headphones className="h-5 w-5 text-slate-600 dark:text-zinc-400" />
                         ) : (
-                          <BookOpen className="h-5 w-5 text-zinc-400" />
+                          <BookOpen className="h-5 w-5 text-slate-600 dark:text-zinc-400" />
                         )}
                       </div>
 
@@ -389,7 +389,7 @@ export function BookMatchModal({
                             <CheckCircle2 className="h-4 w-4 text-primary flex-shrink-0" />
                           )}
                         </div>
-                        <p className="text-[11px] text-zinc-400 truncate">{sug.author}</p>
+                        <p className="text-[11px] text-slate-600 dark:text-zinc-400 truncate">{sug.author}</p>
                         {sug.series && (
                           <p className="text-[10px] text-primary font-medium truncate">
                             {sug.series} {sug.volumeNumber ? `(Vol. ${sug.volumeNumber})` : ""}
@@ -400,10 +400,10 @@ export function BookMatchModal({
                             variant="outline"
                             className={`text-[9px] px-1 py-0 h-4 uppercase ${
                               sug.source === "database"
-                                ? "border-emerald-500/30 text-emerald-400 bg-emerald-500/10"
+                                ? "border-emerald-500/30 text-emerald-700 dark:text-emerald-400 bg-emerald-500/10"
                                 : sug.source === "ai"
-                                ? "border-amber-500/30 text-amber-400 bg-amber-500/10"
-                                : "border-blue-500/30 text-blue-400 bg-blue-500/10"
+                                ? "border-amber-500/30 text-amber-700 dark:text-amber-400 bg-amber-500/10"
+                                : "border-blue-500/30 text-blue-700 dark:text-blue-400 bg-blue-500/10"
                             }`}
                           >
                             {sug.source}
@@ -416,18 +416,18 @@ export function BookMatchModal({
                 })}
               </div>
             ) : !loadingSuggestions ? (
-              <div className="p-4 rounded-lg bg-zinc-950/40 border border-zinc-800/60 text-center text-xs text-zinc-500">
+              <div className="p-4 rounded-lg bg-muted/40 dark:bg-zinc-950/40 border border-border dark:border-zinc-800/60 text-center text-xs text-zinc-500">
                 No automatic matches detected. Use the search bar above or enter canonical details below.
               </div>
             ) : null}
           </div>
 
           {/* Form Editing Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-zinc-800/60">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-border dark:border-zinc-800/60">
             {/* Live Artwork Card */}
             <div className="sm:col-span-1 flex flex-col items-center space-y-2">
-              <Label className="text-xs font-semibold text-zinc-300 self-start">Cover Artwork</Label>
-              <div className="w-32 h-48 rounded-lg bg-zinc-950 border border-zinc-800 overflow-hidden shadow-md relative flex items-center justify-center">
+              <Label className="text-xs font-semibold text-slate-700 dark:text-zinc-300 self-start">Cover Artwork</Label>
+              <div className="w-32 h-48 rounded-lg bg-muted dark:bg-zinc-950 border border-border dark:border-zinc-800 overflow-hidden shadow-md relative flex items-center justify-center">
                 {coverUrl ? (
                   <img
                     src={coverUrl}
@@ -451,7 +451,7 @@ export function BookMatchModal({
             {/* Metadata Fields */}
             <div className="sm:col-span-2 space-y-3">
               <div className="space-y-1">
-                <Label htmlFor="matchTitle" className="text-xs font-semibold text-zinc-300">
+                <Label htmlFor="matchTitle" className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
                   Canonical Book Title *
                 </Label>
                 <Input
@@ -459,13 +459,13 @@ export function BookMatchModal({
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="e.g. Harry Potter and the Sorcerer's Stone"
-                  className="bg-zinc-950/60 border-zinc-800 text-xs h-9"
+                  className="bg-muted/60 dark:bg-zinc-950/60 border-border dark:border-zinc-800 text-xs h-9"
                   required
                 />
               </div>
 
               <div className="space-y-1">
-                <Label htmlFor="matchAuthor" className="text-xs font-semibold text-zinc-300">
+                <Label htmlFor="matchAuthor" className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
                   Author Name *
                 </Label>
                 <Input
@@ -473,14 +473,14 @@ export function BookMatchModal({
                   value={author}
                   onChange={(e) => setAuthor(e.target.value)}
                   placeholder="e.g. J.K. Rowling"
-                  className="bg-zinc-950/60 border-zinc-800 text-xs h-9"
+                  className="bg-muted/60 dark:bg-zinc-950/60 border-border dark:border-zinc-800 text-xs h-9"
                   required
                 />
               </div>
 
               <div className="grid grid-cols-3 gap-2">
                 <div className="col-span-2 space-y-1">
-                  <Label htmlFor="matchSeries" className="text-xs font-semibold text-zinc-300">
+                  <Label htmlFor="matchSeries" className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
                     Series Name (Optional)
                   </Label>
                   <Input
@@ -488,11 +488,11 @@ export function BookMatchModal({
                     value={series}
                     onChange={(e) => setSeries(e.target.value)}
                     placeholder="e.g. Harry Potter"
-                    className="bg-zinc-950/60 border-zinc-800 text-xs h-9"
+                    className="bg-muted/60 dark:bg-zinc-950/60 border-border dark:border-zinc-800 text-xs h-9"
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label htmlFor="matchVolume" className="text-xs font-semibold text-zinc-300">
+                  <Label htmlFor="matchVolume" className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
                     Volume #
                   </Label>
                   <Input
@@ -500,13 +500,13 @@ export function BookMatchModal({
                     value={volumeNumber}
                     onChange={(e) => setVolumeNumber(e.target.value)}
                     placeholder="e.g. 1"
-                    className="bg-zinc-950/60 border-zinc-800 text-xs h-9"
+                    className="bg-muted/60 dark:bg-zinc-950/60 border-border dark:border-zinc-800 text-xs h-9"
                   />
                 </div>
               </div>
 
               <div className="space-y-1">
-                <Label htmlFor="matchCoverUrl" className="text-xs font-semibold text-zinc-300">
+                <Label htmlFor="matchCoverUrl" className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
                   Cover Artwork URL
                 </Label>
                 <Input
@@ -514,14 +514,14 @@ export function BookMatchModal({
                   value={coverUrl}
                   onChange={(e) => setCoverUrl(e.target.value)}
                   placeholder="https://..."
-                  className="bg-zinc-950/60 border-zinc-800 text-xs h-9"
+                  className="bg-muted/60 dark:bg-zinc-950/60 border-border dark:border-zinc-800 text-xs h-9"
                 />
               </div>
             </div>
           </div>
 
           {/* Radarr/Sonarr Style Disk Organization Option */}
-          <div className="p-3 rounded-lg bg-zinc-900/60 border border-zinc-800 flex items-start space-x-3">
+          <div className="p-3 rounded-lg bg-muted/70 dark:bg-zinc-900/60 border border-border dark:border-zinc-800 flex items-start space-x-3">
             <Checkbox
               id="organizeDisk"
               checked={organizeDisk}
@@ -531,12 +531,12 @@ export function BookMatchModal({
             <div className="space-y-0.5">
               <label
                 htmlFor="organizeDisk"
-                className="text-xs font-semibold text-zinc-200 cursor-pointer flex items-center gap-1.5"
+                className="text-xs font-semibold text-foreground dark:text-zinc-200 cursor-pointer flex items-center gap-1.5"
               >
                 <Folder className="h-3.5 w-3.5 text-primary" />
                 Organize and Rename File on Disk
               </label>
-              <p className="text-[11px] text-zinc-400">
+              <p className="text-[11px] text-slate-600 dark:text-zinc-400">
                 Safely migrates media into standard structure:{" "}
                 <code className="text-primary font-mono text-[10px]">
                   Library / {author || "Author"} / {series ? `[${series} ${volumeNumber || "01"}] ` : ""}
@@ -548,11 +548,11 @@ export function BookMatchModal({
         </div>
 
         {/* Modal Footer */}
-        <CardFooter className="pt-3 pb-3 border-t border-zinc-800/80 bg-zinc-900/50 flex justify-between items-center flex-shrink-0">
+        <CardFooter className="pt-3 pb-3 border-t border-border dark:border-zinc-800/80 bg-muted/70 dark:bg-zinc-900/50 flex justify-between items-center flex-shrink-0">
           <Button
             variant="ghost"
             size="sm"
-            className="text-xs text-zinc-400 hover:text-foreground h-9"
+            className="text-xs text-slate-600 dark:text-zinc-400 hover:text-foreground h-9"
             onClick={onClose}
             disabled={isSubmitting}
           >

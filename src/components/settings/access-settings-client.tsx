@@ -1976,7 +1976,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
     return (
         <div className="space-y-6 w-full min-w-0">
             <div>
-                <h3 className="text-xl font-bold tracking-tight text-emerald-400">Access Control & User Directory</h3>
+                <h3 className="text-xl font-bold tracking-tight text-emerald-700 dark:text-emerald-400">Access Control & User Directory</h3>
                 <p className="text-sm text-muted-foreground">
                     Provision accounts, manage Plex library access, configure prorated annual subscriptions & trials, and track member referrals.
                 </p>
@@ -1984,24 +1984,24 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
 
             {/* TOP NAVIGATION TABS */}
             <Tabs defaultValue="users" value={activeTab} onValueChange={handleTabChange} className="w-full space-y-6">
-                <TabsList className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 bg-[#121218] border border-border/50 p-1.5 rounded-xl h-auto gap-1.5">
+                <TabsList className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 bg-card dark:bg-[#121218] border border-border/50 p-1.5 rounded-xl h-auto gap-1.5">
                     <TabsTrigger value="users" className="gap-2 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground min-w-0 py-2">
                         <Users className="h-4 w-4 shrink-0" /> <span className="truncate">User Directory ({users.length})</span>
                     </TabsTrigger>
                     <TabsTrigger value="referrals" className="gap-2 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground min-w-0 py-2">
-                        <Trophy className="h-4 w-4 text-amber-400 shrink-0" /> <span className="truncate">Referrals & Leaderboard</span>
+                        <Trophy className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0" /> <span className="truncate">Referrals & Leaderboard</span>
                     </TabsTrigger>
                     <TabsTrigger value="onboarding" className="gap-2 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground min-w-0 py-2 relative">
-                        <CreditCard className="h-4 w-4 text-emerald-400 shrink-0" /> <span className="truncate">Payment & Onboarding</span>
+                        <CreditCard className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0" /> <span className="truncate">Payment & Onboarding</span>
                         {hasUnsavedChanges && (
                             <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse ml-1 shrink-0" />
                         )}
                     </TabsTrigger>
                     <TabsTrigger value="scraper" className="gap-2 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground min-w-0 py-2">
-                        <DollarSign className="h-4 w-4 text-emerald-400 shrink-0" /> <span className="truncate">Email Scraper</span>
+                        <DollarSign className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0" /> <span className="truncate">Email Scraper</span>
                     </TabsTrigger>
                     <TabsTrigger value="approvals" className="gap-2 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground min-w-0 py-2 relative">
-                        <ShieldAlert className="h-4 w-4 text-amber-400 shrink-0" />
+                        <ShieldAlert className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0" />
                         <span className="truncate">Approval Queue</span>
                         {approvalCounts.pendingCount > 0 && (
                             <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-black animate-pulse">
@@ -2010,16 +2010,16 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                         )}
                     </TabsTrigger>
                     <TabsTrigger value="sent-emails" className="gap-2 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground min-w-0 py-2 relative">
-                        <MailCheck className="h-4 w-4 text-sky-400 shrink-0" />
+                        <MailCheck className="h-4 w-4 text-sky-700 dark:text-sky-400 shrink-0" />
                         <span className="truncate">Sent Emails</span>
                         {sentEmailsTotalCount > 0 && (
-                            <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-sky-500/20 text-sky-300 border border-sky-500/30">
+                            <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-sky-500/20 text-sky-800 dark:text-sky-300 border border-sky-500/30">
                                 {sentEmailsTotalCount}
                             </span>
                         )}
                     </TabsTrigger>
                     <TabsTrigger value="cloudflare" className="gap-2 text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground min-w-0 py-2 relative">
-                        <Shield className="h-4 w-4 text-orange-400 shrink-0" />
+                        <Shield className="h-4 w-4 text-orange-700 dark:text-orange-400 shrink-0" />
                         <span className="truncate">Cloudflare Access</span>
                     </TabsTrigger>
                 </TabsList>
@@ -2060,7 +2060,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
 
                     <div className="grid gap-5 grid-cols-1 lg:grid-cols-2">
                         {/* CREATE USER FORM */}
-                        <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md">
+                        <Card className="border-border/50 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md">
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2 text-lg font-bold">
                                     <UserPlus className="h-5 w-5 text-primary" /> Create Account
@@ -2132,7 +2132,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                         </Card>
 
                         {/* CHANGE PASSWORD FORM */}
-                        <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md">
+                        <Card className="border-border/50 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md">
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2 text-lg font-bold">
                                     <KeyRound className="h-5 w-5 text-primary" /> Change Your Password
@@ -2146,13 +2146,13 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                     autoComplete="off"
                                 >
                                     {passMsg && (
-                                        <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
+                                        <div className="text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/40 dark:border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
                                             <CheckCircle2 className="h-4 w-4 shrink-0" />
                                             <span>{passMsg}</span>
                                         </div>
                                     )}
                                     {passErr && (
-                                        <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2">
+                                        <div className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 dark:bg-red-950/40 border border-red-500/40 dark:border-red-800/40 p-3 rounded-lg flex items-center gap-2">
                                             <XCircle className="h-4 w-4 shrink-0" />
                                             <span>{passErr}</span>
                                         </div>
@@ -2189,7 +2189,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                     </div>
 
                     {/* USER DIRECTORY TABLE & CONTROLS */}
-                    <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md">
+                    <Card className="border-border/50 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md">
                         <CardHeader className="space-y-4">
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                 <div>
@@ -2248,14 +2248,14 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                             </div>
 
                             {usersWithSecurityLeaks.length > 0 && (
-                                <div className="bg-red-500/15 border-2 border-red-500/60 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-red-200 animate-pulse shadow-lg shadow-red-950/40">
+                                <div className="bg-red-500/15 border-2 border-red-500/60 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-red-900 dark:text-red-200 animate-pulse shadow-lg shadow-red-950/40">
                                     <div className="flex items-center gap-3 min-w-0">
-                                        <ShieldAlert className="h-6 w-6 text-red-400 shrink-0" />
+                                        <ShieldAlert className="h-6 w-6 text-red-700 dark:text-red-400 shrink-0" />
                                         <div className="min-w-0">
-                                            <div className="font-bold text-sm text-red-200">
+                                            <div className="font-bold text-sm text-red-900 dark:text-red-200">
                                                 🚨 CRITICAL SECURITY ALERT: {usersWithSecurityLeaks.length} Inactive User{usersWithSecurityLeaks.length > 1 ? "s Retain" : " Retains"} Active Plex Access!
                                             </div>
-                                            <div className="text-xs text-red-300/80 truncate">
+                                            <div className="text-xs text-red-800/80 dark:text-red-300/80 truncate">
                                                 {usersWithSecurityLeaks.map(u => `${u.username} (${u.status})`).join(", ")} {usersWithSecurityLeaks.length > 1 ? "have" : "has"} active Plex shares that should be immediately revoked.
                                             </div>
                                         </div>
@@ -2276,7 +2276,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                             {restoreStatusMsg && (
                                 <div className="p-3 bg-primary/10 border border-primary/30 rounded-lg text-xs flex items-center justify-between gap-2 text-foreground">
                                     <div className="flex items-center gap-2">
-                                        <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                                        <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0" />
                                         <span>{restoreStatusMsg}</span>
                                     </div>
                                     <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2" onClick={() => setRestoreStatusMsg("")}>
@@ -2288,7 +2288,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                             {reminderSuccessMsg && (
                                 <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-xs flex items-center justify-between gap-2 text-foreground animate-in fade-in">
                                     <div className="flex items-center gap-2">
-                                        <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                                        <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0" />
                                         <span>{reminderSuccessMsg}</span>
                                     </div>
                                     <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2" onClick={() => setReminderSuccessMsg("")}>
@@ -2300,7 +2300,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                             {reminderErrMsg && (
                                 <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-xs flex items-center justify-between gap-2 text-foreground animate-in fade-in">
                                     <div className="flex items-center gap-2">
-                                        <XCircle className="h-4 w-4 text-red-400 shrink-0" />
+                                        <XCircle className="h-4 w-4 text-red-700 dark:text-red-400 shrink-0" />
                                         <span>{reminderErrMsg}</span>
                                     </div>
                                     <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2" onClick={() => setReminderErrMsg("")}>
@@ -2329,7 +2329,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                     <SelectValue placeholder="Sort users..." />
                                                 </div>
                                             </SelectTrigger>
-                                            <SelectContent position="popper" sideOffset={4} className="text-xs bg-[#121218] border-border/60 z-[100] min-w-[225px]">
+                                            <SelectContent position="popper" sideOffset={4} className="text-xs bg-popover dark:bg-[#121218] border-border/60 z-[100] min-w-[225px]">
                                                 <SelectItem value="joined_desc">Joined: Newest First</SelectItem>
                                                 <SelectItem value="joined_asc">Joined: Oldest First</SelectItem>
                                                 <SelectItem value="last_login_desc">Last Login: Recent First</SelectItem>
@@ -2403,18 +2403,18 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                             <div className="space-y-3.5">
                                 {/* BULK ACTION ALERTS */}
                                 {bulkSuccessMsg && (
-                                    <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs flex items-center justify-between text-emerald-200 animate-in fade-in-50">
+                                    <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs flex items-center justify-between text-emerald-900 dark:text-emerald-200 animate-in fade-in-50">
                                         <div className="flex items-center gap-2">
-                                            <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                                            <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0" />
                                             <span>{bulkSuccessMsg}</span>
                                         </div>
                                         <Button variant="ghost" size="sm" className="h-5 text-[10px] px-1.5 cursor-pointer" onClick={() => setBulkSuccessMsg("")}>✕</Button>
                                     </div>
                                 )}
                                 {bulkErrMsg && (
-                                    <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-xs flex items-center justify-between text-red-200 animate-in fade-in-50">
+                                    <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-xs flex items-center justify-between text-red-900 dark:text-red-200 animate-in fade-in-50">
                                         <div className="flex items-center gap-2">
-                                            <AlertTriangle className="h-4 w-4 text-red-400 shrink-0" />
+                                            <AlertTriangle className="h-4 w-4 text-red-700 dark:text-red-400 shrink-0" />
                                             <span>{bulkErrMsg}</span>
                                         </div>
                                         <Button variant="ghost" size="sm" className="h-5 text-[10px] px-1.5 cursor-pointer" onClick={() => setBulkErrMsg("")}>✕</Button>
@@ -2432,13 +2432,13 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                     id="bulk-select-all"
                                                     checked={sortedAndFilteredUsers.length > 0 && sortedAndFilteredUsers.every(u => selectedUserIds.includes(u.id))}
                                                     onChange={() => handleSelectAllFiltered(sortedAndFilteredUsers)}
-                                                    className="h-4 w-4 rounded border-slate-750 bg-slate-950 text-amber-500 focus:ring-amber-500/30 cursor-pointer"
+                                                    className="h-4 w-4 rounded border-slate-750 bg-muted dark:bg-slate-950 text-amber-500 focus:ring-amber-500/30 cursor-pointer"
                                                 />
                                                 <label htmlFor="bulk-select-all" className="font-semibold text-foreground cursor-pointer select-none">
                                                     Select All Filtered ({sortedAndFilteredUsers.length})
                                                 </label>
                                                 {selectedUserIds.length > 0 && (
-                                                    <Badge variant="outline" className="text-[11px] bg-amber-500/15 text-amber-300 border-amber-500/40 font-bold px-2 py-0.5">
+                                                    <Badge variant="outline" className="text-[11px] bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/40 font-bold px-2 py-0.5">
                                                         {selectedUserIds.length} user{selectedUserIds.length === 1 ? "" : "s"} selected
                                                     </Badge>
                                                 )}
@@ -2457,16 +2457,16 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
 
                                         {/* Action Bar when users selected */}
                                         {selectedUserIds.length > 0 && (
-                                            <div className="p-3.5 bg-gradient-to-r from-amber-950/35 via-slate-900/90 to-slate-950/80 rounded-xl border border-amber-500/45 shadow-lg space-y-2.5 animate-in fade-in-50">
+                                            <div className="p-3.5 bg-gradient-to-r from-amber-500/10 dark:from-amber-950/35 via-card dark:via-slate-900/90 to-muted/60 dark:to-slate-950/80 rounded-xl border border-amber-500/45 shadow-lg space-y-2.5 animate-in fade-in-50">
                                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                                                     <div className="flex items-center gap-2">
-                                                        <Sparkles className="h-4 w-4 text-amber-400 shrink-0" />
-                                                        <span className="text-xs font-bold text-amber-200">
+                                                        <Sparkles className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0" />
+                                                        <span className="text-xs font-bold text-amber-900 dark:text-amber-200">
                                                             Bulk Actions for {selectedUserIds.length} Selected User{selectedUserIds.length === 1 ? "" : "s"}:
                                                         </span>
                                                     </div>
                                                     {bulkUpdating && (
-                                                        <span className="text-xs text-amber-300 flex items-center gap-1.5 font-medium">
+                                                        <span className="text-xs text-amber-800 dark:text-amber-300 flex items-center gap-1.5 font-medium">
                                                             <Loader2 className="h-3.5 w-3.5 animate-spin" /> Processing bulk update...
                                                         </span>
                                                     )}
@@ -2491,7 +2491,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                         variant="outline"
                                                         disabled={bulkUpdating}
                                                         onClick={() => handleBulkSetSubscription("1_YEAR")}
-                                                        className="h-8 px-2.5 text-xs font-semibold border-amber-500/30 hover:bg-amber-500/10 text-amber-200 gap-1.5 cursor-pointer"
+                                                        className="h-8 px-2.5 text-xs font-semibold border-amber-500/30 hover:bg-amber-500/10 text-amber-900 dark:text-amber-200 gap-1.5 cursor-pointer"
                                                     >
                                                         <Clock className="h-3.5 w-3.5" />
                                                         +1 Full Year
@@ -2503,7 +2503,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                         variant="outline"
                                                         disabled={bulkUpdating}
                                                         onClick={() => handleBulkSetSubscription("30_DAYS")}
-                                                        className="h-8 px-2.5 text-xs font-semibold border-border/60 hover:bg-white/5 text-foreground gap-1.5 cursor-pointer"
+                                                        className="h-8 px-2.5 text-xs font-semibold border-border/60 hover:bg-accent dark:hover:bg-white/5 text-foreground gap-1.5 cursor-pointer"
                                                     >
                                                         +30 Days
                                                     </Button>
@@ -2514,7 +2514,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                         variant="outline"
                                                         disabled={bulkUpdating}
                                                         onClick={() => handleBulkSetSubscription("PERMANENT")}
-                                                        className="h-8 px-2.5 text-xs font-semibold border-emerald-500/30 hover:bg-emerald-500/10 text-emerald-300 gap-1.5 cursor-pointer"
+                                                        className="h-8 px-2.5 text-xs font-semibold border-emerald-500/30 hover:bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 gap-1.5 cursor-pointer"
                                                     >
                                                         <CheckCircle2 className="h-3.5 w-3.5" />
                                                         Permanent / Lifetime
@@ -2531,7 +2531,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                             setBulkCustomDate(format(eoy, "yyyy-MM-dd"));
                                                             setShowBulkCustomModal(true);
                                                         }}
-                                                        className="h-8 px-2.5 text-xs font-semibold border-border/60 hover:bg-white/5 text-amber-300 gap-1.5 cursor-pointer"
+                                                        className="h-8 px-2.5 text-xs font-semibold border-border/60 hover:bg-accent dark:hover:bg-white/5 text-amber-800 dark:text-amber-300 gap-1.5 cursor-pointer"
                                                     >
                                                         <SlidersHorizontal className="h-3.5 w-3.5" />
                                                         Custom Date...
@@ -2543,7 +2543,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                         variant="outline"
                                                         disabled={bulkUpdating}
                                                         onClick={() => handleBulkSetSubscription("SUSPENDED")}
-                                                        className="h-8 px-2.5 text-xs font-semibold border-red-500/30 hover:bg-red-500/10 text-red-300 gap-1.5 cursor-pointer sm:ml-auto"
+                                                        className="h-8 px-2.5 text-xs font-semibold border-red-500/30 hover:bg-red-500/10 text-red-800 dark:text-red-300 gap-1.5 cursor-pointer sm:ml-auto"
                                                     >
                                                         <PauseCircle className="h-3.5 w-3.5" />
                                                         Suspend Selected
@@ -2555,9 +2555,9 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                 )}
 
                                 {usersError && (
-                                    <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-xs flex flex-wrap items-center justify-between gap-3 text-red-200">
+                                    <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-xs flex flex-wrap items-center justify-between gap-3 text-red-900 dark:text-red-200">
                                         <div className="flex items-center gap-2">
-                                            <AlertTriangle className="h-4 w-4 text-red-400 shrink-0" />
+                                            <AlertTriangle className="h-4 w-4 text-red-700 dark:text-red-400 shrink-0" />
                                             <span><strong className="font-semibold">User directory failed to load:</strong> {usersError}</span>
                                         </div>
                                         <Button
@@ -2565,7 +2565,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                             variant="outline"
                                             size="sm"
                                             onClick={() => loadUsers()}
-                                            className="h-7 text-xs border-red-500/40 bg-red-500/15 hover:bg-red-500/25 text-red-200 gap-1.5 cursor-pointer"
+                                            className="h-7 text-xs border-red-500/40 bg-red-500/15 hover:bg-red-500/25 text-red-900 dark:text-red-200 gap-1.5 cursor-pointer"
                                         >
                                             <RefreshCw className="h-3.5 w-3.5" />
                                             Retry
@@ -2575,7 +2575,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
 
                                 {loading ? (
                                     <div className="text-sm text-muted-foreground flex items-center gap-2 p-6 justify-center">
-                                        <Loader2 className="h-5 w-5 animate-spin text-emerald-400" /> Loading user directory...
+                                        <Loader2 className="h-5 w-5 animate-spin text-emerald-700 dark:text-emerald-400" /> Loading user directory...
                                     </div>
                                 ) : sortedAndFilteredUsers.length === 0 ? (
                                     <div className="text-sm text-muted-foreground p-8 text-center border border-dashed border-border/40 rounded-xl bg-muted/10">
@@ -2707,28 +2707,28 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                     selectedUserIds.includes(user.id)
                                                         ? "bg-amber-500/10 border-amber-500/80 shadow-md shadow-amber-500/10 ring-1 ring-amber-500/50"
                                                         : hasSecurityLeak
-                                                        ? "bg-red-950/30 border-2 border-red-500 shadow-lg shadow-red-950/50"
+                                                        ? "bg-red-500/10 dark:bg-red-950/30 border-2 border-red-500 shadow-lg shadow-red-950/50"
                                                         : isPending 
                                                         ? "bg-amber-500/10 border-amber-500/40 hover:border-amber-500/60" 
                                                         : isSuspended || isExpired || isRejected
                                                         ? "bg-red-500/5 border-red-500/30 hover:border-red-500/50"
-                                                        : "bg-[#101014]/90 border-border/50 hover:border-primary/40 hover:shadow-sm"
+                                                        : "bg-card/95 dark:bg-[#101014]/90 border-border/50 hover:border-primary/40 hover:shadow-sm"
                                                 }`}
                                             >
                                                 {/* SECURITY LEAK BANNER */}
                                                 {hasSecurityLeak && (
                                                     <div className="bg-red-500/20 border border-red-500/60 rounded-lg p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
                                                         <div className="flex items-center gap-2.5 min-w-0">
-                                                            <ShieldAlert className="h-5 w-5 text-red-400 shrink-0 animate-bounce" />
+                                                            <ShieldAlert className="h-5 w-5 text-red-700 dark:text-red-400 shrink-0 animate-bounce" />
                                                             <div className="min-w-0">
-                                                                <div className="text-xs font-bold text-red-200 flex items-center gap-1.5 flex-wrap">
+                                                                <div className="text-xs font-bold text-red-900 dark:text-red-200 flex items-center gap-1.5 flex-wrap">
                                                                     <span>🚨 CRITICAL SECURITY LEAK: Unauthorized Plex Access Detected</span>
                                                                     <Badge variant="destructive" className="text-[10px] px-1.5 py-0 font-mono uppercase">
                                                                         {user.status}
                                                                     </Badge>
                                                                 </div>
-                                                                <div className="text-[11px] text-red-300/90 mt-0.5">
-                                                                    This account is inactive ({user.status}) but still retains active sharing permissions for <span className="font-bold underline text-white">{actualPlexShareCount} Plex librar{actualPlexShareCount === 1 ? "y" : "ies"}</span> on the server.
+                                                                <div className="text-[11px] text-red-800/90 dark:text-red-300/90 mt-0.5">
+                                                                    This account is inactive ({user.status}) but still retains active sharing permissions for <span className="font-bold underline text-foreground dark:text-white">{actualPlexShareCount} Plex librar{actualPlexShareCount === 1 ? "y" : "ies"}</span> on the server.
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -2859,12 +2859,12 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                     {/* STATUS & ATTRIBUTION BADGES */}
                                                     <div className="flex flex-wrap items-center gap-1.5 shrink-0 sm:self-center">
                                                         {user.parentUserId && (
-                                                            <Badge variant="outline" className="bg-sky-500/20 text-sky-300 border-sky-500/40 text-xs font-bold gap-1">
+                                                            <Badge variant="outline" className="bg-sky-500/20 text-sky-800 dark:text-sky-300 border-sky-500/40 text-xs font-bold gap-1">
                                                                 Sub-Account of @{user.parentUser?.username || "Parent"}
                                                             </Badge>
                                                         )}
                                                         {user.accountType && user.accountType !== "STANDARD" && (
-                                                            <Badge variant="outline" className="bg-sky-500/15 text-sky-300 border-sky-500/40 text-xs font-semibold">
+                                                            <Badge variant="outline" className="bg-sky-500/15 text-sky-800 dark:text-sky-300 border-sky-500/40 text-xs font-semibold">
                                                                 {user.accountType === "KID" ? "Kid Profile" : "Living Room"}
                                                             </Badge>
                                                         )}
@@ -2874,19 +2874,19 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                             </Badge>
                                                         )}
                                                         {isAdmin ? (
-                                                            <Badge variant="outline" className="bg-sky-500/20 text-sky-300 border-sky-500/40 text-xs font-bold gap-1">
-                                                                <Shield className="h-3 w-3 text-sky-400" /> Platform Administrator
+                                                            <Badge variant="outline" className="bg-sky-500/20 text-sky-800 dark:text-sky-300 border-sky-500/40 text-xs font-bold gap-1">
+                                                                <Shield className="h-3 w-3 text-sky-700 dark:text-sky-400" /> Platform Administrator
                                                             </Badge>
                                                         ) : user.membershipTier === "TIER_2_VIP" ? (
-                                                            <Badge variant="outline" className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-xs font-bold">
+                                                            <Badge variant="outline" className="bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/40 text-xs font-bold">
                                                                 Tier 2 (Managed Support)
                                                             </Badge>
                                                         ) : user.membershipTier === "TRIAL" ? (
-                                                            <Badge variant="outline" className="bg-blue-500/20 text-blue-300 border-blue-500/40 text-xs font-bold">
+                                                            <Badge variant="outline" className="bg-blue-500/20 text-blue-800 dark:text-blue-300 border-blue-500/40 text-xs font-bold">
                                                                 Trial Pass
                                                             </Badge>
                                                         ) : (
-                                                            <Badge variant="outline" className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-xs font-semibold">
+                                                            <Badge variant="outline" className="bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border-emerald-500/40 text-xs font-semibold">
                                                                 ⭐ Tier 1 (Regular)
                                                             </Badge>
                                                         )}
@@ -2920,7 +2920,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                             return (
                                                                 <Badge 
                                                                     variant="outline" 
-                                                                    className="bg-amber-500/15 text-amber-300 border-amber-500/30 text-xs font-semibold gap-1 cursor-pointer hover:bg-amber-500/25 transition-colors"
+                                                                    className="bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30 text-xs font-semibold gap-1 cursor-pointer hover:bg-amber-500/25 transition-colors"
                                                                     onClick={() => {
                                                                         setSubModalUser(user);
                                                                         setShowCustomTrialScreen(false);
@@ -2930,7 +2930,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                                     }}
                                                                     title={`Active Add-ons:\n${userAddonList.map((id: string) => `• ${adminAddonsCatalog.find((a: any) => a.id === id)?.name || id}`).join("\n")}`}
                                                                 >
-                                                                    <Zap className="h-3 w-3 text-amber-400" />
+                                                                    <Zap className="h-3 w-3 text-amber-700 dark:text-amber-400" />
                                                                     {userAddonList.length} Add-on{userAddonList.length > 1 ? "s" : ""}
                                                                 </Badge>
                                                             );
@@ -2938,24 +2938,24 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                         {user.subAccounts && user.subAccounts.length > 0 && (
                                                             <Badge 
                                                                 variant="outline" 
-                                                                className="bg-sky-500/15 text-sky-300 border-sky-500/40 text-[10px] font-semibold cursor-help"
+                                                                className="bg-sky-500/15 text-sky-800 dark:text-sky-300 border-sky-500/40 text-[10px] font-semibold cursor-help"
                                                                 title={`Linked Household Profiles:\n${user.subAccounts.map((s: any) => `• ${s.subAccountLabel || s.username} (${s.accountType === "KID" ? "Kid Profile" : "Living Room"})`).join("\n")}`}
                                                             >
                                                                 {user.subAccounts.length} Sub-Account{user.subAccounts.length > 1 ? "s" : ""}
                                                             </Badge>
                                                         )}
                                                         {isPending && (
-                                                            <Badge variant="outline" className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-xs gap-1 font-bold">
+                                                            <Badge variant="outline" className="bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/40 text-xs gap-1 font-bold">
                                                                 <Clock className="h-3 w-3" /> Pending Approval
                                                             </Badge>
                                                         )}
                                                         {!isAdmin && isTrial && (
-                                                            <Badge variant="outline" className="bg-blue-500/20 text-blue-300 border-blue-500/40 text-xs gap-1 font-bold">
+                                                            <Badge variant="outline" className="bg-blue-500/20 text-blue-800 dark:text-blue-300 border-blue-500/40 text-xs gap-1 font-bold">
                                                                 <Timer className="h-3 w-3" /> Trial ({daysLeft}d left)
                                                             </Badge>
                                                         )}
                                                         {!isAdmin && user.status === "APPROVED" && user.subscriptionEndsAt && (
-                                                            <Badge variant="outline" className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-xs gap-1 font-semibold">
+                                                            <Badge variant="outline" className="bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border-emerald-500/40 text-xs gap-1 font-semibold">
                                                                 <CheckCircle2 className="h-3 w-3" /> {user.subscriptionCadence === "MONTHLY" ? "Monthly Plan" : "Annual Plan"} ({format(new Date(user.subscriptionEndsAt), "MMM d, yyyy")})
                                                             </Badge>
                                                         )}
@@ -2964,26 +2964,26 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                             reminderInfo.status === "paid" ? (
                                                                 <Badge 
                                                                     variant="outline" 
-                                                                    className="bg-emerald-500/15 text-emerald-300 border-emerald-500/30 text-[10px] gap-1 font-semibold cursor-help"
+                                                                    className="bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border-emerald-500/30 text-[10px] gap-1 font-semibold cursor-help"
                                                                     title={reminderInfo.details}
                                                                 >
-                                                                    <CheckCircle2 className="h-3 w-3 text-emerald-400" /> Paid / Cycle Covered
+                                                                    <CheckCircle2 className="h-3 w-3 text-emerald-700 dark:text-emerald-400" /> Paid / Cycle Covered
                                                                 </Badge>
                                                             ) : reminderInfo.status === "due_today" ? (
                                                                 <Badge 
                                                                     variant="outline" 
-                                                                    className="bg-amber-500/20 text-amber-200 border-amber-500/50 text-[10px] gap-1 font-bold animate-pulse cursor-help"
+                                                                    className="bg-amber-500/20 text-amber-900 dark:text-amber-200 border-amber-500/50 text-[10px] gap-1 font-bold animate-pulse cursor-help"
                                                                     title={reminderInfo.details}
                                                                 >
-                                                                    <BellRing className="h-3 w-3 text-amber-300" /> Reminder Due Today ({reminderInfo.nextMilestoneDays}d notice)
+                                                                    <BellRing className="h-3 w-3 text-amber-800 dark:text-amber-300" /> Reminder Due Today ({reminderInfo.nextMilestoneDays}d notice)
                                                                 </Badge>
                                                             ) : reminderInfo.status === "scheduled" ? (
                                                                 <Badge 
                                                                     variant="outline" 
-                                                                    className="bg-blue-500/15 text-blue-300 border-blue-500/30 text-[10px] gap-1 font-medium cursor-help"
+                                                                    className="bg-blue-500/15 text-blue-800 dark:text-blue-300 border-blue-500/30 text-[10px] gap-1 font-medium cursor-help"
                                                                     title={reminderInfo.details}
                                                                 >
-                                                                    <BellRing className="h-3 w-3 text-blue-400" /> Next Reminder: {reminderInfo.badgeText}
+                                                                    <BellRing className="h-3 w-3 text-blue-700 dark:text-blue-400" /> Next Reminder: {reminderInfo.badgeText}
                                                                 </Badge>
                                                             ) : reminderInfo.status === "all_sent" ? (
                                                                 <Badge 
@@ -2999,58 +2999,58 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                             reminderInfo.status === "due_today" ? (
                                                                 <Badge 
                                                                     variant="outline" 
-                                                                    className="bg-amber-500/20 text-amber-200 border-amber-500/50 text-[10px] gap-1 font-bold animate-pulse cursor-help"
+                                                                    className="bg-amber-500/20 text-amber-900 dark:text-amber-200 border-amber-500/50 text-[10px] gap-1 font-bold animate-pulse cursor-help"
                                                                     title={reminderInfo.details}
                                                                 >
-                                                                    <BellRing className="h-3 w-3 text-amber-300" /> Trial Notice Due Today
+                                                                    <BellRing className="h-3 w-3 text-amber-800 dark:text-amber-300" /> Trial Notice Due Today
                                                                 </Badge>
                                                             ) : reminderInfo.status === "scheduled" ? (
                                                                 <Badge 
                                                                     variant="outline" 
-                                                                    className="bg-blue-500/15 text-blue-300 border-blue-500/30 text-[10px] gap-1 font-medium cursor-help"
+                                                                    className="bg-blue-500/15 text-blue-800 dark:text-blue-300 border-blue-500/30 text-[10px] gap-1 font-medium cursor-help"
                                                                     title={reminderInfo.badgeText}
                                                                 >
-                                                                    <BellRing className="h-3 w-3 text-blue-400" /> Next Notice: {reminderInfo.badgeText}
+                                                                    <BellRing className="h-3 w-3 text-blue-700 dark:text-blue-400" /> Next Notice: {reminderInfo.badgeText}
                                                                 </Badge>
                                                             ) : null
                                                         )}
                                                         {!isAdmin && user.lastRenewalReminderSentAt && (
-                                                            <Badge variant="outline" className="bg-amber-500/15 text-amber-300 border-amber-500/30 text-[10px] gap-1 font-medium" title={`Last renewal reminder dispatched on ${format(new Date(user.lastRenewalReminderSentAt), "MMM d, yyyy h:mm a")}`}>
-                                                                <CalendarClock className="h-3 w-3 text-amber-400" /> Reminder Sent ({format(new Date(user.lastRenewalReminderSentAt), "MMM d")})
+                                                            <Badge variant="outline" className="bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30 text-[10px] gap-1 font-medium" title={`Last renewal reminder dispatched on ${format(new Date(user.lastRenewalReminderSentAt), "MMM d, yyyy h:mm a")}`}>
+                                                                <CalendarClock className="h-3 w-3 text-amber-700 dark:text-amber-400" /> Reminder Sent ({format(new Date(user.lastRenewalReminderSentAt), "MMM d")})
                                                             </Badge>
                                                         )}
                                                         {(isAdmin || (user.status === "APPROVED" && !user.subscriptionEndsAt)) && (
-                                                            <Badge variant="outline" className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-xs gap-1 font-semibold">
+                                                            <Badge variant="outline" className="bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border-emerald-500/40 text-xs gap-1 font-semibold">
                                                                 <CheckCircle2 className="h-3 w-3" /> Permanent Access
                                                             </Badge>
                                                         )}
                                                         {isSuspended && (
-                                                            <Badge variant="outline" className="bg-red-500/20 text-red-300 border-red-500/40 text-xs font-bold">
+                                                            <Badge variant="outline" className="bg-red-500/20 text-red-800 dark:text-red-300 border-red-500/40 text-xs font-bold">
                                                                 Suspended
                                                             </Badge>
                                                         )}
                                                         {isExpired && (
-                                                            <Badge variant="outline" className="bg-orange-500/20 text-orange-300 border-orange-500/40 text-xs font-bold">
+                                                            <Badge variant="outline" className="bg-orange-500/20 text-orange-800 dark:text-orange-300 border-orange-500/40 text-xs font-bold">
                                                                 Expired
                                                             </Badge>
                                                         )}
                                                         {isRejected && (
-                                                            <Badge variant="outline" className="bg-red-500/20 text-red-300 border-red-500/40 text-xs font-bold">
+                                                            <Badge variant="outline" className="bg-red-500/20 text-red-800 dark:text-red-300 border-red-500/40 text-xs font-bold">
                                                                 Rejected
                                                             </Badge>
                                                         )}
                                                         {user.accountCredit > 0 && (
-                                                            <Badge variant="outline" className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-xs gap-1 font-semibold" title={`Account Credit Balance: $${user.accountCredit.toFixed(2)}`}>
-                                                                <DollarSign className="h-3 w-3 text-amber-400" /> Credit: ${user.accountCredit.toFixed(2)}
+                                                            <Badge variant="outline" className="bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/40 text-xs gap-1 font-semibold" title={`Account Credit Balance: $${user.accountCredit.toFixed(2)}`}>
+                                                                <DollarSign className="h-3 w-3 text-amber-700 dark:text-amber-400" /> Credit: ${user.accountCredit.toFixed(2)}
                                                             </Badge>
                                                         )}
                                                         {user.lastPaymentAmount && (
-                                                            <Badge variant="outline" className="bg-emerald-500/15 text-emerald-300 border-emerald-500/30 text-[10px] gap-1 font-medium" title={`Last payment: $${user.lastPaymentAmount.toFixed(2)} on ${user.lastPaymentDate ? format(new Date(user.lastPaymentDate), "MMM d, yyyy") : "N/A"}${user.lastPaymentProvider ? ` via ${user.lastPaymentProvider}` : ""}`}>
-                                                                <CreditCard className="h-3 w-3 text-emerald-400" /> Last: ${user.lastPaymentAmount.toFixed(2)}
+                                                            <Badge variant="outline" className="bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border-emerald-500/30 text-[10px] gap-1 font-medium" title={`Last payment: $${user.lastPaymentAmount.toFixed(2)} on ${user.lastPaymentDate ? format(new Date(user.lastPaymentDate), "MMM d, yyyy") : "N/A"}${user.lastPaymentProvider ? ` via ${user.lastPaymentProvider}` : ""}`}>
+                                                                <CreditCard className="h-3 w-3 text-emerald-700 dark:text-emerald-400" /> Last: ${user.lastPaymentAmount.toFixed(2)}
                                                             </Badge>
                                                         )}
                                                         {user.referredBy?.username && (
-                                                            <Badge variant="outline" className="bg-amber-500/15 text-amber-300 border-amber-500/40 text-xs gap-1 font-medium" title={`Invited by @${user.referredBy.username}`}>
+                                                            <Badge variant="outline" className="bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/40 text-xs gap-1 font-medium" title={`Invited by @${user.referredBy.username}`}>
                                                                 <Gift className="h-3 w-3" /> @{user.referredBy.username}
                                                                 <button
                                                                     type="button"
@@ -3058,7 +3058,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                                         e.stopPropagation();
                                                                         handleUnlinkReferral(user.id);
                                                                     }}
-                                                                    className="ml-1 text-muted-foreground hover:text-red-400 text-[10px] cursor-pointer"
+                                                                    className="ml-1 text-muted-foreground hover:text-red-700 dark:hover:text-red-400 text-[10px] cursor-pointer"
                                                                     title="Unlink referral"
                                                                 >
                                                                     ✕
@@ -3068,11 +3068,11 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                         {user.referrals && user.referrals.length > 0 && (
                                                             <Badge 
                                                                 variant="outline" 
-                                                                className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-xs gap-1 font-semibold cursor-pointer hover:bg-amber-500/30 transition-colors tabular-nums"
+                                                                className="bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/40 text-xs gap-1 font-semibold cursor-pointer hover:bg-amber-500/30 transition-colors tabular-nums"
                                                                 onClick={() => handleOpenCreditReferralModal(user)}
                                                                 title={`Friends Referred:\n${user.referrals.map((r: any) => `• @${r.username} (${r.status === 'APPROVED' || r.convertedAt ? 'Converted 1 Mo Free' : r.status})`).join('\n')}`}
                                                             >
-                                                                <Trophy className="h-3 w-3 text-amber-400" />
+                                                                <Trophy className="h-3 w-3 text-amber-700 dark:text-amber-400" />
                                                                 {user.referrals.length} Ref{user.referrals.length > 1 ? "s" : ""} ({user.referrals.filter((r: any) => r.status === "APPROVED" || r.convertedAt).length} Converted)
                                                             </Badge>
                                                         )}
@@ -3083,7 +3083,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 text-xs bg-background/50 p-2.5 rounded-lg border border-border/40">
                                                     {/* SEND-TO-KINDLE */}
                                                     <div className="flex items-center gap-1.5 min-w-0">
-                                                        <Send className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                                                        <Send className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
                                                         {editingKindleUserId === user.id ? (
                                                             <div className="flex items-center gap-1 flex-1 min-w-0">
                                                                 <Input 
@@ -3121,10 +3121,10 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
 
                                                     {/* PLEX LIBRARIES */}
                                                     <div className="flex items-center gap-1.5 truncate">
-                                                        <Layers className={`h-3.5 w-3.5 shrink-0 ${hasSecurityLeak ? "text-red-400" : "text-primary"}`} />
+                                                        <Layers className={`h-3.5 w-3.5 shrink-0 ${hasSecurityLeak ? "text-red-700 dark:text-red-400" : "text-primary"}`} />
                                                         <span className="text-muted-foreground">Libraries:</span>
                                                         {hasSecurityLeak ? (
-                                                            <span className="font-bold text-red-400 truncate flex items-center gap-1">
+                                                            <span className="font-bold text-red-700 dark:text-red-400 truncate flex items-center gap-1">
                                                                 {actualPlexShareCount} active on Plex (Security Leak)
                                                             </span>
                                                         ) : isInactive && !isAdmin ? (
@@ -3155,20 +3155,20 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
 
                                                     {/* LAST PAID / PAYMENT SUMMARY */}
                                                     <div className="flex items-center gap-1.5 min-w-0 sm:col-span-2 lg:col-span-3 pt-1 border-t border-border/20">
-                                                        <DollarSign className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                                                        <DollarSign className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400 shrink-0" />
                                                         <span className="text-muted-foreground shrink-0 font-medium">Payment:</span>
                                                         {isAdmin ? (
                                                             <span className="text-muted-foreground text-xs">Exempt (Platform Administrator)</span>
                                                         ) : user.paymentTransactions && user.paymentTransactions.length > 0 ? (
                                                             <div className="flex items-center gap-2 flex-wrap min-w-0">
-                                                                <span className="font-semibold text-emerald-400">
+                                                                <span className="font-semibold text-emerald-700 dark:text-emerald-400">
                                                                     Last Paid: ${user.paymentTransactions[0].amount.toFixed(2)} ({user.paymentTransactions[0].provider})
                                                                 </span>
                                                                 <span className="text-muted-foreground text-[11px]">
                                                                     on {format(new Date(user.paymentTransactions[0].emailDate), "MMM d, yyyy")}
                                                                 </span>
                                                                 {user.paymentTransactions.length > 1 && (
-                                                                    <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-300 border-emerald-500/30 px-1.5 py-0 font-mono font-semibold" title={`All ${user.paymentTransactions.length} payments: ${user.paymentTransactions.map((p: any) => `$${p.amount.toFixed(2)} (${format(new Date(p.emailDate), "MMM d, yyyy")})`).join(", ")}`}>
+                                                                    <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border-emerald-500/30 px-1.5 py-0 font-mono font-semibold" title={`All ${user.paymentTransactions.length} payments: ${user.paymentTransactions.map((p: any) => `$${p.amount.toFixed(2)} (${format(new Date(p.emailDate), "MMM d, yyyy")})`).join(", ")}`}>
                                                                         Total Paid: ${user.paymentTransactions.reduce((acc: number, p: any) => acc + (p.amount || 0), 0).toFixed(2)} ({user.paymentTransactions.length} payments)
                                                                     </Badge>
                                                                 )}
@@ -3186,12 +3186,12 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                     {/* SUBSCRIPTION RENEWAL & NEXT EMAIL REMINDER ROW */}
                                                     {(user.subscriptionEndsAt || user.trialEndsAt) && !isPending && !isAdmin && (
                                                         <div className="flex items-center gap-1.5 min-w-0 sm:col-span-2 lg:col-span-3 pt-1 border-t border-border/20">
-                                                            <CalendarClock className="h-3.5 w-3.5 text-blue-400 shrink-0" />
+                                                            <CalendarClock className="h-3.5 w-3.5 text-blue-700 dark:text-blue-400 shrink-0" />
                                                             <span className="text-muted-foreground shrink-0 font-medium">Renewal Notice:</span>
                                                             <div className="flex items-center gap-2 flex-wrap min-w-0 text-xs">
                                                                 {reminderInfo.status === "paid" ? (
                                                                     <>
-                                                                        <span className="font-semibold text-emerald-400 flex items-center gap-1">
+                                                                        <span className="font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
                                                                             <CheckCircle2 className="h-3 w-3" /> {reminderInfo.label}
                                                                         </span>
                                                                         <span className="text-muted-foreground text-[11px] truncate">
@@ -3200,16 +3200,16 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                                     </>
                                                                 ) : reminderInfo.status === "due_today" ? (
                                                                     <>
-                                                                        <span className="font-bold text-amber-300 flex items-center gap-1">
+                                                                        <span className="font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1">
                                                                             <BellRing className="h-3 w-3" /> {reminderInfo.label}
                                                                         </span>
-                                                                        <span className="text-amber-200/80 text-[11px]">
+                                                                        <span className="text-amber-900/80 dark:text-amber-200/80 text-[11px]">
                                                                             • Dispatches on next hourly background check
                                                                         </span>
                                                                     </>
                                                                 ) : reminderInfo.status === "scheduled" ? (
                                                                     <>
-                                                                        <span className="font-semibold text-blue-300 flex items-center gap-1">
+                                                                        <span className="font-semibold text-blue-800 dark:text-blue-300 flex items-center gap-1">
                                                                             <BellRing className="h-3 w-3" /> Next Email: {reminderInfo.label}
                                                                         </span>
                                                                         <span className="text-muted-foreground text-[11px]">
@@ -3241,7 +3241,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
 
                                                     {/* ACTIVE ADD-ONS ROW */}
                                                     <div className="flex items-center gap-1.5 min-w-0 sm:col-span-2 lg:col-span-3 pt-1 border-t border-border/20">
-                                                        <Zap className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                                                        <Zap className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
                                                         <span className="text-muted-foreground shrink-0 font-medium">Add-ons:</span>
                                                         {(() => {
                                                             let userAddonList: string[] = [];
@@ -3256,7 +3256,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                                     {userAddonList.map((addonId: string) => {
                                                                         const catalogItem = adminAddonsCatalog.find((a: any) => a.id === addonId);
                                                                         return (
-                                                                            <Badge key={addonId} variant="outline" className="text-[10px] bg-amber-500/10 text-amber-300 border-amber-500/30 px-1.5 py-0 font-medium">
+                                                                            <Badge key={addonId} variant="outline" className="text-[10px] bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30 px-1.5 py-0 font-medium">
                                                                                 {catalogItem?.name || addonId}
                                                                             </Badge>
                                                                         );
@@ -3276,14 +3276,14 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                             variant="outline" 
                                                             className={`h-8 px-2.5 text-xs font-semibold gap-1.5 transition-all active:scale-95 ${
                                                                 hasSecurityLeak 
-                                                                    ? "border-red-500/60 text-red-400 hover:bg-red-500/20 hover:border-red-500 font-bold" 
+                                                                    ? "border-red-500/60 text-red-700 dark:text-red-400 hover:bg-red-500/20 hover:border-red-500 font-bold" 
                                                                     : "border-primary/40 hover:border-primary hover:bg-primary/10"
                                                             }`}
                                                             onClick={() => handleOpenLibrariesModal(user)}
                                                             title="Manage Shared Plex Libraries"
                                                         >
                                                             {hasSecurityLeak ? (
-                                                                <ShieldAlert className="h-3.5 w-3.5 text-red-400 animate-pulse" />
+                                                                <ShieldAlert className="h-3.5 w-3.5 text-red-700 dark:text-red-400 animate-pulse" />
                                                             ) : (
                                                                 <Layers className="h-3.5 w-3.5 text-primary" />
                                                             )}
@@ -3295,7 +3295,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                             <Button 
                                                                 size="sm" 
                                                                 variant="outline" 
-                                                                className="h-8 px-2.5 text-xs font-semibold gap-1.5 border-blue-500/40 text-blue-400 hover:bg-blue-500/10 hover:border-blue-500 transition-all active:scale-95"
+                                                                className="h-8 px-2.5 text-xs font-semibold gap-1.5 border-blue-500/40 text-blue-700 dark:text-blue-400 hover:bg-blue-500/10 hover:border-blue-500 transition-all active:scale-95"
                                                                 onClick={() => {
                                                                     setSubModalUser(user);
                                                                     setShowCustomTrialScreen(false);
@@ -3305,7 +3305,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                                 }}
                                                                 title="Adjust Trial or Subscription Period"
                                                             >
-                                                                <Timer className="h-3.5 w-3.5 text-blue-400" />
+                                                                <Timer className="h-3.5 w-3.5 text-blue-700 dark:text-blue-400" />
                                                                 Access & Timer
                                                             </Button>
                                                         )}
@@ -3314,15 +3314,15 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                         <Button 
                                                             size="sm" 
                                                             variant="outline" 
-                                                            className="h-8 px-2.5 text-xs font-semibold gap-1.5 border-amber-500/40 text-amber-300 hover:bg-amber-500/15 hover:border-amber-500 transition-all active:scale-95"
+                                                            className="h-8 px-2.5 text-xs font-semibold gap-1.5 border-amber-500/40 text-amber-800 dark:text-amber-300 hover:bg-amber-500/15 hover:border-amber-500 transition-all active:scale-95"
                                                             onClick={() => handleImpersonateUser(user.id, user.username)}
                                                             title={`View Site As ${user.username}`}
                                                             disabled={impersonatingUserId === user.id}
                                                         >
                                                             {impersonatingUserId === user.id ? (
-                                                                <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-400" />
+                                                                <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-700 dark:text-amber-400" />
                                                             ) : (
-                                                                <Eye className="h-3.5 w-3.5 text-amber-400" />
+                                                                <Eye className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
                                                             )}
                                                             View As
                                                         </Button>
@@ -3332,11 +3332,11 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                             <Button 
                                                                 size="sm" 
                                                                 variant="outline" 
-                                                                className="h-8 px-2.5 text-xs font-semibold gap-1.5 border-amber-500/40 text-amber-300 hover:bg-amber-500/15 hover:border-amber-500 transition-all active:scale-95"
+                                                                className="h-8 px-2.5 text-xs font-semibold gap-1.5 border-amber-500/40 text-amber-800 dark:text-amber-300 hover:bg-amber-500/15 hover:border-amber-500 transition-all active:scale-95"
                                                                 onClick={() => handleOpenCreditReferralModal(user)}
                                                                 title="Credit this member for a referral or assign who invited them"
                                                             >
-                                                                <Gift className="h-3.5 w-3.5 text-amber-400" />
+                                                                <Gift className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
                                                                 Credit Referral
                                                             </Button>
                                                         )}
@@ -3346,15 +3346,15 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                             <Button 
                                                                 size="sm" 
                                                                 variant="outline" 
-                                                                className="h-8 px-2 text-xs font-semibold gap-1 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/15 hover:border-emerald-500 transition-all active:scale-95"
+                                                                className="h-8 px-2 text-xs font-semibold gap-1 border-emerald-500/40 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-500/15 hover:border-emerald-500 transition-all active:scale-95"
                                                                 onClick={() => handleSendRenewalReminder(user.id)}
                                                                 title="Send annual renewal & payment reminder email with referral discounts"
                                                                 disabled={sendingReminderUserId === user.id}
                                                             >
                                                                 {sendingReminderUserId === user.id ? (
-                                                                    <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-400" />
+                                                                    <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-700 dark:text-emerald-400" />
                                                                 ) : (
-                                                                    <Send className="h-3 w-3 text-emerald-400" />
+                                                                    <Send className="h-3 w-3 text-emerald-700 dark:text-emerald-400" />
                                                                 )}
                                                                 Renewal Notice
                                                             </Button>
@@ -3364,8 +3364,8 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                     <div className="flex flex-wrap items-center gap-2">
                                                         {/* MEMBERSHIP TIER SELECTOR */}
                                                         {isAdmin ? (
-                                                            <div className="h-8 px-3 rounded-md bg-sky-500/10 border border-sky-500/30 flex items-center gap-1.5 text-xs font-semibold text-sky-300" title="Platform Administrators have permanent full access and do not have member tiers">
-                                                                <Shield className="h-3.5 w-3.5 text-sky-400" />
+                                                            <div className="h-8 px-3 rounded-md bg-sky-500/10 border border-sky-500/30 flex items-center gap-1.5 text-xs font-semibold text-sky-800 dark:text-sky-300" title="Platform Administrators have permanent full access and do not have member tiers">
+                                                                <Shield className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400" />
                                                                 Permanent Admin
                                                             </div>
                                                         ) : (
@@ -3399,12 +3399,12 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                                 <Button size="sm" variant="default" className="h-8 px-2.5 bg-emerald-600 hover:bg-emerald-500 text-white gap-1 text-xs font-semibold transition-all hover:ring-2 hover:ring-emerald-400/40 active:scale-95" onClick={() => handleApprove(user.id)}>
                                                                     <CheckCircle2 className="h-3.5 w-3.5" /> Approve
                                                                 </Button>
-                                                                <Button size="sm" variant="outline" className="h-8 px-2.5 text-red-400 border-red-800/40 hover:bg-red-950/40 gap-1 text-xs font-semibold transition-all hover:ring-2 hover:ring-red-500/40 active:scale-95" onClick={() => handleReject(user.id)}>
+                                                                <Button size="sm" variant="outline" className="h-8 px-2.5 text-red-700 dark:text-red-400 border-red-500/40 dark:border-red-800/40 hover:bg-red-500/10 dark:hover:bg-red-950/40 gap-1 text-xs font-semibold transition-all hover:ring-2 hover:ring-red-500/40 active:scale-95" onClick={() => handleReject(user.id)}>
                                                                     <XCircle className="h-3.5 w-3.5" /> Reject
                                                                 </Button>
                                                             </>
                                                         ) : isRejected ? (
-                                                            <Button size="sm" variant="outline" className="h-8 px-2.5 text-emerald-400 border-emerald-800/40 hover:bg-emerald-950/40 gap-1 text-xs font-semibold transition-all hover:ring-2 hover:ring-emerald-400/40 active:scale-95" onClick={() => handleApprove(user.id)}>
+                                                            <Button size="sm" variant="outline" className="h-8 px-2.5 text-emerald-700 dark:text-emerald-400 border-emerald-500/40 dark:border-emerald-800/40 hover:bg-emerald-500/10 dark:hover:bg-emerald-950/40 gap-1 text-xs font-semibold transition-all hover:ring-2 hover:ring-emerald-400/40 active:scale-95" onClick={() => handleApprove(user.id)}>
                                                                 <CheckCircle2 className="h-3.5 w-3.5" /> Approve
                                                             </Button>
                                                         ) : null}
@@ -3428,7 +3428,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                         <Button 
                                                             size="icon" 
                                                             variant="ghost" 
-                                                            className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-950/40 transition-all hover:ring-2 hover:ring-red-500/40 active:scale-95" 
+                                                            className="h-8 w-8 text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 hover:bg-red-500/10 dark:hover:bg-red-950/40 transition-all hover:ring-2 hover:ring-red-500/40 active:scale-95" 
                                                             onClick={() => handleDelete(user.id)} 
                                                             title="Delete User"
                                                         >
@@ -3450,58 +3450,58 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                 {/* ========================================================================= */}
                 <TabsContent value="referrals" className="space-y-6 animate-in fade-in-50 duration-200">
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md">
+                        <Card className="border-border/50 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md">
                             <CardContent className="pt-6">
                                 <div className="flex items-center justify-between">
                                     <div className="space-y-1">
                                         <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Total Referred</p>
                                         <p className="text-2xl font-black text-foreground tabular-nums">{referralStats?.totalReferred ?? 0}</p>
                                     </div>
-                                    <div className="p-3 bg-sky-500/10 border border-sky-500/20 rounded-xl text-sky-400">
+                                    <div className="p-3 bg-sky-500/10 border border-sky-500/20 rounded-xl text-sky-700 dark:text-sky-400">
                                         <Users className="h-6 w-6" />
                                     </div>
                                 </div>
                             </CardContent>
                         </Card>
 
-                        <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md">
+                        <Card className="border-border/50 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md">
                             <CardContent className="pt-6">
                                 <div className="flex items-center justify-between">
                                     <div className="space-y-1">
                                         <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Active Trials</p>
-                                        <p className="text-2xl font-black text-blue-400">{referralStats?.totalTrials ?? 0}</p>
+                                        <p className="text-2xl font-black text-blue-700 dark:text-blue-400">{referralStats?.totalTrials ?? 0}</p>
                                     </div>
-                                    <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-blue-400">
+                                    <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-blue-700 dark:text-blue-400">
                                         <Timer className="h-6 w-6" />
                                     </div>
                                 </div>
                             </CardContent>
                         </Card>
 
-                        <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md">
+                        <Card className="border-border/50 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md">
                             <CardContent className="pt-6">
                                 <div className="flex items-center justify-between">
                                     <div className="space-y-1">
                                         <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Paid Conversions</p>
-                                        <p className="text-2xl font-black text-emerald-400">{referralStats?.totalConversions ?? 0}</p>
+                                        <p className="text-2xl font-black text-emerald-700 dark:text-emerald-400">{referralStats?.totalConversions ?? 0}</p>
                                     </div>
-                                    <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400">
+                                    <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-700 dark:text-emerald-400">
                                         <DollarSign className="h-6 w-6" />
                                     </div>
                                 </div>
                             </CardContent>
                         </Card>
 
-                        <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md">
+                        <Card className="border-border/50 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md">
                             <CardContent className="pt-6">
                                 <div className="flex items-center justify-between">
                                     <div className="space-y-1">
                                         <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Conversion Rate</p>
-                                        <p className="text-2xl font-black text-amber-400">
+                                        <p className="text-2xl font-black text-amber-700 dark:text-amber-400">
                                             {referralStats?.totalReferred ? `${Math.round((referralStats.totalConversions / referralStats.totalReferred) * 100)}%` : "0%"}
                                         </p>
                                     </div>
-                                    <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-400">
+                                    <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-700 dark:text-amber-400">
                                         <Trophy className="h-6 w-6" />
                                     </div>
                                 </div>
@@ -3510,11 +3510,11 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                     </div>
 
                     {/* TOP REFERRERS LEADERBOARD */}
-                    <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md">
+                    <Card className="border-border/50 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md">
                         <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                             <div>
                                 <CardTitle className="flex items-center gap-2 text-lg font-bold">
-                                    <Trophy className="h-5 w-5 text-amber-400" /> Member Referral Leaderboard
+                                    <Trophy className="h-5 w-5 text-amber-700 dark:text-amber-400" /> Member Referral Leaderboard
                                 </CardTitle>
                                 <CardDescription>Track which members bring the most friends and successful conversions to your server.</CardDescription>
                             </div>
@@ -3552,7 +3552,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                             {referralStats.leaderboard.map((ref: any, idx: number) => {
                                                 const rate = ref.totalReferrals > 0 ? Math.round((ref.conversions / ref.totalReferrals) * 100) : 0;
                                                 return (
-                                                    <tr key={idx} className="hover:bg-white/[0.02] transition-colors">
+                                                    <tr key={idx} className="hover:bg-accent dark:hover:bg-white/[0.02] transition-colors">
                                                         <td className="py-3.5 px-4 font-bold">
                                                             {idx === 0 ? "🥇 #1" : idx === 1 ? "🥈 #2" : idx === 2 ? "🥉 #3" : `#${idx + 1}`}
                                                         </td>
@@ -3562,13 +3562,13 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                         <td className="py-3.5 px-4 text-center font-semibold">
                                                             {ref.totalReferrals}
                                                         </td>
-                                                        <td className="py-3.5 px-4 text-center font-semibold text-blue-400">
+                                                        <td className="py-3.5 px-4 text-center font-semibold text-blue-700 dark:text-blue-400">
                                                             {ref.trials}
                                                         </td>
-                                                        <td className="py-3.5 px-4 text-center font-bold text-emerald-400">
+                                                        <td className="py-3.5 px-4 text-center font-bold text-emerald-700 dark:text-emerald-400">
                                                             {ref.conversions}
                                                         </td>
-                                                        <td className="py-3.5 px-4 text-right font-bold text-amber-400">
+                                                        <td className="py-3.5 px-4 text-right font-bold text-amber-700 dark:text-amber-400">
                                                             {rate}%
                                                         </td>
                                                     </tr>
@@ -3586,12 +3586,12 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                 {/* TAB 3: PAYMENT & ONBOARDING SETTINGS */}
                 {/* ========================================================================= */}
                 <TabsContent value="onboarding" className="space-y-6 animate-in fade-in-50 duration-200">
-                    <Card className={`transition-all duration-300 bg-[#121218]/80 backdrop-blur-md ${hasUnsavedChanges ? "border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]" : "border-border/50"}`}>
+                    <Card className={`transition-all duration-300 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md ${hasUnsavedChanges ? "border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]" : "border-border/50"}`}>
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2 text-lg font-bold">
-                                <Sparkles className="h-5 w-5 text-emerald-400" /> Wizarr-Style Onboarding, Trials & Prorated Yearly Billing
+                                <Sparkles className="h-5 w-5 text-emerald-700 dark:text-emerald-400" /> Wizarr-Style Onboarding, Trials & Prorated Yearly Billing
                                 {hasUnsavedChanges && (
-                                    <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-400 border-amber-500/30 font-medium ml-2 animate-in fade-in">
+                                    <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 font-medium ml-2 animate-in fade-in">
                                         ● Unsaved Changes
                                     </Badge>
                                 )}
@@ -3603,20 +3603,20 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                         <CardContent>
                             <form onSubmit={handleSaveOnboardingSettings} className="space-y-6">
                                 {settingsSuccessMsg && (
-                                    <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
+                                    <div className="text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/40 dark:border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
                                         <CheckCircle2 className="h-4 w-4 shrink-0" />
                                         <span>{settingsSuccessMsg}</span>
                                     </div>
                                 )}
                                 {settingsErrMsg && (
-                                    <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2">
+                                    <div className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 dark:bg-red-950/40 border border-red-500/40 dark:border-red-800/40 p-3 rounded-lg flex items-center gap-2">
                                         <XCircle className="h-4 w-4 shrink-0" />
                                         <span>{settingsErrMsg}</span>
                                     </div>
                                 )}
 
                                 {/* PRICING & TRIAL SETTINGS */}
-                                <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06] space-y-4">
+                                <div className="p-4 rounded-2xl bg-muted/50 dark:bg-white/[0.02] border border-border/70 dark:border-white/[0.06] space-y-4">
                                     <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-primary">
                                         <Calculator className="h-4 w-4" />
                                         <span>Subscription & Trial Customization</span>
@@ -3640,7 +3640,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                         <div className="space-y-1.5">
                                             <div className="flex items-center justify-between">
                                                 <Label className="text-xs font-semibold">Tier 1 Annual ($)</Label>
-                                                <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">Regular Yearly</Badge>
+                                                <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">Regular Yearly</Badge>
                                             </div>
                                             <div className="relative">
                                                 <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -3663,7 +3663,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                         <div className="space-y-1.5">
                                             <div className="flex items-center justify-between">
                                                 <Label className="text-xs font-semibold">Tier 1 Monthly ($)</Label>
-                                                <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">Regular Monthly</Badge>
+                                                <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">Regular Monthly</Badge>
                                             </div>
                                             <div className="relative">
                                                 <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -3686,7 +3686,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                         <div className="space-y-1.5">
                                             <div className="flex items-center justify-between">
                                                 <Label className="text-xs font-semibold">Tier 2 Annual ($)</Label>
-                                                <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">Managed Yearly</Badge>
+                                                <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30">Managed Yearly</Badge>
                                             </div>
                                             <div className="relative">
                                                 <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -3709,7 +3709,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                         <div className="space-y-1.5">
                                             <div className="flex items-center justify-between">
                                                 <Label className="text-xs font-semibold">Tier 2 Monthly ($)</Label>
-                                                <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">Managed Monthly</Badge>
+                                                <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30">Managed Monthly</Badge>
                                             </div>
                                             <div className="relative">
                                                 <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -3785,17 +3785,17 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                 </div>
 
                                 {/* LIVE PRORATED CALCULATION PREVIEW BOX */}
-                                <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-950/30 via-emerald-900/20 to-transparent border border-emerald-500/30 space-y-3">
+                                <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 dark:from-emerald-950/30 via-emerald-500/10 dark:via-emerald-900/20 to-transparent border border-emerald-500/30 space-y-3">
                                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                        <div className="flex items-center gap-2 text-xs font-bold text-emerald-400 uppercase tracking-wider">
+                                        <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
                                             <Sparkles className="h-4 w-4" />
                                             <span>Live Prorated Billing Calculation Preview</span>
                                         </div>
                                         <div className="flex items-center gap-1.5">
-                                            <Badge variant="outline" className="bg-amber-500/10 text-amber-300 border-amber-500/30 text-[10px]">
+                                            <Badge variant="outline" className="bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30 text-[10px]">
                                                 Tier 1 Conversion Default
                                             </Badge>
-                                            <Badge variant="outline" className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-[10px]">
+                                            <Badge variant="outline" className="bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border-emerald-500/40 text-[10px]">
                                                 Dynamic Engine
                                             </Badge>
                                         </div>
@@ -3810,16 +3810,16 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                             {/* YEARLY PRORATED PREVIEW */}
                                             <div className="p-3 rounded-xl bg-background/70 border border-emerald-500/30 space-y-1.5 text-xs">
                                                 <div className="flex items-center justify-between">
-                                                    <span className="text-emerald-400 font-bold uppercase text-[10px] tracking-wider flex items-center gap-1">
+                                                    <span className="text-emerald-700 dark:text-emerald-400 font-bold uppercase text-[10px] tracking-wider flex items-center gap-1">
                                                         <Calendar className="h-3 w-3" /> Annual Plan (Prorated)
                                                     </span>
-                                                    <Badge variant="outline" className="text-[9px] bg-emerald-500/15 text-emerald-300 border-emerald-500/30">
+                                                    <Badge variant="outline" className="text-[9px] bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border-emerald-500/30">
                                                         Tier 1 (${liveProrated.yearlyRate}/yr)
                                                     </Badge>
                                                 </div>
                                                 <div>
                                                     <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Due at Trial End (Remainder of {liveProrated.trialEndYear}):</span>
-                                                    <span className="text-emerald-400 font-black text-base">
+                                                    <span className="text-emerald-700 dark:text-emerald-400 font-black text-base">
                                                         ${liveProrated.amountDueNow.toFixed(2)}
                                                     </span>
                                                 </div>
@@ -3835,16 +3835,16 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                             {/* MONTHLY PRORATED PREVIEW */}
                                             <div className="p-3 rounded-xl bg-background/70 border border-sky-500/30 space-y-1.5 text-xs">
                                                 <div className="flex items-center justify-between">
-                                                    <span className="text-sky-400 font-bold uppercase text-[10px] tracking-wider flex items-center gap-1">
+                                                    <span className="text-sky-700 dark:text-sky-400 font-bold uppercase text-[10px] tracking-wider flex items-center gap-1">
                                                         <CreditCard className="h-3 w-3" /> Monthly Plan (Prorated)
                                                     </span>
-                                                    <Badge variant="outline" className="text-[9px] bg-sky-500/15 text-sky-300 border-sky-500/30">
+                                                    <Badge variant="outline" className="text-[9px] bg-sky-500/15 text-sky-800 dark:text-sky-300 border-sky-500/30">
                                                         Tier 1 (${liveProrated.standaloneMonthlyRate}/mo)
                                                     </Badge>
                                                 </div>
                                                 <div>
                                                     <span className="text-muted-foreground block text-[10px] uppercase font-semibold">1st Partial Month (Due {format(new Date(liveProrated.trialEndDate), "MMM d")}):</span>
-                                                    <span className="text-sky-300 font-black text-base tabular-nums">
+                                                    <span className="text-sky-800 dark:text-sky-300 font-black text-base tabular-nums">
                                                         ${liveProrated.monthlyAmountDueNow.toFixed(2)}
                                                     </span>
                                                 </div>
@@ -3866,13 +3866,13 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                 </div>
 
                                 {/* SUBSCRIPTION RENEWAL REMINDER TIMINGS & SCHEDULES */}
-                                <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06] space-y-5">
+                                <div className="p-4 rounded-2xl bg-muted/50 dark:bg-white/[0.02] border border-border/70 dark:border-white/[0.06] space-y-5">
                                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-400">
+                                        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">
                                             <CalendarClock className="h-4 w-4" />
                                             <span>Subscription Renewal Reminder Timings & Schedules</span>
                                         </div>
-                                        <Badge variant="outline" className="bg-amber-500/10 text-amber-300 border-amber-500/30 text-[10px] w-fit">
+                                        <Badge variant="outline" className="bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30 text-[10px] w-fit">
                                             Hourly Auto-Check Engine
                                         </Badge>
                                     </div>
@@ -3887,10 +3887,10 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                         <div className="p-4 rounded-xl bg-background/60 border border-amber-500/20 space-y-3.5">
                                             <div className="flex items-center justify-between">
                                                 <div className="flex items-center gap-2">
-                                                    <Calendar className="h-4 w-4 text-amber-400" />
+                                                    <Calendar className="h-4 w-4 text-amber-700 dark:text-amber-400" />
                                                     <span className="text-sm font-bold text-foreground">Annual (Yearly) Schedule</span>
                                                 </div>
-                                                <Badge variant="outline" className="text-[10px] bg-amber-500/15 text-amber-300 border-amber-500/30 font-mono">
+                                                <Badge variant="outline" className="text-[10px] bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30 font-mono">
                                                     {parseReminderDays(paymentSettings.yearlyRenewalReminderDays, DEFAULT_YEARLY_REMINDER_DAYS).length} Milestone Notices
                                                 </Badge>
                                             </div>
@@ -3928,7 +3928,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                                 }}
                                                                 className={`text-[11px] px-2.5 py-1 rounded-lg border font-medium transition-all ${
                                                                     isSelected
-                                                                        ? "bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm shadow-amber-500/10 font-bold"
+                                                                        ? "bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/50 shadow-sm shadow-amber-500/10 font-bold"
                                                                         : "bg-muted/20 text-muted-foreground border-border/40 hover:bg-muted/40 hover:text-foreground"
                                                                 }`}
                                                             >
@@ -3954,11 +3954,11 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                             </div>
 
                                             {/* Sequential Visual Timeline */}
-                                            <div className="p-2.5 rounded-lg bg-amber-950/20 border border-amber-500/20 text-[11px] text-amber-200/90 font-mono flex items-center gap-1.5 flex-wrap">
-                                                <span className="font-bold text-amber-400">📅 Yearly Timeline:</span>
+                                            <div className="p-2.5 rounded-lg bg-amber-500/10 dark:bg-amber-950/20 border border-amber-500/20 text-[11px] text-amber-900/90 dark:text-amber-200/90 font-mono flex items-center gap-1.5 flex-wrap">
+                                                <span className="font-bold text-amber-700 dark:text-amber-400">📅 Yearly Timeline:</span>
                                                 {parseReminderDays(paymentSettings.yearlyRenewalReminderDays, DEFAULT_YEARLY_REMINDER_DAYS).map((d, i, arr) => (
                                                     <span key={d} className="inline-flex items-center gap-1">
-                                                        <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold">{d}d</span>
+                                                        <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-800 dark:text-amber-300 font-bold">{d}d</span>
                                                         {i < arr.length - 1 && <span className="text-amber-500/60">→</span>}
                                                     </span>
                                                 ))}
@@ -3970,10 +3970,10 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                         <div className="p-4 rounded-xl bg-background/60 border border-sky-500/20 space-y-3.5">
                                             <div className="flex items-center justify-between">
                                                 <div className="flex items-center gap-2">
-                                                    <CreditCard className="h-4 w-4 text-sky-400" />
+                                                    <CreditCard className="h-4 w-4 text-sky-700 dark:text-sky-400" />
                                                     <span className="text-sm font-bold text-foreground">Monthly Schedule</span>
                                                 </div>
-                                                <Badge variant="outline" className="text-[10px] bg-sky-500/15 text-sky-300 border-sky-500/30 font-mono tabular-nums">
+                                                <Badge variant="outline" className="text-[10px] bg-sky-500/15 text-sky-800 dark:text-sky-300 border-sky-500/30 font-mono tabular-nums">
                                                     {parseReminderDays(paymentSettings.monthlyRenewalReminderDays, DEFAULT_MONTHLY_REMINDER_DAYS).length} Milestone Notices
                                                 </Badge>
                                             </div>
@@ -4011,7 +4011,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                                 }}
                                                                 className={`text-[11px] px-2.5 py-1 rounded-lg border font-medium transition-all ${
                                                                     isSelected
-                                                                        ? "bg-sky-500/20 text-sky-300 border-sky-500/50 shadow-sm font-bold"
+                                                                        ? "bg-sky-500/20 text-sky-800 dark:text-sky-300 border-sky-500/50 shadow-sm font-bold"
                                                                         : "bg-muted/20 text-muted-foreground border-border/40 hover:bg-muted/40 hover:text-foreground"
                                                                 }`}
                                                             >
@@ -4037,11 +4037,11 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                             </div>
 
                                             {/* Sequential Visual Timeline */}
-                                            <div className="p-2.5 rounded-lg bg-sky-950/20 border border-sky-500/20 text-[11px] text-sky-200/90 font-mono flex items-center gap-1.5 flex-wrap">
-                                                <span className="font-bold text-sky-400">Monthly Timeline:</span>
+                                            <div className="p-2.5 rounded-lg bg-sky-500/10 dark:bg-sky-950/20 border border-sky-500/20 text-[11px] text-sky-900/90 dark:text-sky-200/90 font-mono flex items-center gap-1.5 flex-wrap">
+                                                <span className="font-bold text-sky-700 dark:text-sky-400">Monthly Timeline:</span>
                                                 {parseReminderDays(paymentSettings.monthlyRenewalReminderDays, DEFAULT_MONTHLY_REMINDER_DAYS).map((d, i, arr) => (
                                                     <span key={d} className="inline-flex items-center gap-1">
-                                                        <span className="px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 font-bold">{d}d</span>
+                                                        <span className="px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-800 dark:text-sky-300 font-bold">{d}d</span>
                                                         {i < arr.length - 1 && <span className="text-sky-500/60">→</span>}
                                                     </span>
                                                 ))}
@@ -4051,10 +4051,10 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                     </div>
 
                                     {/* ALREADY PAID SAFETY GUARANTEE CALLOUT */}
-                                    <div className="p-3 rounded-xl bg-emerald-950/20 border border-emerald-500/30 flex items-start gap-2.5 text-xs text-muted-foreground">
-                                        <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+                                    <div className="p-3 rounded-xl bg-emerald-500/10 dark:bg-emerald-950/20 border border-emerald-500/30 flex items-start gap-2.5 text-xs text-muted-foreground">
+                                        <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5" />
                                         <div className="space-y-0.5">
-                                            <span className="font-semibold text-emerald-300">Automatic Payment Verification Guard:</span>
+                                            <span className="font-semibold text-emerald-800 dark:text-emerald-300">Automatic Payment Verification Guard:</span>
                                             <p>
                                                 When a subscriber makes their renewal payment or has an active payment transaction covering the upcoming cycle, renewal reminder emails are strictly suppressed. No reminder emails will be sent to members who have already paid.
                                             </p>
@@ -4063,9 +4063,9 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                 </div>
 
                                 {/* PAYMENT GATEWAYS & HANDLES */}
-                                <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06] space-y-4">
+                                <div className="p-4 rounded-2xl bg-muted/50 dark:bg-white/[0.02] border border-border/70 dark:border-white/[0.06] space-y-4">
                                     <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-foreground">
-                                        <CreditCard className="h-4 w-4 text-emerald-400" />
+                                        <CreditCard className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
                                         <span>Custom Payment Gateways & Handles</span>
                                     </div>
 
@@ -4142,7 +4142,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                 <Label htmlFor="auto-suspend-toggle" className="text-xs font-bold text-foreground cursor-pointer">
                                                     Automatic Access Suspension on Expiration
                                                 </Label>
-                                                <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${paymentSettings.autoSuspendExpiredAccounts ? "bg-amber-950/40 text-amber-300 border-amber-500/40" : "bg-muted/40 text-muted-foreground border-border/40"}`}>
+                                                <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${paymentSettings.autoSuspendExpiredAccounts ? "bg-amber-500/10 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border-amber-500/40" : "bg-muted/40 text-muted-foreground border-border/40"}`}>
                                                     {paymentSettings.autoSuspendExpiredAccounts ? "Active" : "Disabled (Safe Default)"}
                                                 </Badge>
                                             </div>
@@ -4175,10 +4175,10 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                         <div>
                                             <div className="flex items-center gap-2">
                                                 <Label className="text-xs font-bold text-foreground">Default Shared Plex Libraries for Regular Members & Signups</Label>
-                                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-emerald-500/10 text-emerald-300 border-emerald-500/30">Full Member Shelf</Badge>
+                                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border-emerald-500/30">Full Member Shelf</Badge>
                                             </div>
                                             <p className="text-[11px] text-muted-foreground">
-                                                Select which default Plex libraries are shared automatically with regular full members upon signup or approval. To configure Jellyfin, Emby, and overall server library whitelists, visit <Link href="/settings?tab=servers" className="text-amber-400 hover:text-amber-300 underline font-medium">System Settings ➔ Media Servers</Link>.
+                                                Select which default Plex libraries are shared automatically with regular full members upon signup or approval. To configure Jellyfin, Emby, and overall server library whitelists, visit <Link href="/settings?tab=servers" className="text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 underline font-medium">System Settings ➔ Media Servers</Link>.
                                             </p>
                                         </div>
                                         <Button 
@@ -4264,7 +4264,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                                         />
                                                                         <span className="truncate">{sec.title}</span>
                                                                         {isAudiobookSec ? (
-                                                                            <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5 border-teal-500/30 text-teal-400 bg-teal-950/20 shrink-0">
+                                                                            <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5 border-teal-500/30 text-teal-700 dark:text-teal-400 bg-teal-500/10 dark:bg-teal-950/20 shrink-0">
                                                                                 Opt-in Add-on
                                                                             </Badge>
                                                                         ) : (
@@ -4287,7 +4287,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                         <div>
                                             <div className="flex items-center gap-2">
                                                 <Label className="text-xs font-bold text-foreground">Default Shared Plex Libraries for Trial Accounts</Label>
-                                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-amber-500/10 text-amber-300 border-amber-500/30">Trial Safe Pool / Restricted Shelf</Badge>
+                                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30">Trial Safe Pool / Restricted Shelf</Badge>
                                             </div>
                                             <p className="text-[11px] text-muted-foreground">Select which server library sections are shared with prospective trial users. Trial users are restricted strictly to this pool and cannot access full member libraries.</p>
                                         </div>
@@ -4321,9 +4321,9 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                     <div key={srv.serverId} className="p-3 bg-muted/10 rounded-xl border border-border/40 space-y-2">
                                                         <div className="flex items-center justify-between pb-1.5 border-b border-border/30">
                                                             <div className="flex items-center gap-2">
-                                                                <Server className="h-3.5 w-3.5 text-amber-400" />
+                                                                <Server className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
                                                                 <span className="font-bold text-xs text-foreground">{srv.serverName || "Plex Server"}</span>
-                                                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-background/50 text-amber-300">
+                                                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-background/50 text-amber-800 dark:text-amber-300">
                                                                     {srvSelectedCount}/{srvSections.length} Trial Default
                                                                 </Badge>
                                                             </div>
@@ -4374,7 +4374,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                                         />
                                                                         <span className="truncate">{sec.title}</span>
                                                                         {isAudiobookSec ? (
-                                                                            <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5 border-teal-500/30 text-teal-400 bg-teal-950/20 shrink-0">
+                                                                            <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5 border-teal-500/30 text-teal-700 dark:text-teal-400 bg-teal-500/10 dark:bg-teal-950/20 shrink-0">
                                                                                 Opt-in Add-on
                                                                             </Badge>
                                                                         ) : (
@@ -4397,7 +4397,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                         <div>
                                             <div className="flex items-center gap-2">
                                                 <Label className="text-xs font-bold text-foreground">Default Shared Plex Libraries for Kids Accounts</Label>
-                                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-blue-500/10 text-blue-300 border-blue-500/30">Kids Server / Safe Shelf</Badge>
+                                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-blue-500/10 text-blue-800 dark:text-blue-300 border-blue-500/30">Kids Server / Safe Shelf</Badge>
                                             </div>
                                             <p className="text-[11px] text-muted-foreground">Select which server library sections are shared by default when members create a Kids sub-account. Kids accounts inherit this library pool and automatic PG rating restrictions.</p>
                                         </div>
@@ -4431,9 +4431,9 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                     <div key={srv.serverId} className="p-3 bg-muted/10 rounded-xl border border-border/40 space-y-2">
                                                         <div className="flex items-center justify-between pb-1.5 border-b border-border/30">
                                                             <div className="flex items-center gap-2">
-                                                                <Server className="h-3.5 w-3.5 text-blue-400" />
+                                                                <Server className="h-3.5 w-3.5 text-blue-700 dark:text-blue-400" />
                                                                 <span className="font-bold text-xs text-foreground">{srv.serverName || "Plex Server"}</span>
-                                                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-background/50 text-blue-300">
+                                                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-background/50 text-blue-800 dark:text-blue-300">
                                                                     {srvSelectedCount}/{srvSections.length} Kids Default
                                                                 </Badge>
                                                             </div>
@@ -4490,13 +4490,13 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                 </div>
 
                                 {/* ADD-ONS CATALOG & AVAILABILITY MANAGER */}
-                                <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06] space-y-4">
+                                <div className="p-4 rounded-2xl bg-muted/50 dark:bg-white/[0.02] border border-border/70 dark:border-white/[0.06] space-y-4">
                                     <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-400">
+                                        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">
                                             <Sparkles className="h-4 w-4" />
                                             <span>Add-ons &amp; Household Features (Modular Availability Controls)</span>
                                         </div>
-                                        <Badge variant="outline" className="text-[10px] px-2 py-0.5 bg-amber-500/10 text-amber-300 border-amber-500/30">
+                                        <Badge variant="outline" className="text-[10px] px-2 py-0.5 bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30">
                                             Live Feature Flags
                                         </Badge>
                                     </div>
@@ -4521,25 +4521,25 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                         <div className="flex items-center justify-between gap-2">
                                                             <div className="flex items-center gap-2">
                                                                 {addon.icon === "tv" ? (
-                                                                    <Tv className="h-4 w-4 text-cyan-400 shrink-0" />
+                                                                    <Tv className="h-4 w-4 text-cyan-700 dark:text-cyan-400 shrink-0" />
                                                                 ) : addon.icon === "music" ? (
-                                                                    <Music className="h-4 w-4 text-emerald-400 shrink-0" />
+                                                                    <Music className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0" />
                                                                 ) : addon.icon === "book" ? (
-                                                                    <BookOpen className="h-4 w-4 text-amber-400 shrink-0" />
+                                                                    <BookOpen className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0" />
                                                                 ) : addon.icon === "headphones" ? (
-                                                                    <Headphones className="h-4 w-4 text-teal-400 shrink-0" />
+                                                                    <Headphones className="h-4 w-4 text-teal-700 dark:text-teal-400 shrink-0" />
                                                                 ) : addon.icon === "server" ? (
-                                                                    <Server className="h-4 w-4 text-sky-400 shrink-0" />
+                                                                    <Server className="h-4 w-4 text-sky-700 dark:text-sky-400 shrink-0" />
                                                                 ) : addon.icon === "baby" ? (
-                                                                    <Baby className="h-4 w-4 text-sky-400 shrink-0" />
+                                                                    <Baby className="h-4 w-4 text-sky-700 dark:text-sky-400 shrink-0" />
                                                                 ) : addon.icon === "monitor" ? (
-                                                                    <Monitor className="h-4 w-4 text-amber-400 shrink-0" />
+                                                                    <Monitor className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0" />
                                                                 ) : (
-                                                                    <Sparkles className="h-4 w-4 text-amber-400 shrink-0" />
+                                                                    <Sparkles className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0" />
                                                                 )}
                                                                 <span className="font-bold text-xs text-foreground truncate">{addon.name}</span>
                                                             </div>
-                                                            <Badge variant="outline" className={`text-[9px] px-1.5 py-0 shrink-0 ${addon.isFree ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" : "bg-amber-500/10 text-amber-400 border-amber-500/30"}`}>
+                                                            <Badge variant="outline" className={`text-[9px] px-1.5 py-0 shrink-0 ${addon.isFree ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30" : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30"}`}>
                                                                 {addon.isFree ? "Free" : `$${addon.price}/mo`}
                                                             </Badge>
                                                         </div>
@@ -4549,7 +4549,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                     </div>
 
                                                     <div className="pt-2 flex items-center justify-between border-t border-border/30 text-xs">
-                                                        <span className={`text-[10px] font-semibold ${isAvail ? "text-emerald-400" : "text-muted-foreground"}`}>
+                                                        <span className={`text-[10px] font-semibold ${isAvail ? "text-emerald-700 dark:text-emerald-400" : "text-muted-foreground"}`}>
                                                             {isAvail ? "✅ Available to Users" : isLocked ? "🔒 In Development" : "🔒 Disabled / Coming Soon"}
                                                         </span>
                                                         <div className="flex items-center gap-2">
@@ -4609,7 +4609,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                         <div>
                             <h4 className="text-lg font-bold text-foreground flex items-center gap-2">
-                                <ShieldAlert className="h-5 w-5 text-amber-400" />
+                                <ShieldAlert className="h-5 w-5 text-amber-700 dark:text-amber-400" />
                                 Admin Approval Center & Action Staging Gate
                             </h4>
                             <p className="text-xs text-muted-foreground">
@@ -4633,56 +4633,56 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
 
                     {/* Notification Messages */}
                     {approvalSuccessMsg && (
-                        <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-400 text-xs font-medium flex items-center justify-between">
+                        <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-700 dark:text-emerald-400 text-xs font-medium flex items-center justify-between">
                             <span>{approvalSuccessMsg}</span>
-                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-emerald-400" onClick={() => setApprovalSuccessMsg("")}>✕</Button>
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-emerald-700 dark:text-emerald-400" onClick={() => setApprovalSuccessMsg("")}>✕</Button>
                         </div>
                     )}
                     {approvalErrMsg && (
-                        <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-400 text-xs font-medium flex items-center justify-between">
+                        <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-700 dark:text-rose-400 text-xs font-medium flex items-center justify-between">
                             <span>{approvalErrMsg}</span>
-                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-rose-400" onClick={() => setApprovalErrMsg("")}>✕</Button>
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-rose-700 dark:text-rose-400" onClick={() => setApprovalErrMsg("")}>✕</Button>
                         </div>
                     )}
 
                     {/* KPI STATS CARDS */}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        <Card className="bg-[#121218] border-border/50 p-4">
+                        <Card className="bg-card dark:bg-[#121218] border-border/50 p-4">
                             <div className="flex items-center justify-between">
                                 <span className="text-xs text-muted-foreground font-medium">Pending Review</span>
-                                <Clock className="h-4 w-4 text-amber-400" />
+                                <Clock className="h-4 w-4 text-amber-700 dark:text-amber-400" />
                             </div>
-                            <div className="mt-2 text-2xl font-black text-amber-400">{approvalCounts.pendingCount}</div>
+                            <div className="mt-2 text-2xl font-black text-amber-700 dark:text-amber-400">{approvalCounts.pendingCount}</div>
                             <span className="text-[10px] text-muted-foreground">Actions awaiting review</span>
                         </Card>
-                        <Card className="bg-[#121218] border-border/50 p-4">
+                        <Card className="bg-card dark:bg-[#121218] border-border/50 p-4">
                             <div className="flex items-center justify-between">
                                 <span className="text-xs text-muted-foreground font-medium">Approved & Applied</span>
-                                <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                                <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
                             </div>
-                            <div className="mt-2 text-2xl font-black text-emerald-400">{approvalCounts.approvedCount}</div>
+                            <div className="mt-2 text-2xl font-black text-emerald-700 dark:text-emerald-400">{approvalCounts.approvedCount}</div>
                             <span className="text-[10px] text-muted-foreground">Authorized by admins</span>
                         </Card>
-                        <Card className="bg-[#121218] border-border/50 p-4">
+                        <Card className="bg-card dark:bg-[#121218] border-border/50 p-4">
                             <div className="flex items-center justify-between">
                                 <span className="text-xs text-muted-foreground font-medium">Rejected</span>
-                                <XCircle className="h-4 w-4 text-rose-400" />
+                                <XCircle className="h-4 w-4 text-rose-700 dark:text-rose-400" />
                             </div>
-                            <div className="mt-2 text-2xl font-black text-rose-400">{approvalCounts.rejectedCount}</div>
+                            <div className="mt-2 text-2xl font-black text-rose-700 dark:text-rose-400">{approvalCounts.rejectedCount}</div>
                             <span className="text-[10px] text-muted-foreground">Dismissed or blocked</span>
                         </Card>
-                        <Card className="bg-[#121218] border-border/50 p-4">
+                        <Card className="bg-card dark:bg-[#121218] border-border/50 p-4">
                             <div className="flex items-center justify-between">
                                 <span className="text-xs text-muted-foreground font-medium">Total Staged</span>
-                                <Shield className="h-4 w-4 text-blue-400" />
+                                <Shield className="h-4 w-4 text-blue-700 dark:text-blue-400" />
                             </div>
-                            <div className="mt-2 text-2xl font-black text-blue-400">{approvalCounts.totalCount}</div>
+                            <div className="mt-2 text-2xl font-black text-blue-700 dark:text-blue-400">{approvalCounts.totalCount}</div>
                             <span className="text-[10px] text-muted-foreground">Lifetime audit history</span>
                         </Card>
                     </div>
 
                     {/* APPROVAL WORKFLOW GOVERNANCE TOGGLES */}
-                    <Card className="border-border/60 bg-[#121218] shadow-md">
+                    <Card className="border-border/60 bg-card dark:bg-[#121218] shadow-md">
                         <CardHeader className="pb-3 border-b border-border/40">
                             <CardTitle className="text-sm font-bold flex items-center gap-2 text-foreground">
                                 <SlidersHorizontal className="h-4 w-4 text-primary" />
@@ -4696,7 +4696,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-muted/20 rounded-xl border border-border/40">
                                 <div className="space-y-0.5">
                                     <Label className="text-xs font-semibold text-foreground flex items-center gap-2">
-                                        <FolderCheck className="h-3.5 w-3.5 text-blue-400" />
+                                        <FolderCheck className="h-3.5 w-3.5 text-blue-700 dark:text-blue-400" />
                                         Require Admin Approval for Plex Access Changes
                                     </Label>
                                     <p className="text-[11px] text-muted-foreground">
@@ -4713,7 +4713,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-muted/20 rounded-xl border border-border/40">
                                 <div className="space-y-0.5">
                                     <Label className="text-xs font-semibold text-foreground flex items-center gap-2">
-                                        <Mail className="h-3.5 w-3.5 text-emerald-400" />
+                                        <Mail className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
                                         Require Admin Approval for Outgoing Emails
                                     </Label>
                                     <p className="text-[11px] text-muted-foreground">
@@ -4728,10 +4728,10 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                             </div>
 
                             {/* GRANULAR EMAIL APPROVAL POLICIES */}
-                            <div className="p-4 rounded-xl border border-emerald-500/30 bg-emerald-950/10 space-y-4">
+                            <div className="p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 dark:bg-emerald-950/10 space-y-4">
                                 {!approvalSettings.requireApprovalForEmails && (
-                                    <div className="bg-amber-950/30 border border-amber-500/40 rounded-lg p-3 text-xs text-amber-300 flex items-center gap-2">
-                                        <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" />
+                                    <div className="bg-amber-500/10 dark:bg-amber-950/30 border border-amber-500/40 rounded-lg p-3 text-xs text-amber-800 dark:text-amber-300 flex items-center gap-2">
+                                        <AlertTriangle className="h-4 w-4 shrink-0 text-amber-700 dark:text-amber-400" />
                                         <span>
                                             <strong>Master Outgoing Gate Disabled:</strong> The master toggle above is currently OFF. All emails will auto-send via SMTP until the master toggle is enabled. You can configure individual policies below in advance.
                                         </span>
@@ -4741,7 +4741,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                     <div>
                                         <div className="flex items-center gap-2">
                                             <span className="text-xs font-bold text-foreground">Granular Outgoing Email Approval Policy</span>
-                                            <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-medium">
+                                            <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 font-medium">
                                                 Individual Controls
                                             </Badge>
                                         </div>
@@ -4756,9 +4756,9 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                 variant="outline"
                                                 onClick={handleApplyKindleAutoSendPreset}
                                                 disabled={savingApprovalSettings}
-                                                className="h-7 text-[11px] font-semibold border-amber-500/40 text-amber-300 hover:bg-amber-500/10 gap-1.5"
+                                                className="h-7 text-[11px] font-semibold border-amber-500/40 text-amber-800 dark:text-amber-300 hover:bg-amber-500/10 gap-1.5"
                                             >
-                                                <Zap className="h-3 w-3 text-amber-400" />
+                                                <Zap className="h-3 w-3 text-amber-700 dark:text-amber-400" />
                                                 ⚡ Auto-Send Kindle Only
                                             </Button>
                                             <Button
@@ -4843,8 +4843,8 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                             key={template.id}
                                                             className={`p-3 rounded-lg border transition-all flex items-start justify-between gap-3 ${
                                                                 isRequired
-                                                                    ? "bg-[#181822]/90 border-amber-500/30 hover:border-amber-500/50"
-                                                                    : "bg-[#142018]/90 border-emerald-500/30 hover:border-emerald-500/50"
+                                                                    ? "bg-card/95 dark:bg-[#181822]/90 border-amber-500/30 hover:border-amber-500/50"
+                                                                    : "bg-card/95 dark:bg-[#142018]/90 border-emerald-500/30 hover:border-emerald-500/50"
                                                             }`}
                                                         >
                                                             <div className="space-y-1 min-w-0 flex-1">
@@ -4856,20 +4856,20 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                                         variant="outline"
                                                                         className={`text-[9px] px-1.5 py-0 font-medium ${
                                                                             template.category === "KINDLE"
-                                                                                ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                                                                                ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30"
                                                                                 : template.category === "REQUESTS"
-                                                                                ? "bg-sky-500/10 text-sky-400 border-sky-500/30"
+                                                                                ? "bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-500/30"
                                                                                 : "bg-muted/50 text-muted-foreground border-border/40"
                                                                         }`}
                                                                     >
                                                                         {template.category}
                                                                     </Badge>
                                                                     {isRequired ? (
-                                                                        <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30 font-medium">
+                                                                        <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 font-medium">
                                                                             Requires Approval
                                                                         </Badge>
                                                                     ) : (
-                                                                        <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-medium">
+                                                                        <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 font-medium">
                                                                             Auto-Send (SMTP)
                                                                         </Badge>
                                                                     )}
@@ -4940,7 +4940,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                         <div className="flex items-center justify-between p-3 rounded-lg bg-background/50 border border-border/40">
                                             <div className="space-y-0.5 pr-2">
                                                 <div className="text-xs font-medium text-foreground flex items-center gap-1.5">
-                                                    <Mail className="h-3 w-3 text-emerald-400" />
+                                                    <Mail className="h-3 w-3 text-emerald-700 dark:text-emerald-400" />
                                                     Admin Email Alerts
                                                 </div>
                                                 <p className="text-[10px] text-muted-foreground">
@@ -4960,7 +4960,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                     </Card>
 
                     {/* FILTER & BULK ACTIONS BAR */}
-                    <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-[#121218] border border-border/50 rounded-xl">
+                    <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-card dark:bg-[#121218] border border-border/50 rounded-xl">
                         <div className="flex flex-wrap items-center gap-2">
                             <span className="text-xs text-muted-foreground font-semibold">Filter Status:</span>
                             <div className="flex items-center gap-1">
@@ -5003,7 +5003,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                         setSelectedApprovalIds(pendingIds);
                                         handleBulkApprove(pendingIds);
                                     }}
-                                    className="h-7 px-2.5 text-[11px] font-semibold border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 gap-1.5"
+                                    className="h-7 px-2.5 text-[11px] font-semibold border-emerald-500/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 gap-1.5"
                                 >
                                     <CheckCheck className="h-3.5 w-3.5" />
                                     Approve All ({approvals.filter(a => a.status === "PENDING").length})
@@ -5018,7 +5018,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                         setSelectedApprovalIds(pendingIds);
                                         handleBulkReject(pendingIds);
                                     }}
-                                    className="h-7 px-2.5 text-[11px] font-semibold border-rose-500/40 text-rose-400 hover:bg-rose-500/10 gap-1.5"
+                                    className="h-7 px-2.5 text-[11px] font-semibold border-rose-500/40 text-rose-700 dark:text-rose-400 hover:bg-rose-500/10 gap-1.5"
                                 >
                                     <XCircle className="h-3.5 w-3.5" />
                                     Reject All
@@ -5029,14 +5029,14 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
 
                     {/* APPROVAL ITEMS LIST */}
                     {loadingApprovals ? (
-                        <div className="flex flex-col items-center justify-center p-12 space-y-3 bg-[#121218] border border-border/40 rounded-xl">
+                        <div className="flex flex-col items-center justify-center p-12 space-y-3 bg-card dark:bg-[#121218] border border-border/40 rounded-xl">
                             <Loader2 className="h-8 w-8 animate-spin text-primary" />
                             <p className="text-xs text-muted-foreground font-medium">Loading approval queue...</p>
                         </div>
                     ) : approvals.length === 0 ? (
-                        <Card className="bg-[#121218] border-border/40 p-12 text-center">
+                        <Card className="bg-card dark:bg-[#121218] border-border/40 p-12 text-center">
                             <div className="flex flex-col items-center justify-center space-y-2 max-w-sm mx-auto">
-                                <div className="h-12 w-12 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/30 text-emerald-400">
+                                <div className="h-12 w-12 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/30 text-emerald-700 dark:text-emerald-400">
                                     <Check className="h-6 w-6" />
                                 </div>
                                 <h4 className="text-sm font-bold text-foreground">Queue is Clear</h4>
@@ -5071,19 +5071,19 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                 <div className="space-y-1.5 flex-1 min-w-0">
                                                     <div className="flex flex-wrap items-center gap-2">
                                                         {isEmail ? (
-                                                            <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/30 gap-1 text-[11px] font-bold">
+                                                            <Badge variant="outline" className="bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30 gap-1 text-[11px] font-bold">
                                                                 <Mail className="h-3 w-3" /> Outgoing Email
                                                             </Badge>
                                                         ) : isPlexGrant ? (
-                                                            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30 gap-1 text-[11px] font-bold">
+                                                            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 gap-1 text-[11px] font-bold">
                                                                 <FolderCheck className="h-3 w-3" /> Plex Share Grant
                                                             </Badge>
                                                         ) : isPlexRevoke ? (
-                                                            <Badge variant="outline" className="bg-rose-500/10 text-rose-400 border-rose-500/30 gap-1 text-[11px] font-bold">
+                                                            <Badge variant="outline" className="bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/30 gap-1 text-[11px] font-bold">
                                                                 <XCircle className="h-3 w-3" /> Plex Share Revoke
                                                             </Badge>
                                                         ) : (
-                                                            <Badge variant="outline" className="bg-sky-500/10 text-sky-400 border-sky-500/30 gap-1 text-[11px] font-bold">
+                                                            <Badge variant="outline" className="bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-500/30 gap-1 text-[11px] font-bold">
                                                                 <Shield className="h-3 w-3" /> {item.type}
                                                             </Badge>
                                                         )}
@@ -5092,10 +5092,10 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                             variant="outline"
                                                             className={`text-[10px] font-black uppercase px-2 py-0.5 ${
                                                                 isPending 
-                                                                    ? "bg-amber-500/20 text-amber-300 border-amber-500/50" 
+                                                                    ? "bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/50" 
                                                                     : isApproved 
-                                                                        ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/50" 
-                                                                        : "bg-rose-500/20 text-rose-300 border-rose-500/50"
+                                                                        ? "bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border-emerald-500/50" 
+                                                                        : "bg-rose-500/20 text-rose-800 dark:text-rose-300 border-rose-500/50"
                                                             }`}
                                                         >
                                                             {item.status}
@@ -5120,12 +5120,12 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                             <span><strong>Email:</strong> {item.targetEmail}</span>
                                                         )}
                                                         {isApproved && (
-                                                            <span className="text-emerald-400 font-medium">
+                                                            <span className="text-emerald-700 dark:text-emerald-400 font-medium">
                                                                 ✓ Approved by {item.approvedBy || "Admin"} on {item.approvedAt ? format(new Date(item.approvedAt), "MMM d, h:mm a") : "N/A"}
                                                             </span>
                                                         )}
                                                         {isRejected && (
-                                                            <span className="text-rose-400 font-medium">
+                                                            <span className="text-rose-700 dark:text-rose-400 font-medium">
                                                                 ✕ Rejected by {item.approvedBy || "Admin"}{item.rejectionReason ? `: ${item.rejectionReason}` : ""}
                                                             </span>
                                                         )}
@@ -5156,7 +5156,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                                 onClick={() => handleNotifyAdmins(item.id)}
                                                                 disabled={processingApprovalId === item.id}
                                                                 title="Dispatch notification email and Discord alert to administrators"
-                                                                className="h-8 px-2.5 text-xs font-semibold text-amber-400 border-amber-500/30 hover:bg-amber-500/10 gap-1.5 active:scale-95"
+                                                                className="h-8 px-2.5 text-xs font-semibold text-amber-700 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/10 gap-1.5 active:scale-95"
                                                             >
                                                                 <BellRing className="h-3.5 w-3.5" />
                                                                 Alert Admin
@@ -5181,7 +5181,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                                 variant="outline"
                                                                 onClick={() => handleRejectItem(item.id)}
                                                                 disabled={processingApprovalId === item.id}
-                                                                className="h-8 px-3 text-xs font-bold border-rose-500/40 text-rose-400 hover:bg-rose-500/10 gap-1.5 active:scale-95"
+                                                                className="h-8 px-3 text-xs font-bold border-rose-500/40 text-rose-700 dark:text-rose-400 hover:bg-rose-500/10 gap-1.5 active:scale-95"
                                                             >
                                                                 <XCircle className="h-3.5 w-3.5" />
                                                                 Reject
@@ -5218,7 +5218,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
             {/* ========================================================================= */}
             {libModalUser && (
                 <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-                    <Card className="w-full max-w-lg bg-[#121218] border-border/60 shadow-2xl">
+                    <Card className="w-full max-w-lg bg-card dark:bg-[#121218] border-border/60 shadow-2xl">
                         <CardHeader className="pb-3 border-b border-border/40">
                             <CardTitle className="flex items-center gap-2 text-lg font-bold text-primary">
                                 <Layers className="h-5 w-5 text-primary" /> Manage Plex Libraries
@@ -5229,27 +5229,27 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                         </CardHeader>
                         <CardContent className="space-y-4 pt-4">
                             {pendingTrialActivation && (
-                                <div className="text-xs text-blue-300 bg-blue-950/40 border border-blue-500/40 p-3 rounded-xl flex items-center justify-between gap-2">
+                                <div className="text-xs text-blue-800 dark:text-blue-300 bg-blue-500/10 dark:bg-blue-950/40 border border-blue-500/40 p-3 rounded-xl flex items-center justify-between gap-2">
                                     <div className="flex items-center gap-2">
-                                        <Sparkles className="h-4 w-4 text-blue-400 shrink-0" />
+                                        <Sparkles className="h-4 w-4 text-blue-700 dark:text-blue-400 shrink-0" />
                                         <span>
                                             <strong>{getActivationTypeLabel(pendingTrialActivation.type)}:</strong> Select the Plex libraries to share with <strong>{libModalUser.username}</strong> to activate access.
                                         </span>
                                     </div>
-                                    <Badge variant="outline" className="bg-blue-500/20 text-blue-200 border-blue-500/40 text-[10px] shrink-0">
+                                    <Badge variant="outline" className="bg-blue-500/20 text-blue-900 dark:text-blue-200 border-blue-500/40 text-[10px] shrink-0">
                                         Activation Step
                                     </Badge>
                                 </div>
                             )}
 
                             {libSuccessMsg && (
-                                <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
+                                <div className="text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/40 dark:border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
                                     <CheckCircle2 className="h-4 w-4 shrink-0" />
                                     <span>{libSuccessMsg}</span>
                                 </div>
                             )}
                             {libErrMsg && (
-                                <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2">
+                                <div className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 dark:bg-red-950/40 border border-red-500/40 dark:border-red-800/40 p-3 rounded-lg flex items-center gap-2">
                                     <XCircle className="h-4 w-4 shrink-0" />
                                     <span>{libErrMsg}</span>
                                 </div>
@@ -5415,10 +5415,10 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
             {/* ========================================================================= */}
             {showActivationPrompt && libModalUser && (
                 <div className="fixed inset-0 z-[60] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
-                    <Card className="w-full max-w-lg bg-[#121218] border-border/70 shadow-2xl overflow-hidden">
+                    <Card className="w-full max-w-lg bg-card dark:bg-[#121218] border-border/70 shadow-2xl overflow-hidden">
                         <CardHeader className="pb-3 border-b border-border/40 bg-muted/20">
                             <div className="flex items-center gap-2.5">
-                                <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400">
+                                <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400">
                                     <ShieldAlert className="h-5 w-5" />
                                 </div>
                                 <div>
@@ -5426,7 +5426,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                         Activate Suspended User?
                                     </CardTitle>
                                     <CardDescription className="text-xs mt-0.5">
-                                        <strong>{libModalUser.username}</strong> is currently <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-500/40 text-amber-400 uppercase font-bold">{libModalUser.status}</Badge>. Library access cannot be granted on Plex while suspended.
+                                        <strong>{libModalUser.username}</strong> is currently <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-500/40 text-amber-700 dark:text-amber-400 uppercase font-bold">{libModalUser.status}</Badge>. Library access cannot be granted on Plex while suspended.
                                     </CardDescription>
                                 </div>
                             </div>
@@ -5442,7 +5442,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                     onClick={() => setSelectedActivationType("APPROVED")}
                                     className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${
                                         selectedActivationType === "APPROVED"
-                                            ? "bg-emerald-950/30 border-emerald-500/60 ring-1 ring-emerald-500/40"
+                                            ? "bg-emerald-500/10 dark:bg-emerald-950/30 border-emerald-500/60 ring-1 ring-emerald-500/40"
                                             : "bg-background/40 border-border/40 hover:bg-background/70"
                                     }`}
                                 >
@@ -5455,9 +5455,9 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                     />
                                     <div className="min-w-0 flex-1">
                                         <div className="flex items-center gap-2">
-                                            <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                                            <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
                                             <span className="text-xs font-bold text-foreground">Full Activation (Approved)</span>
-                                            <Badge className="bg-emerald-500/20 text-emerald-400 text-[10px] px-1.5 py-0 border border-emerald-500/30">Permanent</Badge>
+                                            <Badge className="bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-[10px] px-1.5 py-0 border border-emerald-500/30">Permanent</Badge>
                                         </div>
                                         <p className="text-[11px] text-muted-foreground mt-1">
                                             Activate account permanently with no expiration date. Immediately enables selected libraries on Plex.
@@ -5470,7 +5470,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                     onClick={() => setSelectedActivationType("TRIAL")}
                                     className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${
                                         selectedActivationType === "TRIAL"
-                                            ? "bg-blue-950/30 border-blue-500/60 ring-1 ring-blue-500/40"
+                                            ? "bg-blue-500/10 dark:bg-blue-950/30 border-blue-500/60 ring-1 ring-blue-500/40"
                                             : "bg-background/40 border-border/40 hover:bg-background/70"
                                     }`}
                                 >
@@ -5483,9 +5483,9 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                     />
                                     <div className="min-w-0 flex-1">
                                         <div className="flex items-center gap-2">
-                                            <Timer className="h-4 w-4 text-blue-400" />
+                                            <Timer className="h-4 w-4 text-blue-700 dark:text-blue-400" />
                                             <span className="text-xs font-bold text-foreground">Default Free Trial</span>
-                                            <Badge className="bg-blue-500/20 text-blue-400 text-[10px] px-1.5 py-0 border border-blue-500/30">
+                                            <Badge className="bg-blue-500/20 text-blue-700 dark:text-blue-400 text-[10px] px-1.5 py-0 border border-blue-500/30">
                                                 {paymentSettings.defaultTrialDays || 14} Days
                                             </Badge>
                                         </div>
@@ -5500,7 +5500,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                     onClick={() => setSelectedActivationType("CUSTOM_TRIAL")}
                                     className={`p-3 rounded-xl border cursor-pointer transition-all flex flex-col gap-2 ${
                                         selectedActivationType === "CUSTOM_TRIAL"
-                                            ? "bg-cyan-950/30 border-cyan-500/60 ring-1 ring-cyan-500/40"
+                                            ? "bg-cyan-500/10 dark:bg-cyan-950/30 border-cyan-500/60 ring-1 ring-cyan-500/40"
                                             : "bg-background/40 border-border/40 hover:bg-background/70"
                                     }`}
                                 >
@@ -5514,9 +5514,9 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                         />
                                         <div className="min-w-0 flex-1">
                                             <div className="flex items-center gap-2">
-                                                <SlidersHorizontal className="h-4 w-4 text-cyan-400" />
+                                                <SlidersHorizontal className="h-4 w-4 text-cyan-700 dark:text-cyan-400" />
                                                 <span className="text-xs font-bold text-foreground">Custom X-Day Trial</span>
-                                                <Badge className="bg-cyan-500/20 text-cyan-400 text-[10px] px-1.5 py-0 border border-cyan-500/30">
+                                                <Badge className="bg-cyan-500/20 text-cyan-700 dark:text-cyan-400 text-[10px] px-1.5 py-0 border border-cyan-500/30">
                                                     {activationPromptCustomDays} Days
                                                 </Badge>
                                             </div>
@@ -5544,7 +5544,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                         type="button"
                                                         variant="ghost"
                                                         size="sm"
-                                                        className={`h-6 px-1.5 text-[10px] ${activationPromptCustomDays === d ? 'bg-cyan-500/20 text-cyan-300 font-bold' : 'text-muted-foreground hover:text-foreground'}`}
+                                                        className={`h-6 px-1.5 text-[10px] ${activationPromptCustomDays === d ? 'bg-cyan-500/20 text-cyan-800 dark:text-cyan-300 font-bold' : 'text-muted-foreground hover:text-foreground'}`}
                                                         onClick={() => setActivationPromptCustomDays(d)}
                                                     >
                                                         {d}d
@@ -5560,7 +5560,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                     onClick={() => setSelectedActivationType("30_DAYS")}
                                     className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${
                                         selectedActivationType === "30_DAYS"
-                                            ? "bg-sky-950/30 border-sky-500/60 ring-1 ring-sky-500/40"
+                                            ? "bg-sky-500/10 dark:bg-sky-950/30 border-sky-500/60 ring-1 ring-sky-500/40"
                                             : "bg-background/40 border-border/40 hover:bg-background/70"
                                     }`}
                                 >
@@ -5573,9 +5573,9 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                     />
                                     <div className="min-w-0 flex-1">
                                         <div className="flex items-center gap-2">
-                                            <Calendar className="h-4 w-4 text-sky-400" />
+                                            <Calendar className="h-4 w-4 text-sky-700 dark:text-sky-400" />
                                             <span className="text-xs font-bold text-foreground">30-Day Subscription</span>
-                                            <Badge className="bg-sky-500/20 text-sky-400 text-[10px] px-1.5 py-0 border border-sky-500/30">30 Days</Badge>
+                                            <Badge className="bg-sky-500/20 text-sky-700 dark:text-sky-400 text-[10px] px-1.5 py-0 border border-sky-500/30">30 Days</Badge>
                                         </div>
                                         <p className="text-[11px] text-muted-foreground mt-1">
                                             Grant 30 days of active subscription access from today, and enable selected libraries on Plex.
@@ -5588,7 +5588,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                     onClick={() => setSelectedActivationType("REST_OF_YEAR")}
                                     className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${
                                         selectedActivationType === "REST_OF_YEAR"
-                                            ? "bg-emerald-950/30 border-emerald-500/60 ring-1 ring-emerald-500/40"
+                                            ? "bg-emerald-500/10 dark:bg-emerald-950/30 border-emerald-500/60 ring-1 ring-emerald-500/40"
                                             : "bg-background/40 border-border/40 hover:bg-background/70"
                                     }`}
                                 >
@@ -5601,9 +5601,9 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                     />
                                     <div className="min-w-0 flex-1">
                                         <div className="flex items-center gap-2">
-                                            <Calendar className="h-4 w-4 text-emerald-400" />
+                                            <Calendar className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
                                             <span className="text-xs font-bold text-foreground">Rest of {new Date().getFullYear()}</span>
-                                            <Badge className="bg-emerald-500/20 text-emerald-400 text-[10px] px-1.5 py-0 border border-emerald-500/30">Annual</Badge>
+                                            <Badge className="bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-[10px] px-1.5 py-0 border border-emerald-500/30">Annual</Badge>
                                         </div>
                                         <p className="text-[11px] text-muted-foreground mt-1">
                                             Grant active subscription access through December 31, {new Date().getFullYear()}, and enable selected libraries on Plex.
@@ -5616,7 +5616,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                     onClick={() => setSelectedActivationType("KEEP_SUSPENDED")}
                                     className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${
                                         selectedActivationType === "KEEP_SUSPENDED"
-                                            ? "bg-amber-950/30 border-amber-500/60 ring-1 ring-amber-500/40"
+                                            ? "bg-amber-500/10 dark:bg-amber-950/30 border-amber-500/60 ring-1 ring-amber-500/40"
                                             : "bg-background/40 border-border/40 hover:bg-background/70"
                                     }`}
                                 >
@@ -5629,9 +5629,9 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                     />
                                     <div className="min-w-0 flex-1">
                                         <div className="flex items-center gap-2">
-                                            <PauseCircle className="h-4 w-4 text-amber-400" />
+                                            <PauseCircle className="h-4 w-4 text-amber-700 dark:text-amber-400" />
                                             <span className="text-xs font-bold text-foreground">Keep Suspended (Save Libraries Only)</span>
-                                            <Badge className="bg-amber-500/20 text-amber-400 text-[10px] px-1.5 py-0 border border-amber-500/30">No Access</Badge>
+                                            <Badge className="bg-amber-500/20 text-amber-700 dark:text-amber-400 text-[10px] px-1.5 py-0 border border-amber-500/30">No Access</Badge>
                                         </div>
                                         <p className="text-[11px] text-muted-foreground mt-1">
                                             Save these library preferences to the database only. Do not activate the user or grant access on Plex.
@@ -5673,10 +5673,10 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
             {/* ========================================================================= */}
             {subModalUser && (
                 <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-                    <Card className="w-full max-w-md bg-[#121218] border-border/60 shadow-2xl max-h-[90vh] flex flex-col">
+                    <Card className="w-full max-w-md bg-card dark:bg-[#121218] border-border/60 shadow-2xl max-h-[90vh] flex flex-col">
                         <CardHeader className="pb-3 border-b border-border/40 shrink-0">
-                            <CardTitle className="flex items-center gap-2 text-lg font-bold text-blue-400">
-                                <Timer className="h-5 w-5 text-blue-400" /> Trial & Subscription Controls
+                            <CardTitle className="flex items-center gap-2 text-lg font-bold text-blue-700 dark:text-blue-400">
+                                <Timer className="h-5 w-5 text-blue-700 dark:text-blue-400" /> Trial & Subscription Controls
                             </CardTitle>
                             <CardDescription>
                                 Set access timers, extend subscriptions, or suspend access for <strong>{subModalUser.username}</strong>.
@@ -5684,13 +5684,13 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                         </CardHeader>
                         <CardContent className="space-y-4 pt-4 overflow-y-auto flex-1">
                             {subSuccessMsg && (
-                                <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
+                                <div className="text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/40 dark:border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
                                     <CheckCircle2 className="h-4 w-4 shrink-0" />
                                     <span>{subSuccessMsg}</span>
                                 </div>
                             )}
                             {subErrMsg && (
-                                <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2">
+                                <div className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 dark:bg-red-950/40 border border-red-500/40 dark:border-red-800/40 p-3 rounded-lg flex items-center gap-2">
                                     <XCircle className="h-4 w-4 shrink-0" />
                                     <span>{subErrMsg}</span>
                                 </div>
@@ -5736,19 +5736,19 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                 {subModalUser.trialEndsAt && (
                                     <div className="flex justify-between">
                                         <span className="text-muted-foreground">Trial Expires:</span>
-                                        <span className="font-bold text-blue-400">{format(new Date(subModalUser.trialEndsAt), "MMM d, yyyy h:mm a")}</span>
+                                        <span className="font-bold text-blue-700 dark:text-blue-400">{format(new Date(subModalUser.trialEndsAt), "MMM d, yyyy h:mm a")}</span>
                                     </div>
                                 )}
                                 {subModalUser.subscriptionEndsAt && (
                                     <div className="flex justify-between">
                                         <span className="text-muted-foreground">Subscription Expires:</span>
-                                        <span className="font-bold text-emerald-400">{format(new Date(subModalUser.subscriptionEndsAt), "MMM d, yyyy")}</span>
+                                        <span className="font-bold text-emerald-700 dark:text-emerald-400">{format(new Date(subModalUser.subscriptionEndsAt), "MMM d, yyyy")}</span>
                                     </div>
                                 )}
                                 {subModalUser.lastRenewalReminderSentAt && (
                                     <div className="flex justify-between">
                                         <span className="text-muted-foreground">Last Renewal Notice:</span>
-                                        <span className="font-medium text-amber-400">{format(new Date(subModalUser.lastRenewalReminderSentAt), "MMM d, yyyy h:mm a")}</span>
+                                        <span className="font-medium text-amber-700 dark:text-amber-400">{format(new Date(subModalUser.lastRenewalReminderSentAt), "MMM d, yyyy h:mm a")}</span>
                                     </div>
                                 )}
                                 <div className="flex justify-between items-center">
@@ -5759,10 +5759,10 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                 </div>
                                 {subModalUser.accountCredit > 0 && (
                                     <div className="flex justify-between items-center p-2 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                                        <span className="text-amber-300 font-semibold flex items-center gap-1.5">
+                                        <span className="text-amber-800 dark:text-amber-300 font-semibold flex items-center gap-1.5">
                                             <DollarSign className="h-3.5 w-3.5" /> Account Credit Balance:
                                         </span>
-                                        <span className="font-bold text-amber-400 tabular-nums">${subModalUser.accountCredit.toFixed(2)}</span>
+                                        <span className="font-bold text-amber-700 dark:text-amber-400 tabular-nums">${subModalUser.accountCredit.toFixed(2)}</span>
                                     </div>
                                 )}
                                 {subModalUser.lastPaymentAmount && (
@@ -5780,7 +5780,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                 <div className="pt-2 border-t border-border/30 space-y-2">
                                     <div className="flex items-center justify-between">
                                         <span className="text-muted-foreground font-semibold flex items-center gap-1.5">
-                                            <Zap className="h-3.5 w-3.5 text-amber-400" />
+                                            <Zap className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
                                             Active Add-ons & Profile Perks:
                                         </span>
                                     </div>
@@ -5800,15 +5800,15 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                             <div className="flex items-center gap-1.5">
                                                                 <span className="font-semibold text-foreground truncate">{addon.name}</span>
                                                                 {addon.isFree ? (
-                                                                    <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">Free</Badge>
+                                                                    <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">Free</Badge>
                                                                 ) : (
-                                                                    <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">${addon.price}/mo</Badge>
+                                                                    <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30">${addon.price}/mo</Badge>
                                                                 )}
                                                             </div>
                                                             <p className="text-[10px] text-muted-foreground line-clamp-1">{addon.description}</p>
                                                         </div>
                                                         <div className="flex items-center gap-1.5 shrink-0">
-                                                            {isToggling && <Loader2 className="h-3 w-3 animate-spin text-amber-400" />}
+                                                            {isToggling && <Loader2 className="h-3 w-3 animate-spin text-amber-700 dark:text-amber-400" />}
                                                             <Switch 
                                                                 checked={isEnabled}
                                                                 disabled={isToggling}
@@ -5825,12 +5825,12 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                             {/* DISCORD ACCOUNT BINDING */}
                             <div className="p-3 rounded-xl bg-sky-500/5 border border-sky-500/20 space-y-2.5">
                                 <div className="flex items-center justify-between">
-                                    <span className="text-xs font-bold text-sky-300 flex items-center gap-1.5">
-                                        <Gamepad2 className="h-4 w-4 text-sky-400" /> Discord Account Binding
+                                    <span className="text-xs font-bold text-sky-800 dark:text-sky-300 flex items-center gap-1.5">
+                                        <Gamepad2 className="h-4 w-4 text-sky-700 dark:text-sky-400" /> Discord Account Binding
                                     </span>
                                     {subModalUser.discordId ? (
-                                        <Badge variant="outline" className="text-[10px] bg-sky-500/10 text-sky-300 border-sky-500/30 gap-1 font-semibold">
-                                            <CheckCircle2 className="h-3 w-3 text-emerald-400" /> Linked
+                                        <Badge variant="outline" className="text-[10px] bg-sky-500/10 text-sky-800 dark:text-sky-300 border-sky-500/30 gap-1 font-semibold">
+                                            <CheckCircle2 className="h-3 w-3 text-emerald-700 dark:text-emerald-400" /> Linked
                                         </Badge>
                                     ) : (
                                         <Badge variant="outline" className="text-[10px] bg-muted/40 text-muted-foreground border-border/40 font-semibold">
@@ -5840,13 +5840,13 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                 </div>
 
                                 {discordLinkMsg && (
-                                    <div className="text-[11px] text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-2 rounded-lg flex items-center gap-1.5">
+                                    <div className="text-[11px] text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/40 dark:border-emerald-800/40 p-2 rounded-lg flex items-center gap-1.5">
                                         <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
                                         <span>{discordLinkMsg}</span>
                                     </div>
                                 )}
                                 {discordLinkErr && (
-                                    <div className="text-[11px] text-red-400 bg-red-950/40 border border-red-800/40 p-2 rounded-lg flex items-center gap-1.5">
+                                    <div className="text-[11px] text-red-700 dark:text-red-400 bg-red-500/10 dark:bg-red-950/40 border border-red-500/40 dark:border-red-800/40 p-2 rounded-lg flex items-center gap-1.5">
                                         <XCircle className="h-3.5 w-3.5 shrink-0" />
                                         <span>{discordLinkErr}</span>
                                     </div>
@@ -5858,7 +5858,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                             {subModalUser.discordAvatar ? (
                                                 <img src={subModalUser.discordAvatar} alt="" className="w-7 h-7 rounded-full border border-sky-500/30 shrink-0 object-cover" />
                                             ) : (
-                                                <div className="w-7 h-7 rounded-full bg-sky-500/20 border border-sky-500/30 flex items-center justify-center text-sky-300 text-xs font-bold shrink-0">
+                                                <div className="w-7 h-7 rounded-full bg-sky-500/20 border border-sky-500/30 flex items-center justify-center text-sky-800 dark:text-sky-300 text-xs font-bold shrink-0">
                                                     {(subModalUser.discordUsername || "D").charAt(0).toUpperCase()}
                                                 </div>
                                             )}
@@ -5878,7 +5878,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                 variant="outline"
                                                 disabled={discordLinkLoading}
                                                 onClick={() => handleAdminSyncUserDiscordRole(subModalUser.id)}
-                                                className="h-7 px-2 text-[11px] bg-sky-500/10 text-sky-300 border-sky-500/30 hover:bg-sky-500/20 cursor-pointer"
+                                                className="h-7 px-2 text-[11px] bg-sky-500/10 text-sky-800 dark:text-sky-300 border-sky-500/30 hover:bg-sky-500/20 cursor-pointer"
                                                 title="Push current status and assign Discord roles"
                                             >
                                                 {discordLinkLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3 mr-1" />}
@@ -5890,7 +5890,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                 variant="outline"
                                                 disabled={discordLinkLoading}
                                                 onClick={() => handleAdminUnlinkUserDiscord(subModalUser.id)}
-                                                className="h-7 px-2 text-[11px] bg-red-500/10 text-red-300 border-red-500/30 hover:bg-red-500/20 cursor-pointer"
+                                                className="h-7 px-2 text-[11px] bg-red-500/10 text-red-800 dark:text-red-300 border-red-500/30 hover:bg-red-500/20 cursor-pointer"
                                                 title="Unlink Discord account"
                                             >
                                                 <Trash2 className="h-3 w-3 mr-1" />
@@ -5939,7 +5939,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                 <div className="space-y-4 p-4 rounded-xl bg-muted/20 border border-cyan-500/30 animate-in fade-in zoom-in-95 duration-150">
                                     <div className="flex items-center justify-between pb-2 border-b border-border/30">
                                         <div className="flex items-center gap-2">
-                                            <div className="p-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
+                                            <div className="p-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-700 dark:text-cyan-400">
                                                 <SlidersHorizontal className="h-4 w-4" />
                                             </div>
                                             <div>
@@ -5972,7 +5972,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                             <span className="text-xs text-muted-foreground font-medium">Days from today</span>
                                         </div>
                                         <p className="text-[11px] text-muted-foreground">
-                                            Trial will expire on: <strong className="text-cyan-400">{format(new Date(Date.now() + customTrialDaysInput * 24 * 60 * 60 * 1000), "MMM d, yyyy h:mm a")}</strong>
+                                            Trial will expire on: <strong className="text-cyan-700 dark:text-cyan-400">{format(new Date(Date.now() + customTrialDaysInput * 24 * 60 * 60 * 1000), "MMM d, yyyy h:mm a")}</strong>
                                         </p>
                                     </div>
 
@@ -5986,7 +5986,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                     type="button"
                                                     variant="outline"
                                                     size="sm"
-                                                    className={`h-7 px-2.5 text-xs ${customTrialDaysInput === days ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300 font-bold' : 'border-border/40 text-muted-foreground hover:text-foreground'}`}
+                                                    className={`h-7 px-2.5 text-xs ${customTrialDaysInput === days ? 'bg-cyan-500/20 border-cyan-500 text-cyan-800 dark:text-cyan-300 font-bold' : 'border-border/40 text-muted-foreground hover:text-foreground'}`}
                                                     onClick={() => setCustomTrialDaysInput(days)}
                                                 >
                                                     {days} Days
@@ -6025,7 +6025,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                             type="button" 
                                             variant="outline" 
                                             disabled={subActionLoading}
-                                            className="h-9 text-xs font-semibold justify-start gap-2 border-blue-500/30 hover:bg-blue-500/10 text-blue-400"
+                                            className="h-9 text-xs font-semibold justify-start gap-2 border-blue-500/30 hover:bg-blue-500/10 text-blue-700 dark:text-blue-400"
                                             onClick={() => handleSetTrialOrSub("TRIAL", paymentSettings.defaultTrialDays || 14)}
                                             title={`Apply default ${paymentSettings.defaultTrialDays || 14}-day trial configured in Settings`}
                                         >
@@ -6036,7 +6036,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                             type="button" 
                                             variant="outline" 
                                             disabled={subActionLoading}
-                                            className="h-9 text-xs font-semibold justify-start gap-2 border-cyan-500/30 hover:bg-cyan-500/10 text-cyan-400"
+                                            className="h-9 text-xs font-semibold justify-start gap-2 border-cyan-500/30 hover:bg-cyan-500/10 text-cyan-700 dark:text-cyan-400"
                                             onClick={() => setShowCustomTrialScreen(true)}
                                             title="Specify custom amount of trial days"
                                         >
@@ -6047,7 +6047,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                             type="button" 
                                             variant="outline" 
                                             disabled={subActionLoading}
-                                            className="h-9 text-xs font-semibold justify-start gap-2 border-sky-500/30 hover:bg-sky-500/10 text-sky-400"
+                                            className="h-9 text-xs font-semibold justify-start gap-2 border-sky-500/30 hover:bg-sky-500/10 text-sky-700 dark:text-sky-400"
                                             onClick={() => handleSetTrialOrSub("30_DAYS")}
                                         >
                                             <Calendar className="h-3.5 w-3.5" /> 30-Day Subscription
@@ -6057,7 +6057,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                             type="button" 
                                             variant="outline" 
                                             disabled={subActionLoading}
-                                            className="h-9 text-xs font-semibold justify-start gap-2 border-emerald-500/30 hover:bg-emerald-500/10 text-emerald-400"
+                                            className="h-9 text-xs font-semibold justify-start gap-2 border-emerald-500/30 hover:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
                                             onClick={() => handleSetTrialOrSub("REST_OF_YEAR")}
                                         >
                                             <Calendar className="h-3.5 w-3.5" /> Rest of {new Date().getFullYear()}
@@ -6067,7 +6067,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                             type="button" 
                                             variant="outline" 
                                             disabled={subActionLoading}
-                                            className="h-9 text-xs font-semibold justify-start gap-2 border-emerald-500/30 hover:bg-emerald-500/10 text-emerald-400"
+                                            className="h-9 text-xs font-semibold justify-start gap-2 border-emerald-500/30 hover:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
                                             onClick={() => handleSetTrialOrSub("1_YEAR")}
                                         >
                                             <CheckCircle2 className="h-3.5 w-3.5" /> Add 1 Full Year
@@ -6077,7 +6077,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                             type="button" 
                                             variant="outline" 
                                             disabled={subActionLoading}
-                                            className="h-9 text-xs font-semibold justify-start gap-2 border-emerald-500/30 hover:bg-emerald-500/10 text-emerald-400"
+                                            className="h-9 text-xs font-semibold justify-start gap-2 border-emerald-500/30 hover:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
                                             onClick={() => handleSetTrialOrSub("PERMANENT")}
                                         >
                                             <Sparkles className="h-3.5 w-3.5" /> Permanent Access
@@ -6087,17 +6087,17 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                             type="button" 
                                             variant="outline" 
                                             disabled={subActionLoading}
-                                            className="h-9 text-xs font-semibold justify-start gap-2 border-amber-500/30 hover:bg-amber-500/10 text-amber-400"
+                                            className="h-9 text-xs font-semibold justify-start gap-2 border-amber-500/30 hover:bg-amber-500/10 text-amber-700 dark:text-amber-400"
                                             onClick={handleMarkUserConverted}
                                         >
-                                            <Trophy className="h-3.5 w-3.5 text-amber-400" /> Mark Converted
+                                            <Trophy className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" /> Mark Converted
                                         </Button>
 
                                         <Button 
                                             type="button" 
                                             variant="outline" 
                                             disabled={subActionLoading}
-                                            className="h-9 text-xs font-semibold justify-start gap-2 border-red-500/30 hover:bg-red-500/10 text-red-400"
+                                            className="h-9 text-xs font-semibold justify-start gap-2 border-red-500/30 hover:bg-red-500/10 text-red-700 dark:text-red-400"
                                             onClick={() => handleSetTrialOrSub("SUSPENDED")}
                                         >
                                             <ShieldAlert className="h-3.5 w-3.5" /> Suspend Access
@@ -6107,7 +6107,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                             type="button" 
                                             variant="outline" 
                                             disabled={subActionLoading}
-                                            className="h-9 text-xs font-semibold justify-start gap-2 border-orange-500/30 hover:bg-orange-500/10 text-orange-400"
+                                            className="h-9 text-xs font-semibold justify-start gap-2 border-orange-500/30 hover:bg-orange-500/10 text-orange-700 dark:text-orange-400"
                                             onClick={() => handleSetTrialOrSub("EXPIRED")}
                                         >
                                             <AlertTriangle className="h-3.5 w-3.5" /> Mark Expired
@@ -6131,7 +6131,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
             {/* ========================================================================= */}
             {resetModalUserId && (
                 <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-                    <Card className="w-full max-w-md bg-[#121218] border-border/60 shadow-2xl">
+                    <Card className="w-full max-w-md bg-card dark:bg-[#121218] border-border/60 shadow-2xl">
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2 text-lg font-bold text-amber-500">
                                 <KeyRound className="h-5 w-5 text-amber-500" /> Admin Reset User Password
@@ -6149,13 +6149,13 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                 data-lpignore="true"
                             >
                                 {adminResetMsg && (
-                                    <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
+                                    <div className="text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/40 dark:border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
                                         <CheckCircle2 className="h-4 w-4 shrink-0" />
                                         <span>{adminResetMsg}</span>
                                     </div>
                                 )}
                                 {adminResetErr && (
-                                    <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2">
+                                    <div className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 dark:bg-red-950/40 border border-red-500/40 dark:border-red-800/40 p-3 rounded-lg flex items-center gap-2">
                                         <XCircle className="h-4 w-4 shrink-0" />
                                         <span>{adminResetErr}</span>
                                     </div>
@@ -6199,7 +6199,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
 
                 return (
                     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-                        <Card className="w-full max-w-2xl bg-[#121218] border-border/60 shadow-2xl flex flex-col max-h-[90vh]">
+                        <Card className="w-full max-w-2xl bg-card dark:bg-[#121218] border-border/60 shadow-2xl flex flex-col max-h-[90vh]">
                             <CardHeader className="pb-3 border-b border-border/40 shrink-0">
                                 <div className="flex items-center justify-between">
                                     <CardTitle className="flex items-center gap-2 text-base font-bold text-foreground">
@@ -6230,7 +6230,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                     )}
                                 </div>
                             </CardContent>
-                            <div className="p-4 border-t border-border/40 flex items-center justify-between shrink-0 bg-[#0d0d12]">
+                            <div className="p-4 border-t border-border/40 flex items-center justify-between shrink-0 bg-card dark:bg-[#0d0d12]">
                                 <Button
                                     type="button"
                                     variant="outline"
@@ -6249,7 +6249,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                 handleRejectItem(emailPreviewApproval.id);
                                                 setEmailPreviewApproval(null);
                                             }}
-                                            className="border-rose-500/40 text-rose-400 hover:bg-rose-500/10 font-semibold"
+                                            className="border-rose-500/40 text-rose-700 dark:text-rose-400 hover:bg-rose-500/10 font-semibold"
                                         >
                                             Reject
                                         </Button>
@@ -6276,12 +6276,12 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
             {/* BULK CUSTOM DATE EXPIRATION MODAL */}
             {showBulkCustomModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-                    <Card className="w-full max-w-md border-amber-500/30 bg-[#0f0f13] text-foreground shadow-2xl relative overflow-hidden">
+                    <Card className="w-full max-w-md border-amber-500/30 bg-card dark:bg-[#0f0f13] text-foreground shadow-2xl relative overflow-hidden">
                         <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-400" />
                         <CardHeader className="pb-3 pt-5">
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2.5">
-                                    <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                                    <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400">
                                         <Calendar className="h-5 w-5" />
                                     </div>
                                     <div>
@@ -6289,7 +6289,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                             Bulk Set Subscription Expiration
                                         </CardTitle>
                                         <CardDescription className="text-xs text-muted-foreground mt-0.5">
-                                            Applying to <span className="font-bold text-amber-300">{selectedUserIds.length} selected user{selectedUserIds.length === 1 ? "" : "s"}</span>
+                                            Applying to <span className="font-bold text-amber-800 dark:text-amber-300">{selectedUserIds.length} selected user{selectedUserIds.length === 1 ? "" : "s"}</span>
                                         </CardDescription>
                                     </div>
                                 </div>
@@ -6312,11 +6312,11 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                     type="date"
                                     value={bulkCustomDate}
                                     onChange={(e) => setBulkCustomDate(e.target.value)}
-                                    className="bg-black/40 border-border/60 text-sm font-mono h-10"
+                                    className="bg-muted/60 dark:bg-black/40 border-border/60 text-sm font-mono h-10"
                                     min={format(new Date(), "yyyy-MM-dd")}
                                 />
                                 <p className="text-[11px] text-muted-foreground">
-                                    All selected users will be set to <span className="text-emerald-400 font-semibold">APPROVED</span> status with active access until this date ends.
+                                    All selected users will be set to <span className="text-emerald-700 dark:text-emerald-400 font-semibold">APPROVED</span> status with active access until this date ends.
                                 </p>
                             </div>
 
@@ -6330,7 +6330,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                         type="button"
                                         variant="outline"
                                         size="sm"
-                                        className="h-8 text-xs font-medium border-amber-500/30 hover:bg-amber-500/10 text-amber-200 justify-start"
+                                        className="h-8 text-xs font-medium border-amber-500/30 hover:bg-amber-500/10 text-amber-900 dark:text-amber-200 justify-start"
                                         onClick={() => {
                                             const now = new Date();
                                             setBulkCustomDate(format(new Date(now.getFullYear(), 11, 31), "yyyy-MM-dd"));
@@ -6342,7 +6342,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                         type="button"
                                         variant="outline"
                                         size="sm"
-                                        className="h-8 text-xs font-medium border-border/50 hover:bg-white/5 text-foreground justify-start"
+                                        className="h-8 text-xs font-medium border-border/50 hover:bg-accent dark:hover:bg-white/5 text-foreground justify-start"
                                         onClick={() => {
                                             const now = new Date();
                                             setBulkCustomDate(format(new Date(now.getFullYear() + 1, 11, 31), "yyyy-MM-dd"));
@@ -6354,7 +6354,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                         type="button"
                                         variant="outline"
                                         size="sm"
-                                        className="h-8 text-xs font-medium border-border/50 hover:bg-white/5 text-foreground justify-start"
+                                        className="h-8 text-xs font-medium border-border/50 hover:bg-accent dark:hover:bg-white/5 text-foreground justify-start"
                                         onClick={() => {
                                             const d = new Date();
                                             d.setDate(d.getDate() + 90);
@@ -6367,7 +6367,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                         type="button"
                                         variant="outline"
                                         size="sm"
-                                        className="h-8 text-xs font-medium border-border/50 hover:bg-white/5 text-foreground justify-start"
+                                        className="h-8 text-xs font-medium border-border/50 hover:bg-accent dark:hover:bg-white/5 text-foreground justify-start"
                                         onClick={() => {
                                             const d = new Date();
                                             d.setFullYear(d.getFullYear() + 1);
@@ -6379,7 +6379,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                 </div>
                             </div>
                         </CardContent>
-                        <CardFooter className="pt-2 pb-4 flex items-center justify-between border-t border-border/30 bg-black/20">
+                        <CardFooter className="pt-2 pb-4 flex items-center justify-between border-t border-border/30 bg-muted/40 dark:bg-black/20">
                             <Button
                                 type="button"
                                 variant="ghost"
@@ -6439,12 +6439,12 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
 
                 return (
                     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-                        <Card className="w-full max-w-lg border-amber-500/35 bg-[#0f0f15] text-foreground shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
+                        <Card className="w-full max-w-lg border-amber-500/35 bg-card dark:bg-[#0f0f15] text-foreground shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
                             <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-amber-500 via-amber-400 to-sky-500" />
                             <CardHeader className="pb-3 pt-5">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2.5">
-                                        <div className="p-2.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-400">
+                                        <div className="p-2.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-400">
                                             <Gift className="h-5 w-5" />
                                         </div>
                                         <div>
@@ -6469,13 +6469,13 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
 
                             <CardContent className="space-y-4 overflow-y-auto flex-1 pr-2">
                                 {creditSuccessMsg && (
-                                    <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
+                                    <div className="text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/40 dark:border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
                                         <CheckCircle2 className="h-4 w-4 shrink-0" />
                                         <span>{creditSuccessMsg}</span>
                                     </div>
                                 )}
                                 {creditErrMsg && (
-                                    <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2">
+                                    <div className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 dark:bg-red-950/40 border border-red-500/40 dark:border-red-800/40 p-3 rounded-lg flex items-center gap-2">
                                         <XCircle className="h-4 w-4 shrink-0" />
                                         <span>{creditErrMsg}</span>
                                     </div>
@@ -6484,13 +6484,13 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                 {/* Referrer dropdown */}
                                 <div className="space-y-1.5">
                                     <Label className="text-xs font-semibold flex items-center gap-1.5">
-                                        <Trophy className="h-3.5 w-3.5 text-amber-400" />
+                                        <Trophy className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
                                         Referring Member (Earns Reward)
                                     </Label>
                                     <select
                                         value={creditReferrerId}
                                         onChange={(e) => setCreditReferrerId(e.target.value)}
-                                        className="w-full h-10 px-3 rounded-md bg-black/50 border border-border/60 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-amber-500 font-medium cursor-pointer"
+                                        className="w-full h-10 px-3 rounded-md bg-muted/60 dark:bg-black/50 border border-border/60 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-amber-500 font-medium cursor-pointer"
                                     >
                                         <option value="">-- Select Member to Reward --</option>
                                         {users.map((u: any) => {
@@ -6512,13 +6512,13 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                 {/* Referred friend dropdown */}
                                 <div className="space-y-1.5">
                                     <Label className="text-xs font-semibold flex items-center gap-1.5">
-                                        <UserCheck className="h-3.5 w-3.5 text-emerald-400" />
+                                        <UserCheck className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
                                         Referred Friend (Joined Member)
                                     </Label>
                                     <select
                                         value={creditReferredId}
                                         onChange={(e) => setCreditReferredId(e.target.value)}
-                                        className="w-full h-10 px-3 rounded-md bg-black/50 border border-border/60 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-amber-500 font-medium cursor-pointer"
+                                        className="w-full h-10 px-3 rounded-md bg-muted/60 dark:bg-black/50 border border-border/60 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-amber-500 font-medium cursor-pointer"
                                     >
                                         <option value="">-- Select Invited Friend --</option>
                                         {users.filter((u: any) => u.id !== creditReferrerId).map((u: any) => {
@@ -6546,7 +6546,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                         />
                                         <div className="space-y-0.5">
                                             <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                                                <Calendar className="h-3.5 w-3.5 text-amber-400" />
+                                                <Calendar className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
                                                 Immediately extend referrer's subscription expiry date by +1 month
                                             </span>
                                             <p className="text-[11px] text-muted-foreground leading-relaxed">
@@ -6567,7 +6567,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                         max={12}
                                         value={creditBonusMonths}
                                         onChange={(e) => setCreditBonusMonths(parseInt(e.target.value) || 0)}
-                                        className="bg-black/40 border-border/60 text-sm h-9"
+                                        className="bg-muted/60 dark:bg-black/40 border-border/60 text-sm h-9"
                                         placeholder="0"
                                     />
                                     <p className="text-[11px] text-muted-foreground">
@@ -6584,40 +6584,40 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                         type="text"
                                         value={creditAdminNotes}
                                         onChange={(e) => setCreditAdminNotes(e.target.value)}
-                                        className="bg-black/40 border-border/60 text-sm h-9"
+                                        className="bg-muted/60 dark:bg-black/40 border-border/60 text-sm h-9"
                                         placeholder="e.g. Manually verified friend invited in Discord"
                                     />
                                 </div>
 
                                 {/* LIVE REWARD & RENEWAL PREVIEW */}
                                 {liveSummary && (
-                                    <div className="p-3.5 rounded-xl border border-border/60 bg-black/40 space-y-2.5">
+                                    <div className="p-3.5 rounded-xl border border-border/60 bg-muted/60 dark:bg-black/40 space-y-2.5">
                                         <div className="flex items-center justify-between text-xs">
-                                            <span className="font-semibold text-amber-300 flex items-center gap-1.5">
-                                                <Sparkles className="h-3.5 w-3.5 text-amber-400" /> Live Statement Preview
+                                            <span className="font-semibold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                                                <Sparkles className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" /> Live Statement Preview
                                             </span>
-                                            <Badge variant="outline" className="bg-amber-500/10 text-amber-300 border-amber-500/30 text-[10px] tabular-nums">
+                                            <Badge variant="outline" className="bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30 text-[10px] tabular-nums">
                                                 {liveSummary.convertedReferralsCount} Converted ({liveSummary.convertedReferralsCount} Free Mo)
                                             </Badge>
                                         </div>
 
                                         <div className="grid grid-cols-2 gap-2 text-xs">
-                                            <div className="p-2.5 rounded-lg bg-white/5 border border-border/30">
+                                            <div className="p-2.5 rounded-lg bg-muted/50 dark:bg-white/5 border border-border/30">
                                                 <div className="text-[10px] uppercase font-semibold text-muted-foreground">Annual Renewal</div>
-                                                <div className="font-bold text-emerald-400 text-sm mt-0.5 tabular-nums">
+                                                <div className="font-bold text-emerald-700 dark:text-emerald-400 text-sm mt-0.5 tabular-nums">
                                                     ${liveSummary.discountedYearlyPrice.toFixed(2)}
                                                     <span className="text-xs text-muted-foreground line-through ml-1.5 font-normal">
                                                         ${liveSummary.baseYearlyPrice.toFixed(2)}
                                                     </span>
                                                 </div>
-                                                <div className="text-[10px] text-amber-300 mt-0.5 tabular-nums">
+                                                <div className="text-[10px] text-amber-800 dark:text-amber-300 mt-0.5 tabular-nums">
                                                     -${liveSummary.rewardDiscountAmount.toFixed(2)} referral discount
                                                 </div>
                                             </div>
 
-                                            <div className="p-2.5 rounded-lg bg-white/5 border border-border/30">
+                                            <div className="p-2.5 rounded-lg bg-muted/50 dark:bg-white/5 border border-border/30">
                                                 <div className="text-[10px] uppercase font-semibold text-muted-foreground">Monthly Alternative</div>
-                                                <div className="font-bold text-amber-300 text-sm mt-0.5">
+                                                <div className="font-bold text-amber-800 dark:text-amber-300 text-sm mt-0.5">
                                                     {liveSummary.delayedMonthlyStartDate || "Delayed +1 mo"}
                                                 </div>
                                                 <div className="text-[10px] text-muted-foreground mt-0.5">
@@ -6633,7 +6633,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                 )}
                             </CardContent>
 
-                            <CardFooter className="pt-2 pb-4 flex items-center justify-between border-t border-border/30 bg-black/30 shrink-0">
+                            <CardFooter className="pt-2 pb-4 flex items-center justify-between border-t border-border/30 bg-muted/60 dark:bg-black/30 shrink-0">
                                 <Button
                                     type="button"
                                     variant="ghost"

@@ -186,11 +186,11 @@ export default function AdminScriptsPage() {
     // Category icon helper
     const getCategoryIcon = (cat: string) => {
         switch (cat) {
-            case "Plex & Media": return <Server className="h-3.5 w-3.5 text-amber-400" />;
-            case "Database": return <Database className="h-3.5 w-3.5 text-cyan-400" />;
-            case "Docker": return <Container className="h-3.5 w-3.5 text-sky-400" />;
-            case "System & Backup": return <HardDrive className="h-3.5 w-3.5 text-emerald-400" />;
-            default: return <FileCode className="h-3.5 w-3.5 text-sky-400" />;
+            case "Plex & Media": return <Server className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />;
+            case "Database": return <Database className="h-3.5 w-3.5 text-cyan-700 dark:text-cyan-400" />;
+            case "Docker": return <Container className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400" />;
+            case "System & Backup": return <HardDrive className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />;
+            default: return <FileCode className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400" />;
         }
     };
 
@@ -198,7 +198,7 @@ export default function AdminScriptsPage() {
         <div className="w-full max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[2200px] mx-auto space-y-4 sm:space-y-6 min-w-0">
             {loadError && scripts.length === 0 && (
                 <div className="p-4 rounded-xl border border-rose-500/30 bg-rose-500/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="flex items-center gap-2 text-xs text-rose-300">
+                    <div className="flex items-center gap-2 text-xs text-rose-800 dark:text-rose-300">
                         <AlertCircle className="h-4 w-4 shrink-0" />
                         <span>{loadError}</span>
                     </div>
@@ -209,16 +209,16 @@ export default function AdminScriptsPage() {
             )}
             {/* Notification Banner */}
             {bannerMessage && (
-                <div className="p-3 bg-zinc-900 border border-emerald-500/30 text-emerald-300 rounded-lg text-xs font-medium flex items-center justify-between shadow-lg animate-in fade-in duration-200">
+                <div className="p-3 bg-card/95 dark:bg-zinc-900 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300 rounded-lg text-xs font-medium flex items-center justify-between shadow-lg animate-in fade-in duration-200">
                     <div className="flex items-center gap-2">
-                        <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                        <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0" />
                         <span>{bannerMessage}</span>
                     </div>
                     <Button 
                         variant="ghost" 
                         size="sm" 
                         onClick={() => setBannerMessage(null)}
-                        className="h-6 w-6 p-0 text-zinc-400 hover:text-white"
+                        className="h-6 w-6 p-0 text-slate-600 dark:text-zinc-400 hover:text-foreground dark:hover:text-white"
                     >
                         ×
                     </Button>
@@ -229,13 +229,13 @@ export default function AdminScriptsPage() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="space-y-1">
                     <div className="flex items-center gap-2.5">
-                        <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shrink-0">
+                        <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 shrink-0">
                             <Terminal className="h-6 w-6" />
                         </div>
                         <div>
                             <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground flex items-center gap-2 flex-wrap">
                                 <span>User Scripts & Automation</span>
-                                <Badge variant="outline" className="text-xs bg-emerald-500/10 text-emerald-300 border-emerald-500/30">
+                                <Badge variant="outline" className="text-xs bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border-emerald-500/30">
                                     Admin Mission Control
                                 </Badge>
                             </h1>
@@ -252,7 +252,7 @@ export default function AdminScriptsPage() {
                         size="sm"
                         onClick={() => loadScripts(true)}
                         disabled={refreshing}
-                        className="h-9 border-zinc-700 bg-zinc-900/60 hover:bg-zinc-800 text-xs text-zinc-200 flex-1 sm:flex-initial"
+                        className="h-9 border-border dark:border-zinc-700 bg-muted/70 dark:bg-zinc-900/60 hover:bg-accent dark:hover:bg-zinc-800 text-xs text-foreground dark:text-zinc-200 flex-1 sm:flex-initial"
                     >
                         <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${refreshing ? "animate-spin" : ""}`} />
                         Refresh
@@ -272,36 +272,36 @@ export default function AdminScriptsPage() {
 
             {/* Stats Dashboard */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-                <Card className="bg-[#12131a]/80 border-zinc-800/80 p-3.5 flex flex-col justify-between">
+                <Card className="bg-card/95 dark:bg-[#12131a]/80 border-border dark:border-zinc-800/80 p-3.5 flex flex-col justify-between">
                     <div className="flex items-center justify-between">
                         <span className="text-xs text-muted-foreground">Total Scripts</span>
-                        <FileCode className="h-4 w-4 text-emerald-400" />
+                        <FileCode className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
                     </div>
-                    <div className="text-xl font-bold text-zinc-100 mt-2">{totalScripts}</div>
+                    <div className="text-xl font-bold text-foreground dark:text-zinc-100 mt-2">{totalScripts}</div>
                 </Card>
 
-                <Card className="bg-[#12131a]/80 border-zinc-800/80 p-3.5 flex flex-col justify-between">
+                <Card className="bg-card/95 dark:bg-[#12131a]/80 border-border dark:border-zinc-800/80 p-3.5 flex flex-col justify-between">
                     <div className="flex items-center justify-between">
                         <span className="text-xs text-muted-foreground">Scheduled Tasks</span>
-                        <Clock className="h-4 w-4 text-cyan-400" />
+                        <Clock className="h-4 w-4 text-cyan-700 dark:text-cyan-400" />
                     </div>
-                    <div className="text-xl font-bold text-zinc-100 mt-2">{scheduledScripts}</div>
+                    <div className="text-xl font-bold text-foreground dark:text-zinc-100 mt-2">{scheduledScripts}</div>
                 </Card>
 
-                <Card className="bg-[#12131a]/80 border-zinc-800/80 p-3.5 flex flex-col justify-between">
+                <Card className="bg-card/95 dark:bg-[#12131a]/80 border-border dark:border-zinc-800/80 p-3.5 flex flex-col justify-between">
                     <div className="flex items-center justify-between">
                         <span className="text-xs text-muted-foreground">Recent Runs</span>
-                        <History className="h-4 w-4 text-amber-400" />
+                        <History className="h-4 w-4 text-amber-700 dark:text-amber-400" />
                     </div>
-                    <div className="text-xl font-bold text-zinc-100 mt-2 tabular-nums">{recentRuns.length}</div>
+                    <div className="text-xl font-bold text-foreground dark:text-zinc-100 mt-2 tabular-nums">{recentRuns.length}</div>
                 </Card>
 
-                <Card className="bg-[#12131a]/80 border-zinc-800/80 p-3.5 flex flex-col justify-between">
+                <Card className="bg-card/95 dark:bg-[#12131a]/80 border-border dark:border-zinc-800/80 p-3.5 flex flex-col justify-between">
                     <div className="flex items-center justify-between">
                         <span className="text-xs text-muted-foreground">Successful Runs</span>
-                        <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                        <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
                     </div>
-                    <div className="text-xl font-bold text-zinc-100 mt-2">{successfulRuns}</div>
+                    <div className="text-xl font-bold text-foreground dark:text-zinc-100 mt-2">{successfulRuns}</div>
                 </Card>
             </div>
 
@@ -316,8 +316,8 @@ export default function AdminScriptsPage() {
                             onClick={() => setSelectedCategory(cat)}
                             className={`h-8 text-xs rounded-full px-3 transition-all shrink-0 ${
                                 selectedCategory === cat
-                                    ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-semibold"
-                                    : "text-muted-foreground hover:text-foreground hover:bg-zinc-800/60"
+                                    ? "bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-500/40 font-semibold"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-zinc-800/60"
                             }`}
                         >
                             {cat === "all" ? "All Scripts" : cat}
@@ -331,7 +331,7 @@ export default function AdminScriptsPage() {
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         placeholder="Search scripts, files, commands..."
-                        className="h-9 pl-9 text-xs bg-[#12131a]/80 border-zinc-800 text-zinc-200"
+                        className="h-9 pl-9 text-xs bg-card/95 dark:bg-[#12131a]/80 border-border dark:border-zinc-800 text-foreground dark:text-zinc-200"
                     />
                 </div>
             </div>
@@ -339,13 +339,13 @@ export default function AdminScriptsPage() {
             {/* Script Cards Grid */}
             {loading ? (
                 <div className="p-12 text-center text-sm text-muted-foreground flex items-center justify-center gap-2">
-                    <Loader2 className="h-5 w-5 animate-spin text-emerald-400" />
+                    <Loader2 className="h-5 w-5 animate-spin text-emerald-700 dark:text-emerald-400" />
                     <span>Loading scripts repository...</span>
                 </div>
             ) : filteredScripts.length === 0 ? (
-                <Card className="bg-[#12131a]/60 border-zinc-800 p-8 text-center space-y-3">
-                    <FileCode className="h-8 w-8 text-zinc-400 mx-auto" />
-                    <div className="text-sm font-semibold text-zinc-300">No scripts found</div>
+                <Card className="bg-muted/80 dark:bg-[#12131a]/60 border-border dark:border-zinc-800 p-8 text-center space-y-3">
+                    <FileCode className="h-8 w-8 text-slate-600 dark:text-zinc-400 mx-auto" />
+                    <div className="text-sm font-semibold text-slate-700 dark:text-zinc-300">No scripts found</div>
                     <p className="text-xs text-muted-foreground max-w-sm mx-auto">
                         {searchQuery ? "No scripts match your search criteria." : "Create your first script to automate tasks."}
                     </p>
@@ -369,25 +369,25 @@ export default function AdminScriptsPage() {
                         return (
                             <Card 
                                 key={script.id} 
-                                className="bg-[#12131a]/80 border-zinc-800/80 hover:border-zinc-700/80 transition-all duration-200 flex flex-col justify-between overflow-hidden shadow-sm hover:shadow-md"
+                                className="bg-card/95 dark:bg-[#12131a]/80 border-border dark:border-zinc-800/80 hover:border-border dark:hover:border-zinc-700/80 transition-all duration-200 flex flex-col justify-between overflow-hidden shadow-sm hover:shadow-md"
                             >
                                 <CardHeader className="pb-3 space-y-2">
                                     <div className="flex items-start justify-between gap-2">
                                         <div className="space-y-1">
                                             <div className="flex items-center gap-2">
-                                                <CardTitle className="text-base font-semibold text-zinc-100">
+                                                <CardTitle className="text-base font-semibold text-foreground dark:text-zinc-100">
                                                     {script.name}
                                                 </CardTitle>
                                             </div>
                                             <div className="flex items-center gap-1.5 flex-wrap">
-                                                <Badge variant="outline" className="text-[10px] font-mono bg-zinc-900 border-zinc-700/80 text-zinc-300">
+                                                <Badge variant="outline" className="text-[10px] font-mono bg-card/95 dark:bg-zinc-900 border-border dark:border-zinc-700/80 text-slate-700 dark:text-zinc-300">
                                                     {script.filename}
                                                 </Badge>
-                                                <Badge variant="outline" className="text-[10px] bg-zinc-900/60 border-zinc-800 text-zinc-400 flex items-center gap-1">
+                                                <Badge variant="outline" className="text-[10px] bg-muted/70 dark:bg-zinc-900/60 border-border dark:border-zinc-800 text-slate-600 dark:text-zinc-400 flex items-center gap-1">
                                                     {getCategoryIcon(script.category)}
                                                     <span>{script.category}</span>
                                                 </Badge>
-                                                <Badge variant="outline" className="text-[10px] font-mono uppercase bg-sky-500/10 border-sky-500/30 text-sky-300">
+                                                <Badge variant="outline" className="text-[10px] font-mono uppercase bg-sky-500/10 border-sky-500/30 text-sky-800 dark:text-sky-300">
                                                     {script.interpreter}
                                                 </Badge>
                                             </div>
@@ -396,21 +396,21 @@ export default function AdminScriptsPage() {
                                         {/* Status badge */}
                                         <div>
                                             {isNever ? (
-                                                <Badge variant="outline" className="text-[10px] bg-zinc-900 border-zinc-800 text-zinc-500">
+                                                <Badge variant="outline" className="text-[10px] bg-card/95 dark:bg-zinc-900 border-border dark:border-zinc-800 text-zinc-500">
                                                     Never Run
                                                 </Badge>
                                             ) : isSuccess ? (
-                                                <Badge className="text-[10px] bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                                                <Badge className="text-[10px] bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
                                                     <CheckCircle2 className="h-3 w-3" />
                                                     <span>Exit 0</span>
                                                 </Badge>
                                             ) : isAborted ? (
-                                                <Badge className="text-[10px] bg-orange-500/15 text-orange-300 border border-orange-500/30 flex items-center gap-1">
+                                                <Badge className="text-[10px] bg-orange-500/15 text-orange-800 dark:text-orange-300 border border-orange-500/30 flex items-center gap-1">
                                                     <Square className="h-3 w-3" />
                                                     <span>Aborted</span>
                                                 </Badge>
                                             ) : (
-                                                <Badge className="text-[10px] bg-rose-500/15 text-rose-300 border border-rose-500/30 flex items-center gap-1">
+                                                <Badge className="text-[10px] bg-rose-500/15 text-rose-800 dark:text-rose-300 border border-rose-500/30 flex items-center gap-1">
                                                     <XCircle className="h-3 w-3" />
                                                     <span>Exit {script.lastExitCode ?? 1}</span>
                                                 </Badge>
@@ -418,14 +418,14 @@ export default function AdminScriptsPage() {
                                         </div>
                                     </div>
 
-                                    <CardDescription className="text-xs text-zinc-400 line-clamp-2 leading-relaxed">
+                                    <CardDescription className="text-xs text-slate-600 dark:text-zinc-400 line-clamp-2 leading-relaxed">
                                         {script.description || "No description provided."}
                                     </CardDescription>
                                 </CardHeader>
 
                                 <CardContent className="pt-0 space-y-3">
                                     {/* Telemetry info row */}
-                                    <div className="p-2 rounded-lg bg-zinc-950/60 border border-zinc-800/60 flex items-center justify-between text-[11px] text-zinc-400">
+                                    <div className="p-2 rounded-lg bg-muted/60 dark:bg-zinc-950/60 border border-border dark:border-zinc-800/60 flex items-center justify-between text-[11px] text-slate-600 dark:text-zinc-400">
                                         <div className="flex items-center gap-1.5">
                                             <Clock className="h-3.5 w-3.5 text-zinc-500" />
                                             <span>
@@ -434,7 +434,7 @@ export default function AdminScriptsPage() {
                                         </div>
                                         <div>
                                             <span>Last run: </span>
-                                            <span className="text-zinc-300 font-medium">{formatTimeAgo(script.lastRunAt)}</span>
+                                            <span className="text-slate-700 dark:text-zinc-300 font-medium">{formatTimeAgo(script.lastRunAt)}</span>
                                             {script.lastDurationMs ? (
                                                 <span className="text-zinc-500"> ({((script.lastDurationMs) / 1000).toFixed(1)}s)</span>
                                             ) : null}
@@ -442,7 +442,7 @@ export default function AdminScriptsPage() {
                                     </div>
 
                                     {/* Action buttons */}
-                                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-zinc-800/60">
+                                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-border dark:border-zinc-800/60">
                                         <div className="flex items-center gap-1.5 flex-1 min-w-0 sm:min-w-[200px]">
                                             <Button
                                                 variant="default"
@@ -459,10 +459,10 @@ export default function AdminScriptsPage() {
                                                 variant="outline"
                                                 size="sm"
                                                 onClick={() => handleRunBackground(script)}
-                                                className="h-8 text-xs border-zinc-700 bg-zinc-900/60 hover:bg-zinc-800 text-zinc-300 flex-1 sm:flex-initial"
+                                                className="h-8 text-xs border-border dark:border-zinc-700 bg-muted/70 dark:bg-zinc-900/60 hover:bg-accent dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-300 flex-1 sm:flex-initial"
                                                 title="Run silently in background"
                                             >
-                                                <Zap className="h-3.5 w-3.5 mr-1 text-amber-400 shrink-0" />
+                                                <Zap className="h-3.5 w-3.5 mr-1 text-amber-700 dark:text-amber-400 shrink-0" />
                                                 <span>Background</span>
                                             </Button>
                                         </div>
@@ -472,7 +472,7 @@ export default function AdminScriptsPage() {
                                                 variant="ghost"
                                                 size="sm"
                                                 onClick={() => handleViewHistory(script)}
-                                                className="h-8 text-xs text-zinc-400 hover:text-zinc-200 px-2 sm:px-2.5"
+                                                className="h-8 text-xs text-slate-600 dark:text-zinc-400 hover:text-foreground dark:hover:text-zinc-200 px-2 sm:px-2.5"
                                                 title="View previous execution runs and logs"
                                             >
                                                 <History className="h-3.5 w-3.5 mr-1" />
@@ -483,7 +483,7 @@ export default function AdminScriptsPage() {
                                                 variant="ghost"
                                                 size="sm"
                                                 onClick={() => handleEditScript(script)}
-                                                className="h-8 text-xs text-zinc-400 hover:text-zinc-200 px-2 sm:px-2.5"
+                                                className="h-8 text-xs text-slate-600 dark:text-zinc-400 hover:text-foreground dark:hover:text-zinc-200 px-2 sm:px-2.5"
                                                 title="Edit script code and settings"
                                             >
                                                 <Edit3 className="h-3.5 w-3.5 mr-1" />
@@ -494,7 +494,7 @@ export default function AdminScriptsPage() {
                                                 variant="ghost"
                                                 size="sm"
                                                 onClick={() => handleDeleteScript(script)}
-                                                className="h-8 text-xs text-zinc-400 hover:text-rose-400 px-2"
+                                                className="h-8 text-xs text-slate-600 dark:text-zinc-400 hover:text-rose-700 dark:hover:text-rose-400 px-2"
                                                 title="Delete script"
                                             >
                                                 <Trash2 className="h-3.5 w-3.5" />

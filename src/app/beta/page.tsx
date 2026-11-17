@@ -26,8 +26,8 @@ export default function BetaPage() {
                 </p>
             </div>
 
-            <Card className="rounded-xl border-border/50 bg-[#121218]/80 backdrop-blur-md p-6 sm:p-12 text-center space-y-6">
-                <div className="mx-auto w-14 h-14 rounded-lg bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-amber-400">
+            <Card className="rounded-xl border-border/50 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md p-6 sm:p-12 text-center space-y-6">
+                <div className="mx-auto w-14 h-14 rounded-lg bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-amber-700 dark:text-amber-400">
                     <Sparkles className="h-7 w-7" />
                 </div>
 
@@ -44,7 +44,7 @@ export default function BetaPage() {
                     </Button>
                     <Button asChild variant="outline" size="sm" className="text-xs font-semibold gap-1.5 border-border/60">
                         <Link href="/guides">
-                            <HelpCircle className="h-3.5 w-3.5 text-sky-400" />
+                            <HelpCircle className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400" />
                             <span>View Setup Guides</span>
                         </Link>
                     </Button>

@@ -778,7 +778,7 @@ export default function EmailManagement() {
             {subTab === "broadcast" && (
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                     {/* LEFT COLUMN: RECIPIENT SELECTION (5 cols) */}
-                    <Card className="lg:col-span-5 flex flex-col bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
+                    <Card className="lg:col-span-5 flex flex-col bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
                         <CardHeader className="pb-3">
                             <div className="flex items-center justify-between">
                                 <CardTitle className="text-base flex items-center gap-2">
@@ -800,7 +800,7 @@ export default function EmailManagement() {
                                         placeholder="Search by username or email..."
                                         value={userSearch}
                                         onChange={(e) => setUserSearch(e.target.value)}
-                                        className="h-8 pl-8 text-xs bg-black/40 border-white/10"
+                                        className="h-8 pl-8 text-xs bg-muted/60 dark:bg-black/40 border-border/70 dark:border-white/10"
                                     />
                                     {userSearch && (
                                         <button 
@@ -854,7 +854,7 @@ export default function EmailManagement() {
                         </CardHeader>
 
                         {/* Quick Selection Buttons */}
-                        <div className="px-6 py-1.5 border-y border-border/40 bg-black/20 flex items-center justify-between text-xs">
+                        <div className="px-6 py-1.5 border-y border-border/40 bg-muted/40 dark:bg-black/20 flex items-center justify-between text-xs">
                             <span className="text-muted-foreground text-[11px]">Quick Select:</span>
                             <div className="flex items-center gap-1.5">
                                 <Button
@@ -895,7 +895,7 @@ export default function EmailManagement() {
                                                 key={user.id}
                                                 onClick={() => hasEmail && handleToggleUser(user.id)}
                                                 className={`p-3 flex items-center justify-between gap-3 transition-colors text-xs ${
-                                                    !hasEmail ? "opacity-40 cursor-not-allowed bg-red-950/10" : "cursor-pointer hover:bg-muted/20"
+                                                    !hasEmail ? "opacity-40 cursor-not-allowed bg-red-500/10 dark:bg-red-950/10" : "cursor-pointer hover:bg-muted/20"
                                                 } ${isSelected ? "bg-primary/5 border-l-2 border-primary" : ""}`}
                                             >
                                                 <div className="flex items-center gap-2.5 min-w-0">
@@ -911,13 +911,13 @@ export default function EmailManagement() {
                                                         <div className="font-semibold text-foreground truncate flex items-center gap-1.5">
                                                             {user.username}
                                                             {user.role === "ADMIN" && (
-                                                                <Badge variant="outline" className="text-[9px] px-1 py-0 border-sky-500/40 text-sky-400 bg-sky-500/10">
+                                                                <Badge variant="outline" className="text-[9px] px-1 py-0 border-sky-500/40 text-sky-700 dark:text-sky-400 bg-sky-500/10">
                                                                     ADMIN
                                                                 </Badge>
                                                             )}
                                                         </div>
                                                         <div className="text-[11px] text-muted-foreground truncate font-mono">
-                                                            {user.email || <span className="text-red-400">No email address configured</span>}
+                                                            {user.email || <span className="text-red-700 dark:text-red-400">No email address configured</span>}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -927,10 +927,10 @@ export default function EmailManagement() {
                                                         variant="outline" 
                                                         className={`text-[9px] px-1.5 py-0 ${
                                                             user.status === "APPROVED" 
-                                                                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" 
+                                                                ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30" 
                                                                 : user.status === "PENDING"
-                                                                ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
-                                                                : "bg-red-500/10 text-red-400 border-red-500/30"
+                                                                ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30"
+                                                                : "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30"
                                                         }`}
                                                     >
                                                         {user.status}
@@ -948,7 +948,7 @@ export default function EmailManagement() {
                             )}
                         </CardContent>
 
-                        <CardFooter className="p-3 border-t border-border/40 bg-black/20 flex items-center justify-between text-xs">
+                        <CardFooter className="p-3 border-t border-border/40 bg-muted/40 dark:bg-black/20 flex items-center justify-between text-xs">
                             <span className="text-muted-foreground text-[11px]">
                                 {selectedUserIds.length} user{selectedUserIds.length === 1 ? "" : "s"} will receive individual copies
                             </span>
@@ -965,7 +965,7 @@ export default function EmailManagement() {
 
                     {/* RIGHT COLUMN: BROADCAST COMPOSER & PREVIEW (7 cols) */}
                     <div className="lg:col-span-7 space-y-4">
-                        <Card className="bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
+                        <Card className="bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
                             <CardHeader className="pb-3">
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                                     <div>
@@ -978,7 +978,7 @@ export default function EmailManagement() {
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <Tabs value={composerTab} onValueChange={(v) => setComposerTab(v as any)} className="h-8">
-                                            <TabsList className="h-8 p-0.5 bg-black/40 border border-white/10">
+                                            <TabsList className="h-8 p-0.5 bg-muted/60 dark:bg-black/40 border border-border/70 dark:border-white/10">
                                                 <TabsTrigger value="write" className="text-xs px-3 h-7">Write</TabsTrigger>
                                                 <TabsTrigger value="preview" className="text-xs px-3 h-7 gap-1">
                                                     <Eye className="h-3 w-3" /> Live Preview
@@ -993,9 +993,9 @@ export default function EmailManagement() {
                                 {/* APPROVAL QUEUE SAFETY BANNER */}
                                 <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex flex-wrap items-center justify-between gap-2 text-xs">
                                     <div className="flex items-center gap-2">
-                                        <FolderCheck className="h-4 w-4 text-amber-400 shrink-0" />
+                                        <FolderCheck className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0" />
                                         <div>
-                                            <span className="font-bold text-amber-300">
+                                            <span className="font-bold text-amber-800 dark:text-amber-300">
                                                 {approvalSettings.requireApprovalForEmails && approvalSettings.emailApprovalPolicy?.["broadcast"] !== false
                                                     ? "Staged in Admin Approval Queue First (Safe Review Mode)"
                                                     : "Direct SMTP Dispatch Mode"}
@@ -1009,17 +1009,17 @@ export default function EmailManagement() {
                                     </div>
                                     <a
                                         href="/settings/access"
-                                        className="text-[11px] font-semibold px-2.5 py-1 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30 transition-colors shrink-0"
+                                        className="text-[11px] font-semibold px-2.5 py-1 rounded-md bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-500/30 transition-colors shrink-0"
                                     >
                                         Open Approval Queue &rarr;
                                     </a>
                                 </div>
 
                                 {/* 1-CLICK BROADCAST PRESET SELECTOR */}
-                                <div className="space-y-1.5 bg-sky-950/25 p-3 rounded-xl border border-sky-500/30">
-                                    <div className="flex items-center justify-between text-[11px] font-semibold text-sky-300">
+                                <div className="space-y-1.5 bg-sky-500/10 dark:bg-sky-950/25 p-3 rounded-xl border border-sky-500/30">
+                                    <div className="flex items-center justify-between text-[11px] font-semibold text-sky-800 dark:text-sky-300">
                                         <span className="flex items-center gap-1.5">
-                                            <Sparkles className="h-3.5 w-3.5 text-sky-400" /> Quick-Load Broadcast Template Preset:
+                                            <Sparkles className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400" /> Quick-Load Broadcast Template Preset:
                                         </span>
                                         <span className="text-[10px] text-muted-foreground">Click to load into Subject &amp; Body</span>
                                     </div>
@@ -1028,7 +1028,7 @@ export default function EmailManagement() {
                                             type="button"
                                             size="sm"
                                             variant="secondary"
-                                            className="h-7 text-xs font-bold bg-sky-600/30 hover:bg-sky-600/50 text-sky-200 border border-sky-500/40 gap-1.5"
+                                            className="h-7 text-xs font-bold bg-sky-600/30 hover:bg-sky-600/50 text-sky-900 dark:text-sky-200 border border-sky-500/40 gap-1.5"
                                             onClick={() => {
                                                 const launchTpl = templates.find(t => t.id === "new_site_launch");
                                                 if (launchTpl) {
@@ -1044,7 +1044,7 @@ export default function EmailManagement() {
                                             type="button"
                                             size="sm"
                                             variant="outline"
-                                            className="h-7 text-xs bg-black/40 border-white/10 hover:bg-white/10"
+                                            className="h-7 text-xs bg-muted/60 dark:bg-black/40 border-border/70 dark:border-white/10 hover:bg-accent dark:hover:bg-white/10"
                                             onClick={() => {
                                                 setBroadcastSubject("Important Update for {portalName} Members");
                                                 setBroadcastBody(`<h2 style="margin-top: 0; color: #0f172a;">Server Update</h2>\n<p>Hi <strong>{username}</strong>,</p>\n<p>I wanted to share a quick update regarding <strong>{portalName}</strong>:</p>\n<ul>\n  <li>New movies, shows, and books have been added to the library.</li>\n  <li>Visit <a href="{appUrl}">{appUrl}</a> to request media, check stream quality, or send books to your Kindle.</li>\n</ul>\n<p>Happy streaming!</p>`);
@@ -1057,7 +1057,7 @@ export default function EmailManagement() {
                                             type="button"
                                             size="sm"
                                             variant="outline"
-                                            className="h-7 text-xs bg-black/40 border-white/10 hover:bg-white/10"
+                                            className="h-7 text-xs bg-muted/60 dark:bg-black/40 border-border/70 dark:border-white/10 hover:bg-accent dark:hover:bg-white/10"
                                             onClick={() => {
                                                 setBroadcastSubject("🛠️ Scheduled Server Maintenance Notice — {portalName}");
                                                 setBroadcastBody(`<h2 style="margin-top: 0; color: #0f172a;">Scheduled Maintenance 🛠️</h2>\n<p>Hi <strong>{username}</strong>,</p>\n<p><strong>{portalName}</strong> will undergo brief scheduled maintenance tonight for system updates and performance improvements. Active streams may briefly pause while services restart.</p>\n<p>You can check live server status anytime on the dashboard at <a href="{appUrl}">{appUrl}</a>.</p>`);
@@ -1072,8 +1072,8 @@ export default function EmailManagement() {
                                 {testBroadcastResult && (
                                     <div className={`p-3 rounded-lg text-xs flex items-center gap-2 ${
                                         testBroadcastResult.success 
-                                            ? "bg-emerald-950/40 text-emerald-300 border border-emerald-800/40" 
-                                            : "bg-red-950/40 text-red-300 border border-red-800/40"
+                                            ? "bg-emerald-500/10 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-500/40 dark:border-emerald-800/40" 
+                                            : "bg-red-500/10 dark:bg-red-950/40 text-red-800 dark:text-red-300 border border-red-500/40 dark:border-red-800/40"
                                     }`}>
                                         {testBroadcastResult.success ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <XCircle className="h-4 w-4 shrink-0" />}
                                         <span>{testBroadcastResult.message || testBroadcastResult.error}</span>
@@ -1083,17 +1083,17 @@ export default function EmailManagement() {
                                 {broadcastSummary && (
                                     <div className={`p-4 rounded-xl text-xs space-y-2 ${
                                         broadcastSummary.failed === 0 
-                                            ? "bg-emerald-950/40 text-emerald-300 border border-emerald-800/40" 
-                                            : "bg-amber-950/40 text-amber-200 border border-amber-800/40"
+                                            ? "bg-emerald-500/10 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-500/40 dark:border-emerald-800/40" 
+                                            : "bg-amber-500/10 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 border border-amber-500/40 dark:border-amber-800/40"
                                     }`}>
                                         <div className="flex items-center justify-between font-bold text-sm">
                                             <span className="flex items-center gap-1.5">
-                                                <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                                                <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
                                                 {broadcastSummary.queued > 0
                                                     ? `Staged ${broadcastSummary.queued} Broadcast Email${broadcastSummary.queued === 1 ? "" : "s"} in Approval Queue!`
                                                     : "Mass Broadcast Dispatch Complete"}
                                             </span>
-                                            <Badge variant="outline" className="bg-black/40">
+                                            <Badge variant="outline" className="bg-muted/60 dark:bg-black/40">
                                                 {broadcastSummary.queued > 0 && `${broadcastSummary.queued} Queued for Review • `}
                                                 {broadcastSummary.sent} Sent / {broadcastSummary.failed} Failed
                                             </Badge>
@@ -1107,15 +1107,15 @@ export default function EmailManagement() {
                                             {broadcastSummary.queued > 0 && (
                                                 <a
                                                     href="/settings/access"
-                                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 font-bold text-xs transition-colors"
+                                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-800 dark:text-emerald-300 border border-emerald-500/40 font-bold text-xs transition-colors"
                                                 >
                                                     <FolderCheck className="h-3.5 w-3.5" /> Review &amp; Approve Emails in Access Control &rarr;
                                                 </a>
                                             )}
                                         </div>
                                         {broadcastSummary.failures.length > 0 && (
-                                            <div className="mt-2 pt-2 border-t border-amber-800/40 space-y-1">
-                                                <span className="font-semibold text-red-400">Failed Deliveries:</span>
+                                            <div className="mt-2 pt-2 border-t border-amber-500/40 dark:border-amber-800/40 space-y-1">
+                                                <span className="font-semibold text-red-700 dark:text-red-400">Failed Deliveries:</span>
                                                 <ul className="list-disc list-inside space-y-0.5 text-[11px] font-mono">
                                                     {broadcastSummary.failures.map((f, i) => (
                                                         <li key={i}>{f.username} ({f.email}): {f.error}</li>
@@ -1136,7 +1136,7 @@ export default function EmailManagement() {
                                         placeholder="Important Update for {portalName} Users..."
                                         value={broadcastSubject}
                                         onChange={(e) => setBroadcastSubject(e.target.value)}
-                                        className="h-9 text-sm bg-black/40 border-white/10"
+                                        className="h-9 text-sm bg-muted/60 dark:bg-black/40 border-border/70 dark:border-white/10"
                                     />
                                 </div>
 
@@ -1196,7 +1196,7 @@ export default function EmailManagement() {
                                             value={broadcastBody}
                                             onChange={(e) => setBroadcastBody(e.target.value)}
                                             placeholder={`<p>Hi {username},</p>\n<p>I've just added new features and updated my server library. Check it out at <a href="{appUrl}">{portalName}</a>!</p>\n<p>Happy streaming and reading!</p>`}
-                                            className="font-mono text-xs leading-relaxed bg-black/40 border-white/10"
+                                            className="font-mono text-xs leading-relaxed bg-muted/60 dark:bg-black/40 border-border/70 dark:border-white/10"
                                         />
                                         <p className="text-[10px] text-muted-foreground">
                                             {broadcastIsHtml 
@@ -1207,7 +1207,7 @@ export default function EmailManagement() {
                                 ) : (
                                     /* LIVE PREVIEW TAB */
                                     <div className="space-y-3">
-                                        <div className="flex items-center justify-between bg-black/30 p-2 rounded border border-border/40 text-xs">
+                                        <div className="flex items-center justify-between bg-muted/60 dark:bg-black/30 p-2 rounded border border-border/40 text-xs">
                                             <span className="text-muted-foreground text-[11px]">Previewing as user:</span>
                                             <div className="flex items-center gap-2">
                                                 <span className="font-semibold text-primary">{sampleUser.username}</span>
@@ -1313,7 +1313,7 @@ export default function EmailManagement() {
 
             {/* CONFIRM BROADCAST MODAL */}
             <Dialog open={showConfirmModal} onOpenChange={setShowConfirmModal}>
-                <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto bg-[#121218] border-border/60 text-foreground">
+                <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto bg-popover dark:bg-[#121218] border-border/60 text-foreground">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2 text-foreground">
                             <Megaphone className="h-5 w-5 text-primary" />
@@ -1329,16 +1329,16 @@ export default function EmailManagement() {
                     </DialogHeader>
 
                     <div className="space-y-3 py-2 text-xs">
-                        <div className="bg-black/40 p-3 rounded-lg border border-border/40 space-y-1.5">
+                        <div className="bg-muted/60 dark:bg-black/40 p-3 rounded-lg border border-border/40 space-y-1.5">
                             <div><strong>Subject:</strong> <span className="text-primary">{broadcastSubject}</span></div>
                             <div><strong>Total Recipients:</strong> <Badge variant="outline">{selectedUserIds.length} users</Badge></div>
                             <div><strong>Delivery Method:</strong> Individual 1-to-1 personalized emails (Never CC&apos;d)</div>
                             <div>
                                 <strong>Approval Gate:</strong>{" "}
                                 {approvalSettings.requireApprovalForEmails && approvalSettings.emailApprovalPolicy?.["broadcast"] !== false ? (
-                                    <span className="text-amber-400 font-semibold">Staged in Admin Approval Queue (Check before sending)</span>
+                                    <span className="text-amber-700 dark:text-amber-400 font-semibold">Staged in Admin Approval Queue (Check before sending)</span>
                                 ) : (
-                                    <span className="text-emerald-400 font-semibold">Immediate SMTP Dispatch</span>
+                                    <span className="text-emerald-700 dark:text-emerald-400 font-semibold">Immediate SMTP Dispatch</span>
                                 )}
                             </div>
                         </div>
@@ -1383,7 +1383,7 @@ export default function EmailManagement() {
             {subTab === "templates" && (
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                     {/* LEFT COLUMN: TEMPLATE CHOOSER (4 cols) */}
-                    <Card className="lg:col-span-4 flex flex-col bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
+                    <Card className="lg:col-span-4 flex flex-col bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
                         <CardHeader className="pb-3">
                             <CardTitle className="text-base flex items-center gap-2">
                                 <Code className="h-4.5 w-4.5 text-primary" /> System Templates
@@ -1445,7 +1445,7 @@ export default function EmailManagement() {
                                                         {tpl.name}
                                                     </div>
                                                     {tpl.isCustom ? (
-                                                        <Badge variant="outline" className="text-[9px] px-1 py-0 border-amber-500/40 text-amber-400 bg-amber-500/10 shrink-0">
+                                                        <Badge variant="outline" className="text-[9px] px-1 py-0 border-amber-500/40 text-amber-700 dark:text-amber-400 bg-amber-500/10 shrink-0">
                                                             Customized
                                                         </Badge>
                                                     ) : (
@@ -1458,8 +1458,8 @@ export default function EmailManagement() {
                                                     {tpl.description}
                                                 </p>
                                                 {tpl.triggerEvent && (
-                                                    <div className="text-[10px] text-amber-400/90 font-medium flex items-center gap-1 pt-0.5 border-t border-border/10">
-                                                        <Zap className="h-3 w-3 text-amber-400 shrink-0" />
+                                                    <div className="text-[10px] text-amber-700/90 dark:text-amber-400/90 font-medium flex items-center gap-1 pt-0.5 border-t border-border/10">
+                                                        <Zap className="h-3 w-3 text-amber-700 dark:text-amber-400 shrink-0" />
                                                         <span className="truncate" title={tpl.triggerEvent}>Trigger: {tpl.triggerEvent}</span>
                                                     </div>
                                                 )}
@@ -1470,15 +1470,15 @@ export default function EmailManagement() {
                                                     </span>
                                                     <div className="flex items-center gap-1 shrink-0">
                                                         {getTemplateRecipient(tpl.id) === "ADMIN" ? (
-                                                            <Badge variant="outline" className="text-[8px] px-1 py-0 border-sky-500/40 text-sky-300 bg-sky-500/10 font-bold">
+                                                            <Badge variant="outline" className="text-[8px] px-1 py-0 border-sky-500/40 text-sky-800 dark:text-sky-300 bg-sky-500/10 font-bold">
                                                                 TO: ADMIN
                                                             </Badge>
                                                         ) : getTemplateRecipient(tpl.id) === "BOTH" ? (
-                                                            <Badge variant="outline" className="text-[8px] px-1 py-0 border-cyan-500/40 text-cyan-300 bg-cyan-500/10 font-bold">
+                                                            <Badge variant="outline" className="text-[8px] px-1 py-0 border-cyan-500/40 text-cyan-800 dark:text-cyan-300 bg-cyan-500/10 font-bold">
                                                                 TO: BOTH
                                                             </Badge>
                                                         ) : (
-                                                            <Badge variant="outline" className="text-[8px] px-1 py-0 border-blue-500/40 text-blue-300 bg-blue-500/10 font-bold">
+                                                            <Badge variant="outline" className="text-[8px] px-1 py-0 border-blue-500/40 text-blue-800 dark:text-blue-300 bg-blue-500/10 font-bold">
                                                                 TO: USERS
                                                             </Badge>
                                                         )}
@@ -1494,7 +1494,7 @@ export default function EmailManagement() {
                     {/* RIGHT COLUMN: TEMPLATE EDITOR & PREVIEW (8 cols) */}
                     <div className="lg:col-span-8 space-y-4">
                         {currentTemplate && (
-                            <Card className="bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
+                            <Card className="bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
                                 <CardHeader className="pb-3">
                                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                                         <div>
@@ -1503,20 +1503,20 @@ export default function EmailManagement() {
                                                     {currentTemplate.name}
                                                 </CardTitle>
                                                 {getTemplateRecipient(currentTemplate.id) === "ADMIN" ? (
-                                                    <Badge className="bg-sky-500/20 text-sky-300 border border-sky-500/40 text-[10px] font-bold gap-1 shrink-0">
-                                                        <Shield className="h-3 w-3 text-sky-400" /> TO: ADMIN
+                                                    <Badge className="bg-sky-500/20 text-sky-800 dark:text-sky-300 border border-sky-500/40 text-[10px] font-bold gap-1 shrink-0">
+                                                        <Shield className="h-3 w-3 text-sky-700 dark:text-sky-400" /> TO: ADMIN
                                                     </Badge>
                                                 ) : getTemplateRecipient(currentTemplate.id) === "BOTH" ? (
-                                                    <Badge className="bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 text-[10px] font-bold gap-1 shrink-0">
-                                                        <Users className="h-3 w-3 text-cyan-400" /> TO: ADMIN &amp; USERS
+                                                    <Badge className="bg-cyan-500/20 text-cyan-800 dark:text-cyan-300 border border-cyan-500/40 text-[10px] font-bold gap-1 shrink-0">
+                                                        <Users className="h-3 w-3 text-cyan-700 dark:text-cyan-400" /> TO: ADMIN &amp; USERS
                                                     </Badge>
                                                 ) : (
-                                                    <Badge className="bg-blue-500/20 text-blue-300 border border-blue-500/40 text-[10px] font-bold gap-1 shrink-0">
-                                                        <User className="h-3 w-3 text-blue-400" /> TO: USERS
+                                                    <Badge className="bg-blue-500/20 text-blue-800 dark:text-blue-300 border border-blue-500/40 text-[10px] font-bold gap-1 shrink-0">
+                                                        <User className="h-3 w-3 text-blue-700 dark:text-blue-400" /> TO: USERS
                                                     </Badge>
                                                 )}
                                                 {currentTemplate.isCustom ? (
-                                                    <Badge className="bg-amber-500/15 text-amber-400 border border-amber-500/30 text-[10px]">
+                                                    <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 text-[10px]">
                                                         Custom Overrides Active
                                                     </Badge>
                                                 ) : (
@@ -1531,7 +1531,7 @@ export default function EmailManagement() {
                                         </div>
 
                                         <Tabs value={templateEditorTab} onValueChange={(v) => setTemplateEditorTab(v as any)} className="h-8">
-                                            <TabsList className="h-8 p-0.5 bg-black/40 border border-white/10">
+                                            <TabsList className="h-8 p-0.5 bg-muted/60 dark:bg-black/40 border border-border/70 dark:border-white/10">
                                                 <TabsTrigger value="write" className="text-xs px-3 h-7">Edit Template</TabsTrigger>
                                                 <TabsTrigger value="preview" className="text-xs px-3 h-7 gap-1">
                                                     <Eye className="h-3 w-3" /> Live Preview
@@ -1565,11 +1565,11 @@ export default function EmailManagement() {
                                     {/* EXACT TRIGGER CONDITION CALLOUT */}
                                     {currentTemplate.triggerEvent && (
                                         <div className="mt-3 p-3 rounded-xl bg-amber-500/[0.08] border border-amber-500/25 flex items-start gap-2.5 text-xs animate-in fade-in">
-                                            <div className="p-1 rounded-md bg-amber-500/20 text-amber-300 shrink-0 mt-0.5">
+                                            <div className="p-1 rounded-md bg-amber-500/20 text-amber-800 dark:text-amber-300 shrink-0 mt-0.5">
                                                 <Zap className="h-3.5 w-3.5" />
                                             </div>
                                             <div className="space-y-0.5 min-w-0">
-                                                <div className="font-bold text-amber-300 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                                                <div className="font-bold text-amber-800 dark:text-amber-300 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
                                                     ⚡ Exact Trigger Condition & Dispatch Event
                                                 </div>
                                                 <p className="text-foreground/90 text-xs leading-relaxed font-normal">
@@ -1591,24 +1591,24 @@ export default function EmailManagement() {
                                         ].includes(currentTemplate.id);
 
                                         return (
-                                            <div className="mt-2.5 p-3 rounded-xl bg-[#141d18]/90 border border-emerald-500/30 flex flex-wrap items-center justify-between gap-3 text-xs shadow-sm">
+                                            <div className="mt-2.5 p-3 rounded-xl bg-card/95 dark:bg-[#141d18]/90 border border-emerald-500/30 flex flex-wrap items-center justify-between gap-3 text-xs shadow-sm">
                                                 <div className="flex items-center gap-2.5">
-                                                    <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0">
+                                                    <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 shrink-0">
                                                         <FolderCheck className="h-4 w-4" />
                                                     </div>
                                                     <div>
                                                         <div className="flex items-center gap-2">
                                                             <span className="font-bold text-foreground text-xs">Action Approval Gate:</span>
                                                             {isAdminAlertTemplate ? (
-                                                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-medium">
+                                                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 font-medium">
                                                                     ⚡ Admin Alert — Auto-Sent to Admin Inbox (Never Gate-Checked)
                                                                 </Badge>
                                                             ) : approvalSettings.requireApprovalForEmails && (approvalSettings.emailApprovalPolicy?.[currentTemplate.id] !== false) ? (
-                                                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30 font-medium">
+                                                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 font-medium">
                                                                     🔒 Requires Approval (Staged in Queue)
                                                                 </Badge>
                                                             ) : (
-                                                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-medium">
+                                                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 font-medium">
                                                                     ⚡ Auto-Send via SMTP
                                                                 </Badge>
                                                             )}
@@ -1644,8 +1644,8 @@ export default function EmailManagement() {
                                     {templateSaveMsg && (
                                         <div className={`p-3 rounded-lg text-xs flex items-center gap-2 ${
                                             templateSaveMsg.type === "success" 
-                                                ? "bg-emerald-950/40 text-emerald-300 border border-emerald-800/40" 
-                                                : "bg-red-950/40 text-red-300 border border-red-800/40"
+                                                ? "bg-emerald-500/10 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-500/40 dark:border-emerald-800/40" 
+                                                : "bg-red-500/10 dark:bg-red-950/40 text-red-800 dark:text-red-300 border border-red-500/40 dark:border-red-800/40"
                                         }`}>
                                             {templateSaveMsg.type === "success" ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <XCircle className="h-4 w-4 shrink-0" />}
                                             <span>{templateSaveMsg.text}</span>
@@ -1655,8 +1655,8 @@ export default function EmailManagement() {
                                     {testTemplateMsg && (
                                         <div className={`p-3 rounded-lg text-xs flex items-center gap-2 ${
                                             testTemplateMsg.type === "success" 
-                                                ? "bg-emerald-950/40 text-emerald-300 border border-emerald-800/40" 
-                                                : "bg-red-950/40 text-red-300 border border-red-800/40"
+                                                ? "bg-emerald-500/10 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-500/40 dark:border-emerald-800/40" 
+                                                : "bg-red-500/10 dark:bg-red-950/40 text-red-800 dark:text-red-300 border border-red-500/40 dark:border-red-800/40"
                                         }`}>
                                             {testTemplateMsg.type === "success" ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <XCircle className="h-4 w-4 shrink-0" />}
                                             <span>{testTemplateMsg.text}</span>
@@ -1667,7 +1667,7 @@ export default function EmailManagement() {
                                     <div className="space-y-1.5 bg-muted/20 p-2.5 rounded-lg border border-border/40">
                                         <div className="flex items-center justify-between text-[11px] font-semibold text-muted-foreground">
                                             <span className="flex items-center gap-1">
-                                                <Sparkles className="h-3 w-3 text-amber-400" /> Available Template Variables:
+                                                <Sparkles className="h-3 w-3 text-amber-700 dark:text-amber-400" /> Available Template Variables:
                                             </span>
                                             <span className="text-[10px]">Click to append to template</span>
                                         </div>
@@ -1677,7 +1677,7 @@ export default function EmailManagement() {
                                                     key={v.key}
                                                     type="button"
                                                     onClick={() => setTemplateBody(prev => prev + v.key)}
-                                                    className="text-[10px] font-mono px-2 py-0.5 rounded bg-black/40 text-amber-300 border border-amber-500/30 hover:bg-amber-500/20 active:scale-95 transition-all flex items-center gap-1 cursor-pointer"
+                                                    className="text-[10px] font-mono px-2 py-0.5 rounded bg-muted/60 dark:bg-black/40 text-amber-800 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-500/20 active:scale-95 transition-all flex items-center gap-1 cursor-pointer"
                                                     title={`${v.description} (e.g. "${v.sampleValue}")`}
                                                 >
                                                     <span>{v.key}</span>
@@ -1687,7 +1687,7 @@ export default function EmailManagement() {
                                             <button
                                                 type="button"
                                                 onClick={() => setTemplateBody(prev => prev + "{appUrl}")}
-                                                className="text-[10px] font-mono px-2 py-0.5 rounded bg-black/40 text-primary border border-primary/30 hover:bg-primary/20 transition-all cursor-pointer"
+                                                className="text-[10px] font-mono px-2 py-0.5 rounded bg-muted/60 dark:bg-black/40 text-primary border border-primary/30 hover:bg-primary/20 transition-all cursor-pointer"
                                             >
                                                 {"{appUrl}"}
                                             </button>
@@ -1711,7 +1711,7 @@ export default function EmailManagement() {
                                         <Input
                                             value={templateSubject}
                                             onChange={(e) => setTemplateSubject(e.target.value)}
-                                            className="h-9 text-sm bg-black/40 border-white/10"
+                                            className="h-9 text-sm bg-muted/60 dark:bg-black/40 border-border/70 dark:border-white/10"
                                         />
                                     </div>
 
@@ -1726,7 +1726,7 @@ export default function EmailManagement() {
                                                 rows={12}
                                                 value={templateBody}
                                                 onChange={(e) => setTemplateBody(e.target.value)}
-                                                className="font-mono text-xs leading-relaxed bg-black/40 border-white/10"
+                                                className="font-mono text-xs leading-relaxed bg-muted/60 dark:bg-black/40 border-border/70 dark:border-white/10"
                                             />
                                         </div>
                                     ) : (
@@ -1810,7 +1810,7 @@ export default function EmailManagement() {
                                                 variant="ghost"
                                                 size="sm"
                                                 onClick={handleResetTemplate}
-                                                className="text-xs text-muted-foreground hover:text-red-400 gap-1"
+                                                className="text-xs text-muted-foreground hover:text-red-700 dark:hover:text-red-400 gap-1"
                                             >
                                                 <RotateCcw className="h-3.5 w-3.5" /> Reset to Default
                                             </Button>
@@ -1838,7 +1838,7 @@ export default function EmailManagement() {
             {/* --- SUB-TAB 3: DISPATCH CONTROLS & MASTER SWITCHES --- */}
             {/* ========================================================================= */}
             {subTab === "notifications" && (
-                <Card className="bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
+                <Card className="bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
                     <CardHeader>
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                             <div>
@@ -1851,18 +1851,18 @@ export default function EmailManagement() {
                             </div>
                             <div className="flex flex-wrap items-center gap-3">
                                 {emailSettingsMsg && (
-                                    <span className="text-xs text-emerald-400 font-medium flex items-center gap-1">
+                                    <span className="text-xs text-emerald-700 dark:text-emerald-400 font-medium flex items-center gap-1">
                                         <CheckCircle2 className="h-3.5 w-3.5" /> {emailSettingsMsg}
                                     </span>
                                 )}
                                 <div className="flex items-center gap-2 bg-muted/40 p-1.5 px-3 rounded-lg border border-border/50">
                                     <Label htmlFor="master-email-toggle-2" className="text-xs font-semibold cursor-pointer flex items-center gap-1.5">
                                         {emailSettings.emailNotificationsEnabled ? (
-                                            <span className="text-emerald-400 flex items-center gap-1">
+                                            <span className="text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
                                                 <Bell className="h-3.5 w-3.5" /> All Outbound Emails Active
                                             </span>
                                         ) : (
-                                            <span className="text-red-400 flex items-center gap-1">
+                                            <span className="text-red-700 dark:text-red-400 flex items-center gap-1">
                                                 <BellOff className="h-3.5 w-3.5" /> All Outbound Emails Disabled
                                             </span>
                                         )}
@@ -1879,8 +1879,8 @@ export default function EmailManagement() {
 
                     <CardContent className="space-y-4">
                         {!emailSettings.emailNotificationsEnabled && (
-                            <div className="bg-red-950/30 border border-red-800/40 rounded-lg p-3.5 text-xs text-red-300 flex items-center gap-2.5">
-                                <BellOff className="h-5 w-5 shrink-0 text-red-400" />
+                            <div className="bg-red-500/10 dark:bg-red-950/30 border border-red-500/40 dark:border-red-800/40 rounded-lg p-3.5 text-xs text-red-800 dark:text-red-300 flex items-center gap-2.5">
+                                <BellOff className="h-5 w-5 shrink-0 text-red-700 dark:text-red-400" />
                                 <span>
                                     <strong>Master Killswitch Engaged:</strong> All automated outgoing email dispatches (approvals, new user alerts, password resets, media ready notifications, ticket alerts, and Send-to-Kindle) are completely suspended.
                                 </span>
@@ -1888,20 +1888,20 @@ export default function EmailManagement() {
                         )}
 
                         {/* APPROVAL GOVERNANCE BANNER */}
-                        <div className="p-4 rounded-xl border border-emerald-500/30 bg-[#141d18]/90 backdrop-blur-sm space-y-3 shadow-md">
+                        <div className="p-4 rounded-xl border border-emerald-500/30 bg-card/95 dark:bg-[#141d18]/90 backdrop-blur-sm space-y-3 shadow-md">
                             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
                                 <div className="flex items-start gap-3">
-                                    <div className="p-2 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0 mt-0.5 lg:mt-0">
+                                    <div className="p-2 rounded-lg bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 shrink-0 mt-0.5 lg:mt-0">
                                         <FolderCheck className="h-4.5 w-4.5" />
                                     </div>
                                     <div className="space-y-0.5">
                                         <div className="flex items-center gap-2 flex-wrap">
                                             <span className="text-xs font-bold text-foreground">Action Approval Gates & Queue Governance</span>
-                                            <Badge variant="outline" className={`text-[10px] font-semibold ${approvalSettings.requireApprovalForEmails ? "bg-amber-500/10 text-amber-400 border-amber-500/30" : "bg-muted/50 text-muted-foreground border-border/40"}`}>
+                                            <Badge variant="outline" className={`text-[10px] font-semibold ${approvalSettings.requireApprovalForEmails ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30" : "bg-muted/50 text-muted-foreground border-border/40"}`}>
                                                 {approvalSettings.requireApprovalForEmails ? "Approval Gate Active" : "Gate Bypassed (All Auto-Send)"}
                                             </Badge>
                                             {approvalPolicyMsg && (
-                                                <span className="text-xs text-emerald-400 font-medium flex items-center gap-1 animate-in fade-in">
+                                                <span className="text-xs text-emerald-700 dark:text-emerald-400 font-medium flex items-center gap-1 animate-in fade-in">
                                                     <CheckCircle2 className="h-3.5 w-3.5" /> {approvalPolicyMsg}
                                                 </span>
                                             )}
@@ -1930,9 +1930,9 @@ export default function EmailManagement() {
                                         variant="outline"
                                         onClick={handleApplyKindlePreset}
                                         disabled={savingApprovalPolicy}
-                                        className="h-7 text-[11px] font-semibold border-amber-500/40 text-amber-300 hover:bg-amber-500/10 gap-1"
+                                        className="h-7 text-[11px] font-semibold border-amber-500/40 text-amber-800 dark:text-amber-300 hover:bg-amber-500/10 gap-1"
                                     >
-                                        <Zap className="h-3 w-3 text-amber-400" />
+                                        <Zap className="h-3 w-3 text-amber-700 dark:text-amber-400" />
                                         ⚡ Auto-Send Kindle Only
                                     </Button>
                                     <Button
@@ -2022,8 +2022,8 @@ export default function EmailManagement() {
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="space-y-1 pr-1">
                                         <div className="font-semibold text-xs text-foreground flex items-center gap-1.5 flex-wrap">
-                                            <UserCheck className="h-4 w-4 text-emerald-400" /> User Account Approvals
-                                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-blue-500/10 text-blue-400 border-blue-500/30 font-bold shrink-0 flex items-center gap-1">
+                                            <UserCheck className="h-4 w-4 text-emerald-700 dark:text-emerald-400" /> User Account Approvals
+                                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30 font-bold shrink-0 flex items-center gap-1">
                                                 <User className="h-2.5 w-2.5" /> TO: USERS
                                             </Badge>
                                         </div>
@@ -2039,14 +2039,14 @@ export default function EmailManagement() {
                                 </div>
                                 <div className="pt-2 border-t border-border/20 flex items-center justify-between gap-2 text-[10px]">
                                     <div className="flex items-center gap-1.5 min-w-0">
-                                        <FolderCheck className="h-3 w-3 text-emerald-400 shrink-0" />
+                                        <FolderCheck className="h-3 w-3 text-emerald-700 dark:text-emerald-400 shrink-0" />
                                         <span className="text-muted-foreground font-medium">Approval Gate:</span>
                                         {isCategoryApprovalRequired(["user_approval"]) ? (
-                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30">
                                                 Staged
                                             </Badge>
                                         ) : (
-                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">
                                                 Auto-Send
                                             </Badge>
                                         )}
@@ -2071,8 +2071,8 @@ export default function EmailManagement() {
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="space-y-1 pr-1">
                                         <div className="font-semibold text-xs text-foreground flex items-center gap-1.5 flex-wrap">
-                                            <Shield className="h-4 w-4 text-blue-400" /> New User Requests
-                                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-sky-500/10 text-sky-400 border-sky-500/30 font-bold shrink-0 flex items-center gap-1">
+                                            <Shield className="h-4 w-4 text-blue-700 dark:text-blue-400" /> New User Requests
+                                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-500/30 font-bold shrink-0 flex items-center gap-1">
                                                 <Shield className="h-2.5 w-2.5" /> TO: ADMIN
                                             </Badge>
                                         </div>
@@ -2088,14 +2088,14 @@ export default function EmailManagement() {
                                 </div>
                                 <div className="pt-2 border-t border-border/20 flex items-center justify-between gap-2 text-[10px]">
                                     <div className="flex items-center gap-1.5 min-w-0">
-                                        <FolderCheck className="h-3 w-3 text-emerald-400 shrink-0" />
+                                        <FolderCheck className="h-3 w-3 text-emerald-700 dark:text-emerald-400 shrink-0" />
                                         <span className="text-muted-foreground font-medium">Approval Gate:</span>
                                         {isCategoryApprovalRequired(["admin_new_user"]) ? (
-                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30">
                                                 Staged
                                             </Badge>
                                         ) : (
-                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">
                                                 Auto-Send
                                             </Badge>
                                         )}
@@ -2120,8 +2120,8 @@ export default function EmailManagement() {
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="space-y-1 pr-1">
                                         <div className="font-semibold text-xs text-foreground flex items-center gap-1.5 flex-wrap">
-                                            <Key className="h-4 w-4 text-amber-400" /> Password Resets
-                                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-blue-500/10 text-blue-400 border-blue-500/30 font-bold shrink-0 flex items-center gap-1">
+                                            <Key className="h-4 w-4 text-amber-700 dark:text-amber-400" /> Password Resets
+                                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30 font-bold shrink-0 flex items-center gap-1">
                                                 <User className="h-2.5 w-2.5" /> TO: USERS
                                             </Badge>
                                         </div>
@@ -2137,14 +2137,14 @@ export default function EmailManagement() {
                                 </div>
                                 <div className="pt-2 border-t border-border/20 flex items-center justify-between gap-2 text-[10px]">
                                     <div className="flex items-center gap-1.5 min-w-0">
-                                        <FolderCheck className="h-3 w-3 text-emerald-400 shrink-0" />
+                                        <FolderCheck className="h-3 w-3 text-emerald-700 dark:text-emerald-400 shrink-0" />
                                         <span className="text-muted-foreground font-medium">Approval Gate:</span>
                                         {isCategoryApprovalRequired(["password_reset"]) ? (
-                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30">
                                                 Staged
                                             </Badge>
                                         ) : (
-                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">
                                                 Auto-Send
                                             </Badge>
                                         )}
@@ -2169,7 +2169,7 @@ export default function EmailManagement() {
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="space-y-1 pr-1">
                                         <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
-                                            <BookOpen className="h-4 w-4 text-emerald-400" /> Media &amp; Book Requests
+                                            <BookOpen className="h-4 w-4 text-emerald-700 dark:text-emerald-400" /> Media &amp; Book Requests
                                         </div>
                                         <p className="text-[11px] text-muted-foreground leading-tight">
                                             Notify users when requested books/audiobooks are ready, failed, or require admin attention.
@@ -2183,14 +2183,14 @@ export default function EmailManagement() {
                                 </div>
                                 <div className="pt-2 border-t border-border/20 flex items-center justify-between gap-2 text-[10px]">
                                     <div className="flex items-center gap-1.5 min-w-0">
-                                        <FolderCheck className="h-3 w-3 text-emerald-400 shrink-0" />
+                                        <FolderCheck className="h-3 w-3 text-emerald-700 dark:text-emerald-400 shrink-0" />
                                         <span className="text-muted-foreground font-medium">Approval Gate:</span>
                                         {isCategoryApprovalRequired(["media_ready", "media_request_admin", "seerr_request_new_admin", "seerr_request_auto_approved", "seerr_request_approved", "seerr_request_declined", "seerr_request_available", "seerr_request_failed"]) ? (
-                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30">
                                                 Staged
                                             </Badge>
                                         ) : (
-                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">
                                                 Auto-Send
                                             </Badge>
                                         )}
@@ -2215,7 +2215,7 @@ export default function EmailManagement() {
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="space-y-1 pr-1">
                                         <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
-                                            <LifeBuoy className="h-4 w-4 text-cyan-400" /> Support Tickets
+                                            <LifeBuoy className="h-4 w-4 text-cyan-700 dark:text-cyan-400" /> Support Tickets
                                         </div>
                                         <p className="text-[11px] text-muted-foreground leading-tight">
                                             Dispatch email notifications for submitted tickets, automated error reports, and admin status updates.
@@ -2229,14 +2229,14 @@ export default function EmailManagement() {
                                 </div>
                                 <div className="pt-2 border-t border-border/20 flex items-center justify-between gap-2 text-[10px]">
                                     <div className="flex items-center gap-1.5 min-w-0">
-                                        <FolderCheck className="h-3 w-3 text-emerald-400 shrink-0" />
+                                        <FolderCheck className="h-3 w-3 text-emerald-700 dark:text-emerald-400 shrink-0" />
                                         <span className="text-muted-foreground font-medium">Approval Gate:</span>
                                         {isCategoryApprovalRequired(["ticket_update", "ticket_error_alert"]) ? (
-                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30">
                                                 Staged
                                             </Badge>
                                         ) : (
-                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">
                                                 Auto-Send
                                             </Badge>
                                         )}
@@ -2275,14 +2275,14 @@ export default function EmailManagement() {
                                 </div>
                                 <div className="pt-2 border-t border-border/20 flex items-center justify-between gap-2 text-[10px]">
                                     <div className="flex items-center gap-1.5 min-w-0">
-                                        <FolderCheck className="h-3 w-3 text-emerald-400 shrink-0" />
+                                        <FolderCheck className="h-3 w-3 text-emerald-700 dark:text-emerald-400 shrink-0" />
                                         <span className="text-muted-foreground font-medium">Approval Gate:</span>
                                         {isCategoryApprovalRequired(["kindle_delivery", "kindle_success", "kindle_failed"]) ? (
-                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30">
                                                 Staged
                                             </Badge>
                                         ) : (
-                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">
                                                 Auto-Send
                                             </Badge>
                                         )}
@@ -2307,7 +2307,7 @@ export default function EmailManagement() {
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="space-y-1 pr-1">
                                         <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
-                                            <Sparkles className="h-4 w-4 text-emerald-400" /> Free Trial Welcome
+                                            <Sparkles className="h-4 w-4 text-emerald-700 dark:text-emerald-400" /> Free Trial Welcome
                                         </div>
                                         <p className="text-[11px] text-muted-foreground leading-tight">
                                             Email users an onboarding welcome and trial details upon free trial activation.
@@ -2321,14 +2321,14 @@ export default function EmailManagement() {
                                 </div>
                                 <div className="pt-2 border-t border-border/20 flex items-center justify-between gap-2 text-[10px]">
                                     <div className="flex items-center gap-1.5 min-w-0">
-                                        <FolderCheck className="h-3 w-3 text-emerald-400 shrink-0" />
+                                        <FolderCheck className="h-3 w-3 text-emerald-700 dark:text-emerald-400 shrink-0" />
                                         <span className="text-muted-foreground font-medium">Approval Gate:</span>
                                         {isCategoryApprovalRequired(["trial_welcome"]) ? (
-                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30">
                                                 Staged
                                             </Badge>
                                         ) : (
-                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">
                                                 Auto-Send
                                             </Badge>
                                         )}
@@ -2353,7 +2353,7 @@ export default function EmailManagement() {
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="space-y-1 pr-1">
                                         <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
-                                            <Bell className="h-4 w-4 text-amber-400" /> Expiration Reminders
+                                            <Bell className="h-4 w-4 text-amber-700 dark:text-amber-400" /> Expiration Reminders
                                         </div>
                                         <p className="text-[11px] text-muted-foreground leading-tight">
                                             Send advance renewal reminders 3 days before a trial or ongoing subscription expires.
@@ -2367,14 +2367,14 @@ export default function EmailManagement() {
                                 </div>
                                 <div className="pt-2 border-t border-border/20 flex items-center justify-between gap-2 text-[10px]">
                                     <div className="flex items-center gap-1.5 min-w-0">
-                                        <FolderCheck className="h-3 w-3 text-emerald-400 shrink-0" />
+                                        <FolderCheck className="h-3 w-3 text-emerald-700 dark:text-emerald-400 shrink-0" />
                                         <span className="text-muted-foreground font-medium">Approval Gate:</span>
                                         {isCategoryApprovalRequired(["trial_expiring_soon"]) ? (
-                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30">
                                                 Staged
                                             </Badge>
                                         ) : (
-                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">
                                                 Auto-Send
                                             </Badge>
                                         )}
@@ -2399,7 +2399,7 @@ export default function EmailManagement() {
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="space-y-1 pr-1">
                                         <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
-                                            <BellOff className="h-4 w-4 text-red-400" /> Access Expired Notices
+                                            <BellOff className="h-4 w-4 text-red-700 dark:text-red-400" /> Access Expired Notices
                                         </div>
                                         <p className="text-[11px] text-muted-foreground leading-tight">
                                             Notify users when their trial or subscription period has concluded and access is paused.
@@ -2413,14 +2413,14 @@ export default function EmailManagement() {
                                 </div>
                                 <div className="pt-2 border-t border-border/20 flex items-center justify-between gap-2 text-[10px]">
                                     <div className="flex items-center gap-1.5 min-w-0">
-                                        <FolderCheck className="h-3 w-3 text-emerald-400 shrink-0" />
+                                        <FolderCheck className="h-3 w-3 text-emerald-700 dark:text-emerald-400 shrink-0" />
                                         <span className="text-muted-foreground font-medium">Approval Gate:</span>
                                         {isCategoryApprovalRequired(["trial_expired", "admin_user_access_revoked"]) ? (
-                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30">
                                                 Staged
                                             </Badge>
                                         ) : (
-                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">
                                                 Auto-Send
                                             </Badge>
                                         )}
@@ -2445,7 +2445,7 @@ export default function EmailManagement() {
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="space-y-1 pr-1">
                                         <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
-                                            <DollarSign className="h-4 w-4 text-emerald-400" /> Payment Receipts & Full Membership Activations
+                                            <DollarSign className="h-4 w-4 text-emerald-700 dark:text-emerald-400" /> Payment Receipts & Full Membership Activations
                                         </div>
                                         <p className="text-[11px] text-muted-foreground leading-tight">
                                             Send automated confirmation receipts when an incoming payment is received (Venmo, PayPal, Zelle) and when Full Membership is activated.
@@ -2459,14 +2459,14 @@ export default function EmailManagement() {
                                 </div>
                                 <div className="pt-2 border-t border-border/20 flex items-center justify-between gap-2 text-[10px]">
                                     <div className="flex items-center gap-1.5 min-w-0">
-                                        <FolderCheck className="h-3 w-3 text-emerald-400 shrink-0" />
+                                        <FolderCheck className="h-3 w-3 text-emerald-700 dark:text-emerald-400 shrink-0" />
                                         <span className="text-muted-foreground font-medium">Approval Gate:</span>
                                         {isCategoryApprovalRequired(["subscription_activated", "payment_received", "payment_underpayment", "admin_payment_received"]) ? (
-                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30">
                                                 Staged
                                             </Badge>
                                         ) : (
-                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">
                                                 Auto-Send
                                             </Badge>
                                         )}
@@ -2491,7 +2491,7 @@ export default function EmailManagement() {
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="space-y-1 pr-1">
                                         <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
-                                            <Users className="h-4 w-4 text-cyan-400" /> Referral Reward Alerts
+                                            <Users className="h-4 w-4 text-cyan-700 dark:text-cyan-400" /> Referral Reward Alerts
                                         </div>
                                         <p className="text-[11px] text-muted-foreground leading-tight">
                                             Notify members when a friend joins via their referral code and grants them +1 free month credit.
@@ -2505,14 +2505,14 @@ export default function EmailManagement() {
                                 </div>
                                 <div className="pt-2 border-t border-border/20 flex items-center justify-between gap-2 text-[10px]">
                                     <div className="flex items-center gap-1.5 min-w-0">
-                                        <FolderCheck className="h-3 w-3 text-emerald-400 shrink-0" />
+                                        <FolderCheck className="h-3 w-3 text-emerald-700 dark:text-emerald-400 shrink-0" />
                                         <span className="text-muted-foreground font-medium">Approval Gate:</span>
                                         {isCategoryApprovalRequired(["referral_reward_credited"]) ? (
-                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30">
                                                 Staged
                                             </Badge>
                                         ) : (
-                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">
                                                 Auto-Send
                                             </Badge>
                                         )}
@@ -2551,14 +2551,14 @@ export default function EmailManagement() {
                                 </div>
                                 <div className="pt-2 border-t border-border/20 flex items-center justify-between gap-2 text-[10px]">
                                     <div className="flex items-center gap-1.5 min-w-0">
-                                        <FolderCheck className="h-3 w-3 text-emerald-400 shrink-0" />
+                                        <FolderCheck className="h-3 w-3 text-emerald-700 dark:text-emerald-400 shrink-0" />
                                         <span className="text-muted-foreground font-medium">Approval Gate:</span>
                                         {isCategoryApprovalRequired(["subscription_renewal_reminder_yearly", "subscription_renewal_reminder_monthly", "subscription_renewal_reminder"]) ? (
-                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30">
                                                 Staged
                                             </Badge>
                                         ) : (
-                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">
                                                 Auto-Send
                                             </Badge>
                                         )}
@@ -2586,7 +2586,7 @@ export default function EmailManagement() {
                                     <div className="font-bold text-sm text-foreground flex items-center gap-2">
                                         <CalendarClock className="h-4 w-4 text-amber-500" />
                                         <span>Automated Subscription Renewal Reminder Sweep</span>
-                                        <Badge variant="outline" className="text-[10px] border-amber-500/30 text-amber-400 bg-amber-500/10">
+                                        <Badge variant="outline" className="text-[10px] border-amber-500/30 text-amber-700 dark:text-amber-400 bg-amber-500/10">
                                             Runs Hourly in Background
                                         </Badge>
                                     </div>
@@ -2596,8 +2596,8 @@ export default function EmailManagement() {
                                     {renewalCheckResult && (
                                         <div className={`mt-2 text-xs font-semibold flex items-center gap-1.5 p-2 rounded-lg ${
                                             renewalCheckResult.startsWith("Error") 
-                                                ? "bg-red-950/40 text-red-400 border border-red-800/40" 
-                                                : "bg-emerald-950/40 text-emerald-400 border border-emerald-800/40"
+                                                ? "bg-red-500/10 dark:bg-red-950/40 text-red-700 dark:text-red-400 border border-red-500/40 dark:border-red-800/40" 
+                                                : "bg-emerald-500/10 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-500/40 dark:border-emerald-800/40"
                                         }`}>
                                             {renewalCheckResult.startsWith("Error") ? (
                                                 <XCircle className="h-4 w-4 shrink-0" />
@@ -2614,7 +2614,7 @@ export default function EmailManagement() {
                                         variant="outline"
                                         disabled={runningRenewalCheck || !emailSettings.emailNotificationsEnabled}
                                         onClick={handleRunRenewalSweep}
-                                        className="gap-2 text-xs font-bold border-amber-500/40 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300 w-full sm:w-auto"
+                                        className="gap-2 text-xs font-bold border-amber-500/40 text-amber-700 dark:text-amber-400 hover:bg-amber-500/10 hover:text-amber-800 dark:hover:text-amber-300 w-full sm:w-auto"
                                     >
                                         {runningRenewalCheck ? (
                                             <>

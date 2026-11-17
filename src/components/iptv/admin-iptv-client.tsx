@@ -642,13 +642,13 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border/40 pb-6">
                 <div>
                     <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shadow-sm">
+                        <div className="h-10 w-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-700 dark:text-amber-400 shadow-sm">
                             <ShieldCheck className="h-5 w-5" />
                         </div>
                         <div>
                             <h1 className="text-2xl md:text-3xl font-extrabold text-foreground tracking-tight flex items-center gap-2.5">
                                 Live TV & IPTV Mission Control
-                                <Badge variant="outline" className="text-xs font-semibold bg-amber-500/10 border-amber-500/30 text-amber-300">
+                                <Badge variant="outline" className="text-xs font-semibold bg-amber-500/10 border-amber-500/30 text-amber-800 dark:text-amber-300">
                                     Admin Only
                                 </Badge>
                             </h1>
@@ -685,8 +685,8 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                 <div
                     className={`p-3.5 rounded-xl border text-xs font-semibold flex items-center gap-2.5 ${
                         statusMsg.type === "success"
-                            ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
-                            : "bg-rose-500/10 border-rose-500/30 text-rose-300"
+                            ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-800 dark:text-emerald-300"
+                            : "bg-rose-500/10 border-rose-500/30 text-rose-800 dark:text-rose-300"
                     }`}
                 >
                     {statusMsg.type === "success" ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <AlertTriangle className="h-4 w-4 shrink-0" />}
@@ -713,7 +713,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                         <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                             DVR Reserved Buffer
                         </span>
-                        <div className="text-2xl font-black text-amber-300">
+                        <div className="text-2xl font-black text-amber-800 dark:text-amber-300">
                             {capacityData.dvrReservedStreams} stream{capacityData.dvrReservedStreams === 1 ? "" : "s"}
                         </div>
                         <p className="text-[11px] text-muted-foreground">
@@ -725,7 +725,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                         <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                             Open Stream Lines
                         </span>
-                        <div className="text-2xl font-black text-emerald-400">
+                        <div className="text-2xl font-black text-emerald-700 dark:text-emerald-400">
                             {capacityData.freeStreamBuffer} line{capacityData.freeStreamBuffer === 1 ? "" : "s"}
                         </div>
                         <p className="text-[11px] text-muted-foreground">
@@ -739,11 +739,11 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                         </span>
                         <div className="text-2xl font-black">
                             {capacityData.isSaturated ? (
-                                <span className="text-rose-400">LOCKED (0 Free)</span>
+                                <span className="text-rose-700 dark:text-rose-400">LOCKED (0 Free)</span>
                             ) : capacityData.isNearLimit ? (
-                                <span className="text-amber-400">NEAR CAPACITY</span>
+                                <span className="text-amber-700 dark:text-amber-400">NEAR CAPACITY</span>
                             ) : (
-                                <span className="text-emerald-400">HEALTHY</span>
+                                <span className="text-emerald-700 dark:text-emerald-400">HEALTHY</span>
                             )}
                         </div>
                         <p className="text-[11px] text-muted-foreground">
@@ -757,27 +757,27 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
                 <TabsList className="bg-card/60 border border-border/50 p-1 rounded-2xl flex flex-wrap gap-1">
                     <TabsTrigger value="providers" className="text-xs font-bold gap-1.5 rounded-xl">
-                        <Key className="h-3.5 w-3.5 text-amber-400" />
+                        <Key className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
                         Providers & Vault ({providersList.length})
                     </TabsTrigger>
                     <TabsTrigger value="dispatcharr" className="text-xs font-bold gap-1.5 rounded-xl">
-                        <Radio className="h-3.5 w-3.5 text-teal-400" />
+                        <Radio className="h-3.5 w-3.5 text-teal-700 dark:text-teal-400" />
                         Dispatcharr Lineups
                     </TabsTrigger>
                     <TabsTrigger value="dvr" className="text-xs font-bold gap-1.5 rounded-xl">
-                        <Server className="h-3.5 w-3.5 text-sky-400" />
+                        <Server className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400" />
                         Plex & Jellyfin DVR
                     </TabsTrigger>
                     <TabsTrigger value="telemetry" className="text-xs font-bold gap-1.5 rounded-xl">
-                        <Activity className="h-3.5 w-3.5 text-orange-400" />
+                        <Activity className="h-3.5 w-3.5 text-orange-700 dark:text-orange-400" />
                         Live Streams ({activeSessions.length})
                     </TabsTrigger>
                     <TabsTrigger value="users" className="text-xs font-bold gap-1.5 rounded-xl">
-                        <Users className="h-3.5 w-3.5 text-blue-400" />
+                        <Users className="h-3.5 w-3.5 text-blue-700 dark:text-blue-400" />
                         User Access ({pendingApprovals.length > 0 ? `${pendingApprovals.length} pending` : usersList.length})
                     </TabsTrigger>
                     <TabsTrigger value="catalog" className="text-xs font-bold gap-1.5 rounded-xl">
-                        <ListPlus className="h-3.5 w-3.5 text-sky-400" />
+                        <ListPlus className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400" />
                         Channel Requests ({channelRequests.filter(r => r.status === "PENDING").length})
                     </TabsTrigger>
                 </TabsList>
@@ -810,10 +810,10 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                         <Badge
                                             className={`text-[10px] font-bold ${
                                                 p.status === "ONLINE"
-                                                    ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-300"
+                                                    ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-800 dark:text-emerald-300"
                                                     : p.status === "EXPIRED"
-                                                    ? "bg-rose-500/15 border-rose-500/30 text-rose-300"
-                                                    : "bg-amber-500/15 border-amber-500/30 text-amber-300"
+                                                    ? "bg-rose-500/15 border-rose-500/30 text-rose-800 dark:text-rose-300"
+                                                    : "bg-amber-500/15 border-amber-500/30 text-amber-800 dark:text-amber-300"
                                             }`}
                                         >
                                             {p.status}
@@ -826,7 +826,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                             <span className="text-[11px] font-bold text-muted-foreground">Credentials (AES-256-GCM)</span>
                                             <button
                                                 onClick={() => handleRevealCreds(p.id)}
-                                                className="text-[11px] text-amber-400 hover:text-amber-300 flex items-center gap-1 font-semibold"
+                                                className="text-[11px] text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 flex items-center gap-1 font-semibold"
                                             >
                                                 {isRevealed ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
                                                 {isRevealed ? "Hide" : "Reveal Decrypted"}
@@ -845,7 +845,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                                     <div className="flex items-center justify-between">
                                                         <span><span className="text-muted-foreground">User: </span>{creds.username}</span>
                                                         <button onClick={() => handleCopy(creds.username, `u-${p.id}`)} className="text-muted-foreground hover:text-foreground">
-                                                            {copiedKey === `u-${p.id}` ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                                                            {copiedKey === `u-${p.id}` ? <Check className="h-3 w-3 text-emerald-700 dark:text-emerald-400" /> : <Copy className="h-3 w-3" />}
                                                         </button>
                                                     </div>
                                                 )}
@@ -853,7 +853,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                                     <div className="flex items-center justify-between">
                                                         <span><span className="text-muted-foreground">Pass: </span>{creds.password}</span>
                                                         <button onClick={() => handleCopy(creds.password, `p-${p.id}`)} className="text-muted-foreground hover:text-foreground">
-                                                            {copiedKey === `p-${p.id}` ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                                                            {copiedKey === `p-${p.id}` ? <Check className="h-3 w-3 text-emerald-700 dark:text-emerald-400" /> : <Copy className="h-3 w-3" />}
                                                         </button>
                                                     </div>
                                                 )}
@@ -861,7 +861,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                                     <div className="flex items-center justify-between">
                                                         <span className="truncate max-w-[200px]"><span className="text-muted-foreground">M3U: </span>{creds.m3uUrl}</span>
                                                         <button onClick={() => handleCopy(creds.m3uUrl, `m-${p.id}`)} className="text-muted-foreground hover:text-foreground">
-                                                            {copiedKey === `m-${p.id}` ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                                                            {copiedKey === `m-${p.id}` ? <Check className="h-3 w-3 text-emerald-700 dark:text-emerald-400" /> : <Copy className="h-3 w-3" />}
                                                         </button>
                                                     </div>
                                                 )}
@@ -870,7 +870,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                             <div className="text-[11px] text-muted-foreground space-y-1">
                                                 <div>User: <span className="font-mono">{p.username || "••••••••"}</span></div>
                                                 <div>Password: <span className="font-mono">••••••••••••</span></div>
-                                                <div>Server: <span className="font-mono text-emerald-400/80">Encrypted in Vault</span></div>
+                                                <div>Server: <span className="font-mono text-emerald-700/80 dark:text-emerald-400/80">Encrypted in Vault</span></div>
                                             </div>
                                         )}
                                     </div>
@@ -884,7 +884,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                             disabled={isPending}
                                             className="h-8 text-[11px] gap-1.5"
                                         >
-                                            <Zap className="h-3 w-3 text-amber-400" />
+                                            <Zap className="h-3 w-3 text-amber-700 dark:text-amber-400" />
                                             Probe Ping {p.lastPingMs ? `(${p.lastPingMs}ms)` : ""}
                                         </Button>
 
@@ -892,7 +892,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                             size="sm"
                                             variant="ghost"
                                             onClick={() => handleDeleteProvider(p.id)}
-                                            className="h-8 text-[11px] text-rose-400 hover:text-rose-300 hover:bg-rose-500/10"
+                                            className="h-8 text-[11px] text-rose-700 dark:text-rose-400 hover:text-rose-800 dark:hover:text-rose-300 hover:bg-rose-500/10"
                                         >
                                             <Trash2 className="h-3.5 w-3.5" />
                                         </Button>
@@ -907,7 +907,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                 <TabsContent value="dispatcharr" className="space-y-6">
                     <div className="p-6 rounded-2xl border border-border/60 bg-card/60 space-y-4">
                         <div className="flex items-center gap-3">
-                            <div className="h-9 w-9 rounded-xl bg-teal-500/15 border border-teal-500/30 flex items-center justify-center text-teal-400">
+                            <div className="h-9 w-9 rounded-xl bg-teal-500/15 border border-teal-500/30 flex items-center justify-center text-teal-700 dark:text-teal-400">
                                 <Radio className="h-4 w-4" />
                             </div>
                             <div>
@@ -977,7 +977,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                     <div className="p-5 rounded-2xl border border-teal-500/30 bg-teal-500/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <div className="space-y-1">
                             <h4 className="font-bold text-sm text-foreground flex items-center gap-2">
-                                <Sparkles className="h-4 w-4 text-teal-400" />
+                                <Sparkles className="h-4 w-4 text-teal-700 dark:text-teal-400" />
                                 Lineup Deduplication & Multi-Source Stream Consolidation
                             </h4>
                             <p className="text-xs text-muted-foreground max-w-2xl leading-relaxed">
@@ -1010,7 +1010,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                                 {p.channelCount} channels
                                             </Badge>
                                         </span>
-                                        <Badge variant="outline" className="text-[10px] text-teal-300 border-teal-500/30">
+                                        <Badge variant="outline" className="text-[10px] text-teal-800 dark:text-teal-300 border-teal-500/30">
                                             Role: {p.minRoleRequired}
                                         </Badge>
                                     </div>
@@ -1019,15 +1019,15 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                     <div className="pt-2 border-t border-border/30 space-y-1.5 font-mono text-[10px]">
                                         <div className="flex items-center justify-between">
                                             <span className="text-muted-foreground">HDHomeRun Tuner:</span>
-                                            <button onClick={() => handleCopy(p.hdhrUrl, `hdhr-${p.id}`)} className="text-teal-400 hover:text-teal-300 flex items-center gap-1">
-                                                {copiedKey === `hdhr-${p.id}` ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                                            <button onClick={() => handleCopy(p.hdhrUrl, `hdhr-${p.id}`)} className="text-teal-700 dark:text-teal-400 hover:text-teal-800 dark:hover:text-teal-300 flex items-center gap-1">
+                                                {copiedKey === `hdhr-${p.id}` ? <Check className="h-3 w-3 text-emerald-700 dark:text-emerald-400" /> : <Copy className="h-3 w-3" />}
                                                 Copy Tuner URL
                                             </button>
                                         </div>
                                         <div className="flex items-center justify-between">
                                             <span className="text-muted-foreground">XMLTV EPG Feed:</span>
-                                            <button onClick={() => handleCopy(p.epgUrl, `epg-${p.id}`)} className="text-teal-400 hover:text-teal-300 flex items-center gap-1">
-                                                {copiedKey === `epg-${p.id}` ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                                            <button onClick={() => handleCopy(p.epgUrl, `epg-${p.id}`)} className="text-teal-700 dark:text-teal-400 hover:text-teal-800 dark:hover:text-teal-300 flex items-center gap-1">
+                                                {copiedKey === `epg-${p.id}` ? <Check className="h-3 w-3 text-emerald-700 dark:text-emerald-400" /> : <Copy className="h-3 w-3" />}
                                                 Copy EPG URL
                                             </button>
                                         </div>
@@ -1042,7 +1042,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                 <TabsContent value="dvr" className="space-y-6">
                     <div className="p-6 rounded-2xl border border-border/60 bg-card/60 space-y-4">
                         <div className="flex items-center gap-3">
-                            <div className="h-9 w-9 rounded-xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-400">
+                            <div className="h-9 w-9 rounded-xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-700 dark:text-sky-400">
                                 <Server className="h-4 w-4" />
                             </div>
                             <div>
@@ -1059,7 +1059,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                     <div>
                                         <div className="flex items-center gap-2">
                                             <span className="font-bold text-foreground text-sm">{node.name}</span>
-                                            <Badge variant="outline" className="text-[10px] text-sky-300 border-sky-500/30">
+                                            <Badge variant="outline" className="text-[10px] text-sky-800 dark:text-sky-300 border-sky-500/30">
                                                 {node.platform}
                                             </Badge>
                                         </div>
@@ -1069,7 +1069,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                     </div>
 
                                     <div className="flex items-center gap-2">
-                                        <span className="text-[11px] text-emerald-400 font-semibold flex items-center gap-1">
+                                        <span className="text-[11px] text-emerald-700 dark:text-emerald-400 font-semibold flex items-center gap-1">
                                             <CheckCircle2 className="h-3.5 w-3.5" /> Monitored
                                         </span>
                                     </div>
@@ -1096,7 +1096,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                                 <h4 className="font-bold text-foreground text-sm">{s.channelTitle}</h4>
                                                 <p className="text-[11px] text-muted-foreground">{s.programTitle || "Live Broadcast"}</p>
                                             </div>
-                                            <Badge variant="outline" className="text-[10px] text-emerald-300 border-emerald-500/30">
+                                            <Badge variant="outline" className="text-[10px] text-emerald-800 dark:text-emerald-300 border-emerald-500/30">
                                                 {s.platform || "Plex Live TV"}
                                             </Badge>
                                         </div>
@@ -1113,7 +1113,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                                 size="sm"
                                                 variant="ghost"
                                                 onClick={() => handleKillSession(s.id)}
-                                                className="h-7 text-[11px] text-rose-400 hover:text-rose-300 hover:bg-rose-500/10"
+                                                className="h-7 text-[11px] text-rose-700 dark:text-rose-400 hover:text-rose-800 dark:hover:text-rose-300 hover:bg-rose-500/10"
                                             >
                                                 Terminate Stream
                                             </Button>
@@ -1135,13 +1135,13 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                     <div className="p-5 rounded-2xl border border-sky-500/30 bg-gradient-to-r from-sky-500/10 via-sky-500/5 to-transparent space-y-4">
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
                             <div className="flex items-center gap-3">
-                                <div className="h-10 w-10 rounded-xl bg-sky-500/20 border border-sky-500/30 flex items-center justify-center text-sky-300 shrink-0">
+                                <div className="h-10 w-10 rounded-xl bg-sky-500/20 border border-sky-500/30 flex items-center justify-center text-sky-800 dark:text-sky-300 shrink-0">
                                     <Server className="h-5 w-5" />
                                 </div>
                                 <div>
                                     <h3 className="font-bold text-sm text-foreground flex items-center gap-2">
                                         Plex Home & Jellyfin Live TV Governance
-                                        <Badge variant="outline" className="text-[10px] bg-sky-500/10 text-sky-300 border-sky-500/30">
+                                        <Badge variant="outline" className="text-[10px] bg-sky-500/10 text-sky-800 dark:text-sky-300 border-sky-500/30">
                                             15-Slot Plex Cap
                                         </Badge>
                                     </h3>
@@ -1156,7 +1156,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                     size="sm"
                                     variant="outline"
                                     onClick={() => setShowPlexHomeGuide(true)}
-                                    className="border-amber-500/40 text-amber-300 hover:bg-amber-500/10 text-xs font-bold gap-1.5 rounded-xl"
+                                    className="border-amber-500/40 text-amber-800 dark:text-amber-300 hover:bg-amber-500/10 text-xs font-bold gap-1.5 rounded-xl"
                                 >
                                     <Tv className="h-3.5 w-3.5" />
                                     Plex Home Guide
@@ -1167,7 +1167,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                     onClick={handleCopyPlexHomeGuide}
                                     className="border-border/50 text-muted-foreground hover:text-foreground text-xs font-bold gap-1.5 rounded-xl"
                                 >
-                                    {copiedGuide ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                                    {copiedGuide ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
                                     {copiedGuide ? "✓ Copied" : "Copy for User"}
                                 </Button>
                                 <Button
@@ -1175,7 +1175,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                     variant="outline"
                                     onClick={handleRunEcosystemAudit}
                                     disabled={isPending}
-                                    className="border-sky-500/30 text-sky-300 hover:bg-sky-500/10 text-xs font-bold gap-2 rounded-xl"
+                                    className="border-sky-500/30 text-sky-800 dark:text-sky-300 hover:bg-sky-500/10 text-xs font-bold gap-2 rounded-xl"
                                 >
                                     <RefreshCw className={`h-3.5 w-3.5 ${isPending ? "animate-spin" : ""}`} />
                                     Audit Ecosystem
@@ -1203,11 +1203,11 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                 </div>
                                 <div className="text-xl font-black mt-0.5">
                                     {(auditReport?.plexHomeMissingLiveTvCount ?? 0) > 0 ? (
-                                        <span className="text-rose-400">
+                                        <span className="text-rose-700 dark:text-rose-400">
                                             {auditReport.plexHomeMissingLiveTvCount} Missing
                                         </span>
                                     ) : (
-                                        <span className="text-emerald-400">0 Anomalies</span>
+                                        <span className="text-emerald-700 dark:text-emerald-400">0 Anomalies</span>
                                     )}
                                 </div>
                                 <p className="text-[10px] text-muted-foreground mt-0.5">
@@ -1219,7 +1219,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                 <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                                     Inactivity Candidates
                                 </div>
-                                <div className="text-xl font-black text-amber-300 mt-0.5">
+                                <div className="text-xl font-black text-amber-800 dark:text-amber-300 mt-0.5">
                                     {auditReport?.plexHomeInactiveCandidateCount ?? usersList.filter(u => u.isInactiveCandidate).length} Inactive
                                 </div>
                                 <p className="text-[10px] text-muted-foreground mt-0.5">
@@ -1231,7 +1231,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                 <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                                     Jellyfin Live TV
                                 </div>
-                                <div className="text-xl font-black text-sky-300 mt-0.5 tabular-nums">
+                                <div className="text-xl font-black text-sky-800 dark:text-sky-300 mt-0.5 tabular-nums">
                                     {auditReport?.jellyfinLiveTvUsersCount ?? usersList.filter(u => u.hasJellyfinLiveTvAccess).length} Users
                                 </div>
                                 <p className="text-[10px] text-muted-foreground mt-0.5">
@@ -1243,13 +1243,13 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                         {/* Plex Home Capacity Alert Banner */}
                         {(auditReport?.plexHomeAvailableSlots ?? (14 - usersList.filter(u => u.isPlexHomeMember && u.role !== "ADMIN").length)) <= 0 && (
                             <div className="p-4 rounded-xl border border-sky-500/30 bg-sky-500/10 flex items-start gap-3 text-xs">
-                                <div className="p-2 rounded-lg bg-sky-500/20 text-sky-300 shrink-0">
+                                <div className="p-2 rounded-lg bg-sky-500/20 text-sky-800 dark:text-sky-300 shrink-0">
                                     <Layers className="h-4 w-4" />
                                 </div>
                                 <div>
                                     <div className="flex items-center gap-2">
-                                        <span className="font-bold text-sky-200">Plex Home is at Capacity (14/14 Member Slots Occupied)</span>
-                                        <Badge className="bg-sky-500/20 text-sky-300 border-sky-500/40 text-[10px] font-bold">
+                                        <span className="font-bold text-sky-900 dark:text-sky-200">Plex Home is at Capacity (14/14 Member Slots Occupied)</span>
+                                        <Badge className="bg-sky-500/20 text-sky-800 dark:text-sky-300 border-sky-500/40 text-[10px] font-bold">
                                             Jellyfin Unlimited Mode
                                         </Badge>
                                     </div>
@@ -1262,9 +1262,9 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
 
                         {/* Anomaly Callout Banner (If Plex Home members lack Live TV) */}
                         {auditReport && (auditReport.plexHomeMissingLiveTvCount ?? 0) > 0 && (
-                            <div className="p-3.5 rounded-xl border border-rose-500/40 bg-rose-500/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-rose-200">
+                            <div className="p-3.5 rounded-xl border border-rose-500/40 bg-rose-500/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-rose-900 dark:text-rose-200">
                                 <div className="flex items-center gap-2.5">
-                                    <AlertTriangle className="h-4 w-4 text-rose-400 shrink-0" />
+                                    <AlertTriangle className="h-4 w-4 text-rose-700 dark:text-rose-400 shrink-0" />
                                     <span>
                                         <b>{auditReport.plexHomeMissingLiveTvCount} member(s) in Plex Home</b> are missing Live TV access!
                                     </span>
@@ -1285,7 +1285,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
 
                     {pendingApprovals.length > 0 && (
                         <div className="p-5 rounded-2xl border border-amber-500/30 bg-amber-500/10 space-y-3">
-                            <h3 className="font-bold text-sm text-amber-200 flex items-center gap-2">
+                            <h3 className="font-bold text-sm text-amber-900 dark:text-amber-200 flex items-center gap-2">
                                 <Clock className="h-4 w-4" />
                                 Pending Live TV Access Requests ({pendingApprovals.length})
                             </h3>
@@ -1317,7 +1317,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                                 size="sm"
                                                 variant="outline"
                                                 onClick={() => handleResolveApproval(app.id, app.userId, false)}
-                                                className="h-8 text-xs text-rose-400 hover:text-rose-300"
+                                                className="h-8 text-xs text-rose-700 dark:text-rose-400 hover:text-rose-800 dark:hover:text-rose-300"
                                             >
                                                 Reject
                                             </Button>
@@ -1367,30 +1367,30 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                                     {u.role}
                                                 </Badge>
                                                 {isOwner && (
-                                                    <Badge className="text-[10px] bg-amber-500/20 text-amber-300 border-amber-500/30">
+                                                    <Badge className="text-[10px] bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/30">
                                                         Plex Owner
                                                     </Badge>
                                                 )}
                                                 {u.isPlexHomeMember && !isOwner && (
-                                                    <Badge className="text-[10px] bg-sky-500/20 text-sky-300 border-sky-500/30">
+                                                    <Badge className="text-[10px] bg-sky-500/20 text-sky-800 dark:text-sky-300 border-sky-500/30">
                                                         Plex Home
                                                     </Badge>
                                                 )}
                                                 {u.isPlexHomeMember && !isOwner && (
                                                     u.hasPlexLiveTvAccess && u.hasPlexDvrAccess ? (
-                                                        <Badge className="text-[10px] bg-emerald-500/20 text-emerald-300 border-emerald-500/30 font-bold" title="Plex: Allow Live TV and DVR access">
+                                                        <Badge className="text-[10px] bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border-emerald-500/30 font-bold" title="Plex: Allow Live TV and DVR access">
                                                             Live TV + DVR
                                                         </Badge>
                                                     ) : u.hasPlexLiveTvAccess ? (
-                                                        <Badge className="text-[10px] bg-sky-500/20 text-sky-300 border-sky-500/30 font-bold" title="Plex: Allow Live TV only">
+                                                        <Badge className="text-[10px] bg-sky-500/20 text-sky-800 dark:text-sky-300 border-sky-500/30 font-bold" title="Plex: Allow Live TV only">
                                                             Live TV Only
                                                         </Badge>
                                                     ) : u.hasPlexDvrAccess ? (
-                                                        <Badge className="text-[10px] bg-amber-500/20 text-amber-300 border-amber-500/30 font-bold">
+                                                        <Badge className="text-[10px] bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/30 font-bold">
                                                             DVR Only
                                                         </Badge>
                                                     ) : (
-                                                        <Badge className="text-[10px] bg-zinc-500/20 text-zinc-400 border-zinc-500/30 font-medium" title="Plex: No Live TV and DVR access">
+                                                        <Badge className="text-[10px] bg-zinc-500/20 text-slate-600 dark:text-zinc-400 border-zinc-500/30 font-medium" title="Plex: No Live TV and DVR access">
                                                             No Live TV / DVR
                                                         </Badge>
                                                     )
@@ -1416,7 +1416,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                                     </span>
                                                 )}
                                                 {u.isInactiveCandidate && (
-                                                    <span className="text-amber-400 font-semibold">
+                                                    <span className="text-amber-700 dark:text-amber-400 font-semibold">
                                                         • Slot Rotation Candidate (Protected)
                                                     </span>
                                                 )}
@@ -1465,7 +1465,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                                                 variant="ghost"
                                                                 onClick={() => handleRemovePlexHome(u.id)}
                                                                 disabled={isPending}
-                                                                className="h-7 text-[11px] text-muted-foreground hover:text-rose-400 hover:bg-rose-500/10 px-2 rounded-lg"
+                                                                className="h-7 text-[11px] text-muted-foreground hover:text-rose-700 dark:hover:text-rose-400 hover:bg-rose-500/10 px-2 rounded-lg"
                                                                 title="Demote to regular Plex Friend (frees 1 Plex Home slot)"
                                                             >
                                                                 Free Slot
@@ -1477,7 +1477,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                                             variant="outline"
                                                             onClick={() => handleInvitePlexHome(u.id)}
                                                             disabled={isPending}
-                                                            className="h-7 text-[11px] border-sky-500/30 text-sky-300 hover:bg-sky-500/10 font-bold rounded-xl"
+                                                            className="h-7 text-[11px] border-sky-500/30 text-sky-800 dark:text-sky-300 hover:bg-sky-500/10 font-bold rounded-xl"
                                                         >
                                                             + Plex Home
                                                         </Button>
@@ -1541,26 +1541,26 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                                             {r.genre || "TV"}
                                                         </Badge>
                                                         {hasAiPrompt && (
-                                                            <Badge className="text-[10px] bg-teal-500/15 text-teal-300 border-teal-500/30 gap-1">
+                                                            <Badge className="text-[10px] bg-teal-500/15 text-teal-800 dark:text-teal-300 border-teal-500/30 gap-1">
                                                                 <Sparkles className="h-3 w-3" /> AI Prompt Ready
                                                             </Badge>
                                                         )}
                                                         {isProfileMoveRequest && (
-                                                            <Badge className="text-[10px] bg-amber-500/15 text-amber-300 border-amber-500/30 gap-1">
+                                                            <Badge className="text-[10px] bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30 gap-1">
                                                                 <ArrowRightLeft className="h-3 w-3" /> Profile Move
                                                             </Badge>
                                                         )}
                                                         {isProfileAddRequest && (
-                                                            <Badge className="text-[10px] bg-sky-500/15 text-sky-300 border-sky-500/30 gap-1">
+                                                            <Badge className="text-[10px] bg-sky-500/15 text-sky-800 dark:text-sky-300 border-sky-500/30 gap-1">
                                                                 <Layers className="h-3 w-3" /> Profile Addition
                                                             </Badge>
                                                         )}
                                                         <Badge
                                                             className={`text-[10px] ${
                                                                 r.status === "ACTIVATED"
-                                                                    ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
+                                                                    ? "bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border-emerald-500/30"
                                                                     : r.status === "PENDING"
-                                                                    ? "bg-amber-500/15 text-amber-300 border-amber-500/30"
+                                                                    ? "bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30"
                                                                     : "bg-muted text-muted-foreground"
                                                             }`}
                                                         >
@@ -1580,7 +1580,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                                                 variant="outline"
                                                                 onClick={() => handleScanMarketStreams(r.id, r.callsign || r.channelName || r.adminNotes)}
                                                                 disabled={isPending}
-                                                                className="h-8 text-xs border-teal-500/40 text-teal-300 hover:bg-teal-500/10 font-bold gap-1 rounded-xl"
+                                                                className="h-8 text-xs border-teal-500/40 text-teal-800 dark:text-teal-300 hover:bg-teal-500/10 font-bold gap-1 rounded-xl"
                                                             >
                                                                 <Sparkles className="h-3.5 w-3.5" />
                                                                 AI Auto-Scan Dispatcharr
@@ -1621,7 +1621,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                                             size="sm"
                                                             variant="ghost"
                                                             onClick={() => handleResolveChannelRequest(r.id, "REJECTED")}
-                                                            className="h-8 text-xs text-rose-400 rounded-xl"
+                                                            className="h-8 text-xs text-rose-700 dark:text-rose-400 rounded-xl"
                                                         >
                                                             Reject
                                                         </Button>
@@ -1632,7 +1632,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                             {r.adminNotes && (
                                                 <div className="pt-2.5 border-t border-border/30 space-y-1.5">
                                                     <div className="flex items-center justify-between">
-                                                        <span className="text-[11px] font-bold text-teal-300 flex items-center gap-1.5">
+                                                        <span className="text-[11px] font-bold text-teal-800 dark:text-teal-300 flex items-center gap-1.5">
                                                             <Sparkles className="h-3 w-3" />
                                                             AI Dispatcharr Integration Prompt:
                                                         </span>
@@ -1644,12 +1644,12 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                                                 setCopiedKey(`prompt-${r.id}`);
                                                                 setTimeout(() => setCopiedKey(null), 2000);
                                                             }}
-                                                            className="h-6 text-[10px] text-teal-300 hover:text-teal-200 px-2"
+                                                            className="h-6 text-[10px] text-teal-800 dark:text-teal-300 hover:text-teal-900 dark:hover:text-teal-200 px-2"
                                                         >
                                                             {copiedKey === `prompt-${r.id}` ? "✓ Copied!" : "Copy AI Prompt"}
                                                         </Button>
                                                     </div>
-                                                    <pre className="p-2.5 rounded-lg bg-slate-950/80 border border-border/60 text-[10px] font-mono text-teal-200/90 whitespace-pre-wrap leading-relaxed max-h-40 overflow-y-auto select-all">
+                                                    <pre className="p-2.5 rounded-lg bg-muted/80 dark:bg-slate-950/80 border border-border/60 text-[10px] font-mono text-teal-900/90 dark:text-teal-200/90 whitespace-pre-wrap leading-relaxed max-h-40 overflow-y-auto select-all">
                                                         {r.adminNotes}
                                                     </pre>
                                                 </div>
@@ -1673,7 +1673,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                     <div className="w-full max-w-lg rounded-2xl border border-border bg-card p-6 shadow-2xl space-y-4">
                         <div className="flex items-center justify-between">
                             <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
-                                <Key className="h-5 w-5 text-amber-400" />
+                                <Key className="h-5 w-5 text-amber-700 dark:text-amber-400" />
                                 Add IPTV Provider to Credential Vault
                             </h3>
                             <button onClick={() => setIsProviderModalOpen(false)} className="text-muted-foreground hover:text-foreground text-sm font-bold">

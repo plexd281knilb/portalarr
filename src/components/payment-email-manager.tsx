@@ -661,7 +661,7 @@ export default function PaymentEmailManager() {
     return (
         <div className="space-y-6 animate-in fade-in duration-300 w-full min-w-0">
             {/* --- TOP CONTROL PANEL & SCANNER STATUS --- */}
-            <Card className="border-border/50 bg-[#121218]/90 backdrop-blur-md shadow-md relative overflow-hidden">
+            <Card className="border-border/50 bg-card/95 dark:bg-[#121218]/90 backdrop-blur-md shadow-md relative overflow-hidden">
                 <CardHeader className="pb-4">
                     <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 min-w-0">
                         <div className="space-y-1 min-w-0 flex-1">
@@ -672,7 +672,7 @@ export default function PaymentEmailManager() {
                                 <CardTitle className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
                                     Automated Payment Email Scraper & Verification
                                 </CardTitle>
-                                <Badge variant="outline" className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 text-xs font-semibold shrink-0">
+                                <Badge variant="outline" className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 text-xs font-semibold shrink-0">
                                     {sources.filter(s => s.enabled).length} Active Sources
                                 </Badge>
                             </div>
@@ -716,7 +716,7 @@ export default function PaymentEmailManager() {
 
                 <CardContent className="space-y-4 pt-0">
                     {/* Telemetry Summary & Schedule Controls */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-3.5 rounded-xl bg-black/40 border border-border/40 text-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-3.5 rounded-xl bg-muted/60 dark:bg-black/40 border border-border/40 text-xs">
                         <div className="space-y-1">
                             <span className="text-muted-foreground uppercase font-bold text-[10px] tracking-wider block">Auto-Scan Schedule</span>
                             <div className="flex items-center gap-2.5">
@@ -777,7 +777,7 @@ export default function PaymentEmailManager() {
                             <span className="text-muted-foreground uppercase font-bold text-[10px] tracking-wider block">Last Telemetry</span>
                             <p className="text-muted-foreground text-xs truncate">
                                 {config.paymentLastScanResult ? (
-                                    <span className="text-emerald-400 font-medium">
+                                    <span className="text-emerald-700 dark:text-emerald-400 font-medium">
                                         Scanned {config.paymentLastScanResult.scannedMessages || 0} emails • Found {config.paymentLastScanResult.newPaymentsFound || 0} new
                                     </span>
                                 ) : "Ready"}
@@ -789,13 +789,13 @@ export default function PaymentEmailManager() {
                     {scanResult && (
                         <div className={`p-3.5 rounded-xl border text-xs animate-in fade-in duration-200 flex items-start gap-2.5 ${
                             scanResult.errors && scanResult.errors.length > 0 
-                                ? "bg-amber-950/40 border-amber-500/40 text-amber-300"
-                                : "bg-emerald-950/40 border-emerald-500/40 text-emerald-300"
+                                ? "bg-amber-500/10 dark:bg-amber-950/40 border-amber-500/40 text-amber-800 dark:text-amber-300"
+                                : "bg-emerald-500/10 dark:bg-emerald-950/40 border-emerald-500/40 text-emerald-800 dark:text-emerald-300"
                         }`}>
                             {scanResult.errors && scanResult.errors.length > 0 ? (
-                                <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400 mt-0.5" />
+                                <AlertTriangle className="h-4 w-4 shrink-0 text-amber-700 dark:text-amber-400 mt-0.5" />
                             ) : (
-                                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400 mt-0.5" />
+                                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-400 mt-0.5" />
                             )}
                             <div className="space-y-1 flex-1">
                                 <p className="font-bold">
@@ -803,12 +803,12 @@ export default function PaymentEmailManager() {
                                 </p>
                                 <p className="text-[11px] opacity-90">
                                     Found <strong className="text-foreground">{scanResult.newPaymentsFound}</strong> new payments (
-                                    <span className="text-emerald-400 font-bold">{scanResult.autoAttributed} Auto-Attributed</span>,{" "}
-                                    <span className="text-amber-400 font-bold">{scanResult.unmatched} Unmatched</span>
+                                    <span className="text-emerald-700 dark:text-emerald-400 font-bold">{scanResult.autoAttributed} Auto-Attributed</span>,{" "}
+                                    <span className="text-amber-700 dark:text-amber-400 font-bold">{scanResult.unmatched} Unmatched</span>
                                     {scanResult.duplicatePaymentsSkipped ? `, ${scanResult.duplicatePaymentsSkipped} already processed in database` : ""}).
                                 </p>
                                 {scanResult.errors && scanResult.errors.length > 0 && (
-                                    <ul className="list-disc pl-4 space-y-0.5 text-[10px] text-red-300">
+                                    <ul className="list-disc pl-4 space-y-0.5 text-[10px] text-red-800 dark:text-red-300">
                                         {scanResult.errors.map((err: string, i: number) => (
                                             <li key={i}>{err}</li>
                                         ))}
@@ -821,7 +821,7 @@ export default function PaymentEmailManager() {
             </Card>
 
             {/* --- SECTION 1: CONFIGURED EMAIL SOURCES --- */}
-            <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm">
+            <Card className="border-border/50 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md shadow-sm">
                 <CardHeader className="pb-3 border-b border-border/40">
                     <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 min-w-0">
                         <div className="min-w-0 flex-1">
@@ -838,7 +838,7 @@ export default function PaymentEmailManager() {
                                 size="sm" 
                                 variant="outline" 
                                 onClick={() => handleOpenAddModal("gmail")}
-                                className="h-8 text-xs bg-red-500/10 hover:bg-red-500/20 text-red-300 border-red-500/30 gap-1.5 shrink-0"
+                                className="h-8 text-xs bg-red-500/10 hover:bg-red-500/20 text-red-800 dark:text-red-300 border-red-500/30 gap-1.5 shrink-0"
                             >
                                 <Plus className="h-3.5 w-3.5" /> Add Gmail
                             </Button>
@@ -846,7 +846,7 @@ export default function PaymentEmailManager() {
                                 size="sm" 
                                 variant="outline" 
                                 onClick={() => handleOpenAddModal("outlook")}
-                                className="h-8 text-xs bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border-blue-500/30 gap-1.5 shrink-0"
+                                className="h-8 text-xs bg-blue-500/10 hover:bg-blue-500/20 text-blue-800 dark:text-blue-300 border-blue-500/30 gap-1.5 shrink-0"
                             >
                                 <Plus className="h-3.5 w-3.5" /> Add Outlook
                             </Button>
@@ -854,7 +854,7 @@ export default function PaymentEmailManager() {
                                 size="sm" 
                                 variant="outline" 
                                 onClick={() => handleOpenAddModal("custom")}
-                                className="h-8 text-xs border-border/60 hover:bg-white/10 gap-1.5 shrink-0"
+                                className="h-8 text-xs border-border/60 hover:bg-accent dark:hover:bg-white/10 gap-1.5 shrink-0"
                             >
                                 <Plus className="h-3.5 w-3.5" /> Custom IMAP
                             </Button>
@@ -894,7 +894,7 @@ export default function PaymentEmailManager() {
                                             <div className="flex items-center gap-2">
                                                 <h4 className="font-bold text-sm text-foreground truncate">{src.name}</h4>
                                                 {src.enabled ? (
-                                                    <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 text-[10px] font-semibold">
+                                                    <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 text-[10px] font-semibold">
                                                         Active
                                                     </Badge>
                                                 ) : (
@@ -911,7 +911,7 @@ export default function PaymentEmailManager() {
                                                 variant="ghost" 
                                                 size="sm" 
                                                 onClick={() => handleOpenEditModal(src)}
-                                                className="h-7 w-7 p-0 hover:bg-white/10 text-muted-foreground hover:text-foreground"
+                                                className="h-7 w-7 p-0 hover:bg-accent dark:hover:bg-white/10 text-muted-foreground hover:text-foreground"
                                                 title="Edit email source"
                                             >
                                                 <Edit2 className="h-3.5 w-3.5" />
@@ -920,7 +920,7 @@ export default function PaymentEmailManager() {
                                                 variant="ghost" 
                                                 size="sm" 
                                                 onClick={() => handleDeleteSource(src.id)}
-                                                className="h-7 w-7 p-0 hover:bg-red-500/10 text-red-400 hover:text-red-300"
+                                                className="h-7 w-7 p-0 hover:bg-red-500/10 text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
                                                 title="Delete email source"
                                             >
                                                 <Trash2 className="h-3.5 w-3.5" />
@@ -942,9 +942,9 @@ export default function PaymentEmailManager() {
                                     {src.lastStatus && (
                                         <div className="text-[10px] text-muted-foreground flex items-center gap-1.5 truncate">
                                             {src.lastStatus.includes("Error") ? (
-                                                <XCircle className="h-3 w-3 text-red-400 shrink-0" />
+                                                <XCircle className="h-3 w-3 text-red-700 dark:text-red-400 shrink-0" />
                                             ) : (
-                                                <CheckCircle2 className="h-3 w-3 text-emerald-400 shrink-0" />
+                                                <CheckCircle2 className="h-3 w-3 text-emerald-700 dark:text-emerald-400 shrink-0" />
                                             )}
                                             <span className="truncate">{src.lastStatus}</span>
                                         </div>
@@ -972,12 +972,12 @@ export default function PaymentEmailManager() {
             </Card>
 
             {/* --- SECTION 2: SCANNED PAYMENT TRANSACTIONS & ATTRIBUTION --- */}
-            <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm">
+            <Card className="border-border/50 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md shadow-sm">
                 <CardHeader className="pb-3 border-b border-border/40 space-y-3">
                     <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 min-w-0">
                         <div className="space-y-0.5 min-w-0">
                             <CardTitle className="text-lg font-bold flex items-center gap-2">
-                                <DollarSign className="h-5 w-5 text-emerald-400 shrink-0" /> <span className="truncate">Payment Transactions Stream ({transactions.length})</span>
+                                <DollarSign className="h-5 w-5 text-emerald-700 dark:text-emerald-400 shrink-0" /> <span className="truncate">Payment Transactions Stream ({transactions.length})</span>
                             </CardTitle>
                             <CardDescription className="text-xs">
                                 Inbound payments detected from Venmo, PayPal, Zelle, and Cash App notification emails.
@@ -998,7 +998,7 @@ export default function PaymentEmailManager() {
                                 variant="outline" 
                                 onClick={handleReprocessPayments}
                                 disabled={reprocessing || transactions.length === 0}
-                                className="h-8 text-xs bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border-emerald-500/30 gap-1.5 font-semibold flex-1 sm:flex-initial"
+                                className="h-8 text-xs bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border-emerald-500/30 gap-1.5 font-semibold flex-1 sm:flex-initial"
                                 title="Auto-match unmatched payments to members and re-align installment dates"
                             >
                                 <RefreshCw className={`h-3.5 w-3.5 ${reprocessing ? "animate-spin" : ""}`} /> 
@@ -1009,7 +1009,7 @@ export default function PaymentEmailManager() {
                                     size="sm" 
                                     variant="outline" 
                                     onClick={handlePurgeUnmatched}
-                                    className="h-8 text-xs bg-red-500/10 hover:bg-red-500/20 text-red-300 border-red-500/30 gap-1.5 flex-1 sm:flex-initial"
+                                    className="h-8 text-xs bg-red-500/10 hover:bg-red-500/20 text-red-800 dark:text-red-300 border-red-500/30 gap-1.5 flex-1 sm:flex-initial"
                                     title="Purge all unmatched transactions"
                                 >
                                     <Trash2 className="h-3.5 w-3.5" /> <span>Purge Unmatched</span>
@@ -1030,7 +1030,7 @@ export default function PaymentEmailManager() {
                     </div>
 
                     {reprocessMsg && (
-                        <div className="p-2.5 bg-emerald-500/15 border border-emerald-500/30 rounded-lg text-xs text-emerald-400 font-medium flex items-center gap-2">
+                        <div className="p-2.5 bg-emerald-500/15 border border-emerald-500/30 rounded-lg text-xs text-emerald-700 dark:text-emerald-400 font-medium flex items-center gap-2">
                             <CheckCircle2 className="h-4 w-4 shrink-0" />
                             <span>{reprocessMsg}</span>
                         </div>
@@ -1077,7 +1077,7 @@ export default function PaymentEmailManager() {
                                             variant="outline"
                                             onClick={handleBulkUnmatch}
                                             disabled={bulkActionLoading}
-                                            className="h-7 text-xs bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30 font-semibold gap-1.5"
+                                            className="h-7 text-xs bg-amber-500/10 hover:bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/30 font-semibold gap-1.5"
                                             title="Unlink selected payments from members"
                                         >
                                             <Unlink className={`h-3.5 w-3.5 ${bulkActionLoading ? "animate-spin" : ""}`} /> Unmatch Selected
@@ -1088,7 +1088,7 @@ export default function PaymentEmailManager() {
                                         variant="outline"
                                         onClick={handleBulkDelete}
                                         disabled={bulkActionLoading}
-                                        className="h-7 text-xs bg-red-500/10 hover:bg-red-500/20 text-red-300 border-red-500/30 font-semibold gap-1.5"
+                                        className="h-7 text-xs bg-red-500/10 hover:bg-red-500/20 text-red-800 dark:text-red-300 border-red-500/30 font-semibold gap-1.5"
                                         title="Delete selected payment records"
                                     >
                                         <Trash2 className="h-3.5 w-3.5" /> Delete Selected
@@ -1118,7 +1118,7 @@ export default function PaymentEmailManager() {
                                 <div 
                                     key={tx.id} 
                                     className={`p-4 sm:p-5 flex flex-col xl:flex-row xl:items-center justify-between gap-4 transition-colors ${
-                                        selectedTxIds.includes(tx.id) ? "bg-primary/5 hover:bg-primary/10" : "hover:bg-white/[0.02]"
+                                        selectedTxIds.includes(tx.id) ? "bg-primary/5 hover:bg-primary/10" : "hover:bg-accent dark:hover:bg-white/[0.02]"
                                     }`}
                                 >
                                     <div className="flex items-start gap-3 sm:gap-3.5 min-w-0 flex-1">
@@ -1129,7 +1129,7 @@ export default function PaymentEmailManager() {
                                             className={`p-1.5 rounded-lg border transition-all shrink-0 cursor-pointer mt-0.5 ${
                                                 selectedTxIds.includes(tx.id)
                                                     ? "bg-primary text-primary-foreground border-primary"
-                                                    : "bg-background/60 hover:bg-white/10 border-border/60 text-muted-foreground"
+                                                    : "bg-background/60 hover:bg-accent dark:hover:bg-white/10 border-border/60 text-muted-foreground"
                                             }`}
                                             title="Select transaction"
                                         >
@@ -1186,11 +1186,11 @@ export default function PaymentEmailManager() {
                                             <>
                                                 <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs space-y-0.5 sm:text-right flex-1 sm:flex-initial min-w-0">
                                                     <div className="flex items-center gap-1.5 sm:justify-end">
-                                                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-                                                        <span className="font-bold text-emerald-400 truncate max-w-[140px]">
+                                                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400 shrink-0" />
+                                                        <span className="font-bold text-emerald-700 dark:text-emerald-400 truncate max-w-[140px]">
                                                             {tx.matchedUser.username}
                                                         </span>
-                                                        <Badge className="bg-emerald-500/20 text-emerald-300 border-0 text-[9px]">
+                                                        <Badge className="bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border-0 text-[9px]">
                                                             {tx.status}
                                                         </Badge>
                                                     </div>
@@ -1205,7 +1205,7 @@ export default function PaymentEmailManager() {
                                                         variant="outline" 
                                                         onClick={() => handleUnmatch(tx)}
                                                         disabled={unmatchingTxId === tx.id}
-                                                        className="h-8 text-xs bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30 gap-1 font-medium"
+                                                        className="h-8 text-xs bg-amber-500/10 hover:bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/30 gap-1 font-medium"
                                                         title="Unmatch payment from member"
                                                     >
                                                         <Unlink className={`h-3.5 w-3.5 ${unmatchingTxId === tx.id ? "animate-spin" : ""}`} /> Unmatch
@@ -1214,7 +1214,7 @@ export default function PaymentEmailManager() {
                                                         size="sm" 
                                                         variant="outline" 
                                                         onClick={() => handleOpenAssignModal(tx)}
-                                                        className="h-8 text-xs border-border/60 hover:bg-white/10 gap-1"
+                                                        className="h-8 text-xs border-border/60 hover:bg-accent dark:hover:bg-white/10 gap-1"
                                                         title="Reassign to a different member"
                                                     >
                                                         <User className="h-3.5 w-3.5" /> Reassign
@@ -1223,7 +1223,7 @@ export default function PaymentEmailManager() {
                                             </>
                                         ) : (
                                             <div className="flex items-center gap-2">
-                                                <Badge variant="outline" className="bg-amber-500/15 text-amber-400 border-amber-500/30 text-xs py-1">
+                                                <Badge variant="outline" className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30 text-xs py-1">
                                                     ⚠️ Unmatched
                                                 </Badge>
                                                 <Button 
@@ -1242,7 +1242,7 @@ export default function PaymentEmailManager() {
                                                 size="sm" 
                                                 variant="outline" 
                                                 onClick={() => handleOpenSplitModal(tx)}
-                                                className="h-8 text-xs border-border/60 hover:bg-white/10 text-muted-foreground hover:text-foreground gap-1"
+                                                className="h-8 text-xs border-border/60 hover:bg-accent dark:hover:bg-white/10 text-muted-foreground hover:text-foreground gap-1"
                                                 title="Split payment into multiple parts"
                                             >
                                                 <Scissors className="h-3.5 w-3.5" /> Split
@@ -1251,7 +1251,7 @@ export default function PaymentEmailManager() {
                                                 variant="ghost" 
                                                 size="sm" 
                                                 onClick={() => handleDeleteTransaction(tx.id)}
-                                                className="h-8 w-8 p-0 hover:bg-red-500/10 text-muted-foreground hover:text-red-400 shrink-0"
+                                                className="h-8 w-8 p-0 hover:bg-red-500/10 text-muted-foreground hover:text-red-700 dark:hover:text-red-400 shrink-0"
                                                 title="Delete transaction record"
                                             >
                                                 <Trash2 className="h-4 w-4" />
@@ -1268,7 +1268,7 @@ export default function PaymentEmailManager() {
             {/* --- ADD / EDIT EMAIL SOURCE MODAL --- */}
             {sourceModalOpen && (
                 <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-                    <Card className="w-full max-w-lg border-border/50 shadow-2xl relative bg-[#121218]/95 backdrop-blur-md">
+                    <Card className="w-full max-w-lg border-border/50 shadow-2xl relative bg-card/95 dark:bg-[#121218]/95 backdrop-blur-md">
                         <CardHeader className="pb-4 border-b border-border/40">
                             <CardTitle className="text-lg font-bold flex items-center gap-2 text-primary">
                                 <Mail className="h-5 w-5 text-primary" />
@@ -1282,13 +1282,13 @@ export default function PaymentEmailManager() {
                         <form onSubmit={handleSaveSource}>
                             <CardContent className="space-y-4 pt-4">
                                 {sourceMsg && (
-                                    <div className="p-3 bg-emerald-500/15 border border-emerald-500/35 rounded-lg text-xs text-emerald-400 font-medium flex items-center gap-2">
+                                    <div className="p-3 bg-emerald-500/15 border border-emerald-500/35 rounded-lg text-xs text-emerald-700 dark:text-emerald-400 font-medium flex items-center gap-2">
                                         <CheckCircle2 className="h-4 w-4 shrink-0" />
                                         <span>{sourceMsg}</span>
                                     </div>
                                 )}
                                 {sourceErr && (
-                                    <div className="p-3 bg-red-500/15 border border-red-500/35 rounded-lg text-xs text-red-400 font-medium flex items-center gap-2">
+                                    <div className="p-3 bg-red-500/15 border border-red-500/35 rounded-lg text-xs text-red-700 dark:text-red-400 font-medium flex items-center gap-2">
                                         <XCircle className="h-4 w-4 shrink-0" />
                                         <span>{sourceErr}</span>
                                     </div>
@@ -1379,8 +1379,8 @@ export default function PaymentEmailManager() {
                                 {testResult && (
                                     <div className={`p-3 rounded-lg border text-xs flex items-center gap-2 ${
                                         testResult.success 
-                                            ? "bg-emerald-950/40 border-emerald-500/40 text-emerald-300"
-                                            : "bg-red-950/40 border-red-500/40 text-red-300"
+                                            ? "bg-emerald-500/10 dark:bg-emerald-950/40 border-emerald-500/40 text-emerald-800 dark:text-emerald-300"
+                                            : "bg-red-500/10 dark:bg-red-950/40 border-red-500/40 text-red-800 dark:text-red-300"
                                     }`}>
                                         {testResult.success ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <XCircle className="h-4 w-4 shrink-0" />}
                                         <span>{testResult.message}</span>
@@ -1429,7 +1429,7 @@ export default function PaymentEmailManager() {
             {/* --- MANUAL ASSIGN / REASSIGN USER MODAL --- */}
             {assignModalTx && (
                 <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-                    <Card className="w-full max-w-md border-border/50 shadow-2xl relative bg-[#121218]/95 backdrop-blur-md">
+                    <Card className="w-full max-w-md border-border/50 shadow-2xl relative bg-card/95 dark:bg-[#121218]/95 backdrop-blur-md">
                         <CardHeader className="pb-3 border-b border-border/40">
                             <CardTitle className="text-lg font-bold flex items-center gap-2 text-primary">
                                 <User className="h-5 w-5 text-primary" /> {assignModalTx.matchedUserId ? "Reassign Payment to Member" : "Manually Assign Payment"}
@@ -1441,13 +1441,13 @@ export default function PaymentEmailManager() {
 
                         <CardContent className="space-y-4 pt-4">
                             {assignMsg && (
-                                <div className="p-3 bg-emerald-500/15 border border-emerald-500/35 rounded-lg text-xs text-emerald-400 font-medium flex items-center gap-2">
+                                <div className="p-3 bg-emerald-500/15 border border-emerald-500/35 rounded-lg text-xs text-emerald-700 dark:text-emerald-400 font-medium flex items-center gap-2">
                                     <CheckCircle2 className="h-4 w-4 shrink-0" />
                                     <span>{assignMsg}</span>
                                 </div>
                             )}
                             {assignErr && (
-                                <div className="p-3 bg-red-500/15 border border-red-500/35 rounded-lg text-xs text-red-400 font-medium flex items-center gap-2">
+                                <div className="p-3 bg-red-500/15 border border-red-500/35 rounded-lg text-xs text-red-700 dark:text-red-400 font-medium flex items-center gap-2">
                                     <XCircle className="h-4 w-4 shrink-0" />
                                     <span>{assignErr}</span>
                                 </div>
@@ -1495,7 +1495,7 @@ export default function PaymentEmailManager() {
                                             className={`p-2 rounded-md cursor-pointer transition-all flex items-center justify-between text-xs ${
                                                 assignUserId === u.id 
                                                     ? "bg-primary/20 border border-primary/40 text-primary font-bold" 
-                                                    : "hover:bg-white/5 text-foreground"
+                                                    : "hover:bg-accent dark:hover:bg-white/5 text-foreground"
                                             }`}
                                         >
                                             <div>
@@ -1536,7 +1536,7 @@ export default function PaymentEmailManager() {
             {/* --- GROUP & ATTRIBUTE PAYMENTS MODAL --- */}
             {groupModalOpen && (
                 <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-                    <Card className="w-full max-w-lg border-border/50 shadow-2xl relative bg-[#121218]/95 backdrop-blur-md">
+                    <Card className="w-full max-w-lg border-border/50 shadow-2xl relative bg-card/95 dark:bg-[#121218]/95 backdrop-blur-md">
                         <CardHeader className="pb-3 border-b border-border/40">
                             <CardTitle className="text-lg font-bold flex items-center gap-2 text-primary">
                                 <Users className="h-5 w-5 text-primary" /> Group & Attribute Payments ({selectedTransactions.length})
@@ -1548,13 +1548,13 @@ export default function PaymentEmailManager() {
 
                         <CardContent className="space-y-4 pt-4">
                             {groupMsg && (
-                                <div className="p-3 bg-emerald-500/15 border border-emerald-500/35 rounded-lg text-xs text-emerald-400 font-medium flex items-center gap-2">
+                                <div className="p-3 bg-emerald-500/15 border border-emerald-500/35 rounded-lg text-xs text-emerald-700 dark:text-emerald-400 font-medium flex items-center gap-2">
                                     <CheckCircle2 className="h-4 w-4 shrink-0" />
                                     <span>{groupMsg}</span>
                                 </div>
                             )}
                             {groupErr && (
-                                <div className="p-3 bg-red-500/15 border border-red-500/35 rounded-lg text-xs text-red-400 font-medium flex items-center gap-2">
+                                <div className="p-3 bg-red-500/15 border border-red-500/35 rounded-lg text-xs text-red-700 dark:text-red-400 font-medium flex items-center gap-2">
                                     <XCircle className="h-4 w-4 shrink-0" />
                                     <span>{groupErr}</span>
                                 </div>
@@ -1564,7 +1564,7 @@ export default function PaymentEmailManager() {
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between text-xs font-semibold">
                                     <span>Selected Payments ({selectedTransactions.length})</span>
-                                    <Badge className="bg-emerald-500/20 text-emerald-300 font-extrabold text-xs px-2 py-0.5">
+                                    <Badge className="bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 font-extrabold text-xs px-2 py-0.5">
                                         Combined Total: ${selectedTotalAmount.toFixed(2)} USD
                                     </Badge>
                                 </div>
@@ -1604,7 +1604,7 @@ export default function PaymentEmailManager() {
                                             className={`p-2 rounded-md cursor-pointer transition-all flex items-center justify-between text-xs ${
                                                 groupUserId === u.id 
                                                     ? "bg-primary/20 border border-primary/40 text-primary font-bold" 
-                                                    : "hover:bg-white/5 text-foreground"
+                                                    : "hover:bg-accent dark:hover:bg-white/5 text-foreground"
                                             }`}
                                         >
                                             <div>
@@ -1663,7 +1663,7 @@ export default function PaymentEmailManager() {
             {/* --- SPLIT PAYMENT TRANSACTION MODAL --- */}
             {splitModalTx && (
                 <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-                    <Card className="w-full max-w-xl border-border/50 shadow-2xl relative bg-[#121218]/95 backdrop-blur-md max-h-[90vh] flex flex-col">
+                    <Card className="w-full max-w-xl border-border/50 shadow-2xl relative bg-card/95 dark:bg-[#121218]/95 backdrop-blur-md max-h-[90vh] flex flex-col">
                         <CardHeader className="pb-3 border-b border-border/40 shrink-0">
                             <CardTitle className="text-lg font-bold flex items-center gap-2 text-primary">
                                 <Scissors className="h-5 w-5 text-primary" /> Split Payment Transaction
@@ -1675,13 +1675,13 @@ export default function PaymentEmailManager() {
 
                         <CardContent className="space-y-4 pt-4 overflow-y-auto flex-1">
                             {splitMsg && (
-                                <div className="p-3 bg-emerald-500/15 border border-emerald-500/35 rounded-lg text-xs text-emerald-400 font-medium flex items-center gap-2">
+                                <div className="p-3 bg-emerald-500/15 border border-emerald-500/35 rounded-lg text-xs text-emerald-700 dark:text-emerald-400 font-medium flex items-center gap-2">
                                     <CheckCircle2 className="h-4 w-4 shrink-0" />
                                     <span>{splitMsg}</span>
                                 </div>
                             )}
                             {splitErr && (
-                                <div className="p-3 bg-red-500/15 border border-red-500/35 rounded-lg text-xs text-red-400 font-medium flex items-center gap-2">
+                                <div className="p-3 bg-red-500/15 border border-red-500/35 rounded-lg text-xs text-red-700 dark:text-red-400 font-medium flex items-center gap-2">
                                     <XCircle className="h-4 w-4 shrink-0" />
                                     <span>{splitErr}</span>
                                 </div>
@@ -1714,7 +1714,7 @@ export default function PaymentEmailManager() {
                                         size="sm"
                                         variant="outline"
                                         onClick={handleSplitEvenly}
-                                        className="h-7 text-xs border-border/60 hover:bg-white/10 gap-1"
+                                        className="h-7 text-xs border-border/60 hover:bg-accent dark:hover:bg-white/10 gap-1"
                                         title="Distribute amounts evenly across all parts"
                                     >
                                         <Split className="h-3.5 w-3.5" /> Split Evenly
@@ -1745,7 +1745,7 @@ export default function PaymentEmailManager() {
                                                     variant="ghost"
                                                     size="sm"
                                                     onClick={() => handleRemoveSplitPart(idx)}
-                                                    className="h-6 w-6 p-0 hover:bg-red-500/10 text-muted-foreground hover:text-red-400"
+                                                    className="h-6 w-6 p-0 hover:bg-red-500/10 text-muted-foreground hover:text-red-700 dark:hover:text-red-400"
                                                     title="Remove split part"
                                                 >
                                                     <Trash2 className="h-3.5 w-3.5" />
@@ -1803,14 +1803,14 @@ export default function PaymentEmailManager() {
                             {/* Live Balance Validator Banner */}
                             <div className={`p-3 rounded-xl border text-xs flex items-center justify-between gap-3 ${
                                 isSplitBalanced 
-                                    ? "bg-emerald-950/30 border-emerald-500/40 text-emerald-300"
-                                    : "bg-red-950/30 border-red-500/40 text-red-300"
+                                    ? "bg-emerald-500/10 dark:bg-emerald-950/30 border-emerald-500/40 text-emerald-800 dark:text-emerald-300"
+                                    : "bg-red-500/10 dark:bg-red-950/30 border-red-500/40 text-red-800 dark:text-red-300"
                             }`}>
                                 <div className="flex items-center gap-2">
                                     {isSplitBalanced ? (
-                                        <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                                        <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0" />
                                     ) : (
-                                        <AlertTriangle className="h-4 w-4 text-red-400 shrink-0" />
+                                        <AlertTriangle className="h-4 w-4 text-red-700 dark:text-red-400 shrink-0" />
                                     )}
                                     <div>
                                         <span className="font-bold">
@@ -1857,10 +1857,10 @@ export default function PaymentEmailManager() {
             {/* RECORD MANUAL PAYMENT MODAL */}
             {recordModalOpen && (
                 <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150">
-                    <Card className="w-full max-w-lg bg-[#121218] border-border/60 shadow-2xl flex flex-col max-h-[90vh]">
+                    <Card className="w-full max-w-lg bg-card dark:bg-[#121218] border-border/60 shadow-2xl flex flex-col max-h-[90vh]">
                         <CardHeader className="pb-3 border-b border-border/40 shrink-0">
                             <CardTitle className="flex items-center gap-2 text-base font-bold text-foreground">
-                                <DollarSign className="h-5 w-5 text-emerald-400" /> Record Manual Member Payment
+                                <DollarSign className="h-5 w-5 text-emerald-700 dark:text-emerald-400" /> Record Manual Member Payment
                             </CardTitle>
                             <CardDescription className="text-xs">
                                 Manually log an offline payment (Cash, Venmo, PayPal, Zelle) and credit their annual or monthly subscription cleanly.
@@ -1868,13 +1868,13 @@ export default function PaymentEmailManager() {
                         </CardHeader>
                         <CardContent className="space-y-4 py-4 overflow-y-auto">
                             {recordMsg && (
-                                <div className="p-3 bg-emerald-500/15 border border-emerald-500/30 rounded-lg text-xs text-emerald-400 font-medium flex items-center gap-2">
+                                <div className="p-3 bg-emerald-500/15 border border-emerald-500/30 rounded-lg text-xs text-emerald-700 dark:text-emerald-400 font-medium flex items-center gap-2">
                                     <CheckCircle2 className="h-4 w-4 shrink-0" />
                                     <span>{recordMsg}</span>
                                 </div>
                             )}
                             {recordErr && (
-                                <div className="p-3 bg-red-500/15 border border-red-500/30 rounded-lg text-xs text-red-400 font-medium flex items-center gap-2">
+                                <div className="p-3 bg-red-500/15 border border-red-500/30 rounded-lg text-xs text-red-700 dark:text-red-400 font-medium flex items-center gap-2">
                                     <AlertTriangle className="h-4 w-4 shrink-0" />
                                     <span>{recordErr}</span>
                                 </div>

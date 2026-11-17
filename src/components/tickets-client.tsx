@@ -176,20 +176,20 @@ export default function TicketsClient({ initialData }: { initialData?: TicketsBo
         switch (status) {
             case "Completed":
                 return (
-                    <Badge className="bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-xs px-2.5 py-0.5">
-                        <CheckCircle2 className="h-3 w-3 mr-1 text-emerald-400" /> Completed
+                    <Badge className="bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30 text-xs px-2.5 py-0.5">
+                        <CheckCircle2 className="h-3 w-3 mr-1 text-emerald-700 dark:text-emerald-400" /> Completed
                     </Badge>
                 );
             case "Acknowledged":
                 return (
-                    <Badge className="bg-blue-500/15 text-blue-300 border border-blue-500/30 text-xs px-2.5 py-0.5">
-                        <Clock className="h-3 w-3 mr-1 text-blue-400" /> Acknowledged
+                    <Badge className="bg-blue-500/15 text-blue-800 dark:text-blue-300 border border-blue-500/30 text-xs px-2.5 py-0.5">
+                        <Clock className="h-3 w-3 mr-1 text-blue-700 dark:text-blue-400" /> Acknowledged
                     </Badge>
                 );
             default:
                 return (
-                    <Badge className="bg-amber-500/15 text-amber-300 border border-amber-500/30 text-xs px-2.5 py-0.5">
-                        <AlertCircle className="h-3 w-3 mr-1 text-amber-400" /> Pending
+                    <Badge className="bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30 text-xs px-2.5 py-0.5">
+                        <AlertCircle className="h-3 w-3 mr-1 text-amber-700 dark:text-amber-400" /> Pending
                     </Badge>
                 );
         }
@@ -220,11 +220,11 @@ export default function TicketsClient({ initialData }: { initialData?: TicketsBo
                 <div>
                     <div className="flex items-center gap-2">
                         <h2 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2.5 text-foreground">
-                            <LifeBuoy className="h-7 w-7 text-amber-400" /> Support Tickets
+                            <LifeBuoy className="h-7 w-7 text-amber-700 dark:text-amber-400" /> Support Tickets
                         </h2>
                         {isAdmin && (
-                            <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-300 border-amber-500/30 gap-1">
-                                <Shield className="h-3 w-3 text-amber-400" /> Admin Command
+                            <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30 gap-1">
+                                <Shield className="h-3 w-3 text-amber-700 dark:text-amber-400" /> Admin Command
                             </Badge>
                         )}
                     </div>
@@ -257,9 +257,9 @@ export default function TicketsClient({ initialData }: { initialData?: TicketsBo
             </div>
 
             {/* AI ASSISTANT FAST-FIX CALLOUT BANNER */}
-            <div className="p-4 rounded-xl bg-gradient-to-r from-slate-900/95 via-[#121218] to-slate-900/90 border border-amber-500/30 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs sm:text-sm">
+            <div className="p-4 rounded-xl bg-gradient-to-r from-muted/60 dark:from-slate-900/95 via-card dark:via-[#121218] to-muted/60 dark:to-slate-900/90 border border-amber-500/30 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs sm:text-sm">
                 <div className="flex items-center gap-3 min-w-0">
-                    <div className="p-2.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-400 shrink-0 shadow-sm">
+                    <div className="p-2.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-400 shrink-0 shadow-sm">
                         <Bot className="h-5 w-5" />
                     </div>
                     <div>
@@ -294,16 +294,16 @@ export default function TicketsClient({ initialData }: { initialData?: TicketsBo
 
             {/* ERROR BANNER */}
             {errorMessage && (
-                <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 flex items-center justify-between gap-3 animate-in fade-in duration-200">
+                <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-800 dark:text-rose-300 flex items-center justify-between gap-3 animate-in fade-in duration-200">
                     <div className="flex items-center gap-2">
-                        <AlertCircle className="h-4 w-4 shrink-0 text-rose-400" />
+                        <AlertCircle className="h-4 w-4 shrink-0 text-rose-700 dark:text-rose-400" />
                         <span>{errorMessage}</span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                        <Button variant="outline" size="sm" onClick={loadDashboard} className="h-7 text-[11px] border-rose-500/40 text-rose-200 hover:bg-rose-500/20">
+                        <Button variant="outline" size="sm" onClick={loadDashboard} className="h-7 text-[11px] border-rose-500/40 text-rose-900 dark:text-rose-200 hover:bg-rose-500/20">
                             Retry
                         </Button>
-                        <Button variant="ghost" size="sm" onClick={() => setErrorMessage(null)} className="h-6 text-[10px] text-rose-400 hover:text-rose-200 cursor-pointer">
+                        <Button variant="ghost" size="sm" onClick={() => setErrorMessage(null)} className="h-6 text-[10px] text-rose-700 dark:text-rose-400 hover:text-rose-900 dark:hover:text-rose-200 cursor-pointer">
                             Dismiss
                         </Button>
                     </div>
@@ -316,7 +316,7 @@ export default function TicketsClient({ initialData }: { initialData?: TicketsBo
             {isAdmin ? (
                 <div className="space-y-4 sm:space-y-6">
                     {/* FILTER & SEARCH CONTROLS */}
-                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3 rounded-xl bg-[#121218]/60 border border-border/50">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3 rounded-xl bg-muted/80 dark:bg-[#121218]/60 border border-border/50">
                         <div className="flex flex-wrap items-center gap-1.5">
                             <Button
                                 variant={statusFilter === "ALL" ? "secondary" : "ghost"}
@@ -366,7 +366,7 @@ export default function TicketsClient({ initialData }: { initialData?: TicketsBo
                     {/* ADMIN TICKET CARDS */}
                     <div className="grid gap-4 sm:gap-6">
                         {filteredTickets.length === 0 && !loading && (
-                            <Card className="border-dashed border-border/50 bg-[#121218]/50 rounded-lg">
+                            <Card className="border-dashed border-border/50 bg-muted/80 dark:bg-[#121218]/50 rounded-lg">
                                 <CardContent className="p-12 text-center text-muted-foreground">
                                     {searchQuery || statusFilter !== "ALL" 
                                         ? "No support tickets match the selected filter." 
@@ -382,7 +382,7 @@ export default function TicketsClient({ initialData }: { initialData?: TicketsBo
                             const aiPromptMatch = ticket.issue.match(/--- READY-TO-USE ANTIGRAVITY AI PROMPT ---\s*([\s\S]+)$/i);
                             const aiPrompt = aiPromptMatch ? aiPromptMatch[1].trim() : ticket.issue;
                             return (
-                            <Card key={ticket.id} className="overflow-hidden border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm hover:shadow-md transition-all duration-200 rounded-2xl">
+                            <Card key={ticket.id} className="overflow-hidden border-border/50 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md shadow-sm hover:shadow-md transition-all duration-200 rounded-2xl">
                                 <CardHeader className="bg-muted/20 pb-4 border-b border-border/40">
                                     <div className="flex flex-col sm:flex-row justify-between sm:items-start w-full gap-3 sm:gap-4">
                                         <div className="space-y-1 min-w-0">
@@ -394,8 +394,8 @@ export default function TicketsClient({ initialData }: { initialData?: TicketsBo
                                                     <Mail className="h-3 w-3 mr-1 text-primary shrink-0"/> <span className="truncate">{ticket.email}</span>
                                                 </Badge>
                                                 {isPageFix && (
-                                                    <Badge variant="outline" className="font-semibold text-[10px] px-2 py-0.5 h-5 bg-amber-500/15 text-amber-300 border-amber-500/30 gap-1">
-                                                        <Wrench className="h-2.5 w-2.5 text-amber-400" />
+                                                    <Badge variant="outline" className="font-semibold text-[10px] px-2 py-0.5 h-5 bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30 gap-1">
+                                                        <Wrench className="h-2.5 w-2.5 text-amber-700 dark:text-amber-400" />
                                                         <span>Page Fix Request</span>
                                                     </Badge>
                                                 )}
@@ -409,7 +409,7 @@ export default function TicketsClient({ initialData }: { initialData?: TicketsBo
                                             <Button 
                                                 variant="ghost" 
                                                 size="icon" 
-                                                className="h-8 w-8 text-muted-foreground hover:text-red-400 hover:bg-red-950/40 transition-all duration-200 hover:ring-2 hover:ring-red-500/40 active:scale-95 cursor-pointer"
+                                                className="h-8 w-8 text-muted-foreground hover:text-red-700 dark:hover:text-red-400 hover:bg-red-500/10 dark:hover:bg-red-950/40 transition-all duration-200 hover:ring-2 hover:ring-red-500/40 active:scale-95 cursor-pointer"
                                                 onClick={() => setTicketToDelete(ticket)}
                                                 title="Delete Ticket"
                                             >
@@ -433,50 +433,50 @@ export default function TicketsClient({ initialData }: { initialData?: TicketsBo
                                                     onClick={() => handleCopyPrompt(ticket.id, aiPrompt)}
                                                     className={`h-8 text-xs font-semibold active:scale-95 transition-all duration-200 cursor-pointer ${
                                                         copiedPromptId === ticket.id
-                                                            ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/50 ring-2 ring-emerald-500/40"
-                                                            : "border-sky-500/40 text-sky-300 hover:bg-sky-500/10 hover:ring-2 hover:ring-sky-500/40"
+                                                            ? "bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border-emerald-500/50 ring-2 ring-emerald-500/40"
+                                                            : "border-sky-500/40 text-sky-800 dark:text-sky-300 hover:bg-sky-500/10 hover:ring-2 hover:ring-sky-500/40"
                                                     }`}
                                                 >
                                                     {copiedPromptId === ticket.id ? (
                                                         <>
-                                                            <Check className="h-3.5 w-3.5 mr-1.5 text-emerald-400" />
+                                                            <Check className="h-3.5 w-3.5 mr-1.5 text-emerald-700 dark:text-emerald-400" />
                                                             <span>Copied Prompt for AI!</span>
                                                         </>
                                                     ) : (
                                                         <>
-                                                            <Copy className="h-3.5 w-3.5 mr-1.5 text-sky-400" />
+                                                            <Copy className="h-3.5 w-3.5 mr-1.5 text-sky-700 dark:text-sky-400" />
                                                             <span>Copy Prompt for AI</span>
                                                         </>
                                                     )}
                                                 </Button>
 
                                                 {reportedPage && (
-                                                    <Button asChild variant="outline" size="sm" className="h-8 text-xs font-semibold border-amber-500/40 text-amber-300 hover:bg-amber-500/10 hover:ring-2 hover:ring-amber-500/40 active:scale-95 transition-all duration-200">
+                                                    <Button asChild variant="outline" size="sm" className="h-8 text-xs font-semibold border-amber-500/40 text-amber-800 dark:text-amber-300 hover:bg-amber-500/10 hover:ring-2 hover:ring-amber-500/40 active:scale-95 transition-all duration-200">
                                                         <Link href={reportedPage}>
-                                                            <ExternalLink className="h-3.5 w-3.5 mr-1.5 text-amber-400" /> Open Reported Page
+                                                            <ExternalLink className="h-3.5 w-3.5 mr-1.5 text-amber-700 dark:text-amber-400" /> Open Reported Page
                                                         </Link>
                                                     </Button>
                                                 )}
                                             </>
                                         )}
-                                        <Button asChild variant="outline" size="sm" className="h-8 text-xs font-semibold border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 hover:ring-2 hover:ring-emerald-500/40 active:scale-95 transition-all duration-200">
+                                        <Button asChild variant="outline" size="sm" className="h-8 text-xs font-semibold border-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 hover:ring-2 hover:ring-emerald-500/40 active:scale-95 transition-all duration-200">
                                             <Link href={`/settings/access?search=${encodeURIComponent(ticket.email)}`}>
-                                                <UserCog className="h-3.5 w-3.5 mr-1.5 text-emerald-400" /> Manage User
+                                                <UserCog className="h-3.5 w-3.5 mr-1.5 text-emerald-700 dark:text-emerald-400" /> Manage User
                                             </Link>
                                         </Button>
-                                        <Button asChild variant="outline" size="sm" className="h-8 text-xs font-semibold border-blue-500/30 text-blue-400 hover:bg-blue-500/10 hover:ring-2 hover:ring-blue-500/40 active:scale-95 transition-all duration-200">
+                                        <Button asChild variant="outline" size="sm" className="h-8 text-xs font-semibold border-blue-500/30 text-blue-700 dark:text-blue-400 hover:bg-blue-500/10 hover:ring-2 hover:ring-blue-500/40 active:scale-95 transition-all duration-200">
                                             <Link href="/radarr">
-                                                <Film className="h-3.5 w-3.5 mr-1.5 text-blue-400" /> Radarr (Movies)
+                                                <Film className="h-3.5 w-3.5 mr-1.5 text-blue-700 dark:text-blue-400" /> Radarr (Movies)
                                             </Link>
                                         </Button>
-                                        <Button asChild variant="outline" size="sm" className="h-8 text-xs font-semibold border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10 hover:ring-2 hover:ring-cyan-500/40 active:scale-95 transition-all duration-200">
+                                        <Button asChild variant="outline" size="sm" className="h-8 text-xs font-semibold border-cyan-500/30 text-cyan-700 dark:text-cyan-400 hover:bg-cyan-500/10 hover:ring-2 hover:ring-cyan-500/40 active:scale-95 transition-all duration-200">
                                             <Link href="/sonarr">
-                                                <Tv className="h-3.5 w-3.5 mr-1.5 text-cyan-400" /> Sonarr (TV)
+                                                <Tv className="h-3.5 w-3.5 mr-1.5 text-cyan-700 dark:text-cyan-400" /> Sonarr (TV)
                                             </Link>
                                         </Button>
-                                        <Button asChild variant="outline" size="sm" className="h-8 text-xs font-semibold border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 hover:ring-2 hover:ring-emerald-500/40 active:scale-95 transition-all duration-200">
+                                        <Button asChild variant="outline" size="sm" className="h-8 text-xs font-semibold border-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 hover:ring-2 hover:ring-emerald-500/40 active:scale-95 transition-all duration-200">
                                             <Link href="/library">
-                                                <BookOpen className="h-3.5 w-3.5 mr-1.5 text-emerald-400" /> Book Library
+                                                <BookOpen className="h-3.5 w-3.5 mr-1.5 text-emerald-700 dark:text-emerald-400" /> Book Library
                                             </Link>
                                         </Button>
                                     </div>
@@ -541,7 +541,7 @@ export default function TicketsClient({ initialData }: { initialData?: TicketsBo
                                 const matchPage = ticket.issue.match(/Reported Page:\s*([^\r\n]+)/i) || ticket.issue.match(/Target Page URL:\*\*\s*`([^`]+)`/i);
                                 const reportedPage = matchPage ? matchPage[1].trim() : null;
                                 return (
-                                <Card key={ticket.id} className="overflow-hidden border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm rounded-2xl">
+                                <Card key={ticket.id} className="overflow-hidden border-border/50 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md shadow-sm rounded-2xl">
                                     <CardHeader className="bg-muted/20 pb-4 border-b border-border/40">
                                         <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
                                             <div className="space-y-1">
@@ -550,8 +550,8 @@ export default function TicketsClient({ initialData }: { initialData?: TicketsBo
                                                         {isPageFix ? "Page Fix Suggestion" : "Support Request"}
                                                     </CardTitle>
                                                     {isPageFix && (
-                                                        <Badge variant="outline" className="font-semibold text-[10px] px-2 py-0.5 h-5 bg-amber-500/15 text-amber-300 border-amber-500/30 gap-1">
-                                                            <Wrench className="h-2.5 w-2.5 text-amber-400" />
+                                                        <Badge variant="outline" className="font-semibold text-[10px] px-2 py-0.5 h-5 bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30 gap-1">
+                                                            <Wrench className="h-2.5 w-2.5 text-amber-700 dark:text-amber-400" />
                                                             <span>Page Fix Request</span>
                                                         </Badge>
                                                     )}
@@ -575,16 +575,16 @@ export default function TicketsClient({ initialData }: { initialData?: TicketsBo
 
                                         {ticket.adminComment ? (
                                             <div className="space-y-1.5 pt-2">
-                                                <Label className="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                                                <Label className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
                                                     <MessageSquare className="h-3.5 w-3.5" /> Administrator Response
                                                 </Label>
-                                                <div className="p-4 rounded-xl bg-emerald-950/20 border border-emerald-500/30 text-xs sm:text-sm leading-relaxed whitespace-pre-wrap text-emerald-100">
+                                                <div className="p-4 rounded-xl bg-emerald-500/10 dark:bg-emerald-950/20 border border-emerald-500/30 text-xs sm:text-sm leading-relaxed whitespace-pre-wrap text-emerald-900 dark:text-emerald-100">
                                                     {ticket.adminComment}
                                                 </div>
                                             </div>
                                         ) : (
-                                            <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20 text-[11px] text-amber-300 flex items-center gap-2">
-                                                <Clock className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+                                            <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20 text-[11px] text-amber-800 dark:text-amber-300 flex items-center gap-2">
+                                                <Clock className="h-3.5 w-3.5 shrink-0 text-amber-700 dark:text-amber-400" />
                                                 <span>Awaiting review by the server administrator. You will receive an email as soon as an update is posted.</span>
                                             </div>
                                         )}
@@ -599,10 +599,10 @@ export default function TicketsClient({ initialData }: { initialData?: TicketsBo
 
             {/* CREATE TICKET MODAL */}
             <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-                <DialogContent className="sm:max-w-md w-[95vw] max-h-[90vh] overflow-y-auto bg-[#121218] border border-border/60 shadow-2xl text-foreground">
+                <DialogContent className="sm:max-w-md w-[95vw] max-h-[90vh] overflow-y-auto bg-popover dark:bg-[#121218] border border-border/60 shadow-2xl text-foreground">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2 text-base font-bold text-foreground">
-                            <LifeBuoy className="h-5 w-5 text-amber-400" />
+                            <LifeBuoy className="h-5 w-5 text-amber-700 dark:text-amber-400" />
                             Submit Server Support Ticket
                         </DialogTitle>
                         <DialogDescription className="text-xs text-muted-foreground">
@@ -612,15 +612,15 @@ export default function TicketsClient({ initialData }: { initialData?: TicketsBo
 
                     {createSuccess ? (
                         <div className="py-8 text-center space-y-2">
-                            <CheckCircle2 className="h-10 w-10 text-emerald-400 mx-auto animate-bounce" />
+                            <CheckCircle2 className="h-10 w-10 text-emerald-700 dark:text-emerald-400 mx-auto animate-bounce" />
                             <h4 className="text-sm font-bold text-foreground">Ticket Submitted Successfully</h4>
                             <p className="text-xs text-muted-foreground">The administrator has been notified via email.</p>
                         </div>
                     ) : (
                         <form onSubmit={handleCreateTicket} className="space-y-3.5 pt-2">
                             {createError && (
-                                <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 flex items-center gap-2">
-                                    <AlertCircle className="h-4 w-4 shrink-0 text-rose-400" />
+                                <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-xs text-rose-800 dark:text-rose-300 flex items-center gap-2">
+                                    <AlertCircle className="h-4 w-4 shrink-0 text-rose-700 dark:text-rose-400" />
                                     <span>{createError}</span>
                                 </div>
                             )}
@@ -688,9 +688,9 @@ export default function TicketsClient({ initialData }: { initialData?: TicketsBo
 
             {/* PERMANENT DELETE CONFIRMATION DIALOG */}
             <Dialog open={!!ticketToDelete} onOpenChange={(open) => !open && setTicketToDelete(null)}>
-                <DialogContent className="sm:max-w-md w-[95vw] max-h-[90vh] overflow-y-auto bg-[#121218] border-border/60 text-foreground">
+                <DialogContent className="sm:max-w-md w-[95vw] max-h-[90vh] overflow-y-auto bg-popover dark:bg-[#121218] border-border/60 text-foreground">
                     <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2 text-rose-400">
+                        <DialogTitle className="flex items-center gap-2 text-rose-700 dark:text-rose-400">
                             <Trash2 className="h-5 w-5" /> Permanently Delete Ticket?
                         </DialogTitle>
                         <DialogDescription className="text-muted-foreground text-xs leading-relaxed pt-1">

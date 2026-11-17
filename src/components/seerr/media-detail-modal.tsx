@@ -560,7 +560,7 @@ export function MediaDetailModal({
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
-            <DialogContent className="w-[95vw] sm:w-[92vw] md:w-[90vw] max-w-4xl lg:max-w-5xl max-h-[90vh] sm:max-h-[92vh] bg-[#0c0c12] border-border/60 p-0 overflow-y-auto overflow-x-hidden shadow-2xl rounded-2xl sm:rounded-3xl scrollbar-thin text-foreground">
+            <DialogContent className="w-[95vw] sm:w-[92vw] md:w-[90vw] max-w-4xl lg:max-w-5xl max-h-[90vh] sm:max-h-[92vh] bg-popover dark:bg-[#0c0c12] border-border/60 p-0 overflow-y-auto overflow-x-hidden shadow-2xl rounded-2xl sm:rounded-3xl scrollbar-thin text-foreground">
                 {!details ? (
                     <div className="flex flex-col items-center justify-center p-20 space-y-4">
                         <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
@@ -582,7 +582,7 @@ export function MediaDetailModal({
                                             <Play className="h-3.5 w-3.5 fill-current" />
                                         </div>
                                         <div className="min-w-0">
-                                            <div className="text-sm font-bold text-white truncate">
+                                            <div className="text-sm font-bold text-foreground dark:text-white truncate">
                                                 {trailers[activeTrailerIndex]?.name || "Official Trailer"}
                                             </div>
                                             <p className="text-[11px] text-muted-foreground truncate">
@@ -594,7 +594,7 @@ export function MediaDetailModal({
                                         size="sm"
                                         variant="outline"
                                         onClick={() => setIsPlayingTrailer(false)}
-                                        className="h-8 px-3 rounded-lg text-xs font-semibold bg-white/10 hover:bg-white/20 text-white border-white/20 flex items-center gap-1.5 shrink-0 transition-all active:scale-95"
+                                        className="h-8 px-3 rounded-lg text-xs font-semibold bg-muted/50 dark:bg-white/10 hover:bg-white/20 text-foreground dark:text-white border-border/70 dark:border-white/20 flex items-center gap-1.5 shrink-0 transition-all active:scale-95"
                                     >
                                         <X className="h-4 w-4" />
                                         <span>Close Trailer</span>
@@ -602,7 +602,7 @@ export function MediaDetailModal({
                                 </div>
 
                                 {/* 16:9 Video Box */}
-                                <div className="relative w-full aspect-video max-h-[55vh] rounded-xl sm:rounded-2xl overflow-hidden shadow-2xl bg-black border border-white/10 mx-auto">
+                                <div className="relative w-full aspect-video max-h-[55vh] rounded-xl sm:rounded-2xl overflow-hidden shadow-2xl bg-black border border-border/70 dark:border-white/10 mx-auto">
                                     <iframe
                                         key={trailers[activeTrailerIndex]?.key || activeTrailerIndex}
                                         src={`${trailers[activeTrailerIndex]?.embedUrl}?autoplay=1&rel=0&modestbranding=1`}
@@ -627,7 +627,7 @@ export function MediaDetailModal({
                                                 className={`h-7 px-3 text-xs font-medium rounded-full shrink-0 transition-all ${
                                                     activeTrailerIndex === idx
                                                         ? "bg-red-600 hover:bg-red-500 text-white shadow-sm"
-                                                        : "bg-white/[0.04] hover:bg-white/[0.08] text-muted-foreground hover:text-foreground border-border/40"
+                                                        : "bg-muted/50 dark:bg-white/[0.04] hover:bg-accent dark:hover:bg-white/[0.08] text-muted-foreground hover:text-foreground border-border/40"
                                                 }`}
                                                 onClick={() => setActiveTrailerIndex(idx)}
                                             >
@@ -640,7 +640,7 @@ export function MediaDetailModal({
                             </div>
                         ) : (
                             /* COMPACT 2-COLUMN HERO HEADER */
-                            <div className="relative w-full bg-[#0e0e16] p-4 sm:p-5 md:p-6 border-b border-border/40 overflow-hidden">
+                            <div className="relative w-full bg-card dark:bg-[#0e0e16] p-4 sm:p-5 md:p-6 border-b border-border/40 overflow-hidden">
                                 {/* Ambient Blurred Backdrop Layer */}
                                 {details.backdropPath && (
                                     <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -649,14 +649,14 @@ export function MediaDetailModal({
                                             alt=""
                                             className="w-full h-full object-cover object-center filter blur-xl scale-110 opacity-25"
                                         />
-                                        <div className="absolute inset-0 bg-gradient-to-t from-[#0e0e16] via-[#0e0e16]/80 to-transparent" />
-                                        <div className="absolute inset-0 bg-gradient-to-r from-[#0e0e16] via-[#0e0e16]/85 to-transparent" />
+                                        <div className="absolute inset-0 bg-gradient-to-t from-muted/60 dark:from-[#0e0e16] via-card dark:via-[#0e0e16]/80 to-transparent" />
+                                        <div className="absolute inset-0 bg-gradient-to-r from-muted/60 dark:from-[#0e0e16] via-card dark:via-[#0e0e16]/85 to-transparent" />
                                     </div>
                                 )}
 
                                 <div className="relative z-10 flex flex-col sm:flex-row gap-4 sm:gap-5 md:gap-6 items-start">
                                     {/* Left Column: 2:3 Vertical Poster Card */}
-                                    <div className="w-28 sm:w-36 md:w-40 lg:w-44 aspect-[2/3] rounded-2xl overflow-hidden border-2 border-white/10 shadow-2xl shrink-0 bg-[#14141c] mx-auto sm:mx-0 relative group">
+                                    <div className="w-28 sm:w-36 md:w-40 lg:w-44 aspect-[2/3] rounded-2xl overflow-hidden border-2 border-border/70 dark:border-white/10 shadow-2xl shrink-0 bg-card dark:bg-[#14141c] mx-auto sm:mx-0 relative group">
                                         {details.posterPath ? (
                                             <img
                                                 src={details.posterPath}
@@ -686,36 +686,36 @@ export function MediaDetailModal({
                                         {/* Row 1: Badges & Arr Monitored Tags */}
                                         <div className="flex flex-wrap items-center gap-2">
                                             <Badge variant="outline" className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full backdrop-blur-md ${
-                                                isTv ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40" : "bg-blue-500/20 text-blue-300 border-blue-500/40"
+                                                isTv ? "bg-cyan-500/20 text-cyan-800 dark:text-cyan-300 border-cyan-500/40" : "bg-blue-500/20 text-blue-800 dark:text-blue-300 border-blue-500/40"
                                             }`}>
                                                 {isTv ? "TV Series" : "Movie"}
                                             </Badge>
 
                                             {/* Monitoring Badges */}
                                             {is1080pMonitored && (
-                                                <Badge variant="outline" className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border-blue-500/40 backdrop-blur-md flex items-center gap-1">
+                                                <Badge variant="outline" className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-800 dark:text-blue-300 border-blue-500/40 backdrop-blur-md flex items-center gap-1">
                                                     <Check className="h-3 w-3" />
                                                     <span>{canRequest4k ? "1080p Monitored" : "Monitored"}</span>
                                                 </Badge>
                                             )}
 
                                             {is4kMonitored && (
-                                                <Badge variant="outline" className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-500/25 text-sky-300 border-sky-500/50 backdrop-blur-md flex items-center gap-1">
+                                                <Badge variant="outline" className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-500/25 text-sky-800 dark:text-sky-300 border-sky-500/50 backdrop-blur-md flex items-center gap-1">
                                                     <Check className="h-3 w-3" />
                                                     <span>4K UHD Monitored</span>
                                                 </Badge>
                                             )}
 
                                             {loading && (
-                                                <Badge variant="outline" className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border-cyan-500/30 backdrop-blur-md flex items-center gap-1 animate-pulse">
+                                                <Badge variant="outline" className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-800 dark:text-cyan-300 border-cyan-500/30 backdrop-blur-md flex items-center gap-1 animate-pulse">
                                                     <RefreshCw className="h-3 w-3 animate-spin" />
                                                     <span>Checking Arr status...</span>
                                                 </Badge>
                                             )}
 
                                             {rating && Number(rating) > 0 && (
-                                                <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[11px] font-bold backdrop-blur-md">
-                                                    <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                                                <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/40 text-[11px] font-bold backdrop-blur-md">
+                                                    <Star className="h-3 w-3 fill-amber-400 text-amber-700 dark:text-amber-400" />
                                                     <span>{rating}</span>
                                                 </div>
                                             )}
@@ -723,10 +723,10 @@ export function MediaDetailModal({
                                             {details.certification && (
                                                 <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase backdrop-blur-md border ${
                                                     isAdultOrMatureRating(details.certification)
-                                                        ? "bg-rose-500/20 text-rose-300 border-rose-500/40"
+                                                        ? "bg-rose-500/20 text-rose-800 dark:text-rose-300 border-rose-500/40"
                                                         : isKidsSafeRating(details.certification)
-                                                        ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
-                                                        : "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                                                        ? "bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border-emerald-500/40"
+                                                        : "bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/40"
                                                 }`}>
                                                     {details.certification}
                                                 </span>
@@ -754,11 +754,11 @@ export function MediaDetailModal({
 
                                         {/* Row 2: Title & Tagline */}
                                         <div>
-                                            <DialogTitle className="text-xl sm:text-2xl md:text-3xl font-extrabold text-white tracking-tight leading-tight">
+                                            <DialogTitle className="text-xl sm:text-2xl md:text-3xl font-extrabold text-foreground dark:text-white tracking-tight leading-tight">
                                                 {details.title}
                                             </DialogTitle>
                                             {details.tagline && (
-                                                <p className="text-xs sm:text-sm text-gray-400 mt-0.5">
+                                                <p className="text-xs sm:text-sm text-slate-600 dark:text-gray-400 mt-0.5">
                                                     "{details.tagline}"
                                                 </p>
                                             )}
@@ -768,7 +768,7 @@ export function MediaDetailModal({
                                         {details.genres && details.genres.length > 0 && (
                                             <div className="flex flex-wrap gap-1.5">
                                                 {details.genres.map(g => (
-                                                    <span key={g} className="px-2 py-0.5 rounded-md bg-white/[0.05] border border-white/10 text-[11px] font-medium text-gray-300">
+                                                    <span key={g} className="px-2 py-0.5 rounded-md bg-muted/50 dark:bg-white/[0.05] border border-border/70 dark:border-white/10 text-[11px] font-medium text-slate-700 dark:text-gray-300">
                                                         {g}
                                                     </span>
                                                 ))}
@@ -778,19 +778,19 @@ export function MediaDetailModal({
                                         {/* Row 4: Action Buttons (Primary Request / Monitor Action First) */}
                                         <div className="flex flex-wrap items-center gap-2 pt-1">
                                             {inLibrary ? (
-                                                <div className="h-8 sm:h-9 px-3 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 flex items-center gap-1.5 text-xs font-bold">
-                                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                                                <div className="h-8 sm:h-9 px-3 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5 text-xs font-bold">
+                                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400 shrink-0" />
                                                     <span>In {isKids ? "Kids " : ""}Library ({availability?.quality || "1080p"})</span>
                                                 </div>
                                             ) : is1080pMonitored && is4kMonitored ? (
-                                                <div className="h-8 sm:h-9 px-3 rounded-xl bg-cyan-500/15 border border-cyan-500/40 text-cyan-300 flex items-center gap-1.5 text-xs font-bold">
-                                                    <CheckCheck className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
+                                                <div className="h-8 sm:h-9 px-3 rounded-xl bg-cyan-500/15 border border-cyan-500/40 text-cyan-800 dark:text-cyan-300 flex items-center gap-1.5 text-xs font-bold">
+                                                    <CheckCheck className="h-3.5 w-3.5 text-cyan-700 dark:text-cyan-400 shrink-0" />
                                                     <span>Monitored (1080p & 4K UHD)</span>
                                                 </div>
                                             ) : is1080pMonitored && !is4kMonitored ? (
                                                 <div className="flex items-center gap-2">
-                                                    <div className="h-8 sm:h-9 px-3 rounded-xl bg-blue-500/15 border border-blue-500/40 text-blue-300 flex items-center gap-1.5 text-xs font-bold">
-                                                        <Clock className="h-3.5 w-3.5 text-blue-400 shrink-0" />
+                                                    <div className="h-8 sm:h-9 px-3 rounded-xl bg-blue-500/15 border border-blue-500/40 text-blue-800 dark:text-blue-300 flex items-center gap-1.5 text-xs font-bold">
+                                                        <Clock className="h-3.5 w-3.5 text-blue-700 dark:text-blue-400 shrink-0" />
                                                         <span>{canRequest4k ? "1080p Monitored" : "Monitored"}</span>
                                                     </div>
                                                     {canRequest4k && (
@@ -809,8 +809,8 @@ export function MediaDetailModal({
                                                 </div>
                                             ) : is4kMonitored && !is1080pMonitored ? (
                                                 <div className="flex items-center gap-2">
-                                                    <div className="h-8 sm:h-9 px-3 rounded-xl bg-sky-500/15 border border-sky-500/40 text-sky-300 flex items-center gap-1.5 text-xs font-bold">
-                                                        <Clock className="h-3.5 w-3.5 text-sky-400 shrink-0" />
+                                                    <div className="h-8 sm:h-9 px-3 rounded-xl bg-sky-500/15 border border-sky-500/40 text-sky-800 dark:text-sky-300 flex items-center gap-1.5 text-xs font-bold">
+                                                        <Clock className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400 shrink-0" />
                                                         <span>4K UHD Monitored</span>
                                                     </div>
                                                     <Button
@@ -826,8 +826,8 @@ export function MediaDetailModal({
                                                     </Button>
                                                 </div>
                                             ) : inMainOnly ? (
-                                                <div className="h-8 sm:h-9 px-3 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-300 flex items-center gap-1.5 text-xs font-bold">
-                                                    <Info className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                                                <div className="h-8 sm:h-9 px-3 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-800 dark:text-amber-300 flex items-center gap-1.5 text-xs font-bold">
+                                                    <Info className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
                                                     <span>In Main Library Only ({availability?.quality || "1080p"})</span>
                                                 </div>
                                             ) : (
@@ -858,10 +858,10 @@ export function MediaDetailModal({
                                                 <Button
                                                     size="sm"
                                                     variant="outline"
-                                                    className="h-8 sm:h-9 px-3.5 rounded-xl font-semibold bg-red-600/15 hover:bg-red-600/25 text-red-200 border-red-500/30 hover:border-red-500/50 shadow-sm active:scale-95 transition-all flex items-center gap-1.5 text-xs"
+                                                    className="h-8 sm:h-9 px-3.5 rounded-xl font-semibold bg-red-600/15 hover:bg-red-600/25 text-red-900 dark:text-red-200 border-red-500/30 hover:border-red-500/50 shadow-sm active:scale-95 transition-all flex items-center gap-1.5 text-xs"
                                                     onClick={() => setIsPlayingTrailer(true)}
                                                 >
-                                                    <Play className="h-3.5 w-3.5 fill-current text-red-400" />
+                                                    <Play className="h-3.5 w-3.5 fill-current text-red-700 dark:text-red-400" />
                                                     <span>Watch Trailer</span>
                                                 </Button>
                                             )}
@@ -869,7 +869,7 @@ export function MediaDetailModal({
 
                                         {/* Row 5: Overview Synopsis */}
                                         <div className="pt-0.5">
-                                            <p className="text-xs sm:text-sm text-gray-300 leading-relaxed line-clamp-3 md:line-clamp-4">
+                                            <p className="text-xs sm:text-sm text-slate-700 dark:text-gray-300 leading-relaxed line-clamp-3 md:line-clamp-4">
                                                 {details.overview || "No overview available for this title."}
                                             </p>
                                         </div>
@@ -881,7 +881,7 @@ export function MediaDetailModal({
                         {/* ========================================================================= */}
                         {/* NAVIGATION TABS BAR                                                      */}
                         {/* ========================================================================= */}
-                        <div className="flex items-center gap-1.5 px-4 sm:px-6 py-2 border-b border-border/40 overflow-x-auto max-w-full bg-[#0d0d14] sticky top-0 z-20 scrollbar-none">
+                        <div className="flex items-center gap-1.5 px-4 sm:px-6 py-2 border-b border-border/40 overflow-x-auto max-w-full bg-card dark:bg-[#0d0d14] sticky top-0 z-20 scrollbar-none">
                             <Button
                                 size="sm"
                                 variant="ghost"
@@ -970,32 +970,32 @@ export function MediaDetailModal({
                                 <div className="space-y-4">
                                     {/* Monitored Status Banners */}
                                     {is1080pMonitored && is4kMonitored ? (
-                                        <div className="p-3.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-between gap-3 text-cyan-300">
+                                        <div className="p-3.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-between gap-3 text-cyan-800 dark:text-cyan-300">
                                             <div className="flex items-center gap-3">
-                                                <div className="h-8 w-8 rounded-lg bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-300 shrink-0">
+                                                <div className="h-8 w-8 rounded-lg bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-800 dark:text-cyan-300 shrink-0">
                                                     <CheckCheck className="h-4 w-4" />
                                                 </div>
                                                 <div>
-                                                    <h4 className="text-xs sm:text-sm font-bold text-cyan-200">
+                                                    <h4 className="text-xs sm:text-sm font-bold text-cyan-900 dark:text-cyan-200">
                                                         Fully Monitored in 1080p & 4K UHD
                                                     </h4>
-                                                    <p className="text-[11px] text-cyan-300/80">
+                                                    <p className="text-[11px] text-cyan-800/80 dark:text-cyan-300/80">
                                                         Already scheduled for download in 1080p and 4K UHD.
                                                     </p>
                                                 </div>
                                             </div>
                                         </div>
                                     ) : is1080pMonitored && !is4kMonitored ? (
-                                        <div className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-between gap-3 text-blue-300">
+                                        <div className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-between gap-3 text-blue-800 dark:text-blue-300">
                                             <div className="flex items-center gap-3">
-                                                <div className="h-8 w-8 rounded-lg bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-blue-300 shrink-0">
+                                                <div className="h-8 w-8 rounded-lg bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-blue-800 dark:text-blue-300 shrink-0">
                                                     <Check className="h-4 w-4" />
                                                 </div>
                                                 <div>
-                                                    <h4 className="text-xs sm:text-sm font-bold text-blue-200">
+                                                    <h4 className="text-xs sm:text-sm font-bold text-blue-900 dark:text-blue-200">
                                                         {canRequest4k ? "Monitored in 1080p (Standard HD)" : "Monitored for Download"}
                                                     </h4>
-                                                    <p className="text-[11px] text-blue-300/80">
+                                                    <p className="text-[11px] text-blue-800/80 dark:text-blue-300/80">
                                                         {canRequest4k
                                                             ? `This title is already monitored for 1080p. You can still request a dedicated 4K UHD version below!`
                                                             : isTv
@@ -1006,16 +1006,16 @@ export function MediaDetailModal({
                                             </div>
                                         </div>
                                     ) : is4kMonitored && !is1080pMonitored ? (
-                                        <div className="p-3.5 rounded-xl bg-sky-500/10 border border-sky-500/30 flex items-center justify-between gap-3 text-sky-300">
+                                        <div className="p-3.5 rounded-xl bg-sky-500/10 border border-sky-500/30 flex items-center justify-between gap-3 text-sky-800 dark:text-sky-300">
                                             <div className="flex items-center gap-3">
-                                                <div className="h-8 w-8 rounded-lg bg-sky-500/20 border border-sky-500/40 flex items-center justify-center text-sky-300 shrink-0">
+                                                <div className="h-8 w-8 rounded-lg bg-sky-500/20 border border-sky-500/40 flex items-center justify-center text-sky-800 dark:text-sky-300 shrink-0">
                                                     <Check className="h-4 w-4" />
                                                 </div>
                                                 <div>
-                                                    <h4 className="text-xs sm:text-sm font-bold text-sky-200">
+                                                    <h4 className="text-xs sm:text-sm font-bold text-sky-900 dark:text-sky-200">
                                                         Monitored in 4K UHD ({arrDetails?.app4kName || "4K Instance"})
                                                     </h4>
-                                                    <p className="text-[11px] text-sky-300/80">
+                                                    <p className="text-[11px] text-sky-800/80 dark:text-sky-300/80">
                                                         {isTv
                                                             ? `This series is currently monitored for 4K UHD. You can request companion 1080p standard versions or unmonitored episodes below!`
                                                             : `This movie is already monitored for 4K UHD. You can request a companion 1080p standard version below!`}
@@ -1026,7 +1026,7 @@ export function MediaDetailModal({
                                     ) : null}
 
                                     {/* Request Submission Card */}
-                                    <div className="p-4 sm:p-5 rounded-2xl bg-[#121218] border border-border/60 space-y-3.5">
+                                    <div className="p-4 sm:p-5 rounded-2xl bg-card dark:bg-[#121218] border border-border/60 space-y-3.5">
                                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                                             <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
                                                 <Plus className="h-4 w-4 text-primary" />
@@ -1036,15 +1036,15 @@ export function MediaDetailModal({
                                             {/* Account Tier & Quota Label */}
                                             <div className="flex items-center gap-2">
                                                 {quotaData?.accountTier === "TRIAL" ? (
-                                                    <Badge variant="outline" className="text-[10px] font-bold px-2 py-0.5 bg-amber-500/15 text-amber-300 border-amber-500/30">
+                                                    <Badge variant="outline" className="text-[10px] font-bold px-2 py-0.5 bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30">
                                                         Trial Account
                                                     </Badge>
                                                 ) : quotaData?.accountTier === "FULL" ? (
-                                                    <Badge variant="outline" className="text-[10px] font-bold px-2 py-0.5 bg-emerald-500/15 text-emerald-300 border-emerald-500/30">
+                                                    <Badge variant="outline" className="text-[10px] font-bold px-2 py-0.5 bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border-emerald-500/30">
                                                         Full Account
                                                     </Badge>
                                                 ) : (
-                                                    <Badge variant="outline" className="text-[10px] font-bold px-2 py-0.5 bg-blue-500/15 text-blue-300 border-blue-500/30">
+                                                    <Badge variant="outline" className="text-[10px] font-bold px-2 py-0.5 bg-blue-500/15 text-blue-800 dark:text-blue-300 border-blue-500/30">
                                                         Admin
                                                     </Badge>
                                                 )}
@@ -1061,7 +1061,7 @@ export function MediaDetailModal({
                                         {canRequest4k && !isMatureInKids && !isDisallowed && (
                                             <div className="flex items-center justify-between p-2.5 rounded-xl bg-sky-500/10 border border-sky-500/30">
                                                 <div className="flex items-center gap-2">
-                                                    <Badge variant="outline" className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-sky-500/30 text-sky-300 border-sky-500/50">
+                                                    <Badge variant="outline" className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-sky-500/30 text-sky-800 dark:text-sky-300 border-sky-500/50">
                                                         4K UHD
                                                     </Badge>
                                                     <div>
@@ -1092,7 +1092,7 @@ export function MediaDetailModal({
                                                             type="button"
                                                             size="sm"
                                                             variant="outline"
-                                                            className="h-6 px-2 text-[11px] rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-muted-foreground hover:text-foreground border-border/40"
+                                                            className="h-6 px-2 text-[11px] rounded-lg bg-muted/50 dark:bg-white/[0.04] hover:bg-accent dark:hover:bg-white/[0.08] text-muted-foreground hover:text-foreground border-border/40"
                                                             onClick={handleSelectUnmonitoredSeasons}
                                                         >
                                                             <Filter className="h-3 w-3 mr-1" />
@@ -1139,7 +1139,7 @@ export function MediaDetailModal({
                                                                             checked={isSelected}
                                                                             onCheckedChange={() => handleToggleSeasonSelect(sNum)}
                                                                         />
-                                                                        <span className="text-xs font-bold text-white truncate">{s.name}</span>
+                                                                        <span className="text-xs font-bold text-foreground dark:text-white truncate">{s.name}</span>
                                                                     </div>
                                                                     <span className="text-[10px] text-muted-foreground shrink-0">{s.episodeCount} eps</span>
                                                                 </div>
@@ -1147,22 +1147,22 @@ export function MediaDetailModal({
                                                                 {/* Status indicators */}
                                                                 <div className="flex flex-wrap items-center gap-1 pt-0.5">
                                                                     {isFullyMon ? (
-                                                                        <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 text-[9px] font-bold border border-emerald-500/40 flex items-center gap-0.5">
+                                                                        <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 text-[9px] font-bold border border-emerald-500/40 flex items-center gap-0.5">
                                                                             <Check className="h-2.5 w-2.5" />
                                                                             {canRequest4k ? (is4k ? "4K Monitored" : "1080p Monitored") : "Monitored"}
                                                                         </span>
                                                                     ) : isPartiallyMon ? (
-                                                                        <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 text-[9px] font-bold border border-amber-500/40">
+                                                                        <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-800 dark:text-amber-300 text-[9px] font-bold border border-amber-500/40">
                                                                             {activeMon.monitoredEpisodeCount}/{activeMon.episodeCount} eps
                                                                         </span>
                                                                     ) : (
-                                                                        <span className="px-1.5 py-0.2 rounded bg-white/[0.05] text-gray-400 text-[9px] font-medium border border-white/10">
+                                                                        <span className="px-1.5 py-0.2 rounded bg-muted/50 dark:bg-white/[0.05] text-slate-600 dark:text-gray-400 text-[9px] font-medium border border-border/70 dark:border-white/10">
                                                                             Unmonitored
                                                                         </span>
                                                                     )}
 
                                                                     {!is4k && canRequest4k && seasonMon4k?.isFullyMonitored && (
-                                                                        <span className="px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-300 text-[9px] font-bold border border-sky-500/40">
+                                                                        <span className="px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-800 dark:text-sky-300 text-[9px] font-bold border border-sky-500/40">
                                                                             4K
                                                                         </span>
                                                                     )}
@@ -1176,13 +1176,13 @@ export function MediaDetailModal({
 
                                         {/* Feedback Messages */}
                                         {requestSuccessMsg && (
-                                            <div className="p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-medium flex items-center gap-2">
+                                            <div className="p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-800 dark:text-emerald-300 text-xs font-medium flex items-center gap-2">
                                                 <CheckCircle2 className="h-4 w-4 shrink-0" />
                                                 <span>{requestSuccessMsg}</span>
                                             </div>
                                         )}
                                         {requestErrorMsg && (
-                                            <div className="p-2.5 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 text-xs font-medium flex items-center gap-2">
+                                            <div className="p-2.5 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-800 dark:text-rose-300 text-xs font-medium flex items-center gap-2">
                                                 <AlertCircle className="h-4 w-4 shrink-0" />
                                                 <span>{requestErrorMsg}</span>
                                             </div>
@@ -1280,7 +1280,7 @@ export function MediaDetailModal({
                                                     <Button
                                                         size="icon"
                                                         variant="outline"
-                                                        className="h-6 w-6 rounded-lg bg-white/[0.04] border-border/40 text-muted-foreground hover:text-foreground"
+                                                        className="h-6 w-6 rounded-lg bg-muted/50 dark:bg-white/[0.04] border-border/40 text-muted-foreground hover:text-foreground"
                                                         onClick={() => scrollCarousel("left")}
                                                         title="Scroll left"
                                                     >
@@ -1289,7 +1289,7 @@ export function MediaDetailModal({
                                                     <Button
                                                         size="icon"
                                                         variant="outline"
-                                                        className="h-6 w-6 rounded-lg bg-white/[0.04] border-border/40 text-muted-foreground hover:text-foreground"
+                                                        className="h-6 w-6 rounded-lg bg-muted/50 dark:bg-white/[0.04] border-border/40 text-muted-foreground hover:text-foreground"
                                                         onClick={() => scrollCarousel("right")}
                                                         title="Scroll right"
                                                     >
@@ -1306,7 +1306,7 @@ export function MediaDetailModal({
                                                     <div
                                                         key={rec.id}
                                                         onClick={() => handleSelectRecommendation(rec)}
-                                                        className="w-28 sm:w-32 shrink-0 group cursor-pointer rounded-xl bg-[#121218] border border-border/40 hover:border-primary/60 transition-all hover:scale-[1.03] shadow-md p-1.5 flex flex-col justify-between"
+                                                        className="w-28 sm:w-32 shrink-0 group cursor-pointer rounded-xl bg-card dark:bg-[#121218] border border-border/40 hover:border-primary/60 transition-all hover:scale-[1.03] shadow-md p-1.5 flex flex-col justify-between"
                                                     >
                                                         <div className="aspect-[2/3] w-full rounded-lg overflow-hidden bg-muted/20 relative">
                                                             {rec.posterPath ? (
@@ -1321,8 +1321,8 @@ export function MediaDetailModal({
                                                                 </div>
                                                             )}
                                                             {rec.voteAverage > 0 && (
-                                                                <div className="absolute top-1 right-1 px-1.5 py-0.5 rounded bg-black/70 backdrop-blur-md text-amber-300 text-[9px] font-bold flex items-center gap-0.5 border border-white/10">
-                                                                    <Star className="h-2 w-2 fill-amber-400 text-amber-400" />
+                                                                <div className="absolute top-1 right-1 px-1.5 py-0.5 rounded bg-black/70 backdrop-blur-md text-amber-300 text-[9px] font-bold flex items-center gap-0.5 border border-border/70 dark:border-white/10">
+                                                                    <Star className="h-2 w-2 fill-amber-400 text-amber-700 dark:text-amber-400" />
                                                                     <span>{rec.voteAverage.toFixed(1)}</span>
                                                                 </div>
                                                             )}
@@ -1375,7 +1375,7 @@ export function MediaDetailModal({
                                     </div>
 
                                     {/* Toolbar for Season: Quick Selection & Action Bar */}
-                                    <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-[#121218] border border-border/40">
+                                    <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-card dark:bg-[#121218] border border-border/40">
                                         <div className="flex items-center gap-2">
                                             <span className="text-xs font-semibold text-muted-foreground">
                                                 Season {selectedSeasonNumber} Episodes:
@@ -1383,7 +1383,7 @@ export function MediaDetailModal({
                                             <Button
                                                 size="sm"
                                                 variant="outline"
-                                                className="h-7 px-2.5 text-xs font-semibold rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-muted-foreground hover:text-foreground border-border/40"
+                                                className="h-7 px-2.5 text-xs font-semibold rounded-lg bg-muted/50 dark:bg-white/[0.04] hover:bg-accent dark:hover:bg-white/[0.08] text-muted-foreground hover:text-foreground border-border/40"
                                                 onClick={() => handleSelectAllUnmonitoredEpisodesInSeason(selectedSeasonNumber)}
                                             >
                                                 <Filter className="h-3 w-3 mr-1" />
@@ -1404,9 +1404,9 @@ export function MediaDetailModal({
                                         {/* 4K vs 1080p target indicator */}
                                         <div className="flex items-center gap-2">
                                             {canRequest4k && (
-                                                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-white/[0.04] border border-border/40 text-[11px]">
+                                                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-muted/50 dark:bg-white/[0.04] border border-border/40 text-[11px]">
                                                     <span className="text-muted-foreground">Target:</span>
-                                                    <span className={`font-bold ${is4k ? "text-sky-300" : "text-blue-300"}`}>
+                                                    <span className={`font-bold ${is4k ? "text-sky-800 dark:text-sky-300" : "text-blue-800 dark:text-blue-300"}`}>
                                                         {is4k ? "4K UHD" : "1080p"}
                                                     </span>
                                                 </div>
@@ -1440,13 +1440,13 @@ export function MediaDetailModal({
 
                                     {/* Episode Feedback */}
                                     {episodeSuccessMsg && (
-                                        <div className="p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-medium flex items-center gap-2">
+                                        <div className="p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-800 dark:text-emerald-300 text-xs font-medium flex items-center gap-2">
                                             <CheckCircle2 className="h-4 w-4 shrink-0" />
                                             <span>{episodeSuccessMsg}</span>
                                         </div>
                                     )}
                                     {episodeErrorMsg && (
-                                        <div className="p-2.5 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 text-xs font-medium flex items-center gap-2">
+                                        <div className="p-2.5 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-800 dark:text-rose-300 text-xs font-medium flex items-center gap-2">
                                             <AlertCircle className="h-4 w-4 shrink-0" />
                                             <span>{episodeErrorMsg}</span>
                                         </div>
@@ -1472,7 +1472,7 @@ export function MediaDetailModal({
                                                         className={`p-2.5 rounded-xl border transition-colors flex flex-col sm:flex-row gap-3 items-start ${
                                                             isSelected
                                                                 ? "bg-primary/10 border-primary/50"
-                                                                : "bg-[#121218] border-border/40 hover:bg-muted/15"
+                                                                : "bg-card dark:bg-[#121218] border-border/40 hover:bg-muted/15"
                                                         }`}
                                                     >
                                                         {/* Checkbox for episode */}
@@ -1487,7 +1487,7 @@ export function MediaDetailModal({
                                                             <img
                                                                 src={ep.stillPath}
                                                                 alt={ep.name}
-                                                                className="w-full sm:w-32 aspect-video rounded-lg object-cover shrink-0 bg-muted/20 border border-white/5"
+                                                                className="w-full sm:w-32 aspect-video rounded-lg object-cover shrink-0 bg-muted/20 border border-border/70 dark:border-white/5"
                                                             />
                                                         )}
 
@@ -1505,34 +1505,34 @@ export function MediaDetailModal({
                                                                 {/* Monitored Status Badges */}
                                                                 <div className="flex items-center gap-1.5">
                                                                     {mon1080?.hasFile ? (
-                                                                        <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/40 flex items-center gap-1">
+                                                                        <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 text-[10px] font-bold border border-emerald-500/40 flex items-center gap-1">
                                                                             <CheckCircle2 className="h-3 w-3" />
                                                                             {canRequest4k ? "1080p Downloaded" : "Downloaded"}
                                                                         </span>
                                                                     ) : mon1080?.monitored ? (
-                                                                        <span className="px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-300 text-[10px] font-bold border border-blue-500/40 flex items-center gap-1">
+                                                                        <span className="px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-800 dark:text-blue-300 text-[10px] font-bold border border-blue-500/40 flex items-center gap-1">
                                                                             <Clock className="h-3 w-3" />
                                                                             {canRequest4k ? "1080p Monitored" : "Monitored"}
                                                                         </span>
                                                                     ) : (
-                                                                        <span className="px-1.5 py-0.2 rounded bg-white/[0.05] text-muted-foreground text-[10px] font-medium border border-white/10">
+                                                                        <span className="px-1.5 py-0.2 rounded bg-muted/50 dark:bg-white/[0.05] text-muted-foreground text-[10px] font-medium border border-border/70 dark:border-white/10">
                                                                             {canRequest4k ? "1080p Unmonitored" : "Unmonitored"}
                                                                         </span>
                                                                     )}
 
                                                                     {canRequest4k && (
                                                                         mon4k?.hasFile ? (
-                                                                            <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/40 flex items-center gap-1">
+                                                                            <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 text-[10px] font-bold border border-emerald-500/40 flex items-center gap-1">
                                                                                 <CheckCircle2 className="h-3 w-3" />
                                                                                 4K Downloaded
                                                                             </span>
                                                                         ) : mon4k?.monitored ? (
-                                                                            <span className="px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-300 text-[10px] font-bold border border-sky-500/40 flex items-center gap-1">
+                                                                            <span className="px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-800 dark:text-sky-300 text-[10px] font-bold border border-sky-500/40 flex items-center gap-1">
                                                                                 <Clock className="h-3 w-3" />
                                                                                 4K Monitored
                                                                             </span>
                                                                         ) : (
-                                                                            <span className="px-1.5 py-0.2 rounded bg-white/[0.05] text-muted-foreground text-[10px] font-medium border border-white/10">
+                                                                            <span className="px-1.5 py-0.2 rounded bg-muted/50 dark:bg-white/[0.05] text-muted-foreground text-[10px] font-medium border border-border/70 dark:border-white/10">
                                                                                 4K Unmonitored
                                                                             </span>
                                                                         )
@@ -1554,7 +1554,7 @@ export function MediaDetailModal({
                                                                 </div>
                                                             </div>
 
-                                                            <p className="text-[11px] text-gray-400 line-clamp-2 leading-relaxed">
+                                                            <p className="text-[11px] text-slate-600 dark:text-gray-400 line-clamp-2 leading-relaxed">
                                                                 {ep.overview || "No episode description available."}
                                                             </p>
                                                         </div>
@@ -1578,7 +1578,7 @@ export function MediaDetailModal({
                                     </h4>
                                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                                         {details.cast.map(c => (
-                                            <div key={c.id} className="p-2.5 rounded-xl bg-[#121218] border border-border/40 space-y-1.5 text-center min-w-0">
+                                            <div key={c.id} className="p-2.5 rounded-xl bg-card dark:bg-[#121218] border border-border/40 space-y-1.5 text-center min-w-0">
                                                 <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto rounded-full overflow-hidden border border-border/50 bg-muted/20 shadow-md">
                                                     {c.profilePath ? (
                                                         <img src={c.profilePath} alt={c.name} className="w-full h-full object-cover" />
@@ -1610,7 +1610,7 @@ export function MediaDetailModal({
                                             </h4>
                                             <div className="flex flex-wrap gap-2">
                                                 {details.watchProviders.stream.map(p => (
-                                                    <div key={p.providerId} className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#121218] border border-border/40">
+                                                    <div key={p.providerId} className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-card dark:bg-[#121218] border border-border/40">
                                                         {p.logoPath && <img src={p.logoPath} alt={p.providerName} className="w-5 h-5 rounded-lg shadow" />}
                                                         <span className="text-xs font-semibold text-foreground">{p.providerName}</span>
                                                     </div>
@@ -1626,7 +1626,7 @@ export function MediaDetailModal({
                                             </h4>
                                             <div className="flex flex-wrap gap-2">
                                                 {details.watchProviders.rent.map(p => (
-                                                    <div key={p.providerId} className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#121218] border border-border/40">
+                                                    <div key={p.providerId} className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-card dark:bg-[#121218] border border-border/40">
                                                         {p.logoPath && <img src={p.logoPath} alt={p.providerName} className="w-5 h-5 rounded-lg shadow" />}
                                                         <span className="text-xs font-semibold text-foreground">{p.providerName}</span>
                                                     </div>
@@ -1648,7 +1648,7 @@ export function MediaDetailModal({
                                             <div
                                                 key={rec.id}
                                                 onClick={() => handleSelectRecommendation(rec)}
-                                                className="group cursor-pointer rounded-xl overflow-hidden bg-[#121218] border border-border/40 hover:border-primary/50 transition-all hover:scale-[1.02] shadow-lg min-w-0 flex flex-col justify-between"
+                                                className="group cursor-pointer rounded-xl overflow-hidden bg-card dark:bg-[#121218] border border-border/40 hover:border-primary/50 transition-all hover:scale-[1.02] shadow-lg min-w-0 flex flex-col justify-between"
                                             >
                                                 <div className="aspect-[2/3] w-full bg-muted/20 overflow-hidden relative">
                                                     {rec.posterPath ? (
@@ -1659,8 +1659,8 @@ export function MediaDetailModal({
                                                         </div>
                                                     )}
                                                     {rec.voteAverage > 0 && (
-                                                        <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/70 backdrop-blur-md text-amber-300 text-[10px] font-bold flex items-center gap-1 border border-white/10">
-                                                            <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-400" />
+                                                        <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/70 backdrop-blur-md text-amber-300 text-[10px] font-bold flex items-center gap-1 border border-border/70 dark:border-white/10">
+                                                            <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-700 dark:text-amber-400" />
                                                             <span>{rec.voteAverage.toFixed(1)}</span>
                                                         </div>
                                                     )}

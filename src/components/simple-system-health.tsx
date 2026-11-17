@@ -44,10 +44,10 @@ export default function SimpleSystemHealth() {
     const isAllGood = downApps.length === 0;
 
     return (
-        <Card className="border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm">
+        <Card className="border-border/50 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md shadow-sm">
             <CardContent className="p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-3.5">
-                    <div className={`p-2.5 rounded-xl ${isAllGood ? "bg-emerald-500/10 text-emerald-400" : "bg-amber-500/10 text-amber-400"} shrink-0`}>
+                    <div className={`p-2.5 rounded-xl ${isAllGood ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" : "bg-amber-500/10 text-amber-700 dark:text-amber-400"} shrink-0`}>
                         {isAllGood ? <CheckCircle2 className="h-6 w-6" /> : <AlertTriangle className="h-6 w-6 animate-pulse" />}
                     </div>
                     <div>
@@ -59,8 +59,8 @@ export default function SimpleSystemHealth() {
                                 variant="outline" 
                                 className={`text-[10px] font-semibold ${
                                     isAllGood 
-                                        ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" 
-                                        : "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                                        ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30" 
+                                        : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30"
                                 }`}
                             >
                                 <span className={`w-1.5 h-1.5 rounded-full mr-1 ${isAllGood ? "bg-emerald-400 animate-pulse" : "bg-amber-400"}`} />

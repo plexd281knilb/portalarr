@@ -67,7 +67,7 @@ export default function ActiveDownloads() {
     });
 
     return (
-        <Card className="w-full border-border/50 bg-[#121218]/80 backdrop-blur-md shadow-sm hover:shadow-md transition-all duration-200 animate-in fade-in duration-700">
+        <Card className="w-full border-border/50 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md shadow-sm hover:shadow-md transition-all duration-200 animate-in fade-in duration-700">
             <CardHeader className="p-4 sm:p-6 pb-2 sm:pb-3">
                 <div className="flex justify-between items-center gap-2">
                     <div>
@@ -106,14 +106,14 @@ export default function ActiveDownloads() {
                                         </div>
                                         <div className="flex items-center gap-2 text-[11px] sm:text-xs text-muted-foreground shrink-0 font-mono">
                                             {speed && (
-                                                <span className="text-emerald-400 font-semibold">{speed}</span>
+                                                <span className="text-emerald-700 dark:text-emerald-400 font-semibold">{speed}</span>
                                             )}
                                             {timeleft && <span>ETA: {timeleft}</span>}
                                         </div>
                                     </div>
                                     <div className="space-y-1">
                                         <div className="flex justify-between text-[11px] text-muted-foreground font-medium">
-                                            <span className="text-cyan-400 font-semibold flex items-center gap-1.5">
+                                            <span className="text-cyan-700 dark:text-cyan-400 font-semibold flex items-center gap-1.5">
                                                 <span className="inline-block w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
                                                 Downloading
                                             </span>

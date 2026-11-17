@@ -1577,7 +1577,7 @@ function SettingsPageContent() {
             <div className="flex-1 p-8 max-w-2xl mx-auto">
                 <Card className="border-rose-500/30 bg-rose-500/5">
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-rose-400">
+                        <CardTitle className="flex items-center gap-2 text-rose-700 dark:text-rose-400">
                             <AlertTriangle className="h-5 w-5" />
                             Failed to Load System Settings
                         </CardTitle>
@@ -1604,8 +1604,8 @@ function SettingsPageContent() {
             <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
                 <TabsList className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 w-full h-auto p-1.5 bg-muted/40 border border-muted/60 rounded-xl gap-1.5 shadow-md">
                     {/* HUB 1: GENERAL */}
-                    <TabsTrigger value="general" className="group py-2.5 px-3 flex items-center justify-center gap-2 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-orange-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(249,115,22,0.25)] hover:bg-muted/80 data-[state=active]:text-orange-400 data-[state=active]:bg-orange-500/10 data-[state=active]:border-orange-500/40 data-[state=active]:shadow-sm min-w-0">
-                        <Sliders className="h-4 w-4 text-orange-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
+                    <TabsTrigger value="general" className="group py-2.5 px-3 flex items-center justify-center gap-2 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-orange-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(249,115,22,0.25)] hover:bg-muted/80 data-[state=active]:text-orange-700 dark:data-[state=active]:text-orange-400 data-[state=active]:bg-orange-500/10 data-[state=active]:border-orange-500/40 data-[state=active]:shadow-sm min-w-0">
+                        <Sliders className="h-4 w-4 text-orange-700 dark:text-orange-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
                         <span className="truncate">General & Platform</span>
                         {isGeneralHubDirty && (
                             <span className="ml-1 flex h-2 w-2 relative shrink-0">
@@ -1616,8 +1616,8 @@ function SettingsPageContent() {
                     </TabsTrigger>
 
                     {/* HUB 2: MEDIA SERVERS */}
-                    <TabsTrigger value="servers" className="group py-2.5 px-3 flex items-center justify-center gap-2 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-blue-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(59,130,246,0.25)] hover:bg-muted/80 data-[state=active]:text-blue-400 data-[state=active]:bg-blue-500/10 data-[state=active]:border-blue-500/40 data-[state=active]:shadow-sm min-w-0">
-                        <Server className="h-4 w-4 text-blue-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
+                    <TabsTrigger value="servers" className="group py-2.5 px-3 flex items-center justify-center gap-2 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-blue-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(59,130,246,0.25)] hover:bg-muted/80 data-[state=active]:text-blue-700 dark:data-[state=active]:text-blue-400 data-[state=active]:bg-blue-500/10 data-[state=active]:border-blue-500/40 data-[state=active]:shadow-sm min-w-0">
+                        <Server className="h-4 w-4 text-blue-700 dark:text-blue-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
                         <span className="truncate">Media Servers & Streaming</span>
                         {isServersHubDirty && (
                             <span className="ml-1 flex h-2 w-2 relative shrink-0">
@@ -1628,14 +1628,14 @@ function SettingsPageContent() {
                     </TabsTrigger>
 
                     {/* HUB 3: ACCESS CONTROL */}
-                    <TabsTrigger value="access" className="group py-2.5 px-3 flex items-center justify-center gap-2 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-emerald-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(52,211,153,0.25)] hover:bg-muted/80 data-[state=active]:text-emerald-400 data-[state=active]:bg-emerald-500/10 data-[state=active]:border-emerald-500/40 data-[state=active]:shadow-sm min-w-0">
-                        <Shield className="h-4 w-4 text-emerald-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
+                    <TabsTrigger value="access" className="group py-2.5 px-3 flex items-center justify-center gap-2 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-emerald-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(52,211,153,0.25)] hover:bg-muted/80 data-[state=active]:text-emerald-700 dark:data-[state=active]:text-emerald-400 data-[state=active]:bg-emerald-500/10 data-[state=active]:border-emerald-500/40 data-[state=active]:shadow-sm min-w-0">
+                        <Shield className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
                         <span className="truncate">Access Control & Members</span>
                     </TabsTrigger>
 
                     {/* HUB 4: INTEGRATIONS */}
-                    <TabsTrigger value="integrations" className="group py-2.5 px-3 flex items-center justify-center gap-2 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-rose-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(244,63,94,0.25)] hover:bg-muted/80 data-[state=active]:text-rose-400 data-[state=active]:bg-rose-500/10 data-[state=active]:border-rose-500/40 data-[state=active]:shadow-sm min-w-0">
-                        <Activity className="h-4 w-4 text-rose-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
+                    <TabsTrigger value="integrations" className="group py-2.5 px-3 flex items-center justify-center gap-2 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-rose-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(244,63,94,0.25)] hover:bg-muted/80 data-[state=active]:text-rose-700 dark:data-[state=active]:text-rose-400 data-[state=active]:bg-rose-500/10 data-[state=active]:border-rose-500/40 data-[state=active]:shadow-sm min-w-0">
+                        <Activity className="h-4 w-4 text-rose-700 dark:text-rose-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
                         <span className="truncate">Integrations & Ecosystem</span>
                         {isIntegrationsHubDirty && (
                             <span className="ml-1 flex h-2 w-2 relative shrink-0">
@@ -1646,8 +1646,8 @@ function SettingsPageContent() {
                     </TabsTrigger>
 
                     {/* HUB 5: COMMUNICATIONS */}
-                    <TabsTrigger value="communications" className="group py-2.5 px-3 flex items-center justify-center gap-2 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-sky-400/80 hover:ring-offset-1 hover:ring-offset-background hover:bg-muted/80 data-[state=active]:text-sky-400 data-[state=active]:bg-sky-500/10 data-[state=active]:border-sky-500/40 data-[state=active]:shadow-sm min-w-0">
-                        <MessageSquare className="h-4 w-4 text-sky-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
+                    <TabsTrigger value="communications" className="group py-2.5 px-3 flex items-center justify-center gap-2 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-sky-400/80 hover:ring-offset-1 hover:ring-offset-background hover:bg-muted/80 data-[state=active]:text-sky-700 dark:data-[state=active]:text-sky-400 data-[state=active]:bg-sky-500/10 data-[state=active]:border-sky-500/40 data-[state=active]:shadow-sm min-w-0">
+                        <MessageSquare className="h-4 w-4 text-sky-700 dark:text-sky-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
                         <span className="truncate">Communications & Community</span>
                         {isCommunicationsHubDirty && (
                             <span className="ml-1 flex h-2 w-2 relative shrink-0">
@@ -1663,14 +1663,14 @@ function SettingsPageContent() {
                 {/* ========================================================================= */}
                 <TabsContent value="general" className="space-y-6">
                     {/* Sub-tab Pill Switcher */}
-                    <div className="flex items-center gap-1.5 p-1 bg-white/[0.03] border border-white/10 rounded-xl w-fit overflow-x-auto max-w-full mb-6">
+                    <div className="flex items-center gap-1.5 p-1 bg-muted/50 dark:bg-white/[0.03] border border-border/70 dark:border-white/10 rounded-xl w-fit overflow-x-auto max-w-full mb-6">
                         <button
                             type="button"
                             onClick={() => handleSubTabChange("general", "platform")}
                             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
                                 hubSubTabs.general === "platform"
-                                    ? "bg-orange-500/20 text-orange-400 border border-orange-500/40 shadow-xs"
-                                    : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05]"
+                                    ? "bg-orange-500/20 text-orange-700 dark:text-orange-400 border border-orange-500/40 shadow-xs"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-white/[0.05]"
                             }`}
                         >
                             <Globe className="h-3.5 w-3.5" />
@@ -1684,8 +1684,8 @@ function SettingsPageContent() {
                             onClick={() => handleSubTabChange("general", "schedules")}
                             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
                                 hubSubTabs.general === "schedules"
-                                    ? "bg-orange-500/20 text-orange-400 border border-orange-500/40 shadow-xs"
-                                    : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05]"
+                                    ? "bg-orange-500/20 text-orange-700 dark:text-orange-400 border border-orange-500/40 shadow-xs"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-white/[0.05]"
                             }`}
                         >
                             <CalendarClock className="h-3.5 w-3.5" />
@@ -1699,8 +1699,8 @@ function SettingsPageContent() {
                             onClick={() => handleSubTabChange("general", "announcements")}
                             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
                                 hubSubTabs.general === "announcements"
-                                    ? "bg-orange-500/20 text-orange-400 border border-orange-500/40 shadow-xs"
-                                    : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05]"
+                                    ? "bg-orange-500/20 text-orange-700 dark:text-orange-400 border border-orange-500/40 shadow-xs"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-white/[0.05]"
                             }`}
                         >
                             <Megaphone className="h-3.5 w-3.5" />
@@ -1714,8 +1714,8 @@ function SettingsPageContent() {
                             onClick={() => handleSubTabChange("general", "logs")}
                             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
                                 hubSubTabs.general === "logs"
-                                    ? "bg-orange-500/20 text-orange-400 border border-orange-500/40 shadow-xs"
-                                    : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05]"
+                                    ? "bg-orange-500/20 text-orange-700 dark:text-orange-400 border border-orange-500/40 shadow-xs"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-white/[0.05]"
                             }`}
                         >
                             <Terminal className="h-3.5 w-3.5" />
@@ -1726,7 +1726,7 @@ function SettingsPageContent() {
                     {hubSubTabs.general === "platform" && (
                         <div className="space-y-6">
                                                 {/* PUBLIC WEB ADDRESS (CANONICAL BASE URL) CARD */}
-                    <Card className={`bg-[#121218]/80 backdrop-blur-md shadow-lg transition-all duration-300 ${
+                    <Card className={`bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md shadow-lg transition-all duration-300 ${
                         isAppUrlDirty 
                             ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" 
                             : "border-primary/40 shadow-primary/10"
@@ -1743,16 +1743,16 @@ function SettingsPageContent() {
                                 </div>
                                 <div className="flex flex-wrap items-center gap-1.5 shrink-0">
                                     {isAppUrlDirty && (
-                                        <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
+                                        <Badge className="bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
                                             ● Unsaved Changes
                                         </Badge>
                                     )}
                                     {systemSettings?.appUrl ? (
-                                        <Badge className="bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 text-[10px] gap-1">
+                                        <Badge className="bg-emerald-600/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 text-[10px] gap-1">
                                             <CheckCircle2 className="h-3 w-3" /> Configured
                                         </Badge>
                                     ) : (
-                                        <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/30 text-[10px]">
+                                        <Badge variant="outline" className="bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30 text-[10px]">
                                             Auto-Detecting
                                         </Badge>
                                     )}
@@ -1787,13 +1787,13 @@ function SettingsPageContent() {
                                 autoComplete="off"
                             >
                                 {saveAppUrlMsg && (
-                                    <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
+                                    <div className="text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/40 dark:border-emerald-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
                                         <CheckCircle2 className="h-4 w-4 shrink-0" />
                                         <span>{saveAppUrlMsg}</span>
                                     </div>
                                 )}
                                 {saveAppUrlErr && (
-                                    <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
+                                    <div className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 dark:bg-red-950/40 border border-red-500/40 dark:border-red-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
                                         <XCircle className="h-4 w-4 shrink-0" />
                                         <span>{saveAppUrlErr}</span>
                                     </div>
@@ -1856,20 +1856,20 @@ function SettingsPageContent() {
                                         <Sparkles className="h-3.5 w-3.5 text-primary" /> Generated Links Preview
                                     </div>
                                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 font-mono text-[11px]">
-                                        <div className="p-2 rounded-lg bg-black/40 border border-amber-500/20 truncate">
-                                            <span className="text-[9px] uppercase font-bold text-amber-400 block tracking-wider font-sans">Invite Friends</span>
+                                        <div className="p-2 rounded-lg bg-muted/60 dark:bg-black/40 border border-amber-500/20 truncate">
+                                            <span className="text-[9px] uppercase font-bold text-amber-700 dark:text-amber-400 block tracking-wider font-sans">Invite Friends</span>
                                             <span className="text-muted-foreground truncate block">
                                                 {appUrlInput ? `${appUrlInput.replace(/\/+$/, "")}/join?ref=invite` : "http://localhost:3000/join?ref=invite"}
                                             </span>
                                         </div>
-                                        <div className="p-2 rounded-lg bg-black/40 border border-blue-500/20 truncate">
-                                            <span className="text-[9px] uppercase font-bold text-blue-400 block tracking-wider font-sans">Email Login Link</span>
+                                        <div className="p-2 rounded-lg bg-muted/60 dark:bg-black/40 border border-blue-500/20 truncate">
+                                            <span className="text-[9px] uppercase font-bold text-blue-700 dark:text-blue-400 block tracking-wider font-sans">Email Login Link</span>
                                             <span className="text-muted-foreground truncate block">
                                                 {appUrlInput ? `${appUrlInput.replace(/\/+$/, "")}/login` : "http://localhost:3000/login"}
                                             </span>
                                         </div>
-                                        <div className="p-2 rounded-lg bg-black/40 border border-emerald-500/20 truncate">
-                                            <span className="text-[9px] uppercase font-bold text-emerald-400 block tracking-wider font-sans">Admin Approvals</span>
+                                        <div className="p-2 rounded-lg bg-muted/60 dark:bg-black/40 border border-emerald-500/20 truncate">
+                                            <span className="text-[9px] uppercase font-bold text-emerald-700 dark:text-emerald-400 block tracking-wider font-sans">Admin Approvals</span>
                                             <span className="text-muted-foreground truncate block">
                                                 {appUrlInput ? `${appUrlInput.replace(/\/+$/, "")}/settings/access` : "http://localhost:3000/settings/access"}
                                             </span>
@@ -1898,7 +1898,7 @@ function SettingsPageContent() {
                         </CardContent>
                     </Card>
 
-                                                        <Card className={`bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
+                                                        <Card className={`bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
                                 isDownloadsPathDirty ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" : ""
                             }`}>
                                 <CardHeader>
@@ -1910,7 +1910,7 @@ function SettingsPageContent() {
                                             <CardDescription>Configure filesystem storage directory path and verify read, write, and delete permissions.</CardDescription>
                                         </div>
                                         {isDownloadsPathDirty && (
-                                            <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
+                                            <Badge className="bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
                                                 ● Unsaved Changes
                                             </Badge>
                                         )}
@@ -1932,7 +1932,7 @@ function SettingsPageContent() {
                                         className="space-y-4"
                                     >
                                         {saveDownloadsMsg && (
-                                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
+                                            <div className="text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/40 dark:border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
                                                 <CheckCircle2 className="h-4 w-4 shrink-0" />
                                                 <span>{saveDownloadsMsg}</span>
                                             </div>
@@ -1980,16 +1980,16 @@ function SettingsPageContent() {
                                                 <Button 
                                                     type="button" 
                                                     variant="secondary" 
-                                                    className="text-xs shrink-0 font-extrabold gap-1.5 bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 hover:ring-2 hover:ring-amber-500/40 active:scale-95 transition-all shadow-sm"
+                                                    className="text-xs shrink-0 font-extrabold gap-1.5 bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 hover:ring-2 hover:ring-amber-500/40 active:scale-95 transition-all shadow-sm"
                                                     disabled={permTesting}
                                                     onClick={() => handleTestPermissions(inputDownloadsPath)}
                                                 >
-                                                    {permTesting ? <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-400" /> : <Shield className="h-3.5 w-3.5 text-amber-400" />}
+                                                    {permTesting ? <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-700 dark:text-amber-400" /> : <Shield className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />}
                                                     Run Diagnostic Suite
                                                 </Button>
                                             </div>
                                             {pathResult && (
-                                                <div className={`text-xs p-2.5 rounded-lg border mt-2 flex items-center gap-2 ${pathResult.success ? "text-emerald-400 bg-emerald-950/40 border-emerald-800/40" : "text-red-400 bg-red-950/40 border-red-800/40"}`}>
+                                                <div className={`text-xs p-2.5 rounded-lg border mt-2 flex items-center gap-2 ${pathResult.success ? "text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40 border-emerald-500/40 dark:border-emerald-800/40" : "text-red-700 dark:text-red-400 bg-red-500/10 dark:bg-red-950/40 border-red-500/40 dark:border-red-800/40"}`}>
                                                     {pathResult.success ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <XCircle className="h-4 w-4 shrink-0" />}
                                                     <span>{pathResult.msg || pathResult.err}</span>
                                                 </div>
@@ -1997,13 +1997,13 @@ function SettingsPageContent() {
 
                                             {/* FULL FOLDER PERMISSIONS DIAGNOSTIC RESULTS */}
                                             {permResult && (
-                                                <div className={`text-xs p-4 rounded-xl border mt-3 space-y-3 ${permResult.success ? "bg-emerald-950/30 border-emerald-800/40 text-emerald-300" : "bg-red-950/30 border-red-800/40 text-slate-200"}`}>
+                                                <div className={`text-xs p-4 rounded-xl border mt-3 space-y-3 ${permResult.success ? "bg-emerald-500/10 dark:bg-emerald-950/30 border-emerald-500/40 dark:border-emerald-800/40 text-emerald-800 dark:text-emerald-300" : "bg-red-500/10 dark:bg-red-950/30 border-red-500/40 dark:border-red-800/40 text-foreground dark:text-slate-200"}`}>
                                                     <div className="flex flex-wrap items-center justify-between gap-2 font-bold text-sm border-b border-muted/30 pb-2">
                                                         <span className="flex items-center gap-2">
-                                                            {permResult.success ? <CheckCircle2 className="h-4.5 w-4.5 text-emerald-400 shrink-0" /> : <AlertTriangle className="h-4.5 w-4.5 text-red-400 shrink-0" />}
-                                                            Container Folder Diagnostic: <code className="text-amber-400 text-xs">{permResult.results?.folderPath}</code>
+                                                            {permResult.success ? <CheckCircle2 className="h-4.5 w-4.5 text-emerald-700 dark:text-emerald-400 shrink-0" /> : <AlertTriangle className="h-4.5 w-4.5 text-red-700 dark:text-red-400 shrink-0" />}
+                                                            Container Folder Diagnostic: <code className="text-amber-700 dark:text-amber-400 text-xs">{permResult.results?.folderPath}</code>
                                                         </span>
-                                                        <Badge className={permResult.success ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30" : "bg-red-500/20 text-red-300 border-red-500/30"}>
+                                                        <Badge className={permResult.success ? "bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border-emerald-500/30" : "bg-red-500/20 text-red-800 dark:text-red-300 border-red-500/30"}>
                                                             {permResult.success ? "✓ ALL PERMISSIONS PASS" : "✗ PERMISSIONS DEFICIENT"}
                                                         </Badge>
                                                     </div>
@@ -2011,25 +2011,25 @@ function SettingsPageContent() {
                                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 font-mono text-[11px]">
                                                         <div className="flex items-center justify-between p-2 rounded bg-background/60 border border-muted/30">
                                                             <span>Path Exists:</span>
-                                                            <span className={permResult.results?.exists ? "text-emerald-400 font-bold" : "text-red-400 font-bold"}>
+                                                            <span className={permResult.results?.exists ? "text-emerald-700 dark:text-emerald-400 font-bold" : "text-red-700 dark:text-red-400 font-bold"}>
                                                                 {permResult.results?.exists ? "✓ PASS" : "✗ FAIL"}
                                                             </span>
                                                         </div>
                                                         <div className="flex items-center justify-between p-2 rounded bg-background/60 border border-muted/30">
                                                             <span>Read Access:</span>
-                                                            <span className={permResult.results?.canRead ? "text-emerald-400 font-bold" : "text-red-400 font-bold"}>
+                                                            <span className={permResult.results?.canRead ? "text-emerald-700 dark:text-emerald-400 font-bold" : "text-red-700 dark:text-red-400 font-bold"}>
                                                                 {permResult.results?.canRead ? "✓ PASS" : "✗ FAIL"}
                                                             </span>
                                                         </div>
                                                         <div className="flex items-center justify-between p-2 rounded bg-background/60 border border-muted/30">
                                                             <span>Write Access:</span>
-                                                            <span className={permResult.results?.canWrite ? "text-emerald-400 font-bold" : "text-red-400 font-bold"}>
+                                                            <span className={permResult.results?.canWrite ? "text-emerald-700 dark:text-emerald-400 font-bold" : "text-red-700 dark:text-red-400 font-bold"}>
                                                                 {permResult.results?.canWrite ? "✓ PASS" : "✗ FAIL"}
                                                             </span>
                                                         </div>
                                                         <div className="flex items-center justify-between p-2 rounded bg-background/60 border border-muted/30">
                                                             <span>Delete Access:</span>
-                                                            <span className={permResult.results?.canDelete ? "text-emerald-400 font-bold" : "text-red-400 font-bold"}>
+                                                            <span className={permResult.results?.canDelete ? "text-emerald-700 dark:text-emerald-400 font-bold" : "text-red-700 dark:text-red-400 font-bold"}>
                                                                 {permResult.results?.canDelete ? "✓ PASS" : "✗ FAIL"}
                                                             </span>
                                                         </div>
@@ -2041,14 +2041,14 @@ function SettingsPageContent() {
                                                                 Total Items: <strong className="text-primary">{permResult.results?.itemCount || 0}</strong>
                                                             </span>
                                                             <span>
-                                                                Total File Size: <strong className="text-amber-400">{((permResult.results?.totalSizeBytes || 0) / (1024 * 1024)).toFixed(1)} MB</strong>
+                                                                Total File Size: <strong className="text-amber-700 dark:text-amber-400">{((permResult.results?.totalSizeBytes || 0) / (1024 * 1024)).toFixed(1)} MB</strong>
                                                             </span>
                                                         </div>
                                                     )}
 
                                                     {permResult.results?.subfolders && permResult.results.subfolders.length > 0 && (
                                                         <div className="space-y-1.5 pt-1">
-                                                            <div className="text-[11px] font-bold text-slate-400">Detected Subdirectories:</div>
+                                                            <div className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Detected Subdirectories:</div>
                                                             <div className="flex flex-wrap gap-1.5">
                                                                 {permResult.results.subfolders.map((sub: any) => (
                                                                     <Badge key={sub.name} variant="outline" className="bg-muted/40 text-[10px] font-mono">
@@ -2060,7 +2060,7 @@ function SettingsPageContent() {
                                                     )}
 
                                                     {permResult.results?.error && (
-                                                        <div className="text-[11px] text-red-400 bg-red-950/50 p-2.5 rounded-lg border border-red-800/40">
+                                                        <div className="text-[11px] text-red-700 dark:text-red-400 bg-red-500/10 dark:bg-red-950/50 p-2.5 rounded-lg border border-red-500/40 dark:border-red-800/40">
                                                             <strong>Error Details:</strong> {permResult.results.error}
                                                         </div>
                                                     )}
@@ -2078,12 +2078,12 @@ function SettingsPageContent() {
                             <div className="p-4 rounded-xl bg-gradient-to-r from-orange-500/10 via-amber-500/5 to-transparent border border-orange-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
                                 <div className="flex items-center gap-3 min-w-0">
                                     <div className="h-10 w-10 rounded-xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-center shrink-0">
-                                        <Shield className="h-5 w-5 text-orange-400" />
+                                        <Shield className="h-5 w-5 text-orange-700 dark:text-orange-400" />
                                     </div>
                                     <div className="min-w-0 space-y-0.5">
                                         <div className="text-xs font-bold text-foreground flex items-center gap-1.5">
                                             <span>Cloudflare Access & Edge Security Policy Paths</span>
-                                            <Badge variant="outline" className="text-[10px] bg-orange-500/10 text-orange-300 border-orange-500/30">
+                                            <Badge variant="outline" className="text-[10px] bg-orange-500/10 text-orange-800 dark:text-orange-300 border-orange-500/30">
                                                 Access Control Tab
                                             </Badge>
                                         </div>
@@ -2097,7 +2097,7 @@ function SettingsPageContent() {
                                     variant="outline"
                                     size="sm"
                                     onClick={() => navigateToTab("cloudflare")}
-                                    className="text-xs font-semibold gap-1.5 border-orange-500/40 text-orange-300 hover:bg-orange-500/10 shrink-0 self-start sm:self-auto cursor-pointer"
+                                    className="text-xs font-semibold gap-1.5 border-orange-500/40 text-orange-800 dark:text-orange-300 hover:bg-orange-500/10 shrink-0 self-start sm:self-auto cursor-pointer"
                                 >
                                     <span>Open Cloudflare Access</span>
                                     <ArrowUpRight className="h-3.5 w-3.5" />
@@ -2109,21 +2109,21 @@ function SettingsPageContent() {
                                         {hubSubTabs.general === "schedules" && (
                         <div className="space-y-6">
                             {/* LIBRARY AUTO-SCAN & SYNC FREQUENCY CARD */}
-                            <Card className={`bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
+                            <Card className={`bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
                                 isAutoSyncIntervalDirty ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" : ""
                             }`}>
                                 <CardHeader>
                                     <div className="flex justify-between items-start">
                                         <div>
                                             <CardTitle className="flex items-center gap-2">
-                                                <RefreshCw className="h-5 w-5 text-sky-400" /> Library Auto-Scan &amp; Sync Frequency
+                                                <RefreshCw className="h-5 w-5 text-sky-700 dark:text-sky-400" /> Library Auto-Scan &amp; Sync Frequency
                                             </CardTitle>
                                             <CardDescription>
                                                 Configure how frequently Portalarr scans filesystem storage for media updates and syncs live Plex friends.
                                             </CardDescription>
                                         </div>
                                         {isAutoSyncIntervalDirty && (
-                                            <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px]">
+                                            <Badge className="bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/40 text-[10px]">
                                                 Unsaved Changes
                                             </Badge>
                                         )}
@@ -2145,7 +2145,7 @@ function SettingsPageContent() {
                                         className="space-y-4"
                                     >
                                         {saveScanIntervalMsg && (
-                                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
+                                            <div className="text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/40 dark:border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
                                                 <CheckCircle2 className="h-4 w-4 shrink-0" />
                                                 <span>{saveScanIntervalMsg}</span>
                                             </div>
@@ -2168,8 +2168,8 @@ function SettingsPageContent() {
                                                             size="sm"
                                                             className={`h-6 px-2 text-[10px] font-mono border-muted/50 transition-all ${
                                                                 String(autoSyncIntervalInput) === preset.value
-                                                                    ? "bg-sky-500/20 text-sky-300 border-sky-500/50"
-                                                                    : "text-muted-foreground hover:text-sky-300 hover:border-sky-500/40"
+                                                                    ? "bg-sky-500/20 text-sky-800 dark:text-sky-300 border-sky-500/50"
+                                                                    : "text-muted-foreground hover:text-sky-800 dark:hover:text-sky-300 hover:border-sky-500/40"
                                                             }`}
                                                             onClick={() => setAutoSyncIntervalInput(preset.value)}
                                                         >
@@ -2185,12 +2185,12 @@ function SettingsPageContent() {
                                                 onChange={(e) => setAutoSyncIntervalInput(e.target.value)} 
                                                 placeholder="60"
                                             />
-                                            <div className="p-3 rounded-lg bg-sky-950/30 border border-sky-900/40 text-[11px] text-slate-300 space-y-1">
-                                                <div className="font-semibold text-sky-300 flex items-center gap-1.5">
-                                                    <Clock className="h-3.5 w-3.5 text-sky-400" />
+                                            <div className="p-3 rounded-lg bg-sky-500/10 dark:bg-sky-950/30 border border-sky-500/40 dark:border-sky-900/40 text-[11px] text-slate-700 dark:text-slate-300 space-y-1">
+                                                <div className="font-semibold text-sky-800 dark:text-sky-300 flex items-center gap-1.5">
+                                                    <Clock className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400" />
                                                     Storage &amp; Spinning Disk Best Practices
                                                 </div>
-                                                <p className="text-slate-400">
+                                                <p className="text-slate-600 dark:text-slate-400">
                                                     If your Plex media files reside on spinning hard drives (e.g. Unraid array), a longer interval such as <strong>360 minutes (6 hours)</strong> prevents drive wake-ups and avoids spin-up delays during routine parity checks.
                                                 </p>
                                             </div>
@@ -2210,7 +2210,7 @@ function SettingsPageContent() {
                     {hubSubTabs.general === "announcements" && (
                         <div className="space-y-6">
                                                 {/* ALERT BANNER CARD */}
-                    <Card className={`bg-[#121218]/80 backdrop-blur-md shadow-lg transition-all duration-300 ${
+                    <Card className={`bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md shadow-lg transition-all duration-300 ${
                         isAlertBannerDirty 
                             ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" 
                             : "border-orange-500/40 shadow-orange-950/20"
@@ -2224,7 +2224,7 @@ function SettingsPageContent() {
                                     <CardDescription>Display a warning or maintenance notification banner at the top of the main dashboard.</CardDescription>
                                 </div>
                                 {isAlertBannerDirty && (
-                                    <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
+                                    <Badge className="bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
                                         ● Unsaved Changes
                                     </Badge>
                                 )}
@@ -2257,7 +2257,7 @@ function SettingsPageContent() {
                     </Card>
 
                                                 {/* DUAL ROADMAP CARD EDITOR (USER & DEV ROADMAPS) */}
-                    <Card className={`bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
+                    <Card className={`bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
                         (isRoadmapDirty || isDevRoadmapDirty) ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" : ""
                     }`}>
                         <CardHeader>
@@ -2267,7 +2267,7 @@ function SettingsPageContent() {
                                     <CardDescription>Manage both the public user-facing feature announcements and the internal developer maintenance backlog.</CardDescription>
                                 </div>
                                 {(isRoadmapDirty || isDevRoadmapDirty) && (
-                                    <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
+                                    <Badge className="bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
                                         ● Unsaved Changes
                                     </Badge>
                                 )}
@@ -2275,14 +2275,14 @@ function SettingsPageContent() {
                         </CardHeader>
                         <CardContent>
                             <Tabs defaultValue="user-roadmap" className="w-full">
-                                <TabsList className="mb-4 grid w-full max-w-md grid-cols-2 bg-black/40 border border-white/[0.08]">
-                                    <TabsTrigger value="user-roadmap" className="gap-1.5 text-xs font-semibold data-[state=active]:bg-sky-500/20 data-[state=active]:text-sky-300">
-                                        <Sparkles className="h-3.5 w-3.5 text-sky-400" />
+                                <TabsList className="mb-4 grid w-full max-w-md grid-cols-2 bg-muted/60 dark:bg-black/40 border border-border/70 dark:border-white/[0.08]">
+                                    <TabsTrigger value="user-roadmap" className="gap-1.5 text-xs font-semibold data-[state=active]:bg-sky-500/20 data-[state=active]:text-sky-800 dark:data-[state=active]:text-sky-300">
+                                        <Sparkles className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400" />
                                         <span>User Roadmap</span>
                                         {isRoadmapDirty && <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />}
                                     </TabsTrigger>
-                                    <TabsTrigger value="dev-roadmap" className="gap-1.5 text-xs font-semibold data-[state=active]:bg-amber-500/20 data-[state=active]:text-amber-300">
-                                        <Wrench className="h-3.5 w-3.5 text-amber-400" />
+                                    <TabsTrigger value="dev-roadmap" className="gap-1.5 text-xs font-semibold data-[state=active]:bg-amber-500/20 data-[state=active]:text-amber-800 dark:data-[state=active]:text-amber-300">
+                                        <Wrench className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
                                         <span>Dev Roadmap</span>
                                         {isDevRoadmapDirty && <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />}
                                     </TabsTrigger>
@@ -2329,12 +2329,12 @@ function SettingsPageContent() {
                                                     value={devRoadmapText} 
                                                     onChange={(e) => setDevRoadmapText(e.target.value)}
                                                     rows={12} 
-                                                    className="font-mono text-sm leading-relaxed text-amber-200 bg-black/40"
+                                                    className="font-mono text-sm leading-relaxed text-amber-900 dark:text-amber-200 bg-muted/60 dark:bg-black/40"
                                                     placeholder="# 🛠️ Developer Roadmap & Maintenance Backlog..."
                                                     required
                                                 />
                                             </TabsContent>
-                                            <TabsContent value="preview" className="border border-amber-500/20 rounded-md p-5 min-h-[290px] bg-amber-950/10 prose prose-neutral dark:prose-invert max-w-none text-sm leading-relaxed overflow-y-auto prose-headings:font-bold prose-h3:text-base prose-h3:text-amber-300 prose-h3:mt-3 prose-h3:mb-2 prose-ul:my-2 prose-ul:space-y-2 prose-li:my-1 prose-hr:my-4">
+                                            <TabsContent value="preview" className="border border-amber-500/20 rounded-md p-5 min-h-[290px] bg-amber-500/10 dark:bg-amber-950/10 prose prose-neutral dark:prose-invert max-w-none text-sm leading-relaxed overflow-y-auto prose-headings:font-bold prose-h3:text-base prose-h3:text-amber-800 dark:prose-h3:text-amber-300 prose-h3:mt-3 prose-h3:mb-2 prose-ul:my-2 prose-ul:space-y-2 prose-li:my-1 prose-hr:my-4">
                                                 <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{devRoadmapText || "*No developer backlog content*"}</ReactMarkdown>
                                             </TabsContent>
                                         </Tabs>
@@ -2347,7 +2347,7 @@ function SettingsPageContent() {
 
                             <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
                                                         {/* BETA DASHBOARD INTRO EDITOR */}
-                        <Card className={`bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
+                        <Card className={`bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
                             isBetaDirty ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" : ""
                         }`}>
                             <CardHeader>
@@ -2357,7 +2357,7 @@ function SettingsPageContent() {
                                         <CardDescription>This Markdown text appears on the main home dashboard.</CardDescription>
                                     </div>
                                     {isBetaDirty && (
-                                        <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
+                                        <Badge className="bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
                                             ● Unsaved Changes
                                         </Badge>
                                     )}
@@ -2381,7 +2381,7 @@ function SettingsPageContent() {
                                                 placeholder="### Interested in Beta Testing?..." 
                                             />
                                         </TabsContent>
-                                        <TabsContent value="preview" className="border rounded-md p-4 min-h-[164px] bg-muted/10 prose prose-invert max-w-none text-sm overflow-y-auto">
+                                        <TabsContent value="preview" className="border rounded-md p-4 min-h-[164px] bg-muted/10 prose dark:prose-invert max-w-none text-sm overflow-y-auto">
                                             <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{betaText || "*No content*"}</ReactMarkdown>
                                         </TabsContent>
                                     </Tabs>
@@ -2391,7 +2391,7 @@ function SettingsPageContent() {
                         </Card>
 
                                                         {/* BETA TESTING CARDS EDITOR */}
-                        <Card className="bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
+                        <Card className="bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
                             <CardHeader>
                                 <CardTitle>{editingBetaCard ? "Edit Beta Card" : "Beta Testing Cards"}</CardTitle>
                                 <CardDescription>Manage the interactive service cards on `/beta`.</CardDescription>
@@ -2400,7 +2400,7 @@ function SettingsPageContent() {
                                 {!editingBetaCard && (
                                     <div className="space-y-4 max-h-[300px] overflow-y-auto">
                                         {betaCards.map((card: any) => (
-                                            <div key={card.id} className="flex items-start justify-between border border-border/40 p-3 rounded-xl bg-[#101014]/90 backdrop-blur-md hover:border-border/80 transition-all">
+                                            <div key={card.id} className="flex items-start justify-between border border-border/40 p-3 rounded-xl bg-card/95 dark:bg-[#101014]/90 backdrop-blur-md hover:border-border/80 transition-all">
                                                 <div className="space-y-1">
                                                     <div className="font-semibold">{card.title}</div>
                                                     <div className="text-xs text-muted-foreground line-clamp-1">{card.content}</div>
@@ -2459,7 +2459,7 @@ function SettingsPageContent() {
                                                     className="font-mono text-sm"
                                                 />
                                             </TabsContent>
-                                            <TabsContent value="preview" className="border rounded-md p-3 min-h-[104px] bg-muted/10 prose prose-invert max-w-none text-xs overflow-y-auto">
+                                            <TabsContent value="preview" className="border rounded-md p-3 min-h-[104px] bg-muted/10 prose dark:prose-invert max-w-none text-xs overflow-y-auto">
                                                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{betaCardContent || "*No content*"}</ReactMarkdown>
                                             </TabsContent>
                                         </Tabs>
@@ -2509,14 +2509,14 @@ function SettingsPageContent() {
                 {/* ========================================================================= */}
                 <TabsContent value="servers" className="space-y-6">
                     {/* Sub-tab Pill Switcher */}
-                    <div className="flex items-center gap-1.5 p-1 bg-white/[0.03] border border-white/10 rounded-xl w-fit overflow-x-auto max-w-full mb-6">
+                    <div className="flex items-center gap-1.5 p-1 bg-muted/50 dark:bg-white/[0.03] border border-border/70 dark:border-white/10 rounded-xl w-fit overflow-x-auto max-w-full mb-6">
                         <button
                             type="button"
                             onClick={() => handleSubTabChange("servers", "fleet")}
                             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
                                 hubSubTabs.servers === "fleet"
-                                    ? "bg-blue-500/20 text-blue-400 border border-blue-500/40 shadow-xs"
-                                    : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05]"
+                                    ? "bg-blue-500/20 text-blue-700 dark:text-blue-400 border border-blue-500/40 shadow-xs"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-white/[0.05]"
                             }`}
                         >
                             <Server className="h-3.5 w-3.5" />
@@ -2527,8 +2527,8 @@ function SettingsPageContent() {
                             onClick={() => handleSubTabChange("servers", "plex-admin")}
                             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
                                 hubSubTabs.servers === "plex-admin"
-                                    ? "bg-blue-500/20 text-blue-400 border border-blue-500/40 shadow-xs"
-                                    : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05]"
+                                    ? "bg-blue-500/20 text-blue-700 dark:text-blue-400 border border-blue-500/40 shadow-xs"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-white/[0.05]"
                             }`}
                         >
                             <Tv className="h-3.5 w-3.5" />
@@ -2542,8 +2542,8 @@ function SettingsPageContent() {
                             onClick={() => handleSubTabChange("servers", "plex-cluster")}
                             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
                                 hubSubTabs.servers === "plex-cluster"
-                                    ? "bg-blue-500/20 text-blue-400 border border-blue-500/40 shadow-xs"
-                                    : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05]"
+                                    ? "bg-blue-500/20 text-blue-700 dark:text-blue-400 border border-blue-500/40 shadow-xs"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-white/[0.05]"
                             }`}
                         >
                             <Radio className="h-3.5 w-3.5" />
@@ -2554,8 +2554,8 @@ function SettingsPageContent() {
                             onClick={() => handleSubTabChange("servers", "telemetry")}
                             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
                                 hubSubTabs.servers === "telemetry"
-                                    ? "bg-blue-500/20 text-blue-400 border border-blue-500/40 shadow-xs"
-                                    : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05]"
+                                    ? "bg-blue-500/20 text-blue-700 dark:text-blue-400 border border-blue-500/40 shadow-xs"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-white/[0.05]"
                             }`}
                         >
                             <History className="h-3.5 w-3.5" />
@@ -2576,7 +2576,7 @@ function SettingsPageContent() {
                     {hubSubTabs.servers === "plex-admin" && (
                         <div className="space-y-6">
                                                         {/* PLEX SERVER & ADMIN TOKEN INTEGRATION */}
-                            <Card className={`bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
+                            <Card className={`bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
                                 isPlexDirty ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" : ""
                             }`}>
                                 <CardHeader>
@@ -2589,16 +2589,16 @@ function SettingsPageContent() {
                                         </div>
                                         <div className="flex flex-wrap items-center gap-1.5">
                                             {isPlexDirty && (
-                                                <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
+                                                <Badge className="bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
                                                     ● Unsaved Changes
                                                 </Badge>
                                             )}
                                             {systemSettings?.mainPlexToken ? (
-                                                <Badge className="bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 text-[10px] gap-1">
+                                                <Badge className="bg-emerald-600/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 text-[10px] gap-1">
                                                     <CheckCircle2 className="h-3 w-3" /> Token Linked
                                                 </Badge>
                                             ) : (
-                                                <Badge variant="outline" className="bg-red-500/10 text-red-400 border-red-500/30 text-[10px]">
+                                                <Badge variant="outline" className="bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30 text-[10px]">
                                                     Token Inactive
                                                 </Badge>
                                             )}
@@ -2608,7 +2608,7 @@ function SettingsPageContent() {
                                 <CardContent>
                                     <div className="p-3 mb-4 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-between gap-3 text-xs">
                                         <div className="flex items-center gap-2">
-                                            <Server className="h-4 w-4 text-blue-400 shrink-0" />
+                                            <Server className="h-4 w-4 text-blue-700 dark:text-blue-400 shrink-0" />
                                             <span className="text-muted-foreground">
                                                 Manage <strong className="text-foreground">Emby &amp; Jellyfin</strong> servers or configure <strong className="text-foreground">User Library Whitelists</strong> in the dedicated tab.
                                             </span>
@@ -2618,7 +2618,7 @@ function SettingsPageContent() {
                                             variant="outline"
                                             size="sm"
                                             onClick={() => handleSubTabChange("servers", "fleet")}
-                                            className="h-7 text-xs font-semibold gap-1.5 border-blue-500/40 text-blue-400 hover:bg-blue-500/15 shrink-0"
+                                            className="h-7 text-xs font-semibold gap-1.5 border-blue-500/40 text-blue-700 dark:text-blue-400 hover:bg-blue-500/15 shrink-0"
                                         >
                                             Media Servers Tab &rarr;
                                         </Button>
@@ -2642,19 +2642,19 @@ function SettingsPageContent() {
                                         data-lpignore="true"
                                     >
                                         {savePlexMsg && (
-                                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
+                                            <div className="text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/40 dark:border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
                                                 <CheckCircle2 className="h-4 w-4 shrink-0" />
                                                 <span>{savePlexMsg}</span>
                                             </div>
                                         )}
                                         {syncPlexFriendsMsg && (
-                                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
+                                            <div className="text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/40 dark:border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
                                                 <CheckCircle2 className="h-4 w-4 shrink-0" />
                                                 <span>{syncPlexFriendsMsg}</span>
                                             </div>
                                         )}
                                         {syncPlexFriendsErr && (
-                                            <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2">
+                                            <div className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 dark:bg-red-950/40 border border-red-500/40 dark:border-red-800/40 p-3 rounded-lg flex items-center gap-2">
                                                 <XCircle className="h-4 w-4 shrink-0" />
                                                 <span>{syncPlexFriendsErr}</span>
                                             </div>
@@ -2665,7 +2665,7 @@ function SettingsPageContent() {
                                             <div className="flex items-center justify-between">
                                                 <Label htmlFor="mainPlexToken" className="text-xs font-semibold">Admin Plex Token (Auto-Syncs Friends List)</Label>
                                                 {systemSettings?.mainPlexToken && (
-                                                    <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
+                                                    <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-medium flex items-center gap-1">
                                                         <CheckCircle2 className="h-3 w-3" /> Encrypted & Saved
                                                     </span>
                                                 )}
@@ -2706,7 +2706,7 @@ function SettingsPageContent() {
                                                     {isLinkingPlex ? "Connecting to Plex..." : "Sign in with Plex to Auto-Link Token"}
                                                 </Button>
                                                 {plexLinkMsg && (
-                                                    <span className="text-xs text-emerald-400 font-medium flex items-center gap-1">
+                                                    <span className="text-xs text-emerald-700 dark:text-emerald-400 font-medium flex items-center gap-1">
                                                         <CheckCircle2 className="h-3.5 w-3.5" /> {plexLinkMsg}
                                                     </span>
                                                 )}
@@ -2731,7 +2731,7 @@ function SettingsPageContent() {
                                             <Button 
                                                 type="button" 
                                                 variant="outline"
-                                                className="text-xs gap-1.5 border-amber-500/30 text-amber-400 hover:bg-amber-500/10 font-semibold hover:ring-2 hover:ring-amber-400/40 active:scale-95 transition-all"
+                                                className="text-xs gap-1.5 border-amber-500/30 text-amber-700 dark:text-amber-400 hover:bg-amber-500/10 font-semibold hover:ring-2 hover:ring-amber-400/40 active:scale-95 transition-all"
                                                 onClick={handleSyncPlexFriends}
                                                 disabled={syncingPlexFriends || !systemSettings?.mainPlexToken}
                                                 title="Sync friend list and access shares from Plex.tv"
@@ -2762,18 +2762,18 @@ function SettingsPageContent() {
                             </Card>
 
                             {/* PLEX DIRECT SQLITE DATABASE SNAPSHOTS & DELTA-SYNC */}
-                            <Card className="bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
+                            <Card className="bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
                                 <CardHeader>
                                     <div className="flex justify-between items-start">
                                         <div>
-                                            <CardTitle className="flex items-center gap-2 text-emerald-400">
-                                                <Zap className="h-5 w-5 text-emerald-400" /> Direct SQLite Snapshots & Delta-Sync
+                                            <CardTitle className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
+                                                <Zap className="h-5 w-5 text-emerald-700 dark:text-emerald-400" /> Direct SQLite Snapshots & Delta-Sync
                                             </CardTitle>
                                             <CardDescription>
                                                 Configure direct filesystem access to <code className="text-foreground">com.plexapp.plugins.library.db</code> for high-speed atomic snapshots, eliminating Plex Media Server API locks during pruning, library scans, and automated curation.
                                             </CardDescription>
                                         </div>
-                                        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-300 border-emerald-500/30 text-[10px] px-2 py-0.5 flex items-center gap-1">
+                                        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border-emerald-500/30 text-[10px] px-2 py-0.5 flex items-center gap-1">
                                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Zero PMS Lockups
                                         </Badge>
                                     </div>
@@ -2781,9 +2781,9 @@ function SettingsPageContent() {
                                 <CardContent className="space-y-4">
                                     {/* Target Server Selector & Edit Full Server Node Link */}
                                     {plexServers.length > 0 && (
-                                        <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-lg bg-black/40 border border-border/40">
+                                        <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-lg bg-muted/60 dark:bg-black/40 border border-border/40">
                                             <div className="flex items-center gap-2">
-                                                <Server className="h-4 w-4 text-emerald-400" />
+                                                <Server className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
                                                 <Label className="text-xs font-semibold">Assign to Server:</Label>
                                                 <select
                                                     value={snapshotTargetServerId}
@@ -2797,7 +2797,7 @@ function SettingsPageContent() {
                                                             setSaveDatabasePathResult(null);
                                                         }
                                                     }}
-                                                    className="bg-[#181824] border border-border/50 text-foreground text-xs rounded-md px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-emerald-500 font-mono"
+                                                    className="bg-card dark:bg-[#181824] border border-border/50 text-foreground text-xs rounded-md px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-emerald-500 font-mono"
                                                 >
                                                     {plexServers.map(s => (
                                                         <option key={s.id} value={s.id}>
@@ -2810,7 +2810,7 @@ function SettingsPageContent() {
                                                 type="button"
                                                 variant="ghost"
                                                 size="sm"
-                                                className="h-7 px-2.5 text-xs text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 gap-1.5 font-medium"
+                                                className="h-7 px-2.5 text-xs text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:bg-blue-500/10 gap-1.5 font-medium"
                                                 onClick={() => {
                                                     const s = plexServers.find(srv => srv.id === snapshotTargetServerId) || plexServers[0];
                                                     if (s) {
@@ -2838,7 +2838,7 @@ function SettingsPageContent() {
                                                 type="button"
                                                 variant="ghost"
                                                 size="sm"
-                                                className="h-5 px-2 text-[10px] font-mono text-muted-foreground hover:text-emerald-400 gap-1"
+                                                className="h-5 px-2 text-[10px] font-mono text-muted-foreground hover:text-emerald-700 dark:hover:text-emerald-400 gap-1"
                                                 disabled={discoveringPaths}
                                                 onClick={async () => {
                                                     setDiscoveringPaths(true);
@@ -2872,7 +2872,7 @@ function SettingsPageContent() {
                                                 type="button"
                                                 size="sm"
                                                 variant="outline"
-                                                className="h-9 px-3 text-xs border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 shrink-0 gap-1 font-semibold"
+                                                className="h-9 px-3 text-xs border-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 shrink-0 gap-1 font-semibold"
                                                 disabled={testingDatabasePath || !plexServerFormDatabasePath.trim()}
                                                 onClick={async () => {
                                                     setTestingDatabasePath(true);
@@ -2909,7 +2909,7 @@ function SettingsPageContent() {
                                                     type="button"
                                                     variant="ghost"
                                                     size="sm"
-                                                    className="h-5 px-1.5 text-[9px] text-muted-foreground hover:text-emerald-400 border border-border/40"
+                                                    className="h-5 px-1.5 text-[9px] text-muted-foreground hover:text-emerald-700 dark:hover:text-emerald-400 border border-border/40"
                                                     onClick={() => {
                                                         setPlexServerFormDatabasePath(p.path);
                                                         setDatabasePathTestResult(null);
@@ -2927,7 +2927,7 @@ function SettingsPageContent() {
                                             if (targetServer?.databasePath) {
                                                 return (
                                                     <div className="text-[11px] text-muted-foreground flex flex-wrap items-center gap-1.5 pt-1">
-                                                        <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                                                        <span className="text-emerald-700 dark:text-emerald-400 font-semibold flex items-center gap-1">
                                                             <CheckCircle2 className="h-3 w-3" /> Currently Saved:
                                                         </span>
                                                         <code className="text-foreground bg-muted/40 px-1.5 py-0.5 rounded text-[10px] font-mono break-all">
@@ -2948,8 +2948,8 @@ function SettingsPageContent() {
                                         {databasePathTestResult && (
                                             <div className={`text-[11px] p-2.5 rounded-lg flex items-center gap-1.5 mt-2 ${
                                                 databasePathTestResult.success 
-                                                    ? "text-emerald-400 bg-emerald-950/40 border border-emerald-500/30" 
-                                                    : "text-red-400 bg-red-950/40 border border-red-500/30"
+                                                    ? "text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/30" 
+                                                    : "text-red-700 dark:text-red-400 bg-red-500/10 dark:bg-red-950/40 border border-red-500/30"
                                             }`}>
                                                 {databasePathTestResult.success ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> : <XCircle className="h-3.5 w-3.5 shrink-0" />}
                                                 <span>{databasePathTestResult.message || databasePathTestResult.error}</span>
@@ -2960,8 +2960,8 @@ function SettingsPageContent() {
                                         {saveDatabasePathResult && (
                                             <div className={`text-[11px] p-2.5 rounded-lg flex items-center gap-1.5 mt-2 ${
                                                 saveDatabasePathResult.success 
-                                                    ? "text-emerald-400 bg-emerald-950/40 border border-emerald-500/30" 
-                                                    : "text-red-400 bg-red-950/40 border border-red-500/30"
+                                                    ? "text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/30" 
+                                                    : "text-red-700 dark:text-red-400 bg-red-500/10 dark:bg-red-950/40 border border-red-500/30"
                                             }`}>
                                                 {saveDatabasePathResult.success ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> : <XCircle className="h-3.5 w-3.5 shrink-0" />}
                                                 <span>{saveDatabasePathResult.message || saveDatabasePathResult.error}</span>
@@ -2976,25 +2976,25 @@ function SettingsPageContent() {
                     {hubSubTabs.servers === "plex-cluster" && (
                         <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
                                                         {/* MULTI-PLEX SERVERS MANAGEMENT */}
-                            <Card className="bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
+                            <Card className="bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
                                 <CardHeader>
                                     <div className="flex justify-between items-start">
                                         <div>
-                                            <CardTitle className="flex items-center gap-2 text-amber-400">
+                                            <CardTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
                                                 <Tv className="h-5 w-5 text-amber-500" /> {editingPlexServer ? `Edit Plex Server: ${editingPlexServer.name}` : "Plex Media Servers"}
                                             </CardTitle>
                                             <CardDescription>
                                                 {editingPlexServer ? "Update server connection URL or token." : "Configure multiple direct Plex servers. Test connection latency and select your default server."}
                                             </CardDescription>
                                         </div>
-                                        <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-[10px]">
+                                        <Badge variant="outline" className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 text-[10px]">
                                             {plexServers.length} {plexServers.length === 1 ? "Server" : "Servers"} Configured
                                         </Badge>
                                     </div>
                                 </CardHeader>
                                 <CardContent className="space-y-4">
                                     {plexServerActionMsg && (
-                                        <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
+                                        <div className="text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/40 dark:border-emerald-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
                                             <CheckCircle2 className="h-4 w-4 shrink-0" />
                                             <span>{plexServerActionMsg}</span>
                                         </div>
@@ -3009,31 +3009,31 @@ function SettingsPageContent() {
                                                 </div>
                                             ) : (
                                                 plexServers.map((server) => (
-                                                    <div key={server.id} className="space-y-2 border border-border/40 p-3 rounded-xl bg-[#101014]/90 backdrop-blur-md hover:border-border/80 transition-all text-sm">
+                                                    <div key={server.id} className="space-y-2 border border-border/40 p-3 rounded-xl bg-card/95 dark:bg-[#101014]/90 backdrop-blur-md hover:border-border/80 transition-all text-sm">
                                                         <div className="flex justify-between items-start gap-2">
                                                             <div className="truncate space-y-0.5">
                                                                 <div className="font-bold flex items-center gap-2">
                                                                     <span className="truncate">{server.name}</span>
                                                                     {server.isDefault && (
-                                                                        <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[9px] gap-1 px-1.5 py-0">
-                                                                            <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-400" /> Default
+                                                                        <Badge className="bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/40 text-[9px] gap-1 px-1.5 py-0">
+                                                                            <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-700 dark:text-amber-400" /> Default
                                                                         </Badge>
                                                                     )}
                                                                     {server.token ? (
-                                                                        <Badge variant="outline" className="bg-sky-500/10 text-sky-300 border-sky-500/30 text-[9px] px-1.5 py-0">
+                                                                        <Badge variant="outline" className="bg-sky-500/10 text-sky-800 dark:text-sky-300 border-sky-500/30 text-[9px] px-1.5 py-0">
                                                                             Custom Token
                                                                         </Badge>
                                                                     ) : (
-                                                                        <Badge variant="outline" className="bg-slate-500/10 text-slate-400 border-slate-500/30 text-[9px] px-1.5 py-0">
+                                                                        <Badge variant="outline" className="bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/30 text-[9px] px-1.5 py-0">
                                                                             Admin Token
                                                                         </Badge>
                                                                     )}
                                                                     {server.databasePath ? (
-                                                                        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-300 border-emerald-500/30 text-[9px] px-1.5 py-0 flex items-center gap-1" title={server.databasePath}>
+                                                                        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border-emerald-500/30 text-[9px] px-1.5 py-0 flex items-center gap-1" title={server.databasePath}>
                                                                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Direct Snapshot
                                                                         </Badge>
                                                                     ) : (
-                                                                        <Badge variant="outline" className="bg-slate-500/10 text-slate-400 border-slate-500/30 text-[9px] px-1.5 py-0 flex items-center gap-1" title="Using standard HTTP connection">
+                                                                        <Badge variant="outline" className="bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/30 text-[9px] px-1.5 py-0 flex items-center gap-1" title="Using standard HTTP connection">
                                                                             <span className="w-1.5 h-1.5 rounded-full bg-slate-500" /> HTTP Mode
                                                                         </Badge>
                                                                     )}
@@ -3052,7 +3052,7 @@ function SettingsPageContent() {
                                                                     />
                                                                     <Label htmlFor={`monitored-plex-gen-${server.id}`} className="text-[10px] cursor-pointer font-medium select-none">
                                                                         {server.monitored !== false ? (
-                                                                            <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                                                                            <span className="text-emerald-700 dark:text-emerald-400 font-semibold flex items-center gap-1">
                                                                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Monitored
                                                                             </span>
                                                                         ) : (
@@ -3067,12 +3067,12 @@ function SettingsPageContent() {
                                                                     type="button"
                                                                     size="sm" 
                                                                     variant="outline" 
-                                                                    className="h-7 text-[11px] px-2.5 border-amber-500/30 text-amber-400 hover:bg-amber-500/10 font-semibold gap-1 hover:ring-1 hover:ring-amber-400/40 active:scale-95 transition-all"
+                                                                    className="h-7 text-[11px] px-2.5 border-amber-500/30 text-amber-700 dark:text-amber-400 hover:bg-amber-500/10 font-semibold gap-1 hover:ring-1 hover:ring-amber-400/40 active:scale-95 transition-all"
                                                                     disabled={testingPlexServerId === server.id}
                                                                     onClick={() => handleTestPlexServer(server.id)}
                                                                     title="Test connection to this Plex server"
                                                                 >
-                                                                    {testingPlexServerId === server.id ? <Loader2 className="h-3 w-3 animate-spin text-amber-400" /> : <Zap className="h-3 w-3 text-amber-400" />}
+                                                                    {testingPlexServerId === server.id ? <Loader2 className="h-3 w-3 animate-spin text-amber-700 dark:text-amber-400" /> : <Zap className="h-3 w-3 text-amber-700 dark:text-amber-400" />}
                                                                     Test
                                                                 </Button>
 
@@ -3081,7 +3081,7 @@ function SettingsPageContent() {
                                                                         type="button"
                                                                         size="icon" 
                                                                         variant="ghost" 
-                                                                        className="h-7 w-7 text-muted-foreground hover:text-amber-400 hover:ring-1 hover:ring-amber-400/40 active:scale-95 transition-all"
+                                                                        className="h-7 w-7 text-muted-foreground hover:text-amber-700 dark:hover:text-amber-400 hover:ring-1 hover:ring-amber-400/40 active:scale-95 transition-all"
                                                                         onClick={async () => {
                                                                             await setDefaultPlexServerAction(server.id);
                                                                             setPlexServerActionMsg(`"${server.name}" set as default Plex server.`);
@@ -3098,7 +3098,7 @@ function SettingsPageContent() {
                                                                     type="button"
                                                                     size="icon" 
                                                                     variant="ghost" 
-                                                                    className="h-7 w-7 text-blue-400 hover:ring-1 hover:ring-blue-400/40 active:scale-95 transition-all"
+                                                                    className="h-7 w-7 text-blue-700 dark:text-blue-400 hover:ring-1 hover:ring-blue-400/40 active:scale-95 transition-all"
                                                                     onClick={() => {
                                                                         setEditingPlexServer(server);
                                                                         setPlexServerFormName(server.name);
@@ -3139,8 +3139,8 @@ function SettingsPageContent() {
                                                         {plexServerTestResults[server.id] && (
                                                             <div className={`text-[11px] p-2 rounded-lg flex items-center gap-1.5 ${
                                                                 plexServerTestResults[server.id].success 
-                                                                    ? "text-emerald-400 bg-emerald-950/40 border border-emerald-500/30" 
-                                                                    : "text-red-400 bg-red-950/40 border border-red-500/30"
+                                                                    ? "text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/30" 
+                                                                    : "text-red-700 dark:text-red-400 bg-red-500/10 dark:bg-red-950/40 border border-red-500/30"
                                                             }`}>
                                                                 {plexServerTestResults[server.id].success ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> : <XCircle className="h-3.5 w-3.5 shrink-0" />}
                                                                 <span className="leading-tight">{plexServerTestResults[server.id].msg || plexServerTestResults[server.id].err}</span>
@@ -3218,7 +3218,7 @@ function SettingsPageContent() {
                                                             type="button"
                                                             variant="ghost"
                                                             size="sm"
-                                                            className="h-5 px-1.5 text-[9px] font-mono text-muted-foreground hover:text-amber-400"
+                                                            className="h-5 px-1.5 text-[9px] font-mono text-muted-foreground hover:text-amber-700 dark:hover:text-amber-400"
                                                             onClick={() => setPlexServerFormUrl(preset)}
                                                         >
                                                             {preset.replace("http://", "")}
@@ -3273,7 +3273,7 @@ function SettingsPageContent() {
                                             <div className="flex justify-between items-center">
                                                 <Label className="text-xs font-semibold flex items-center gap-1.5">
                                                     <span>⚡ Direct SQLite Database Path (Optional)</span>
-                                                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30 text-[9px] px-1.5 py-0 font-normal">
+                                                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 text-[9px] px-1.5 py-0 font-normal">
                                                         Unraid / Zero PMS Locks
                                                     </Badge>
                                                 </Label>
@@ -3281,7 +3281,7 @@ function SettingsPageContent() {
                                                     type="button"
                                                     variant="ghost"
                                                     size="sm"
-                                                    className="h-5 px-1.5 text-[9px] font-mono text-muted-foreground hover:text-emerald-400 gap-1"
+                                                    className="h-5 px-1.5 text-[9px] font-mono text-muted-foreground hover:text-emerald-700 dark:hover:text-emerald-400 gap-1"
                                                     disabled={discoveringPaths}
                                                     onClick={async () => {
                                                         setDiscoveringPaths(true);
@@ -3314,7 +3314,7 @@ function SettingsPageContent() {
                                                     type="button"
                                                     size="sm"
                                                     variant="outline"
-                                                    className="h-9 px-3 text-xs border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 shrink-0 gap-1"
+                                                    className="h-9 px-3 text-xs border-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 shrink-0 gap-1"
                                                     disabled={testingDatabasePath || !plexServerFormDatabasePath.trim()}
                                                     onClick={async () => {
                                                         setTestingDatabasePath(true);
@@ -3340,7 +3340,7 @@ function SettingsPageContent() {
                                                         type="button"
                                                         variant="ghost"
                                                         size="sm"
-                                                        className="h-5 px-1.5 text-[9px] text-muted-foreground hover:text-emerald-400 border border-border/40"
+                                                        className="h-5 px-1.5 text-[9px] text-muted-foreground hover:text-emerald-700 dark:hover:text-emerald-400 border border-border/40"
                                                         onClick={() => {
                                                             setPlexServerFormDatabasePath(p.path);
                                                             setDatabasePathTestResult(null);
@@ -3356,8 +3356,8 @@ function SettingsPageContent() {
                                             {databasePathTestResult && (
                                                 <div className={`text-[11px] p-2 rounded-md flex items-center gap-1.5 ${
                                                     databasePathTestResult.success 
-                                                        ? "text-emerald-400 bg-emerald-950/40 border border-emerald-500/30" 
-                                                        : "text-red-400 bg-red-950/40 border border-red-500/30"
+                                                        ? "text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/30" 
+                                                        : "text-red-700 dark:text-red-400 bg-red-500/10 dark:bg-red-950/40 border border-red-500/30"
                                                 }`}>
                                                     {databasePathTestResult.success ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> : <XCircle className="h-3.5 w-3.5 shrink-0" />}
                                                     <span>{databasePathTestResult.message || databasePathTestResult.error}</span>
@@ -3398,8 +3398,8 @@ function SettingsPageContent() {
                                         {plexServerFormTestResult && (
                                             <div className={`text-[11px] p-2.5 rounded-lg flex items-center gap-2 ${
                                                 plexServerFormTestResult.success 
-                                                    ? "text-emerald-400 bg-emerald-950/40 border border-emerald-500/30" 
-                                                    : "text-red-400 bg-red-950/40 border border-red-500/30"
+                                                    ? "text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/30" 
+                                                    : "text-red-700 dark:text-red-400 bg-red-500/10 dark:bg-red-950/40 border border-red-500/30"
                                             }`}>
                                                 {plexServerFormTestResult.success ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <XCircle className="h-4 w-4 shrink-0" />}
                                                 <span className="leading-tight">{plexServerFormTestResult.msg || plexServerFormTestResult.err}</span>
@@ -3412,11 +3412,11 @@ function SettingsPageContent() {
                                                 type="button" 
                                                 size="sm" 
                                                 variant="outline" 
-                                                className="text-xs font-semibold gap-1.5 border-amber-500/40 hover:border-amber-500 hover:bg-amber-500/10 text-amber-400 active:scale-95 transition-all"
+                                                className="text-xs font-semibold gap-1.5 border-amber-500/40 hover:border-amber-500 hover:bg-amber-500/10 text-amber-700 dark:text-amber-400 active:scale-95 transition-all"
                                                 disabled={testingPlexServerForm || !plexServerFormUrl}
                                                 onClick={handleTestPlexServerForm}
                                             >
-                                                {testingPlexServerForm ? <Loader2 className="h-3 w-3 animate-spin text-amber-400" /> : <Zap className="h-3 w-3 text-amber-400" />}
+                                                {testingPlexServerForm ? <Loader2 className="h-3 w-3 animate-spin text-amber-700 dark:text-amber-400" /> : <Zap className="h-3 w-3 text-amber-700 dark:text-amber-400" />}
                                                 Test Connection
                                             </Button>
 
@@ -3453,7 +3453,7 @@ function SettingsPageContent() {
                             </Card>
 
                                                     {/* PLEX MEDIA SERVERS & AUTO-DISCOVERY */}
-                        <Card className="flex flex-col bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
+                        <Card className="flex flex-col bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
                             <CardHeader>
                                 <div className="flex justify-between items-start">
                                     <div>
@@ -3462,14 +3462,14 @@ function SettingsPageContent() {
                                         </CardTitle>
                                         <CardDescription>Primary direct stream monitoring source, PMS hardware telemetry, and Plex.tv account auto-discovery.</CardDescription>
                                     </div>
-                                    <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-[10px]">
+                                    <Badge variant="outline" className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 text-[10px]">
                                         {plexServers.length} {plexServers.length === 1 ? "Server" : "Servers"}
                                     </Badge>
                                 </div>
                             </CardHeader>
                             <CardContent className="space-y-4 flex-1">
                                 {plexServerActionMsg && (
-                                    <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-2.5 rounded-lg flex items-center gap-2 animate-in fade-in">
+                                    <div className="text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/40 dark:border-emerald-800/40 p-2.5 rounded-lg flex items-center gap-2 animate-in fade-in">
                                         <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
                                         <span>{plexServerActionMsg}</span>
                                     </div>
@@ -3486,14 +3486,14 @@ function SettingsPageContent() {
                                             <p className="text-xs text-muted-foreground">No Plex servers configured. Import from discovered servers below or add one in General &amp; Setup.</p>
                                         )}
                                         {plexServers.map(s => (
-                                            <div key={s.id} className="space-y-1.5 border border-border/40 p-2.5 rounded-xl bg-[#101014]/90 backdrop-blur-md hover:border-border/80 transition-all text-sm">
+                                            <div key={s.id} className="space-y-1.5 border border-border/40 p-2.5 rounded-xl bg-card/95 dark:bg-[#101014]/90 backdrop-blur-md hover:border-border/80 transition-all text-sm">
                                                 <div className="flex justify-between items-center gap-2">
                                                     <div className="truncate space-y-0.5">
                                                         <div className="font-semibold flex items-center gap-1.5 truncate">
                                                             <span className="truncate">{s.name}</span>
                                                             {s.isDefault && (
-                                                                <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[9px] gap-0.5 px-1 py-0">
-                                                                    <Star className="h-2 w-2 fill-amber-400 text-amber-400" /> Default
+                                                                <Badge className="bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/40 text-[9px] gap-0.5 px-1 py-0">
+                                                                    <Star className="h-2 w-2 fill-amber-400 text-amber-700 dark:text-amber-400" /> Default
                                                                 </Badge>
                                                             )}
                                                         </div>
@@ -3511,7 +3511,7 @@ function SettingsPageContent() {
                                                             />
                                                             <Label htmlFor={`monitored-plex-tab-${s.id}`} className="text-[10px] cursor-pointer font-medium select-none">
                                                                 {s.monitored !== false ? (
-                                                                    <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                                                                    <span className="text-emerald-700 dark:text-emerald-400 font-semibold flex items-center gap-1">
                                                                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Monitored
                                                                     </span>
                                                                 ) : (
@@ -3524,7 +3524,7 @@ function SettingsPageContent() {
                                                         <Button 
                                                             size="sm" 
                                                             variant="ghost" 
-                                                            className="h-7 text-[11px] px-2 text-amber-400 hover:ring-1 hover:ring-amber-400/40 active:scale-95 transition-all"
+                                                            className="h-7 text-[11px] px-2 text-amber-700 dark:text-amber-400 hover:ring-1 hover:ring-amber-400/40 active:scale-95 transition-all"
                                                             disabled={testingPlexServerId === s.id}
                                                             onClick={() => handleTestPlexServer(s.id)}
                                                         >
@@ -3549,7 +3549,7 @@ function SettingsPageContent() {
                                                     </div>
                                                 </div>
                                                 {plexServerTestResults[s.id] && (
-                                                    <div className={`text-[11px] p-1.5 rounded flex items-center gap-1 ${plexServerTestResults[s.id].success ? "text-emerald-400 bg-emerald-950/40" : "text-red-400 bg-red-950/40"}`}>
+                                                    <div className={`text-[11px] p-1.5 rounded flex items-center gap-1 ${plexServerTestResults[s.id].success ? "text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40" : "text-red-700 dark:text-red-400 bg-red-500/10 dark:bg-red-950/40"}`}>
                                                         {plexServerTestResults[s.id].success ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
                                                         <span className="truncate">{plexServerTestResults[s.id].msg || plexServerTestResults[s.id].err}</span>
                                                     </div>
@@ -3573,7 +3573,7 @@ function SettingsPageContent() {
                                             type="button"
                                             size="sm"
                                             variant="outline"
-                                            className="h-7 text-[10px] px-2.5 font-semibold gap-1.5 border-amber-500/30 text-amber-400 hover:bg-amber-500/10 active:scale-95 transition-all"
+                                            className="h-7 text-[10px] px-2.5 font-semibold gap-1.5 border-amber-500/30 text-amber-700 dark:text-amber-400 hover:bg-amber-500/10 active:scale-95 transition-all"
                                             disabled={loadingDiscoveredPlexServers}
                                             onClick={handleFetchDiscoveredPlexServers}
                                         >
@@ -3597,7 +3597,7 @@ function SettingsPageContent() {
                                                 {/* NEW / UNADDED SERVERS */}
                                                 {unconfiguredDiscovered.length > 0 ? (
                                                     <div className="space-y-1.5 max-h-[180px] overflow-y-auto pr-1">
-                                                        <div className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider flex items-center gap-1">
+                                                        <div className="text-[10px] font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1">
                                                             <span>New Servers Found on Plex.tv ({unconfiguredDiscovered.length})</span>
                                                         </div>
                                                         {unconfiguredDiscovered.map((srv, idx) => {
@@ -3610,7 +3610,7 @@ function SettingsPageContent() {
                                                                     <div className="truncate space-y-0.5 max-w-[55%]">
                                                                         <div className="font-medium truncate flex items-center gap-1.5">
                                                                             <span className="truncate">{srv.name}</span>
-                                                                            <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-[9px] px-1 py-0 shrink-0">
+                                                                            <Badge variant="outline" className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 text-[9px] px-1 py-0 shrink-0">
                                                                                 New Discovery
                                                                             </Badge>
                                                                         </div>
@@ -3623,7 +3623,7 @@ function SettingsPageContent() {
                                                                             type="button"
                                                                             size="sm"
                                                                             variant="outline"
-                                                                            className="h-6 text-[10px] px-2 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10 active:scale-95 transition-all"
+                                                                            className="h-6 text-[10px] px-2 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10 active:scale-95 transition-all"
                                                                             disabled={isImporting}
                                                                             onClick={() => handleImportDiscoveredPlexServer(srv, true)}
                                                                         >
@@ -3648,8 +3648,8 @@ function SettingsPageContent() {
                                                     /* ALL SERVERS CONFIGURED STATE */
                                                     <div className="flex items-center justify-between p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-xs">
                                                         <div className="flex items-center gap-2">
-                                                            <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
-                                                            <span className="text-emerald-300 font-medium">All Plex account servers ({configuredDiscovered.length}) are configured & active above.</span>
+                                                            <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0" />
+                                                            <span className="text-emerald-800 dark:text-emerald-300 font-medium">All Plex account servers ({configuredDiscovered.length}) are configured & active above.</span>
                                                         </div>
                                                         <Button
                                                             type="button"
@@ -3680,7 +3680,7 @@ function SettingsPageContent() {
                                                                     <div className="truncate space-y-0.5 max-w-[70%]">
                                                                         <div className="font-medium truncate flex items-center gap-1.5 text-foreground">
                                                                             <span className="truncate">{srv.name}</span>
-                                                                            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30 text-[9px] px-1 py-0 shrink-0">
+                                                                            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 text-[9px] px-1 py-0 shrink-0">
                                                                                 Configured Above
                                                                             </Badge>
                                                                         </div>
@@ -3690,7 +3690,7 @@ function SettingsPageContent() {
                                                                     </div>
                                                                     <div className="shrink-0">
                                                                         {srv.monitored !== false ? (
-                                                                            <span className="text-emerald-400 text-[10px] font-semibold flex items-center gap-1">
+                                                                            <span className="text-emerald-700 dark:text-emerald-400 text-[10px] font-semibold flex items-center gap-1">
                                                                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Monitored
                                                                             </span>
                                                                         ) : (
@@ -3716,9 +3716,9 @@ function SettingsPageContent() {
                     {hubSubTabs.servers === "telemetry" && (
                         <div className="space-y-6">
                                                 {/* DIRECT PLEX STREAM TELEMETRY BANNER */}
-                    <div className="p-4 rounded-xl bg-gradient-to-r from-amber-500/10 via-slate-900/70 to-sky-500/10 border border-amber-500/25 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md backdrop-blur-md">
+                    <div className="p-4 rounded-xl bg-gradient-to-r from-amber-500/10 via-card dark:via-slate-900/70 to-sky-500/10 border border-amber-500/25 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md backdrop-blur-md">
                         <div className="flex items-start gap-3">
-                            <div className="p-2 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30 shrink-0 mt-0.5 sm:mt-0">
+                            <div className="p-2 rounded-lg bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/30 shrink-0 mt-0.5 sm:mt-0">
                                 <Zap className="h-4 w-4" />
                             </div>
                             <div className="space-y-0.5">
@@ -3731,7 +3731,7 @@ function SettingsPageContent() {
                             </div>
                         </div>
                         <Link href="/admin/tautulli">
-                            <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1.5 border-amber-500/30 text-amber-400 hover:bg-amber-500/10 shrink-0 cursor-pointer">
+                            <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1.5 border-amber-500/30 text-amber-700 dark:text-amber-400 hover:bg-amber-500/10 shrink-0 cursor-pointer">
                                 <History className="h-3.5 w-3.5" />
                                 <span>Historical Backfill Tool</span>
                             </Button>
@@ -3740,16 +3740,16 @@ function SettingsPageContent() {
 
                             <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
                                                         {/* TAUTULLI HISTORICAL WATCH ARCHIVE */}
-                        <Card className="flex flex-col bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
+                        <Card className="flex flex-col bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
                             <CardHeader>
                                 <div className="flex justify-between items-start">
                                     <div>
                                         <CardTitle className="flex items-center gap-2">
-                                            <History className="h-5 w-5 text-amber-400"/> {editingTautulli ? "Edit Historical Archive" : "Tautulli (Historical Watch Archive)"}
+                                            <History className="h-5 w-5 text-amber-700 dark:text-amber-400"/> {editingTautulli ? "Edit Historical Archive" : "Tautulli (Historical Watch Archive)"}
                                         </CardTitle>
                                         <CardDescription>{editingTautulli ? `Modifying ${editingTautulli.name}` : "Optional watch archive for importing historical play records into DomsHomeLab."}</CardDescription>
                                     </div>
-                                    <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-[10px] shrink-0">
+                                    <Badge variant="outline" className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 text-[10px] shrink-0">
                                         Optional • History Import
                                     </Badge>
                                 </div>
@@ -3758,13 +3758,13 @@ function SettingsPageContent() {
                                 {!editingTautulli && (
                                     <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
                                         {tautulli.length === 0 && (
-                                            <div className="p-3 rounded-lg bg-white/[0.02] border border-dashed border-white/10 text-xs text-muted-foreground space-y-1">
+                                            <div className="p-3 rounded-lg bg-muted/50 dark:bg-white/[0.02] border border-dashed border-border/70 dark:border-white/10 text-xs text-muted-foreground space-y-1">
                                                 <p className="font-semibold text-foreground">No Tautulli instances configured.</p>
                                                 <p className="text-[11px]">DomsHomeLab monitors Plex streams directly. Only add Tautulli if you have past watch history you wish to backfill.</p>
                                             </div>
                                         )}
                                         {tautulli.map(t => (
-                                            <div key={t.id} className="space-y-1.5 border border-border/40 p-2.5 rounded-xl bg-[#101014]/90 backdrop-blur-md hover:border-border/80 transition-all text-sm">
+                                            <div key={t.id} className="space-y-1.5 border border-border/40 p-2.5 rounded-xl bg-card/95 dark:bg-[#101014]/90 backdrop-blur-md hover:border-border/80 transition-all text-sm">
                                                 <div className="flex justify-between items-center">
                                                     <span className="truncate font-semibold">{t.name}</span>
                                                     <div className="flex items-center gap-1.5">
@@ -3777,7 +3777,7 @@ function SettingsPageContent() {
                                                             />
                                                             <Label htmlFor={`monitored-tautulli-${t.id}`} className="text-[10px] cursor-pointer font-medium select-none">
                                                                 {t.monitored !== false ? (
-                                                                    <span className="text-amber-400 font-semibold flex items-center gap-1">
+                                                                    <span className="text-amber-700 dark:text-amber-400 font-semibold flex items-center gap-1">
                                                                         <span className="w-1.5 h-1.5 rounded-full bg-amber-400" /> Archive Active
                                                                     </span>
                                                                 ) : (
@@ -3790,13 +3790,13 @@ function SettingsPageContent() {
                                                         <Button 
                                                             size="sm" 
                                                             variant="ghost" 
-                                                            className="h-7 text-[11px] px-2 text-amber-400 hover:ring-1 hover:ring-amber-400/40 active:scale-95 transition-all"
+                                                            className="h-7 text-[11px] px-2 text-amber-700 dark:text-amber-400 hover:ring-1 hover:ring-amber-400/40 active:scale-95 transition-all"
                                                             disabled={testingTautulliId === t.id}
                                                             onClick={() => handleTestTautulli(t.id)}
                                                         >
                                                             {testingTautulliId === t.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Test"}
                                                         </Button>
-                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-400 hover:ring-1 hover:ring-blue-400/40 active:scale-95 transition-all" onClick={() => setEditingTautulli(t)}>
+                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-700 dark:text-blue-400 hover:ring-1 hover:ring-blue-400/40 active:scale-95 transition-all" onClick={() => setEditingTautulli(t)}>
                                                             <Pencil className="h-3.5 w-3.5"/>
                                                         </Button>
                                                         <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500 hover:ring-1 hover:ring-red-500/40 active:scale-95 transition-all" onClick={() => handleDelete(t.id, removeTautulliInstance)}>
@@ -3805,7 +3805,7 @@ function SettingsPageContent() {
                                                     </div>
                                                 </div>
                                                 {tautulliTestResults[t.id] && (
-                                                    <div className={`text-[11px] p-1.5 rounded flex items-center gap-1 ${tautulliTestResults[t.id].success ? "text-emerald-400 bg-emerald-950/40" : "text-red-400 bg-red-950/40"}`}>
+                                                    <div className={`text-[11px] p-1.5 rounded flex items-center gap-1 ${tautulliTestResults[t.id].success ? "text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40" : "text-red-700 dark:text-red-400 bg-red-500/10 dark:bg-red-950/40"}`}>
                                                         {tautulliTestResults[t.id].success ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
                                                         <span className="truncate">{tautulliTestResults[t.id].msg || tautulliTestResults[t.id].err}</span>
                                                     </div>
@@ -3889,7 +3889,7 @@ function SettingsPageContent() {
                                         </Label>
                                     </div>
                                     {tautulliFormTestResult && (
-                                        <div className={`text-[11px] p-2 rounded-lg flex items-center gap-1.5 ${tautulliFormTestResult.success ? "text-emerald-400 bg-emerald-950/40 border border-emerald-500/30" : "text-red-400 bg-red-950/40 border border-red-500/30"}`}>
+                                        <div className={`text-[11px] p-2 rounded-lg flex items-center gap-1.5 ${tautulliFormTestResult.success ? "text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/30" : "text-red-700 dark:text-red-400 bg-red-500/10 dark:bg-red-950/40 border border-red-500/30"}`}>
                                             {tautulliFormTestResult.success ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> : <XCircle className="h-3.5 w-3.5 shrink-0" />}
                                             <span className="leading-tight">{tautulliFormTestResult.msg || tautulliFormTestResult.err}</span>
                                         </div>
@@ -3919,11 +3919,11 @@ function SettingsPageContent() {
 
                                 <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-between gap-3 text-xs">
                                     <div className="space-y-0.5">
-                                        <span className="font-semibold text-amber-300 block">Looking to import past history?</span>
+                                        <span className="font-semibold text-amber-800 dark:text-amber-300 block">Looking to import past history?</span>
                                         <span className="text-[11px] text-muted-foreground block">Run a 1-click historical backfill across all past sessions.</span>
                                     </div>
                                     <Link href="/admin/tautulli">
-                                        <Button size="sm" variant="outline" className="h-7 text-[10px] px-2.5 border-amber-500/30 text-amber-300 hover:bg-amber-500/20 shrink-0 cursor-pointer">
+                                        <Button size="sm" variant="outline" className="h-7 text-[10px] px-2.5 border-amber-500/30 text-amber-800 dark:text-amber-300 hover:bg-amber-500/20 shrink-0 cursor-pointer">
                                             Open Backfill Tool
                                         </Button>
                                     </Link>
@@ -3932,10 +3932,10 @@ function SettingsPageContent() {
                         </Card>
 
                                                         {/* GLANCES INSTANCES */}
-                        <Card className="flex flex-col bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
+                        <Card className="flex flex-col bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2">
-                                    <Activity className="h-5 w-5 text-sky-400"/> {editingGlances ? "Edit Glances" : "Glances Hardware"}
+                                    <Activity className="h-5 w-5 text-sky-700 dark:text-sky-400"/> {editingGlances ? "Edit Glances" : "Glances Hardware"}
                                 </CardTitle>
                                 <CardDescription>{editingGlances ? `Modifying ${editingGlances.name}` : "CPU, Memory, and System Metrics."}</CardDescription>
                             </CardHeader>
@@ -3944,7 +3944,7 @@ function SettingsPageContent() {
                                     <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
                                         {glances.length === 0 && <p className="text-xs text-muted-foreground">No Glances instances added.</p>}
                                         {glances.map(g => (
-                                            <div key={g.id} className="space-y-1.5 border border-border/40 p-2.5 rounded-xl bg-[#101014]/90 backdrop-blur-md hover:border-border/80 transition-all text-sm">
+                                            <div key={g.id} className="space-y-1.5 border border-border/40 p-2.5 rounded-xl bg-card/95 dark:bg-[#101014]/90 backdrop-blur-md hover:border-border/80 transition-all text-sm">
                                                 <div className="flex justify-between items-center">
                                                     <span className="truncate font-semibold">{g.name}</span>
                                                     <div className="flex items-center gap-1.5">
@@ -3957,7 +3957,7 @@ function SettingsPageContent() {
                                                             />
                                                             <Label htmlFor={`monitored-glances-${g.id}`} className="text-[10px] cursor-pointer font-medium select-none">
                                                                 {g.monitored !== false ? (
-                                                                    <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                                                                    <span className="text-emerald-700 dark:text-emerald-400 font-semibold flex items-center gap-1">
                                                                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Monitored
                                                                     </span>
                                                                 ) : (
@@ -3970,13 +3970,13 @@ function SettingsPageContent() {
                                                         <Button 
                                                             size="sm" 
                                                             variant="ghost" 
-                                                            className="h-7 text-[11px] px-2 text-sky-400 hover:ring-1 hover:ring-sky-400/40 active:scale-95 transition-all"
+                                                            className="h-7 text-[11px] px-2 text-sky-700 dark:text-sky-400 hover:ring-1 hover:ring-sky-400/40 active:scale-95 transition-all"
                                                             disabled={testingGlancesId === g.id}
                                                             onClick={() => handleTestGlances(g.id)}
                                                         >
                                                             {testingGlancesId === g.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Test"}
                                                         </Button>
-                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-400 hover:ring-1 hover:ring-blue-400/40 active:scale-95 transition-all" onClick={() => setEditingGlances(g)}>
+                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-700 dark:text-blue-400 hover:ring-1 hover:ring-blue-400/40 active:scale-95 transition-all" onClick={() => setEditingGlances(g)}>
                                                             <Pencil className="h-3.5 w-3.5"/>
                                                         </Button>
                                                         <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500 hover:ring-1 hover:ring-red-500/40 active:scale-95 transition-all" onClick={() => handleDelete(g.id, removeGlancesInstance)}>
@@ -3985,7 +3985,7 @@ function SettingsPageContent() {
                                                     </div>
                                                 </div>
                                                 {glancesTestResults[g.id] && (
-                                                    <div className={`text-[11px] p-1.5 rounded flex items-center gap-1 ${glancesTestResults[g.id].success ? "text-emerald-400 bg-emerald-950/40" : "text-red-400 bg-red-950/40"}`}>
+                                                    <div className={`text-[11px] p-1.5 rounded flex items-center gap-1 ${glancesTestResults[g.id].success ? "text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40" : "text-red-700 dark:text-red-400 bg-red-500/10 dark:bg-red-950/40"}`}>
                                                         {glancesTestResults[g.id].success ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
                                                         <span className="truncate">{glancesTestResults[g.id].msg || glancesTestResults[g.id].err}</span>
                                                     </div>
@@ -4044,7 +4044,7 @@ function SettingsPageContent() {
                                         </Label>
                                     </div>
                                     {glancesFormTestResult && (
-                                        <div className={`text-[11px] p-2 rounded-lg flex items-center gap-1.5 ${glancesFormTestResult.success ? "text-emerald-400 bg-emerald-950/40 border border-emerald-500/30" : "text-red-400 bg-red-950/40 border border-red-500/30"}`}>
+                                        <div className={`text-[11px] p-2 rounded-lg flex items-center gap-1.5 ${glancesFormTestResult.success ? "text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/30" : "text-red-700 dark:text-red-400 bg-red-500/10 dark:bg-red-950/40 border border-red-500/30"}`}>
                                             {glancesFormTestResult.success ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> : <XCircle className="h-3.5 w-3.5 shrink-0" />}
                                             <span className="leading-tight">{glancesFormTestResult.msg || glancesFormTestResult.err}</span>
                                         </div>
@@ -4054,11 +4054,11 @@ function SettingsPageContent() {
                                             type="button" 
                                             size="sm" 
                                             variant="outline" 
-                                            className="text-xs font-semibold gap-1.5 border-sky-400/30 hover:border-sky-400 hover:bg-sky-400/10 transition-all active:scale-95 text-sky-400"
+                                            className="text-xs font-semibold gap-1.5 border-sky-400/30 hover:border-sky-400 hover:bg-sky-400/10 transition-all active:scale-95 text-sky-700 dark:text-sky-400"
                                             disabled={testingGlancesForm}
                                             onClick={handleTestGlancesForm}
                                         >
-                                            {testingGlancesForm ? <Loader2 className="h-3 w-3 animate-spin text-sky-400" /> : <Zap className="h-3 w-3 text-sky-400" />}
+                                            {testingGlancesForm ? <Loader2 className="h-3 w-3 animate-spin text-sky-700 dark:text-sky-400" /> : <Zap className="h-3 w-3 text-sky-700 dark:text-sky-400" />}
                                             Test
                                         </Button>
                                         <Button type="submit" size="sm" className="flex-1 font-semibold hover:ring-2 hover:ring-sky-400/40 active:scale-95 transition-all">
@@ -4093,14 +4093,14 @@ function SettingsPageContent() {
                 {/* ========================================================================= */}
                 <TabsContent value="integrations" className="space-y-6">
                     {/* Sub-tab Pill Switcher */}
-                    <div className="flex items-center gap-1.5 p-1 bg-white/[0.03] border border-white/10 rounded-xl w-fit overflow-x-auto max-w-full mb-6">
+                    <div className="flex items-center gap-1.5 p-1 bg-muted/50 dark:bg-white/[0.03] border border-border/70 dark:border-white/10 rounded-xl w-fit overflow-x-auto max-w-full mb-6">
                         <button
                             type="button"
                             onClick={() => handleSubTabChange("integrations", "servarr")}
                             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
                                 hubSubTabs.integrations === "servarr"
-                                    ? "bg-rose-500/20 text-rose-400 border border-rose-500/40 shadow-xs"
-                                    : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05]"
+                                    ? "bg-rose-500/20 text-rose-700 dark:text-rose-400 border border-rose-500/40 shadow-xs"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-white/[0.05]"
                             }`}
                         >
                             <FolderCheck className="h-3.5 w-3.5" />
@@ -4111,8 +4111,8 @@ function SettingsPageContent() {
                             onClick={() => handleSubTabChange("integrations", "requests")}
                             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
                                 hubSubTabs.integrations === "requests"
-                                    ? "bg-rose-500/20 text-rose-400 border border-rose-500/40 shadow-xs"
-                                    : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05]"
+                                    ? "bg-rose-500/20 text-rose-700 dark:text-rose-400 border border-rose-500/40 shadow-xs"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-white/[0.05]"
                             }`}
                         >
                             <Compass className="h-3.5 w-3.5" />
@@ -4126,8 +4126,8 @@ function SettingsPageContent() {
                             onClick={() => handleSubTabChange("integrations", "ai")}
                             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
                                 hubSubTabs.integrations === "ai"
-                                    ? "bg-rose-500/20 text-rose-400 border border-rose-500/40 shadow-xs"
-                                    : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05]"
+                                    ? "bg-rose-500/20 text-rose-700 dark:text-rose-400 border border-rose-500/40 shadow-xs"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-white/[0.05]"
                             }`}
                         >
                             <Bot className="h-3.5 w-3.5" />
@@ -4141,10 +4141,10 @@ function SettingsPageContent() {
                     {hubSubTabs.integrations === "servarr" && (
                         <div className="space-y-6">
                                                     {/* MEDIA APPS & DOWNLOAD CLIENTS */}
-                        <Card className="flex flex-col bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
+                        <Card className="flex flex-col bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg">
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2">
-                                    <Shield className="h-5 w-5 text-emerald-400"/> {editingApp ? "Edit Application" : "Media Stack & Apps"}
+                                    <Shield className="h-5 w-5 text-emerald-700 dark:text-emerald-400"/> {editingApp ? "Edit Application" : "Media Stack & Apps"}
                                 </CardTitle>
                                 <CardDescription>{editingApp ? `Modifying ${editingApp.name}` : "Connect Arr apps & download clients."}</CardDescription>
                             </CardHeader>
@@ -4153,7 +4153,7 @@ function SettingsPageContent() {
                                     <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
                                         {mediaApps.length === 0 && <p className="text-xs text-muted-foreground">No applications configured.</p>}
                                         {mediaApps.map(app => (
-                                            <div key={app.id} className="space-y-1.5 border border-border/40 p-2.5 rounded-xl bg-[#101014]/90 backdrop-blur-md hover:border-border/80 transition-all text-sm">
+                                            <div key={app.id} className="space-y-1.5 border border-border/40 p-2.5 rounded-xl bg-card/95 dark:bg-[#101014]/90 backdrop-blur-md hover:border-border/80 transition-all text-sm">
                                                 <div className="flex justify-between items-center">
                                                     <div className="truncate">
                                                         <div className="font-semibold">{app.name}</div>
@@ -4169,7 +4169,7 @@ function SettingsPageContent() {
                                                             />
                                                             <Label htmlFor={`monitored-app-${app.id}`} className="text-[10px] cursor-pointer font-medium select-none">
                                                                 {app.monitored !== false ? (
-                                                                    <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                                                                    <span className="text-emerald-700 dark:text-emerald-400 font-semibold flex items-center gap-1">
                                                                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Monitored
                                                                     </span>
                                                                 ) : (
@@ -4182,13 +4182,13 @@ function SettingsPageContent() {
                                                         <Button 
                                                             size="sm" 
                                                             variant="ghost" 
-                                                            className="h-7 text-[11px] px-2 text-emerald-400 hover:ring-1 hover:ring-emerald-400/40 active:scale-95 transition-all"
+                                                            className="h-7 text-[11px] px-2 text-emerald-700 dark:text-emerald-400 hover:ring-1 hover:ring-emerald-400/40 active:scale-95 transition-all"
                                                             disabled={testingAppId === app.id}
                                                             onClick={() => handleTestApp(app.id)}
                                                         >
                                                             {testingAppId === app.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Test"}
                                                         </Button>
-                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-400 hover:ring-1 hover:ring-blue-400/40 active:scale-95 transition-all" onClick={() => { setEditingApp(app); setArrMeta(null); }}>
+                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-700 dark:text-blue-400 hover:ring-1 hover:ring-blue-400/40 active:scale-95 transition-all" onClick={() => { setEditingApp(app); setArrMeta(null); }}>
                                                             <Pencil className="h-3.5 w-3.5"/>
                                                         </Button>
                                                         <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500 hover:ring-1 hover:ring-red-500/40 active:scale-95 transition-all" onClick={() => handleDelete(app.id, removeMediaApp)}>
@@ -4197,7 +4197,7 @@ function SettingsPageContent() {
                                                     </div>
                                                 </div>
                                                 {appTestResults[app.id] && (
-                                                    <div className={`text-[11px] p-1.5 rounded flex items-center gap-1 ${appTestResults[app.id].success ? "text-emerald-400 bg-emerald-950/40" : "text-red-400 bg-red-950/40"}`}>
+                                                    <div className={`text-[11px] p-1.5 rounded flex items-center gap-1 ${appTestResults[app.id].success ? "text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40" : "text-red-700 dark:text-red-400 bg-red-500/10 dark:bg-red-950/40"}`}>
                                                         {appTestResults[app.id].success ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
                                                         <span className="truncate">{appTestResults[app.id].msg || appTestResults[app.id].err}</span>
                                                     </div>
@@ -4408,7 +4408,7 @@ function SettingsPageContent() {
                                     </div>
 
                                     {appFormTestResult && (
-                                        <div className={`text-[11px] p-2 rounded-lg flex items-center gap-1.5 ${appFormTestResult.success ? "text-emerald-400 bg-emerald-950/40 border border-emerald-500/30" : "text-red-400 bg-red-950/40 border border-red-500/30"}`}>
+                                        <div className={`text-[11px] p-2 rounded-lg flex items-center gap-1.5 ${appFormTestResult.success ? "text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/30" : "text-red-700 dark:text-red-400 bg-red-500/10 dark:bg-red-950/40 border border-red-500/30"}`}>
                                             {appFormTestResult.success ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> : <XCircle className="h-3.5 w-3.5 shrink-0" />}
                                             <span className="leading-tight">{appFormTestResult.msg || appFormTestResult.err}</span>
                                         </div>
@@ -4419,11 +4419,11 @@ function SettingsPageContent() {
                                             type="button" 
                                             size="sm" 
                                             variant="outline" 
-                                            className="h-9 text-xs font-semibold gap-1.5 border-emerald-400/30 hover:border-emerald-400 hover:bg-emerald-400/10 transition-all active:scale-95 text-emerald-400"
+                                            className="h-9 text-xs font-semibold gap-1.5 border-emerald-400/30 hover:border-emerald-400 hover:bg-emerald-400/10 transition-all active:scale-95 text-emerald-700 dark:text-emerald-400"
                                             disabled={testingAppForm}
                                             onClick={handleTestAppForm}
                                         >
-                                            {testingAppForm ? <Loader2 className="h-3 w-3 animate-spin text-emerald-400" /> : <Zap className="h-3 w-3 text-emerald-400" />}
+                                            {testingAppForm ? <Loader2 className="h-3 w-3 animate-spin text-emerald-700 dark:text-emerald-400" /> : <Zap className="h-3 w-3 text-emerald-700 dark:text-emerald-400" />}
                                             Test
                                         </Button>
                                         <Button type="submit" size="sm" className="flex-1 h-9 font-semibold hover:ring-2 hover:ring-emerald-400/40 active:scale-95 transition-all">
@@ -4455,7 +4455,7 @@ function SettingsPageContent() {
                     {hubSubTabs.integrations === "ai" && (
                         <div className="space-y-6">
                                                         {/* AI METADATA AGENT CARD */}
-                            <Card className={`border-sky-500/40 bg-[#121218]/80 backdrop-blur-md shadow-lg transition-all duration-300 ${
+                            <Card className={`border-sky-500/40 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md shadow-lg transition-all duration-300 ${
                                 isAiDirty 
                                     ? "border-amber-400/80 ring-2 ring-amber-400/50" 
                                     : ""
@@ -4463,8 +4463,8 @@ function SettingsPageContent() {
                                 <CardHeader>
                                     <div className="flex justify-between items-start">
                                         <div>
-                                            <CardTitle className="flex items-center gap-2 text-sky-400">
-                                                <Bot className="h-5 w-5 text-sky-400"/> AI Metadata Agent &amp; Support Assistant
+                                            <CardTitle className="flex items-center gap-2 text-sky-700 dark:text-sky-400">
+                                                <Bot className="h-5 w-5 text-sky-700 dark:text-sky-400"/> AI Metadata Agent &amp; Support Assistant
                                             </CardTitle>
                                             <CardDescription>
                                                 Configure the AI engine for media metadata extraction and set the autonomy level for the AI Support Bot.
@@ -4472,11 +4472,11 @@ function SettingsPageContent() {
                                         </div>
                                         <div className="flex items-center gap-1.5">
                                             {isAiDirty && (
-                                                <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px]">
+                                                <Badge className="bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/40 text-[10px]">
                                                     Unsaved Changes
                                                 </Badge>
                                             )}
-                                            <Badge className="bg-sky-500/20 text-sky-300 border border-sky-500/30 text-[10px]">
+                                            <Badge className="bg-sky-500/20 text-sky-800 dark:text-sky-300 border border-sky-500/30 text-[10px]">
                                                 {aiProviderSelect === "default" ? "Built-In Heuristic" : aiProviderSelect === "gemini" ? "Google Gemini" : "OpenAI"}
                                             </Badge>
                                         </div>
@@ -4507,7 +4507,7 @@ function SettingsPageContent() {
                                         data-lpignore="true"
                                     >
                                         {saveAiMsg && (
-                                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
+                                            <div className="text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/40 dark:border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
                                                 <CheckCircle2 className="h-4 w-4 shrink-0" />
                                                 <span>{saveAiMsg}</span>
                                             </div>
@@ -4544,7 +4544,7 @@ function SettingsPageContent() {
                                                         <Label>API Key</Label>
                                                         <div className="flex items-center gap-2">
                                                             {aiSettings?.aiApiKey && (
-                                                                <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
+                                                                <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-medium flex items-center gap-1">
                                                                     <CheckCircle2 className="h-3 w-3" /> Encrypted & Saved
                                                                 </span>
                                                             )}
@@ -4671,8 +4671,8 @@ function SettingsPageContent() {
                                         <div className="pt-4 border-t border-sky-500/20 space-y-4">
                                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                                                 <div>
-                                                    <Label className="text-sm font-semibold flex items-center gap-1.5 text-sky-300">
-                                                        <Sliders className="h-4 w-4 text-sky-400" /> AI Support Bot Autonomy Level
+                                                    <Label className="text-sm font-semibold flex items-center gap-1.5 text-sky-800 dark:text-sky-300">
+                                                        <Sliders className="h-4 w-4 text-sky-700 dark:text-sky-400" /> AI Support Bot Autonomy Level
                                                     </Label>
                                                     <p className="text-xs text-muted-foreground mt-0.5">
                                                         Controls what troubleshooting, playback probes, and self-healing actions the AI Support Bot is permitted to execute.
@@ -4680,10 +4680,10 @@ function SettingsPageContent() {
                                                 </div>
                                                 <Badge className={`text-xs px-2.5 py-0.5 font-semibold self-start sm:self-auto border ${
                                                     aiAutonomyLevel === "advisory"
-                                                        ? "bg-sky-500/20 text-sky-300 border-sky-500/40"
+                                                        ? "bg-sky-500/20 text-sky-800 dark:text-sky-300 border-sky-500/40"
                                                         : aiAutonomyLevel === "assisted"
-                                                        ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
-                                                        : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                                                        ? "bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/40"
+                                                        : "bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border-emerald-500/40"
                                                 }`}>
                                                     {aiAutonomyLevel === "advisory" && "Level 1: Advisory (Passive)"}
                                                     {aiAutonomyLevel === "assisted" && "Level 2: Assisted (Guided)"}
@@ -4706,7 +4706,7 @@ function SettingsPageContent() {
                                                             else if (val === 2) setAiAutonomyLevel("assisted");
                                                             else setAiAutonomyLevel("autonomous");
                                                         }}
-                                                        className="w-full h-2.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-400/50"
+                                                        className="w-full h-2.5 bg-muted dark:bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-400/50"
                                                     />
                                                 </div>
                                                 {/* Stepper Labels */}
@@ -4714,21 +4714,21 @@ function SettingsPageContent() {
                                                     <button 
                                                         type="button" 
                                                         onClick={() => setAiAutonomyLevel("advisory")}
-                                                        className={`transition-colors font-medium text-left ${aiAutonomyLevel === "advisory" ? "text-sky-400 font-bold" : "hover:text-foreground"}`}
+                                                        className={`transition-colors font-medium text-left ${aiAutonomyLevel === "advisory" ? "text-sky-700 dark:text-sky-400 font-bold" : "hover:text-foreground"}`}
                                                     >
                                                         1. Advisory
                                                     </button>
                                                     <button 
                                                         type="button" 
                                                         onClick={() => setAiAutonomyLevel("assisted")}
-                                                        className={`transition-colors font-medium text-center ${aiAutonomyLevel === "assisted" ? "text-amber-400 font-bold" : "hover:text-foreground"}`}
+                                                        className={`transition-colors font-medium text-center ${aiAutonomyLevel === "assisted" ? "text-amber-700 dark:text-amber-400 font-bold" : "hover:text-foreground"}`}
                                                     >
                                                         2. Assisted
                                                     </button>
                                                     <button 
                                                         type="button" 
                                                         onClick={() => setAiAutonomyLevel("autonomous")}
-                                                        className={`transition-colors font-medium text-right ${aiAutonomyLevel === "autonomous" ? "text-emerald-400 font-bold" : "hover:text-foreground"}`}
+                                                        className={`transition-colors font-medium text-right ${aiAutonomyLevel === "autonomous" ? "text-emerald-700 dark:text-emerald-400 font-bold" : "hover:text-foreground"}`}
                                                     >
                                                         3. Full Autonomous
                                                     </button>
@@ -4742,21 +4742,21 @@ function SettingsPageContent() {
                                                     onClick={() => setAiAutonomyLevel("advisory")}
                                                     className={`cursor-pointer rounded-lg p-3 border transition-all text-xs space-y-1.5 ${
                                                         aiAutonomyLevel === "advisory"
-                                                            ? "border-sky-500/80 bg-sky-950/30 text-sky-100 ring-1 ring-sky-500/50 shadow-sm"
-                                                            : "border-white/10 bg-black/20 hover:border-sky-500/30 text-muted-foreground"
+                                                            ? "border-sky-500/80 bg-sky-500/10 dark:bg-sky-950/30 text-sky-900 dark:text-sky-100 ring-1 ring-sky-500/50 shadow-sm"
+                                                            : "border-border/70 dark:border-white/10 bg-muted/40 dark:bg-black/20 hover:border-sky-500/30 text-muted-foreground"
                                                     }`}
                                                 >
                                                     <div className="flex items-center justify-between font-semibold">
-                                                        <span className="flex items-center gap-1.5 text-sky-300">
+                                                        <span className="flex items-center gap-1.5 text-sky-800 dark:text-sky-300">
                                                             <Eye className="h-3.5 w-3.5" /> Level 1: Advisory
                                                         </span>
-                                                        {aiAutonomyLevel === "advisory" && <Check className="h-3.5 w-3.5 text-sky-400" />}
+                                                        {aiAutonomyLevel === "advisory" && <Check className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400" />}
                                                     </div>
                                                     <p className="text-[11px] leading-relaxed text-muted-foreground">
                                                         Passive diagnostics and device coaching only. Explains transcode telemetry & client buffer issues.
                                                     </p>
-                                                    <div className="pt-1 text-[10px] space-y-0.5 border-t border-white/5">
-                                                        <div className="text-emerald-400/90">✓ Stream telemetry & setup guides</div>
+                                                    <div className="pt-1 text-[10px] space-y-0.5 border-t border-border/70 dark:border-white/5">
+                                                        <div className="text-emerald-700/90 dark:text-emerald-400/90">✓ Stream telemetry & setup guides</div>
                                                         <div className="text-neutral-500">✗ No stream kills or file grabs</div>
                                                     </div>
                                                 </div>
@@ -4766,22 +4766,22 @@ function SettingsPageContent() {
                                                     onClick={() => setAiAutonomyLevel("assisted")}
                                                     className={`cursor-pointer rounded-lg p-3 border transition-all text-xs space-y-1.5 ${
                                                         aiAutonomyLevel === "assisted"
-                                                            ? "border-amber-500/80 bg-amber-950/30 text-amber-100 ring-1 ring-amber-500/50 shadow-sm"
-                                                            : "border-white/10 bg-black/20 hover:border-amber-500/30 text-muted-foreground"
+                                                            ? "border-amber-500/80 bg-amber-500/10 dark:bg-amber-950/30 text-amber-900 dark:text-amber-100 ring-1 ring-amber-500/50 shadow-sm"
+                                                            : "border-border/70 dark:border-white/10 bg-muted/40 dark:bg-black/20 hover:border-amber-500/30 text-muted-foreground"
                                                     }`}
                                                 >
                                                     <div className="flex items-center justify-between font-semibold">
-                                                        <span className="flex items-center gap-1.5 text-amber-300">
+                                                        <span className="flex items-center gap-1.5 text-amber-800 dark:text-amber-300">
                                                             <Shield className="h-3.5 w-3.5" /> Level 2: Assisted
                                                         </span>
-                                                        {aiAutonomyLevel === "assisted" && <Check className="h-3.5 w-3.5 text-amber-400" />}
+                                                        {aiAutonomyLevel === "assisted" && <Check className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />}
                                                     </div>
                                                     <p className="text-[11px] leading-relaxed text-muted-foreground">
                                                         Proactive container inspections & synthetic probes. Stops user streams on command; requests confirmation before downloads.
                                                     </p>
-                                                    <div className="pt-1 text-[10px] space-y-0.5 border-t border-white/5">
-                                                        <div className="text-emerald-400/90">✓ Probes & user stream kills</div>
-                                                        <div className="text-amber-400/90">⚠️ Prompts confirmation for grabs</div>
+                                                    <div className="pt-1 text-[10px] space-y-0.5 border-t border-border/70 dark:border-white/5">
+                                                        <div className="text-emerald-700/90 dark:text-emerald-400/90">✓ Probes & user stream kills</div>
+                                                        <div className="text-amber-700/90 dark:text-amber-400/90">⚠️ Prompts confirmation for grabs</div>
                                                     </div>
                                                 </div>
 
@@ -4790,22 +4790,22 @@ function SettingsPageContent() {
                                                     onClick={() => setAiAutonomyLevel("autonomous")}
                                                     className={`cursor-pointer rounded-lg p-3 border transition-all text-xs space-y-1.5 ${
                                                         aiAutonomyLevel === "autonomous"
-                                                            ? "border-emerald-500/80 bg-emerald-950/30 text-emerald-100 ring-1 ring-emerald-500/50 shadow-sm"
-                                                            : "border-white/10 bg-black/20 hover:border-emerald-500/30 text-muted-foreground"
+                                                            ? "border-emerald-500/80 bg-emerald-500/10 dark:bg-emerald-950/30 text-emerald-900 dark:text-emerald-100 ring-1 ring-emerald-500/50 shadow-sm"
+                                                            : "border-border/70 dark:border-white/10 bg-muted/40 dark:bg-black/20 hover:border-emerald-500/30 text-muted-foreground"
                                                     }`}
                                                 >
                                                     <div className="flex items-center justify-between font-semibold">
-                                                        <span className="flex items-center gap-1.5 text-emerald-300">
+                                                        <span className="flex items-center gap-1.5 text-emerald-800 dark:text-emerald-300">
                                                             <Zap className="h-3.5 w-3.5" /> Level 3: Autonomous
                                                         </span>
-                                                        {aiAutonomyLevel === "autonomous" && <Check className="h-3.5 w-3.5 text-emerald-400" />}
+                                                        {aiAutonomyLevel === "autonomous" && <Check className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />}
                                                     </div>
                                                     <p className="text-[11px] leading-relaxed text-muted-foreground">
                                                         Full auto-pilot self-healing. Auto-terminates stuck playback, grabs replacement English media in Radarr/Sonarr, and auto-escalates tickets.
                                                     </p>
-                                                    <div className="pt-1 text-[10px] space-y-0.5 border-t border-white/5">
-                                                        <div className="text-emerald-400/90">✓ Auto Radarr/Sonarr grabs</div>
-                                                        <div className="text-emerald-400/90">✓ Auto ticket escalation + probes</div>
+                                                    <div className="pt-1 text-[10px] space-y-0.5 border-t border-border/70 dark:border-white/5">
+                                                        <div className="text-emerald-700/90 dark:text-emerald-400/90">✓ Auto Radarr/Sonarr grabs</div>
+                                                        <div className="text-emerald-700/90 dark:text-emerald-400/90">✓ Auto ticket escalation + probes</div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -4814,14 +4814,14 @@ function SettingsPageContent() {
                                             <div className="pt-3 border-t border-sky-500/20 space-y-3">
                                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                                                     <div>
-                                                        <Label className="text-sm font-semibold flex items-center gap-1.5 text-sky-300">
-                                                            <Activity className="h-4 w-4 text-sky-400" /> Max Daily Radarr / Sonarr Interactions
+                                                        <Label className="text-sm font-semibold flex items-center gap-1.5 text-sky-800 dark:text-sky-300">
+                                                            <Activity className="h-4 w-4 text-sky-700 dark:text-sky-400" /> Max Daily Radarr / Sonarr Interactions
                                                         </Label>
                                                         <p className="text-xs text-muted-foreground mt-0.5">
                                                             Safety rate limit on automated replacement searches & downloads the AI can dispatch to Radarr & Sonarr per user within a 24-hour window.
                                                         </p>
                                                     </div>
-                                                    <Badge className="text-xs px-2.5 py-0.5 font-semibold self-start sm:self-auto bg-sky-500/20 text-sky-300 border border-sky-500/40 tabular-nums">
+                                                    <Badge className="text-xs px-2.5 py-0.5 font-semibold self-start sm:self-auto bg-sky-500/20 text-sky-800 dark:text-sky-300 border border-sky-500/40 tabular-nums">
                                                         {aiMaxDailyGrabs} grabs / user / 24h
                                                     </Badge>
                                                 </div>
@@ -4835,35 +4835,35 @@ function SettingsPageContent() {
                                                             step={1}
                                                             value={aiMaxDailyGrabs}
                                                             onChange={(e) => setAiMaxDailyGrabs(Number(e.target.value))}
-                                                            className="w-full h-2.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-400/50"
+                                                            className="w-full h-2.5 bg-muted dark:bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-400/50"
                                                         />
                                                     </div>
                                                     <div className="flex justify-between text-[11px] text-muted-foreground px-0.5">
                                                         <button 
                                                             type="button" 
                                                             onClick={() => setAiMaxDailyGrabs(1)}
-                                                            className={`hover:text-foreground transition-colors ${aiMaxDailyGrabs === 1 ? "text-sky-400 font-bold" : ""}`}
+                                                            className={`hover:text-foreground transition-colors ${aiMaxDailyGrabs === 1 ? "text-sky-700 dark:text-sky-400 font-bold" : ""}`}
                                                         >
                                                             1 (Conservative)
                                                         </button>
                                                         <button 
                                                             type="button" 
                                                             onClick={() => setAiMaxDailyGrabs(3)}
-                                                            className={`hover:text-foreground transition-colors ${aiMaxDailyGrabs === 3 ? "text-sky-400 font-bold" : ""}`}
+                                                            className={`hover:text-foreground transition-colors ${aiMaxDailyGrabs === 3 ? "text-sky-700 dark:text-sky-400 font-bold" : ""}`}
                                                         >
                                                             3 (Default)
                                                         </button>
                                                         <button 
                                                             type="button" 
                                                             onClick={() => setAiMaxDailyGrabs(5)}
-                                                            className={`hover:text-foreground transition-colors ${aiMaxDailyGrabs === 5 ? "text-sky-400 font-bold" : ""}`}
+                                                            className={`hover:text-foreground transition-colors ${aiMaxDailyGrabs === 5 ? "text-sky-700 dark:text-sky-400 font-bold" : ""}`}
                                                         >
                                                             5 (Moderate)
                                                         </button>
                                                         <button 
                                                             type="button" 
                                                             onClick={() => setAiMaxDailyGrabs(10)}
-                                                            className={`hover:text-foreground transition-colors ${aiMaxDailyGrabs === 10 ? "text-sky-400 font-bold" : ""}`}
+                                                            className={`hover:text-foreground transition-colors ${aiMaxDailyGrabs === 10 ? "text-sky-700 dark:text-sky-400 font-bold" : ""}`}
                                                         >
                                                             10 (Max)
                                                         </button>
@@ -4871,8 +4871,8 @@ function SettingsPageContent() {
                                                 </div>
                                             </div>
 
-                                            <div className="p-2.5 rounded-lg bg-neutral-900/40 border border-neutral-800/60 text-[11px] text-muted-foreground flex items-center gap-2">
-                                                <Shield className="h-3.5 w-3.5 text-sky-400 shrink-0" />
+                                            <div className="p-2.5 rounded-lg bg-muted/70 dark:bg-neutral-900/40 border border-border dark:border-neutral-800/60 text-[11px] text-muted-foreground flex items-center gap-2">
+                                                <Shield className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400 shrink-0" />
                                                 <span>
                                                     <strong>Security Boundary:</strong> Regardless of autonomy level, strict user isolation is always enforced: non-admin users can never view or terminate streams belonging to other users.
                                                 </span>
@@ -4880,10 +4880,10 @@ function SettingsPageContent() {
                                         </div>
 
                                         {testAiResult && (
-                                            <div className="text-xs bg-sky-950/40 border border-sky-800/40 p-3 rounded-lg space-y-1.5 font-mono text-sky-200">
-                                                <div className="font-bold flex items-center justify-between text-sky-300">
+                                            <div className="text-xs bg-sky-500/10 dark:bg-sky-950/40 border border-sky-500/40 dark:border-sky-800/40 p-3 rounded-lg space-y-1.5 font-mono text-sky-900 dark:text-sky-200">
+                                                <div className="font-bold flex items-center justify-between text-sky-800 dark:text-sky-300">
                                                     <span className="flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5" /> AI Resolution Result:</span>
-                                                    <Badge variant="outline" className="text-[10px] bg-sky-500/20 border-sky-500/30 text-sky-300">
+                                                    <Badge variant="outline" className="text-[10px] bg-sky-500/20 border-sky-500/30 text-sky-800 dark:text-sky-300">
                                                         {testAiResult.providerUsed}
                                                     </Badge>
                                                 </div>
@@ -4895,7 +4895,7 @@ function SettingsPageContent() {
                                         )}
 
                                         {testAiErr && (
-                                            <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2">
+                                            <div className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 dark:bg-red-950/40 border border-red-500/40 dark:border-red-800/40 p-3 rounded-lg flex items-center gap-2">
                                                 <XCircle className="h-4 w-4 shrink-0" />
                                                 <span>{testAiErr}</span>
                                             </div>
@@ -4908,7 +4908,7 @@ function SettingsPageContent() {
                                             <Button 
                                                 type="button" 
                                                 variant="outline" 
-                                                className="border-sky-500/40 text-sky-300 hover:bg-sky-500/10 font-semibold gap-1 hover:ring-2 hover:ring-sky-400/40 active:scale-95 transition-all"
+                                                className="border-sky-500/40 text-sky-800 dark:text-sky-300 hover:bg-sky-500/10 font-semibold gap-1 hover:ring-2 hover:ring-sky-400/40 active:scale-95 transition-all"
                                                 onClick={handleTestAiAgent}
                                                 disabled={testAiLoading}
                                             >
@@ -4918,11 +4918,11 @@ function SettingsPageContent() {
                                             <Button 
                                                 type="button" 
                                                 variant="secondary" 
-                                                className="bg-sky-500/20 text-sky-300 border border-sky-500/40 hover:bg-sky-500/30 font-bold gap-1.5 w-full sm:w-auto hover:ring-2 hover:ring-sky-400/50 active:scale-95 transition-all shadow-sm"
+                                                className="bg-sky-500/20 text-sky-800 dark:text-sky-300 border border-sky-500/40 hover:bg-sky-500/30 font-bold gap-1.5 w-full sm:w-auto hover:ring-2 hover:ring-sky-400/50 active:scale-95 transition-all shadow-sm"
                                                 onClick={handleRunAiBatchScan}
                                                 disabled={batchScanning}
                                             >
-                                                {batchScanning ? <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-300" /> : <Sparkles className="h-3.5 w-3.5 text-sky-300" />}
+                                                {batchScanning ? <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-800 dark:text-sky-300" /> : <Sparkles className="h-3.5 w-3.5 text-sky-800 dark:text-sky-300" />}
                                                 Run AI Batch Resolution on All Libraries
                                             </Button>
                                         </div>
@@ -4932,7 +4932,7 @@ function SettingsPageContent() {
 
                             <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
                                                             {/* CURATION, KOMETA & AGREGARR API KEYS CARD */}
-                            <Card className={`border-amber-500/40 bg-[#121218]/80 backdrop-blur-md shadow-lg transition-all duration-300 ${
+                            <Card className={`border-amber-500/40 bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md shadow-lg transition-all duration-300 ${
                                 isCurationDirty 
                                     ? "border-amber-400/80 ring-2 ring-amber-400/50" 
                                     : ""
@@ -4940,15 +4940,15 @@ function SettingsPageContent() {
                                 <CardHeader>
                                     <div className="flex justify-between items-start">
                                         <div>
-                                            <CardTitle className="flex items-center gap-2 text-amber-400">
-                                                <Sparkles className="h-5 w-5 text-amber-400"/> Curation &amp; Discovery API Keys
+                                            <CardTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+                                                <Sparkles className="h-5 w-5 text-amber-700 dark:text-amber-400"/> Curation &amp; Discovery API Keys
                                             </CardTitle>
                                             <CardDescription>
                                                 Configure TMDb, Trakt.tv, and IMDb / Community Ratings (MDBList) API keys for automated movie/TV collections, ratings badges, and theatrical vs digital release calendars.
                                             </CardDescription>
                                         </div>
                                         {isCurationDirty && (
-                                            <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
+                                            <Badge className="bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
                                                 ● Unsaved Changes
                                             </Badge>
                                         )}
@@ -4973,14 +4973,14 @@ function SettingsPageContent() {
                                         className="space-y-4"
                                     >
                                         {curationSavedMsg && (
-                                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-2.5 rounded-lg flex items-center gap-1.5">
+                                            <div className="text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/40 dark:border-emerald-800/40 p-2.5 rounded-lg flex items-center gap-1.5">
                                                 <CheckCircle2 className="h-3.5 w-3.5" />
                                                 <span>{curationSavedMsg}</span>
                                             </div>
                                         )}
 
                                         {curationTestResult && (
-                                            <div className={`text-xs p-3 rounded-lg border space-y-1 ${curationTestResult.errors?.length === 0 ? 'bg-emerald-950/50 text-emerald-300 border-emerald-800' : 'bg-rose-950/50 text-rose-300 border-rose-800'}`}>
+                                            <div className={`text-xs p-3 rounded-lg border space-y-1 ${curationTestResult.errors?.length === 0 ? 'bg-emerald-500/10 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 border-emerald-500/40 dark:border-emerald-800' : 'bg-rose-500/10 dark:bg-rose-950/50 text-rose-800 dark:text-rose-300 border-rose-500/40 dark:border-rose-800'}`}>
                                                 <div className="font-bold flex items-center gap-1.5">
                                                     {curationTestResult.errors?.length === 0 ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
                                                     <span>API Verification Results:</span>
@@ -4990,7 +4990,7 @@ function SettingsPageContent() {
                                                     {traktKey && <div>• Trakt: {curationTestResult.trakt ? "✓ Connected (200 OK)" : "✗ Failed"}</div>}
                                                     {mdblistKey && <div>• IMDb / Ratings (MDBList): {curationTestResult.mdblist ? "✓ Connected (200 OK)" : "✗ Failed"}</div>}
                                                     {curationTestResult.errors?.map((err: string, i: number) => (
-                                                        <div key={i} className="text-rose-400">• {err}</div>
+                                                        <div key={i} className="text-rose-700 dark:text-rose-400">• {err}</div>
                                                     ))}
                                                 </div>
                                             </div>
@@ -5000,7 +5000,7 @@ function SettingsPageContent() {
                                             {/* TMDb API Key */}
                                             <div className="space-y-1">
                                                 <div className="flex justify-between items-center text-xs">
-                                                    <Label className="font-semibold text-slate-200">The Movie Database (TMDb) API Key</Label>
+                                                    <Label className="font-semibold text-foreground dark:text-slate-200">The Movie Database (TMDb) API Key</Label>
                                                     <a href="https://www.themoviedb.org/settings/api" target="_blank" className="text-[10px] text-primary hover:underline">
                                                         Get Free Key ↗
                                                     </a>
@@ -5011,7 +5011,7 @@ function SettingsPageContent() {
                                                         value={tmdbKey}
                                                         onChange={e => setTmdbKey(e.target.value)}
                                                         placeholder="e.g. 3a1f8c..."
-                                                        className="bg-black/50 border-white/10 text-xs pr-8"
+                                                        className="bg-muted/60 dark:bg-black/50 border-border/70 dark:border-white/10 text-xs pr-8"
                                                     />
                                                     <Button
                                                         type="button"
@@ -5023,7 +5023,7 @@ function SettingsPageContent() {
                                                         {showTmdbKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                                                     </Button>
                                                 </div>
-                                                <p className="text-[10px] text-slate-400">
+                                                <p className="text-[10px] text-slate-600 dark:text-slate-400">
                                                     Powers franchise collections (MCU, Star Wars, Pixar, HBO, Netflix) and theatrical vs digital release countdowns.
                                                 </p>
                                             </div>
@@ -5031,7 +5031,7 @@ function SettingsPageContent() {
                                             {/* Trakt Client ID */}
                                             <div className="space-y-1">
                                                 <div className="flex justify-between items-center text-xs">
-                                                    <Label className="font-semibold text-slate-200">Trakt.tv API Client ID</Label>
+                                                    <Label className="font-semibold text-foreground dark:text-slate-200">Trakt.tv API Client ID</Label>
                                                     <a href="https://trakt.tv/oauth/applications" target="_blank" className="text-[10px] text-primary hover:underline">
                                                         Create Trakt App ↗
                                                     </a>
@@ -5042,7 +5042,7 @@ function SettingsPageContent() {
                                                         value={traktKey}
                                                         onChange={e => setTraktKey(e.target.value)}
                                                         placeholder="e.g. 9b7c6..."
-                                                        className="bg-black/50 border-white/10 text-xs pr-8"
+                                                        className="bg-muted/60 dark:bg-black/50 border-border/70 dark:border-white/10 text-xs pr-8"
                                                     />
                                                     <Button
                                                         type="button"
@@ -5054,7 +5054,7 @@ function SettingsPageContent() {
                                                         {showTraktKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                                                     </Button>
                                                 </div>
-                                                <p className="text-[10px] text-slate-400">
+                                                <p className="text-[10px] text-slate-600 dark:text-slate-400">
                                                     Powers dynamic Trending This Week, Anticipated Movies, and custom public Trakt lists.
                                                 </p>
                                             </div>
@@ -5062,7 +5062,7 @@ function SettingsPageContent() {
                                             {/* MDBList API Key */}
                                             <div className="space-y-1">
                                                 <div className="flex justify-between items-center text-xs">
-                                                    <Label className="font-semibold text-slate-200">IMDb & Community Ratings (MDBList API Key)</Label>
+                                                    <Label className="font-semibold text-foreground dark:text-slate-200">IMDb & Community Ratings (MDBList API Key)</Label>
                                                     <a href="https://mdblist.com/preferences/" target="_blank" className="text-[10px] text-primary hover:underline">
                                                         Get MDBList Key ↗
                                                     </a>
@@ -5073,7 +5073,7 @@ function SettingsPageContent() {
                                                         value={mdblistKey}
                                                         onChange={e => setMdblistKey(e.target.value)}
                                                         placeholder="e.g. key_..."
-                                                        className="bg-black/50 border-white/10 text-xs pr-8"
+                                                        className="bg-muted/60 dark:bg-black/50 border-border/70 dark:border-white/10 text-xs pr-8"
                                                     />
                                                     <Button
                                                         type="button"
@@ -5085,7 +5085,7 @@ function SettingsPageContent() {
                                                         {showMdblistKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                                                     </Button>
                                                 </div>
-                                                <p className="text-[10px] text-slate-400">
+                                                <p className="text-[10px] text-slate-600 dark:text-slate-400">
                                                     Powers IMDb Top 250, Oscar Best Picture Winners, and composite IMDb/Rotten Tomatoes/Metacritic ratings badges.
                                                 </p>
                                             </div>
@@ -5101,9 +5101,9 @@ function SettingsPageContent() {
                                                 size="sm" 
                                                 disabled={testingCurationKeys || (!tmdbKey && !traktKey && !mdblistKey)}
                                                 onClick={handleTestCurationKeys}
-                                                className="text-xs h-8 border-slate-700 font-semibold gap-1.5"
+                                                className="text-xs h-8 border-border dark:border-slate-700 font-semibold gap-1.5"
                                             >
-                                                {testingCurationKeys ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 text-amber-400" />}
+                                                {testingCurationKeys ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />}
                                                 Test API Keys
                                             </Button>
                                         </div>
@@ -5111,7 +5111,7 @@ function SettingsPageContent() {
                                 </CardContent>
                             </Card>
 
-                                                            <Card className={`bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
+                                                            <Card className={`bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
                                 isGoogleBooksDirty ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" : ""
                             }`}>
                                 <CardHeader>
@@ -5121,7 +5121,7 @@ function SettingsPageContent() {
                                             <CardDescription>Configure a free Google Cloud API key to bypass the 1,000 queries/day anonymous IP limit for fetching eBook covers.</CardDescription>
                                         </div>
                                         {isGoogleBooksDirty && (
-                                            <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
+                                            <Badge className="bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
                                                 ● Unsaved Changes
                                             </Badge>
                                         )}
@@ -5146,7 +5146,7 @@ function SettingsPageContent() {
                                         data-lpignore="true"
                                     >
                                         {saveGoogleBooksMsg && (
-                                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
+                                            <div className="text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/40 dark:border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
                                                 <CheckCircle2 className="h-4 w-4 shrink-0" />
                                                 <span>{saveGoogleBooksMsg}</span>
                                             </div>
@@ -5155,7 +5155,7 @@ function SettingsPageContent() {
                                             <div className="flex justify-between items-center">
                                                 <Label>API Key</Label>
                                                 {systemSettings?.googleBooksApiKey && (
-                                                    <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
+                                                    <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-medium flex items-center gap-1">
                                                         <CheckCircle2 className="h-3 w-3" /> Saved
                                                     </span>
                                                 )}
@@ -5167,7 +5167,7 @@ function SettingsPageContent() {
                                                     value={googleBooksKey}
                                                     onChange={(e) => setGoogleBooksKey(e.target.value)}
                                                     placeholder="AIzaSy..."
-                                                    className="bg-black/50 border-white/10 text-white placeholder:text-gray-500 pr-8"
+                                                    className="bg-muted/60 dark:bg-black/50 border-border/70 dark:border-white/10 text-foreground dark:text-white placeholder:text-gray-500 pr-8"
                                                     autoComplete="new-password"
                                                     data-1p-ignore="true"
                                                     data-lpignore="true"
@@ -5202,14 +5202,14 @@ function SettingsPageContent() {
                 {/* ========================================================================= */}
                 <TabsContent value="communications" className="space-y-6">
                     {/* Sub-tab Pill Switcher */}
-                    <div className="flex items-center gap-1.5 p-1 bg-white/[0.03] border border-white/10 rounded-xl w-fit overflow-x-auto max-w-full mb-6">
+                    <div className="flex items-center gap-1.5 p-1 bg-muted/50 dark:bg-white/[0.03] border border-border/70 dark:border-white/10 rounded-xl w-fit overflow-x-auto max-w-full mb-6">
                         <button
                             type="button"
                             onClick={() => handleSubTabChange("communications", "smtp")}
                             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
                                 hubSubTabs.communications === "smtp"
-                                    ? "bg-sky-500/20 text-sky-400 border border-sky-500/40 shadow-xs"
-                                    : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05]"
+                                    ? "bg-sky-500/20 text-sky-700 dark:text-sky-400 border border-sky-500/40 shadow-xs"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-white/[0.05]"
                             }`}
                         >
                             <Mail className="h-3.5 w-3.5" />
@@ -5223,8 +5223,8 @@ function SettingsPageContent() {
                             onClick={() => handleSubTabChange("communications", "broadcast")}
                             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
                                 hubSubTabs.communications === "broadcast"
-                                    ? "bg-sky-500/20 text-sky-400 border border-sky-500/40 shadow-xs"
-                                    : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05]"
+                                    ? "bg-sky-500/20 text-sky-700 dark:text-sky-400 border border-sky-500/40 shadow-xs"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-white/[0.05]"
                             }`}
                         >
                             <Bell className="h-3.5 w-3.5" />
@@ -5235,8 +5235,8 @@ function SettingsPageContent() {
                             onClick={() => handleSubTabChange("communications", "discord")}
                             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
                                 hubSubTabs.communications === "discord"
-                                    ? "bg-sky-500/20 text-sky-400 border border-sky-500/40 shadow-xs"
-                                    : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05]"
+                                    ? "bg-sky-500/20 text-sky-700 dark:text-sky-400 border border-sky-500/40 shadow-xs"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-white/[0.05]"
                             }`}
                         >
                             <MessageSquare className="h-3.5 w-3.5" />
@@ -5247,7 +5247,7 @@ function SettingsPageContent() {
                     {hubSubTabs.communications === "smtp" && (
                         <div className="space-y-6">
                                                         {/* SMTP & EMAIL INTEGRATION */}
-                            <Card className={`bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
+                            <Card className={`bg-card/95 dark:bg-[#121218]/80 backdrop-blur-md border-border/50 shadow-lg transition-all duration-300 ${
                                 isSmtpDirty ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" : ""
                             }`}>
                                 <CardHeader>
@@ -5260,20 +5260,20 @@ function SettingsPageContent() {
                                         </div>
                                         <div className="flex flex-wrap items-center gap-1.5">
                                             {isSmtpDirty && (
-                                                <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px]">
+                                                <Badge className="bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/40 text-[10px]">
                                                     Unsaved Changes
                                                 </Badge>
                                             )}
                                             {systemSettings?.emailProviderMode === "resend" || systemSettings?.smtpHost?.includes("resend") ? (
-                                                <Badge className="bg-sky-500/15 text-sky-300 border border-sky-500/30 text-[10px] gap-1">
+                                                <Badge className="bg-sky-500/15 text-sky-800 dark:text-sky-300 border border-sky-500/30 text-[10px] gap-1">
                                                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Active: Resend
                                                 </Badge>
                                             ) : systemSettings?.smtpHost ? (
-                                                <Badge className="bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 text-[10px] gap-1">
+                                                <Badge className="bg-emerald-600/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 text-[10px] gap-1">
                                                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Active: Custom SMTP
                                                 </Badge>
                                             ) : (
-                                                <Badge variant="outline" className="bg-red-500/10 text-red-400 border-red-500/30 text-[10px]">
+                                                <Badge variant="outline" className="bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30 text-[10px]">
                                                     SMTP Inactive
                                                 </Badge>
                                             )}
@@ -5333,19 +5333,19 @@ function SettingsPageContent() {
                                         data-lpignore="true"
                                     >
                                         {saveSmtpMsg && (
-                                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
+                                            <div className="text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/40 dark:border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
                                                 <CheckCircle2 className="h-4 w-4 shrink-0" />
                                                 <span>{saveSmtpMsg}</span>
                                             </div>
                                         )}
                                         {testEmailMsg && (
-                                            <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
+                                            <div className="text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/40 dark:border-emerald-800/40 p-3 rounded-lg flex items-center gap-2">
                                                 <CheckCircle2 className="h-4 w-4 shrink-0" />
                                                 <span>{testEmailMsg}</span>
                                             </div>
                                         )}
                                         {testEmailErr && (
-                                            <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg flex items-center gap-2">
+                                            <div className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 dark:bg-red-950/40 border border-red-500/40 dark:border-red-800/40 p-3 rounded-lg flex items-center gap-2">
                                                 <XCircle className="h-4 w-4 shrink-0" />
                                                 <span>{testEmailErr}</span>
                                             </div>
@@ -5361,20 +5361,20 @@ function SettingsPageContent() {
                                                     Click to choose which provider is active. Both can be configured independently without overwriting.
                                                 </p>
                                             </div>
-                                            <div className="flex items-center gap-1.5 bg-black/40 p-1 rounded-xl border border-border/40 self-start sm:self-auto">
+                                            <div className="flex items-center gap-1.5 bg-muted/60 dark:bg-black/40 p-1 rounded-xl border border-border/40 self-start sm:self-auto">
                                                 <button
                                                     type="button"
                                                     onClick={() => setEmailProviderMode("resend")}
                                                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                                                         emailProviderMode === "resend"
-                                                            ? "bg-amber-500/15 text-amber-200 shadow-sm border border-amber-500/40 ring-1 ring-amber-500/30"
-                                                            : "text-muted-foreground hover:text-foreground hover:bg-white/[0.04]"
+                                                            ? "bg-amber-500/15 text-amber-900 dark:text-amber-200 shadow-sm border border-amber-500/40 ring-1 ring-amber-500/30"
+                                                            : "text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-white/[0.04]"
                                                     }`}
                                                 >
-                                                    <Zap className="h-3.5 w-3.5 text-amber-400" />
+                                                    <Zap className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
                                                     <span>Resend</span>
                                                     {emailProviderMode === "resend" ? (
-                                                        <span className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 rounded-full font-mono ml-0.5">
+                                                        <span className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-500/40 rounded-full font-mono ml-0.5">
                                                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> ACTIVE
                                                         </span>
                                                     ) : (
@@ -5388,13 +5388,13 @@ function SettingsPageContent() {
                                                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                                                         emailProviderMode === "custom"
                                                             ? "bg-primary text-primary-foreground shadow-sm border border-primary/40 ring-1 ring-primary/50"
-                                                            : "text-muted-foreground hover:text-foreground hover:bg-white/[0.04]"
+                                                            : "text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-white/[0.04]"
                                                     }`}
                                                 >
                                                     <Mail className="h-3.5 w-3.5" />
                                                     <span>Custom SMTP</span>
                                                     {emailProviderMode === "custom" ? (
-                                                        <span className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 rounded-full font-mono ml-0.5">
+                                                        <span className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-500/40 rounded-full font-mono ml-0.5">
                                                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> ACTIVE
                                                         </span>
                                                     ) : (
@@ -5405,19 +5405,19 @@ function SettingsPageContent() {
                                         </div>
 
                                         {emailProviderMode === "resend" ? (
-                                            <div className="p-4 rounded-xl bg-sky-950/20 border border-sky-500/30 space-y-4">
+                                            <div className="p-4 rounded-xl bg-sky-500/10 dark:bg-sky-950/20 border border-sky-500/30 space-y-4">
                                                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                                                     <div className="space-y-0.5">
                                                         <div className="text-sm font-extrabold text-foreground flex items-center gap-1.5">
-                                                            <Zap className="h-4 w-4 text-sky-400" /> Resend API Key &amp; Outbound Delivery
+                                                            <Zap className="h-4 w-4 text-sky-700 dark:text-sky-400" /> Resend API Key &amp; Outbound Delivery
                                                         </div>
                                                         <p className="text-xs text-muted-foreground leading-relaxed">
-                                                            Enter your Resend API Key below. Portalarr automatically routes emails through Resend's SMTP server (<code className="text-sky-300 font-mono text-[11px]">smtp.resend.com:465</code>) using your verified domain.
+                                                            Enter your Resend API Key below. Portalarr automatically routes emails through Resend's SMTP server (<code className="text-sky-800 dark:text-sky-300 font-mono text-[11px]">smtp.resend.com:465</code>) using your verified domain.
                                                         </p>
                                                     </div>
                                                     <div className="flex flex-wrap items-center gap-2 shrink-0">
                                                         {emailProviderMode === "resend" ? (
-                                                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
                                                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Active Engine
                                                             </span>
                                                         ) : (
@@ -5426,9 +5426,9 @@ function SettingsPageContent() {
                                                                 size="sm"
                                                                 variant="outline"
                                                                 onClick={() => setEmailProviderMode("resend")}
-                                                                className="text-xs h-7 px-3 gap-1.5 font-bold border-sky-500/40 text-sky-300 hover:bg-sky-500/20"
+                                                                className="text-xs h-7 px-3 gap-1.5 font-bold border-sky-500/40 text-sky-800 dark:text-sky-300 hover:bg-sky-500/20"
                                                             >
-                                                                <CheckCircle2 className="h-3.5 w-3.5 text-sky-400" />
+                                                                <CheckCircle2 className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400" />
                                                                 <span>Set Active</span>
                                                             </Button>
                                                         )}
@@ -5436,7 +5436,7 @@ function SettingsPageContent() {
                                                             href="https://resend.com/api-keys"
                                                             target="_blank"
                                                             rel="noopener noreferrer"
-                                                            className="text-[11px] text-sky-400 hover:text-sky-300 flex items-center gap-1 font-medium underline underline-offset-2 ml-1"
+                                                            className="text-[11px] text-sky-700 dark:text-sky-400 hover:text-sky-800 dark:hover:text-sky-300 flex items-center gap-1 font-medium underline underline-offset-2 ml-1"
                                                         >
                                                             Resend Dashboard <ExternalLink className="h-3 w-3" />
                                                         </a>
@@ -5446,7 +5446,7 @@ function SettingsPageContent() {
                                                 <div className="space-y-2">
                                                     <Label className="text-xs font-semibold flex items-center justify-between">
                                                         <span>Resend API Key</span>
-                                                        <span className="text-[10px] text-muted-foreground font-normal">Starts with <code className="text-sky-300">re_</code></span>
+                                                        <span className="text-[10px] text-muted-foreground font-normal">Starts with <code className="text-sky-800 dark:text-sky-300">re_</code></span>
                                                     </Label>
                                                     <div className="relative">
                                                         <Input 
@@ -5454,7 +5454,7 @@ function SettingsPageContent() {
                                                             type={showSmtpKey ? "text" : "password"} 
                                                             value={resendApiKeyInput} 
                                                             onChange={(e) => setResendApiKeyInput(e.target.value)} 
-                                                            className="pr-9 font-mono text-xs border-sky-500/30 focus-visible:ring-sky-500/40 bg-black/40"
+                                                            className="pr-9 font-mono text-xs border-sky-500/30 focus-visible:ring-sky-500/40 bg-muted/60 dark:bg-black/40"
                                                             placeholder="re_123456789_abcdef..."
                                                             autoComplete="new-password"
                                                             data-1p-ignore="true"
@@ -5471,9 +5471,9 @@ function SettingsPageContent() {
                                                         </Button>
                                                     </div>
                                                     {resendApiKeyInput && !resendApiKeyInput.startsWith("re_") && (
-                                                        <div className="flex items-center gap-1.5 p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs mt-1.5">
-                                                            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" />
-                                                            <span>Resend API keys start with <code className="font-bold text-amber-200">re_</code>. This looks like a Gmail App Password. If using Resend, please paste your Resend API Key.</span>
+                                                        <div className="flex items-center gap-1.5 p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs mt-1.5">
+                                                            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-700 dark:text-amber-400" />
+                                                            <span>Resend API keys start with <code className="font-bold text-amber-900 dark:text-amber-200">re_</code>. This looks like a Gmail App Password. If using Resend, please paste your Resend API Key.</span>
                                                         </div>
                                                     )}
                                                 </div>
@@ -5485,33 +5485,33 @@ function SettingsPageContent() {
                                                         value={resendFromInput} 
                                                         onChange={(e) => setResendFromInput(e.target.value)} 
                                                         placeholder="notifications@domshomelab.com" 
-                                                        className="border-sky-500/30 font-mono text-xs bg-black/40"
+                                                        className="border-sky-500/30 font-mono text-xs bg-muted/60 dark:bg-black/40"
                                                         autoComplete="off" 
                                                         data-1p-ignore="true" 
                                                         data-lpignore="true"
                                                     />
                                                     {resendFromInput && (resendFromInput.toLowerCase().includes("@gmail.com") || resendFromInput.toLowerCase().includes("@yahoo.com") || resendFromInput.toLowerCase().includes("@outlook.com")) && (
-                                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs">
+                                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-800 dark:text-rose-300 text-xs">
                                                             <div className="flex items-center gap-1.5">
-                                                                <AlertTriangle className="h-4 w-4 shrink-0 text-rose-400" />
-                                                                <span>Resend error 550: Resend cannot send from public webmail (<code className="font-bold text-rose-200">{resendFromInput}</code>). Resend requires sending from your verified domain.</span>
+                                                                <AlertTriangle className="h-4 w-4 shrink-0 text-rose-700 dark:text-rose-400" />
+                                                                <span>Resend error 550: Resend cannot send from public webmail (<code className="font-bold text-rose-900 dark:text-rose-200">{resendFromInput}</code>). Resend requires sending from your verified domain.</span>
                                                             </div>
                                                             <Button
                                                                 type="button"
                                                                 size="sm"
                                                                 variant="outline"
                                                                 onClick={() => setResendFromInput("notifications@domshomelab.com")}
-                                                                className="h-6 text-[10px] font-bold px-2 border-rose-500/40 text-rose-200 hover:bg-rose-500/20 shrink-0"
+                                                                className="h-6 text-[10px] font-bold px-2 border-rose-500/40 text-rose-900 dark:text-rose-200 hover:bg-rose-500/20 shrink-0"
                                                             >
                                                                 Set to notifications@domshomelab.com
                                                             </Button>
                                                         </div>
                                                     )}
-                                                    <div className="text-[11px] text-muted-foreground bg-black/40 p-2.5 rounded-lg border border-sky-500/20 space-y-1">
-                                                        <div className="font-semibold text-sky-200 flex items-center gap-1">
-                                                            <Send className="h-3 w-3 text-sky-400" /> Send-to-Kindle Dispatch:
+                                                    <div className="text-[11px] text-muted-foreground bg-muted/60 dark:bg-black/40 p-2.5 rounded-lg border border-sky-500/20 space-y-1">
+                                                        <div className="font-semibold text-sky-900 dark:text-sky-200 flex items-center gap-1">
+                                                            <Send className="h-3 w-3 text-sky-700 dark:text-sky-400" /> Send-to-Kindle Dispatch:
                                                         </div>
-                                                        <div>Kindle deliveries are automatically sent from <code className="bg-black/60 text-sky-300 px-1 py-0.5 rounded font-mono font-bold">kindle@domshomelab.com</code>. Ensure this address is added to users' <strong>Amazon Approved Personal Document E-mail List</strong>.</div>
+                                                        <div>Kindle deliveries are automatically sent from <code className="bg-muted/60 dark:bg-black/60 text-sky-800 dark:text-sky-300 px-1 py-0.5 rounded font-mono font-bold">kindle@domshomelab.com</code>. Ensure this address is added to users' <strong>Amazon Approved Personal Document E-mail List</strong>.</div>
                                                     </div>
                                                 </div>
 
@@ -5527,7 +5527,7 @@ function SettingsPageContent() {
                                                         <span>{showAdvancedSmtp ? "Hide Advanced Connection Parameters" : "Show Advanced Connection Parameters"}</span>
                                                     </Button>
                                                     {showAdvancedSmtp && (
-                                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 rounded-lg bg-black/50 border border-border/40 mt-2 text-xs">
+                                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 rounded-lg bg-muted/60 dark:bg-black/50 border border-border/40 mt-2 text-xs">
                                                             <div>
                                                                 <span className="text-[10px] text-muted-foreground block">Host:</span>
                                                                 <span className="font-mono text-[11px] text-foreground">smtp.resend.com</span>
@@ -5545,18 +5545,18 @@ function SettingsPageContent() {
                                                 </div>
                                             </div>
                                         ) : (
-                                            <div className="p-4 rounded-xl bg-slate-900/40 border border-border/50 space-y-4">
+                                            <div className="p-4 rounded-xl bg-muted/70 dark:bg-slate-900/40 border border-border/50 space-y-4">
                                                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                                                     <div className="space-y-0.5">
                                                         <div className="text-sm font-extrabold text-foreground flex items-center gap-1.5">
-                                                            <Mail className="h-4 w-4 text-sky-400" /> Custom SMTP / Gmail Outbound Delivery
+                                                            <Mail className="h-4 w-4 text-sky-700 dark:text-sky-400" /> Custom SMTP / Gmail Outbound Delivery
                                                         </div>
                                                         <p className="text-xs text-muted-foreground leading-relaxed">
                                                             Connect your standard SMTP server (e.g. Gmail, Outlook, Amazon SES) to route platform emails.
                                                         </p>
                                                     </div>
                                                     {emailProviderMode === "custom" ? (
-                                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shrink-0">
+                                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 shrink-0">
                                                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Active Engine
                                                         </span>
                                                     ) : (
@@ -5565,9 +5565,9 @@ function SettingsPageContent() {
                                                             size="sm"
                                                             variant="outline"
                                                             onClick={() => setEmailProviderMode("custom")}
-                                                            className="text-xs h-7 px-3 gap-1.5 font-bold border-sky-500/40 text-sky-300 hover:bg-sky-500/20 shrink-0"
+                                                            className="text-xs h-7 px-3 gap-1.5 font-bold border-sky-500/40 text-sky-800 dark:text-sky-300 hover:bg-sky-500/20 shrink-0"
                                                         >
-                                                            <CheckCircle2 className="h-3.5 w-3.5 text-sky-400" />
+                                                            <CheckCircle2 className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400" />
                                                             <span>Set Active</span>
                                                         </Button>
                                                     )}
@@ -5736,7 +5736,7 @@ function SettingsPageContent() {
 
                     {/* ADMIN NOTIFICATION EMAIL UPDATE MODAL */}
                     <Dialog open={showAdminEmailModal} onOpenChange={setShowAdminEmailModal}>
-                        <DialogContent className="sm:max-w-[425px] bg-[#121218]/95 border-border/60">
+                        <DialogContent className="sm:max-w-[425px] bg-popover/95 dark:bg-[#121218]/95 border-border/60">
                             <DialogHeader>
                                 <DialogTitle className="flex items-center gap-2 text-base font-bold">
                                     <Mail className="h-5 w-5 text-primary" />
@@ -5748,13 +5748,13 @@ function SettingsPageContent() {
                             </DialogHeader>
                             <div className="space-y-4 py-2">
                                 {adminEmailModalMsg && (
-                                    <div className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 p-2.5 rounded-lg flex items-center gap-2">
+                                    <div className="text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/40 dark:border-emerald-800/40 p-2.5 rounded-lg flex items-center gap-2">
                                         <CheckCircle2 className="h-4 w-4 shrink-0" />
                                         <span>{adminEmailModalMsg}</span>
                                     </div>
                                 )}
                                 {adminEmailModalErr && (
-                                    <div className="text-xs text-red-400 bg-red-950/40 border border-red-800/40 p-2.5 rounded-lg flex items-center gap-2">
+                                    <div className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 dark:bg-red-950/40 border border-red-500/40 dark:border-red-800/40 p-2.5 rounded-lg flex items-center gap-2">
                                         <XCircle className="h-4 w-4 shrink-0" />
                                         <span>{adminEmailModalErr}</span>
                                     </div>
@@ -5822,14 +5822,14 @@ function SettingsPageContent() {
                         {/* FLOATING DOCKED SAVE BAR */}
             {hasUnsavedChanges && (
                 <div className="fixed bottom-6 right-6 z-50 animate-in fade-in slide-in-from-bottom-5 duration-300">
-                    <div className="flex flex-col sm:flex-row items-center gap-3 bg-[#13131a]/95 backdrop-blur-xl border-2 border-amber-500/70 p-3.5 sm:px-5 sm:py-3.5 rounded-2xl shadow-[0_10px_35px_rgba(245,158,11,0.25)] text-foreground">
+                    <div className="flex flex-col sm:flex-row items-center gap-3 bg-card/95 dark:bg-[#13131a]/95 backdrop-blur-xl border-2 border-amber-500/70 p-3.5 sm:px-5 sm:py-3.5 rounded-2xl shadow-[0_10px_35px_rgba(245,158,11,0.25)] text-foreground">
                         <div className="flex items-center gap-2.5">
                             <span className="relative flex h-3 w-3">
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
                                 <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
                             </span>
                             <div className="text-xs">
-                                <span className="font-bold text-amber-400">Unsaved Settings ({unsavedSections.length})</span>
+                                <span className="font-bold text-amber-700 dark:text-amber-400">Unsaved Settings ({unsavedSections.length})</span>
                                 <p className="text-[10px] text-muted-foreground hidden sm:block max-w-[220px] truncate">
                                     {unsavedSections.join(", ")}
                                 </p>
@@ -5842,7 +5842,7 @@ function SettingsPageContent() {
                                 size="sm" 
                                 onClick={handleDiscardAllDirty}
                                 disabled={isSavingAll}
-                                className="h-8 text-xs text-muted-foreground hover:text-foreground hover:bg-white/5"
+                                className="h-8 text-xs text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-white/5"
                             >
                                 <RotateCcw className="h-3.5 w-3.5 mr-1" /> Discard
                             </Button>
@@ -5863,7 +5863,7 @@ function SettingsPageContent() {
 
                         {/* UNSAVED CHANGES MODAL */}
             <Dialog open={leaveModalOpen} onOpenChange={(open) => { if (!open) { setLeaveModalOpen(false); setPendingNavigation(null); } }}>
-                <DialogContent className="w-[96vw] sm:max-w-md max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-[#13131a] border-amber-500/40 text-foreground shadow-2xl">
+                <DialogContent className="w-[96vw] sm:max-w-md max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-popover dark:bg-[#13131a] border-amber-500/40 text-foreground shadow-2xl">
                     <DialogHeader className="shrink-0">
                         <div className="flex items-center gap-2 text-amber-500 mb-1">
                             <AlertTriangle className="h-5 w-5" />
@@ -5875,10 +5875,10 @@ function SettingsPageContent() {
                     </DialogHeader>
 
                     <div className="space-y-2 py-2 flex-1 overflow-y-auto min-h-0">
-                        <div className="text-xs font-semibold text-slate-300">Modified Sections:</div>
+                        <div className="text-xs font-semibold text-slate-700 dark:text-slate-300">Modified Sections:</div>
                         <div className="flex flex-wrap gap-1.5">
                             {unsavedSections.map((sec) => (
-                                <Badge key={sec} variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-[11px] font-medium">
+                                <Badge key={sec} variant="outline" className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 text-[11px] font-medium">
                                     ● {sec}
                                 </Badge>
                             ))}

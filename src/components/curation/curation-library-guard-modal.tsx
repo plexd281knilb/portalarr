@@ -88,17 +88,17 @@ export function CurationLibraryGuardModal({
             if (!val && onCancel) onCancel();
             onOpenChange(val);
         }}>
-            <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto bg-slate-900 border-amber-500/40 text-slate-100 shadow-2xl p-6 sm:p-7">
+            <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto bg-popover dark:bg-slate-900 border-amber-500/40 text-foreground dark:text-slate-100 shadow-2xl p-6 sm:p-7">
                 <DialogHeader className="space-y-3">
                     <div className="flex items-center gap-3">
-                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-400">
                             <AlertTriangle className="h-6 w-6" />
                         </div>
                         <div>
-                            <DialogTitle className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+                            <DialogTitle className="text-xl font-bold tracking-tight text-foreground dark:text-white flex items-center gap-2">
                                 <span>Library Not Enabled on Schedule</span>
                             </DialogTitle>
-                            <DialogDescription className="text-xs text-amber-300/80 font-medium">
+                            <DialogDescription className="text-xs text-amber-800/80 dark:text-amber-300/80 font-medium">
                                 Protective Curation Guard • {featureName}
                             </DialogDescription>
                         </div>
@@ -106,30 +106,30 @@ export function CurationLibraryGuardModal({
                 </DialogHeader>
 
                 {/* Library Scope Information Box */}
-                <div className="p-3.5 rounded-xl border border-slate-800 bg-slate-950/70 space-y-2 mt-2">
+                <div className="p-3.5 rounded-xl border border-border dark:border-slate-800 bg-muted/70 dark:bg-slate-950/70 space-y-2 mt-2">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex items-center gap-2 text-xs text-slate-300">
-                            <HardDrive className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
-                            <span className="font-semibold text-white">{serverName}</span>
+                        <div className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300">
+                            <HardDrive className="h-3.5 w-3.5 text-cyan-700 dark:text-cyan-400 shrink-0" />
+                            <span className="font-semibold text-foreground dark:text-white">{serverName}</span>
                             <span className="text-slate-500">•</span>
-                            <Folder className="h-3.5 w-3.5 text-amber-400 shrink-0" />
-                            <span className="text-slate-200">
+                            <Folder className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
+                            <span className="text-foreground dark:text-slate-200">
                                 {libraryName} {sectionKey ? <span className="text-slate-500 font-mono text-[11px]">(#{sectionKey})</span> : null}
                             </span>
                         </div>
-                        <Badge variant="outline" className="border-rose-500/40 bg-rose-500/10 text-rose-300 text-[10px] uppercase font-mono px-2 py-0.5">
+                        <Badge variant="outline" className="border-rose-500/40 bg-rose-500/10 text-rose-800 dark:text-rose-300 text-[10px] uppercase font-mono px-2 py-0.5">
                             ⚪ Excluded from Schedule
                         </Badge>
                     </div>
                 </div>
 
                 {/* Warning Context */}
-                <div className="p-4 rounded-xl bg-amber-950/25 border border-amber-500/25 text-sm text-slate-200 space-y-2 leading-relaxed">
-                    <p className="font-semibold text-amber-300 flex items-center gap-1.5 text-[13px]">
-                        <ShieldAlert className="h-4 w-4 shrink-0 text-amber-400" />
+                <div className="p-4 rounded-xl bg-amber-500/10 dark:bg-amber-950/25 border border-amber-500/25 text-sm text-foreground dark:text-slate-200 space-y-2 leading-relaxed">
+                    <p className="font-semibold text-amber-800 dark:text-amber-300 flex items-center gap-1.5 text-[13px]">
+                        <ShieldAlert className="h-4 w-4 shrink-0 text-amber-700 dark:text-amber-400" />
                         <span>Hey, you don't have this library turned on or enabled!</span>
                     </p>
-                    <p className="text-xs text-slate-300 leading-normal">
+                    <p className="text-xs text-slate-700 dark:text-slate-300 leading-normal">
                         You are about to run <strong>{actionName}</strong> on this library, but it is currently excluded from your automated {featureName} schedule. How would you like to proceed?
                     </p>
                 </div>
@@ -141,23 +141,23 @@ export function CurationLibraryGuardModal({
                         type="button"
                         disabled={submittingAction !== null}
                         onClick={handleEnableAndRun}
-                        className="w-full text-left p-3.5 rounded-xl border border-emerald-500/40 bg-emerald-950/30 hover:bg-emerald-900/40 transition-all group flex items-start gap-3.5 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full text-left p-3.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 dark:bg-emerald-950/30 hover:bg-emerald-500/10 dark:hover:bg-emerald-900/40 transition-all group flex items-start gap-3.5 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-400 font-bold text-sm border border-emerald-500/30 group-hover:scale-105 transition-transform">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 font-bold text-sm border border-emerald-500/30 group-hover:scale-105 transition-transform">
                             {submittingAction === "enable" ? <Loader2 className="h-4 w-4 animate-spin" /> : "1"}
                         </div>
                         <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 font-medium text-emerald-300 text-sm">
+                            <div className="flex items-center gap-2 font-medium text-emerald-800 dark:text-emerald-300 text-sm">
                                 <span>Enable Library & {actionName}</span>
-                                <Badge variant="outline" className="border-emerald-500/40 bg-emerald-500/20 text-emerald-300 text-[10px] py-0 px-1.5 uppercase font-mono">
+                                <Badge variant="outline" className="border-emerald-500/40 bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 text-[10px] py-0 px-1.5 uppercase font-mono">
                                     Recommended
                                 </Badge>
                             </div>
-                            <p className="text-xs text-slate-300 mt-1">
+                            <p className="text-xs text-slate-700 dark:text-slate-300 mt-1">
                                 Turns this library <strong>ON</strong> permanently in your automation schedule, then executes the update immediately.
                             </p>
                         </div>
-                        <ArrowRight className="h-4 w-4 text-emerald-400 shrink-0 mt-1 group-hover:translate-x-0.5 transition-transform" />
+                        <ArrowRight className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0 mt-1 group-hover:translate-x-0.5 transition-transform" />
                     </button>
 
                     {/* Option 2: Force Update (One-Time) */}
@@ -165,23 +165,23 @@ export function CurationLibraryGuardModal({
                         type="button"
                         disabled={submittingAction !== null}
                         onClick={handleForceRun}
-                        className="w-full text-left p-3.5 rounded-xl border border-amber-500/40 bg-amber-950/30 hover:bg-amber-900/40 transition-all group flex items-start gap-3.5 focus:outline-none focus:ring-2 focus:ring-amber-500/50 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full text-left p-3.5 rounded-xl border border-amber-500/40 bg-amber-500/10 dark:bg-amber-950/30 hover:bg-amber-500/10 dark:hover:bg-amber-900/40 transition-all group flex items-start gap-3.5 focus:outline-none focus:ring-2 focus:ring-amber-500/50 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/20 text-amber-400 font-bold text-sm border border-amber-500/30 group-hover:scale-105 transition-transform">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/20 text-amber-700 dark:text-amber-400 font-bold text-sm border border-amber-500/30 group-hover:scale-105 transition-transform">
                             {submittingAction === "force" ? <Loader2 className="h-4 w-4 animate-spin" /> : "2"}
                         </div>
                         <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 font-medium text-amber-300 text-sm">
+                            <div className="flex items-center gap-2 font-medium text-amber-800 dark:text-amber-300 text-sm">
                                 <span>Force Update (One-Time Override)</span>
-                                <Badge variant="outline" className="border-amber-500/40 bg-amber-500/20 text-amber-300 text-[10px] py-0 px-1.5 uppercase font-mono">
+                                <Badge variant="outline" className="border-amber-500/40 bg-amber-500/20 text-amber-800 dark:text-amber-300 text-[10px] py-0 px-1.5 uppercase font-mono">
                                     One-Time
                                 </Badge>
                             </div>
-                            <p className="text-xs text-slate-300 mt-1">
+                            <p className="text-xs text-slate-700 dark:text-slate-300 mt-1">
                                 Executes this update once right now, but keeps this library <strong>excluded</strong> for future automated scheduled runs.
                             </p>
                         </div>
-                        <ArrowRight className="h-4 w-4 text-amber-400 shrink-0 mt-1 group-hover:translate-x-0.5 transition-transform" />
+                        <ArrowRight className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0 mt-1 group-hover:translate-x-0.5 transition-transform" />
                     </button>
 
                     {/* Option 3: Cancel */}
@@ -189,20 +189,20 @@ export function CurationLibraryGuardModal({
                         type="button"
                         disabled={submittingAction !== null}
                         onClick={handleCancel}
-                        className="w-full text-left p-3.5 rounded-xl border border-slate-800 bg-slate-950/60 hover:bg-slate-800/80 transition-all group flex items-start gap-3.5 focus:outline-none focus:ring-2 focus:ring-slate-500/50 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full text-left p-3.5 rounded-xl border border-border dark:border-slate-800 bg-muted/60 dark:bg-slate-950/60 hover:bg-accent dark:hover:bg-slate-800/80 transition-all group flex items-start gap-3.5 focus:outline-none focus:ring-2 focus:ring-slate-500/50 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-800 text-slate-400 font-bold text-sm border border-slate-700 group-hover:scale-105 transition-transform">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold text-sm border border-border dark:border-slate-700 group-hover:scale-105 transition-transform">
                             3
                         </div>
                         <div className="flex-1 min-w-0">
-                            <div className="font-medium text-slate-300 text-sm">
+                            <div className="font-medium text-slate-700 dark:text-slate-300 text-sm">
                                 Cancel
                             </div>
-                            <p className="text-xs text-slate-400 mt-1">
+                            <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
                                 Abort this action immediately. No media will be modified.
                             </p>
                         </div>
-                        <X className="h-4 w-4 text-slate-400 shrink-0 mt-1" />
+                        <X className="h-4 w-4 text-slate-600 dark:text-slate-400 shrink-0 mt-1" />
                     </button>
                 </div>
             </DialogContent>

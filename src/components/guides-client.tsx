@@ -244,13 +244,13 @@ function GuidesContent({ initialGuides, initialUser, initialAccess }: GuidesClie
 
     const getDeviceIcon = (id: string) => {
         switch (id) {
-            case "appletv": return <Tv className="h-4 w-4 text-cyan-400" />;
-            case "roku": return <Tv2 className="h-4 w-4 text-teal-400" />;
-            case "firetv": return <Flame className="h-4 w-4 text-orange-400" />;
-            case "smarttv": return <Monitor className="h-4 w-4 text-blue-400" />;
-            case "googletv": return <Smartphone className="h-4 w-4 text-emerald-400" />;
-            case "mobile": return <Smartphone className="h-4 w-4 text-pink-400" />;
-            case "web": return <Globe className="h-4 w-4 text-amber-400" />;
+            case "appletv": return <Tv className="h-4 w-4 text-cyan-700 dark:text-cyan-400" />;
+            case "roku": return <Tv2 className="h-4 w-4 text-teal-700 dark:text-teal-400" />;
+            case "firetv": return <Flame className="h-4 w-4 text-orange-700 dark:text-orange-400" />;
+            case "smarttv": return <Monitor className="h-4 w-4 text-blue-700 dark:text-blue-400" />;
+            case "googletv": return <Smartphone className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />;
+            case "mobile": return <Smartphone className="h-4 w-4 text-pink-700 dark:text-pink-400" />;
+            case "web": return <Globe className="h-4 w-4 text-amber-700 dark:text-amber-400" />;
             default: return <Tv className="h-4 w-4 text-primary" />;
         }
     };
@@ -292,7 +292,7 @@ function GuidesContent({ initialGuides, initialUser, initialAccess }: GuidesClie
     if (loadError && guides.length === 0) {
         return (
             <div className="flex-1 max-w-2xl mx-auto w-full p-8 text-center space-y-4">
-                <AlertCircle className="h-10 w-10 text-rose-400 mx-auto" />
+                <AlertCircle className="h-10 w-10 text-rose-700 dark:text-rose-400 mx-auto" />
                 <div className="space-y-1">
                     <h2 className="text-lg font-bold text-foreground">Unable to load Setup Guides</h2>
                     <p className="text-xs text-muted-foreground">{loadError}</p>
@@ -328,7 +328,7 @@ function GuidesContent({ initialGuides, initialUser, initialAccess }: GuidesClie
 
                 {/* PAGE HEADER */}
                 <div className="space-y-2">
-                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-sky-500/10 text-sky-700 dark:text-sky-400 border border-sky-500/20">
                         <Sparkles className="h-3.5 w-3.5" />
                         <span>DomsHomeLab (d281knilb) Knowledge Base</span>
                     </div>
@@ -356,7 +356,7 @@ function GuidesContent({ initialGuides, initialUser, initialAccess }: GuidesClie
                                     className={`flex items-center gap-2 py-2 px-3.5 rounded-xl text-xs font-semibold transition-all shrink-0 cursor-pointer ${
                                         isActive
                                             ? "bg-primary text-primary-foreground shadow-md font-bold"
-                                            : "text-muted-foreground hover:text-foreground hover:bg-white/[0.04]"
+                                            : "text-muted-foreground hover:text-foreground hover:bg-accent dark:hover:bg-white/[0.04]"
                                     }`}
                                 >
                                     <Icon className={`h-4 w-4 ${isActive ? "text-primary-foreground" : "text-primary"}`} />
@@ -364,7 +364,7 @@ function GuidesContent({ initialGuides, initialUser, initialAccess }: GuidesClie
                                     {item.badge && (
                                         <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-medium ${
                                             isActive 
-                                                ? "bg-black/20 text-white" 
+                                                ? "bg-muted/40 dark:bg-black/20 text-foreground dark:text-white" 
                                                 : "bg-primary/10 text-primary border border-primary/20"
                                         }`}>
                                             {item.badge}
@@ -380,24 +380,24 @@ function GuidesContent({ initialGuides, initialUser, initialAccess }: GuidesClie
                 {mainCategory === "devices" && (
                     <div className="space-y-6 animate-in fade-in-50 duration-200">
                         {/* THE GOLDEN RULE CALLOUT BANNER */}
-                        <Card className="rounded-xl border-amber-500/30 bg-gradient-to-br from-amber-950/20 via-background to-background p-5 sm:p-6 shadow-md relative overflow-hidden">
+                        <Card className="rounded-xl border-amber-500/30 bg-gradient-to-br from-amber-500/10 dark:from-amber-950/20 via-background to-background p-5 sm:p-6 shadow-md relative overflow-hidden">
                             <div className="flex items-start gap-4">
-                                <div className="p-2.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-400 shrink-0 mt-0.5">
+                                <div className="p-2.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5">
                                     <AlertCircle className="h-6 w-6" />
                                 </div>
                                 <div className="space-y-2">
                                     <div className="flex items-center gap-2">
-                                        <h3 className="text-base sm:text-lg font-bold text-amber-300">
+                                        <h3 className="text-base sm:text-lg font-bold text-amber-800 dark:text-amber-300">
                                             The #1 Rule for Zero Buffering: Force "Maximum / Original" Quality
                                         </h3>
-                                        <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-300 border-amber-500/30 font-semibold uppercase">
+                                        <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30 font-semibold uppercase">
                                             Essential Fix
                                         </Badge>
                                     </div>
                                     <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
                                         By default, almost every fresh Plex app installation caps remote streaming quality to a restricted <strong className="text-foreground">2 Mbps (720p)</strong>. 
                                         This forces the server to re-encode the stream into a low-resolution file in real-time, causing spinning wheels and stuttering. 
-                                        Simply changing your client setting to <strong className="text-emerald-400">"Maximum" or "Original"</strong> allows your device to stream the native studio file with zero server lag.
+                                        Simply changing your client setting to <strong className="text-emerald-700 dark:text-emerald-400">"Maximum" or "Original"</strong> allows your device to stream the native studio file with zero server lag.
                                     </p>
                                 </div>
                             </div>
@@ -408,14 +408,14 @@ function GuidesContent({ initialGuides, initialUser, initialAccess }: GuidesClie
                             <Tabs defaultValue={activeDeviceTab} value={activeDeviceTab} onValueChange={setActiveDeviceTab} className="w-full space-y-4">
                                 <div className="flex items-center justify-between gap-2 px-1">
                                     <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                                        <Sparkles className="h-3.5 w-3.5 text-sky-400" />
+                                        <Sparkles className="h-3.5 w-3.5 text-sky-700 dark:text-sky-400" />
                                         Select Your Streaming Device:
                                     </span>
                                     <div className="flex items-center gap-1">
                                         <Button
                                             size="icon"
                                             variant="outline"
-                                            className="h-7 w-7 rounded-lg bg-white/[0.04] border-border/40 text-muted-foreground hover:text-foreground"
+                                            className="h-7 w-7 rounded-lg bg-muted/50 dark:bg-white/[0.04] border-border/40 text-muted-foreground hover:text-foreground"
                                             onClick={() => scrollTabs("left")}
                                             title="Scroll devices left"
                                         >
@@ -424,7 +424,7 @@ function GuidesContent({ initialGuides, initialUser, initialAccess }: GuidesClie
                                         <Button
                                             size="icon"
                                             variant="outline"
-                                            className="h-7 w-7 rounded-lg bg-white/[0.04] border-border/40 text-muted-foreground hover:text-foreground"
+                                            className="h-7 w-7 rounded-lg bg-muted/50 dark:bg-white/[0.04] border-border/40 text-muted-foreground hover:text-foreground"
                                             onClick={() => scrollTabs("right")}
                                             title="Scroll devices right"
                                         >
@@ -442,7 +442,7 @@ function GuidesContent({ initialGuides, initialUser, initialAccess }: GuidesClie
                                             <TabsTrigger 
                                                 key={guide.id} 
                                                 value={guide.id} 
-                                                className="flex items-center gap-2 py-2.5 px-3.5 text-xs font-semibold data-[state=active]:bg-sky-500 data-[state=active]:text-white data-[state=active]:shadow-md transition-all rounded-xl shrink-0 cursor-pointer"
+                                                className="flex items-center gap-2 py-2.5 px-3.5 text-xs font-semibold data-[state=active]:bg-sky-500 data-[state=active]:text-foreground dark:data-[state=active]:text-white data-[state=active]:shadow-md transition-all rounded-xl shrink-0 cursor-pointer"
                                             >
                                                 {getDeviceIcon(guide.id)}
                                                 <span>{guide.name}</span>
@@ -453,7 +453,7 @@ function GuidesContent({ initialGuides, initialUser, initialAccess }: GuidesClie
 
                                 {guides.map(guide => (
                                     <TabsContent key={guide.id} value={guide.id} className="space-y-6 animate-in fade-in-50 duration-200">
-                                        <Card className="rounded-2xl border-border/50 bg-[#121218]/90 backdrop-blur-md shadow-sm">
+                                        <Card className="rounded-2xl border-border/50 bg-card/95 dark:bg-[#121218]/90 backdrop-blur-md shadow-sm">
                                             <CardHeader className="pb-4 border-b border-border/30">
                                                 <div className="flex flex-wrap items-center justify-between gap-3">
                                                     <div className="space-y-1">
@@ -463,7 +463,7 @@ function GuidesContent({ initialGuides, initialUser, initialAccess }: GuidesClie
                                                                 {guide.name}
                                                             </CardTitle>
                                                             {guide.badge && (
-                                                                <Badge variant="outline" className="text-xs bg-sky-500/10 text-sky-400 border-sky-500/30 font-medium">
+                                                                <Badge variant="outline" className="text-xs bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-500/30 font-medium">
                                                                     {guide.badge}
                                                                 </Badge>
                                                             )}
@@ -480,10 +480,10 @@ function GuidesContent({ initialGuides, initialUser, initialAccess }: GuidesClie
                                                     {guide.steps.map((step: any, idx: number) => (
                                                         <div 
                                                             key={idx} 
-                                                            className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] hover:border-sky-500/40 hover:bg-white/[0.03] transition-all space-y-2 group"
+                                                            className="p-4 rounded-xl bg-muted/50 dark:bg-white/[0.02] border border-border/70 dark:border-white/[0.06] hover:border-sky-500/40 hover:bg-accent dark:hover:bg-white/[0.03] transition-all space-y-2 group"
                                                         >
-                                                            <div className="flex items-center gap-2.5 text-sm font-semibold text-foreground group-hover:text-sky-300 transition-colors">
-                                                                <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                                                            <div className="flex items-center gap-2.5 text-sm font-semibold text-foreground group-hover:text-sky-800 dark:group-hover:text-sky-300 transition-colors">
+                                                                <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-400 shrink-0" />
                                                                 <span>{step.title}</span>
                                                             </div>
                                                             <p className="text-xs sm:text-sm text-muted-foreground/90 pl-6.5 leading-relaxed">
@@ -498,7 +498,7 @@ function GuidesContent({ initialGuides, initialUser, initialAccess }: GuidesClie
                                         {/* PRO-TIPS SECTION PER DEVICE */}
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
                                             <Card className="rounded-xl border-border/40 bg-muted/10 p-4 space-y-2">
-                                                <div className="flex items-center gap-2 text-xs font-bold text-sky-400 uppercase tracking-wide">
+                                                <div className="flex items-center gap-2 text-xs font-bold text-sky-700 dark:text-sky-400 uppercase tracking-wide">
                                                     <Subtitles className="h-4 w-4 shrink-0" />
                                                     <span>Subtitle Settings</span>
                                                 </div>
@@ -508,7 +508,7 @@ function GuidesContent({ initialGuides, initialUser, initialAccess }: GuidesClie
                                             </Card>
 
                                             <Card className="rounded-xl border-border/40 bg-muted/10 p-4 space-y-2">
-                                                <div className="flex items-center gap-2 text-xs font-bold text-emerald-400 uppercase tracking-wide">
+                                                <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wide">
                                                     <Volume2 className="h-4 w-4 shrink-0" />
                                                     <span>Surround Sound</span>
                                                 </div>
@@ -518,7 +518,7 @@ function GuidesContent({ initialGuides, initialUser, initialAccess }: GuidesClie
                                             </Card>
 
                                             <Card className="rounded-xl border-border/40 bg-muted/10 p-4 space-y-2">
-                                                <div className="flex items-center gap-2 text-xs font-bold text-amber-400 uppercase tracking-wide">
+                                                <div className="flex items-center gap-2 text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wide">
                                                     <Zap className="h-4 w-4 shrink-0" />
                                                     <span>Network Stability</span>
                                                 </div>
@@ -537,8 +537,8 @@ function GuidesContent({ initialGuides, initialUser, initialAccess }: GuidesClie
                 {/* FEATURE GUIDES RENDERER (AI Assistant, Movies/TV, Ebooks, Audiobooks, Referrals, Curation) */}
                 {mainCategory !== "devices" && mainCategory !== "manual" && (
                     userAccess && !userAccess.allowedCategories.includes(mainCategory) ? (
-                        <Card className="rounded-2xl border-amber-500/30 bg-amber-950/10 p-8 text-center space-y-4">
-                            <AlertCircle className="h-10 w-10 text-amber-400 mx-auto" />
+                        <Card className="rounded-2xl border-amber-500/30 bg-amber-500/10 dark:bg-amber-950/10 p-8 text-center space-y-4">
+                            <AlertCircle className="h-10 w-10 text-amber-700 dark:text-amber-400 mx-auto" />
                             <div className="space-y-1">
                                 <h3 className="text-lg font-bold text-foreground">Access Restricted</h3>
                                 <p className="text-xs sm:text-sm text-muted-foreground max-w-md mx-auto">
@@ -562,8 +562,8 @@ function GuidesContent({ initialGuides, initialUser, initialAccess }: GuidesClie
                 {/* TAB: FULL PLATFORM MANUAL */}
                 {mainCategory === "manual" && (
                     !userAccess?.isAdmin ? (
-                        <Card className="rounded-2xl border-amber-500/30 bg-amber-950/10 p-8 text-center space-y-4">
-                            <AlertCircle className="h-10 w-10 text-amber-400 mx-auto" />
+                        <Card className="rounded-2xl border-amber-500/30 bg-amber-500/10 dark:bg-amber-950/10 p-8 text-center space-y-4">
+                            <AlertCircle className="h-10 w-10 text-amber-700 dark:text-amber-400 mx-auto" />
                             <div className="space-y-1">
                                 <h3 className="text-lg font-bold text-foreground">Admin Manual Restricted</h3>
                                 <p className="text-xs sm:text-sm text-muted-foreground max-w-md mx-auto">
@@ -629,8 +629,8 @@ function GuidesContent({ initialGuides, initialUser, initialAccess }: GuidesClie
                         {manualFeedback && (
                             <div className={`p-3 rounded-xl border text-xs font-semibold flex items-center gap-2 ${
                                 manualFeedback.error 
-                                    ? "bg-red-500/10 border-red-500/20 text-red-400" 
-                                    : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                                    ? "bg-red-500/10 border-red-500/20 text-red-700 dark:text-red-400" 
+                                    : "bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-400"
                             }`}>
                                 <CheckCircle2 className="h-4 w-4 shrink-0" />
                                 <span>{manualFeedback.text}</span>
@@ -695,11 +695,11 @@ function GuidesContent({ initialGuides, initialUser, initialAccess }: GuidesClie
                                     value={editManualText}
                                     onChange={(e) => setEditManualText(e.target.value)}
                                     rows={26}
-                                    className="font-mono text-xs leading-relaxed bg-black/40 border-border/50 resize-y"
+                                    className="font-mono text-xs leading-relaxed bg-muted/60 dark:bg-black/40 border-border/50 resize-y"
                                 />
                             </Card>
                         ) : (
-                            <Card className="rounded-2xl border-border/50 bg-[#121218]/90 backdrop-blur-md p-6 sm:p-8 shadow-sm">
+                            <Card className="rounded-2xl border-border/50 bg-card/95 dark:bg-[#121218]/90 backdrop-blur-md p-6 sm:p-8 shadow-sm">
                                 {manualLoading ? (
                                     <div className="space-y-4 py-8">
                                         <Skeleton className="h-8 w-64" />
@@ -709,22 +709,7 @@ function GuidesContent({ initialGuides, initialUser, initialAccess }: GuidesClie
                                         <Skeleton className="h-32 w-full rounded-xl" />
                                     </div>
                                 ) : (
-                                    <div className="prose prose-invert max-w-none text-sm text-foreground
-                                        [&>h1]:text-2xl [&>h1]:font-extrabold [&>h1]:text-sky-300 [&>h1]:mt-8 [&>h1]:mb-4 [&>h1]:border-b [&>h1]:border-border/40 [&>h1]:pb-3
-                                        [&>h2]:text-xl [&>h2]:font-bold [&>h2]:text-emerald-300 [&>h2]:mt-6 [&>h2]:mb-3
-                                        [&>h3]:text-base [&>h3]:font-semibold [&>h3]:text-amber-300 [&>h3]:mt-5 [&>h3]:mb-2
-                                        [&>p]:text-muted-foreground [&>p]:leading-relaxed [&>p]:mb-3
-                                        [&>ul]:list-disc [&>ul]:pl-5 [&>ul]:mb-3 [&>ul]:space-y-1.5 [&>ul]:text-muted-foreground
-                                        [&>ol]:list-decimal [&>ol]:pl-5 [&>ol]:mb-3 [&>ol]:space-y-1.5 [&>ol]:text-muted-foreground
-                                        [&>li]:leading-relaxed
-                                        [&>table]:w-full [&>table]:my-4 [&>table]:border-collapse [&>table]:text-xs
-                                        [&_th]:border [&_th]:border-border/60 [&_th]:p-2.5 [&_th]:bg-muted/40 [&_th]:font-semibold [&_th]:text-foreground
-                                        [&_td]:border [&_td]:border-border/40 [&_td]:p-2.5 [&_td]:text-muted-foreground
-                                        [&>blockquote]:border-l-2 [&>blockquote]:border-primary [&>blockquote]:pl-4 [&>blockquote]:py-1.5 [&>blockquote]:my-4 [&>blockquote]:bg-primary/5 [&>blockquote]:rounded-r
-                                        [&_code]:bg-muted/40 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-primary [&_code]:text-xs [&_code]:font-mono
-                                        [&_pre]:bg-slate-900 [&_pre]:p-4 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_pre]:border [&_pre]:border-slate-800
-                                        [&_hr]:border-muted/40 [&_hr]:my-6
-                                        [&_a]:text-primary [&_a]:underline [&_a]:hover:text-primary/80"
+                                    <div className="prose dark:prose-invert max-w-none text-sm text-foreground [&>h1]:text-2xl [&>h1]:font-extrabold [&>h1]:text-sky-800 dark:[&>h1]:text-sky-300 [&>h1]:mt-8 [&>h1]:mb-4 [&>h1]:border-b [&>h1]:border-border/40 [&>h1]:pb-3 [&>h2]:text-xl [&>h2]:font-bold [&>h2]:text-emerald-800 dark:[&>h2]:text-emerald-300 [&>h2]:mt-6 [&>h2]:mb-3 [&>h3]:text-base [&>h3]:font-semibold [&>h3]:text-amber-800 dark:[&>h3]:text-amber-300 [&>h3]:mt-5 [&>h3]:mb-2 [&>p]:text-muted-foreground [&>p]:leading-relaxed [&>p]:mb-3 [&>ul]:list-disc [&>ul]:pl-5 [&>ul]:mb-3 [&>ul]:space-y-1.5 [&>ul]:text-muted-foreground [&>ol]:list-decimal [&>ol]:pl-5 [&>ol]:mb-3 [&>ol]:space-y-1.5 [&>ol]:text-muted-foreground [&>li]:leading-relaxed [&>table]:w-full [&>table]:my-4 [&>table]:border-collapse [&>table]:text-xs [&_th]:border [&_th]:border-border/60 [&_th]:p-2.5 [&_th]:bg-muted/40 [&_th]:font-semibold [&_th]:text-foreground [&_td]:border [&_td]:border-border/40 [&_td]:p-2.5 [&_td]:text-muted-foreground [&>blockquote]:border-l-2 [&>blockquote]:border-primary [&>blockquote]:pl-4 [&>blockquote]:py-1.5 [&>blockquote]:my-4 [&>blockquote]:bg-primary/5 [&>blockquote]:rounded-r [&_code]:bg-muted/40 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-primary [&_code]:text-xs [&_code]:font-mono [&_pre]:bg-card/95 dark:[&_pre]:bg-slate-900 [&_pre]:p-4 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_pre]:border [&_pre]:border-border dark:[&_pre]:border-slate-800 [&_hr]:border-muted/40 [&_hr]:my-6 [&_a]:text-primary [&_a]:underline [&_a]:hover:text-primary/80"
                                     >
                                         <ReactMarkdown remarkPlugins={[remarkGfm]}>
                                             {displayedManual || "*No manual content found.*"}
@@ -795,7 +780,7 @@ function FeatureTopicRenderer({ topicId }: { topicId: FeatureGuideId }) {
     return (
         <div className="space-y-6 animate-in fade-in-50 duration-200">
             {/* TOPIC BANNER */}
-            <Card className="rounded-2xl border-border/50 bg-[#121218]/90 backdrop-blur-md shadow-sm">
+            <Card className="rounded-2xl border-border/50 bg-card/95 dark:bg-[#121218]/90 backdrop-blur-md shadow-sm">
                 <CardHeader className="pb-4 border-b border-border/30">
                     <div className="flex flex-wrap items-center justify-between gap-4">
                         <div className="space-y-2">
@@ -835,9 +820,9 @@ function FeatureTopicRenderer({ topicId }: { topicId: FeatureGuideId }) {
                             {topic.highlights.map((h, idx) => (
                                 <span 
                                     key={idx} 
-                                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-white/[0.03] border border-white/[0.08] text-slate-200"
+                                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-muted/50 dark:bg-white/[0.03] border border-border/70 dark:border-white/[0.08] text-foreground dark:text-slate-200"
                                 >
-                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
                                     <span>{h}</span>
                                 </span>
                             ))}
@@ -851,7 +836,7 @@ function FeatureTopicRenderer({ topicId }: { topicId: FeatureGuideId }) {
                         {topic.sections.map((sec, idx) => (
                             <div 
                                 key={idx} 
-                                className="p-5 rounded-2xl bg-white/[0.02] border border-white/[0.06] hover:border-primary/40 transition-all space-y-3 flex flex-col justify-between"
+                                className="p-5 rounded-2xl bg-muted/50 dark:bg-white/[0.02] border border-border/70 dark:border-white/[0.06] hover:border-primary/40 transition-all space-y-3 flex flex-col justify-between"
                             >
                                 <div className="space-y-2.5">
                                     <div className="flex items-center gap-2.5 text-sm font-bold text-foreground">
@@ -866,7 +851,7 @@ function FeatureTopicRenderer({ topicId }: { topicId: FeatureGuideId }) {
                                     </p>
 
                                     {sec.bullets && sec.bullets.length > 0 && (
-                                        <ul className="space-y-1.5 pl-12 list-disc text-xs text-slate-300">
+                                        <ul className="space-y-1.5 pl-12 list-disc text-xs text-slate-700 dark:text-slate-300">
                                             {sec.bullets.map((b, bIdx) => (
                                                 <li key={bIdx} className="leading-relaxed">
                                                     {b}
@@ -878,15 +863,15 @@ function FeatureTopicRenderer({ topicId }: { topicId: FeatureGuideId }) {
 
                                 <div className="space-y-2 pt-2">
                                     {sec.proTip && (
-                                        <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 flex items-start gap-2.5">
-                                            <Sparkles className="h-4 w-4 shrink-0 mt-0.5 text-amber-400" />
+                                        <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2.5">
+                                            <Sparkles className="h-4 w-4 shrink-0 mt-0.5 text-amber-700 dark:text-amber-400" />
                                             <span className="leading-relaxed"><strong>Pro Tip:</strong> {sec.proTip}</span>
                                         </div>
                                     )}
 
                                     {sec.warning && (
-                                        <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-xs text-red-300 flex items-start gap-2.5">
-                                            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-red-400" />
+                                        <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-xs text-red-800 dark:text-red-300 flex items-start gap-2.5">
+                                            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-red-700 dark:text-red-400" />
                                             <span className="leading-relaxed"><strong>Important:</strong> {sec.warning}</span>
                                         </div>
                                     )}
