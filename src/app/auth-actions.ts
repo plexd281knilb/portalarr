@@ -103,15 +103,25 @@ export async function login(formData: FormData) {
     return { error: "Invalid credentials" };
   }
 
-  // Check if trial or subscription elapsed before creating session
+  // Check if trial or subscription elapsed before creating session (never auto-expire ADMIN or when autoSuspendExpiredAccounts is disabled)
   const now = new Date();
   let currentStatus = user.status;
-  if (currentStatus === "TRIAL" && user.trialEndsAt && new Date(user.trialEndsAt) < now) {
-    currentStatus = "EXPIRED";
-    await prisma.user.update({ where: { id: user.id }, data: { status: "EXPIRED", plexLibrarySectionIds: "", selectedPlexLibrarySectionIds: "" } }).catch(() => {});
-  } else if (currentStatus === "APPROVED" && user.subscriptionEndsAt && new Date(user.subscriptionEndsAt) < now) {
-    currentStatus = "EXPIRED";
-    await prisma.user.update({ where: { id: user.id }, data: { status: "EXPIRED", plexLibrarySectionIds: "", selectedPlexLibrarySectionIds: "" } }).catch(() => {});
+  if (user.role !== "ADMIN" && (currentStatus === "TRIAL" || currentStatus === "APPROVED")) {
+    const settings = await prisma.settings.findUnique({
+      where: { id: "global" },
+      select: { autoSuspendExpiredAccounts: true, subscriptionGracePeriodDays: true }
+    }).catch(() => null);
+    if (settings?.autoSuspendExpiredAccounts === true) {
+      const graceMs = Math.max(0, Number(settings?.subscriptionGracePeriodDays || 0)) * 24 * 60 * 60 * 1000;
+      const cutoff = now.getTime() - graceMs;
+      if (currentStatus === "TRIAL" && user.trialEndsAt && new Date(user.trialEndsAt).getTime() <= cutoff) {
+        currentStatus = "EXPIRED";
+        await prisma.user.update({ where: { id: user.id }, data: { status: "EXPIRED", plexLibrarySectionIds: "", selectedPlexLibrarySectionIds: "" } }).catch(() => {});
+      } else if (currentStatus === "APPROVED" && user.subscriptionEndsAt && new Date(user.subscriptionEndsAt).getTime() <= cutoff) {
+        currentStatus = "EXPIRED";
+        await prisma.user.update({ where: { id: user.id }, data: { status: "EXPIRED", plexLibrarySectionIds: "", selectedPlexLibrarySectionIds: "" } }).catch(() => {});
+      }
+    }
   }
 
   // Auto-heal membership tier for approved members or admins whose tier is still marked as TRIAL
@@ -658,89 +668,99 @@ export async function getCurrentUser() {
 
   if (!user) return null;
 
-  // Auto-expire trials that have elapsed
+  // Auto-expire trials/subscriptions that have elapsed beyond grace period (strictly excluding ADMIN & honoring autoSuspendExpiredAccounts)
   const now = new Date();
-  if (user.status === "TRIAL" && user.trialEndsAt && new Date(user.trialEndsAt) < now) {
-    console.log(`[AUTH] Trial expired for ${user.username}. Updating status to EXPIRED and revoking Plex access.`);
-    user = await prisma.user.update({
-      where: { id: user.id },
-      data: { status: "EXPIRED", plexLibrarySectionIds: "", selectedPlexLibrarySectionIds: "" },
-      select: {
-        id: true,
-        username: true,
-        email: true,
-        kindleEmail: true,
-        role: true,
-        status: true,
-        membershipTier: true,
-        subscriptionCadence: true,
-        lastRenewalReminderSentAt: true,
-        trialEndsAt: true,
-        subscriptionEndsAt: true,
-        referralCode: true,
-        plexEmail: true,
-        plexUsername: true,
-        accountCredit: true,
-        lastPaymentAmount: true,
-        lastPaymentDate: true,
-        lastPaymentProvider: true,
-      discordId: true,
-      discordUsername: true,
-      discordDiscriminator: true,
-      discordAvatar: true,
-      discordLinkedAt: true,
-        lastLogin: true
+  if (user.role !== "ADMIN" && (user.status === "TRIAL" || user.status === "APPROVED")) {
+    const expirySettings = await prisma.settings.findUnique({
+      where: { id: "global" },
+      select: { autoSuspendExpiredAccounts: true, subscriptionGracePeriodDays: true }
+    }).catch(() => null);
+    if (expirySettings?.autoSuspendExpiredAccounts === true) {
+      const graceMs = Math.max(0, Number(expirySettings?.subscriptionGracePeriodDays || 0)) * 24 * 60 * 60 * 1000;
+      const cutoff = now.getTime() - graceMs;
+
+      if (user.status === "TRIAL" && user.trialEndsAt && new Date(user.trialEndsAt).getTime() <= cutoff) {
+        console.log(`[AUTH] Trial expired for ${user.username}. Updating status to EXPIRED and revoking Plex access.`);
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: { status: "EXPIRED", plexLibrarySectionIds: "", selectedPlexLibrarySectionIds: "" },
+          select: {
+            id: true,
+            username: true,
+            email: true,
+            kindleEmail: true,
+            role: true,
+            status: true,
+            membershipTier: true,
+            subscriptionCadence: true,
+            lastRenewalReminderSentAt: true,
+            trialEndsAt: true,
+            subscriptionEndsAt: true,
+            referralCode: true,
+            plexEmail: true,
+            plexUsername: true,
+            accountCredit: true,
+            lastPaymentAmount: true,
+            lastPaymentDate: true,
+            lastPaymentProvider: true,
+          discordId: true,
+          discordUsername: true,
+          discordDiscriminator: true,
+          discordAvatar: true,
+          discordLinkedAt: true,
+            lastLogin: true
+          }
+        });
+
+        try {
+          const { revokePlexAccessForUserInternal } = await import("./actions");
+          if (user) await revokePlexAccessForUserInternal(user, "Your trial period has expired.");
+        } catch (revokeErr) {
+          console.warn("[AUTH-TRIAL-REVOKE-WARNING]:", revokeErr);
+        }
+        if (!user) return null;
       }
-    });
 
-    try {
-      const { revokePlexAccessForUserInternal } = await import("./actions");
-      if (user) await revokePlexAccessForUserInternal(user, "Your trial period has expired.");
-    } catch (revokeErr) {
-      console.warn("[AUTH-TRIAL-REVOKE-WARNING]:", revokeErr);
-    }
-    if (!user) return null;
-}
+      if (user.status === "APPROVED" && user.subscriptionEndsAt && new Date(user.subscriptionEndsAt).getTime() <= cutoff) {
+        console.log(`[AUTH] Subscription expired for ${user.username}. Updating status to EXPIRED and revoking Plex access.`);
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: { status: "EXPIRED", plexLibrarySectionIds: "", selectedPlexLibrarySectionIds: "" },
+          select: {
+            id: true,
+            username: true,
+            email: true,
+            kindleEmail: true,
+            role: true,
+            status: true,
+            membershipTier: true,
+            subscriptionCadence: true,
+            lastRenewalReminderSentAt: true,
+            trialEndsAt: true,
+            subscriptionEndsAt: true,
+            referralCode: true,
+            plexEmail: true,
+            plexUsername: true,
+            accountCredit: true,
+            lastPaymentAmount: true,
+            lastPaymentDate: true,
+            lastPaymentProvider: true,
+          discordId: true,
+          discordUsername: true,
+          discordDiscriminator: true,
+          discordAvatar: true,
+          discordLinkedAt: true,
+            lastLogin: true
+          }
+        });
 
-  // Auto-expire timed subscriptions that have elapsed
-  if (user.status === "APPROVED" && user.subscriptionEndsAt && new Date(user.subscriptionEndsAt) < now) {
-    console.log(`[AUTH] Subscription expired for ${user.username}. Updating status to EXPIRED and revoking Plex access.`);
-    user = await prisma.user.update({
-      where: { id: user.id },
-      data: { status: "EXPIRED", plexLibrarySectionIds: "", selectedPlexLibrarySectionIds: "" },
-      select: {
-        id: true,
-        username: true,
-        email: true,
-        kindleEmail: true,
-        role: true,
-        status: true,
-        membershipTier: true,
-        subscriptionCadence: true,
-        lastRenewalReminderSentAt: true,
-        trialEndsAt: true,
-        subscriptionEndsAt: true,
-        referralCode: true,
-        plexEmail: true,
-        plexUsername: true,
-        accountCredit: true,
-        lastPaymentAmount: true,
-        lastPaymentDate: true,
-        lastPaymentProvider: true,
-      discordId: true,
-      discordUsername: true,
-      discordDiscriminator: true,
-      discordAvatar: true,
-      discordLinkedAt: true,
-        lastLogin: true
+        try {
+          const { revokePlexAccessForUserInternal } = await import("./actions");
+          if (user) await revokePlexAccessForUserInternal(user, "Your subscription period has expired.");
+        } catch (revokeErr) {
+          console.warn("[AUTH-SUB-REVOKE-WARNING]:", revokeErr);
+        }
       }
-    });
-
-    try {
-      const { revokePlexAccessForUserInternal } = await import("./actions");
-      if (user) await revokePlexAccessForUserInternal(user, "Your subscription period has expired.");
-    } catch (revokeErr) {
-      console.warn("[AUTH-SUB-REVOKE-WARNING]:", revokeErr);
     }
   }
   
@@ -1027,8 +1047,11 @@ export async function impersonateUserAction(targetUserId: string) {
     try {
       const { payload } = await jwtVerify(sessionToken, getJwtSecret());
       if (payload.role === "ADMIN" && payload.userId) {
-        callerIsAdmin = true;
-        adminUserId = payload.userId as string;
+        const dbAdmin = await prisma.user.findUnique({ where: { id: payload.userId as string } });
+        if (dbAdmin && dbAdmin.role === "ADMIN") {
+          callerIsAdmin = true;
+          adminUserId = dbAdmin.id;
+        }
       }
     } catch {
       // ignore

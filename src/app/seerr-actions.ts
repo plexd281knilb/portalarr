@@ -86,7 +86,27 @@ interface AuthSession {
 }
 
 async function verifyAuth(): Promise<AuthSession> {
-    if (process.env.PORTALARR_TEST_AUTH === "true") {
+    if (process.env.NODE_ENV !== "production" && process.env.PORTALARR_TEST_AUTH === "true") {
+        if (process.env.PORTALARR_TEST_USER_ID) {
+            const specificUser = await prisma.user.findUnique({
+                where: { id: process.env.PORTALARR_TEST_USER_ID },
+                select: { id: true, username: true, role: true, status: true, email: true }
+            });
+            if (specificUser) {
+                const role = String(specificUser.role || "USER").toUpperCase();
+                const status = String(specificUser.status || "APPROVED").toUpperCase();
+                if (role !== "ADMIN" && (status === "PENDING" || status === "REJECTED" || status === "SUSPENDED" || status === "EXPIRED")) {
+                    throw new Error("Unauthorized: Account is inactive or pending approval.");
+                }
+                return {
+                    userId: specificUser.id,
+                    username: specificUser.username,
+                    role: specificUser.role,
+                    status: specificUser.status,
+                    email: specificUser.email ? String(specificUser.email) : undefined
+                };
+            }
+        }
         return {
             userId: "test-admin-id",
             username: "admin",
@@ -99,12 +119,28 @@ async function verifyAuth(): Promise<AuthSession> {
     if (!session || !session.username) {
         throw new Error("Unauthorized. Please log in.");
     }
+    const userId = String(session.userId || session.id || "");
+    if (!userId) {
+        throw new Error("Unauthorized. Please log in.");
+    }
+    const dbUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, username: true, role: true, status: true, email: true }
+    });
+    if (!dbUser) {
+        throw new Error("Unauthorized. Please log in.");
+    }
+    const role = String(dbUser.role || "USER").toUpperCase();
+    const status = String(dbUser.status || "APPROVED").toUpperCase();
+    if (role !== "ADMIN" && (status === "PENDING" || status === "REJECTED" || status === "SUSPENDED" || status === "EXPIRED")) {
+        throw new Error("Unauthorized: Account is inactive or pending approval.");
+    }
     return {
-        userId: String(session.userId || session.id || ""),
-        username: String(session.username || ""),
-        role: String(session.role || "USER"),
-        status: String(session.status || "APPROVED"),
-        email: session.email ? String(session.email) : undefined
+        userId: dbUser.id,
+        username: dbUser.username,
+        role: dbUser.role,
+        status: dbUser.status,
+        email: dbUser.email ? String(dbUser.email) : undefined
     };
 }
 
@@ -557,6 +593,49 @@ export async function requestTvEpisodesAction(payload: {
         }
 
         const settings = await prisma.settings.findFirst({ where: { id: "global" } });
+        const isTrial = (user.status === "TRIAL" || user.membershipTier === "TRIAL") && !isAdmin;
+
+        // Enforce TV request quota even for partial/episode selections
+        if (!isAdmin) {
+            if (isTrial) {
+                const limit = user.requestLimitTv ?? settings?.seerrTrialQuotaTv ?? 3;
+                if (limit > 0) {
+                    const windowStartDate = user.createdAt ? new Date(user.createdAt) : new Date(0);
+                    const count = await prisma.mediaRequest.count({
+                        where: {
+                            requestedByUsername: user.username,
+                            mediaType: "tv",
+                            isDual1080pChild: false,
+                            status: { notIn: ["DECLINED", "FAILED"] },
+                            createdAt: { gte: windowStartDate }
+                        }
+                    });
+                    if (count >= limit) {
+                        throw new Error(`You have reached your limit of ${limit} TV show requests for your trial period.`);
+                    }
+                }
+            } else {
+                const isUnlimited = settings?.seerrFullUnlimited ?? true;
+                const quotaDays = user.requestLimitDays || settings?.seerrFullQuotaDays || 7;
+                const limit = isUnlimited ? 0 : (user.requestLimitTv ?? settings?.seerrFullQuotaTv ?? 10);
+                if (limit > 0) {
+                    const windowStartDate = new Date(Date.now() - quotaDays * 24 * 60 * 60 * 1000);
+                    const count = await prisma.mediaRequest.count({
+                        where: {
+                            requestedByUsername: user.username,
+                            mediaType: "tv",
+                            isDual1080pChild: false,
+                            status: { notIn: ["DECLINED", "FAILED"] },
+                            createdAt: { gte: windowStartDate }
+                        }
+                    });
+                    if (count >= limit) {
+                        throw new Error(`You have reached your limit of ${limit} TV show requests for this ${quotaDays}-day period.`);
+                    }
+                }
+            }
+        }
+
         const sonarrAppsRes = await getEnabledArrInstancesInternal("sonarr");
         const sonarrApps = sonarrAppsRes.success && sonarrAppsRes.data ? sonarrAppsRes.data : [];
 
@@ -846,12 +925,14 @@ export async function getUserRequestQuotaAction() {
             ? (user.createdAt ? new Date(user.createdAt) : new Date(0))
             : new Date(Date.now() - quotaDays * 24 * 60 * 60 * 1000);
 
-        // Count user's requests within window
+        // Count user's requests within window (exclude dual 1080p child companions and declined/failed requests)
         const [recentMovieCount, recentTvCount] = await Promise.all([
             prisma.mediaRequest.count({
                 where: {
                     requestedByUsername: user.username,
                     mediaType: "movie",
+                    isDual1080pChild: false,
+                    status: { notIn: ["DECLINED", "FAILED"] },
                     createdAt: { gte: windowStartDate }
                 }
             }),
@@ -859,6 +940,8 @@ export async function getUserRequestQuotaAction() {
                 where: {
                     requestedByUsername: user.username,
                     mediaType: "tv",
+                    isDual1080pChild: false,
+                    status: { notIn: ["DECLINED", "FAILED"] },
                     createdAt: { gte: windowStartDate }
                 }
             })
@@ -959,6 +1042,8 @@ export async function submitMediaRequestAction(payload: {
                         where: {
                             requestedByUsername: user.username,
                             mediaType: payload.mediaType,
+                            isDual1080pChild: false,
+                            status: { notIn: ["DECLINED", "FAILED"] },
                             createdAt: { gte: windowStartDate }
                         }
                     });
@@ -980,6 +1065,8 @@ export async function submitMediaRequestAction(payload: {
                         where: {
                             requestedByUsername: user.username,
                             mediaType: payload.mediaType,
+                            isDual1080pChild: false,
+                            status: { notIn: ["DECLINED", "FAILED"] },
                             createdAt: { gte: windowStartDate }
                         }
                     });
@@ -1209,7 +1296,7 @@ export async function reconcileBookRequestsWithMediaRequests(targetUsername?: st
                 mappedStatus = "APPROVED";
             } else if (brStatus === "rejected" || brStatus === "declined") {
                 mappedStatus = "DECLINED";
-            } else if (brStatus === "failed") {
+            } else if (brStatus === "failed" || brStatus.startsWith("failed -")) {
                 mappedStatus = "FAILED";
             } else if (brStatus === "downloaded" || brStatus === "available") {
                 // If marked downloaded/available in BookRequest but missing from the target shelf,
@@ -1547,6 +1634,16 @@ export async function declineMediaRequestAction(requestId: string, reason?: stri
             }
         });
 
+        if (req.is4k) {
+            await prisma.mediaRequest.updateMany({
+                where: { parent4kRequestId: req.id, status: { notIn: ["AVAILABLE", "DECLINED"] } },
+                data: {
+                    status: "DECLINED",
+                    errorMessage: reason || "Parent 4K request declined by administrator"
+                }
+            }).catch(() => {});
+        }
+
         if (req.mediaType === "book" || req.mediaType === "ebook" || req.mediaType === "audiobook") {
             await prisma.bookRequest.updateMany({
                 where: {
@@ -1585,7 +1682,12 @@ export async function bulkDeclineMediaRequestsAction(requestIds: string[], reaso
         const validIds = targets.map(t => t.id);
 
         const updateRes = await prisma.mediaRequest.updateMany({
-            where: { id: { in: validIds } },
+            where: {
+                OR: [
+                    { id: { in: validIds } },
+                    { parent4kRequestId: { in: validIds }, status: { notIn: ["AVAILABLE", "DECLINED"] } }
+                ]
+            },
             data: {
                 status: "DECLINED",
                 errorMessage: reason || "Request declined by administrator"
@@ -1843,20 +1945,30 @@ export async function syncMediaRequestsQueueAndAvailabilityInternal(): Promise<{
                 matches = guidIndex.get(`title:${req.mediaType}:${norm}:${req.releaseYear || ""}`);
             }
 
-            const match = matches && matches.length > 0 ? matches[0] : null;
+            const matchList = matches || [];
+            const match = req.is4k
+                ? (matchList.find(m => m.is4k && (!req.isKids || m.isKidsSection)) || null)
+                : (req.isKids
+                    ? (matchList.find(m => m.isKidsSection) || null)
+                    : (matchList.find(m => !m.isKidsSection) || matchList[0] || null));
 
             if (match) {
-                await prisma.mediaRequest.update({
-                    where: { id: req.id },
+                const availUpd = await prisma.mediaRequest.updateMany({
+                    where: {
+                        id: req.id,
+                        status: { notIn: ["AVAILABLE", "DECLINED"] }
+                    },
                     data: {
                         status: "AVAILABLE",
                         downloadProgress: 100,
                         availableAt: new Date()
                     }
                 });
-                updatedCount++;
-                const plexUrl = match.ratingKey ? `https://app.plex.tv/desktop#!/server/${match.serverName || ""}/details?key=%2Flibrary%2Fmetadata%2F${match.ratingKey}` : undefined;
-                notifyMediaRequestEvent("AVAILABLE", req.id, { plexUrl }).catch(() => {});
+                if (availUpd.count > 0) {
+                    updatedCount++;
+                    const plexUrl = match.ratingKey ? `https://app.plex.tv/desktop#!/server/${match.serverName || ""}/details?key=%2Flibrary%2Fmetadata%2F${match.ratingKey}` : undefined;
+                    notifyMediaRequestEvent("AVAILABLE", req.id, { plexUrl }).catch(() => {});
+                }
             }
         }
 
@@ -1880,7 +1992,11 @@ export async function syncMediaRequestsQueueAndAvailabilityInternal(): Promise<{
                 if (queueRes.success && queueRes.data?.records) {
                     for (const record of queueRes.data.records) {
                         const movieId = record.movieId;
-                        const matchReq = remainingProcessing.find(r => r.mediaType === "movie" && r.servarrId === movieId);
+                        const matchReq = remainingProcessing.find(r =>
+                            r.mediaType === "movie" &&
+                            r.servarrId === movieId &&
+                            (!r.servarrAppId || r.servarrAppId === app.id)
+                        );
                         if (matchReq) {
                             activeDownloadingReqIds.add(matchReq.id);
                             const sizeleft = record.sizeleft || 0;
@@ -1903,7 +2019,11 @@ export async function syncMediaRequestsQueueAndAvailabilityInternal(): Promise<{
                 if (queueRes.success && queueRes.data?.records) {
                     for (const record of queueRes.data.records) {
                         const seriesId = record.seriesId;
-                        const matchReq = remainingProcessing.find(r => r.mediaType === "tv" && r.servarrId === seriesId);
+                        const matchReq = remainingProcessing.find(r =>
+                            r.mediaType === "tv" &&
+                            r.servarrId === seriesId &&
+                            (!r.servarrAppId || r.servarrAppId === app.id)
+                        );
                         if (matchReq) {
                             activeDownloadingReqIds.add(matchReq.id);
                             const sizeleft = record.sizeleft || 0;

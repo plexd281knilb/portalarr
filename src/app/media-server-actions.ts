@@ -60,12 +60,18 @@ function safeRevalidate(path: string) {
 // Helper: Authentication verification
 async function verifySessionUser(): Promise<any> {
     await ensureSchemaColumns();
-    if (process.env.PORTALARR_TEST_AUTH === "true") {
+    if (process.env.NODE_ENV !== "production" && process.env.PORTALARR_TEST_AUTH === "true") {
         if (process.env.PORTALARR_TEST_USER_ID) {
             const specificUser = await prisma.user.findUnique({
                 where: { id: process.env.PORTALARR_TEST_USER_ID }
             });
-            if (specificUser) return specificUser;
+            if (specificUser) {
+                const st = String(specificUser.status || "").toUpperCase();
+                if (specificUser.role !== "ADMIN" && (st === "PENDING" || st === "REJECTED" || st === "SUSPENDED" || st === "EXPIRED")) {
+                    throw new Error("Unauthorized");
+                }
+                return specificUser;
+            }
         }
         const testUser = await prisma.user.findFirst({
             where: { role: "ADMIN" }
@@ -92,6 +98,10 @@ async function verifySessionUser(): Promise<any> {
         where: { id: userId }
     });
     if (!dbUser) throw new Error("User not found");
+    const st = String(dbUser.status || "").toUpperCase();
+    if (dbUser.role !== "ADMIN" && (st === "PENDING" || st === "REJECTED" || st === "SUSPENDED" || st === "EXPIRED")) {
+        throw new Error("Unauthorized");
+    }
     return dbUser;
 }
 
@@ -288,7 +298,7 @@ export async function saveMediaServerAction(data: {
         }
 
         let encryptedKey = "";
-        if (data.apiKey && !data.apiKey.startsWith("enc_") && data.apiKey.trim().length > 0) {
+        if (data.apiKey && !data.apiKey.startsWith("enc_") && !data.apiKey.startsWith("••••") && data.apiKey.trim().length > 0) {
             encryptedKey = encryptData(data.apiKey.trim());
         }
 
@@ -1125,7 +1135,7 @@ export async function updateUserMediaServersAndLibrariesAction(payload: {
             try { decKey = decryptData(srv.apiKey); } catch {}
             if (decKey) {
                 syncUserMediaServerAccess(
-                    { id: srv.id, name: srv.name, type: srv.type, url: srv.url, apiKey: decKey },
+                    { id: srv.id, name: srv.name, type: srv.type, url: srv.url, internalUrl: srv.internalUrl, apiKey: decKey },
                     { 
                         id: user.id, 
                         username: (srvType === "JELLYFIN" ? user.jellyfinUsername : user.embyUsername) || user.username,

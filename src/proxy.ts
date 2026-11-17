@@ -50,8 +50,14 @@ export async function proxy(req: NextRequest) {
     return NextResponse.next();
   }
 
+  // Standalone IPTV feeds (/api/iptv/m3u, /api/iptv/epg) authenticate via ?token= query parameter inside their route handlers
+  const isTokenAuthenticatedIptvFeed = pathname === "/api/iptv/m3u" || pathname === "/api/iptv/epg";
+
   // 3. Require login for everything else
   if (!session) {
+    if (isTokenAuthenticatedIptvFeed) {
+      return NextResponse.next();
+    }
     if (pathname.startsWith("/api")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

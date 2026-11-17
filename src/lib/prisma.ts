@@ -2553,7 +2553,7 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
     }
     await ensureSchemaColumns();
     const settings = await prisma.settings.findUnique({ where: { id: "global" } }).catch(() => null);
-    const intervalMinutes = settings?.autoSyncInterval || 5;
+    const intervalMinutes = settings?.autoSyncInterval || 60;
     console.log(`[BACKGROUND-SCHEDULER] Initializing Portalarr background scheduler (Interval: ${intervalMinutes}m)...`);
     console.log(`[PORTALARR] Server is fully booted, ready, and listening on http://0.0.0.0:3000`);
 
@@ -2599,12 +2599,17 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
       const now = new Date();
       let settings = await prisma.settings.findUnique({ where: { id: "global" } }).catch(() => null);
 
-      // 1. Trial & Subscription Expiration (Evaluated every minute)
-      try {
-        const { expireDueTrialsAndSubscriptionsInternal } = await import("../app/actions");
-        await expireDueTrialsAndSubscriptionsInternal();
-      } catch (trialExpErr: any) {
-        console.warn("[BACKGROUND-SCHEDULER] 1-minute trial expiration check error:", trialExpErr.message || trialExpErr);
+      // 1. Trial & Subscription Expiration (Evaluated every minute under concurrency lock)
+      if (!(global as any).__PORTALARR_TRIAL_EXP_RUNNING) {
+        (global as any).__PORTALARR_TRIAL_EXP_RUNNING = true;
+        try {
+          const { expireDueTrialsAndSubscriptionsInternal } = await import("../app/actions");
+          await expireDueTrialsAndSubscriptionsInternal();
+        } catch (trialExpErr: any) {
+          console.warn("[BACKGROUND-SCHEDULER] 1-minute trial expiration check error:", trialExpErr.message || trialExpErr);
+        } finally {
+          (global as any).__PORTALARR_TRIAL_EXP_RUNNING = false;
+        }
       }
 
       // 1b. Subscription Expiration & Renewal Warnings (Evaluated hourly with milestone deduplication)
@@ -2869,7 +2874,7 @@ if (!globalForScheduler.schedulerInitialized && !process.env.__PORTALARR_SCHEDUL
 
       // 7. Library Auto-Scan, Plex Friends Sync, and Book Requests Retry
       if (!(global as any).__PORTALARR_LIBRARY_SCAN_RUNNING) {
-        const intervalMinutes = settings?.autoSyncInterval || 5;
+        const intervalMinutes = settings?.autoSyncInterval || 60;
         const lastSync = settings?.lastAutoSync;
 
         if (!lastSync || (now.getTime() - lastSync.getTime()) >= (intervalMinutes * 60 - 5) * 1000) {

@@ -1670,7 +1670,7 @@ export default function UserProfilePage() {
 
                     {/* PAYMENT HANDLES & MODAL */}
                     <div className="pt-2 border-t border-border/40">
-                        <PaymentMethodsGrid config={paymentConfig} username={user?.username} amount={profileEffectiveAmountDue > 0 ? profileEffectiveAmountDue : undefined} cadence={profileCadence} />
+                        <PaymentMethodsGrid config={paymentConfig} username={user?.username} membershipTier={user?.membershipTier} amount={profileEffectiveAmountDue > 0 ? profileEffectiveAmountDue : undefined} cadence={profileCadence} />
                     </div>
 
                     {paymentConfig?.paymentInstructions && (

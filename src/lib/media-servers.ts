@@ -642,7 +642,15 @@ export async function fetchMediaServerActiveSessions(
                 player: s.Client || s.DeviceName || `${server.type} Client`,
                 platform: s.DeviceName || s.Client || "",
                 device: s.DeviceName || s.Client || "",
-                ipAddress: s.RemoteEndPoint?.split(":")?.[0] || "",
+                ipAddress: (() => {
+                    const ep = String(s.RemoteEndPoint || "").trim();
+                    if (!ep) return "";
+                    if (ep.startsWith("[") && ep.includes("]:")) return ep.slice(1, ep.indexOf("]:"));
+                    if (ep.startsWith("[") && ep.endsWith("]")) return ep.slice(1, -1);
+                    const colonCount = (ep.match(/:/g) || []).length;
+                    if (colonCount === 1) return ep.split(":")[0];
+                    return ep;
+                })(),
                 videoDecision,
                 audioDecision,
                 transcodeDecision: videoDecision,

@@ -1,49 +1,52 @@
 import fs from "fs";
 import path from "path";
-import { execFile } from "child_process";
+import { execFile, execFileSync } from "child_process";
 import { promisify } from "util";
 import JSZip from "jszip";
 import { logger } from "@/lib/logger";
 
 const execFileAsync = promisify(execFile);
 
-let cachedBinaryPath: string | null = null;
+let cachedBinaryPath: string | null | undefined = undefined;
+const NON_CONVERTIBLE_COMIC_EXTS = new Set([".cbz", ".cbr"]);
 
 /**
- * Finds the Calibre ebook-convert executable path across OS environments
+ * Finds and verifies the Calibre ebook-convert executable path across OS environments
  */
 export function getEbookConvertBinaryPath(): string | null {
-    if (cachedBinaryPath && fs.existsSync(cachedBinaryPath)) {
-        return cachedBinaryPath;
+    if (cachedBinaryPath !== undefined) {
+        if (!cachedBinaryPath) return null;
+        if (!cachedBinaryPath.includes(path.sep) || fs.existsSync(cachedBinaryPath)) {
+            return cachedBinaryPath;
+        }
     }
 
     const possiblePaths = process.platform === "win32"
         ? [
-            "ebook-convert.exe",
             "C:\\Program Files\\Calibre2\\ebook-convert.exe",
             "C:\\Program Files (x86)\\Calibre2\\ebook-convert.exe",
             "C:\\Calibre\\ebook-convert.exe",
-            path.join(process.env.LOCALAPPDATA || "", "Programs", "Calibre", "ebook-convert.exe")
+            path.join(process.env.LOCALAPPDATA || "", "Programs", "Calibre", "ebook-convert.exe"),
+            "ebook-convert.exe"
         ]
         : [
-            "ebook-convert",
             "/usr/bin/ebook-convert",
             "/usr/local/bin/ebook-convert",
-            "/opt/calibre/ebook-convert"
+            "/opt/calibre/ebook-convert",
+            "ebook-convert"
         ];
 
     for (const bin of possiblePaths) {
         try {
-            if (bin.includes(path.sep) && fs.existsSync(bin)) {
-                cachedBinaryPath = bin;
-                return bin;
-            }
+            if (bin.includes(path.sep) && !fs.existsSync(bin)) continue;
+            execFileSync(bin, ["--version"], { stdio: "ignore", timeout: 5000 });
+            cachedBinaryPath = bin;
+            return bin;
         } catch (e) {}
     }
 
-    // Default to binary name in PATH
-    cachedBinaryPath = process.platform === "win32" ? "ebook-convert.exe" : "ebook-convert";
-    return cachedBinaryPath;
+    cachedBinaryPath = null;
+    return null;
 }
 
 export interface ConversionResult {
@@ -54,8 +57,9 @@ export interface ConversionResult {
 }
 
 /**
- * Converts any non-EPUB ebook (.mobi, .azw3, .azw, .azw4, .pdf, .cbz, .cbr, .fb2, .lit, .txt, .rtf)
- * to standard .epub using Calibre and deletes the non-EPUB original.
+ * Converts convertible non-EPUB ebooks (.mobi, .azw3, .azw, .azw4, .fb2, .lit, .txt, .rtf)
+ * to standard .epub using Calibre and deletes the non-EPUB original only upon success.
+ * Comic archives (.cbz, .cbr) are never converted.
  */
 export async function convertEbookToEpub(inputFilePath: string): Promise<ConversionResult> {
     if (!fs.existsSync(inputFilePath)) {
@@ -65,6 +69,9 @@ export async function convertEbookToEpub(inputFilePath: string): Promise<Convers
     const ext = path.extname(inputFilePath).toLowerCase();
     if (ext === ".epub") {
         return { success: true, epubPath: inputFilePath, originalDeleted: false };
+    }
+    if (NON_CONVERTIBLE_COMIC_EXTS.has(ext)) {
+        return { success: false, originalDeleted: false, error: `Comic archive format '${ext}' is preserved natively and cannot be converted to EPUB.` };
     }
 
     const bin = getEbookConvertBinaryPath();
@@ -258,6 +265,19 @@ export async function validateAndFixEpubForKindle(filePath: string): Promise<Kin
         await execFileAsync(bin, args, { timeout: 120000 });
 
         if (fs.existsSync(tempRepairedPath) && fs.statSync(tempRepairedPath).size > 500) {
+            const repairedStat = fs.statSync(tempRepairedPath);
+            if (repairedStat.size > 50 * 1024 * 1024) {
+                try { fs.unlinkSync(tempRepairedPath); } catch (e) {}
+                const repairedMb = (repairedStat.size / (1024 * 1024)).toFixed(1);
+                return {
+                    valid: false,
+                    repaired: false,
+                    finalPath: filePath,
+                    fileSize: repairedStat.size,
+                    fileSizeMb: repairedMb,
+                    error: `Repaired EPUB size (${repairedMb} MB) exceeds Amazon Send-to-Kindle's 50MB limit.`
+                };
+            }
             // Overwrite original with the repaired EPUB
             fs.copyFileSync(tempRepairedPath, filePath);
             try { fs.unlinkSync(tempRepairedPath); } catch (e) {}

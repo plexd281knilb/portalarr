@@ -436,9 +436,22 @@ export function saveScript(scriptData: Partial<UserScript> & { name: string }): 
         } catch (_) {}
     }
 
-    const id = scriptData.id || scriptData.name.toLowerCase().replace(/[^a-z0-9_-]/g, "_");
-    const filename = scriptData.filename || `${id}.sh`;
-    const filePath = path.join(scriptsDir, filename);
+    const rawId = scriptData.id || scriptData.name.toLowerCase().replace(/[^a-z0-9_-]/g, "_");
+    const id = rawId.replace(/[^a-zA-Z0-9_-]/g, "");
+    if (!id) {
+        throw new Error("Invalid script ID.");
+    }
+
+    const baseScriptsDir = path.resolve(scriptsDir);
+    const safeFilename = path.basename((scriptData.filename || `${id}.sh`).trim());
+    if (!safeFilename || safeFilename === "." || safeFilename === ".." || safeFilename.includes("..")) {
+        throw new Error("Invalid script filename.");
+    }
+    const filePath = path.resolve(baseScriptsDir, safeFilename);
+    if (!filePath.startsWith(baseScriptsDir + path.sep)) {
+        throw new Error("Script path escapes managed scripts directory.");
+    }
+    const filename = safeFilename;
 
     const now = new Date().toISOString();
     const content = (scriptData.content || "").replace(/\r\n/g, "\n");
@@ -493,8 +506,9 @@ export function deleteScript(id: string): boolean {
     if (!target) return false;
 
     if (target.filename) {
-        const filePath = path.join(scriptsDir, target.filename);
-        if (fs.existsSync(filePath)) {
+        const baseScriptsDir = path.resolve(scriptsDir);
+        const filePath = path.resolve(baseScriptsDir, path.basename(target.filename));
+        if (filePath.startsWith(baseScriptsDir + path.sep) && fs.existsSync(filePath)) {
             try {
                 fs.unlinkSync(filePath);
             } catch (_) {}
@@ -554,10 +568,15 @@ export function recordScriptRunFinish(
         } catch (_) {}
     }
 
-    const logFile = path.join(getLogsDir(), `${scriptId}_${runId}.log`);
-    try {
-        fs.writeFileSync(logFile, fullLogs.join("\n"), "utf-8");
-    } catch (_) {}
+    const safeScriptId = path.basename(scriptId).replace(/[^a-zA-Z0-9_-]/g, "");
+    const safeRunId = path.basename(runId).replace(/[^a-zA-Z0-9_-]/g, "");
+    const baseLogsDir = path.resolve(getLogsDir());
+    const logFile = path.resolve(baseLogsDir, `${safeScriptId}_${safeRunId}.log`);
+    if (logFile.startsWith(baseLogsDir + path.sep)) {
+        try {
+            fs.writeFileSync(logFile, fullLogs.join("\n"), "utf-8");
+        } catch (_) {}
+    }
 
     const snippet = fullLogs.slice(-5).join("\n");
     const now = new Date().toISOString();

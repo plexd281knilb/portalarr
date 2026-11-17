@@ -1144,96 +1144,136 @@ export async function setPlexUserDvrPrivilege(
 /**
  * Invites a user into the server owner's Plex Home and enables Live TV tuner privileges.
  */
+let plexHomeInviteQueue: Promise<any> = Promise.resolve();
+
+/**
+ * Invites a Portalarr user into the Plex Home managed group so they unlock Live TV & DVR tuners.
+ * Enforces the configured Plex Home member slot ceiling (1..14) under a serialization lock.
+ */
 export async function inviteUserToPlexHome(
     userId: string,
     grantLiveTv = true
 ): Promise<{ success: boolean; message: string; error?: string }> {
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user) {
-        return { success: false, message: "User not found", error: "User not found" };
-    }
+    const task = plexHomeInviteQueue.then(async () => {
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+        if (!user) {
+            return { success: false, message: "User not found", error: "User not found" };
+        }
 
-    const iptvSettings = await getIptvSettings();
-    const currentHomeCount = await prisma.user.count({
-        where: { isPlexHomeMember: true, role: { not: "ADMIN" } }
-    });
+        const iptvSettings = await getIptvSettings();
+        const maxSlots = Math.min(14, Math.max(1, Number(iptvSettings.plexHomeMaxSlots || 14)));
+        const currentHomeCount = await prisma.user.count({
+            where: { isPlexHomeMember: true, role: { not: "ADMIN" } }
+        });
 
-    if (!user.isPlexHomeMember && currentHomeCount >= (iptvSettings.plexHomeMaxSlots || 14)) {
-        return {
-            success: false,
-            message: `Plex Home is at capacity (${currentHomeCount}/${iptvSettings.plexHomeMaxSlots || 14} member slots used).`,
-            error: `Plex Home is at capacity (${currentHomeCount}/${iptvSettings.plexHomeMaxSlots || 14} member slots used). Rotate an inactive member out or grant Jellyfin / Standalone M3U access instead.`
-        };
-    }
-
-    const targetIdentifier = (user.plexEmail || user.email || user.plexUsername || user.username).trim();
-    const adminToken = await resolveActivePlexAdminToken();
-    let plexHomeUserId = user.plexHomeUserId || null;
-
-    if (adminToken && targetIdentifier) {
-        try {
-            // 1. Canonical Plex Home invite endpoint
-            const inviteUrl = `https://plex.tv/api/home/users?invitedEmail=${encodeURIComponent(targetIdentifier)}&X-Plex-Token=${encodeURIComponent(adminToken)}`;
-            const res = await fetch(inviteUrl, {
-                method: "POST",
-                headers: {
-                    "Accept": "application/json, application/xml, */*",
-                    "X-Plex-Token": adminToken,
-                    "X-Plex-Client-Identifier": PLEX_CLIENT_ID
-                },
-                signal: AbortSignal.timeout(3500)
-            }).catch(() => null);
-
-            if (res && res.ok) {
-                const text = await res.text().catch(() => "");
-                const idMatch = text.match(/\bid="([^"]*)"/i)?.[1];
-                if (idMatch) plexHomeUserId = idMatch;
-            } else {
-                // Fallback to v2 endpoint
-                const v2Res = await fetch(
-                    `https://plex.tv/api/v2/home/users?invitedEmail=${encodeURIComponent(targetIdentifier)}`,
-                    {
-                        method: "POST",
-                        headers: {
-                            "Accept": "application/json",
-                            "X-Plex-Token": adminToken,
-                            "X-Plex-Client-Identifier": PLEX_CLIENT_ID
-                        },
-                        signal: AbortSignal.timeout(3500)
+        const adminToken = await resolveActivePlexAdminToken();
+        let liveNonOwnerCount = 0;
+        if (adminToken) {
+            try {
+                const liveRes = await fetch("https://plex.tv/api/home/users", {
+                    headers: {
+                        "Accept": "application/xml, application/json",
+                        "X-Plex-Token": adminToken,
+                        "X-Plex-Client-Identifier": PLEX_CLIENT_ID
+                    },
+                    signal: AbortSignal.timeout(3500)
+                }).catch(() => null);
+                if (liveRes && liveRes.ok) {
+                    const liveText = await liveRes.text().catch(() => "");
+                    const adminMatches = liveText.match(/\badmin="([^"]*)"/gi) || [];
+                    if (adminMatches.length > 0) {
+                        liveNonOwnerCount = adminMatches.filter(m => !m.includes('"1"') && !m.toLowerCase().includes('"true"')).length;
                     }
-                ).catch(() => null);
-
-                if (v2Res && v2Res.ok) {
-                    const data = await v2Res.json().catch(() => null);
-                    if (data?.id) plexHomeUserId = String(data.id);
                 }
+            } catch {}
+        }
+
+        const effectiveHomeCount = Math.max(currentHomeCount, liveNonOwnerCount);
+        if (!user.isPlexHomeMember && effectiveHomeCount >= maxSlots) {
+            return {
+                success: false,
+                message: `Plex Home is at capacity (${effectiveHomeCount}/${maxSlots} member slots used).`,
+                error: `Plex Home is at capacity (${effectiveHomeCount}/${maxSlots} member slots used). Rotate an inactive member out or grant Jellyfin / Standalone M3U access instead.`
+            };
+        }
+
+        const targetIdentifier = (user.plexEmail || user.email || user.plexUsername || user.username).trim();
+        let plexHomeUserId = user.plexHomeUserId || null;
+
+        if (adminToken && targetIdentifier) {
+            try {
+                // 1. Canonical Plex Home invite endpoint
+                const inviteUrl = `https://plex.tv/api/home/users?invitedEmail=${encodeURIComponent(targetIdentifier)}&X-Plex-Token=${encodeURIComponent(adminToken)}`;
+                const res = await fetch(inviteUrl, {
+                    method: "POST",
+                    headers: {
+                        "Accept": "application/json, application/xml, */*",
+                        "X-Plex-Token": adminToken,
+                        "X-Plex-Client-Identifier": PLEX_CLIENT_ID
+                    },
+                    signal: AbortSignal.timeout(3500)
+                }).catch(() => null);
+
+                if (res && res.ok) {
+                    const text = await res.text().catch(() => "");
+                    const idMatch = text.match(/\bid="([^"]*)"/i)?.[1];
+                    if (idMatch) plexHomeUserId = idMatch;
+                } else if (res && (res.status === 422 || res.status === 403)) {
+                    const errBody = await res.text().catch(() => "");
+                    return {
+                        success: false,
+                        message: `Plex rejected Home invite (${res.status}).`,
+                        error: errBody || `Plex.tv returned HTTP ${res.status}`
+                    };
+                } else {
+                    // Fallback to v2 endpoint
+                    const v2Res = await fetch(
+                        `https://plex.tv/api/v2/home/users?invitedEmail=${encodeURIComponent(targetIdentifier)}`,
+                        {
+                            method: "POST",
+                            headers: {
+                                "Accept": "application/json",
+                                "X-Plex-Token": adminToken,
+                                "X-Plex-Client-Identifier": PLEX_CLIENT_ID
+                            },
+                            signal: AbortSignal.timeout(3500)
+                        }
+                    ).catch(() => null);
+
+                    if (v2Res && v2Res.ok) {
+                        const data = await v2Res.json().catch(() => null);
+                        if (data?.id) plexHomeUserId = String(data.id);
+                    }
+                }
+            } catch (err: any) {
+                logger.addLog("WARN", "PLEX", `[PLEX-HOME] Cloud invite warning for "${targetIdentifier}": ${err?.message || err}`);
             }
-        } catch (err: any) {
-            logger.addLog("WARN", "PLEX", `[PLEX-HOME] Cloud invite warning for "${targetIdentifier}": ${err?.message || err}`);
         }
-    }
 
-    await prisma.user.update({
-        where: { id: user.id },
-        data: {
-            isPlexHomeMember: true,
-            plexHomeUserId: plexHomeUserId || user.plexHomeUserId,
-            plexHomeJoinedAt: user.plexHomeJoinedAt || new Date(),
-            hasPlexLiveTvAccess: grantLiveTv,
-            hasPlexDvrAccess: grantLiveTv,
-            canAccessIptv: user.role === "ADMIN"
+        await prisma.user.update({
+            where: { id: user.id },
+            data: {
+                isPlexHomeMember: true,
+                plexHomeUserId: plexHomeUserId || user.plexHomeUserId,
+                plexHomeJoinedAt: user.plexHomeJoinedAt || new Date(),
+                hasPlexLiveTvAccess: grantLiveTv,
+                hasPlexDvrAccess: grantLiveTv,
+                canAccessIptv: user.role === "ADMIN"
+            }
+        });
+
+        if (grantLiveTv) {
+            await setPlexUserLiveTvPrivilege(user.id, true);
+            await setPlexUserDvrPrivilege(user.id, true);
         }
+
+        return {
+            success: true,
+            message: `Added ${user.username} to Plex Home${grantLiveTv ? " with Live TV & DVR privileges enabled" : ""}.`
+        };
     });
-
-    if (grantLiveTv) {
-        await setPlexUserLiveTvPrivilege(user.id, true);
-        await setPlexUserDvrPrivilege(user.id, true);
-    }
-
-    return {
-        success: true,
-        message: `Added ${user.username} to Plex Home${grantLiveTv ? " with Live TV & DVR privileges enabled" : ""}.`
-    };
+    plexHomeInviteQueue = task.catch(() => {});
+    return task;
 }
 
 /**
@@ -1272,6 +1312,7 @@ export async function removeUserFromPlexHome(
         where: { id: user.id },
         data: {
             isPlexHomeMember: false,
+            plexHomeUserId: null,
             hasPlexLiveTvAccess: false,
             hasPlexDvrAccess: false,
             plexHomeJoinedAt: null

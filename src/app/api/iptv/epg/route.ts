@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { getIptvSettings } from "@/lib/iptv/provider-vault";
 import { ensureDefaultIptvProfiles } from "@/lib/iptv/dispatcharr-client";
+
+function escapeXml(val: string | number | null | undefined): string {
+    return String(val ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&apos;");
+}
 
 export async function GET(req: NextRequest) {
     try {
@@ -17,9 +27,27 @@ export async function GET(req: NextRequest) {
             include: { user: true }
         });
 
-        if (!userToken || userToken.isRevoked || !userToken.user || userToken.user.role !== "ADMIN") {
-            return new NextResponse("Forbidden: Standalone EPG feeds are restricted to administrators", { status: 403 });
+        if (
+            !userToken ||
+            userToken.isRevoked ||
+            (userToken.expiresAt && userToken.expiresAt.getTime() <= Date.now()) ||
+            !userToken.user ||
+            userToken.user.role !== "ADMIN" ||
+            userToken.user.status !== "APPROVED"
+        ) {
+            return new NextResponse("Forbidden: Standalone EPG feeds are restricted to active administrators", { status: 403 });
         }
+
+        const settings = await getIptvSettings();
+        if (settings.enabled === false) {
+            return new NextResponse("Forbidden: IPTV Hub is disabled", { status: 403 });
+        }
+
+        const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "127.0.0.1";
+        await prisma.iptvUserToken.update({
+            where: { id: userToken.id },
+            data: { lastAccessIp: clientIp, lastAccessAt: new Date() }
+        }).catch(() => {});
 
         const channels = await prisma.iptvChannel.findMany({
             where: { isActive: true },
@@ -29,15 +57,15 @@ export async function GET(req: NextRequest) {
         const xmlLines: string[] = [
             `<?xml version="1.0" encoding="UTF-8"?>`,
             `<!DOCTYPE tv SYSTEM "xmltv.dtd">`,
-            `<tv generator-info-name="DomsHomeLab IPTV Hub v1.4" generator-info-url="https://domshomelab.com">`
+            `<tv generator-info-name="DomsHomeLab IPTV Hub v1.5" generator-info-url="https://domshomelab.com">`
         ];
 
         for (const ch of channels) {
-            const id = ch.xmltvId || ch.callsign || ch.name;
+            const id = escapeXml(ch.xmltvId || ch.callsign || ch.name);
             xmlLines.push(`  <channel id="${id}">`);
-            xmlLines.push(`    <display-name>${ch.name.replace(/&/g, "&amp;")}</display-name>`);
+            xmlLines.push(`    <display-name>${escapeXml(ch.name)}</display-name>`);
             if (ch.channelNumber) {
-                xmlLines.push(`    <display-name>${ch.channelNumber}</display-name>`);
+                xmlLines.push(`    <display-name>${escapeXml(ch.channelNumber)}</display-name>`);
             }
             xmlLines.push(`  </channel>`);
         }
@@ -51,6 +79,6 @@ export async function GET(req: NextRequest) {
             }
         });
     } catch (err: any) {
-        return new NextResponse(`Error generating XMLTV: ${err?.message || "Unknown error"}`, { status: 500 });
+        return new NextResponse(`Error generating XMLTV: ${escapeXml(err?.message || "Unknown error")}`, { status: 500 });
     }
 }

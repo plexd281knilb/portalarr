@@ -66,6 +66,12 @@ interface ArrIndexCache {
     sonarr4k: Map<number, { id: number; monitored: boolean; seasons: any[] }>;
     sonarrTitles1080p: Map<string, { id: number; monitored: boolean; seasons: any[] }>;
     sonarrTitles4k: Map<string, { id: number; monitored: boolean; seasons: any[] }>;
+    kidsRadarr1080p: Map<number, { id: number; monitored: boolean; hasFile: boolean }>;
+    kidsRadarr4k: Map<number, { id: number; monitored: boolean; hasFile: boolean }>;
+    kidsSonarr1080p: Map<number, { id: number; monitored: boolean; seasons: any[] }>;
+    kidsSonarr4k: Map<number, { id: number; monitored: boolean; seasons: any[] }>;
+    kidsSonarrTitles1080p: Map<string, { id: number; monitored: boolean; seasons: any[] }>;
+    kidsSonarrTitles4k: Map<string, { id: number; monitored: boolean; seasons: any[] }>;
 }
 
 let arrCache: ArrIndexCache | null = null;
@@ -97,7 +103,13 @@ export async function getArrIndex(forceRefresh = false): Promise<ArrIndexCache> 
             sonarr1080p: new Map(),
             sonarr4k: new Map(),
             sonarrTitles1080p: new Map(),
-            sonarrTitles4k: new Map()
+            sonarrTitles4k: new Map(),
+            kidsRadarr1080p: new Map(),
+            kidsRadarr4k: new Map(),
+            kidsSonarr1080p: new Map(),
+            kidsSonarr4k: new Map(),
+            kidsSonarrTitles1080p: new Map(),
+            kidsSonarrTitles4k: new Map()
         };
 
         try {
@@ -119,7 +131,20 @@ export async function getArrIndex(forceRefresh = false): Promise<ArrIndexCache> 
                 ? sonarrApps.find(a => a.id === settings.seerrDefaultTv4kAppId)
                 : null;
 
-            // Fetch Radarr 1080p, Radarr 4k, Sonarr 1080p, Sonarr 4k in parallel with timeouts
+            const kidsRadarr1080p = (settings?.seerrKidsMovieAppId && settings.seerrKidsMovieAppId !== "none" && settings.seerrKidsMovieAppId !== defaultRadarr1080p?.id)
+                ? radarrApps.find(a => a.id === settings.seerrKidsMovieAppId)
+                : null;
+            const kidsRadarr4k = (settings?.seerrKidsMovie4kAppId && settings.seerrKidsMovie4kAppId !== "none" && settings.seerrKidsMovie4kAppId !== defaultRadarr4k?.id)
+                ? radarrApps.find(a => a.id === settings.seerrKidsMovie4kAppId)
+                : null;
+            const kidsSonarr1080p = (settings?.seerrKidsTvAppId && settings.seerrKidsTvAppId !== "none" && settings.seerrKidsTvAppId !== defaultSonarr1080p?.id)
+                ? sonarrApps.find(a => a.id === settings.seerrKidsTvAppId)
+                : null;
+            const kidsSonarr4k = (settings?.seerrKidsTv4kAppId && settings.seerrKidsTv4kAppId !== "none" && settings.seerrKidsTv4kAppId !== defaultSonarr4k?.id)
+                ? sonarrApps.find(a => a.id === settings.seerrKidsTv4kAppId)
+                : null;
+
+            // Fetch Radarr 1080p, Radarr 4k, Sonarr 1080p, Sonarr 4k (and distinct Kids instances) in parallel with timeouts
             await Promise.allSettled([
                 defaultRadarr1080p ? arrApiGet(defaultRadarr1080p, "/api/v3/movie").then(res => {
                     if (res.success && Array.isArray(res.data)) {
@@ -189,8 +214,57 @@ export async function getArrIndex(forceRefresh = false): Promise<ArrIndexCache> 
                             }
                         }
                     }
+                }).catch(() => {}) : Promise.resolve(),
+
+                kidsRadarr1080p ? arrApiGet(kidsRadarr1080p, "/api/v3/movie").then(res => {
+                    if (res.success && Array.isArray(res.data)) {
+                        for (const m of res.data) {
+                            if (m.tmdbId) newIndex.kidsRadarr1080p.set(m.tmdbId, { id: m.id, monitored: Boolean(m.monitored), hasFile: Boolean(m.hasFile) });
+                        }
+                    }
+                }).catch(() => {}) : Promise.resolve(),
+
+                kidsRadarr4k ? arrApiGet(kidsRadarr4k, "/api/v3/movie").then(res => {
+                    if (res.success && Array.isArray(res.data)) {
+                        for (const m of res.data) {
+                            if (m.tmdbId) newIndex.kidsRadarr4k.set(m.tmdbId, { id: m.id, monitored: Boolean(m.monitored), hasFile: Boolean(m.hasFile) });
+                        }
+                    }
+                }).catch(() => {}) : Promise.resolve(),
+
+                kidsSonarr1080p ? arrApiGet(kidsSonarr1080p, "/api/v3/series").then(res => {
+                    if (res.success && Array.isArray(res.data)) {
+                        for (const s of res.data) {
+                            if (s.tvdbId) newIndex.kidsSonarr1080p.set(s.tvdbId, { id: s.id, monitored: Boolean(s.monitored), seasons: s.seasons || [] });
+                            if (s.title) newIndex.kidsSonarrTitles1080p.set(normalizeTitle(s.title), { id: s.id, monitored: Boolean(s.monitored), seasons: s.seasons || [] });
+                        }
+                    }
+                }).catch(() => {}) : Promise.resolve(),
+
+                kidsSonarr4k ? arrApiGet(kidsSonarr4k, "/api/v3/series").then(res => {
+                    if (res.success && Array.isArray(res.data)) {
+                        for (const s of res.data) {
+                            if (s.tvdbId) newIndex.kidsSonarr4k.set(s.tvdbId, { id: s.id, monitored: Boolean(s.monitored), seasons: s.seasons || [] });
+                            if (s.title) newIndex.kidsSonarrTitles4k.set(normalizeTitle(s.title), { id: s.id, monitored: Boolean(s.monitored), seasons: s.seasons || [] });
+                        }
+                    }
                 }).catch(() => {}) : Promise.resolve()
             ]);
+
+            if (!kidsRadarr1080p && (!settings?.seerrKidsMovieAppId || settings.seerrKidsMovieAppId === defaultRadarr1080p?.id)) {
+                newIndex.kidsRadarr1080p = newIndex.radarr1080p;
+            }
+            if (!kidsRadarr4k && (!settings?.seerrKidsMovie4kAppId || settings.seerrKidsMovie4kAppId === defaultRadarr4k?.id)) {
+                newIndex.kidsRadarr4k = newIndex.radarr4k;
+            }
+            if (!kidsSonarr1080p && (!settings?.seerrKidsTvAppId || settings.seerrKidsTvAppId === defaultSonarr1080p?.id)) {
+                newIndex.kidsSonarr1080p = newIndex.sonarr1080p;
+                newIndex.kidsSonarrTitles1080p = newIndex.sonarrTitles1080p;
+            }
+            if (!kidsSonarr4k && (!settings?.seerrKidsTv4kAppId || settings.seerrKidsTv4kAppId === defaultSonarr4k?.id)) {
+                newIndex.kidsSonarr4k = newIndex.sonarr4k;
+                newIndex.kidsSonarrTitles4k = newIndex.sonarrTitles4k;
+            }
 
             arrCache = newIndex;
         } catch (e: any) {
@@ -212,13 +286,14 @@ export async function getQuickArrMonitoringStatus(
     tmdbId: number,
     mediaType: "movie" | "tv",
     tvdbId?: number,
-    title?: string
+    title?: string,
+    isKids = false
 ): Promise<ArrQuickMonitoringStatus> {
     const index = await getArrIndex();
 
     if (mediaType === "movie") {
-        const rad1080 = index.radarr1080p.get(tmdbId);
-        const rad4k = index.radarr4k.get(tmdbId);
+        const rad1080 = isKids ? index.kidsRadarr1080p.get(tmdbId) : index.radarr1080p.get(tmdbId);
+        const rad4k = isKids ? index.kidsRadarr4k.get(tmdbId) : index.radarr4k.get(tmdbId);
 
         const isMonitored1080p = Boolean(rad1080?.monitored);
         const isMonitored4k = Boolean(rad4k?.monitored);
@@ -235,8 +310,12 @@ export async function getQuickArrMonitoringStatus(
         };
     } else {
         const normTitle = normalizeTitle(title);
-        const son1080 = (tvdbId ? index.sonarr1080p.get(tvdbId) : null) || (normTitle ? index.sonarrTitles1080p.get(normTitle) : null);
-        const son4k = (tvdbId ? index.sonarr4k.get(tvdbId) : null) || (normTitle ? index.sonarrTitles4k.get(normTitle) : null);
+        const sonMap1080 = isKids ? index.kidsSonarr1080p : index.sonarr1080p;
+        const sonTitle1080 = isKids ? index.kidsSonarrTitles1080p : index.sonarrTitles1080p;
+        const sonMap4k = isKids ? index.kidsSonarr4k : index.sonarr4k;
+        const sonTitle4k = isKids ? index.kidsSonarrTitles4k : index.sonarrTitles4k;
+        const son1080 = (tvdbId ? sonMap1080.get(tvdbId) : null) || (normTitle ? sonTitle1080.get(normTitle) : null);
+        const son4k = (tvdbId ? sonMap4k.get(tvdbId) : null) || (normTitle ? sonTitle4k.get(normTitle) : null);
 
         const isMonitored1080p = Boolean(son1080?.monitored || (son1080?.seasons && son1080.seasons.some((s: any) => s.monitored)));
         const isMonitored4k = Boolean(son4k?.monitored || (son4k?.seasons && son4k.seasons.some((s: any) => s.monitored)));

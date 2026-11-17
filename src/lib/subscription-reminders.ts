@@ -220,12 +220,13 @@ export function getNextRenewalReminderInfo(params: {
             };
         }
 
-        // Check if trial reminder was already sent
+        // Check if trial reminder was already sent for this trial expiration date
+        const tCycleTarget = trialExpiry.toISOString().slice(0, 10);
         let sentTrialNotice = false;
         if (user.renewalRemindersSent) {
             try {
                 const parsed = JSON.parse(user.renewalRemindersSent);
-                if (parsed && Array.isArray(parsed.milestones) && parsed.milestones.includes("trial_expiring")) {
+                if (parsed && (!parsed.cycleTarget || parsed.cycleTarget === tCycleTarget) && Array.isArray(parsed.milestones) && parsed.milestones.includes("trial_expiring")) {
                     sentTrialNotice = true;
                 }
             } catch (_) {}

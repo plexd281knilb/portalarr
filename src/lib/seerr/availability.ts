@@ -248,7 +248,7 @@ export async function checkMediaAvailability(
                 result.requestStatus = (result.hasFile1080p || result.hasFile4k) ? "AVAILABLE" : "PROCESSING";
             }
         } else {
-            const quickStatus = await getQuickArrMonitoringStatus(tmdbId, mediaType, tvdbId, title);
+            const quickStatus = await getQuickArrMonitoringStatus(tmdbId, mediaType, tvdbId, title, isKids);
             result.isMonitored1080p = quickStatus.isMonitored1080p;
             result.isMonitored4k = quickStatus.isMonitored4k;
             result.hasFile1080p = quickStatus.hasFile1080p;
@@ -275,14 +275,15 @@ export async function checkMediaAvailability(
         if (matches.length > 0) {
             if (isKids) {
                 // In Kids mode: only mark as inLibrary if present in a Kids-specific section
-                const kidsMatch = matches.find(m => m.isKidsSection);
+                const kidsMatches = matches.filter(m => m.isKidsSection);
+                const kidsMatch = (existingRequest?.is4k ? kidsMatches.find(m => m.is4k) : null) || kidsMatches[0];
                 if (kidsMatch) {
                     result.inLibrary = true;
                     result.plexRatingKey = kidsMatch.ratingKey;
                     result.plexServerName = kidsMatch.serverName;
                     result.plexSectionName = kidsMatch.sectionTitle;
                     result.quality = kidsMatch.quality;
-                    result.has4k = kidsMatch.is4k;
+                    result.has4k = kidsMatches.some(m => Boolean(m.is4k));
                 } else {
                     // Exists in main / non-kids library only
                     const mainMatch = matches.find(m => !m.isKidsSection) || matches[0];
@@ -292,23 +293,27 @@ export async function checkMediaAvailability(
                     result.plexRatingKey = mainMatch.ratingKey;
                     result.plexServerName = mainMatch.serverName;
                     result.quality = mainMatch.quality;
-                    result.has4k = mainMatch.is4k;
+                    result.has4k = matches.some(m => Boolean(m.is4k));
                 }
             } else {
-                // In Main mode: any match counts as in library
+                // In Main mode: any match counts as in library, but distinguish 4K vs 1080p accurately
                 const primaryMatch = matches.find(m => !m.isKidsSection) || matches[0];
                 result.inLibrary = true;
                 result.plexRatingKey = primaryMatch.ratingKey;
                 result.plexServerName = primaryMatch.serverName;
                 result.plexSectionName = primaryMatch.sectionTitle;
                 result.quality = primaryMatch.quality;
-                result.has4k = primaryMatch.is4k;
+                result.has4k = matches.some(m => Boolean(m.is4k));
             }
 
-            // If request exists and was pending/processing, auto-upgrade request to AVAILABLE if in library
-            if (result.inLibrary && existingRequest && existingRequest.status !== "AVAILABLE" && existingRequest.status !== "DECLINED") {
-                await prisma.mediaRequest.update({
-                    where: { id: existingRequest.id },
+            const matchesRequestedQuality = !existingRequest?.is4k || Boolean(result.has4k);
+            // If request exists and was pending/processing, auto-upgrade request to AVAILABLE only if matching quality exists in library
+            if (result.inLibrary && matchesRequestedQuality && existingRequest && existingRequest.status !== "AVAILABLE" && existingRequest.status !== "DECLINED") {
+                await prisma.mediaRequest.updateMany({
+                    where: {
+                        id: existingRequest.id,
+                        status: { notIn: ["AVAILABLE", "DECLINED"] }
+                    },
                     data: {
                         status: "AVAILABLE",
                         availableAt: new Date()
@@ -383,8 +388,8 @@ export async function batchCheckMediaAvailability(
             // Cross-reference with Arr monitoring index
             if (arrIndex) {
                 if (item.mediaType === "movie") {
-                    const rad1080 = arrIndex.radarr1080p.get(item.id);
-                    const rad4k = arrIndex.radarr4k.get(item.id);
+                    const rad1080 = isKids && arrIndex.kidsRadarr1080p ? arrIndex.kidsRadarr1080p.get(item.id) : arrIndex.radarr1080p.get(item.id);
+                    const rad4k = isKids && arrIndex.kidsRadarr4k ? arrIndex.kidsRadarr4k.get(item.id) : arrIndex.radarr4k.get(item.id);
                     status.isMonitored1080p = Boolean(rad1080?.monitored);
                     status.isMonitored4k = Boolean(rad4k?.monitored);
                     status.hasFile1080p = Boolean(rad1080?.hasFile);
@@ -392,8 +397,12 @@ export async function batchCheckMediaAvailability(
                     status.isMonitored = status.isMonitored1080p || status.isMonitored4k;
                 } else {
                     const normTitle = (item.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-                    const son1080 = (item.tvdbId ? arrIndex.sonarr1080p.get(item.tvdbId) : null) || (normTitle ? arrIndex.sonarrTitles1080p.get(normTitle) : null);
-                    const son4k = (item.tvdbId ? arrIndex.sonarr4k.get(item.tvdbId) : null) || (normTitle ? arrIndex.sonarrTitles4k.get(normTitle) : null);
+                    const sonMap1080 = isKids && arrIndex.kidsSonarr1080p ? arrIndex.kidsSonarr1080p : arrIndex.sonarr1080p;
+                    const sonTitle1080 = isKids && arrIndex.kidsSonarrTitles1080p ? arrIndex.kidsSonarrTitles1080p : arrIndex.sonarrTitles1080p;
+                    const sonMap4k = isKids && arrIndex.kidsSonarr4k ? arrIndex.kidsSonarr4k : arrIndex.sonarr4k;
+                    const sonTitle4k = isKids && arrIndex.kidsSonarrTitles4k ? arrIndex.kidsSonarrTitles4k : arrIndex.sonarrTitles4k;
+                    const son1080 = (item.tvdbId ? sonMap1080.get(item.tvdbId) : null) || (normTitle ? sonTitle1080.get(normTitle) : null);
+                    const son4k = (item.tvdbId ? sonMap4k.get(item.tvdbId) : null) || (normTitle ? sonTitle4k.get(normTitle) : null);
                     status.isMonitored1080p = Boolean(son1080?.monitored || (son1080?.seasons && son1080.seasons.some((s: any) => s.monitored)));
                     status.isMonitored4k = Boolean(son4k?.monitored || (son4k?.seasons && son4k.seasons.some((s: any) => s.monitored)));
                     status.hasFile1080p = Boolean(son1080?.seasons && son1080.seasons.some((s: any) => s.statistics?.episodeFileCount > 0));
@@ -419,14 +428,15 @@ export async function batchCheckMediaAvailability(
 
             if (matches.length > 0) {
                 if (isKids) {
-                    const kidsMatch = matches.find(m => m.isKidsSection);
+                    const kidsMatches = matches.filter(m => m.isKidsSection);
+                    const kidsMatch = (req?.is4k ? kidsMatches.find(m => m.is4k) : null) || kidsMatches[0];
                     if (kidsMatch) {
                         status.inLibrary = true;
                         status.plexRatingKey = kidsMatch.ratingKey;
                         status.plexServerName = kidsMatch.serverName;
                         status.plexSectionName = kidsMatch.sectionTitle;
                         status.quality = kidsMatch.quality;
-                        status.has4k = kidsMatch.is4k;
+                        status.has4k = kidsMatches.some(m => Boolean(m.is4k));
                     } else {
                         const mainMatch = matches.find(m => !m.isKidsSection) || matches[0];
                         status.inLibrary = false;
@@ -435,7 +445,7 @@ export async function batchCheckMediaAvailability(
                         status.plexRatingKey = mainMatch.ratingKey;
                         status.plexServerName = mainMatch.serverName;
                         status.quality = mainMatch.quality;
-                        status.has4k = mainMatch.is4k;
+                        status.has4k = matches.some(m => Boolean(m.is4k));
                     }
                 } else {
                     const primaryMatch = matches.find(m => !m.isKidsSection) || matches[0];
@@ -444,10 +454,10 @@ export async function batchCheckMediaAvailability(
                     status.plexServerName = primaryMatch.serverName;
                     status.plexSectionName = primaryMatch.sectionTitle;
                     status.quality = primaryMatch.quality;
-                    status.has4k = primaryMatch.is4k;
+                    status.has4k = matches.some(m => Boolean(m.is4k));
                 }
 
-                if (status.inLibrary && req && req.status !== "AVAILABLE" && req.status !== "DECLINED") {
+                if (status.inLibrary && (!req?.is4k || status.has4k) && req && req.status !== "AVAILABLE" && req.status !== "DECLINED") {
                     status.requestStatus = "AVAILABLE";
                 }
             }

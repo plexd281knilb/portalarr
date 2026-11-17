@@ -19,8 +19,11 @@ interface PaymentQrModalProps {
         paymentZelle?: string | null;
         yearlyPrice?: number | null;
         monthlyPrice?: number | null;
+        tier2YearlyPrice?: number | null;
+        tier2MonthlyPrice?: number | null;
     } | null;
     username?: string;
+    membershipTier?: string | null;
     initialProvider?: "paypal" | "venmo" | "cashapp" | "zelle";
     initialCadence?: "yearly" | "monthly";
     customAmount?: number;
@@ -31,6 +34,7 @@ export function PaymentQrModal({
     onClose,
     config,
     username = "USER",
+    membershipTier,
     initialProvider = "venmo",
     initialCadence = "yearly",
     customAmount,
@@ -44,8 +48,9 @@ export function PaymentQrModal({
         }
     }, [initialCadence, isOpen]);
 
-    const baseYearlyAmount = config?.yearlyPrice || 180;
-    const baseMonthlyAmount = config?.monthlyPrice || 17.50;
+    const isTier2 = membershipTier === "TIER_2_VIP";
+    const baseYearlyAmount = isTier2 ? (config?.tier2YearlyPrice || 240) : (config?.yearlyPrice || 180);
+    const baseMonthlyAmount = isTier2 ? (config?.tier2MonthlyPrice || 25) : (config?.monthlyPrice || 17.50);
     const yearlyAmount = (cadence === "yearly" && initialCadence === "yearly" && customAmount) ? customAmount : baseYearlyAmount;
     const monthlyAmount = (cadence === "monthly" && initialCadence === "monthly" && customAmount) ? customAmount : baseMonthlyAmount;
     const selectedAmount = cadence === "yearly" ? yearlyAmount : monthlyAmount;

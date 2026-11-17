@@ -17,7 +17,11 @@ export async function GET(request: Request) {
             }
         });
     } catch (e: any) {
-        console.error(`[API /api/books] ❌ Error:`, e.message);
-        return NextResponse.json({ success: false, error: e.message || "Failed to fetch books" }, { status: 500 });
+        const msg = e?.message || "Failed to fetch books";
+        const status = msg.toLowerCase().includes("unauthorized") ? 401 : 500;
+        if (status !== 401) {
+            console.error(`[API /api/books] ❌ Error:`, msg);
+        }
+        return NextResponse.json({ success: false, error: msg }, { status });
     }
 }

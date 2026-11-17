@@ -194,6 +194,25 @@ export function buildDispatcharrEndpoints(baseUrl: string, virtualTunerSlug: str
     };
 }
 
+export function isSafeHttpTargetUrl(rawUrl: string): boolean {
+    try {
+        const u = new URL(rawUrl);
+        if (u.protocol !== "http:" && u.protocol !== "https:") return false;
+        const host = u.hostname.toLowerCase();
+        if (
+            host === "169.254.169.254" ||
+            host.startsWith("169.254.") ||
+            host.startsWith("fe80:") ||
+            host === "metadata.google.internal"
+        ) {
+            return false;
+        }
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 /**
  * Tests reachability and API authentication against a Dispatcharr instance.
  */
@@ -206,14 +225,29 @@ export async function testDispatcharrConnection(customUrl?: string, customApiKey
     message: string;
 }> {
     const settings = await getIptvSettings();
-    const baseUrl = (customUrl || settings.dispatcharrUrl || "http://192.168.1.87:9191").replace(/\/+$/, "");
-    const apiKey = customApiKey !== undefined ? customApiKey : await getDecryptedDispatcharrApiKey();
+    const savedBaseUrl = (settings.dispatcharrUrl || "http://192.168.1.87:9191").replace(/\/+$/, "");
+    const baseUrl = (customUrl || savedBaseUrl).replace(/\/+$/, "");
+    if (!isSafeHttpTargetUrl(baseUrl)) {
+        return {
+            reachable: false,
+            latencyMs: 0,
+            profileCount: 0,
+            channelCount: 0,
+            baseUrl,
+            message: "Invalid or blocked Dispatcharr URL."
+        };
+    }
+
+    // Never forward the stored Dispatcharr X-API-Key to an arbitrary third-party customUrl origin
+    let apiKey = "";
+    if (customApiKey !== undefined) {
+        apiKey = customApiKey;
+    } else if (!customUrl || baseUrl === savedBaseUrl || new URL(baseUrl).origin === new URL(savedBaseUrl).origin) {
+        apiKey = await getDecryptedDispatcharrApiKey();
+    }
 
     const startTime = Date.now();
     try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 4500);
-
         const headers: Record<string, string> = {
             "Accept": "application/json"
         };
@@ -224,16 +258,15 @@ export async function testDispatcharrConnection(customUrl?: string, customApiKey
         const res = await fetch(`${baseUrl}/api/channels/profiles/`, {
             method: "GET",
             headers,
-            signal: controller.signal
+            signal: AbortSignal.timeout(4500)
         }).catch(async () => {
-            // Fallback to HDHR discover endpoint if REST API path differs
+            // Fallback to HDHR discover endpoint with a fresh timeout signal
             return fetch(`${baseUrl}/hdhr/All_Channels/discover.json`, {
                 method: "GET",
-                signal: controller.signal
+                signal: AbortSignal.timeout(3500)
             });
         });
 
-        clearTimeout(timeout);
         const latencyMs = Date.now() - startTime;
 
         if (res && res.ok) {
@@ -263,8 +296,8 @@ export async function testDispatcharrConnection(customUrl?: string, customApiKey
         return {
             reachable: false,
             latencyMs,
-            profileCount: 7,
-            channelCount: 817,
+            profileCount: 0,
+            channelCount: 0,
             baseUrl,
             message: `Dispatcharr unreachable at ${baseUrl} (${err?.message || "Connection timeout"})`
         };
@@ -350,15 +383,38 @@ export async function syncDispatcharrLineup(): Promise<{
                 profilesSynced++;
             }
 
-            // Fetch full channels inventory from Dispatcharr
-            const chanRes = await fetch(`${baseUrl}/api/channels/channels/?page_size=1000`, {
-                headers,
-                signal: controller.signal
-            }).catch(() => null);
+            // Fetch full channels inventory across all paginated pages from Dispatcharr
+            const channels: any[] = [];
+            let nextUrl: string | null = `${baseUrl}/api/channels/channels/?page_size=1000`;
+            let pageLoops = 0;
+            let chanResOk = false;
+            while (nextUrl && pageLoops < 20) {
+                pageLoops++;
+                const chanRes: Response | null = await fetch(nextUrl, {
+                    headers,
+                    signal: AbortSignal.timeout(12000)
+                }).catch(() => null);
+                if (!chanRes || !chanRes.ok) break;
+                chanResOk = true;
+                const chanData: any = await chanRes.json().catch(() => null);
+                if (Array.isArray(chanData?.results)) {
+                    channels.push(...chanData.results);
+                } else if (Array.isArray(chanData)) {
+                    channels.push(...chanData);
+                    break;
+                }
+                const rawNext: string = typeof chanData?.next === "string" ? chanData.next.trim() : "";
+                if (rawNext && rawNext.startsWith("/")) {
+                    nextUrl = `${baseUrl}${rawNext}`;
+                } else if (rawNext && rawNext.startsWith(baseUrl)) {
+                    nextUrl = rawNext;
+                } else {
+                    nextUrl = null;
+                }
+            }
+            clearTimeout(timeout);
 
-            if (chanRes && chanRes.ok) {
-                const chanData = await chanRes.json().catch(() => null);
-                const channels = Array.isArray(chanData?.results) ? chanData.results : [];
+            if (chanResOk) {
                 const syncedDbChannelIds = new Set<string>();
 
                 for (const ch of channels) {

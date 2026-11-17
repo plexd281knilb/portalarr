@@ -13,25 +13,31 @@ interface PaymentConfigProps {
     paymentZelle?: string | null;
     yearlyPrice?: number | null;
     monthlyPrice?: number | null;
+    tier2YearlyPrice?: number | null;
+    tier2MonthlyPrice?: number | null;
 }
 
 interface PaymentMethodsGridProps {
     config?: PaymentConfigProps | null;
     username?: string;
+    membershipTier?: string | null;
     className?: string;
     onCopy?: (text: string, provider: string) => void;
     amount?: number;
     cadence?: "yearly" | "monthly";
 }
 
-export function PaymentMethodsGrid({ config, username = "USER", className = "", onCopy, amount, cadence }: PaymentMethodsGridProps) {
+export function PaymentMethodsGrid({ config, username = "USER", membershipTier, className = "", onCopy, amount, cadence }: PaymentMethodsGridProps) {
     const [copiedKey, setCopiedKey] = useState<string | null>(null);
     const [qrModalOpen, setQrModalOpen] = useState(false);
     const [selectedProvider, setSelectedProvider] = useState<"paypal" | "venmo" | "cashapp" | "zelle">("venmo");
 
     if (!config) return null;
 
-    const effectiveAmount = amount ?? (cadence === "monthly" ? (config?.monthlyPrice || 17.50) : (config?.yearlyPrice || 180));
+    const isTier2 = membershipTier === "TIER_2_VIP";
+    const defaultYearly = isTier2 ? (config?.tier2YearlyPrice || 240) : (config?.yearlyPrice || 180);
+    const defaultMonthly = isTier2 ? (config?.tier2MonthlyPrice || 25) : (config?.monthlyPrice || 17.50);
+    const effectiveAmount = amount ?? (cadence === "monthly" ? defaultMonthly : defaultYearly);
 
     const providers: Array<{ key: "paypal" | "venmo" | "cashapp" | "zelle"; value?: string | null }> = [
         { key: "paypal", value: config.paymentPaypal },
@@ -163,6 +169,7 @@ export function PaymentMethodsGrid({ config, username = "USER", className = "", 
                 onClose={() => setQrModalOpen(false)}
                 config={config}
                 username={username}
+                membershipTier={membershipTier}
                 initialProvider={selectedProvider}
                 initialCadence={cadence || "yearly"}
                 customAmount={amount}

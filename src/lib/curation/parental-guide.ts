@@ -1137,7 +1137,7 @@ export async function clearParentalTagsFromLibrary(
 
     // Also purge stored cached advisories for this section so the studio UI resets completely clean
     try {
-        const serverIdCandidates = [serverId, resolved.serverId, "main"].filter(Boolean) as string[];
+        const serverIdCandidates = Array.from(new Set([serverId, resolved.serverId, ...(serverId === "main" ? ["main"] : [])].filter(Boolean) as string[]));
         await prisma.mediaContentAdvisory.deleteMany({
             where: {
                 ratingKey: { in: ratingKeys },
@@ -1175,7 +1175,7 @@ export async function getStoredParentalAdvisoriesForLibrary(
         const mediaItems = await getPlexLibraryMediaItems(urlsToTry, resolved.token, sectionKey, 5000, undefined, false);
 
         const ratingKeys = mediaItems.map(m => m.ratingKey);
-        const serverIdCandidates = [serverId, resolved.serverId, "main"].filter(Boolean) as string[];
+        const serverIdCandidates = Array.from(new Set([serverId, resolved.serverId, ...(serverId === "main" ? ["main"] : [])].filter(Boolean) as string[]));
         const advisories = await prisma.mediaContentAdvisory.findMany({
             where: {
                 ratingKey: { in: ratingKeys },

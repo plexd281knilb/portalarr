@@ -568,7 +568,8 @@ export default function PaymentEmailManager() {
         setRecordUserId("");
         setRecordUserSearch("");
         setRecordAmount("180.00");
-        setRecordDate(new Date().toISOString().split("T")[0]);
+        const nowLocal = new Date();
+        setRecordDate(`${nowLocal.getFullYear()}-${String(nowLocal.getMonth() + 1).padStart(2, "0")}-${String(nowLocal.getDate()).padStart(2, "0")}`);
         setRecordProvider("VENMO");
         setRecordNote("");
         setRecordMsg("");
@@ -1932,25 +1933,35 @@ export default function PaymentEmailManager() {
                                             className="pl-6 text-xs bg-background h-8 font-mono font-bold"
                                         />
                                     </div>
-                                    <div className="flex gap-1.5 pt-1">
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => setRecordAmount("180.00")}
-                                            className="h-6 px-2 text-[10px] text-muted-foreground hover:text-foreground"
-                                        >
-                                            $180 (1 Year)
-                                        </Button>
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => setRecordAmount("17.50")}
-                                            className="h-6 px-2 text-[10px] text-muted-foreground hover:text-foreground"
-                                        >
-                                            $17.50 (1 Month)
-                                        </Button>
+                                    <div className="flex flex-wrap gap-1.5 pt-1">
+                                        {(() => {
+                                            const selUser = allUsers.find((u: any) => u.id === recordUserId);
+                                            const isVip = selUser?.membershipTier === "TIER_2_VIP";
+                                            const yrAmt = isVip ? "240.00" : "180.00";
+                                            const moAmt = isVip ? "25.00" : "17.50";
+                                            return (
+                                                <>
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => setRecordAmount(yrAmt)}
+                                                        className="h-6 px-2 text-[10px] text-muted-foreground hover:text-foreground"
+                                                    >
+                                                        ${yrAmt.replace(/\.00$/, "")} (1 Year{isVip ? " VIP" : ""})
+                                                    </Button>
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => setRecordAmount(moAmt)}
+                                                        className="h-6 px-2 text-[10px] text-muted-foreground hover:text-foreground"
+                                                    >
+                                                        ${moAmt} (1 Month{isVip ? " VIP" : ""})
+                                                    </Button>
+                                                </>
+                                            );
+                                        })()}
                                     </div>
                                 </div>
 

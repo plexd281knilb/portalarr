@@ -65,6 +65,9 @@ export async function POST(req: NextRequest) {
                 const stats = fs.statSync(finalPath);
                 finalSize = stats.size;
             } catch (err: any) {
+                try {
+                    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+                } catch {}
                 console.error("Kindle epub processing failed:", err);
                 return NextResponse.json({ error: `Epub validation failed: ${err.message}` }, { status: 400 });
             }

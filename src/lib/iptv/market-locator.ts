@@ -315,6 +315,13 @@ export function getDallasAnchorChannels<T extends GenericIptvChannel>(channels: 
     return matched.sort((a, b) => priority(a.name) - priority(b.name));
 }
 
+function matchesMarketKeyword(text: string, keyword: string): boolean {
+    if (!text || !keyword) return false;
+    const escaped = keyword.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regex = new RegExp(`(?:^|[^a-z0-9])${escaped}(?:$|[^a-z0-9])`, "i");
+    return regex.test(text);
+}
+
 /**
  * Filter channels for a specific user media market
  */
@@ -331,7 +338,7 @@ export function getMarketChannels<T extends GenericIptvChannel>(channels: T[], m
     const matched = channels.filter(c => {
         const name = (c.name || "").toLowerCase();
         const callsign = (c.callsign || "").toLowerCase();
-        return market.keywords.some(kw => name.includes(kw) || callsign.includes(kw));
+        return market.keywords.some(kw => matchesMarketKeyword(name, kw) || matchesMarketKeyword(callsign, kw));
     });
 
     return matched;

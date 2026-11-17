@@ -59,16 +59,22 @@ export async function saveIptvSettings(data: Partial<IptvSettingsDTO> & { dispat
 
     if (data.enabled !== undefined) updatePayload.enabled = data.enabled;
     if (data.dispatcharrUrl !== undefined) updatePayload.dispatcharrUrl = data.dispatcharrUrl.trim();
-    if (data.dispatcharrApiKey !== undefined && data.dispatcharrApiKey.trim() !== "") {
-        updatePayload.dispatcharrApiKey = encryptData(data.dispatcharrApiKey.trim());
+    if (data.dispatcharrApiKey !== undefined) {
+        const trimmedKey = data.dispatcharrApiKey.trim();
+        if (trimmedKey && !trimmedKey.includes("••••") && trimmedKey !== "••••••••") {
+            updatePayload.dispatcharrApiKey = encryptData(trimmedKey);
+        }
     }
-    if (data.defaultMaxStreamsPerUser !== undefined) updatePayload.defaultMaxStreamsPerUser = data.defaultMaxStreamsPerUser;
+    if (data.defaultMaxStreamsPerUser !== undefined) updatePayload.defaultMaxStreamsPerUser = Math.max(1, Number(data.defaultMaxStreamsPerUser) || 1);
     if (data.allowTrialAccess !== undefined) updatePayload.allowTrialAccess = data.allowTrialAccess;
-    if (data.trialDailyMinutesLimit !== undefined) updatePayload.trialDailyMinutesLimit = data.trialDailyMinutesLimit;
+    if (data.trialDailyMinutesLimit !== undefined) updatePayload.trialDailyMinutesLimit = Math.max(0, Number(data.trialDailyMinutesLimit) || 0);
     if (data.enforceSingleHousehold !== undefined) updatePayload.enforceSingleHousehold = data.enforceSingleHousehold;
-    if (data.dvrBufferReservation !== undefined) updatePayload.dvrBufferReservation = data.dvrBufferReservation;
-    if (data.autoPruneInactiveDays !== undefined) updatePayload.autoPruneInactiveDays = data.autoPruneInactiveDays;
-    if (data.plexHomeMaxSlots !== undefined) updatePayload.plexHomeMaxSlots = data.plexHomeMaxSlots;
+    if (data.dvrBufferReservation !== undefined) updatePayload.dvrBufferReservation = Math.max(0, Number(data.dvrBufferReservation) || 0);
+    if (data.autoPruneInactiveDays !== undefined) updatePayload.autoPruneInactiveDays = Math.max(1, Number(data.autoPruneInactiveDays) || 30);
+    if (data.plexHomeMaxSlots !== undefined) {
+        const parsedSlots = Number(data.plexHomeMaxSlots);
+        updatePayload.plexHomeMaxSlots = Number.isFinite(parsedSlots) ? Math.min(14, Math.max(1, Math.round(parsedSlots))) : 14;
+    }
     if (data.plexHomeInactivityDays !== undefined) updatePayload.plexHomeInactivityDays = data.plexHomeInactivityDays;
     if (data.plexHomeAutoKickEnabled !== undefined) updatePayload.plexHomeAutoKickEnabled = Boolean(data.plexHomeAutoKickEnabled);
     if (data.healthCheckIntervalMinutes !== undefined) updatePayload.healthCheckIntervalMinutes = data.healthCheckIntervalMinutes;

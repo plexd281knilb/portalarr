@@ -20,7 +20,8 @@ import {
     buildDispatcharrEndpoints,
     testDispatcharrConnection,
     syncDispatcharrLineup,
-    provisionMissingDispatcharrChannels
+    provisionMissingDispatcharrChannels,
+    isSafeHttpTargetUrl
 } from "@/lib/iptv/dispatcharr-client";
 import {
     detectMarketFromHeaders,
@@ -45,12 +46,16 @@ function safeRevalidate(path: string) {
 
 async function verifySessionUser(): Promise<any> {
     await ensureSchemaColumns();
-    if (process.env.PORTALARR_TEST_AUTH === "true") {
+    if (process.env.NODE_ENV !== "production" && process.env.PORTALARR_TEST_AUTH === "true") {
         if (process.env.PORTALARR_TEST_USER_ID) {
             const specificUser = await prisma.user.findUnique({
                 where: { id: process.env.PORTALARR_TEST_USER_ID }
             });
-            if (specificUser) return specificUser;
+            if (!specificUser) throw new Error("User not found");
+            if (specificUser.role !== "ADMIN" && ["PENDING", "REJECTED", "SUSPENDED", "EXPIRED"].includes(specificUser.status)) {
+                throw new Error(`Account is ${specificUser.status.toLowerCase()}. Active membership required.`);
+            }
+            return specificUser;
         }
         const testUser = await prisma.user.findFirst({
             where: { role: "ADMIN" }
@@ -81,6 +86,9 @@ async function verifySessionUser(): Promise<any> {
         where: { id: userId }
     });
     if (!dbUser) throw new Error("User not found");
+    if (dbUser.role !== "ADMIN" && ["PENDING", "REJECTED", "SUSPENDED", "EXPIRED"].includes(dbUser.status)) {
+        throw new Error(`Account is ${dbUser.status.toLowerCase()}. Active membership required.`);
+    }
     return dbUser;
 }
 
@@ -97,7 +105,7 @@ async function verifySessionAdmin(): Promise<any> {
  */
 export async function getIptvSettingsAction() {
     try {
-        await verifySessionUser();
+        await verifySessionAdmin();
         const settings = await getIptvSettings();
         return { success: true, data: settings };
     } catch (err: any) {
@@ -322,6 +330,9 @@ export async function probeIptvProviderHealthAction(providerId: string) {
                     const cleanBase = creds.serverUrl.replace(/\/+$/, "");
                     targetUrl = `${cleanBase}/player_api.php?username=${encodeURIComponent(creds.username)}&password=${encodeURIComponent(creds.password)}`;
                 }
+                if (!isSafeHttpTargetUrl(targetUrl)) {
+                    throw new Error("Blocked unsafe or non-HTTP provider probe URL");
+                }
                 const res = await fetch(targetUrl, { method: "GET", signal: controller.signal });
                 clearTimeout(timeout);
                 if (!res.ok && res.status >= 400) {
@@ -358,7 +369,7 @@ export async function probeIptvProviderHealthAction(providerId: string) {
  */
 export async function getDvrConnectionsStatusAction() {
     try {
-        await verifySessionUser();
+        await verifySessionAdmin();
         await ensureDefaultIptvProfiles();
 
         const [settings, profiles, plexServers, mediaServers] = await Promise.all([
@@ -758,6 +769,11 @@ export async function activateJellyfinLiveTvAction(targetUserId?: string) {
             if (!found) return { success: false, error: "Target user not found" };
             targetUser = found;
         }
+        if (sessionUser.role !== "ADMIN") {
+            if (targetUser.status !== "APPROVED" || targetUser.accountType === "KID") {
+                return { success: false, error: "Active adult membership is required to provision Live TV access." };
+            }
+        }
 
         const res = await setJellyfinUserLiveTvAccess(targetUser.id, true);
         if (!res.success) {
@@ -873,7 +889,7 @@ export async function revokeUserIptvTokenAction(tokenId: string) {
  */
 export async function getIptvLiveTelemetryAction() {
     try {
-        await verifySessionUser();
+        await verifySessionAdmin();
         const [activeSessions, recentSessions, topChannels, capacity] = await Promise.all([
             prisma.iptvWatchSession.findMany({
                 where: { stoppedAt: null },
@@ -957,12 +973,14 @@ export async function recordIptvWatchSessionAction(input: {
     transcodeHw?: boolean;
 }) {
     try {
-        await verifySessionUser();
+        await verifySessionAdmin();
         const sessionKey = input.sessionKey || `iptv_sess_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
-        // Multi-IP concurrent check for same user
+        // Multi-IP concurrent check for same user (IPv4 RFC1918 + 172.16-31 + IPv6 loopback/link-local/ULA aware)
         let isSharingAlert = false;
-        if (input.userName && input.ipAddress) {
+        const { normalizeIp, isPrivateOrLocalIp } = await import("@/lib/telemetry/stream-tracker");
+        const cleanCurrentIp = normalizeIp(input.ipAddress || "");
+        if (input.userName && cleanCurrentIp) {
             const otherActive = await prisma.iptvWatchSession.findMany({
                 where: {
                     userName: input.userName,
@@ -971,11 +989,11 @@ export async function recordIptvWatchSessionAction(input: {
             });
             const distinctPublicIps = new Set(
                 otherActive
-                    .map((s) => s.ipAddress)
-                    .filter((ip): ip is string => typeof ip === "string" && !ip.startsWith("192.168.") && !ip.startsWith("10.") && ip !== "127.0.0.1")
+                    .map((s) => normalizeIp(s.ipAddress))
+                    .filter((ip) => Boolean(ip) && !isPrivateOrLocalIp(ip))
             );
-            if (!input.ipAddress.startsWith("192.168.") && !input.ipAddress.startsWith("10.") && input.ipAddress !== "127.0.0.1") {
-                distinctPublicIps.add(input.ipAddress);
+            if (!isPrivateOrLocalIp(cleanCurrentIp)) {
+                distinctPublicIps.add(cleanCurrentIp);
             }
             if (distinctPublicIps.size >= 2) {
                 isSharingAlert = true;
@@ -994,8 +1012,8 @@ export async function recordIptvWatchSessionAction(input: {
                 providerId: input.providerId || null,
                 platform: input.platform || "Plex Live TV",
                 device: input.device || "Apple TV",
-                ipAddress: input.ipAddress || "192.168.1.100",
-                location: input.ipAddress?.startsWith("192.168.") ? "LAN" : "Remote",
+                ipAddress: cleanCurrentIp || input.ipAddress || "192.168.1.100",
+                location: cleanCurrentIp ? (isPrivateOrLocalIp(cleanCurrentIp) ? "LAN" : "Remote") : "LAN",
                 streamBitrateKbps: input.streamBitrateKbps || 8500,
                 transcodeDecision: input.transcodeDecision || "direct_play",
                 transcodeHw: Boolean(input.transcodeHw),
@@ -1099,21 +1117,34 @@ export async function getIptvCatalogAction(filters?: {
     try {
         const user = await verifySessionUser();
         await ensureDefaultIptvProfiles();
+        const iptvSettings = await getIptvSettings();
 
         const isAdmin = user.role === "ADMIN";
+        const isTrialBlocked = !isAdmin && user.status === "TRIAL" && !iptvSettings.allowTrialAccess;
+        if (!isAdmin && (user.status !== "APPROVED" && user.status !== "TRIAL")) {
+            return { success: false, error: `Account status "${user.status}" does not permit Live TV access.` };
+        }
+        if (isTrialBlocked) {
+            return { success: false, error: "Live TV & IPTV is disabled for Trial accounts." };
+        }
+
+        const isKidAccount = !isAdmin && user.accountType === "KID";
         const profiles = await prisma.iptvProfile.findMany({
-            where: isAdmin ? {} : { isPublic: true },
+            where: isAdmin ? {} : isKidAccount ? { slug: "kids", isPublic: true } : { isPublic: true },
             orderBy: { name: "asc" }
         });
 
         let channelIdsFilter: string[] | undefined = undefined;
-        if (filters?.profileSlug && filters.profileSlug !== "all") {
+        const effectiveProfileSlug = isKidAccount ? "kids" : filters?.profileSlug;
+        if (effectiveProfileSlug && effectiveProfileSlug !== "all") {
             const targetProfile = await prisma.iptvProfile.findUnique({
-                where: { slug: filters.profileSlug },
+                where: { slug: effectiveProfileSlug },
                 include: { profileChannels: { select: { channelId: true } } }
             });
             if (targetProfile) {
                 channelIdsFilter = targetProfile.profileChannels.map((pc) => pc.channelId);
+            } else if (isKidAccount) {
+                channelIdsFilter = [];
             }
         }
 
@@ -1221,7 +1252,6 @@ export async function getIptvCatalogAction(filters?: {
         const plexHomeTotalMembers = await prisma.user.count({
             where: { isPlexHomeMember: true, role: { not: "ADMIN" } }
         });
-        const iptvSettings = await getIptvSettings();
         const plexHomeMaxSlots = iptvSettings.plexHomeMaxSlots || 14;
         const plexHomeAvailableSlots = Math.max(0, plexHomeMaxSlots - plexHomeTotalMembers);
         const isPlexHomeFull = plexHomeAvailableSlots <= 0;
@@ -1552,6 +1582,9 @@ export async function requestAddChannelToProfileAction(input: {
 }> {
     try {
         const user = await verifySessionUser();
+        if (user.role !== "ADMIN" && (user.status !== "APPROVED" || user.accountType === "KID")) {
+            return { success: false, error: "Active adult membership is required to assign channels to profiles.", message: "Forbidden" };
+        }
         const { addChannelToDispatcharrProfile } = await import("@/lib/iptv/dispatcharr-client");
 
         const channel = await prisma.iptvChannel.findUnique({
@@ -1667,6 +1700,9 @@ export async function requestMoveChannelProfileAction(input: {
 }> {
     try {
         const user = await verifySessionUser();
+        if (user.role !== "ADMIN" && (user.status !== "APPROVED" || user.accountType === "KID")) {
+            return { success: false, error: "Active adult membership is required to reassign channel profiles.", message: "Forbidden" };
+        }
         const { moveChannelDispatcharrProfile } = await import("@/lib/iptv/dispatcharr-client");
 
         const channel = await prisma.iptvChannel.findUnique({

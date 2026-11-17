@@ -15,8 +15,8 @@ export async function POST(req: NextRequest) {
         const body = await req.json().catch(() => ({}));
         const { scriptId, customCode } = body;
 
-        if (!scriptId) {
-            return NextResponse.json({ error: "scriptId is required." }, { status: 400 });
+        if (!scriptId || typeof scriptId !== "string" || !/^[a-zA-Z0-9_-]{1,80}$/.test(scriptId)) {
+            return NextResponse.json({ error: "Valid scriptId is required." }, { status: 400 });
         }
 
         const encoder = new TextEncoder();

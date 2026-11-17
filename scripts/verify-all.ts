@@ -170,6 +170,41 @@ async function runTestSuite() {
         if (!matchesCloudflareAdmin("/admin/streams")) throw new Error("/admin/streams must match admin");
         if (!matchesCloudflareSuperUser("/radarr")) throw new Error("/radarr must match super user");
         if (!matchesCloudflareSuperUser("/sonarr")) throw new Error("/sonarr must match super user");
+
+        // Behavioral auth regression: protected API routes reject unauthenticated calls with 401/403
+        const { NextRequest } = await import("next/server");
+        const { GET: getBadges } = await import("../src/app/api/curation/badges/route");
+        const { GET: getLeaving } = await import("../src/app/api/curation/leaving-soon/route");
+        const { GET: getBooksApi } = await import("../src/app/api/books/route");
+        const { GET: getDownloadsApi } = await import("../src/app/api/downloads/route");
+        const { GET: getRequestsApi } = await import("../src/app/api/requests/route");
+
+        const prevTestAuth = process.env.PORTALARR_TEST_AUTH;
+        process.env.PORTALARR_TEST_AUTH = "false";
+        try {
+            const unauthBadgeRes = await getBadges();
+            if (unauthBadgeRes.status !== 401 && unauthBadgeRes.status !== 403) {
+                throw new Error(`Expected GET /api/curation/badges unauthenticated to return 401/403, got ${unauthBadgeRes.status}`);
+            }
+            const unauthLeavingRes = await getLeaving(new NextRequest("http://localhost:3000/api/curation/leaving-soon"));
+            if (unauthLeavingRes.status !== 401 && unauthLeavingRes.status !== 403) {
+                throw new Error(`Expected GET /api/curation/leaving-soon unauthenticated to return 401/403, got ${unauthLeavingRes.status}`);
+            }
+            const unauthBooksRes = await getBooksApi(new Request("http://localhost:3000/api/books?libraryId=nonexistent"));
+            if (unauthBooksRes.status !== 401) {
+                throw new Error(`Expected GET /api/books unauthenticated to return 401, got ${unauthBooksRes.status}`);
+            }
+            const unauthDownloadsRes = await getDownloadsApi();
+            if (unauthDownloadsRes.status !== 401) {
+                throw new Error(`Expected GET /api/downloads unauthenticated to return 401, got ${unauthDownloadsRes.status}`);
+            }
+            const unauthReqRes = await getRequestsApi();
+            if (unauthReqRes.status !== 401) {
+                throw new Error(`Expected GET /api/requests unauthenticated to return 401, got ${unauthReqRes.status}`);
+            }
+        } finally {
+            process.env.PORTALARR_TEST_AUTH = prevTestAuth;
+        }
     });
 
     // =========================================================================
@@ -343,11 +378,62 @@ async function runTestSuite() {
                 if (recheckedSettings?.mainPlexToken !== originalAdminTokenEnc) {
                     throw new Error("CRITICAL SECURITY BREACH: settings.mainPlexToken was hijacked by regular user Plex login!");
                 }
+
+                // 3. Sub-account lifecycle cascade (setUserTrialOrSubscriptionInternal + expireDueTrialsAndSubscriptionsInternal)
+                const { setUserTrialOrSubscriptionInternal, expireDueTrialsAndSubscriptionsInternal } = await import("../src/app/actions");
+                const { getUserMediaServersAndLibrariesAction } = await import("../src/app/media-server-actions");
+
+                const subChild = await prisma.user.create({
+                    data: {
+                        username: `sub_cascade_child_${Date.now()}`,
+                        email: `sub_cascade_child_${Date.now()}@test.com`,
+                        password: "mock_password_hash",
+                        role: "USER",
+                        status: "TRIAL",
+                        membershipTier: "TRIAL",
+                        accountType: "KID",
+                        parentUserId: aliasUser.id
+                    }
+                });
+                try {
+                    const grantRes = await setUserTrialOrSubscriptionInternal(aliasUser.id, "1_YEAR");
+                    if (!grantRes.success) throw new Error(`setUserTrialOrSubscriptionInternal failed: ${grantRes.error}`);
+                    const refreshedChild = await prisma.user.findUnique({ where: { id: subChild.id } });
+                    if (refreshedChild?.status !== "APPROVED" || refreshedChild?.subscriptionCadence !== "YEARLY") {
+                        throw new Error(`Expected sub-account cascade APPROVED + YEARLY, got status=${refreshedChild?.status}, cadence=${refreshedChild?.subscriptionCadence}`);
+                    }
+
+                    // Suspended user must be rejected by verifySessionUser even when holding user ID
+                    await prisma.user.update({ where: { id: aliasUser.id }, data: { status: "SUSPENDED" } });
+                    process.env.PORTALARR_TEST_USER_ID = aliasUser.id;
+                    const suspMediaRes = await getUserMediaServersAndLibrariesAction();
+                    if (suspMediaRes.success) {
+                        throw new Error("Expected SUSPENDED user to be blocked by getUserMediaServersAndLibrariesAction");
+                    }
+                    process.env.PORTALARR_TEST_USER_ID = adminUser.id;
+
+                    // autoSuspendExpiredAccounts=false must NOT auto-expire elapsed users
+                    const origAutoSuspend = recheckedSettings?.autoSuspendExpiredAccounts;
+                    await prisma.settings.update({ where: { id: "global" }, data: { autoSuspendExpiredAccounts: false } });
+                    await prisma.user.update({
+                        where: { id: aliasUser.id },
+                        data: { status: "APPROVED", subscriptionEndsAt: new Date(Date.now() - 86400000) }
+                    });
+                    const expOffRes = await expireDueTrialsAndSubscriptionsInternal();
+                    const afterOffUser = await prisma.user.findUnique({ where: { id: aliasUser.id } });
+                    if (!expOffRes.autoSuspensionDisabled || afterOffUser?.status !== "APPROVED") {
+                        throw new Error(`Expected autoSuspendExpiredAccounts=false to leave APPROVED user untouched, got ${afterOffUser?.status}`);
+                    }
+                    await prisma.settings.update({ where: { id: "global" }, data: { autoSuspendExpiredAccounts: origAutoSuspend ?? true } });
+                } finally {
+                    await prisma.user.delete({ where: { id: subChild.id } }).catch(() => {});
+                }
             } finally {
                 await prisma.user.delete({ where: { id: aliasUser.id } }).catch(() => {});
             }
         } finally {
             delete process.env.PORTALARR_TEST_USER_ID;
+            delete process.env.PORTALARR_TEST_AUTH;
             await prisma.user.deleteMany({ where: { id: { in: [adminUser.id, kidUser.id] } } });
         }
     });
@@ -699,6 +785,147 @@ async function runTestSuite() {
         if (reminderDays.length !== 4 || reminderDays[0] !== 14 || reminderDays[3] !== 1) {
             throw new Error(`Unexpected reminder days parsed: ${JSON.stringify(reminderDays)}`);
         }
+
+        // 7. Wave 2 Billing regressions: additive bonus months, refund rejection, anchored amount, group sum, split guard, local noon date
+        const { matchPaymentToUser } = await import("../src/lib/payment-email-scraper");
+        const { groupAndAttributePaymentsAction, splitPaymentTransactionAction, recordManualPaymentAction } = await import("../src/app/payment-actions");
+
+        const additiveThreshold = evaluatePaymentThreshold({
+            user: {
+                status: "APPROVED",
+                membershipTier: "STANDARD",
+                referralBonusMonths: 1,
+                referrals: [{ status: "APPROVED", convertedAt: new Date() }]
+            },
+            payment: { amount: 150, provider: "VENMO", emailDate: new Date("2026-12-31T18:00:00Z") },
+            settings: { yearlyPrice: 180, monthlyPrice: 17.5 }
+        });
+        if (additiveThreshold.action !== "FULL_YEARLY" || additiveThreshold.targetPrice !== 150) {
+            throw new Error(`Expected additive 2 reward months ($150 target), got: ${JSON.stringify(additiveThreshold)}`);
+        }
+
+        const anchoredAmt = extractAmount("Promo: Win up to $500! Bob paid you $180.00 via Venmo");
+        if (anchoredAmt !== 180) {
+            throw new Error(`Expected extractAmount to prioritize payment-anchored $180.00 over $500 promo, got ${anchoredAmt}`);
+        }
+
+        // Short 2-char username in free-text memo must NOT false match "annual"
+        const shortUser = await prisma.user.create({
+            data: {
+                username: "al",
+                email: `al_${Date.now()}@test.com`,
+                password: "mock",
+                role: "USER",
+                status: "APPROVED"
+            }
+        });
+        const billingParent = await prisma.user.create({
+            data: {
+                username: `bill_parent_${Date.now()}`,
+                email: `bill_parent_${Date.now()}@test.com`,
+                password: "mock",
+                role: "USER",
+                status: "APPROVED"
+            }
+        });
+        const subPayUser = await prisma.user.create({
+            data: {
+                username: `bill_child_${Date.now()}`,
+                email: `bill_child_${Date.now()}@test.com`,
+                password: "mock",
+                role: "USER",
+                status: "APPROVED",
+                parentUserId: billingParent.id
+            }
+        });
+        const prevBillingTestAuth = process.env.PORTALARR_TEST_AUTH;
+        process.env.PORTALARR_TEST_AUTH = "true";
+        try {
+            const falseMatch = await matchPaymentToUser({
+                provider: "VENMO",
+                amount: 180,
+                currency: "USD",
+                note: "annual payment",
+                emailSubject: "Venmo payment",
+                emailDate: new Date(),
+                emailUid: "1"
+            });
+            if (falseMatch?.id === shortUser.id) {
+                throw new Error("Short username 'al' falsely matched 'annual payment'");
+            }
+            const subLeakMatch = await matchPaymentToUser({
+                provider: "VENMO",
+                amount: 180,
+                currency: "USD",
+                note: subPayUser.username,
+                emailSubject: "Venmo payment",
+                emailDate: new Date(),
+                emailUid: "2"
+            });
+            if (subLeakMatch?.id === subPayUser.id) {
+                throw new Error("Child sub-account must NEVER be matched as billing target");
+            }
+
+            // Grouping two $90 installments evaluates $180 total -> FULL_YEARLY instead of two 5-month MONTHLY grants
+            const tx1 = await prisma.paymentTransaction.create({
+                data: { provider: "VENMO", amount: 90, currency: "USD", emailSubject: "Part 1", emailDate: new Date("2026-12-31T12:00:00Z"), status: "UNMATCHED" }
+            });
+            const tx2 = await prisma.paymentTransaction.create({
+                data: { provider: "VENMO", amount: 90, currency: "USD", emailSubject: "Part 2", emailDate: new Date("2026-12-31T13:00:00Z"), status: "UNMATCHED" }
+            });
+            try {
+                const grpRes = await groupAndAttributePaymentsAction([tx1.id, tx2.id], billingParent.id);
+                if (!grpRes.success) throw new Error(`groupAndAttributePaymentsAction failed: ${grpRes.error}`);
+                const grpUser = await prisma.user.findUnique({ where: { id: billingParent.id } });
+                if (grpUser?.subscriptionCadence !== "YEARLY") {
+                    throw new Error(`Expected grouped $90+$90 to grant YEARLY cadence, got ${grpUser?.subscriptionCadence}`);
+                }
+
+                // splitPaymentTransactionAction must reject zero/negative splits
+                const negSplitRes = await splitPaymentTransactionAction(tx1.id, [
+                    { amount: 100, userId: billingParent.id },
+                    { amount: -10, userId: billingParent.id }
+                ]);
+                if (negSplitRes.success) {
+                    throw new Error("Expected splitPaymentTransactionAction to reject negative split amounts");
+                }
+
+                // recordManualPaymentAction YYYY-MM-DD local noon stays on Dec 31
+                const manRes = await recordManualPaymentAction({
+                    userId: billingParent.id,
+                    amount: 180,
+                    paymentDate: "2026-12-31",
+                    provider: "CASH"
+                });
+                if (!manRes.success || !manRes.transactionId) throw new Error(`recordManualPaymentAction failed: ${manRes.error}`);
+                const savedManTx = await prisma.paymentTransaction.findUnique({ where: { id: manRes.transactionId } });
+                if (!savedManTx?.emailDate || savedManTx.emailDate.getFullYear() !== 2026 || savedManTx.emailDate.getMonth() !== 11 || savedManTx.emailDate.getDate() !== 31) {
+                    throw new Error(`Expected local Dec 31 paymentDate without UTC day shift, got: ${savedManTx?.emailDate?.toISOString()}`);
+                }
+            } finally {
+                await prisma.paymentTransaction.deleteMany({ where: { matchedUserId: billingParent.id } }).catch(() => {});
+                await prisma.paymentTransaction.deleteMany({ where: { id: { in: [tx1.id, tx2.id] } } }).catch(() => {});
+            }
+
+            // Trial reminder cycleTarget isolation (extending trial unlocks new reminder)
+            const extendedTrialInfo = getNextRenewalReminderInfo({
+                user: {
+                    id: "trial-rem-test",
+                    username: "trialrem",
+                    role: "USER",
+                    status: "TRIAL",
+                    trialEndsAt: new Date(Date.now() + 2 * 86400000),
+                    renewalRemindersSent: JSON.stringify({ cycleTarget: "2025-01-01", milestones: ["trial_expiring"] })
+                },
+                now: new Date()
+            });
+            if (extendedTrialInfo.status !== "due_today") {
+                throw new Error(`Expected extended trial with old cycleTarget to be due_today, got ${extendedTrialInfo.status}`);
+            }
+        } finally {
+            process.env.PORTALARR_TEST_AUTH = prevBillingTestAuth;
+            await prisma.user.deleteMany({ where: { id: { in: [shortUser.id, subPayUser.id, billingParent.id] } } }).catch(() => {});
+        }
     });
 
     // =========================================================================
@@ -858,6 +1085,139 @@ async function runTestSuite() {
             throw new Error("Expected tv search to only return tv shows");
         }
 
+        // Wave 3 Seerr regressions: dual 1080p child quota exclusion, decline cascade, Book "Failed - ..." mapping
+        const {
+            getUserRequestQuotaAction,
+            declineMediaRequestAction,
+            reconcileBookRequestsWithMediaRequests,
+            requestTvEpisodesAction
+        } = await import("../src/app/seerr-actions");
+        const quotaUser = await prisma.user.create({
+            data: {
+                username: `seerr_quota_usr_${Date.now()}`,
+                email: `seerr_quota_${Date.now()}@test.com`,
+                password: "mock",
+                role: "USER",
+                status: "APPROVED",
+                requestLimitMovies: 2,
+                requestLimitTv: 1,
+                requestLimitDays: 7
+            }
+        });
+        const prevSeerrAuth = process.env.PORTALARR_TEST_AUTH;
+        const prevSeerrUid = process.env.PORTALARR_TEST_USER_ID;
+        process.env.PORTALARR_TEST_AUTH = "true";
+        process.env.PORTALARR_TEST_USER_ID = quotaUser.id;
+        try {
+            const parent4kReq = await prisma.mediaRequest.create({
+                data: {
+                    mediaType: "movie",
+                    tmdbId: 909101,
+                    title: "Dual 4K Quota Movie",
+                    status: "APPROVED",
+                    is4k: true,
+                    isDual1080pChild: false,
+                    requestedByUserId: quotaUser.id,
+                    requestedByUsername: quotaUser.username
+                }
+            });
+            const child1080Req = await prisma.mediaRequest.create({
+                data: {
+                    mediaType: "movie",
+                    tmdbId: 909101,
+                    title: "Dual 4K Quota Movie",
+                    status: "APPROVED",
+                    is4k: false,
+                    isDual1080pChild: true,
+                    parent4kRequestId: parent4kReq.id,
+                    requestedByUserId: quotaUser.id,
+                    requestedByUsername: quotaUser.username
+                }
+            });
+            const prevSettings = await prisma.settings.findUnique({ where: { id: "global" } });
+            await prisma.settings.upsert({
+                where: { id: "global" },
+                update: { seerrFullUnlimited: false },
+                create: { id: "global", seerrFullUnlimited: false }
+            });
+            try {
+                const quotaRes = await getUserRequestQuotaAction();
+                if (!quotaRes.success || quotaRes.data?.movies?.used !== 1) {
+                    throw new Error(`Expected isDual1080pChild excluded so movies.used=1, got: ${JSON.stringify(quotaRes.data?.movies)}`);
+                }
+
+                // Decline parent 4K cascades DECLINED to companion 1080p request
+                const adminForDecline = await prisma.user.findFirst({ where: { role: "ADMIN" } });
+                if (adminForDecline) process.env.PORTALARR_TEST_USER_ID = adminForDecline.id;
+                else delete process.env.PORTALARR_TEST_USER_ID;
+                const decRes = await declineMediaRequestAction(parent4kReq.id, "Test decline cascade");
+                if (!decRes.success) throw new Error(`declineMediaRequestAction failed: ${decRes.error}`);
+                const refreshedChild = await prisma.mediaRequest.findUnique({ where: { id: child1080Req.id } });
+                if (refreshedChild?.status !== "DECLINED") {
+                    throw new Error(`Expected companion 1080p request to cascade DECLINED, got ${refreshedChild?.status}`);
+                }
+
+                // TV episode request enforces TV quota
+                process.env.PORTALARR_TEST_USER_ID = quotaUser.id;
+                const tvReq1 = await prisma.mediaRequest.create({
+                    data: {
+                        mediaType: "tv",
+                        tmdbId: 909202,
+                        title: "Quota TV Show",
+                        status: "APPROVED",
+                        isDual1080pChild: false,
+                        requestedByUserId: quotaUser.id,
+                        requestedByUsername: quotaUser.username
+                    }
+                });
+                try {
+                    const epRes = await requestTvEpisodesAction({
+                        tmdbId: 909203,
+                        title: "Over Quota Show",
+                        episodes: [{ seasonNumber: 1, episodeNumber: 1 }]
+                    });
+                    if (epRes.success) {
+                        throw new Error("Expected requestTvEpisodesAction to reject over-quota TV episode request");
+                    }
+                } finally {
+                    await prisma.mediaRequest.delete({ where: { id: tvReq1.id } }).catch(() => {});
+                }
+
+                // BookRequest "Failed - No release found" reconciles to FAILED (not PENDING)
+                const failedBookReq = await prisma.bookRequest.create({
+                    data: {
+                        title: `Failed Book Reconcile ${Date.now()}`,
+                        author: "Test Author",
+                        mediaType: "ebook",
+                        requestedBy: quotaUser.username,
+                        status: "Failed - No release found"
+                    }
+                });
+                try {
+                    await reconcileBookRequestsWithMediaRequests(undefined, true);
+                    const reconciledMediaReq = await prisma.mediaRequest.findFirst({
+                        where: { title: failedBookReq.title, requestedByUsername: quotaUser.username }
+                    });
+                    if (reconciledMediaReq?.status !== "FAILED") {
+                        throw new Error(`Expected 'Failed - ...' book request to map to FAILED, got ${reconciledMediaReq?.status}`);
+                    }
+                    if (reconciledMediaReq) await prisma.mediaRequest.delete({ where: { id: reconciledMediaReq.id } }).catch(() => {});
+                } finally {
+                    await prisma.bookRequest.delete({ where: { id: failedBookReq.id } }).catch(() => {});
+                }
+            } finally {
+                if (prevSettings) {
+                    await prisma.settings.update({ where: { id: "global" }, data: { seerrFullUnlimited: prevSettings.seerrFullUnlimited } }).catch(() => {});
+                }
+                await prisma.mediaRequest.deleteMany({ where: { id: { in: [parent4kReq.id, child1080Req.id] } } }).catch(() => {});
+            }
+        } finally {
+            process.env.PORTALARR_TEST_AUTH = prevSeerrAuth;
+            if (prevSeerrUid === undefined) delete process.env.PORTALARR_TEST_USER_ID;
+            else process.env.PORTALARR_TEST_USER_ID = prevSeerrUid;
+            await prisma.user.delete({ where: { id: quotaUser.id } }).catch(() => {});
+        }
+
         await prisma.mediaRequest.delete({ where: { id: testReq.id } });
     });
 
@@ -932,8 +1292,41 @@ async function runTestSuite() {
             if (!noticeStatus2.hasKindleEmail || noticeStatus2.needsNotice) {
                 throw new Error(`Expected needsNotice=false after acknowledgment, got: ${JSON.stringify(noticeStatus2)}`);
             }
+
+            // Wave 1/3 Books regressions: comic .cbz preserved, DIRECT_DOWNLOAD blocked on sendBookToKindle, explicit ebook mediaType preserved
+            const { convertEbookToEpub, getEbookConvertBinaryPath } = await import("../src/lib/books/epub-converter");
+            getEbookConvertBinaryPath(); // Must never throw if Calibre isn't installed
+            const cbzRes = await convertEbookToEpub(path.join(process.cwd(), "nonexistent-comic.cbz"));
+            if (cbzRes.success) {
+                throw new Error("Expected .cbz comic archive conversion to skip/reject cleanly");
+            }
+
+            await prisma.user.update({ where: { id: noticeTestUser.id }, data: { kindleEmail: "DIRECT_DOWNLOAD" } });
+            const { sendBookToKindle, getLibraries } = await import("../src/app/actions");
+            const directSendRes = await sendBookToKindle("any-book-id");
+            if (directSendRes.success) {
+                throw new Error("Expected sendBookToKindle to reject DIRECT_DOWNLOAD sentinel");
+            }
+
+            const audioNamedEbookLib = await prisma.library.create({
+                data: {
+                    name: `Audio Story Illustrated_${Date.now()}`,
+                    path: "",
+                    mediaType: "ebook",
+                    allowedUsers: "*"
+                }
+            });
+            try {
+                await getLibraries();
+                const persistedLib = await prisma.library.findUnique({ where: { id: audioNamedEbookLib.id } });
+                if (persistedLib?.mediaType !== "ebook") {
+                    throw new Error(`Expected getLibraries() not to overwrite explicit 'ebook' mediaType, got ${persistedLib?.mediaType}`);
+                }
+            } finally {
+                await prisma.library.delete({ where: { id: audioNamedEbookLib.id } }).catch(() => {});
+            }
         } finally {
-            process.env.PORTALARR_TEST_AUTH = "true";
+            delete process.env.PORTALARR_TEST_AUTH;
             delete process.env.PORTALARR_TEST_USER_ID;
             await prisma.user.delete({ where: { id: noticeTestUser.id } }).catch(() => {});
         }
@@ -1020,6 +1413,27 @@ async function runTestSuite() {
         if (nonConfigRes.success) {
             throw new Error("Expected updateSystemScheduleFrequencyAction to reject non-configurable task");
         }
+
+        // Regression: deleteMediaCollectionAction scoped to serverId/sectionKey (never deletes identically named collection on other server)
+        const { deleteMediaCollectionAction } = await import("../src/app/curation-actions");
+        const collA = await prisma.mediaCollection.create({
+            data: { title: "Shared Holiday Hub", serverId: "srv-a-test", sectionKey: "1", sourceType: "preset" }
+        });
+        const collB = await prisma.mediaCollection.create({
+            data: { title: "Shared Holiday Hub", serverId: "srv-b-test", sectionKey: "1", sourceType: "preset" }
+        });
+        const prevCurationAuth = process.env.PORTALARR_TEST_AUTH;
+        process.env.PORTALARR_TEST_AUTH = "true";
+        try {
+            await deleteMediaCollectionAction(collA.id, false, false);
+            const stillThere = await prisma.mediaCollection.findUnique({ where: { id: collB.id } });
+            if (!stillThere) {
+                throw new Error("deleteMediaCollectionAction improperly deleted collection on another server with matching title");
+            }
+        } finally {
+            process.env.PORTALARR_TEST_AUTH = prevCurationAuth;
+            await prisma.mediaCollection.deleteMany({ where: { id: { in: [collA.id, collB.id] } } }).catch(() => {});
+        }
     });
 
     // =========================================================================
@@ -1036,6 +1450,16 @@ async function runTestSuite() {
 
         for (const b of badges) {
             if (!b.label || !b.color) throw new Error(`Invalid badge definition: ${JSON.stringify(b)}`);
+        }
+
+        // Regression: computeMediaOverlayHash includes ribbon & edition position options
+        const { computeMediaOverlayHash } = await import("../src/lib/curation/overlay-engine");
+        const mockMedia: any = { ratingKey: "rk-hash-test", title: "Hash Test", type: "movie", media: [{ videoResolution: "4k", audioCodec: "truehd" }] };
+        const hashA = computeMediaOverlayHash(mockMedia, { showRibbon: true, ribbonText: "4K UHD", ribbonTheme: "gold", editionPosition: "top-left" });
+        const hashB = computeMediaOverlayHash(mockMedia, { showRibbon: true, ribbonText: "IMDb TOP 250", ribbonTheme: "gold", editionPosition: "top-left" });
+        const hashC = computeMediaOverlayHash(mockMedia, { showRibbon: true, ribbonText: "4K UHD", ribbonTheme: "gold", editionPosition: "bottom-right" });
+        if (hashA === hashB || hashA === hashC) {
+            throw new Error("Expected computeMediaOverlayHash to invalidate when ribbonText or editionPosition changes");
         }
     });
 
@@ -1097,6 +1521,26 @@ async function runTestSuite() {
             if (adv?.isLeavingSoon !== false) {
                 throw new Error("Advisory record should have isLeavingSoon set to false");
             }
+
+            // Unwatched item on unreachable server MUST report success=false so auto-prune aborts safely
+            const unwatchedKey = `test_unwatched_${Date.now()}`;
+            await prisma.mediaContentAdvisory.create({
+                data: {
+                    ratingKey: unwatchedKey,
+                    serverId: "unreachable_prune_srv_test",
+                    title: "Unreachable Prune Safety Test",
+                    isLeavingSoon: true,
+                    leavingSoonDate: new Date(Date.now() + 86400000)
+                }
+            });
+            try {
+                const unreachableRes = await recheckLeavingSoonWatchActivityInternal("unreachable_prune_srv_test", false, true);
+                if (unreachableRes.success || !unreachableRes.error) {
+                    throw new Error(`Expected unreachable server recheck to return success=false with error, got: ${JSON.stringify(unreachableRes)}`);
+                }
+            } finally {
+                await prisma.mediaContentAdvisory.deleteMany({ where: { ratingKey: unwatchedKey } }).catch(() => {});
+            }
         } finally {
             await prisma.watchHistory.deleteMany({ where: { ratingKey: testRatingKey } });
             await prisma.mediaContentAdvisory.deleteMany({ where: { ratingKey: testRatingKey } });
@@ -1153,7 +1597,8 @@ async function runTestSuite() {
             analyzeUserAccountSharing,
             isFixedHomeDevice,
             isMobileRoamingDevice,
-            isSameSubnetOrIp
+            isSameSubnetOrIp,
+            normalizeIp
         } = await import("../src/lib/telemetry/stream-tracker");
 
         // 1. Date Range Boundaries
@@ -1249,6 +1694,27 @@ async function runTestSuite() {
             const dualTvEval = analyzeUserAccountSharing(dualTvSessions);
             if (dualTvEval.sharingAssessment.risk !== "HIGH_SHARING_RISK") {
                 throw new Error(`Expected dual TV concurrency to trigger HIGH_SHARING_RISK, got ${dualTvEval.sharingAssessment.risk}`);
+            }
+
+            // 6. Wave 3 IPv6 [addr]:port normalization, :: zero-expanded /64 subnet match & per-user limit overrides
+            if (normalizeIp("[2601:1c0::1]:52431") !== "2601:1c0::1") {
+                throw new Error(`Expected bracketed IPv6 host stripping, got "${normalizeIp("[2601:1c0::1]:52431")}"`);
+            }
+            if (!isSameSubnetOrIp("2601:1c0::1", "2601:01c0:0000:0000:ffff::2")) {
+                throw new Error("Same IPv6 /64 with different :: compression forms must match");
+            }
+            if (isSameSubnetOrIp("2601:1c0::1", "2601:1c1::1")) {
+                throw new Error("Different IPv6 /64 prefixes must NOT match");
+            }
+            const { analyzeActiveSessionsForSharing } = await import("../src/lib/telemetry/stream-tracker");
+            const perUserLimits = new Map<string, number>([["bob", 1]]);
+            const limitRes = analyzeActiveSessionsForSharing([
+                { user: "bob", ipAddress: "73.189.44.12", player: "Roku", platform: "Roku", device: "Roku" },
+                { user: "bob", ipAddress: "73.189.44.12", player: "Apple TV", platform: "tvOS", device: "Apple TV" }
+            ], 3, perUserLimits);
+            const bobAnalysis = limitRes.get("bob");
+            if (!bobAnalysis || !bobAnalysis.isExcessiveConnections || !bobAnalysis.sharingReason?.includes("limit: 1")) {
+                throw new Error(`Expected per-user maxStreams=1 override to flag exceedance, got ${JSON.stringify(bobAnalysis)}`);
             }
         } finally {
             await prisma.watchHistory.deleteMany({ where: { user: testUser } });
@@ -1412,6 +1878,13 @@ async function runTestSuite() {
             if (!askRec.success || !askRec.answer || (!hasRecMention && !hasRecAction)) {
                 throw new Error(`Expected personalized recommendations response, got: ${JSON.stringify(askRec)}`);
             }
+
+            // Wave 3: AI guardrail prefix-bypass protection ("alexander" must NOT match allowed token "alex")
+            const alexCaller = { id: "u_alex_guard", username: "alex", email: "alex@example.com", role: "USER" };
+            const crossBoundaryPrefix = validateUserCrossBoundaryQuery("show watch history for alexander", alexCaller, []);
+            if (crossBoundaryPrefix.allowed) {
+                throw new Error("validateUserCrossBoundaryQuery must block 'alexander' when caller is 'alex'");
+            }
         } finally {
             await prisma.mediaRequest.delete({ where: { id: testBookReq.id } }).catch(() => {});
             await prisma.user.delete({ where: { id: recTestUser.id } }).catch(() => {});
@@ -1453,6 +1926,25 @@ async function runTestSuite() {
         deleteScript(testScriptId);
         const deleted = getScriptById(testScriptId);
         if (deleted) throw new Error("Script was not deleted");
+
+        // Wave 1: Path traversal containment in saveScript / deleteScript
+        const traversalId = `trav_test_${Date.now()}`;
+        const travSaved = saveScript({
+            id: `../../${traversalId}`,
+            name: "Traversal Safe Test",
+            filename: "../../evil_escape.sh",
+            description: "Containment check",
+            category: "System & Backup",
+            interpreter: "bash",
+            content: "echo ok\nexit 0"
+        });
+        try {
+            if (travSaved.id.includes("..") || travSaved.filename.includes("..") || travSaved.filename.includes("/") || travSaved.filename.includes("\\")) {
+                throw new Error(`Expected sanitized script id and basename filename, got id=${travSaved.id}, filename=${travSaved.filename}`);
+            }
+        } finally {
+            deleteScript(travSaved.id);
+        }
     });
 
     // =========================================================================
@@ -1876,6 +2368,8 @@ async function runTestSuite() {
         }
 
         // Test editing existing media server (URL & Name update while keeping existing API key + setting internalUrl)
+        process.env.PORTALARR_TEST_AUTH = "true";
+        delete process.env.PORTALARR_TEST_USER_ID;
         const editServerRes = await saveMediaServerAction({
             id: testMediaServer.id,
             name: "Updated Jellyfin Node",
@@ -2655,15 +3149,60 @@ async function runTestSuite() {
                 }
 
                 // 6. Fan-out integration check: mapping helper
-                const { getLinkedEmailCategoryForTemplate } = await import("../src/app/actions");
+                const { getLinkedEmailCategoryForTemplate, sendBroadcastEmailAction } = await import("../src/app/actions");
                 if ((await getLinkedEmailCategoryForTemplate("payment_reminder")) !== "receiveSubscriptionReminders") {
                     throw new Error("payment_reminder must map to receiveSubscriptionReminders");
+                }
+                if ((await getLinkedEmailCategoryForTemplate("payment_received")) !== "receiveSubscriptionReminders") {
+                    throw new Error("payment_received must map to receiveSubscriptionReminders");
+                }
+                if ((await getLinkedEmailCategoryForTemplate("payment_underpayment")) !== "receiveSubscriptionReminders") {
+                    throw new Error("payment_underpayment must map to receiveSubscriptionReminders");
+                }
+                if ((await getLinkedEmailCategoryForTemplate("subscription_activated")) !== "receiveSubscriptionReminders") {
+                    throw new Error("subscription_activated must map to receiveSubscriptionReminders");
+                }
+                if ((await getLinkedEmailCategoryForTemplate("seerr_request_failed")) !== "receiveRequestApproved") {
+                    throw new Error("seerr_request_failed must map to receiveRequestApproved");
+                }
+                if ((await getLinkedEmailCategoryForTemplate("seerr_request_declined")) !== "receiveRequestApproved") {
+                    throw new Error("seerr_request_declined must map to receiveRequestApproved");
                 }
                 if ((await getLinkedEmailCategoryForTemplate("broadcast")) !== "receiveAnnouncements") {
                     throw new Error("broadcast must map to receiveAnnouncements");
                 }
                 if ((await getLinkedEmailCategoryForTemplate("media_ready")) !== "receiveMediaReady") {
                     throw new Error("media_ready must map to receiveMediaReady");
+                }
+
+                // 6b. Wave 2: Broadcast announcement opt-out must suppress single-user broadcast too
+                await prisma.userNotificationPreference.upsert({
+                    where: { userId: linkedTestUser.id },
+                    create: { userId: linkedTestUser.id, emailAnnouncements: false },
+                    update: { emailAnnouncements: false }
+                });
+                const prevSettingsApproval = (await prisma.settings.findFirst({ where: { id: "global" }, select: { requireApprovalForEmails: true } }))?.requireApprovalForEmails;
+                await prisma.settings.updateMany({ where: { id: "global" }, data: { requireApprovalForEmails: true } });
+                const prevBcastTestAuth = process.env.PORTALARR_TEST_AUTH;
+                const prevBcastTestUid = process.env.PORTALARR_TEST_USER_ID;
+                process.env.PORTALARR_TEST_AUTH = "true";
+                delete process.env.PORTALARR_TEST_USER_ID;
+                try {
+                    const bcastRes = await sendBroadcastEmailAction({
+                        userIds: [linkedTestUser.id],
+                        subject: "Opt-Out Verification Broadcast",
+                        body: "Should not be queued or sent to opted-out member"
+                    });
+                    if (!bcastRes.success || (bcastRes.sentCount ?? 0) !== 0 || (bcastRes.queuedCount ?? 0) !== 0) {
+                        throw new Error(`Expected opted-out single-user broadcast to send/queue 0, got ${JSON.stringify(bcastRes)}`);
+                    }
+                } finally {
+                    process.env.PORTALARR_TEST_AUTH = prevBcastTestAuth;
+                    if (prevBcastTestUid !== undefined) process.env.PORTALARR_TEST_USER_ID = prevBcastTestUid;
+                    if (prevSettingsApproval !== undefined) {
+                        await prisma.settings.updateMany({ where: { id: "global" }, data: { requireApprovalForEmails: prevSettingsApproval } }).catch(() => {});
+                    }
+                    await prisma.userNotificationPreference.deleteMany({ where: { userId: linkedTestUser.id } }).catch(() => {});
                 }
 
                 // 7. Delete linked email
@@ -3507,6 +4046,49 @@ async function runTestSuite() {
                 await prisma.user.deleteMany({
                     where: { id: { in: [trevorMock.id, krisMock.id, jonathanMock.id, zestyMock.id] } }
                 }).catch(() => {});
+            }
+
+            // Wave 3: Market locator word-boundary check + Plex Home max slots clamping + IPv6 local IPTV check
+            const laFiltered = getMarketChannels([
+                { name: "Dallas CBS 11", callsign: "KTVT" },
+                { name: "Atlanta ABC 2", callsign: "WSB" },
+                { name: "Los Angeles KNBC 4", callsign: "KNBC" }
+            ], "los_angeles");
+            if (laFiltered.length !== 1 || laFiltered[0].callsign !== "KNBC") {
+                throw new Error(`Expected word-boundary LA market filter to return only KNBC, got ${JSON.stringify(laFiltered)}`);
+            }
+
+            const prevIptvCfg = await getIptvSettings();
+            try {
+                const clampedCfg = await saveIptvSettings({ plexHomeMaxSlots: 99 });
+                if (clampedCfg.plexHomeMaxSlots !== 14) {
+                    throw new Error(`Expected plexHomeMaxSlots=99 to clamp to 14, got ${clampedCfg.plexHomeMaxSlots}`);
+                }
+            } finally {
+                await saveIptvSettings({ plexHomeMaxSlots: prevIptvCfg.plexHomeMaxSlots }).catch(() => {});
+            }
+
+            const { recordIptvWatchSessionAction } = await import("../src/app/iptv-actions");
+            const ipv6SessKey = `iptv_ipv6_${Date.now()}`;
+            const ipv6Sess2Key = `iptv_ipv6_2_${Date.now()}`;
+            try {
+                const s1 = await recordIptvWatchSessionAction({
+                    sessionKey: ipv6SessKey,
+                    userName: "ipv6_lan_tester",
+                    channelTitle: "Local IPv6 Test 1",
+                    ipAddress: "fe80::1"
+                });
+                const s2 = await recordIptvWatchSessionAction({
+                    sessionKey: ipv6Sess2Key,
+                    userName: "ipv6_lan_tester",
+                    channelTitle: "Local IPv6 Test 2",
+                    ipAddress: "::1"
+                });
+                if (!s1.success || !s2.success || s2.isSharingAlert) {
+                    throw new Error(`Expected IPv6 link-local/loopback sessions NOT to raise sharing alert, got ${JSON.stringify({ s1, s2 })}`);
+                }
+            } finally {
+                await prisma.iptvWatchSession.deleteMany({ where: { sessionKey: { in: [ipv6SessKey, ipv6Sess2Key] } } }).catch(() => {});
             }
         } finally {
             await prisma.user.delete({ where: { id: testUser.id } }).catch(() => {});

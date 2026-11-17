@@ -1116,7 +1116,7 @@ export async function getMediaCollectionsAction(serverId?: string, sectionKey?: 
         await verifyAdmin();
 
         await ensureSchemaColumns();
-        let serverIdCandidates = serverId ? [serverId, "main"] : [];
+        let serverIdCandidates = serverId ? [serverId] : [];
         if (serverId) {
             try {
                 const dbServer = await prisma.plexServer.findFirst({
@@ -1134,7 +1134,7 @@ export async function getMediaCollectionsAction(serverId?: string, sectionKey?: 
                         dbServer.id,
                         dbServer.name,
                         dbServer.clientIdentifier,
-                        "main"
+                        ...(serverId === "main" ? ["main"] : [])
                     ].filter(Boolean) as string[]));
                 }
             } catch {}
@@ -1249,7 +1249,7 @@ export async function importPlexLibraryCollectionsAction(serverId?: string, sect
             // Check if this hub/collection has been dismissed/ignored by the user
             const isDismissed = dismissedList.some(d => {
                 if (d.ratingKey && pColl.ratingKey && d.ratingKey === pColl.ratingKey) return true;
-                if (d.normalizedTitle && (d.normalizedTitle === pTitleNorm || pTitleNorm.includes(d.normalizedTitle) || d.normalizedTitle.includes(pTitleNorm))) {
+                if (d.normalizedTitle && d.normalizedTitle === pTitleNorm) {
                     if (!d.serverId || d.serverId === serverId) {
                         if (!d.sectionKey || d.sectionKey === String(sectionKey)) return true;
                     }
@@ -3455,10 +3455,13 @@ export async function syncLeavingSoonCollectionHubInternal(
         const urlsToTry = [serverUrl, ...resolved.allCandidateUrls.filter(u => u !== serverUrl)];
 
         // 0. Auto-unflag items that users have watched while staged in Leaving Soon
+        let watchCheckVerified = true;
         if (!options.skipWatchRecheck) {
-            await recheckLeavingSoonWatchActivityInternal(targetServerId, false).catch(err => {
+            const wc = await recheckLeavingSoonWatchActivityInternal(targetServerId, false, true).catch(err => {
                 console.warn(`[PRUNE-SYNC] Error checking watch activity for Leaving Soon on ${resolved.serverName}:`, err.message);
+                return { success: false, failedServers: [targetServerId] };
             });
+            watchCheckVerified = wc?.success !== false && !(wc as any)?.failedServers?.includes(targetServerId);
         }
 
         // 1. Storage Headroom & Inactivity Retention Policy Evaluation
@@ -3626,7 +3629,7 @@ export async function syncLeavingSoonCollectionHubInternal(
             }
         }
 
-        // 2. Active Reclamation for Expired Items (if Master Deletion ON & Dry Run OFF)
+        // 2. Active Reclamation for Expired Items (if Master Deletion ON & Dry Run OFF & Watch Check Verified)
         if (!options.skipExpiredPrune && settings?.enableAutoPruneDeletion && !settings?.pruneDryRun) {
             const expiredItems = await prisma.mediaContentAdvisory.findMany({
                 where: {
@@ -3636,7 +3639,9 @@ export async function syncLeavingSoonCollectionHubInternal(
                 }
             });
 
-            if (expiredItems.length > 0) {
+            if (expiredItems.length > 0 && !watchCheckVerified) {
+                logger.addLog("WARN", "CURATION", `[${resolved.serverName}] Aborted expired prune deletion because live watch verification failed.`);
+            } else if (expiredItems.length > 0) {
                 logger.addLog("WARN", "CURATION", `[${resolved.serverName}] Auto-pruning ${expiredItems.length} expired Leaving Soon items.`);
                 await executePruneAction(
                     expiredItems.map(it => ({ ratingKey: it.ratingKey, serverId: it.serverId || targetServerId, title: it.title || undefined })),
@@ -3895,13 +3900,17 @@ export async function deleteMediaCollectionAction(collectionId: string, deleteFr
             }
         }
 
-        // Delete the canonical record AND any duplicate records matching this title / server / sectionKey
+        // Delete the canonical record AND any duplicate records matching this title within the same server/section
         await prisma.mediaCollection.deleteMany({
             where: {
                 OR: [
                     { id: collectionId },
                     ...(collection ? [{ id: collection.id }] : []),
-                    ...(collTitle ? [{ title: collTitle }] : [])
+                    ...(collTitle ? [{
+                        title: collTitle,
+                        ...(serverId ? { serverId } : {}),
+                        ...(sectionKey ? { sectionKey } : {})
+                    }] : [])
                 ]
             }
         });
@@ -3942,7 +3951,7 @@ export async function deleteAllPlexCollectionsAction(
         }
 
         // 2. Also wipe all mediaCollection records for this server & section in DB
-        const serverIdCandidates = [serverId, resolved?.serverId, "main"].filter(Boolean) as string[];
+        const serverIdCandidates = Array.from(new Set([serverId, resolved?.serverId, ...(serverId === "main" ? ["main"] : [])].filter(Boolean) as string[]));
         const dbResult = await prisma.mediaCollection.deleteMany({
             where: {
                 serverId: { in: serverIdCandidates },
@@ -5852,11 +5861,13 @@ async function unflagWatchedLeavingSoonItem(
         console.warn(`[WatchStatus] Failed to update advisory for ${rec.ratingKey}:`, dbErr?.message || dbErr);
     }
 
-    try {
-        const urlsToTry = [resolved.serverUrl, ...(resolved.allCandidateUrls || []).filter(u => u !== resolved.serverUrl)];
-        await restoreItemOriginalArtwork(urlsToTry, resolved.token, sId, rec.ratingKey, resolved.serverName);
-    } catch (artErr: any) {
-        console.warn(`[WatchStatus] Poster restore skipped/failed for ${rec.ratingKey}:`, artErr?.message || artErr);
+    if (resolved.serverUrl && resolved.token) {
+        try {
+            const urlsToTry = [resolved.serverUrl, ...(resolved.allCandidateUrls || []).filter(u => u !== resolved.serverUrl)];
+            await restoreItemOriginalArtwork(urlsToTry, resolved.token, sId, rec.ratingKey, resolved.serverName);
+        } catch (artErr: any) {
+            console.warn(`[WatchStatus] Poster restore skipped/failed for ${rec.ratingKey}:`, artErr?.message || artErr);
+        }
     }
 
     unflaggedItems.push({
@@ -5892,6 +5903,8 @@ export async function recheckLeavingSoonWatchActivityInternal(targetServerId?: s
         }
 
         const unflaggedItems: Array<{ ratingKey: string; title: string; reason: string; lastViewedAt?: string }> = [];
+        const failedServers = new Set<string>();
+        const checkedServers = new Set<string>();
 
         // Group by serverId
         const byServer: Record<string, typeof leavingSoonRecords> = {};
@@ -5911,13 +5924,10 @@ export async function recheckLeavingSoonWatchActivityInternal(targetServerId?: s
             lastWatchCheckByServer.set(sId, now);
 
             const resolved = await resolveWorkingPlexServerConnection(sId).catch(() => null);
-            const safeResolved = resolved || {
-                serverUrl: settings?.mainPlexUrl || "",
-                allCandidateUrls: settings?.mainPlexUrl ? [settings.mainPlexUrl] : [],
-                token: token,
-                serverName: sId,
-                serverId: sId
-            };
+            const hasWorkingPlex = Boolean(resolved && resolved.serverUrl && resolved.token);
+            const safeResolved = hasWorkingPlex
+                ? resolved!
+                : { serverUrl: "", allCandidateUrls: [] as string[], token: "", serverName: sId };
 
             const remainingRecords: typeof records = [];
 
@@ -5980,6 +5990,13 @@ export async function recheckLeavingSoonWatchActivityInternal(targetServerId?: s
                     remainingRecords.push(rec);
                 }
             }
+
+            if (remainingRecords.length > 0 && !hasWorkingPlex) {
+                failedServers.add(sId);
+                console.warn(`[WatchStatus] Skipping remote watch-activity verification for ${remainingRecords.length} unflagged items on server "${sId}": Plex server unreachable (strict isolation blocks main-server fallback).`);
+                continue;
+            }
+            checkedServers.add(sId);
 
             // =========================================================================
             // TIER 2: Single Plex Batch Call for Native History (/status/sessions/history)
@@ -6129,10 +6146,15 @@ export async function recheckLeavingSoonWatchActivityInternal(targetServerId?: s
         }
 
         return {
-            success: true,
+            success: failedServers.size === 0,
             checkedCount: leavingSoonRecords.length,
             unflaggedCount: unflaggedItems.length,
             unflaggedItems,
+            checkedServers: Array.from(checkedServers),
+            failedServers: Array.from(failedServers),
+            ...(failedServers.size > 0
+                ? { error: `Plex watch-activity verification failed/unreachable for server(s): ${Array.from(failedServers).join(", ")}` }
+                : {}),
             message: unflaggedItems.length > 0
                 ? `Successfully verified ${leavingSoonRecords.length} items: unflagged and restored ${unflaggedItems.length} watched ${unflaggedItems.length === 1 ? 'title' : 'titles'}!`
                 : `Verified ${leavingSoonRecords.length} items: no new watch activity detected.`
@@ -6498,7 +6520,15 @@ export async function executePruneAction(
                                 for (const app of radarrRes.data) {
                                     const lookupRes = await arrApiGet(app, `/api/v3/movie/lookup?term=${encodeURIComponent(cleanTitle)}`);
                                     if (lookupRes.success && Array.isArray(lookupRes.data)) {
-                                        const match = lookupRes.data.find((m: any) => m.title?.toLowerCase() === cleanTitle.toLowerCase() && m.id);
+                                        const itemTmdb = (it as any).tmdbId ? Number((it as any).tmdbId) : null;
+                                        const titleYearMatch = it.title?.match(/\((\d{4})\)/);
+                                        const itemYear = (it as any).year || (titleYearMatch ? Number(titleYearMatch[1]) : null);
+                                        const match = lookupRes.data.find((m: any) =>
+                                            m.id && (
+                                                (itemTmdb && m.tmdbId === itemTmdb) ||
+                                                (m.title?.toLowerCase() === cleanTitle.toLowerCase() && (!itemYear || !m.year || Number(m.year) === Number(itemYear)))
+                                            )
+                                        );
                                         if (match && match.id) {
                                             const delRes = await arrApiDelete(app, `/api/v3/movie/${match.id}?deleteFiles=true&addImportExclusion=false`);
                                             if (delRes.success) arrDeleted = true;
@@ -6514,7 +6544,15 @@ export async function executePruneAction(
                             for (const app of sonarrRes.data) {
                                 const seriesRes = await arrApiGet(app, `/api/v3/series/lookup?term=${encodeURIComponent(cleanTitle)}`);
                                 if (seriesRes.success && Array.isArray(seriesRes.data)) {
-                                    const match = seriesRes.data.find((s: any) => s.title?.toLowerCase() === cleanTitle.toLowerCase() && s.id);
+                                    const itemTvdb = (it as any).tvdbId ? Number((it as any).tvdbId) : null;
+                                    const titleYearMatch = it.title?.match(/\((\d{4})\)/);
+                                    const itemYear = (it as any).year || (titleYearMatch ? Number(titleYearMatch[1]) : null);
+                                    const match = seriesRes.data.find((s: any) =>
+                                        s.id && (
+                                            (itemTvdb && s.tvdbId === itemTvdb) ||
+                                            (s.title?.toLowerCase() === cleanTitle.toLowerCase() && (!itemYear || !s.year || Number(s.year) === Number(itemYear)))
+                                        )
+                                    );
                                     if (match && match.id) {
                                         if (isSeasonItem) {
                                             // SEASON-SPECIFIC PRUNING: Only delete episode files of this season and unmonitor season. NEVER delete whole series!
@@ -7270,13 +7308,17 @@ export async function runFullCurationSyncInternal(): Promise<{
             ? JSON.parse(settings.enabledServersForCollections) 
             : [];
 
+        let hasErrors = false;
+
         // 1. Seasonal & Scheduled Collections Sync (Agregarr)
         if (settings.curationSyncCollections !== false && settings.agregarrSyncEnabled !== false) {
             try {
                 const agregarrRes = await runAgregarrSyncInternal();
+                if (!agregarrRes.success) hasErrors = true;
                 seasonalCount = agregarrRes.evaluatedCount || 0;
                 details.push(...agregarrRes.details);
             } catch (sErr: any) {
+                hasErrors = true;
                 details.push(`Agregarr sync error: ${sErr.message}`);
             }
         }
@@ -7285,9 +7327,11 @@ export async function runFullCurationSyncInternal(): Promise<{
         if (settings.curationSyncPruning !== false && settings.pruneSyncEnabled !== false) {
             try {
                 const pruneRes = await runMaintainerrSyncInternal();
+                if (!pruneRes.success) hasErrors = true;
                 leavingSoonCount = pruneRes.leavingCount || 0;
                 details.push(...pruneRes.details);
             } catch (lErr: any) {
+                hasErrors = true;
                 details.push(`Maintainerr sync error: ${lErr.message}`);
             }
         }
@@ -7297,9 +7341,11 @@ export async function runFullCurationSyncInternal(): Promise<{
         if (settings.curationSyncParentalTags !== false && settings.parentalTaggingEnabled !== false && settings.taggingSyncEnabled !== false) {
             try {
                 const tagRes = await runParentalTagsSyncInternal();
+                if (tagRes.success === false) hasErrors = true;
                 parentalTaggedCount = tagRes.totalTagged || 0;
                 details.push(...tagRes.details);
             } catch (pErr: any) {
+                hasErrors = true;
                 details.push(`Parental tagging error: ${pErr.message}`);
             }
         }
@@ -7309,16 +7355,18 @@ export async function runFullCurationSyncInternal(): Promise<{
         if (settings.curationSyncOverlays !== false && settings.overlayIncrementalEnabled !== false) {
             try {
                 const overlayRes = await runOverlayIncrementalSyncInternal();
+                if (!overlayRes.success) hasErrors = true;
                 overlaysAppliedCount = overlayRes.overlaysAppliedCount || 0;
                 details.push(...overlayRes.details);
             } catch (oErr: any) {
+                hasErrors = true;
                 details.push(`Overlay sync error: ${oErr.message}`);
             }
         }
 
         // Save last run telemetry
         const statusSummary = {
-            success: true,
+            success: !hasErrors,
             timestamp: new Date().toISOString(),
             seasonalCount,
             overlaysAppliedCount,
@@ -7338,7 +7386,7 @@ export async function runFullCurationSyncInternal(): Promise<{
         logger.addLog("SUCCESS", "CURATION", `Automated Curation Sync Job completed: ${details.join(" • ")}`);
 
         return {
-            success: true,
+            success: !hasErrors,
             seasonalCount,
             overlaysAppliedCount,
             leavingSoonCount,
@@ -8276,12 +8324,14 @@ export async function runMaintainerrSyncInternal(
         for (const srv of serversWithSections) {
             if (targetServerId && srv.serverId !== targetServerId) continue;
 
-            // 1. Hoist watch activity re-check once per server pass
-            await recheckLeavingSoonWatchActivityInternal(srv.serverId, false).catch(err => {
+            // 1. Require forced live watch activity re-check before any deletion
+            const watchCheckRes = await recheckLeavingSoonWatchActivityInternal(srv.serverId, false, true).catch(err => {
                 console.warn(`[PRUNE-SYNC] Error checking watch activity for Leaving Soon on ${srv.serverName}:`, err.message);
+                return { success: false, failedServers: [srv.serverId], error: err.message };
             });
 
-            // 2. Hoist expired items active reclamation once per server pass (if Master Deletion ON & Dry Run OFF)
+            // 2. Active reclamation only if watch-activity verification completed cleanly for this server
+            const watchCheckVerified = watchCheckRes?.success !== false && !(watchCheckRes as any)?.failedServers?.includes(srv.serverId);
             if (settings?.enableAutoPruneDeletion && !settings?.pruneDryRun) {
                 const expiredItems = await prisma.mediaContentAdvisory.findMany({
                     where: {
@@ -8291,7 +8341,9 @@ export async function runMaintainerrSyncInternal(
                     }
                 });
 
-                if (expiredItems.length > 0) {
+                if (expiredItems.length > 0 && !watchCheckVerified) {
+                    logger.addLog("WARN", "CURATION", `[${srv.serverName}] Aborted auto-pruning ${expiredItems.length} expired item(s) because watch-activity verification did not succeed.`);
+                } else if (expiredItems.length > 0) {
                     logger.addLog("WARN", "CURATION", `[${srv.serverName}] Auto-pruning ${expiredItems.length} expired Leaving Soon items.`);
                     await executePruneAction(
                         expiredItems.map(it => ({ ratingKey: it.ratingKey, serverId: it.serverId || srv.serverId, title: it.title || undefined })),
@@ -9740,7 +9792,7 @@ export async function createPlaceholderItemInternal(
             quality: itemData.quality
         });
 
-        const cleanTitle = itemData.title.replace(/[\/\\:*?"<>|]/g, "_").trim();
+        const cleanTitle = itemData.title.replace(/[\/\\:*?"<>|]/g, "_").trim() || `tmdb_${itemData.tmdbId}`;
         const yearStr = itemData.year ? ` (${itemData.year})` : "";
         let shareSaved = false;
         let createdFolderPath = "";
@@ -11931,7 +11983,11 @@ export async function cleanupAvailablePlaceholdersInternal(
                                 ) {
                                     continue;
                                 }
-                                const isInsideShare = Array.from(shareDirectories).some(sd => fileLower.includes(sd.toLowerCase()) || fileLower.includes(path.basename(sd).toLowerCase()));
+                                const isInsideShare = Array.from(shareDirectories).some(sd => {
+                                    const normShare = sd.replace(/\\/g, "/").toLowerCase().replace(/\/+$/, "");
+                                    const normFile = fileLower.replace(/\\/g, "/");
+                                    return normFile === normShare || normFile.startsWith(`${normShare}/`);
+                                });
                                 if (isInsideShare) continue;
 
                                 if (it.labels?.some(l => l.toLowerCase() === "trailer-placeholder" || l.toLowerCase() === "placeholder")) {
