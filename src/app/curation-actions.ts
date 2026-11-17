@@ -139,17 +139,7 @@ import {
 import { getEnabledArrInstances } from "@/app/arr-actions";
 import { getEnabledArrInstancesInternal, arrApiGet, arrApiPost, arrApiPut, arrApiDelete } from "@/lib/arr-client";
 import { resolveContainedPath } from "@/lib/book-route-auth";
-
-async function isDirectExternalServerActionCall(): Promise<boolean> {
-    if (process.env.NODE_ENV !== "production" && (process.env.PORTALARR_TEST === "true" || process.env.PORTALARR_TEST_AUTH === "true")) return false;
-    try {
-        const { headers } = await import("next/headers");
-        const h = await headers();
-        return Boolean(h.get("next-action"));
-    } catch {
-        return false;
-    }
-}
+import { isDirectExternalServerActionCall } from "@/lib/internal-context";
 
 // Verify admin permissions
 async function verifyAdmin() {

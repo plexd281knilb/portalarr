@@ -593,8 +593,11 @@ async function dispatchBookOrAudiobookRequest(req: any): Promise<DispatchResult>
 
         // Trigger background search & grab (skip during test execution)
         if (process.env.NODE_ENV !== "test" && process.env.PORTALARR_TEST !== "true") {
-            const { autoDownloadBookRequest } = await import("@/app/actions");
-            autoDownloadBookRequest(bookReq.id, title, author).catch(err => {
+            const [{ autoDownloadBookRequest }, { runAsServerInternal }] = await Promise.all([
+                import("@/app/actions"),
+                import("@/lib/internal-context")
+            ]);
+            runAsServerInternal(() => autoDownloadBookRequest(bookReq.id, title, author)).catch(err => {
                 logger.addLog("WARN", "BOOK_ENGINE", `Auto-download failed for request ${bookReq?.id}: ${err.message}`);
             });
         }

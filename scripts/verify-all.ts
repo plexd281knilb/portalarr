@@ -204,6 +204,24 @@ async function runTestSuite() {
             if (unauthReqRes.status !== 401) {
                 throw new Error(`Expected GET /api/requests unauthenticated to return 401, got ${unauthReqRes.status}`);
             }
+
+            // Internal AsyncLocalStorage context propagates cleanly across async awaits and suppresses external action check
+            const { runAsServerInternal, isServerInternalActive, isDirectExternalServerActionCall } = await import("../src/lib/internal-context");
+            if (isServerInternalActive()) {
+                throw new Error("Expected isServerInternalActive() to be false outside runAsServerInternal()");
+            }
+            await runAsServerInternal(async () => {
+                await Promise.resolve();
+                if (!isServerInternalActive()) {
+                    throw new Error("Expected isServerInternalActive() to remain true across async awaits");
+                }
+                if (await isDirectExternalServerActionCall()) {
+                    throw new Error("Expected isDirectExternalServerActionCall() to return false inside runAsServerInternal()");
+                }
+            });
+            if (isServerInternalActive()) {
+                throw new Error("Expected isServerInternalActive() to reset to false after runAsServerInternal() exits");
+            }
         } finally {
             process.env.PORTALARR_TEST_AUTH = prevTestAuth;
         }
