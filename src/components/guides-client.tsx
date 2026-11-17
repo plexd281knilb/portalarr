@@ -380,10 +380,9 @@ function GuidesContent({ initialGuides, initialUser, initialAccess }: GuidesClie
                 {mainCategory === "devices" && (
                     <div className="space-y-6 animate-in fade-in-50 duration-200">
                         {/* THE GOLDEN RULE CALLOUT BANNER */}
-                        <Card className="rounded-2xl border-amber-500/30 bg-gradient-to-br from-amber-950/20 via-background to-background p-5 sm:p-6 shadow-md relative overflow-hidden">
-                            <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
+                        <Card className="rounded-xl border-amber-500/30 bg-gradient-to-br from-amber-950/20 via-background to-background p-5 sm:p-6 shadow-md relative overflow-hidden">
                             <div className="flex items-start gap-4">
-                                <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 shrink-0 mt-0.5">
+                                <div className="p-2.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-400 shrink-0 mt-0.5">
                                     <AlertCircle className="h-6 w-6" />
                                 </div>
                                 <div className="space-y-2">

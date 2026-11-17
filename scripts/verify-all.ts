@@ -3532,6 +3532,9 @@ async function runTestSuite() {
         if (!globalsCssSrc.includes("prefers-reduced-motion: reduce")) {
             throw new Error("src/app/globals.css must include prefers-reduced-motion accessibility guard");
         }
+        if (!globalsCssSrc.includes("text-wrap: balance") || !globalsCssSrc.includes("tabular-nums")) {
+            throw new Error("src/app/globals.css must enforce balanced heading wraps and tabular numerals");
+        }
 
         // 2. Reusable Empty State, Route Skeleton, 404 & Humanized Error Boundaries
         if (!emptyStateSrc.includes("export function EmptyState") || !routeSkeletonSrc.includes("export function RouteLoadingShell")) {
@@ -3557,10 +3560,14 @@ async function runTestSuite() {
         walkTsx(componentsDir);
 
         const forbiddenGradientRe = /\b(?:from|via|to)-(?:purple|indigo|violet)-/;
+        const decorativeOrbRe = /\bw-(?:56|64|72|80|96)\s+h-(?:56|64|72|80|96)[^"]*blur-[23]xl/;
         for (const f of tsxFiles) {
             const content = fs.readFileSync(f, "utf8");
             if (forbiddenGradientRe.test(content)) {
                 throw new Error(`Decorative purple/indigo/violet gradient found in ${path.relative(process.cwd(), f)}`);
+            }
+            if (decorativeOrbRe.test(content)) {
+                throw new Error(`Decorative blur orb embellishment found in ${path.relative(process.cwd(), f)}`);
             }
         }
 
@@ -3614,6 +3621,44 @@ async function runTestSuite() {
         for (const relLoading of routesRequiringLoading) {
             if (!fs.existsSync(path.join(appDir, relLoading))) {
                 throw new Error(`Missing route loading skeleton: src/app/${relLoading}`);
+            }
+        }
+
+        // 5. Shared empty states must use reusable <EmptyState />
+        const emptyStateConsumers = [
+            "src/components/tickets-client.tsx",
+            "src/components/seerr/request-manager.tsx",
+            "src/components/arr/radarr-client.tsx",
+            "src/components/arr/sonarr-client.tsx",
+            "src/app/library/page.tsx"
+        ];
+        for (const relConsumer of emptyStateConsumers) {
+            const consumerSrc = fs.readFileSync(path.join(process.cwd(), relConsumer), "utf8");
+            if (!consumerSrc.includes("<EmptyState")) {
+                throw new Error(`Expected ${relConsumer} to render shared <EmptyState /> component`);
+            }
+        }
+
+        // 6. Polished interactive JSX components must use Lucide icons instead of raw UI emojis
+        const emojiFreeComponents = [
+            "src/components/ai-server-assistant.tsx",
+            "src/components/seerr/book-card.tsx",
+            "src/components/seerr/book-detail-modal.tsx",
+            "src/components/book-match-modal.tsx",
+            "src/components/seerr/discover-hub.tsx",
+            "src/components/seerr/request-manager.tsx",
+            "src/components/curation/kometa-overlays-guide-modal.tsx",
+            "src/components/system-logs-viewer.tsx",
+            "src/components/kindle-sender-update-banner.tsx",
+            "src/components/kindle-sender-update-modal.tsx",
+            "src/components/kindle-setup-guide-modal.tsx",
+            "src/components/stream-quality-doctor-banner.tsx"
+        ];
+        const bannedUiEmojiRe = /[⚡🎬📚📖🎧🧸📌]/u;
+        for (const relComp of emojiFreeComponents) {
+            const compSrc = fs.readFileSync(path.join(process.cwd(), relComp), "utf8");
+            if (bannedUiEmojiRe.test(compSrc)) {
+                throw new Error(`Unexpected decorative UI emoji found in ${relComp}`);
             }
         }
     });

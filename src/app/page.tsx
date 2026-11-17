@@ -357,7 +357,6 @@ export default async function UserLandingPage() {
 
                         {/* 7. PROMINENT BOOK LIBRARY ACCESS CARD */}
                         <Card className="border-emerald-500/30 bg-gradient-to-br from-emerald-950/20 via-[#121218]/90 to-[#0d0d12] backdrop-blur-md shadow-md relative overflow-hidden">
-                            <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
                             <CardHeader className="pb-3">
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                                     <div className="space-y-0.5">

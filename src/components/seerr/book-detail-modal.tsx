@@ -582,7 +582,7 @@ export function BookDetailModal({
                                 ))}
                             </div>
                         ) : similarBooks.length === 0 ? (
-                            <p className="text-xs text-muted-foreground/60 italic py-2">
+                            <p className="text-xs text-muted-foreground py-2">
                                 No additional recommendations found for this title.
                             </p>
                         ) : (

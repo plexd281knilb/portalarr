@@ -669,7 +669,6 @@ export default function PaymentEmailManager() {
         <div className="space-y-6 animate-in fade-in duration-300 w-full min-w-0">
             {/* --- TOP CONTROL PANEL & SCANNER STATUS --- */}
             <Card className="border-border/50 bg-[#121218]/90 backdrop-blur-md shadow-md relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-80 h-80 bg-primary/5 rounded-full blur-3xl -z-10 pointer-events-none" />
                 <CardHeader className="pb-4">
                     <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 min-w-0">
                         <div className="space-y-1 min-w-0 flex-1">

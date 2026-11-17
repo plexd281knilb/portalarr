@@ -12,7 +12,7 @@ Radix UI's default `DialogContent` includes `sm:max-w-lg`. If you simply add `ma
 For wide media and book modals (such as `MediaDetailModal`, `BookDetailModal`, `EpisodeGuideModal`, `CollectionBuilderModal`, `SettingsModal`):
 ```tsx
 <DialogContent
-  className="w-[95vw] sm:w-[92vw] md:w-[90vw] max-w-3xl lg:max-w-4xl max-h-[90vh] sm:max-h-[92vh] overflow-y-auto overflow-x-hidden p-0 bg-[#0c0c12] border border-border/60 shadow-2xl rounded-2xl sm:rounded-3xl scrollbar-thin text-foreground focus:outline-none"
+  className="w-[95vw] sm:w-[92vw] md:w-[90vw] max-w-3xl lg:max-w-4xl max-h-[90vh] sm:max-h-[92vh] overflow-y-auto overflow-x-hidden p-0 bg-[#0c0c12] border border-border/60 shadow-2xl rounded-xl scrollbar-thin text-foreground focus:outline-none"
 >
 ```
 
@@ -89,12 +89,12 @@ For detail modals that have multiple sub-sections (e.g. Details, Seasons/Episode
 
 For loose file ingestion, unlinked series metadata matching, and interactive release verification (`BookMatchModal`):
 - **Candidate Suggestion Cards**:
-  - Render detected candidate cards with tier confidence badges (`emerald` for High SQLite/Exact match, `amber` for Medium registry search, `purple` for AI analysis).
-  - Include 2:3 vertical poster thumbnails, canonical title, author, series name, volume number, and a direct `✓ Select` action.
+  - Render detected candidate cards with tier confidence badges (`emerald` for High SQLite/Exact match, `amber` for Medium registry search, `sky` for AI analysis).
+  - Include 2:3 vertical poster thumbnails, canonical title, author, series name, volume number, and a direct `Select` action with Lucide `Check`.
 - **Side-by-Side File Inspection Telemetry**:
   - Show raw disk file path, parsed base title, file type, file size, and current relational link status (`Unlinked` vs `Linked to Series`).
 - **Interactive Search Bar**:
-  - Provide an inline search bar with format filter buttons (`📚 Ebook` vs `🎧 Audiobook`) querying online registries (OpenLibrary, Audible, Google Books) on demand.
+  - Provide an inline search bar with format filter buttons (`BookOpen` Ebook vs `Headphones` Audiobook) querying online registries (OpenLibrary, Audible, Google Books) on demand.
 - **Manual Overrides & Safety Toggles**:
   - Editable form inputs for Title, Author, Series Name, Volume Number, and Cover URL.
   - Safe disk restructuring checkbox (`"Organize on disk into Author / [Series Vol] Title"`) defaulting to checked only when confident.

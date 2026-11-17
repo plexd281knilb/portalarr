@@ -18,7 +18,7 @@ async function runSoakTest() {
     const startTimeOverall = Date.now();
 
     for (let i = 1; i <= ITERATIONS; i++) {
-        process.stdout.write(`[CYCLE ${String(i).padStart(2, '0')}/${ITERATIONS}] Running 79 verification test cases... `);
+        process.stdout.write(`[CYCLE ${String(i).padStart(2, '0')}/${ITERATIONS}] Running full verification suite... `);
         const cycleStart = Date.now();
         let passed = true;
         let errorMsg = "";
@@ -63,7 +63,6 @@ async function runSoakTest() {
     console.log("   SOAK & STRESS TEST REPORT SUMMARY                      ");
     console.log("==========================================================");
     console.log(`Total Cycles Run:        ${ITERATIONS}`);
-    console.log(`Total Tests Executed:    ${ITERATIONS * 79}`);
     console.log(`Cycles Passed:           ${passedCycles} / ${ITERATIONS} (${((passedCycles / ITERATIONS) * 100).toFixed(1)}%)`);
     console.log(`Cycles Failed:           ${failedCycles} / ${ITERATIONS}`);
     console.log(`Fastest Cycle:           ${(minDuration / 1000).toFixed(2)}s`);

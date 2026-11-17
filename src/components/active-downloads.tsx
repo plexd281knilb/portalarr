@@ -83,7 +83,7 @@ export default function ActiveDownloads() {
             </CardHeader>
             <CardContent className="p-3 sm:p-6 pt-0 sm:pt-0">
                 {allQueueItems.length === 0 ? (
-                    <div className="text-center text-muted-foreground text-sm italic py-8 border border-dashed border-border/50 rounded-xl bg-muted/10">
+                    <div className="text-center text-muted-foreground text-sm py-8 border border-dashed border-border/50 rounded-lg bg-muted/10">
                         No active downloads at the moment. All queues are idle.
                     </div>
                 ) : (

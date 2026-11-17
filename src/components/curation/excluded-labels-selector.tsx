@@ -784,10 +784,10 @@ export function ExcludedLabelsSelector({
                 )}
 
                 {filteredPresetLabels.length === 0 && filteredAuditLabels.length === 0 && (
-                    <div className="text-center py-6 text-slate-500 space-y-1">
-                        <AlertTriangle className="h-5 w-5 mx-auto text-slate-600" />
+                    <div className="text-center py-6 text-slate-400 space-y-1">
+                        <AlertTriangle className="h-5 w-5 mx-auto text-slate-400" />
                         <p className="text-[11px]">No labels found matching "{searchQuery}".</p>
-                        <p className="text-[10px] text-slate-600">Type in the manual input below to exclude custom tags.</p>
+                        <p className="text-[10px] text-slate-400">Type in the manual input below to exclude custom tags.</p>
                     </div>
                 )}
             </div>

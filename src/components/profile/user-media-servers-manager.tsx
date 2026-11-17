@@ -219,7 +219,6 @@ export function UserMediaServersManager({
             {/* 1. ROLE & CAPABILITIES OVERVIEW BANNER */}
             {/* ========================================================================= */}
             <Card className="border-border/60 bg-gradient-to-r from-slate-900/90 via-[#121218]/95 to-slate-900/80 shadow-md relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-72 h-72 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
                 <CardHeader className="pb-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div className="space-y-1">
@@ -325,7 +324,6 @@ export function UserMediaServersManager({
             {/* 2. MULTI-PLATFORM MEDIA SERVERS & LIBRARIES COMMAND CENTER */}
             {/* ========================================================================= */}
             <Card id="media-servers" className={`transition-all duration-300 bg-[#121218]/90 backdrop-blur-md relative overflow-hidden scroll-mt-6 ${isDirty ? "border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]" : "border-cyan-500/30 shadow-sm"}`}>
-                <div className="absolute top-0 right-0 w-72 h-72 bg-cyan-500/5 rounded-full blur-3xl pointer-events-none" />
                 <CardHeader className="pb-3 border-b border-border/30">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div className="space-y-0.5">
@@ -335,8 +333,8 @@ export function UserMediaServersManager({
                                     My Media Servers &amp; Libraries (Plex • Jellyfin • Emby)
                                 </CardTitle>
                                 {isDirty && (
-                                    <Badge variant="outline" className="text-[10px] bg-amber-500/15 text-amber-400 border-amber-500/30 font-bold ml-1 animate-pulse">
-                                        ● Unsaved Changes
+                                    <Badge variant="outline" className="text-[10px] bg-amber-500/15 text-amber-400 border-amber-500/30 font-bold ml-1">
+                                        Unsaved Changes
                                     </Badge>
                                 )}
                             </div>

@@ -1204,7 +1204,7 @@ export default function SonarrClient({ initialInstances, initialInstancesError }
                       );
                     })}
                     {filteredLibrary.length === 0 && (
-                      <p className="text-sm text-muted-foreground italic col-span-full text-center py-8 border border-dashed border-border/40 rounded-xl">
+                      <p className="text-sm text-muted-foreground col-span-full text-center py-8 border border-dashed border-border/40 rounded-lg">
                         No TV shows found in library.
                       </p>
                     )}

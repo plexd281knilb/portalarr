@@ -53,14 +53,14 @@ const TIERS: ExtendedTier[] = [
     },
     {
         tier: 7,
-        name: "Core System & Architecture 23-Suite Battery",
-        description: "Full integration test suite covering database build parity, edge, sync, navigation recovery, and subscriptions",
+        name: "Core System & Architecture Verification Battery",
+        description: "Full integration test suite covering database build parity, edge security, sync, UI design system, and subscriptions",
         command: "npx tsx scripts/verify-all.ts"
     },
     {
         tier: 8,
         name: "Production Turbopack Next.js Build",
-        description: "100% clean production compilation across all 40 static and dynamic routes",
+        description: "100% clean production compilation across all static and dynamic routes",
         command: "next build"
     }
 ];

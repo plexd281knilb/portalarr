@@ -207,17 +207,11 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
                 {/* STEP 0: INVITATION / MEMBER REFERENCE GATE */}
                 {/* ========================================================================= */}
                 {!isInviteVerified && (
-                    <Card className="border-border/50 bg-[#121218]/90 backdrop-blur-xl shadow-2xl relative overflow-hidden animate-in fade-in-50 duration-300">
-                        <div className="absolute top-0 right-0 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl -z-10 pointer-events-none" />
-                        
+                    <Card className="border-border/50 bg-[#121218]/90 backdrop-blur-md shadow-2xl relative overflow-hidden animate-in fade-in-50 duration-300">
                         <CardHeader className="text-center space-y-4 pt-8 pb-4">
-                            <div className="mx-auto bg-purple-500/15 border border-purple-500/30 p-4 rounded-3xl w-fit shadow-lg text-purple-400">
-                                <LockKeyhole className="h-10 w-10" />
+                            <div className="mx-auto bg-amber-500/15 border border-amber-500/30 p-3.5 rounded-xl w-fit shadow-sm text-amber-400">
+                                <LockKeyhole className="h-9 w-9" />
                             </div>
-
-                            <Badge variant="outline" className="mx-auto bg-purple-500/20 text-purple-300 border-purple-500/40 text-xs px-3 py-1 gap-1.5 font-bold">
-                                <Sparkles className="h-3.5 w-3.5" /> Private Media Server
-                            </Badge>
 
                             <CardTitle className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
                                 Invitation Required
@@ -286,16 +280,14 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
                 {/* STEP 1: WELCOME & PERKS COMPARISON (TRIAL VS FULL MEMBERSHIP) */}
                 {/* ========================================================================= */}
                 {isInviteVerified && step === 1 && (
-                    <Card className="border-border/50 bg-[#121218]/90 backdrop-blur-xl shadow-2xl relative overflow-hidden animate-in fade-in-50 duration-300">
-                        <div className="absolute top-0 right-0 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl -z-10 pointer-events-none" />
-                        
+                    <Card className="border-border/50 bg-[#121218]/90 backdrop-blur-md shadow-2xl relative overflow-hidden animate-in fade-in-50 duration-300">
                         <CardHeader className="text-center space-y-4 pt-8 pb-4">
-                            <div className="mx-auto bg-purple-500/15 border border-purple-500/30 p-4 rounded-3xl w-fit shadow-lg text-purple-400">
-                                <Gift className="h-10 w-10" />
+                            <div className="mx-auto bg-amber-500/15 border border-amber-500/30 p-3.5 rounded-xl w-fit shadow-sm text-amber-400">
+                                <Gift className="h-9 w-9" />
                             </div>
 
                             {config?.referrerName && (
-                                <Badge variant="outline" className="mx-auto bg-purple-500/20 text-purple-300 border-purple-500/40 text-xs px-3 py-1 gap-1.5 font-bold">
+                                <Badge variant="outline" className="mx-auto bg-emerald-500/15 text-emerald-300 border-emerald-500/35 text-xs px-3 py-1 gap-1.5 font-semibold">
                                     <Sparkles className="h-3.5 w-3.5" /> Invited by @{config.referrerName}
                                 </Badge>
                             )}
@@ -885,8 +877,8 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
                                     </div>
                                 )}
 
-                                <p className="text-[11px] text-muted-foreground italic pt-1">
-                                    💡 No payment up front for your trial. When submitting future renewal payments, please include your username <strong className="text-foreground">({username || "your account name"})</strong> in the note or memo.
+                                <p className="text-[11px] text-muted-foreground pt-1">
+                                    No payment up front for your trial. When submitting future renewal payments, please include your username <strong className="text-foreground">({username || "your account name"})</strong> in the note or memo.
                                 </p>
                             </div>
                         </CardContent>

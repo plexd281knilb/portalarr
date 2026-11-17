@@ -129,6 +129,12 @@
   body {
     pointer-events: auto !important;
   }
+  h1, h2, h3 {
+    text-wrap: balance;
+  }
+  table, time, [data-slot="badge"], .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

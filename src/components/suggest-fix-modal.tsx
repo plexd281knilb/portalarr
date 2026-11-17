@@ -270,9 +270,6 @@ export function SuggestFixModal({ open, onOpenChange, userRole = "USER", usernam
                         <div className="min-w-0">
                             <DialogTitle className="text-base sm:text-lg font-bold flex items-center gap-2">
                                 <span>Suggest a Fix / Report Issue</span>
-                                <Badge variant="outline" className="text-[10px] bg-amber-500/15 text-amber-300 border-amber-500/30">
-                                    <Sparkles className="h-2.5 w-2.5 mr-1" /> Full Member
-                                </Badge>
                             </DialogTitle>
                             <DialogDescription className="text-xs text-muted-foreground truncate">
                                 Reporting on <span className="font-semibold text-foreground">{pageInfo.title}</span>

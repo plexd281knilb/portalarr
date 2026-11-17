@@ -1365,13 +1365,12 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
             )}
 
             {/* REFERRAL & INVITE LINK CARD */}
-            <Card id="referral" className="border-purple-500/30 bg-purple-950/10 backdrop-blur-md shadow-sm relative overflow-hidden scroll-mt-6">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/5 rounded-full blur-3xl -z-10 pointer-events-none" />
+            <Card id="referral" className="border-amber-500/30 bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden scroll-mt-6">
                 <CardHeader className="pb-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
                             <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
-                                <Gift className="h-5 w-5 text-purple-400" /> Invite Friends & Community Rewards
+                                <Gift className="h-5 w-5 text-amber-400" /> Invite Friends & Community Rewards
                             </CardTitle>
                             <CardDescription className="text-xs">
                                 {isTrial 
@@ -1381,11 +1380,11 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                             </CardDescription>
                         </div>
                         {isTrial ? (
-                            <Badge variant="outline" className="bg-purple-500/20 text-purple-300 border-purple-500/40 text-xs w-fit flex items-center gap-1">
-                                <Sparkles className="h-3 w-3 text-purple-300" /> Full Member Perk
+                            <Badge variant="outline" className="bg-amber-500/15 text-amber-300 border-amber-500/35 text-xs w-fit flex items-center gap-1">
+                                <Sparkles className="h-3 w-3 text-amber-400" /> Full Member Perk
                             </Badge>
                         ) : (
-                            <Badge variant="outline" className="bg-purple-500/20 text-purple-300 border-purple-500/40 text-xs w-fit">
+                            <Badge variant="outline" className="bg-amber-500/15 text-amber-300 border-amber-500/35 text-xs w-fit">
                                 Code: {referralInfo?.referralCode || user?.username}
                             </Badge>
                         )}
@@ -1393,10 +1392,10 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                 </CardHeader>
                 <CardContent className="space-y-4">
                     {isTrial ? (
-                        <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                        <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/25 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                             <div className="space-y-1">
                                 <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                                    <Sparkles className="h-4 w-4 text-purple-400" /> Earn Free Months by Inviting Friends
+                                    <Sparkles className="h-4 w-4 text-amber-400" /> Earn Free Months by Inviting Friends
                                 </p>
                                 <p className="text-[11px] text-muted-foreground leading-relaxed">
                                     Upgrade to a full annual or monthly membership to unlock your personal referral link, invite friends, and automatically earn free subscription months when they convert!
@@ -1408,7 +1407,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                 onClick={() => {
                                     document.getElementById("billing")?.scrollIntoView({ behavior: "smooth" });
                                 }}
-                                className="w-full sm:w-auto text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white shrink-0 gap-1.5 cursor-pointer shadow-xs transition-all active:scale-95"
+                                className="w-full sm:w-auto text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-slate-950 shrink-0 gap-1.5 cursor-pointer shadow-xs transition-all active:scale-95"
                             >
                                 <Crown className="h-3.5 w-3.5" /> View Membership Options
                             </Button>
@@ -1421,32 +1420,32 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                     <Input 
                                         readOnly 
                                         value={inviteUrl} 
-                                        className="bg-background/80 font-mono text-xs pr-10 text-foreground border-purple-500/30"
+                                        className="bg-background/80 font-mono text-xs pr-10 text-foreground border-border/60"
                                     />
                                 </div>
                                 <Button 
                                     type="button" 
                                     onClick={handleCopyInviteLink}
-                                    className="w-full sm:w-auto font-bold shrink-0 bg-purple-600 hover:bg-purple-500 text-white gap-2 text-xs h-10 transition-all hover:ring-2 hover:ring-purple-400/40 active:scale-95"
+                                    className="w-full sm:w-auto font-semibold shrink-0 bg-amber-500 hover:bg-amber-400 text-slate-950 gap-2 text-xs h-10 transition-all active:scale-95"
                                 >
-                                    {copied ? <Check className="h-4 w-4 text-emerald-300" /> : <Copy className="h-4 w-4" />}
+                                    {copied ? <Check className="h-4 w-4 text-slate-950" /> : <Copy className="h-4 w-4" />}
                                     {copied ? "Copied Invite Link!" : "Copy Invite Link"}
                                 </Button>
                             </div>
 
                             {/* REFERRAL METRICS PILLS */}
-                            <div className="grid grid-cols-3 gap-3 pt-2 border-t border-purple-500/20 text-center">
-                                <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 space-y-0.5">
+                            <div className="grid grid-cols-3 gap-3 pt-2 border-t border-border/40 text-center">
+                                <div className="p-2.5 rounded-lg bg-slate-900/70 border border-border/50 space-y-0.5">
                                     <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Friends Invited</p>
-                                    <p className="text-xl font-black text-foreground">{referralInfo?.totalReferrals ?? 0}</p>
+                                    <p className="text-xl font-black text-foreground tabular-nums">{referralInfo?.totalReferrals ?? 0}</p>
                                 </div>
-                                <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 space-y-0.5">
+                                <div className="p-2.5 rounded-lg bg-sky-500/10 border border-sky-500/20 space-y-0.5">
                                     <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Active Trials</p>
-                                    <p className="text-xl font-black text-blue-400">{referralInfo?.activeTrials ?? 0}</p>
+                                    <p className="text-xl font-black text-sky-400 tabular-nums">{referralInfo?.activeTrials ?? 0}</p>
                                 </div>
-                                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 space-y-0.5">
+                                <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 space-y-0.5">
                                     <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Subscribed</p>
-                                    <p className="text-xl font-black text-emerald-400">{referralInfo?.conversions ?? 0}</p>
+                                    <p className="text-xl font-black text-emerald-400 tabular-nums">{referralInfo?.conversions ?? 0}</p>
                                 </div>
                             </div>
                         </>
@@ -1455,13 +1454,12 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
             </Card>
 
             {/* ACCOUNT STATUS & ACCESS CARD */}
-            <Card className="border-indigo-500/30 bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl -z-10 pointer-events-none" />
+            <Card className="border-sky-500/30 bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden">
                 <CardHeader className="pb-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
                             <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
-                                <Crown className="h-5 w-5 text-indigo-400" /> Account Status & Access Level
+                                <Crown className="h-5 w-5 text-sky-400" /> Account Status & Access Level
                             </CardTitle>
                             <CardDescription className="text-xs">
                                 Your account status determines your support level, media requests, and library access.
@@ -1721,8 +1719,8 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                         </div>
                     )}
 
-                    <p className="text-[11px] text-muted-foreground italic pt-1">
-                        💡 When making a payment, remember to include your username <strong className="text-foreground">({user?.username})</strong> in the payment memo.
+                    <p className="text-[11px] text-muted-foreground pt-1">
+                        When making a payment, remember to include your username <strong className="text-foreground">({user?.username})</strong> in the payment memo.
                     </p>
                 </CardContent>
             </Card>
@@ -1738,27 +1736,26 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
             />
 
             {/* HOUSEHOLD SUB-ACCOUNTS CARD */}
-            <Card id="subaccounts" className="border-purple-500/30 bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden scroll-mt-6">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/5 rounded-full blur-3xl -z-10 pointer-events-none" />
+            <Card id="subaccounts" className="border-sky-500/30 bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden scroll-mt-6">
                 <CardHeader className="pb-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
                             <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
-                                <Users className="h-5 w-5 text-purple-400" /> Household Sub-Accounts & Profiles
+                                <Users className="h-5 w-5 text-sky-400" /> Household Sub-Accounts & Profiles
                             </CardTitle>
                             <CardDescription className="text-xs">
                                 Create secondary Plex profiles for your Living Room TV or Kids' tablets with zero extra billing.
                             </CardDescription>
                         </div>
-                        <Badge variant="outline" className="bg-purple-500/15 text-purple-300 border-purple-500/40 text-xs w-fit flex items-center gap-1 font-semibold">
-                            <Sparkles className="h-3 w-3 text-purple-300" /> Coming Soon • Beta
+                        <Badge variant="outline" className="bg-sky-500/15 text-sky-300 border-sky-500/35 text-xs w-fit flex items-center gap-1 font-semibold">
+                            <Sparkles className="h-3 w-3 text-sky-300" /> Coming Soon
                         </Badge>
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    <div className="p-4 rounded-xl bg-purple-950/20 border border-purple-500/30 space-y-3">
+                    <div className="p-4 rounded-lg bg-slate-900/70 border border-sky-500/25 space-y-3">
                         <div className="flex items-center gap-2">
-                            <Badge className="bg-purple-500/20 text-purple-300 border border-purple-500/40 text-[11px] font-semibold">
+                            <Badge className="bg-sky-500/15 text-sky-300 border border-sky-500/35 text-[11px] font-semibold">
                                 Feature in Active Development
                             </Badge>
                             <span className="text-xs text-muted-foreground">Tagging & Filtering Beta</span>
@@ -1769,7 +1766,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                             <div className="p-3 rounded-lg bg-black/30 border border-white/5 space-y-1">
                                 <div className="flex items-center gap-2 text-xs font-bold text-foreground">
-                                    <Monitor className="h-4 w-4 text-indigo-400 shrink-0" /> Living Room TV Profile
+                                    <Monitor className="h-4 w-4 text-sky-400 shrink-0" /> Living Room TV Profile
                                 </div>
                                 <p className="text-[11px] text-muted-foreground">
                                     Shared household viewing that automatically filters out severe nudity and explicit content for living room screens.
@@ -1777,7 +1774,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                             </div>
                             <div className="p-3 rounded-lg bg-black/30 border border-white/5 space-y-1">
                                 <div className="flex items-center gap-2 text-xs font-bold text-foreground">
-                                    <Baby className="h-4 w-4 text-purple-400 shrink-0" /> Kids Tablet Profile
+                                    <Baby className="h-4 w-4 text-emerald-400 shrink-0" /> Kids Tablet Profile
                                 </div>
                                 <p className="text-[11px] text-muted-foreground">
                                     Dedicated child-safe profile restricted strictly to G/PG ratings and animated kids libraries.
@@ -1790,7 +1787,6 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
 
             {/* ACCOUNT ADD-ONS & FEATURES CARD */}
             <Card id="addons" className="border-amber-500/30 bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden scroll-mt-6">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-3xl -z-10 pointer-events-none" />
                 <CardHeader className="pb-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
@@ -1954,7 +1950,6 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
 
             {/* NOTIFICATION PREFERENCES CARD */}
             <Card id="notifications" className={`transition-all duration-300 bg-[#121218]/80 backdrop-blur-md relative overflow-hidden scroll-mt-6 ${isNotifDirty ? "border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]" : "border-cyan-500/30 shadow-sm"}`}>
-                <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/5 rounded-full blur-3xl -z-10 pointer-events-none" />
                 <CardHeader className="pb-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
@@ -2175,20 +2170,19 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
             <LinkedEmailsManager />
 
             {/* DISCORD COMMUNITY & ROLE SYNC CARD */}
-            <Card id="discord" className="border-indigo-500/30 bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden scroll-mt-6">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl -z-10 pointer-events-none" />
+            <Card id="discord" className="border-sky-500/30 bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden scroll-mt-6">
                 <CardHeader className="pb-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
                             <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
-                                <Gamepad2 className="h-5 w-5 text-indigo-400" /> Discord Community & Role Sync
+                                <Gamepad2 className="h-5 w-5 text-sky-400" /> Discord Community & Role Sync
                             </CardTitle>
                             <CardDescription className="text-xs">
                                 Link your Discord account to gain automated access to community channels, live announcements, and support.
                             </CardDescription>
                         </div>
                         {user?.discordId ? (
-                            <Badge variant="outline" className="bg-indigo-500/20 text-indigo-300 border-indigo-500/40 text-xs font-semibold gap-1.5 w-fit">
+                            <Badge variant="outline" className="bg-sky-500/15 text-sky-300 border-sky-500/35 text-xs font-semibold gap-1.5 w-fit">
                                 <CheckCircle2 className="h-3 w-3 text-emerald-400" /> Linked
                             </Badge>
                         ) : (
@@ -2357,7 +2351,6 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
 
             {/* CONTENT SAFETY & FAMILY PROFILE CARD */}
             <Card id="safety" className="border-amber-500/30 bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden scroll-mt-6">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-3xl -z-10 pointer-events-none" />
                 <CardHeader className="pb-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
@@ -2369,12 +2362,12 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                             </CardDescription>
                         </div>
                         <Badge variant="outline" className="bg-amber-500/15 text-amber-300 border-amber-500/40 text-xs w-fit flex items-center gap-1 font-semibold">
-                            <Sparkles className="h-3 w-3 text-amber-300" /> Coming Soon • Beta
+                            <Sparkles className="h-3 w-3 text-amber-300" /> Coming Soon
                         </Badge>
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    <div className="p-4 rounded-xl bg-amber-950/20 border border-amber-500/30 space-y-3">
+                    <div className="p-4 rounded-lg bg-amber-950/20 border border-amber-500/30 space-y-3">
                         <div className="flex items-center gap-2">
                             <Badge className="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[11px] font-semibold">
                                 Tagging Engine in Beta
@@ -2387,7 +2380,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
                             <div className="p-3 rounded-lg bg-black/30 border border-white/5 space-y-1">
                                 <div className="text-xs font-bold text-foreground">
-                                    🔞 Rating Ceilings
+                                    Rating Ceilings
                                 </div>
                                 <p className="text-[11px] text-muted-foreground">
                                     Enforce TV-Y, PG, PG-13, or R rating caps that hide titles exceeding your chosen ceiling.
@@ -2395,7 +2388,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                             </div>
                             <div className="p-3 rounded-lg bg-black/30 border border-white/5 space-y-1">
                                 <div className="text-xs font-bold text-foreground">
-                                    🚫 Explicit Filtering
+                                    Explicit Filtering
                                 </div>
                                 <p className="text-[11px] text-muted-foreground">
                                     One-click exclusion filters for severe nudity, extreme gore, and horror genres.
@@ -2403,7 +2396,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                             </div>
                             <div className="p-3 rounded-lg bg-black/30 border border-white/5 space-y-1">
                                 <div className="text-xs font-bold text-foreground">
-                                    👥 Per-Profile Safety
+                                    Per-Profile Safety
                                 </div>
                                 <p className="text-[11px] text-muted-foreground">
                                     Apply independent safety rules across your primary and household sub-accounts.
@@ -2416,7 +2409,6 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
 
             {/* SEND-TO-KINDLE DELIVERY CARD */}
             <Card id="kindle" className={`transition-all duration-300 bg-[#121218]/80 backdrop-blur-md relative overflow-hidden scroll-mt-6 ${isKindleDirty ? "border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]" : "border-amber-500/30 shadow-sm"}`}>
-                <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-3xl -z-10 pointer-events-none" />
                 <CardHeader className="pb-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
@@ -2588,12 +2580,12 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                     onClick={() => handleCopy(paymentConfig.kindleSenderEmail || paymentConfig.smtpFrom, "smtpFrom")}
                                     className="w-full sm:w-auto font-sans text-xs gap-1.5 shrink-0 border-purple-500/30 hover:bg-purple-500/10"
                                 >
-                                    {copiedHandle === "smtpFrom" ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5 text-purple-400" />}
+                                    {copiedHandle === "smtpFrom" ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5 text-amber-400" />}
                                     {copiedHandle === "smtpFrom" ? "Copied Sender!" : "Copy Sender Email"}
                                 </Button>
                             </div>
                         ) : (
-                            <p className="text-[11px] text-amber-400/90 italic">
+                            <p className="text-[11px] text-amber-400/90">
                                 Note: Inbound server SMTP address will appear once configured by the administrator.
                             </p>
                         )}
@@ -2603,7 +2595,6 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
 
             {/* KIDS & FAMILY LIBRARY ACCESS CARD */}
             <Card id="kids-library" className="border-emerald-500/30 bg-[#121218]/80 backdrop-blur-md relative overflow-hidden shadow-sm scroll-mt-6">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl -z-10 pointer-events-none" />
                 <CardHeader className="pb-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
@@ -2679,13 +2670,12 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
             </Card>
 
             {/* AUDIOBOOKS PLEX LIBRARY ACCESS CARD */}
-            <Card id="audiobooks-library" className="border-purple-500/30 bg-[#121218]/80 backdrop-blur-md relative overflow-hidden shadow-sm scroll-mt-6">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/5 rounded-full blur-3xl -z-10 pointer-events-none" />
+            <Card id="audiobooks-library" className="border-amber-500/30 bg-[#121218]/80 backdrop-blur-md relative overflow-hidden shadow-sm scroll-mt-6">
                 <CardHeader className="pb-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
                             <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
-                                <Headphones className="h-5 w-5 text-purple-400" /> Audiobooks Plex Library Access
+                                <Headphones className="h-5 w-5 text-amber-400" /> Audiobooks Plex Library Access
                             </CardTitle>
                             <CardDescription className="text-xs">
                                 Opt in to stream narrated audiobooks, series collections, and spoken word media directly in Plex.

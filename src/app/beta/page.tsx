@@ -17,12 +17,8 @@ export default function BetaPage() {
                 </Button>
             </div>
 
-            <div className="space-y-3 text-center sm:text-left">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20">
-                    <Sparkles className="h-3.5 w-3.5" />
-                    <span>Experimental Features</span>
-                </div>
-                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-foreground">
+            <div className="space-y-2 text-center sm:text-left">
+                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-foreground text-balance">
                     Beta Testing & Services
                 </h1>
                 <p className="text-muted-foreground text-xs sm:text-sm max-w-2xl leading-relaxed">
@@ -30,9 +26,9 @@ export default function BetaPage() {
                 </p>
             </div>
 
-            <Card className="rounded-2xl border-border/50 bg-[#121218]/80 backdrop-blur-md p-6 sm:p-12 text-center space-y-6">
-                <div className="mx-auto w-16 h-16 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
-                    <Sparkles className="h-8 w-8" />
+            <Card className="rounded-xl border-border/50 bg-[#121218]/80 backdrop-blur-md p-6 sm:p-12 text-center space-y-6">
+                <div className="mx-auto w-14 h-14 rounded-lg bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-amber-400">
+                    <Sparkles className="h-7 w-7" />
                 </div>
 
                 <div className="space-y-2 max-w-md mx-auto">

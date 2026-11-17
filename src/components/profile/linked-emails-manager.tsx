@@ -218,7 +218,6 @@ export function LinkedEmailsManager({ targetUserId, onChanged }: LinkedEmailsMan
 
     return (
         <Card id="linked-emails" className="border-cyan-500/30 bg-[#121218]/80 backdrop-blur-md shadow-sm relative overflow-hidden scroll-mt-6">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/5 rounded-full blur-3xl -z-10 pointer-events-none" />
             <CardHeader className="pb-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="space-y-1">

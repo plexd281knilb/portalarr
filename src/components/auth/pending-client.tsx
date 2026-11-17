@@ -285,7 +285,7 @@ export default function PendingClient({ initialUser, initialPaymentConfig }: Pen
                 />
               </div>
 
-              <p className="text-[11px] text-muted-foreground italic pt-1">
+              <p className="text-[11px] text-muted-foreground pt-1">
                 Include your username <strong className="text-foreground">({user?.username})</strong> in the payment note. Once received, your access will be restored immediately.
               </p>
             </div>
