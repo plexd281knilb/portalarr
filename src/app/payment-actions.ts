@@ -271,6 +271,7 @@ export async function getPaymentTransactions(filter: string = "ALL", limit: numb
                         username: true,
                         email: true,
                         status: true,
+                        subscriptionCadence: true,
                         subscriptionEndsAt: true
                     }
                 },
@@ -661,7 +662,11 @@ export async function recalculateUserSubscriptionFromPayments(userId: string) {
                 where: { id: userId },
                 data: {
                     status: "EXPIRED",
-                    subscriptionEndsAt: null
+                    subscriptionEndsAt: null,
+                    accountCredit: 0,
+                    lastPaymentAmount: null,
+                    lastPaymentDate: null,
+                    lastPaymentProvider: null
                 }
             });
             try {
@@ -676,7 +681,7 @@ export async function recalculateUserSubscriptionFromPayments(userId: string) {
 
     let accumulatedCredit = 0;
     let currentExpiry: Date | null = null;
-    let finalCadence: "YEARLY" | "MONTHLY" = "YEARLY";
+    let finalCadence: "YEARLY" | "MONTHLY" = user.subscriptionCadence === "MONTHLY" ? "MONTHLY" : "YEARLY";
     let lastTx: any = null;
 
     for (const tx of matchedPayments) {
@@ -1358,23 +1363,23 @@ export async function sendSubscriptionRenewalRemindersInternal(): Promise<{
                 const renewalDateStr = summary.expirationDateFormatted || new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric" }).format(expiryDate);
                 const friendNamesStr = summary.convertedFriends.map(f => `@${f.username}`).join(", ");
                 const referralDiscountText = summary.convertedReferralsCount > 0
-                    ? `-${summary.rewardDiscountAmount.toFixed(2)} (${summary.convertedReferralsCount} friend${summary.convertedReferralsCount > 1 ? "s" : ""} referred: ${friendNamesStr})`
+                    ? `-$${summary.rewardDiscountAmount.toFixed(2)} (${summary.convertedReferralsCount} friend${summary.convertedReferralsCount > 1 ? "s" : ""} referred: ${friendNamesStr})`
                     : "No active referral credits";
                 const monthlyAlternativeText = summary.delayedMonthlyStartDate
-                    ? `${memberMonthlyPrice.toFixed(2)}/month starting ${summary.delayedMonthlyStartDate}`
-                    : `${memberMonthlyPrice.toFixed(2)}/month starting ${renewalDateStr}`;
+                    ? `$${memberMonthlyPrice.toFixed(2)}/month starting ${summary.delayedMonthlyStartDate}`
+                    : `$${memberMonthlyPrice.toFixed(2)}/month starting ${renewalDateStr}`;
 
                 const existingCredit = Math.max(0, Number(member.accountCredit || 0));
                 const templateId = isYearly ? "subscription_renewal_reminder_yearly" : "subscription_renewal_reminder_monthly";
                 const netAmountDue = isYearly 
-                    ? `${Math.max(0, summary.discountedYearlyPrice - existingCredit).toFixed(2)}` 
-                    : `${Math.max(0, memberMonthlyPrice - existingCredit).toFixed(2)}`;
+                    ? `$${Math.max(0, summary.discountedYearlyPrice - existingCredit).toFixed(2)}` 
+                    : `$${Math.max(0, memberMonthlyPrice - existingCredit).toFixed(2)}`;
 
                 const { subject, html } = await renderEmailTemplate(templateId, {
                     username: member.username,
                     daysRemaining: String(daysRemaining),
                     renewalDate: renewalDateStr,
-                    basePrice: isYearly ? `${memberYearlyPrice.toFixed(2)} / year` : `${memberMonthlyPrice.toFixed(2)} / month`,
+                    basePrice: isYearly ? `$${memberYearlyPrice.toFixed(2)} / year` : `$${memberMonthlyPrice.toFixed(2)} / month`,
                     referralDiscountText,
                     amountDue: netAmountDue,
                     monthlyAlternativeText,

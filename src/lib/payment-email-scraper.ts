@@ -599,6 +599,7 @@ export function calculateAlignedExpiryDate(params: {
     yearlyPrice: number;
     monthlyPrice: number;
     existingExpiry?: Date | null;
+    forceCadence?: "YEARLY" | "MONTHLY";
 }): { 
     newExpiryDate: Date; 
     periodGrantedText: string; 
@@ -607,18 +608,19 @@ export function calculateAlignedExpiryDate(params: {
     monthsGranted: number;
     cadence: "YEARLY" | "MONTHLY";
 } {
-    const { paymentDate, totalAmount, yearlyPrice, monthlyPrice, existingExpiry } = params;
+    const { paymentDate, totalAmount, yearlyPrice, monthlyPrice, existingExpiry, forceCadence } = params;
     
     const payMonth = paymentDate.getMonth(); // 0-indexed (0=Jan, 9=Oct, 11=Dec)
     const payYear = paymentDate.getFullYear();
     
-    // 1. Check if payment covers the Full Yearly rate (tolerance: >= yearlyPrice - 5)
-    const isFullYearly = totalAmount >= Math.max(1, yearlyPrice - 5);
+    // 1. Check if payment covers the Full Yearly rate (tolerance: >= yearlyPrice - 5) unless caller locked MONTHLY mode
+    const isFullYearly = forceCadence === "MONTHLY" ? false : (totalAmount >= Math.max(1, yearlyPrice - 5));
     
-    // 2. Check Mid-Year Prorated Rest-of-Year calculation (Jan-Sep only)
+    // 2. Check Mid-Year Prorated Rest-of-Year calculation (Jan-Sep only) unless caller locked MONTHLY mode
     const proratedInfo = getProratedRestOfYearAmount(paymentDate, monthlyPrice, yearlyPrice);
-    // Mid-year proration applies if paid Jan-Sep (payMonth < 9) and total covers the rest of the year
-    const isProratedRestOfYear = !isFullYearly && (payMonth < 9) && (totalAmount >= Math.max(1, proratedInfo.amount - 5));
+    const isProratedRestOfYear = forceCadence === "MONTHLY"
+        ? false
+        : (!isFullYearly && (payMonth < 9) && (totalAmount >= Math.max(1, proratedInfo.amount - 5)));
 
     let newExpiryDate: Date;
     let periodGrantedText = "";
@@ -672,9 +674,13 @@ export function calculateAlignedExpiryDate(params: {
         const isRecentExpiry = existingExpiry && (existingExpiry.getTime() > (paymentDate.getTime() - 30 * 24 * 60 * 60 * 1000));
 
         if (isRecentExpiry) {
+            const origDay = existingExpiry.getDate();
             newExpiryDate = new Date(existingExpiry);
-            newExpiryDate.setMonth(newExpiryDate.getMonth() + monthsGranted);
+            // Clamp to day 1 before advancing months so Jan 29-31 doesn't roll over into March;
+            // if expiry was >= 15th of month (e.g. Dec 31 year-end), step forward to the upcoming 1st first.
+            const alignOffset = origDay >= 15 ? 1 : 0;
             newExpiryDate.setDate(1);
+            newExpiryDate.setMonth(newExpiryDate.getMonth() + alignOffset + monthsGranted);
             newExpiryDate.setHours(23, 59, 59, 999);
         } else {
             // New user or lapsed account paying monthly
@@ -685,12 +691,14 @@ export function calculateAlignedExpiryDate(params: {
                 // Prorated payment for remaining days in current month: credits through 1st of next month
                 newExpiryDate = new Date(payYear, payMonth + 1, 1, 23, 59, 59, 999);
             } else {
-                // Full monthly payment ($15) made mid-month:
-                // Credit full month(s) from payment date aligned to next month's 1st:
-                newExpiryDate = new Date(payYear, payMonth + monthsGranted, 1, 23, 59, 59, 999);
-                // Guarantee user receives at least 25 days of access for a full monthly fee:
+                // Full monthly payment(s) made mid-month:
+                // Guarantee the first month covers at least 25 days, then add any remaining full prepaid months
+                newExpiryDate = new Date(payYear, payMonth + 1, 1, 23, 59, 59, 999);
                 if ((newExpiryDate.getTime() - paymentDate.getTime()) < 25 * 24 * 60 * 60 * 1000) {
                     newExpiryDate.setMonth(newExpiryDate.getMonth() + 1);
+                }
+                if (monthsGranted > 1) {
+                    newExpiryDate.setMonth(newExpiryDate.getMonth() + (monthsGranted - 1));
                 }
             }
         }
@@ -1068,7 +1076,7 @@ export async function applySubscriptionForPayment(user: any, payment: ScrapedPay
                     yearlyOptionNote = `
 <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-left: 4px solid #10b981; padding: 14px; border-radius: 6px; margin: 20px 0;">
     <p style="margin: 0; color: #166534; font-size: 13px;">
-        💡 <strong>Prefer the discounted Annual Plan?</strong> The annual membership is ${thresholdResult.targetYearlyPrice.toFixed(2)}/year (averaging only ${avgMonthlyVal}/mo). If you'd like to unlock a full year of access instead, you can send in the remaining <strong>${thresholdResult.yearlyShortfall.toFixed(2)}</strong> (${thresholdResult.targetYearlyPrice.toFixed(2)} - ${thresholdResult.totalCredit.toFixed(2)}).
+        💡 <strong>Prefer the discounted Annual Plan?</strong> The annual membership is $${thresholdResult.targetYearlyPrice.toFixed(2)}/year (averaging only $${avgMonthlyVal}/mo). If you'd like to unlock a full year of access instead, you can send in the remaining <strong>$${thresholdResult.yearlyShortfall.toFixed(2)}</strong> ($${thresholdResult.targetYearlyPrice.toFixed(2)} - $${thresholdResult.totalCredit.toFixed(2)}).
     </p>
 </div>`;
                 }

@@ -6871,7 +6871,11 @@ export async function sendSubscriptionRenewalReminderAction(userId: string) {
         const { isUserSubscriptionPaidForCycle, parseReminderDays, DEFAULT_YEARLY_REMINDER_DAYS, DEFAULT_MONTHLY_REMINDER_DAYS } = await import("@/lib/subscription-reminders");
         const yearlyMilestones = parseReminderDays(settings?.yearlyRenewalReminderDays, DEFAULT_YEARLY_REMINDER_DAYS);
         const monthlyMilestones = parseReminderDays(settings?.monthlyRenewalReminderDays, DEFAULT_MONTHLY_REMINDER_DAYS);
-        const isYearly = (user.subscriptionCadence || "YEARLY").toUpperCase() === "YEARLY";
+        const expiryObj = user.subscriptionEndsAt ? new Date(user.subscriptionEndsAt) : null;
+        const isAnnualBoundary = expiryObj
+            ? (expiryObj.getMonth() === 0 && expiryObj.getDate() === 1) || (expiryObj.getMonth() === 11 && expiryObj.getDate() === 31)
+            : true;
+        const isYearly = (user.subscriptionCadence || (isAnnualBoundary ? "YEARLY" : "MONTHLY")).toUpperCase() === "YEARLY";
         const maxMilestone = isYearly ? yearlyMilestones[0] : monthlyMilestones[0];
 
         const paidCheck = isUserSubscriptionPaidForCycle({
@@ -6896,16 +6900,17 @@ export async function sendSubscriptionRenewalReminderAction(userId: string) {
         const friendNamesStr = summary.convertedFriends.map(f => `@${f.username}`).join(", ");
 
         const referralDiscountText = summary.convertedReferralsCount > 0
-            ? `-${summary.rewardDiscountAmount.toFixed(2)} (${summary.convertedReferralsCount} friend${summary.convertedReferralsCount > 1 ? "s" : ""} referred: ${friendNamesStr})`
+            ? `-$${summary.rewardDiscountAmount.toFixed(2)} (${summary.convertedReferralsCount} friend${summary.convertedReferralsCount > 1 ? "s" : ""} referred: ${friendNamesStr})`
             : "No active referral credits";
 
         const monthlyAlternativeText = summary.delayedMonthlyStartDate
-            ? `${monthlyPrice.toFixed(2)}/month starting ${summary.delayedMonthlyStartDate}`
-            : `${monthlyPrice.toFixed(2)}/month starting ${renewalDateStr}`;
+            ? `$${monthlyPrice.toFixed(2)}/month starting ${summary.delayedMonthlyStartDate}`
+            : `$${monthlyPrice.toFixed(2)}/month starting ${renewalDateStr}`;
 
         const existingCredit = Math.max(0, Number(user.accountCredit || 0));
         const netYearlyDue = Math.max(0, summary.discountedYearlyPrice - existingCredit);
         const netMonthlyDue = Math.max(0, monthlyPrice - existingCredit);
+        const effectiveAmountDue = isYearly ? netYearlyDue : netMonthlyDue;
         const daysRemainingVal = user.subscriptionEndsAt
             ? Math.max(1, Math.ceil((new Date(user.subscriptionEndsAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
             : (isYearly ? 30 : 3);
@@ -6915,9 +6920,9 @@ export async function sendSubscriptionRenewalReminderAction(userId: string) {
             username: user.username,
             daysRemaining: String(daysRemainingVal),
             renewalDate: renewalDateStr,
-            basePrice: isYearly ? `${yearlyPrice.toFixed(2)} / year` : `${monthlyPrice.toFixed(2)} / month`,
+            basePrice: isYearly ? `$${yearlyPrice.toFixed(2)} / year` : `$${monthlyPrice.toFixed(2)} / month`,
             referralDiscountText,
-            amountDue: isYearly ? `${netYearlyDue.toFixed(2)}` : `${netMonthlyDue.toFixed(2)}`,
+            amountDue: `$${effectiveAmountDue.toFixed(2)}`,
             monthlyAlternativeText,
             referralNoticeDetails: summary.reminderNoticeText,
             paymentMemo: user.username,
@@ -6934,11 +6939,11 @@ export async function sendSubscriptionRenewalReminderAction(userId: string) {
             userId: user.id
         });
 
-        logger.addLog("INFO", "EMAIL", `Dispatched subscription renewal reminder to "${user.username}" (${user.email}). Amount due: $${summary.discountedYearlyPrice.toFixed(2)}`);
+        logger.addLog("INFO", "EMAIL", `Dispatched ${isYearly ? "annual" : "monthly"} subscription renewal reminder to "${user.username}" (${user.email}). Amount due: $${effectiveAmountDue.toFixed(2)}`);
 
         return {
             success: true,
-            message: `Successfully dispatched renewal reminder notice to @${user.username} (${user.email})! Amount due: $${summary.discountedYearlyPrice.toFixed(2)}${summary.convertedReferralsCount > 0 ? ` ($${summary.rewardDiscountAmount.toFixed(2)} referral discount applied).` : "."}`
+            message: `Successfully dispatched ${isYearly ? "annual" : "monthly"} renewal reminder notice to @${user.username} (${user.email})! Amount due: $${effectiveAmountDue.toFixed(2)}${isYearly && summary.convertedReferralsCount > 0 ? ` ($${summary.rewardDiscountAmount.toFixed(2)} referral discount applied).` : "."}`
         };
     } catch (e: any) {
         return { success: false, error: e.message || "Failed to send renewal reminder." };
