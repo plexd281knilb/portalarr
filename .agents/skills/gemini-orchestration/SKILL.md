@@ -112,7 +112,7 @@ When calling Layer 1 (`deep-architect`) with `Model: "pro"`:
 
 ## 🛠️ VS Code Tasks Integration
 
-Located in [`.vscode/tasks.json`](file:///C:/Users/kyraj/Documents/Github/portalarr/.vscode/tasks.json):
+Located in [`.vscode/tasks.json`](../../../.vscode/tasks.json):
 - `agy: Root Orchestrator (Gemini 3.8 Flash High - Default)`: Runs `agy --model gemini-3.8-flash-high`.
 - `agy: Deep Architect (Gemini 4 Argon High - Escalation)`: Runs `agy --model gemini-4-argon-high`.
 - `agy: Fallback Architect (Gemini 3.8 Flash High - Quota Fallback)`: Runs `agy --model gemini-3.8-flash-high`.

@@ -131,9 +131,6 @@ export function KindleSetupGuideModal({
                         <Badge className="bg-sky-500/15 text-sky-300 border-sky-500/30 text-[10px] uppercase font-bold tracking-wider px-2 py-0.5">
                             <Send className="h-3 w-3 mr-1 inline" /> Send-to-Kindle Setup
                         </Badge>
-                        <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-300 bg-emerald-500/10">
-                            Wireless Delivery
-                        </Badge>
                     </div>
                     <DialogTitle className="text-lg sm:text-xl font-extrabold tracking-tight text-white flex items-center gap-2">
                         <span>Set Up 1-Click Send-to-Kindle Delivery</span>

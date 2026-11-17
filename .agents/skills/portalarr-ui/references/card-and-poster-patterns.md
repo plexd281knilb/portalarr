@@ -24,7 +24,7 @@ Posters and cards are the primary visual building blocks across Portalarr (Disco
 
 ## 2. Corner Badges & Ribbon Overlays
 
-- **Top-Right Corner**: Format & Type Badges (e.g. `🎬 MOVIE`, `📺 TV`, `📖 EBOOK`, `🎧 AUDIOBOOK`, `4K UHD`, `1080p`).
+- **Top-Right Corner**: Format & Type Badges using crisp `lucide-react` icons (`Film`, `Tv`, `BookOpen`, `Headphones`) paired with uppercase labels (`MOVIE`, `TV`, `EBOOK` in emerald, `AUDIOBOOK` in amber, `4K UHD` in sky/cyan) rather than raw JSX emojis.
   ```tsx
   <div className="absolute top-2 right-2 z-10 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider backdrop-blur-md bg-slate-950/80 text-cyan-300 border border-cyan-500/30">
     4K UHD
@@ -140,7 +140,7 @@ Standard grid layout for media shelves and discovery pages:
           <Image className="w-3.5 h-3.5 mr-2 text-cyan-400" /> Fetch Cover
         </DropdownMenuItem>
         <DropdownMenuItem onClick={handleMatchBook}>
-          <Sparkles className="w-3.5 h-3.5 mr-2 text-purple-400" /> Match Metadata
+          <Sparkles className="w-3.5 h-3.5 mr-2 text-amber-400" /> Match Metadata
         </DropdownMenuItem>
         <DropdownMenuSeparator className="bg-slate-800" />
         <DropdownMenuItem onClick={handleDelete} className="text-red-400 focus:text-red-300">

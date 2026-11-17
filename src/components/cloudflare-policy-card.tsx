@@ -66,7 +66,6 @@ export default function CloudflarePolicyCard() {
 
     return (
         <Card className="border-orange-500/30 bg-[#121218]/90 backdrop-blur-md shadow-md relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-orange-500/5 rounded-full blur-3xl pointer-events-none" />
             <CardHeader className="pb-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div className="space-y-0.5">

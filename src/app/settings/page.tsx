@@ -3724,9 +3724,6 @@ function SettingsPageContent() {
                             <div className="space-y-0.5">
                                 <div className="text-xs font-bold text-foreground flex items-center gap-2">
                                     <span>Direct-Plex Stream Engine (Active)</span>
-                                    <Badge variant="outline" className="text-[9px] bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-semibold">
-                                        Native Telemetry
-                                    </Badge>
                                 </div>
                                 <p className="text-[11px] text-muted-foreground leading-relaxed">
                                     DomsHomeLab connects directly to your Plex Media Servers to capture live playback, hardware transcoding metrics, and stream quality telemetry. External Tautulli instances are completely optional and used exclusively for importing past historical watch records.

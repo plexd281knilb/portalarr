@@ -20,13 +20,16 @@ Portalarr uses a **Modern Cinematic Dark Theme** powered by Tailwind CSS, Radix 
 - **Active / Unsaved Dirty State Warning**:
   - Border: `border-2 border-amber-500/70`
   - Glow: `shadow-[0_0_20px_rgba(245,158,11,0.2)]`
-- **Semantic Accents**:
-  - 🟢 **Emerald (`emerald-400` / `emerald-500`)**: Success, available in library, active streaming, auto-approved.
-  - 🟡 **Amber (`amber-400` / `amber-500`)**: Pending review, warnings, unsaved dirty states, monitored coming soon.
-  - 🟣 **Purple / Indigo (`purple-400` / `indigo-400`)**: Poster overlays, Kometa studio, AI metadata agents, automation schedules.
-  - 🔵 **Cinematic Blue / Cyan (`sky-400` / `cyan-400`)**: Live stream telemetry, Plex direct play, speed test, digital releases.
-  - 🔴 **Crimson / Rose (`rose-400` / `rose-500`)**: Media Requests (Seerr/Overseerr engine), prune deletions, errors, stream terminations, declined requests.
-  - 🟠 **Vibrant Orange (`orange-400` / `orange-500`)**: General setup, alert banners, server configuration.
+- **Semantic Accents & Primary Token**:
+  - **Primary Accent (Plex Amber)**: `oklch(0.769 0.188 70.08)` (`amber-400` / `amber-500`) — Primary brand CTA, active highlights, warnings, unsaved dirty states.
+  - **Emerald (`emerald-400` / `emerald-500`)**: Success, available in library, active streaming, auto-approved, ebook badges.
+  - **Sky / Cyan (`sky-400` / `cyan-400`)**: Live stream telemetry, Plex direct play, speed test, digital releases, info banners.
+  - **Crimson / Rose (`rose-400` / `rose-500`)**: Media Requests (Seerr/Overseerr engine), prune deletions, errors, stream terminations, declined requests.
+  - **Restrained Neutral Surfaces (Zero Decorative Purple/Indigo Gradients)**: Never use decorative `from-purple-*`, `via-purple-*`, `to-purple-*`, `from-indigo-*`, `to-indigo-*`, or `from-violet-*` gradients in JSX components (`Suite 25` fails on any match). Use dark slate surfaces (`bg-slate-900/90`, `border-border/60`) with Plex Amber and Sky highlights instead.
+- **Typography & Concentric Radius Standard**:
+  - **Fonts**: `Inter` (`--font-inter` ➔ `--font-sans`) paired with `JetBrains_Mono` (`--font-jetbrains-mono` ➔ `--font-mono`), `antialiased`.
+  - **Corner Radius**: Unified `--radius: 0.5rem` with concentric geometry (`rounded-xl` dialogs/hero banners ➔ `rounded-lg` cards/alerts ➔ `rounded-md` buttons/inputs/tabs ➔ `rounded-sm` checkboxes/chips).
+  - **Icons Over UI Emojis**: Use crisp `lucide-react` icons rather than raw JSX emojis inside buttons, headers, filter chips, and badges.
 
 ### 2. Multi-Tab Navigation, 5-Hub Settings Architecture & Active State Contrast
 - **System Settings 5-Hub Architecture (`src/app/settings/page.tsx`)**:
@@ -156,7 +159,7 @@ Portalarr uses a **Modern Cinematic Dark Theme** powered by Tailwind CSS, Radix 
 - **Radix Tailwind Merge Gotcha**: Base `DialogContent` contains `sm:max-w-lg`. Passing an unprefixed `max-w-6xl` gets overridden!
 - **Rule**: Always pass explicit prefixed responsive classes for wide modals (Media Detail, Book & Audiobook Detail, Seerr requests, Episode Guide, Collection Builders), capping at `max-w-3xl lg:max-w-4xl` (or `max-w-4xl lg:max-w-5xl`) with `overflow-x-hidden` to prevent horizontal page spreading and off-screen button scrolling on standard desktop/laptop scaling:
   ```tsx
-  className="w-[95vw] sm:w-[92vw] md:w-[90vw] max-w-3xl lg:max-w-4xl max-h-[90vh] sm:max-h-[92vh] overflow-y-auto overflow-x-hidden p-0 bg-[#0c0c12] border border-border/60 shadow-2xl rounded-2xl sm:rounded-3xl scrollbar-thin text-foreground"
+  className="w-[95vw] sm:w-[92vw] md:w-[90vw] max-w-3xl lg:max-w-4xl max-h-[90vh] sm:max-h-[92vh] overflow-y-auto overflow-x-hidden p-0 bg-[#0c0c12] border border-border/60 shadow-2xl rounded-xl scrollbar-thin text-foreground"
   ```
 - **CSS Grid `min-w-0` Child Blowout Prevention**: Because `DialogPrimitive.Content` renders as a CSS Grid, all child containers default to `min-width: auto`. Always wrap modal contents in `<div className="flex flex-col min-h-0 min-w-0 w-full overflow-x-hidden">` and add `min-w-0` to all sections. This prevents carousels with 20+ recommendations (e.g. 24 similar books) from overriding `max-width` and expanding the modal to 3,000+ pixels.
 - **Primary Action Hierarchy**:
@@ -249,7 +252,7 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 - **Studio Schedule & Automation Card Layouts**: When configuring multi-parameter studio schedules (e.g. Kometa Overlays, Agregarr, Maintainerr, Tagging) within side-by-side cards (`grid-cols-1 lg:grid-cols-2`), avoid placing 3 select controls in a single 3-column row (`sm:grid-cols-3`). Instead, give the **Schedule Frequency** dropdown full width on Row 1 to accommodate descriptive text, and place secondary sub-options (**Scope** and **Batch Size**) side-by-side in a 2-column subgrid (`grid grid-cols-1 sm:grid-cols-2 gap-2.5`) on Row 2. Ensure all grid cells and parent cards have `min-w-0`.
 - **Interactive Stepped Range Sliders & Tier Cards Pattern**:
   - When configuring stepped thresholds or permissions (e.g. AI Autonomy Levels 1-3, Max Daily Interactions 1-10), pair an `<input type="range" />` track slider with direct, clickable tier preview cards.
-  - Slider track styling: `w-full h-2.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-400/50`.
+  - Slider track styling: `w-full h-2.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-400/50`.
   - Provide interactive text labels beneath the track with `text-[11px]` and bold color accents when active.
 
 ---
@@ -1122,7 +1125,7 @@ Portalarr features an automated, real-time versioning, branch identification, an
 ### 38. AI Server Assistant Mission Control & Universal Floating Launcher (`AiServerAssistant` & `FloatingAiLauncher`)
 - **Prominent User Mission Control Placement**:
   - Positioned prominently on the main dashboard (position #2 on user/trial/super-user views, and directly accessible in Admin Mission Control) for all accounts (Admins, Full Accounts, Super Users, and Trial Users).
-  - Styled with glowing purple/cyan linear gradient borders (`from-purple-500/20 via-primary/10 to-transparent`), a pulse status badge (`24/7 AI Diagnostic Engine Active`), and instant 1-click quick-chips (`⚡ Buffering`, `🔊 Quiet Dialogue`, `💬 Subtitles`, `📺 Unlock 4K/1080p`, `🎬 Missing Media`, `🟢 Server Health`, and `📚 Book Recommendations`).
+  - Styled as an Obsidian Slate mission card with Plex Amber accents (`border-amber-500/35`), status badge (`24/7 Live AI Master`), and 1-click Lucide-icon quick-chips (`Stream Buffering`, `Quiet Dialogue`, `Subtitle Stutter`, `Unlock 4K & 1080p`, `Missing Movie/Show`, `Book Recommendations`, `Is Server Working?`).
   - Automatically loads the user's active streaming session telemetry into the diagnostic prompt for zero-click context awareness.
 - **Personalized Book & Media Recommendations Engine (`ai-book-recommendations.ts` & `recommend_books_and_media`)**:
   - Aggregates user taste from previous `MediaRequest` and `BookRequest` records, Kindle deliveries (`KindleDeliveryLog`), and content preferences (`UserContentPreference`).
@@ -1341,11 +1344,11 @@ Before completing any task, execute:
 ### 41. Universal Floating Suggest Fix Launcher & Decoupled SMTP Settings Architecture
 - **Floating Suggest Fix Launcher (`FloatingSuggestFixLauncher` & `SuggestFixModal`)**:
   - Mounted globally in `src/components/layout-wrapper.tsx` at `fixed bottom-16 right-4 sm:bottom-20 sm:right-6 z-40` for all authenticated members (positioned just above the AI Assistant pill).
-  - Explicit canonical label: **`Suggest Fix`** with `Wrench` icon (`text-amber-200`) and glowing purple/indigo pill gradient (`from-amber-600 via-purple-600 to-indigo-600`).
+  - Explicit canonical label: **`Suggest Fix`** with `Wrench` icon (`text-amber-200`) and crisp Obsidian Slate + Amber pill styling (`bg-slate-900/95 border-amber-500/40 text-amber-100`).
   - Dismissible with `X` button and programmatically operable via `window.dispatchEvent(new CustomEvent("open-suggest-fix"))`.
 - **Decoupled SMTP & Resend Settings Architecture (`src/app/settings/page.tsx`)**:
   - Resend credentials (`resendApiKey`, `resendFrom`) and Custom SMTP credentials (`customSmtpHost`, `customSmtpPort`, `customSmtpUser`, `customSmtpPass`, `customSmtpFrom`) are completely isolated in separate database columns and UI form states.
-  - **Active Outbound Email Engine Selector Bar**: Administrators can toggle which outbound engine is active using dedicated selector buttons: `Resend (Domain: @domshomelab.com)` with purple styling and `Custom SMTP (Gmail / Outlook / SES)` with sky-blue styling, each displaying real-time `[ ACTIVE ]` vs `[ Standby ]` indicators.
+  - **Active Outbound Email Engine Selector Bar**: Administrators can toggle which outbound engine is active using dedicated selector buttons: `Resend (Domain: @domshomelab.com)` with amber styling (`bg-amber-500/15`) and `Custom SMTP (Gmail / Outlook / SES)` with sky-blue styling, each displaying real-time `[ ACTIVE ]` vs `[ Standby ]` indicators.
   - **Panel Status Badges & Quick Set-Active Controls**: Each provider panel features an `Active Engine` emerald pulse badge or a direct 1-click `Set Active` action button.
   - **Provider-Aware Test Connection (`sendTestEmailAction(emailProviderMode)`)**: When an administrator clicks `Test Connection (Resend)` or `Test Connection (Custom SMTP)`, the action tests the explicitly chosen provider mode rather than whatever was previously saved in the generic SMTP fields. Resend tests route strictly through `smtp.resend.com:465` with `notifications@domshomelab.com`, while Custom SMTP routes through the configured custom host/credentials.
   - Switching between provider tabs never mutates or overwrites the other provider's credentials, preventing API keys and passwords from overwriting each other.
@@ -1520,4 +1523,19 @@ To guarantee 100% reliability, quality control, and consistency, the following 5
 2. **Step 2: Production Build Verification**: Execute `cmd /c "npm run build"`. Ensure 100% clean compilation, zero TypeScript errors, and zero Turbopack runtime errors.
 3. **Step 3: Edge Security & Cloudflare Policy Audit**: Whenever ANY page route (`src/app/**/page.tsx`) or API route (`src/app/api/**/route.ts`) is created, moved, or updated, register it in `src/lib/edge-policy-paths.ts` and inform the user.
 4. **Step 4: Skills & Documentation Sync**: Review and update relevant `.agents/skills/` documents to record any new UI patterns, API contracts, formulas, or operational guidelines **BEFORE** committing.
-5. **Step 5: SemVer Version Increment & Git Deployment Push**: Increment version in `package.json` according to SemVer (PATCH `+1` for fixes/polish, MINOR `+1` for features), stage all changes (`git add -A`), commit with freshly incremented semantic version prefix (`[v<version>] feat/fix(scope): message`), push strictly to `origin/main` (Beta). NEVER push to `stable` unless the user explicitly instructs.
+5. **Step 5: SemVer Version Increment & Git Deployment Push**: Increment version in `package.json`, `package-lock.json`, and `GEMINI.md` according to SemVer (PATCH `+1` for fixes/polish, MINOR `+1` for features), stage all changes (`git add -A`), commit with freshly incremented semantic version prefix (`[v<version>] feat/fix(scope): message`), push strictly to `origin/dev` (or `origin/beta` when porting stabilization fixes). NEVER push to `prod` / `stable` unless the user explicitly instructs.
+
+### 56. 20-Point UI Unslop Design System, Boundaries, Skeletons & Empty States (Suite 25 Enforced)
+- **Typography, Hierarchy & Numerals (`src/app/layout.tsx`, `src/app/globals.css`)**:
+  - Loads `Inter` (`--font-inter`) and `JetBrains_Mono` (`--font-jetbrains-mono`), applying `font-sans antialiased` on `<body>`.
+  - Enforces `--radius: 0.5rem` (strict concentric `inner = outer - padding` geometry), dark Plex Amber `--primary: oklch(0.769 0.188 70.08)`, `text-wrap: balance` on `h1, h2, h3`, `font-variant-numeric: tabular-nums` on `table, time, [data-slot="badge"], .tabular-nums`, and global `@media (prefers-reduced-motion: reduce)`.
+  - Zero decorative purple/indigo/violet gradients, zero `blur-3xl` glow orbs, zero filler badges or ornamental italics on prose/helper captions, clean dark-mode contrast (`text-slate-400`/`text-muted-foreground`), and crisp `lucide-react` icons over raw UI emojis.
+  - Uses `metadata.title.template = "%s | ${titlePrefix}DomsHomeLab"` so every rendered route sets clean tab titles (using sibling Server `layout.tsx` metadata wrappers on `"use client"` pages like `/settings`, `/library`, `/beta`, `/admin/{monitoring,scripts,streams,tautulli}`).
+- **Loading Skeletons (`src/components/ui/route-skeleton.tsx` + `loading.tsx`)**:
+  - Dedicated `loading.tsx` skeletons matching real route geometry across `/`, `/profile`, `/discover`, `/requests`, `/library`, `/tickets`, `/settings`, `/admin/{monitoring,scripts,tautulli}` (and `/channels`, `/admin/iptv` on `dev`).
+- **Custom 404 & Humanized Error Boundaries**:
+  - Branded [not-found.tsx](../../../src/app/not-found.tsx) offering quick recovery links (`/`, `/discover`, `/library`, `/login`).
+  - Root `src/app/error.tsx` and `src/app/profile/error.tsx` route raw exceptions through `getFriendlyErrorDisplay()` (`src/lib/ui-errors.ts`) to present actionable, safe recovery messages (`Try Again` + `/tickets`).
+- **Reusable Empty State (`src/components/ui/empty-state.tsx`)**:
+  - Shared `<EmptyState />` (with `compact` option for dense queue panels) used across `/tickets`, `/requests`, `/radarr`, `/sonarr`, `/library` (and `/channels` on `dev`).
+- **Automated Regression Gate**: Verified automatically in **Suite 25** of `scripts/verify-all.ts` alongside the global `~/.gemini/config/skills/ui-design-system/SKILL.md` standard.

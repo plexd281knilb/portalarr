@@ -265,9 +265,6 @@ export default function TicketsClient({ initialData }: { initialData?: TicketsBo
                     <div>
                         <div className="font-bold text-foreground flex items-center gap-2 flex-wrap">
                             <span>Fix Playback or Media Issues in 30 Seconds</span>
-                            <Badge variant="outline" className="text-[10px] bg-amber-500/15 text-amber-300 border-amber-500/35 font-semibold">
-                                24/7 AI Master
-                            </Badge>
                         </div>
                         <p className="text-xs text-muted-foreground mt-0.5">
                             The AI Server Assistant automatically diagnoses stream buffering, quiet audio, subtitle desync, and player quality limits.
@@ -369,8 +366,8 @@ export default function TicketsClient({ initialData }: { initialData?: TicketsBo
                     {/* ADMIN TICKET CARDS */}
                     <div className="grid gap-4 sm:gap-6">
                         {filteredTickets.length === 0 && !loading && (
-                            <Card className="border-dashed border-border/50 bg-[#121218]/50 rounded-2xl">
-                                <CardContent className="p-12 text-center text-muted-foreground italic">
+                            <Card className="border-dashed border-border/50 bg-[#121218]/50 rounded-lg">
+                                <CardContent className="p-12 text-center text-muted-foreground">
                                     {searchQuery || statusFilter !== "ALL" 
                                         ? "No support tickets match the selected filter." 
                                         : "No support tickets found. All systems operational!"}
@@ -495,7 +492,7 @@ export default function TicketsClient({ initialData }: { initialData?: TicketsBo
                                                 placeholder="Type your reply message to the user..." 
                                                 className="min-h-[90px] bg-background/60 border-border/40 focus-visible:ring-primary/40 text-xs sm:text-sm"
                                             />
-                                            <p className="text-[10px] text-muted-foreground italic">
+                                            <p className="text-[10px] text-muted-foreground">
                                                 This response will be saved and automatically emailed to the member.
                                             </p>
                                         </div>

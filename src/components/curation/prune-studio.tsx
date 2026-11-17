@@ -3809,7 +3809,7 @@ export function PruneStudio() {
                                                                     📁 <span className="text-slate-300">{c.filePath}</span>
                                                                 </span>
                                                             ) : (
-                                                                <span className="italic text-slate-600">Disk path not provided</span>
+                                                                <span className="text-slate-400">Disk path not provided</span>
                                                             )}
                                                             <span className="font-bold text-rose-400 shrink-0">
                                                                 ⚠️ {c.reason || "Oldest candidate match"}

@@ -28,26 +28,28 @@ Portalarr adheres to an ultra-dark cinematic aesthetic designed for high contras
 
 ---
 
-## 3. Semantic Accents & Badges
+## 3. Semantic Accents, Primary Brand & Design Tokens
 
-| Accent Color | Primary Class | Semantic Meaning |
+| Accent / Token | Primary Class / Value | Semantic Meaning |
 | :--- | :--- | :--- |
-| **Amber / Gold** | `text-amber-400 bg-amber-950/40 border-amber-500/30` | Pending approvals, warnings, unsaved states, Coming Soon Monitored |
-| **Emerald / Green** | `text-emerald-400 bg-emerald-950/40 border-emerald-500/30` | In Library, Available, Downloaded, Approved, Direct Play |
-| **Purple / Violet** | `text-purple-400 bg-purple-950/40 border-purple-500/30` | Poster Studio, Overlays, AI metadata agents, Kometa rules |
-| **Indigo / Blue** | `text-indigo-400 bg-indigo-950/40 border-indigo-500/30` | Agregarr curation, Collections, TV Series, Deep Recheck |
-| **Cyan / Sky** | `text-cyan-400 bg-cyan-950/40 border-cyan-500/30` | 4K UHD badges, stream telemetry, speed test, digital releases |
+| **Plex Amber (Primary)** | `--primary: oklch(0.769 0.188 70.08)` / `text-amber-400 bg-amber-500/15 border-amber-500/35` | Primary brand accent, pending approvals, warnings, unsaved states, Coming Soon Monitored |
+| **Emerald / Green** | `text-emerald-400 bg-emerald-950/40 border-emerald-500/30` | In Library, Available, Ebooks, Downloaded, Approved, Direct Play |
+| **Cyan / Sky** | `text-sky-400 bg-sky-950/40 border-sky-500/30` | 4K UHD badges, stream telemetry, Live TV, speed test, Kometa overlays |
 | **Crimson / Rose** | `text-rose-400 bg-rose-950/40 border-rose-500/30` | Prune deletions, Leaving Soon, stream termination, rejected |
 
----
+> **Ban on Decorative Purple Slop**: Never use decorative `from-purple-*`, `via-purple-*`, `to-purple-*`, `from-indigo-*`, `to-indigo-*`, or `from-violet-*` gradients in UI components or routes (enforced by `Suite 25`).
 
-## 4. Typography Hierarchy
+## 4. Typography & Unified Concentric Radius (`--radius: 0.5rem`)
 
-| Level | Tailwind Classes | Usage |
+| Token / Level | Classes / Value | Usage |
 | :--- | :--- | :--- |
+| **Sans Body / UI** | `Inter` (`--font-inter` ➔ `--font-sans`) | App-wide headings, controls, cards, navigation |
+| **Monospace Telemetry** | `JetBrains_Mono` (`--font-jetbrains-mono` ➔ `--font-mono`) | IDs, tokens, paths, bitrates, hashes, timestamps |
+| **Modal / Hero Outer** | `rounded-xl` | Dialogs, hero cards, nav banners |
+| **Cards / Alerts** | `rounded-lg` | Standard cards, `<EmptyState />`, panels |
+| **Controls / Inputs** | `rounded-md` | Buttons, inputs, selects, compact chips |
+| **Tags / Checkboxes** | `rounded-sm` / `rounded-full` | Checkboxes (`rounded-sm`), status dots & pill badges (`rounded-full`) |
 | **Page Title** | `text-2xl sm:text-3xl font-extrabold text-white tracking-tight` | Main page headers (`/library`, `/settings`) |
 | **Card Title** | `text-base sm:text-lg font-bold text-white` | Section card headers |
 | **Body Primary** | `text-xs sm:text-sm text-slate-200 leading-relaxed` | Descriptions, labels, table rows |
 | **Body Secondary** | `text-[11px] sm:text-xs text-slate-400` | Subtitles, help captions, timestamps |
-| **Badge / Label** | `text-[10px] font-bold uppercase tracking-wider` | Corner chips, format tags, statuses |
-| **Monospace** | `font-mono text-xs text-slate-300` | IDs, tokens, paths, bitrates, hashes |

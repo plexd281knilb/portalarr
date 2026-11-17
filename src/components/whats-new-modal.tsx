@@ -372,7 +372,7 @@ export default function WhatsNewModal({
                                             <strong className="font-semibold text-foreground" {...props} />
                                         ),
                                         blockquote: ({ node, ...props }) => (
-                                            <blockquote className="border-l-2 border-amber-500/70 pl-3 py-1.5 my-2 bg-amber-500/5 rounded-r text-xs text-foreground/90 italic" {...props} />
+                                            <blockquote className="border-l-2 border-amber-500/70 pl-3 py-1.5 my-2 bg-amber-500/5 rounded-r text-xs text-foreground/90" {...props} />
                                         ),
                                         a: ({ node, ...props }) => (
                                             <a className="text-cyan-400 underline hover:text-cyan-300 transition-colors" target="_blank" rel="noopener noreferrer" {...props} />
@@ -404,7 +404,7 @@ export default function WhatsNewModal({
                                             <h1 className="text-lg sm:text-xl font-extrabold text-foreground tracking-tight mt-4 mb-2 border-b border-border/40 pb-2 flex items-center gap-2" {...props} />
                                         ),
                                         h2: ({ node, ...props }) => (
-                                            <h2 className="text-base sm:text-lg font-bold text-purple-300 mt-4 mb-2 border-b border-purple-500/20 pb-1.5 flex items-center gap-2" {...props} />
+                                            <h2 className="text-base sm:text-lg font-bold text-amber-300 mt-4 mb-2 border-b border-amber-500/25 pb-1.5 flex items-center gap-2" {...props} />
                                         ),
                                         h3: ({ node, ...props }) => (
                                             <h3 className="text-sm sm:text-base font-bold text-foreground mt-3 mb-1.5 flex items-center gap-2 text-primary/95" {...props} />
@@ -419,16 +419,16 @@ export default function WhatsNewModal({
                                             <ol className="space-y-1.5 my-2 pl-4 list-decimal text-xs sm:text-sm text-muted-foreground/95" {...props} />
                                         ),
                                         li: ({ node, ...props }) => (
-                                            <li className="text-xs leading-relaxed text-muted-foreground/95 p-2.5 rounded-lg bg-white/[0.02] border border-border/40 hover:border-purple-500/30 transition-all block" {...props} />
+                                            <li className="text-xs leading-relaxed text-muted-foreground/95 p-2.5 rounded-lg bg-white/[0.02] border border-border/40 hover:border-amber-500/35 transition-all block" {...props} />
                                         ),
                                         strong: ({ node, ...props }) => (
                                             <strong className="font-semibold text-foreground" {...props} />
                                         ),
                                         blockquote: ({ node, ...props }) => (
-                                            <blockquote className="border-l-2 border-purple-500/70 pl-3 py-1.5 my-2 bg-purple-500/5 rounded-r text-xs text-foreground/90 italic" {...props} />
+                                            <blockquote className="border-l-2 border-amber-500/70 pl-3 py-1.5 my-2 bg-amber-500/5 rounded-r text-xs text-foreground/90" {...props} />
                                         ),
                                         a: ({ node, ...props }) => (
-                                            <a className="text-purple-400 underline hover:text-purple-300 transition-colors" target="_blank" rel="noopener noreferrer" {...props} />
+                                            <a className="text-sky-400 underline hover:text-sky-300 transition-colors" target="_blank" rel="noopener noreferrer" {...props} />
                                         ),
                                     }}
                                 >

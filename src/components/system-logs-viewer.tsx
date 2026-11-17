@@ -513,7 +513,7 @@ export default function SystemLogsViewer() {
                                         }`}
                                     >
                                         <span>{lvl}</span>
-                                        <span className={`text-[10px] px-1.5 py-0.5 min-w-[18px] text-center rounded-full font-mono transition-all ${
+                                        <span className={`text-[10px] px-1.5 py-0.5 min-w-[18px] text-center rounded-full font-mono tabular-nums transition-all ${
                                             isSelected 
                                                 ? 'bg-emerald-500/30 text-emerald-200 font-bold' 
                                                 : lvlCount > 0 
@@ -538,7 +538,7 @@ export default function SystemLogsViewer() {
                                 <button
                                     key={cat.id}
                                     onClick={() => setCategoryFilter(cat.id)}
-                                    className={`px-2.5 py-1 rounded-lg text-[11px] font-mono transition-all flex items-center gap-1.5 border ${
+                                    className={`px-2.5 py-1 rounded-md text-[11px] font-mono transition-all flex items-center gap-1.5 border ${
                                         isSelected
                                             ? cat.activeStyle
                                             : count > 0 
@@ -548,7 +548,7 @@ export default function SystemLogsViewer() {
                                 >
                                     <CatIcon className="h-3 w-3 shrink-0" />
                                     <span>{cat.label}</span>
-                                    <span className={`text-[10px] px-1.5 py-0.5 min-w-[20px] text-center rounded-full font-mono transition-all ${
+                                    <span className={`text-[10px] px-1.5 py-0.5 min-w-[20px] text-center rounded-full font-mono tabular-nums transition-all ${
                                         isSelected 
                                             ? 'bg-black/40 text-white font-bold' 
                                             : count > 0 

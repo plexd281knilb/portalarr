@@ -322,9 +322,6 @@ export function AiServerAssistant() {
         <>
             {/* --- DASHBOARD CARD (PROMINENT MISSION CONTROL HERO CARD) --- */}
             <Card className="w-full relative overflow-hidden border border-amber-500/35 bg-gradient-to-br from-slate-900/95 via-[#121218]/98 to-slate-950/95 backdrop-blur-md shadow-xl hover:border-amber-500/55 transition-colors duration-300 animate-in fade-in duration-500">
-                <div className="absolute top-0 right-0 w-80 h-80 bg-amber-500/8 rounded-full blur-3xl pointer-events-none" />
-                <div className="absolute bottom-0 left-0 w-80 h-80 bg-sky-500/8 rounded-full blur-3xl pointer-events-none" />
-
                 <CardHeader className="pb-3.5">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div className="space-y-1">
@@ -493,7 +490,7 @@ export function AiServerAssistant() {
                     }
                 }}
             >
-                <DialogContent className="w-[98vw] sm:max-w-4xl max-h-[92vh] h-[86vh] flex flex-col bg-[#0c0d14]/98 border-border/60 backdrop-blur-2xl shadow-2xl p-0 overflow-hidden text-foreground">
+                <DialogContent className="w-[98vw] sm:max-w-4xl max-h-[92vh] h-[86vh] flex flex-col bg-[#0c0d14]/98 border-border/60 backdrop-blur-md shadow-2xl p-0 overflow-hidden text-foreground">
                     {/* Top Mission Control Header */}
                     <DialogHeader className="p-4 sm:p-5 pb-3 border-b border-border/50 bg-gradient-to-r from-slate-900/95 via-background to-slate-900/90 shrink-0">
                         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -955,10 +952,10 @@ export function AiServerAssistant() {
                                                                 <strong className="font-bold text-white" {...props} />
                                                             ),
                                                             blockquote: ({ node, ...props }) => (
-                                                                <blockquote className="border-l-2 border-purple-500 pl-3 py-1 my-2 bg-purple-950/20 rounded-r text-[11px] text-purple-200 italic" {...props} />
+                                                                <blockquote className="border-l-2 border-amber-500/60 pl-3 py-1 my-2 bg-amber-500/5 rounded-r text-[11px] text-slate-200" {...props} />
                                                             ),
                                                             code: ({ node, ...props }) => (
-                                                                <code className="px-1.5 py-0.5 rounded bg-slate-800 font-mono text-[10px] text-purple-200" {...props} />
+                                                                <code className="px-1.5 py-0.5 rounded bg-slate-800 font-mono text-[10px] text-amber-300" {...props} />
                                                             )
                                                         }}
                                                     >
