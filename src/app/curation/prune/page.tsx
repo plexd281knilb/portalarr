@@ -5,7 +5,7 @@ import { PruneStudio } from "@/components/curation/prune-studio";
 import { Loader2 } from "lucide-react";
 
 export const metadata = {
-    title: "Maintainerr Storage & Auto-Prune | DomsHomeLab",
+    title: "Maintainerr Storage & Auto-Prune",
     description: "Storage mount thresholds, rule-based media pruning (unwatched, low rating, ended series), pinned 'Leaving Soon' Plex collection, and safe file cleanup."
 };
 

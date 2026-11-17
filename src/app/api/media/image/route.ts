@@ -16,8 +16,8 @@ function generateFallbackPosterSvg(title: string, year: string): string {
                 <stop offset="100%" stop-color="#030712" />
             </linearGradient>
             <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stop-color="#a855f7" />
-                <stop offset="100%" stop-color="#06b6d4" />
+                <stop offset="0%" stop-color="#f59e0b" />
+                <stop offset="100%" stop-color="#0ea5e9" />
             </linearGradient>
             <filter id="cardGlow" x="-20%" y="-20%" width="140%" height="140%">
                 <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.8"/>
@@ -25,15 +25,15 @@ function generateFallbackPosterSvg(title: string, year: string): string {
         </defs>
         <rect width="600" height="900" fill="url(#posterBg)" />
         <rect x="30" y="30" width="540" height="840" rx="20" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="2" />
-        <circle cx="300" cy="380" r="90" fill="#1e1b4b" opacity="0.6" />
-        <g transform="translate(265, 345)" stroke="#c084fc" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="300" cy="380" r="90" fill="#1e293b" opacity="0.7" />
+        <g transform="translate(265, 345)" stroke="#f59e0b" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
             <rect x="0" y="0" width="70" height="70" rx="14" fill="#0f172a" />
-            <polygon points="28,22 48,35 28,48" fill="#c084fc" stroke="none" />
+            <polygon points="28,22 48,35 28,48" fill="#f59e0b" stroke="none" />
         </g>
         <rect x="80" y="540" width="440" height="2" fill="url(#accentGrad)" opacity="0.7" />
         <text x="300" y="600" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="26" fill="#f8fafc" text-anchor="middle">${cleanTitle.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")}</text>
         ${cleanYear ? `<text x="300" y="640" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="700" font-size="18" fill="#94a3b8" text-anchor="middle">${cleanYear}</text>` : ""}
-        <text x="300" y="810" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="800" font-size="12" fill="#818cf8" text-anchor="middle" letter-spacing="3">DOMSHOMELAB MEDIA</text>
+        <text x="300" y="810" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="800" font-size="12" fill="#94a3b8" text-anchor="middle" letter-spacing="3">DOMSHOMELAB MEDIA</text>
     </svg>`;
 }
 

@@ -32,12 +32,12 @@ export function CurationNavHeader({
     return (
         <div className="space-y-4">
             {/* Header Banner */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 sm:p-6 bg-gradient-to-br from-[#13111c] via-[#1a1429] to-[#0f172a] border border-purple-500/20 rounded-2xl shadow-xl">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 sm:p-6 bg-gradient-to-br from-slate-900/95 via-[#121218] to-[#0f172a] border border-border/60 rounded-xl shadow-xl">
                 <div className="space-y-1.5">
                     <div className="flex flex-wrap items-center gap-2.5">
-                        <div className={`p-2 rounded-xl border ${
+                        <div className={`p-2 rounded-lg border ${
                             isKometa 
-                                ? "bg-purple-500/20 text-purple-400 border-purple-500/30"
+                                ? "bg-sky-500/15 text-sky-400 border-sky-500/30"
                                 : isAgregarr
                                     ? "bg-amber-500/20 text-amber-400 border-amber-500/30"
                                     : isTagging
@@ -62,7 +62,7 @@ export function CurationNavHeader({
                         </h1>
                         <Badge variant="outline" className={`text-xs font-semibold px-2 py-0.5 ${
                             isKometa 
-                                ? "border-purple-500/40 text-purple-300 bg-purple-950/40"
+                                ? "border-sky-500/40 text-sky-300 bg-sky-950/40"
                                 : isAgregarr
                                     ? "border-amber-500/40 text-amber-300 bg-amber-950/40"
                                     : isTagging

@@ -214,22 +214,22 @@ function SidebarNavContent({ onItemClick }: SidebarNavContentProps) {
             }}
             className="block w-full group select-none"
           >
-            <div className="w-full flex items-center justify-between p-2.5 rounded-xl border border-purple-500/30 bg-gradient-to-r from-purple-500/15 via-purple-500/10 to-indigo-500/15 hover:border-purple-500/50 hover:bg-purple-500/20 transition-all text-purple-200 shadow-sm cursor-pointer">
+            <div className="w-full flex items-center justify-between p-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 hover:border-amber-500/50 hover:bg-amber-500/15 transition-colors text-amber-100 shadow-sm cursor-pointer">
               <div className="flex items-center gap-2.5 min-w-0">
-                <div className="h-7 w-7 rounded-lg bg-purple-500/25 border border-purple-500/40 flex items-center justify-center shrink-0 text-purple-300 group-hover:scale-105 transition-transform">
-                  <Bot className="h-4 w-4 text-purple-300" />
+                <div className="h-7 w-7 rounded-md bg-amber-500/20 border border-amber-500/35 flex items-center justify-center shrink-0 text-amber-400 group-hover:scale-105 transition-transform">
+                  <Bot className="h-4 w-4 text-amber-400" />
                 </div>
                 <div className="flex flex-col text-left min-w-0">
-                  <span className="text-xs font-semibold text-purple-100 tracking-tight leading-none group-hover:text-white transition-colors">
+                  <span className="text-xs font-semibold text-foreground tracking-tight leading-none group-hover:text-amber-300 transition-colors">
                     AI Assistant
                   </span>
-                  <span className="text-[10px] text-purple-300/70 font-medium leading-tight mt-1 truncate">
+                  <span className="text-[10px] text-muted-foreground font-medium leading-tight mt-1 truncate">
                     24/7 Server Assistant
                   </span>
                 </div>
               </div>
-              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/25 text-purple-200 border border-purple-500/40 shrink-0">
-                <span className="h-1.5 w-1.5 rounded-full bg-purple-400 animate-pulse" />
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 shrink-0">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
                 Fixes
               </span>
             </div>

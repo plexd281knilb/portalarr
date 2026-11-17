@@ -377,7 +377,7 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
                                             <span><strong className="text-foreground">Book & Audiobook Requests:</strong> 1-click requests for bestsellers, new books, and audiobooks.</span>
                                         </li>
                                         <li className="flex items-start gap-2 text-muted-foreground">
-                                            <Gift className="h-4 w-4 text-purple-400 shrink-0 mt-0.5" />
+                                            <Gift className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
                                             <span><strong className="text-foreground">Discord VIP & Referral Rewards (Coming Soon):</strong> Real-time server status alerts, direct support, and upcoming referral reward discounts.</span>
                                         </li>
                                     </ul>
@@ -385,12 +385,12 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
                             </div>
 
                             {/* UPGRADE PERKS CALLOUT */}
-                            <div className="p-3.5 rounded-2xl bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-purple-500/10 border border-purple-500/25 flex items-start sm:items-center gap-3 text-xs">
-                                <div className="p-2 bg-purple-500/20 text-purple-300 rounded-xl shrink-0">
+                            <div className="p-3.5 rounded-xl bg-gradient-to-r from-amber-500/10 via-slate-900/80 to-amber-500/5 border border-amber-500/25 flex items-start sm:items-center gap-3 text-xs">
+                                <div className="p-2 bg-amber-500/15 text-amber-400 rounded-lg shrink-0">
                                     <Crown className="h-4 w-4" />
                                 </div>
                                 <div className="space-y-0.5">
-                                    <h4 className="font-bold text-purple-200">The Trial is Just the Preview</h4>
+                                    <h4 className="font-bold text-amber-200">The Trial is Just the Preview</h4>
                                     <p className="text-[11px] text-muted-foreground leading-relaxed">
                                         Your free trial gives you full access to test out our movies and TV shows streaming. When you upgrade to full membership, you unlock all the premium perks — including our complete digital Ebook & Audiobook collection, priority bandwidth, and upcoming community rewards!
                                     </p>

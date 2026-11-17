@@ -162,10 +162,10 @@ export function SeriesDetailModal({
     return (
         <>
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="w-[95vw] sm:w-[92vw] md:w-[90vw] max-w-4xl lg:max-w-5xl max-h-[90vh] sm:max-h-[92vh] bg-[#0c0c12] border border-border/60 shadow-2xl p-0 overflow-y-auto overflow-x-hidden sm:rounded-2xl flex flex-col min-w-0 scrollbar-thin text-foreground">
+            <DialogContent className="w-[95vw] sm:w-[92vw] md:w-[90vw] max-w-4xl lg:max-w-5xl max-h-[90vh] sm:max-h-[92vh] bg-[#0c0c12] border border-border/60 shadow-2xl p-0 overflow-y-auto overflow-x-hidden sm:rounded-xl flex flex-col min-w-0 scrollbar-thin text-foreground">
                 {/* Header Banner */}
-                <div className="relative h-28 sm:h-36 w-full bg-gradient-to-r from-indigo-950/80 via-purple-950/60 to-background flex items-end p-4 sm:p-6 overflow-hidden border-b border-border/40 shrink-0">
-                    <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-indigo-500/20 via-transparent to-transparent" />
+                <div className="relative h-28 sm:h-36 w-full bg-gradient-to-r from-slate-900/90 via-background/95 to-background flex items-end p-4 sm:p-6 overflow-hidden border-b border-border/40 shrink-0">
+                    <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-sky-500/15 via-transparent to-transparent" />
                 </div>
 
                 {/* Series Info Bar */}
@@ -173,7 +173,7 @@ export function SeriesDetailModal({
                     <div className="flex flex-col sm:flex-row items-center sm:items-end justify-between gap-4">
                         <div className="flex flex-col sm:flex-row items-center sm:items-end gap-4 text-center sm:text-left">
                             {/* Series Cover Artwork */}
-                            <div className="w-24 sm:w-28 aspect-[2/3] rounded-xl overflow-hidden shadow-2xl border-2 border-white/20 bg-muted/80 shrink-0 relative">
+                            <div className="w-24 sm:w-28 aspect-[2/3] rounded-lg overflow-hidden shadow-2xl border-2 border-white/20 bg-muted/80 shrink-0 relative">
                                 {series?.coverUrl ? (
                                     <img
                                         src={series.coverUrl}
@@ -181,7 +181,7 @@ export function SeriesDetailModal({
                                         className="w-full h-full object-cover"
                                     />
                                 ) : (
-                                    <div className="w-full h-full flex flex-col items-center justify-center p-2 text-center bg-gradient-to-tr from-indigo-900/40 to-purple-900/40 text-indigo-300">
+                                    <div className="w-full h-full flex flex-col items-center justify-center p-2 text-center bg-slate-900/90 text-sky-400/80">
                                         <Layers className="h-8 w-8 opacity-60" />
                                         <span className="text-[10px] mt-1 font-semibold">{series?.title || seriesTitle}</span>
                                     </div>

@@ -1,7 +1,13 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/app/auth-actions";
 import { getEnabledArrInstances } from "@/app/arr-actions";
 import SonarrClient from "@/components/arr/sonarr-client";
+
+export const metadata: Metadata = {
+    title: "Sonarr TV Shows",
+    description: "Manage Sonarr television series, episodes, and download queues."
+};
 
 export const dynamic = "force-dynamic";
 

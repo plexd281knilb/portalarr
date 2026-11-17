@@ -166,7 +166,7 @@ export function filterRoadmapByRole(markdown: string, role?: string): string {
     }
 
     const result = filtered.join("\n").replace(/\n{3,}/g, "\n\n").trim();
-    return result || "> 🚀 **Welcome to DomsHomeLab!** Check out our latest media discovery and high-performance streaming features.";
+    return result || "> **Welcome to DomsHomeLab!** Check out our latest media discovery and high-performance streaming features.";
 }
 
 export default function WhatsNewModal({ 
@@ -261,12 +261,12 @@ export default function WhatsNewModal({
                 if (!val) handleDismiss();
                 else setOpen(true);
             }}>
-                <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col bg-[#121218]/95 border-purple-500/30 backdrop-blur-xl shadow-2xl p-0 overflow-hidden">
+                <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col bg-[#121218]/95 border-border/60 backdrop-blur-xl shadow-2xl p-0 overflow-hidden">
                     {/* Header */}
                     <div className={`p-5 sm:p-6 border-b border-border/40 transition-colors ${
                         activeTab === "dev" 
-                            ? "bg-gradient-to-r from-amber-950/40 via-background to-cyan-950/30 border-amber-500/30" 
-                            : "bg-gradient-to-r from-purple-950/40 via-background to-blue-950/30"
+                            ? "bg-gradient-to-r from-amber-950/35 via-background to-slate-900/90 border-amber-500/30" 
+                            : "bg-gradient-to-r from-slate-900/95 via-background to-slate-900/80"
                     }`}>
                         <DialogHeader className="text-left space-y-2">
                             <div className="flex items-center gap-2 flex-wrap">
@@ -275,7 +275,7 @@ export default function WhatsNewModal({
                                         <Wrench className="h-3 w-3 mr-1 text-amber-400" /> Developer Backlog
                                     </Badge>
                                 ) : (
-                                    <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/40 text-[10px] font-bold uppercase tracking-wider py-0.5">
+                                    <Badge className="bg-sky-500/15 text-sky-300 border-sky-500/35 text-[10px] font-bold uppercase tracking-wider py-0.5">
                                         <Rocket className="h-3 w-3 mr-1" /> Latest Updates
                                     </Badge>
                                 )}

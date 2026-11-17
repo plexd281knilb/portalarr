@@ -1,9 +1,15 @@
+import type { Metadata } from "next";
 import { getCurrentUser, getSession } from "@/app/auth-actions";
 import { redirect } from "next/navigation";
 import { DiscoverHub } from "@/components/seerr/discover-hub";
 import { Compass } from "lucide-react";
 import { Suspense } from "react";
 import FeatureGuideModal from "@/components/feature-guide-modal";
+
+export const metadata: Metadata = {
+    title: "Media Discovery",
+    description: "Discover movies, TV series, ebooks, and audiobooks to request on Portalarr."
+};
 
 export const dynamic = "force-dynamic";
 

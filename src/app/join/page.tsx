@@ -1,5 +1,11 @@
+import type { Metadata } from "next";
 import { getPublicJoinConfig, getPlexSetupGuides } from "@/app/actions";
 import JoinClient from "@/components/auth/join-client";
+
+export const metadata: Metadata = {
+    title: "Request Membership",
+    description: "Join DomsHomeLab, redeem a referral code, or review membership tiers."
+};
 
 export const dynamic = "force-dynamic";
 

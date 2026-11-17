@@ -68,11 +68,11 @@ export function KometaOverlaysGuideModal({ open, onOpenChange }: KometaOverlaysG
                     {/* Navigation Tabs */}
                     <div className="flex flex-wrap items-center gap-1.5 pt-4">
                         {[
-                            { id: "stock", label: "🎨 Stock Kometa Assets", icon: Palette },
-                            { id: "adding", label: "📥 Adding Custom Badges", icon: Zap },
-                            { id: "rules", label: "⚡ Match Rules & Logic", icon: Code2 },
-                            { id: "positions", label: "📐 Positioning & Stacking", icon: Layers },
-                            { id: "yaml", label: "📄 Kometa YAML Mapping", icon: FileCode }
+                            { id: "stock", label: "Stock Kometa Assets", icon: Palette },
+                            { id: "adding", label: "Adding Custom Badges", icon: Zap },
+                            { id: "rules", label: "Match Rules & Logic", icon: Code2 },
+                            { id: "positions", label: "Positioning & Stacking", icon: Layers },
+                            { id: "yaml", label: "Kometa YAML Mapping", icon: FileCode }
                         ].map(t => {
                             const Icon = t.icon;
                             const isSelected = activeTab === t.id;

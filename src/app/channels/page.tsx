@@ -3,7 +3,7 @@ import { getIptvCatalogAction } from "@/app/iptv-actions";
 import { ChannelsClient } from "@/components/iptv/channels-client";
 
 export const metadata: Metadata = {
-    title: "Live TV & Channels | DomsHomeLab",
+    title: "Live TV & Channels",
     description: "Browse live television channels, sports feeds, news networks, and request missing channels."
 };
 

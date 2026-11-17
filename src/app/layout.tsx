@@ -1,18 +1,31 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import LayoutWrapper from "@/components/layout-wrapper";
 import { getBuildTelemetry } from "@/lib/version";
 
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-jetbrains-mono",
+  display: "swap",
+});
 
 export function generateMetadata(): Metadata {
   const telemetry = getBuildTelemetry();
   const titlePrefix = telemetry.isBeta ? "[BETA] " : telemetry.isStable ? "" : "[DEV] ";
 
   return {
-    title: `${titlePrefix}DomsHomeLab | d281knilb Media Server`,
+    title: {
+      default: `${titlePrefix}DomsHomeLab | d281knilb Media Server`,
+      template: `%s | ${titlePrefix}DomsHomeLab`,
+    },
     description: "DomsHomeLab (d281knilb) Media Server & Dashboard",
     icons: {
       icon: [
@@ -38,8 +51,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
-      <body className={inter.className}>
+    <html lang="en" className={`dark ${inter.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
+      <body className="font-sans antialiased">
         <ThemeProvider
             attribute="class"
             defaultTheme="dark"

@@ -11,7 +11,7 @@ import {
 import { AdminIptvClient } from "@/components/iptv/admin-iptv-client";
 
 export const metadata: Metadata = {
-    title: "Live TV & IPTV Mission Control | DomsHomeLab",
+    title: "Live TV & IPTV Mission Control",
     description: "Manage IPTV providers, credential vault, Dispatcharr lineups, Plex/Jellyfin DVR connections, and live stream telemetry."
 };
 

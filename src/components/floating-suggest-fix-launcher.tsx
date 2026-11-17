@@ -34,7 +34,7 @@ export function FloatingSuggestFixLauncher({ userRole = "USER", username = "Memb
                 <button
                     type="button"
                     onClick={() => setModalOpen(true)}
-                    className="group flex items-center gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-full bg-gradient-to-r from-amber-600 via-purple-600 to-indigo-600 hover:from-amber-500 hover:via-purple-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-purple-950/50 border border-white/20 backdrop-blur-md transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer ring-2 ring-amber-500/30 hover:ring-amber-400/60"
+                    className="group flex items-center gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-full bg-slate-900/95 hover:bg-slate-800 text-amber-100 font-semibold text-xs shadow-lg shadow-black/50 border border-amber-500/40 hover:border-amber-400/70 backdrop-blur-md transition-all duration-200 hover:scale-[1.03] active:scale-95 cursor-pointer ring-1 ring-amber-500/20 hover:ring-amber-400/40"
                     title="Suggest a page fix or feature improvement"
                 >
                     <div className="p-1 rounded-full bg-white/20 group-hover:rotate-12 transition-transform duration-200">

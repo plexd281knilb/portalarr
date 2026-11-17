@@ -337,22 +337,22 @@ export function ServerGuardRailsModal({
                 <div className="flex-1 overflow-y-auto pr-1 -mr-1 space-y-5 py-2">
                     {loading ? (
                         <div className="flex flex-col items-center justify-center h-64 gap-2 text-slate-400">
-                            <Loader2 className="h-8 w-8 animate-spin text-purple-400" />
+                            <Loader2 className="h-8 w-8 animate-spin text-amber-400" />
                             <p className="text-xs">Loading guard rail configurations...</p>
                         </div>
                     ) : (
                         <>
                             {/* Server Master Switch Card */}
-                            <div className={`p-4 rounded-2xl border transition-all ${
+                            <div className={`p-4 rounded-xl border transition-all ${
                                 activeConfig.enabled
-                                    ? "bg-gradient-to-r from-purple-950/40 via-slate-900/90 to-slate-900/90 border-purple-500/40 shadow-lg shadow-purple-950/20"
+                                    ? "bg-gradient-to-r from-amber-950/30 via-slate-900/95 to-slate-900/95 border-amber-500/40 shadow-lg"
                                     : "bg-slate-900/50 border-slate-800"
                             }`}>
                                 <div className="flex items-center justify-between gap-4">
                                     <div className="flex items-center gap-3">
-                                        <div className={`p-2.5 rounded-xl border ${
+                                        <div className={`p-2.5 rounded-lg border ${
                                             activeConfig.enabled
-                                                ? "bg-purple-600/20 text-purple-400 border-purple-500/40"
+                                                ? "bg-amber-500/15 text-amber-400 border-amber-500/35"
                                                 : "bg-slate-800 text-slate-400 border-slate-700"
                                         }`}>
                                             {activeConfig.enabled ? <ShieldCheck className="h-6 w-6" /> : <ShieldAlert className="h-6 w-6" />}

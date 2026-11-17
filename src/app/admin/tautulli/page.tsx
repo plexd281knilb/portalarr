@@ -1757,7 +1757,7 @@ export default function StreamIntelligencePage() {
                                         <div className="space-y-1.5">
                                             <div className="w-full bg-slate-950 rounded-full h-2.5 overflow-hidden border border-slate-800">
                                                 <div 
-                                                    className="bg-gradient-to-r from-indigo-500 via-cyan-400 to-emerald-400 h-2.5 rounded-full transition-all duration-300"
+                                                    className="bg-gradient-to-r from-sky-500 via-cyan-400 to-emerald-400 h-2.5 rounded-full transition-all duration-300"
                                                     style={{
                                                         width: `${
                                                             backfillProgress?.totalAvailable && backfillProgress.totalAvailable > 0

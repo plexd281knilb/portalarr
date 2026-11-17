@@ -36,6 +36,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
 import {
     requestIptvAccessAction,
     requestIptvChannelAction,
@@ -735,21 +736,21 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
             {/* Access Gating Notice (For Users/Trials without Live TV unlocked) */}
             {!canAccess && (
                 initialData.userAccess.isPlexHomeFull && initialData.userAccess.jellyfinAvailable ? (
-                    <div className="p-6 rounded-2xl border border-purple-500/30 bg-gradient-to-r from-purple-500/15 via-purple-500/5 to-transparent text-purple-200 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
+                    <div className="p-6 rounded-xl border border-sky-500/30 bg-gradient-to-r from-slate-900/95 via-sky-950/20 to-card text-foreground flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
                         <div className="flex items-start gap-3.5">
-                            <div className="p-2.5 rounded-xl bg-purple-500/20 border border-purple-500/40 text-purple-300 shrink-0">
+                            <div className="p-2.5 rounded-lg bg-sky-500/15 border border-sky-500/35 text-sky-400 shrink-0">
                                 <Layers className="h-5 w-5" />
                             </div>
                             <div>
                                 <div className="flex items-center gap-2 flex-wrap">
-                                    <h3 className="font-bold text-base text-purple-100">
-                                        ⚡ Plex Home Slots Full ({initialData.userAccess.plexHomeTotalMembers || 14}/14) — Stream Instantly on Jellyfin!
+                                    <h3 className="font-bold text-base text-foreground">
+                                        Plex Home Slots Full ({initialData.userAccess.plexHomeTotalMembers || 14}/14) — Stream Instantly on Jellyfin!
                                     </h3>
-                                    <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/40 text-[10px] font-bold">
+                                    <Badge className="bg-sky-500/15 text-sky-300 border-sky-500/35 text-[10px] font-bold">
                                         Unlimited Viewer Slots
                                     </Badge>
                                 </div>
-                                <p className="text-xs text-purple-300/80 mt-1 max-w-2xl leading-relaxed">
+                                <p className="text-xs text-muted-foreground mt-1 max-w-2xl leading-relaxed">
                                     Plex limits shared tuner pools to 14 members, which are currently at capacity. However, DomsHomeLab also operates Jellyfin, which has <b>unlimited simultaneous Live TV slots</b> and direct audio/video passthrough for Apple TV, Roku, Fire TV, and mobile! Activate below to start streaming immediately.
                                 </p>
                                 {accessRequestMsg && (
@@ -956,30 +957,30 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                             setActiveHub("entertainment");
                             setVisibleCount(64);
                         }}
-                        className={`p-3 rounded-2xl border text-left transition-all duration-200 flex flex-col justify-between group relative overflow-hidden ${
+                        className={`p-3 rounded-xl border text-left transition-all duration-200 flex flex-col justify-between group relative overflow-hidden ${
                             activeHub === "entertainment"
-                                ? "bg-gradient-to-br from-purple-500/25 via-purple-950/40 to-card border-purple-500/60 shadow-md ring-1 ring-purple-500/30"
-                                : "bg-card/60 hover:bg-card border-border/50 hover:border-purple-500/40"
+                                ? "bg-gradient-to-br from-amber-500/20 via-slate-900/80 to-card border-amber-500/50 shadow-md ring-1 ring-amber-500/25"
+                                : "bg-card/60 hover:bg-card border-border/50 hover:border-amber-500/40"
                         }`}
                     >
                         <div className="flex items-center justify-between w-full mb-2">
-                            <div className={`p-1.5 rounded-xl transition-colors ${
+                            <div className={`p-1.5 rounded-lg transition-colors ${
                                 activeHub === "entertainment"
-                                    ? "bg-purple-500/30 text-purple-200"
-                                    : "bg-purple-500/10 text-purple-400 group-hover:bg-purple-500/20"
+                                    ? "bg-amber-500/25 text-amber-300"
+                                    : "bg-amber-500/10 text-amber-400 group-hover:bg-amber-500/20"
                             }`}>
                                 <Film className="h-4 w-4" />
                             </div>
                             <span className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-full ${
                                 activeHub === "entertainment"
-                                    ? "bg-purple-400 text-slate-950"
-                                    : "bg-purple-500/15 text-purple-300 border border-purple-500/30"
+                                    ? "bg-amber-400 text-slate-950"
+                                    : "bg-amber-500/15 text-amber-300 border border-amber-500/30"
                             }`}>
                                 {entertainmentCount}
                             </span>
                         </div>
                         <div>
-                            <h4 className="text-xs font-extrabold text-foreground tracking-tight group-hover:text-purple-200 transition-colors">
+                            <h4 className="text-xs font-extrabold text-foreground tracking-tight group-hover:text-amber-300 transition-colors">
                                 Entertainment
                             </h4>
                             <p className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5">
@@ -1332,7 +1333,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
 
             {/* Empty State for Active Hub */}
             {activeHubChannels.length === 0 && (
-                <div className="text-center py-12 border border-dashed border-border/60 rounded-2xl bg-card/20 space-y-3">
+                <div className="text-center py-12 border border-dashed border-border/60 rounded-xl bg-card/20 space-y-3">
                     {activeHub === "local" ? (
                         <>
                             <MapPin className="h-8 w-8 text-sky-400 mx-auto opacity-70" />
@@ -1346,7 +1347,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                                 onClick={() => handleRequestMarketChannels(selectedMarket)}
                                 disabled={isPending}
                                 size="sm"
-                                className="bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs gap-1.5 rounded-xl shadow-sm"
+                                className="bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs gap-1.5 rounded-lg shadow-sm"
                             >
                                 <Sparkles className="h-3.5 w-3.5" />
                                 Request {currentMarket.shortName} Channels
@@ -1363,23 +1364,19 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                             </p>
                         </>
                     ) : (
-                        <>
-                            <Tv className="h-8 w-8 text-muted-foreground mx-auto opacity-50" />
-                            <p className="text-sm font-semibold text-muted-foreground">
-                                No channels matched your search or filters.
-                            </p>
-                            <Button
-                                onClick={() => {
-                                    setSelectedGenre("all");
-                                    setSearchQuery("");
-                                    setVisibleCount(64);
-                                }}
-                                variant="outline"
-                                className="text-xs rounded-xl"
-                            >
-                                Reset Filters
-                            </Button>
-                        </>
+                        <EmptyState
+                            compact
+                            className="border-0 bg-transparent py-2"
+                            icon={Tv}
+                            title="No channels matched your search or filters."
+                            description="Try adjusting your category filter or search query."
+                            actionLabel="Reset Filters"
+                            onAction={() => {
+                                setSelectedGenre("all");
+                                setSearchQuery("");
+                                setVisibleCount(64);
+                            }}
+                        />
                     )}
                 </div>
             )}

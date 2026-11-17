@@ -78,10 +78,10 @@ export function AuthorDetailModal({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="w-[95vw] sm:w-[92vw] md:w-[90vw] max-w-4xl lg:max-w-5xl max-h-[90vh] sm:max-h-[92vh] bg-[#0c0c12] border border-border/60 shadow-2xl p-0 overflow-y-auto overflow-x-hidden sm:rounded-2xl flex flex-col min-w-0 scrollbar-thin text-foreground">
+            <DialogContent className="w-[95vw] sm:w-[92vw] md:w-[90vw] max-w-4xl lg:max-w-5xl max-h-[90vh] sm:max-h-[92vh] bg-[#0c0c12] border border-border/60 shadow-2xl p-0 overflow-y-auto overflow-x-hidden sm:rounded-xl flex flex-col min-w-0 scrollbar-thin text-foreground">
                 {/* Header Background */}
-                <div className="relative h-28 sm:h-36 w-full bg-gradient-to-r from-purple-950/80 via-background/90 to-background flex items-end p-4 sm:p-6 overflow-hidden border-b border-border/40 shrink-0">
-                    <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-purple-600/20 via-transparent to-transparent" />
+                <div className="relative h-28 sm:h-36 w-full bg-gradient-to-r from-slate-900/90 via-background/95 to-background flex items-end p-4 sm:p-6 overflow-hidden border-b border-border/40 shrink-0">
+                    <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-amber-500/15 via-transparent to-transparent" />
                 </div>
 
                 {/* Author Info Bar */}
@@ -89,7 +89,7 @@ export function AuthorDetailModal({
                     <div className="flex flex-col sm:flex-row items-center sm:items-end justify-between gap-4">
                         <div className="flex flex-col sm:flex-row items-center sm:items-end gap-4 text-center sm:text-left">
                             {/* Author Photo */}
-                            <div className="h-24 w-24 sm:h-28 sm:w-28 rounded-2xl overflow-hidden shadow-2xl border-2 border-white/20 bg-muted/80 shrink-0 relative">
+                            <div className="h-24 w-24 sm:h-28 sm:w-28 rounded-xl overflow-hidden shadow-2xl border-2 border-white/20 bg-muted/80 shrink-0 relative">
                                 {author?.photoUrl ? (
                                     <img
                                         src={author.photoUrl}
@@ -97,7 +97,7 @@ export function AuthorDetailModal({
                                         className="w-full h-full object-cover"
                                     />
                                 ) : (
-                                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-tr from-purple-900/40 to-indigo-900/40 text-purple-300">
+                                    <div className="w-full h-full flex items-center justify-center bg-slate-900/90 text-amber-400/80">
                                         <User className="h-12 w-12 opacity-60" />
                                     </div>
                                 )}

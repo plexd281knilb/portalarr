@@ -244,10 +244,10 @@ export function BookDetailModal({
     return (
         <>
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="w-[95vw] sm:w-[92vw] md:w-[90vw] max-w-3xl lg:max-w-4xl max-h-[90vh] sm:max-h-[92vh] bg-[#0c0c12] border border-border/60 shadow-2xl p-0 overflow-y-auto overflow-x-hidden sm:rounded-2xl scrollbar-thin text-foreground">
+            <DialogContent className="w-[95vw] sm:w-[92vw] md:w-[90vw] max-w-3xl lg:max-w-4xl max-h-[90vh] sm:max-h-[92vh] bg-[#0c0c12] border border-border/60 shadow-2xl p-0 overflow-y-auto overflow-x-hidden sm:rounded-xl scrollbar-thin text-foreground">
                 <div className="flex flex-col min-h-0 min-w-0 w-full overflow-x-hidden">
                     {/* Header Background Banner */}
-                    <div className="relative h-28 sm:h-36 w-full bg-gradient-to-r from-purple-950/60 via-indigo-950/40 to-background flex items-end p-4 sm:p-6 overflow-hidden border-b border-border/40 shrink-0">
+                    <div className="relative h-28 sm:h-36 w-full bg-gradient-to-r from-slate-900/90 via-background/95 to-background flex items-end p-4 sm:p-6 overflow-hidden border-b border-border/40 shrink-0">
                         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/15 via-transparent to-transparent" />
                         
                         <div className="relative z-10 flex items-center justify-between w-full">
@@ -264,13 +264,14 @@ export function BookDetailModal({
                                     </Button>
                                 )}
                                 <Badge 
-                                    className={`text-xs font-bold px-3 py-1 border shadow-md backdrop-blur-md ${
+                                    className={`text-xs font-bold px-3 py-1 border shadow-md backdrop-blur-md flex items-center gap-1.5 ${
                                         isAudiobook 
                                             ? "bg-amber-500/25 text-amber-300 border-amber-500/40" 
-                                            : "bg-purple-500/25 text-purple-300 border-purple-500/40"
+                                            : "bg-emerald-500/25 text-emerald-300 border-emerald-500/40"
                                     }`}
                                 >
-                                    {isAudiobook ? "🎧 AUDIOBOOK" : "📖 EBOOK"}
+                                    {isAudiobook ? <Headphones className="h-3.5 w-3.5 shrink-0" /> : <BookOpen className="h-3.5 w-3.5 shrink-0" />}
+                                    <span>{isAudiobook ? "AUDIOBOOK" : "EBOOK"}</span>
                                 </Badge>
                             </div>
 
@@ -351,13 +352,14 @@ export function BookDetailModal({
                             <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-1">
                                 <Badge 
                                     variant="secondary" 
-                                    className={`text-[10px] font-bold tracking-wider px-2 py-0.5 border shadow-sm ${
+                                    className={`text-[10px] font-bold tracking-wider px-2 py-0.5 border shadow-sm flex items-center gap-1 ${
                                         isAudiobook 
                                             ? "bg-amber-500/25 text-amber-300 border-amber-500/40" 
-                                            : "bg-purple-500/25 text-purple-300 border-purple-500/40"
+                                            : "bg-emerald-500/25 text-emerald-300 border-emerald-500/40"
                                     }`}
                                 >
-                                    {isAudiobook ? "🎧 AUDIOBOOK" : "📖 EBOOK"}
+                                    {isAudiobook ? <Headphones className="h-3 w-3 shrink-0" /> : <BookOpen className="h-3 w-3 shrink-0" />}
+                                    <span>{isAudiobook ? "AUDIOBOOK" : "EBOOK"}</span>
                                 </Badge>
 
                                 {activeBook.ageRating && (
@@ -436,9 +438,9 @@ export function BookDetailModal({
                                                     <button
                                                         type="button"
                                                         onClick={() => setKindleSetupOpen(true)}
-                                                        className="text-purple-400 hover:text-purple-300 underline font-semibold cursor-pointer"
+                                                        className="text-amber-400 hover:text-amber-300 underline font-semibold cursor-pointer"
                                                     >
-                                                        ⚡ Setup required • Click to configure
+                                                        Setup required • Click to configure
                                                     </button>
                                                 ) : (
                                                     "Mails EPUB to your Kindle when ready"

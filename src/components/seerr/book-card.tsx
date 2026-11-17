@@ -107,13 +107,14 @@ export function BookCard({ item, availability, onSelect, onRequest, compact = fa
                 <div className="absolute top-2 left-2 right-2 flex items-center justify-between gap-1 pointer-events-none">
                     <Badge 
                         variant="secondary" 
-                        className={`text-[10px] font-bold tracking-wider px-2 py-0.5 border shadow-sm backdrop-blur-md ${
+                        className={`text-[10px] font-bold tracking-wider px-2 py-0.5 border shadow-sm backdrop-blur-md flex items-center gap-1 ${
                             isAudiobook 
                                 ? "bg-amber-500/25 text-amber-300 border-amber-500/40" 
-                                : "bg-purple-500/25 text-purple-300 border-purple-500/40"
+                                : "bg-emerald-500/25 text-emerald-300 border-emerald-500/40"
                         }`}
                     >
-                        {isAudiobook ? "🎧 AUDIOBOOK" : "📖 EBOOK"}
+                        {isAudiobook ? <Headphones className="h-3 w-3 shrink-0" /> : <BookOpen className="h-3 w-3 shrink-0" />}
+                        <span>{isAudiobook ? "AUDIOBOOK" : "EBOOK"}</span>
                     </Badge>
 
                     <div className="flex items-center gap-1">

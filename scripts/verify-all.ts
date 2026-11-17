@@ -2854,7 +2854,7 @@ async function runTestSuite() {
 
         const modalPath = path.join(process.cwd(), "src", "components", "kindle-sender-update-modal.tsx");
         const modalContent = fs.readFileSync(modalPath, "utf-8");
-        if (!modalContent.includes("⚡ Outbound Sender Updated to") || !modalContent.includes("Approved Personal Document E-mail List")) {
+        if (!modalContent.includes("Outbound Sender Updated to") || !modalContent.includes("Approved Personal Document E-mail List")) {
             throw new Error("kindle-sender-update-modal.tsx missing required title or Amazon approved list instructions");
         }
         if (!modalContent.includes("https://www.amazon.com/hz/mycd/myx#/home/settings/payment")) {
@@ -2867,7 +2867,7 @@ async function runTestSuite() {
         // Verify KindleSenderUpdateBanner in Media Requests (Ebooks tab & RequestManager)
         const bannerPath = path.join(process.cwd(), "src", "components", "kindle-sender-update-banner.tsx");
         const bannerContent = fs.readFileSync(bannerPath, "utf-8");
-        if (!bannerContent.includes("https://www.amazon.com/hz/mycd/myx#/home/settings/payment") || !bannerContent.includes("⚡ Outbound Sender Updated to")) {
+        if (!bannerContent.includes("https://www.amazon.com/hz/mycd/myx#/home/settings/payment") || !bannerContent.includes("Outbound Sender Updated to")) {
             throw new Error("kindle-sender-update-banner.tsx missing clickable Amazon link or title");
         }
 
@@ -4305,6 +4305,121 @@ async function runTestSuite() {
             }
         } finally {
             process.env.PORTALARR_TEST_AUTH = prevTestAuth;
+        }
+    });
+
+    // =========================================================================
+    // SUITE 25: UI Design System, Typography, Palette, Boundary & Metadata Audit
+    // =========================================================================
+    await assertTest("Suite 25: UI Design System, Typography, Palette, Boundary & Metadata Audit", async () => {
+        const appDir = path.join(process.cwd(), "src/app");
+        const componentsDir = path.join(process.cwd(), "src/components");
+
+        const rootLayoutSrc = fs.readFileSync(path.join(appDir, "layout.tsx"), "utf8");
+        const globalsCssSrc = fs.readFileSync(path.join(appDir, "globals.css"), "utf8");
+        const notFoundSrc = fs.readFileSync(path.join(appDir, "not-found.tsx"), "utf8");
+        const globalErrorSrc = fs.readFileSync(path.join(appDir, "error.tsx"), "utf8");
+        const profileErrorSrc = fs.readFileSync(path.join(appDir, "profile/error.tsx"), "utf8");
+        const uiErrorsSrc = fs.readFileSync(path.join(process.cwd(), "src/lib/ui-errors.ts"), "utf8");
+        const emptyStateSrc = fs.readFileSync(path.join(componentsDir, "ui/empty-state.tsx"), "utf8");
+        const routeSkeletonSrc = fs.readFileSync(path.join(componentsDir, "ui/route-skeleton.tsx"), "utf8");
+
+        // 1. Brand Typography, Title Template, and Design Tokens
+        if (!rootLayoutSrc.includes("Inter") || !rootLayoutSrc.includes("JetBrains_Mono") || !rootLayoutSrc.includes("template:")) {
+            throw new Error("src/app/layout.tsx must load Inter + JetBrains_Mono fonts and define metadata.title.template");
+        }
+        if (!globalsCssSrc.includes("--font-inter") || !globalsCssSrc.includes("--font-jetbrains-mono")) {
+            throw new Error("src/app/globals.css must map --font-sans/--font-mono to --font-inter/--font-jetbrains-mono");
+        }
+        if (!globalsCssSrc.includes("--radius: 0.5rem;") || !globalsCssSrc.includes("oklch(0.769 0.188 70.08)")) {
+            throw new Error("src/app/globals.css must enforce unified --radius: 0.5rem and Plex Amber dark --primary");
+        }
+        if (!globalsCssSrc.includes("prefers-reduced-motion: reduce")) {
+            throw new Error("src/app/globals.css must include prefers-reduced-motion accessibility guard");
+        }
+
+        // 2. Reusable Empty State, Route Skeleton, 404 & Humanized Error Boundaries
+        if (!emptyStateSrc.includes("export function EmptyState") || !routeSkeletonSrc.includes("export function RouteLoadingShell")) {
+            throw new Error("Reusable EmptyState and RouteLoadingShell components must exist");
+        }
+        if (!notFoundSrc.includes('href="/"') || !notFoundSrc.includes("Route Not Found")) {
+            throw new Error("Custom 404 src/app/not-found.tsx must exist with clear home recovery action");
+        }
+        if (!uiErrorsSrc.includes("export function getFriendlyErrorDisplay") || !globalErrorSrc.includes("getFriendlyErrorDisplay") || !profileErrorSrc.includes("getFriendlyErrorDisplay")) {
+            throw new Error("Error boundaries must map exceptions through humanized getFriendlyErrorDisplay()");
+        }
+
+        // 3. No decorative purple/indigo/violet gradient slop in UI components or app routes
+        const tsxFiles: string[] = [];
+        const walkTsx = (dir: string) => {
+            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+                const full = path.join(dir, entry.name);
+                if (entry.isDirectory()) walkTsx(full);
+                else if (entry.name.endsWith(".tsx")) tsxFiles.push(full);
+            }
+        };
+        walkTsx(appDir);
+        walkTsx(componentsDir);
+
+        const forbiddenGradientRe = /\b(?:from|via|to)-(?:purple|indigo|violet)-/;
+        for (const f of tsxFiles) {
+            const content = fs.readFileSync(f, "utf8");
+            if (forbiddenGradientRe.test(content)) {
+                throw new Error(`Decorative purple/indigo/violet gradient found in ${path.relative(process.cwd(), f)}`);
+            }
+        }
+
+        // 4. Every non-redirect route page must expose Metadata via page.tsx or its layout.tsx, and key routes must have loading skeletons
+        const routesRequiringMetadata = [
+            "page.tsx",
+            "discover/page.tsx",
+            "requests/page.tsx",
+            "library/page.tsx",
+            "tickets/page.tsx",
+            "settings/page.tsx",
+            "settings/access/page.tsx",
+            "profile/page.tsx",
+            "beta/page.tsx",
+            "guides/page.tsx",
+            "join/page.tsx",
+            "login/page.tsx",
+            "pending/page.tsx",
+            "radarr/page.tsx",
+            "sonarr/page.tsx",
+            "admin/monitoring/page.tsx",
+            "admin/scripts/page.tsx",
+            "admin/streams/page.tsx",
+            "admin/tautulli/page.tsx",
+            "admin/tickets/page.tsx"
+        ];
+        for (const relPage of routesRequiringMetadata) {
+            const fullPage = path.join(appDir, relPage);
+            if (!fs.existsSync(fullPage)) continue;
+            const pageSrc = fs.readFileSync(fullPage, "utf8");
+            const dirLayout = path.join(path.dirname(fullPage), "layout.tsx");
+            const hasMetaInPage = /export\s+(?:const\s+metadata|async\s+function\s+generateMetadata)\b/.test(pageSrc);
+            const hasMetaInLayout = fs.existsSync(dirLayout) && /export\s+(?:const\s+metadata|async\s+function\s+generateMetadata)\b/.test(fs.readFileSync(dirLayout, "utf8"));
+            if (!hasMetaInPage && !hasMetaInLayout) {
+                throw new Error(`Route src/app/${relPage} lacks metadata in page.tsx or sibling layout.tsx`);
+            }
+        }
+
+        const routesRequiringLoading = [
+            "loading.tsx",
+            "profile/loading.tsx",
+            "discover/loading.tsx",
+            "requests/loading.tsx",
+            "library/loading.tsx",
+            "tickets/loading.tsx",
+            "settings/loading.tsx",
+            "admin/monitoring/loading.tsx",
+            "admin/scripts/loading.tsx",
+            "admin/tautulli/loading.tsx"
+        ];
+        for (const relLoading of routesRequiringLoading) {
+            if (!fs.existsSync(path.join(appDir, relLoading))) {
+                throw new Error(`Missing route loading skeleton: src/app/${relLoading}`);
+            }
         }
     });
 

@@ -218,7 +218,7 @@ export function UserMediaServersManager({
             {/* ========================================================================= */}
             {/* 1. ROLE & CAPABILITIES OVERVIEW BANNER */}
             {/* ========================================================================= */}
-            <Card className="border-border/60 bg-gradient-to-r from-purple-950/20 via-[#121218]/90 to-blue-950/20 shadow-md relative overflow-hidden">
+            <Card className="border-border/60 bg-gradient-to-r from-slate-900/90 via-[#121218]/95 to-slate-900/80 shadow-md relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-72 h-72 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
                 <CardHeader className="pb-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -236,7 +236,7 @@ export function UserMediaServersManager({
                                         Super User
                                     </Badge>
                                 ) : isAdmin ? (
-                                    <Badge variant="outline" className="bg-purple-500/15 text-purple-300 border-purple-500/30 text-xs font-bold">
+                                    <Badge variant="outline" className="bg-sky-500/15 text-sky-300 border-sky-500/30 text-xs font-bold">
                                         Administrator
                                     </Badge>
                                 ) : (
@@ -463,14 +463,14 @@ export function UserMediaServersManager({
                                                         }}
                                                         className="h-7 text-xs font-semibold gap-1.5 border-border/60 hover:bg-white/[0.05] text-foreground cursor-pointer"
                                                     >
-                                                        📖 Setup Guide
+                                                        <BookOpen className="h-3.5 w-3.5 shrink-0" /> Setup Guide
                                                     </Button>
                                                 )}
 
                                                 <div className="flex items-center gap-2">
                                                     {isTrialUser && !isPlex ? (
                                                         <>
-                                                            <Badge variant="outline" className="text-[10px] font-bold bg-purple-500/15 text-purple-300 border-purple-500/30">
+                                                            <Badge variant="outline" className="text-[10px] font-bold bg-amber-500/15 text-amber-300 border-amber-500/30">
                                                                 <Lock className="h-3 w-3 mr-1" /> Full Members Only
                                                             </Badge>
                                                             <Switch

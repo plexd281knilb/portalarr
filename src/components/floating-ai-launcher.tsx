@@ -30,7 +30,7 @@ export function FloatingAiLauncher() {
             <button
                 type="button"
                 onClick={handleClick}
-                className="group flex items-center gap-2 px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-full bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-600 hover:from-purple-500 hover:via-indigo-500 hover:to-cyan-500 text-white font-bold text-xs sm:text-sm shadow-xl shadow-purple-950/60 border border-white/20 backdrop-blur-md transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer ring-2 ring-purple-500/30 hover:ring-purple-400/60"
+                className="group flex items-center gap-2 px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-full bg-slate-900/95 hover:bg-slate-800 text-slate-100 font-semibold text-xs sm:text-sm shadow-xl shadow-black/50 border border-amber-500/40 hover:border-amber-400/70 backdrop-blur-md transition-all duration-200 hover:scale-[1.03] active:scale-95 cursor-pointer ring-1 ring-amber-500/20 hover:ring-amber-400/40"
                 title="Ask the 24/7 AI Server Assistant"
             >
                 <div className="p-1 rounded-full bg-white/20 group-hover:rotate-12 transition-transform duration-200">

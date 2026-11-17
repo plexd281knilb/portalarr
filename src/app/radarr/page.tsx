@@ -1,7 +1,13 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/app/auth-actions";
 import { getEnabledArrInstances } from "@/app/arr-actions";
 import RadarrClient from "@/components/arr/radarr-client";
+
+export const metadata: Metadata = {
+    title: "Radarr Movies",
+    description: "Manage Radarr movie collections, downloads, and indexers."
+};
 
 export const dynamic = "force-dynamic";
 

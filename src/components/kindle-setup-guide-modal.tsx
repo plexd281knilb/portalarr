@@ -124,11 +124,11 @@ export function KindleSetupGuideModal({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto bg-[#0e0e15]/95 backdrop-blur-xl border border-purple-500/30 shadow-2xl p-0 text-foreground scrollbar-thin">
-                {/* Glowing Top Banner */}
-                <div className="bg-gradient-to-r from-purple-950/80 via-indigo-950/60 to-purple-950/80 border-b border-purple-500/20 p-5 pb-4">
+            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto bg-[#0e0e15]/95 backdrop-blur-xl border border-amber-500/35 shadow-2xl p-0 text-foreground scrollbar-thin">
+                {/* Header Banner */}
+                <div className="bg-gradient-to-r from-slate-900/95 via-[#141720] to-slate-900/95 border-b border-border/60 p-5 pb-4">
                     <div className="flex items-center gap-2 mb-2">
-                        <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30 text-[10px] uppercase font-bold tracking-wider px-2 py-0.5">
+                        <Badge className="bg-sky-500/15 text-sky-300 border-sky-500/30 text-[10px] uppercase font-bold tracking-wider px-2 py-0.5">
                             <Send className="h-3 w-3 mr-1 inline" /> Send-to-Kindle Setup
                         </Badge>
                         <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-300 bg-emerald-500/10">
@@ -136,7 +136,7 @@ export function KindleSetupGuideModal({
                         </Badge>
                     </div>
                     <DialogTitle className="text-lg sm:text-xl font-extrabold tracking-tight text-white flex items-center gap-2">
-                        <span>⚡ Set Up 1-Click Send-to-Kindle Delivery</span>
+                        <span>Set Up 1-Click Send-to-Kindle Delivery</span>
                     </DialogTitle>
                     <DialogDescription className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
                         Request or download any ebook and have it fly wirelessly to your Kindle device or Kindle app automatically. Follow the 3 quick steps below to activate delivery.

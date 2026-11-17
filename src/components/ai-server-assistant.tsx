@@ -242,19 +242,19 @@ export function AiServerAssistant() {
 
     const adminPrompts = snapshot?.role === "ADMIN" ? [
         { 
-            icon: "🐳",
+            icon: Server,
             label: "Docker Fleet", 
             category: "Homelab Fleet",
             query: "What is the status of the Docker container fleet across the homelab?" 
         },
         { 
-            icon: "🖥️",
+            icon: Cpu,
             label: "Host Hardware", 
             category: "Hardware",
             query: "Query Glances hardware telemetry: what are host CPU and RAM percentages?" 
         },
         { 
-            icon: "🚨",
+            icon: ShieldAlert,
             label: "Sharing Alerts", 
             category: "Security",
             query: "Check account sharing intelligence: are any accounts streaming from multiple public IPs?" 
@@ -263,49 +263,49 @@ export function AiServerAssistant() {
 
     const basePrompts = [
         { 
-            icon: "🟢",
+            icon: Activity,
             label: "Is Plex Working?", 
             category: "Server Health",
             query: "Is Plex working right now? Test actual file playback and disk access for each server." 
         },
         { 
-            icon: "⚾",
+            icon: Languages,
             label: "Spanish Audio Fix", 
             category: "Audio Tracks",
             query: "The Sandlot is in Spanish only. Can you check if English audio is available or replace it?" 
         },
         { 
-            icon: "📺",
+            icon: Tv,
             label: "Roku Quality Error", 
             category: "Client Fix",
             query: "Why is my Roku giving an error saying quality is too low or crashing when playing a movie?" 
         },
         { 
-            icon: "⚡",
+            icon: Zap,
             label: "100% Direct Play", 
             category: "Buffering",
             query: "Why is my stream buffering and how do I get 100% Direct Play on my device?" 
         },
         { 
-            icon: "🔊",
+            icon: Volume2,
             label: "Quiet Dialogue", 
             category: "Audio",
             query: "Dialogue is too quiet or audio is transcoding. How do I fix dialogue boost and audio settings?" 
         },
         { 
-            icon: "💬",
+            icon: Languages,
             label: "Subtitle Stutter", 
             category: "Subtitles",
             query: "Why do subtitles cause video buffering and how do I fix subtitle burn-in?" 
         },
         { 
-            icon: "⚙️",
+            icon: SlidersHorizontal,
             label: "Remote 1080p/4K Settings", 
             category: "Quality",
             query: "What are the recommended Plex settings for my device to avoid the 720p 2Mbps limit?" 
         },
         { 
-            icon: "📚",
+            icon: BookOpen,
             label: "Book Recommendations", 
             category: "Discovery",
             query: "Can you recommend some books or audiobooks based on what I've requested and read previously?" 
@@ -321,15 +321,15 @@ export function AiServerAssistant() {
     return (
         <>
             {/* --- DASHBOARD CARD (PROMINENT MISSION CONTROL HERO CARD) --- */}
-            <Card className="w-full relative overflow-hidden border-2 border-purple-500/40 bg-gradient-to-br from-purple-950/25 via-[#121218]/95 to-cyan-950/20 backdrop-blur-md shadow-xl hover:border-purple-500/60 transition-all duration-300 animate-in fade-in duration-500">
-                <div className="absolute top-0 right-0 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
-                <div className="absolute bottom-0 left-0 w-80 h-80 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
+            <Card className="w-full relative overflow-hidden border border-amber-500/35 bg-gradient-to-br from-slate-900/95 via-[#121218]/98 to-slate-950/95 backdrop-blur-md shadow-xl hover:border-amber-500/55 transition-colors duration-300 animate-in fade-in duration-500">
+                <div className="absolute top-0 right-0 w-80 h-80 bg-amber-500/8 rounded-full blur-3xl pointer-events-none" />
+                <div className="absolute bottom-0 left-0 w-80 h-80 bg-sky-500/8 rounded-full blur-3xl pointer-events-none" />
 
                 <CardHeader className="pb-3.5">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div className="space-y-1">
                             <div className="flex items-center gap-2.5">
-                                <div className="p-2 sm:p-2.5 rounded-2xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-cyan-500 text-white shadow-lg shadow-purple-900/40 ring-1 ring-white/20 shrink-0">
+                                <div className="p-2 sm:p-2.5 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/35 shadow-sm shrink-0">
                                     <Bot className="h-5 w-5 sm:h-6 sm:w-6" />
                                 </div>
                                 <div>
@@ -345,7 +345,7 @@ export function AiServerAssistant() {
 
                         <div className="flex items-center gap-2 shrink-0">
                             <Badge variant="outline" className="bg-emerald-500/15 text-emerald-300 border-emerald-500/40 text-[11px] sm:text-xs font-bold gap-1.5 px-2.5 py-1">
-                                <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                                <span className="h-2 w-2 rounded-full bg-emerald-400 shrink-0" />
                                 24/7 Live AI Master
                             </Badge>
                         </div>
@@ -355,34 +355,37 @@ export function AiServerAssistant() {
                 <CardContent className="space-y-4 pt-0">
                     {/* 1-Click Common Issue Quick-Chips */}
                     <div className="space-y-1.5">
-                        <div className="text-[11px] font-bold uppercase tracking-wider text-purple-300/80 flex items-center gap-1.5">
-                            <Zap className="h-3.5 w-3.5 text-purple-400" />
+                        <div className="text-[11px] font-bold uppercase tracking-wider text-amber-400/90 flex items-center gap-1.5">
+                            <Zap className="h-3.5 w-3.5 text-amber-400" />
                             <span>1-Click Common Issues &amp; Fixes:</span>
                         </div>
                         <div className="flex flex-wrap gap-2">
                             {[
-                                { icon: "⚡", label: "Stream Buffering", query: "Why is my stream buffering and how do I get 100% Direct Play on my device?" },
-                                { icon: "🔊", label: "Quiet Dialogue", query: "Dialogue is too quiet or audio is transcoding. How do I fix dialogue boost and audio settings?" },
-                                { icon: "💬", label: "Subtitle Stutter", query: "Why do subtitles cause video buffering and how do I fix subtitle burn-in?" },
-                                { icon: "📺", label: "Unlock 4K & 1080p", query: "What are the recommended Plex settings for my device to avoid the 720p 2Mbps limit?" },
-                                { icon: "🎬", label: "Missing Movie/Show", query: "I cannot find a movie or episode in my library. How do I request it or check download status?" },
-                                { icon: "📚", label: "Book Recommendations", query: "Can you recommend some books or audiobooks based on what I've requested and read previously?" },
-                                { icon: "🟢", label: "Is Server Working?", query: "Is Plex working right now? Test actual file playback and disk access for each server." }
-                            ].map((chip, idx) => (
-                                <button
-                                    key={idx}
-                                    type="button"
-                                    onClick={() => {
-                                        setIsOpen(true);
-                                        setActiveTab("chat");
-                                        handleSend(chip.query);
-                                    }}
-                                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/[0.04] hover:bg-purple-500/20 text-xs font-medium text-foreground hover:text-purple-200 border border-border/50 hover:border-purple-500/40 transition-all active:scale-95 cursor-pointer shadow-sm"
-                                >
-                                    <span>{chip.icon}</span>
-                                    <span>{chip.label}</span>
-                                </button>
-                            ))}
+                                { icon: Zap, label: "Stream Buffering", query: "Why is my stream buffering and how do I get 100% Direct Play on my device?" },
+                                { icon: Volume2, label: "Quiet Dialogue", query: "Dialogue is too quiet or audio is transcoding. How do I fix dialogue boost and audio settings?" },
+                                { icon: Languages, label: "Subtitle Stutter", query: "Why do subtitles cause video buffering and how do I fix subtitle burn-in?" },
+                                { icon: Tv, label: "Unlock 4K & 1080p", query: "What are the recommended Plex settings for my device to avoid the 720p 2Mbps limit?" },
+                                { icon: Film, label: "Missing Movie/Show", query: "I cannot find a movie or episode in my library. How do I request it or check download status?" },
+                                { icon: BookOpen, label: "Book Recommendations", query: "Can you recommend some books or audiobooks based on what I've requested and read previously?" },
+                                { icon: Activity, label: "Is Server Working?", query: "Is Plex working right now? Test actual file playback and disk access for each server." }
+                            ].map((chip, idx) => {
+                                const ChipIcon = chip.icon;
+                                return (
+                                    <button
+                                        key={idx}
+                                        type="button"
+                                        onClick={() => {
+                                            setIsOpen(true);
+                                            setActiveTab("chat");
+                                            handleSend(chip.query);
+                                        }}
+                                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/[0.04] hover:bg-amber-500/15 text-xs font-medium text-foreground hover:text-amber-200 border border-border/50 hover:border-amber-500/40 transition-all active:scale-95 cursor-pointer shadow-sm"
+                                    >
+                                        <ChipIcon className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                                        <span>{chip.label}</span>
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
 
@@ -392,19 +395,19 @@ export function AiServerAssistant() {
                             value={quickQuestion}
                             onChange={(e) => setQuickQuestion(e.target.value)}
                             placeholder="Ask for book recommendations, describe buffering, or request fixes (e.g. recommend books like Dune)..."
-                            className="h-11 text-xs sm:text-sm bg-black/40 border-purple-500/30 focus-visible:border-purple-400 focus-visible:ring-purple-500/30 pl-3 sm:pl-4 pr-20 sm:pr-32 rounded-xl"
+                            className="h-11 text-xs sm:text-sm bg-black/40 border-border/60 focus-visible:border-amber-500/60 focus-visible:ring-amber-500/25 pl-3 sm:pl-4 pr-20 sm:pr-32 rounded-lg"
                         />
                         <Button
                             type="submit"
                             size="sm"
-                            className="absolute right-1.5 top-1.5 h-8 px-2.5 sm:px-3.5 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 text-white font-semibold text-xs rounded-lg shadow-md cursor-pointer flex items-center gap-1.5 active:scale-95 transition-all"
+                            className="absolute right-1.5 top-1.5 h-8 px-2.5 sm:px-3.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-xs rounded-md shadow-sm cursor-pointer flex items-center gap-1.5 active:scale-95 transition-all"
                             disabled={loading}
                         >
                             {loading ? (
                                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
                             ) : (
                                 <>
-                                    <Sparkles className="h-3.5 w-3.5 text-purple-200" />
+                                    <Sparkles className="h-3.5 w-3.5 text-slate-950" />
                                     <span className="hidden sm:inline">Ask Assistant</span>
                                     <span className="sm:hidden">Ask</span>
                                 </>
@@ -490,15 +493,14 @@ export function AiServerAssistant() {
                     }
                 }}
             >
-                <DialogContent className="w-[98vw] sm:max-w-4xl max-h-[92vh] h-[86vh] flex flex-col bg-[#0c0d14]/98 border-purple-500/30 backdrop-blur-2xl shadow-2xl p-0 overflow-hidden text-foreground">
+                <DialogContent className="w-[98vw] sm:max-w-4xl max-h-[92vh] h-[86vh] flex flex-col bg-[#0c0d14]/98 border-border/60 backdrop-blur-2xl shadow-2xl p-0 overflow-hidden text-foreground">
                     {/* Top Mission Control Header */}
-                    <DialogHeader className="p-4 sm:p-5 pb-3 border-b border-border/50 bg-gradient-to-r from-purple-950/40 via-background to-cyan-950/30 shrink-0">
+                    <DialogHeader className="p-4 sm:p-5 pb-3 border-b border-border/50 bg-gradient-to-r from-slate-900/95 via-background to-slate-900/90 shrink-0">
                         <div className="flex flex-wrap items-center justify-between gap-3">
                             <div className="flex items-center gap-3 min-w-0">
-                                <div className="relative flex items-center justify-center p-2.5 rounded-2xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-cyan-500 text-white shadow-lg shadow-purple-950/60 border border-purple-400/40 shrink-0">
+                                <div className="relative flex items-center justify-center p-2.5 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/35 shadow-sm shrink-0">
                                     <Bot className="h-6 w-6" />
                                     <span className="absolute -bottom-1 -right-1 flex h-3 w-3">
-                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                                         <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500 border-2 border-slate-900"></span>
                                     </span>
                                 </div>
@@ -508,7 +510,7 @@ export function AiServerAssistant() {
                                             <span>Plex &amp; Server Master AI</span>
                                         </DialogTitle>
                                         <Badge variant="outline" className="text-[10px] font-bold bg-emerald-950/40 text-emerald-300 border-emerald-500/40 flex items-center gap-1">
-                                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
                                             <span>Autonomous v{process.env.NEXT_PUBLIC_PORTALARR_VERSION || "1.0.1"}</span>
                                         </Badge>
                                     </div>
@@ -677,10 +679,10 @@ export function AiServerAssistant() {
                                 {messages.length === 0 ? (
                                     <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-5 my-auto">
                                         <div className="relative">
-                                            <div className="p-5 rounded-3xl bg-gradient-to-tr from-purple-600/20 via-indigo-600/20 to-cyan-500/20 border border-purple-500/30 text-purple-300 shadow-2xl">
+                                            <div className="p-5 rounded-2xl bg-slate-900/90 border border-amber-500/30 text-amber-400 shadow-2xl">
                                                 <Bot className="h-12 w-12" />
                                             </div>
-                                            <Sparkles className="h-5 w-5 text-cyan-400 absolute -top-1 -right-1 animate-pulse" />
+                                            <Sparkles className="h-5 w-5 text-amber-400 absolute -top-1 -right-1" />
                                         </div>
 
                                         <div className="max-w-md space-y-1.5">
@@ -692,25 +694,28 @@ export function AiServerAssistant() {
 
                                         {/* Quick Prompt Cards Grid */}
                                         <div className="w-full max-w-2xl pt-2 grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-left">
-                                            {quickPrompts.slice(0, 6).map((p, idx) => (
-                                                <button
-                                                    key={idx}
-                                                    type="button"
-                                                    onClick={() => handleSend(p.query)}
-                                                    className="p-3 rounded-xl bg-slate-900/60 hover:bg-purple-950/30 border border-slate-800 hover:border-purple-500/40 text-xs transition-all flex items-start gap-2.5 group cursor-pointer"
-                                                >
-                                                    <span className="text-base shrink-0 mt-0.5">{p.icon}</span>
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="flex items-center justify-between gap-1">
-                                                            <span className="font-semibold text-slate-200 group-hover:text-purple-300 truncate">{p.label}</span>
-                                                            <Badge variant="outline" className="text-[9px] px-1 py-0 text-slate-500 border-slate-800">
-                                                                {p.category}
-                                                            </Badge>
+                                            {quickPrompts.slice(0, 6).map((p, idx) => {
+                                                const PromptIcon = p.icon;
+                                                return (
+                                                    <button
+                                                        key={idx}
+                                                        type="button"
+                                                        onClick={() => handleSend(p.query)}
+                                                        className="p-3 rounded-lg bg-slate-900/60 hover:bg-amber-500/10 border border-slate-800 hover:border-amber-500/35 text-xs transition-all flex items-start gap-2.5 group cursor-pointer"
+                                                    >
+                                                        <PromptIcon className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="flex items-center justify-between gap-1">
+                                                                <span className="font-semibold text-slate-200 group-hover:text-amber-300 truncate">{p.label}</span>
+                                                                <Badge variant="outline" className="text-[9px] px-1 py-0 text-slate-500 border-slate-800">
+                                                                    {p.category}
+                                                                </Badge>
+                                                            </div>
+                                                            <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">{p.query}</p>
                                                         </div>
-                                                        <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">{p.query}</p>
-                                                    </div>
-                                                </button>
-                                            ))}
+                                                    </button>
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                 ) : (
@@ -720,14 +725,14 @@ export function AiServerAssistant() {
                                             className={`flex items-start gap-3 ${msg.role === "user" ? "justify-end" : "justify-start"} animate-in fade-in-50 duration-200`}
                                         >
                                             {msg.role === "assistant" && (
-                                                <div className="h-8 w-8 rounded-xl bg-gradient-to-tr from-purple-600 to-cyan-500 text-white flex items-center justify-center shrink-0 shadow-md border border-purple-400/30 mt-0.5">
+                                                <div className="h-8 w-8 rounded-lg bg-amber-500/15 text-amber-400 flex items-center justify-center shrink-0 shadow-sm border border-amber-500/30 mt-0.5">
                                                     <Bot className="h-4 w-4" />
                                                 </div>
                                             )}
 
-                                            <div className={`max-w-[88%] rounded-2xl p-4 text-xs leading-relaxed space-y-3 shadow-md ${
+                                            <div className={`max-w-[88%] rounded-xl p-4 text-xs leading-relaxed space-y-3 shadow-md ${
                                                 msg.role === "user"
-                                                    ? "bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-tr-xs"
+                                                    ? "bg-amber-500/15 border border-amber-500/30 text-slate-100 rounded-tr-xs"
                                                     : "bg-slate-900/90 border border-slate-800 text-slate-200 rounded-tl-xs"
                                             }`}>
                                                 <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-1.5 text-[10px] text-muted-foreground">
@@ -736,7 +741,7 @@ export function AiServerAssistant() {
                                                             {msg.role === "user" ? "You" : "Plex & Server Master AI"}
                                                         </span>
                                                         {msg.role === "assistant" && msg.providerUsed && (
-                                                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 font-normal border-purple-500/30 text-purple-300 bg-purple-950/40">
+                                                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 font-normal border-sky-500/30 text-sky-300 bg-sky-950/40">
                                                                 {msg.providerUsed}
                                                             </Badge>
                                                         )}
@@ -983,11 +988,11 @@ export function AiServerAssistant() {
                                 {/* Thinking / Diagnostic In-Progress State */}
                                 {loading && (
                                     <div className="flex items-start gap-3 animate-in fade-in duration-200">
-                                        <div className="h-8 w-8 rounded-xl bg-gradient-to-tr from-purple-600 to-cyan-500 text-white flex items-center justify-center shrink-0 shadow-md border border-purple-400/30 mt-0.5">
+                                        <div className="h-8 w-8 rounded-lg bg-amber-500/15 text-amber-400 flex items-center justify-center shrink-0 shadow-sm border border-amber-500/30 mt-0.5">
                                             <Bot className="h-4 w-4" />
                                         </div>
-                                        <div className="p-3.5 rounded-2xl bg-slate-900 border border-purple-500/30 text-xs text-purple-200 flex items-center gap-3 shadow-lg">
-                                            <Loader2 className="h-4 w-4 animate-spin text-purple-400 shrink-0" />
+                                        <div className="p-3.5 rounded-xl bg-slate-900 border border-amber-500/30 text-xs text-amber-200 flex items-center gap-3 shadow-lg">
+                                            <Loader2 className="h-4 w-4 animate-spin text-amber-400 shrink-0" />
                                             <span className="leading-relaxed">
                                                 Inspecting stream telemetry, querying indexers, and generating step-by-step fix...
                                             </span>
@@ -1002,20 +1007,23 @@ export function AiServerAssistant() {
                                 {/* Quick Suggestion Prompt Chips */}
                                 <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar text-[10px]">
                                     <span className="text-slate-500 shrink-0 font-semibold flex items-center gap-1">
-                                        <Sparkles className="h-3 w-3 text-purple-400" />
+                                        <Sparkles className="h-3 w-3 text-amber-400" />
                                         <span>Quick:</span>
                                     </span>
-                                    {quickPrompts.map((p, idx) => (
-                                        <button
-                                            key={idx}
-                                            type="button"
-                                            onClick={() => handleSend(p.query)}
-                                            className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-purple-950/50 border border-slate-800 hover:border-purple-500/40 text-slate-300 hover:text-white transition-all shrink-0 whitespace-nowrap cursor-pointer flex items-center gap-1"
-                                        >
-                                            <span>{p.icon}</span>
-                                            <span>{p.label}</span>
-                                        </button>
-                                    ))}
+                                    {quickPrompts.map((p, idx) => {
+                                        const PromptIcon = p.icon;
+                                        return (
+                                            <button
+                                                key={idx}
+                                                type="button"
+                                                onClick={() => handleSend(p.query)}
+                                                className="px-2.5 py-1 rounded-md bg-slate-900 hover:bg-amber-500/15 border border-slate-800 hover:border-amber-500/35 text-slate-300 hover:text-amber-200 transition-all shrink-0 whitespace-nowrap cursor-pointer flex items-center gap-1.5"
+                                            >
+                                                <PromptIcon className="h-3 w-3 text-amber-400 shrink-0" />
+                                                <span>{p.label}</span>
+                                            </button>
+                                        );
+                                    })}
                                     {messages.length > 0 && (
                                         <button
                                             type="button"
@@ -1339,39 +1347,42 @@ export function AiServerAssistant() {
                             </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                {quickPrompts.map((p, idx) => (
-                                    <div 
-                                        key={idx} 
-                                        className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-purple-500/40 transition-all flex flex-col justify-between gap-3 group"
-                                    >
-                                        <div className="space-y-1">
-                                            <div className="flex items-center justify-between gap-2">
-                                                <span className="text-sm font-bold text-white group-hover:text-purple-300 flex items-center gap-2">
-                                                    <span>{p.icon}</span>
-                                                    <span>{p.label}</span>
-                                                </span>
-                                                <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-slate-700 text-slate-400">
-                                                    {p.category}
-                                                </Badge>
-                                            </div>
-                                            <p className="text-xs text-slate-300 leading-relaxed pt-1">
-                                                {p.query}
-                                            </p>
-                                        </div>
-
-                                        <Button
-                                            size="sm"
-                                            onClick={() => {
-                                                setActiveTab("chat");
-                                                handleSend(p.query);
-                                            }}
-                                            className="w-full text-xs font-semibold h-8 bg-slate-800 hover:bg-purple-600 hover:text-white text-slate-200 border border-slate-700 hover:border-purple-500/40 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                                {quickPrompts.map((p, idx) => {
+                                    const FixIcon = p.icon;
+                                    return (
+                                        <div 
+                                            key={idx} 
+                                            className="p-4 rounded-lg bg-slate-900/80 border border-slate-800 hover:border-amber-500/40 transition-all flex flex-col justify-between gap-3 group"
                                         >
-                                            <Sparkles className="h-3 w-3 text-purple-400" />
-                                            <span>Diagnose With AI</span>
-                                        </Button>
-                                    </div>
-                                ))}
+                                            <div className="space-y-1">
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <span className="text-sm font-bold text-white group-hover:text-amber-300 flex items-center gap-2">
+                                                        <FixIcon className="h-4 w-4 text-amber-400 shrink-0" />
+                                                        <span>{p.label}</span>
+                                                    </span>
+                                                    <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-slate-700 text-slate-400">
+                                                        {p.category}
+                                                    </Badge>
+                                                </div>
+                                                <p className="text-xs text-slate-300 leading-relaxed pt-1">
+                                                    {p.query}
+                                                </p>
+                                            </div>
+
+                                            <Button
+                                                size="sm"
+                                                onClick={() => {
+                                                    setActiveTab("chat");
+                                                    handleSend(p.query);
+                                                }}
+                                                className="w-full text-xs font-semibold h-8 bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-slate-200 border border-slate-700 hover:border-amber-400 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                                            >
+                                                <Sparkles className="h-3 w-3" />
+                                                <span>Diagnose With AI</span>
+                                            </Button>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
                     )}

@@ -366,16 +366,16 @@ export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServers
     return (
         <div className="space-y-6">
             {/* Header & Quick Actions */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-gradient-to-r from-purple-950/20 via-background to-blue-950/20 border border-purple-500/30">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-gradient-to-r from-slate-900/95 via-background to-slate-900/80 border border-amber-500/30">
                 <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                        <Layers className="h-5 w-5 text-purple-400" />
+                        <Layers className="h-5 w-5 text-amber-400" />
                         <h2 className="text-base sm:text-lg font-bold text-foreground">
                             Multi-Platform Media Servers &amp; Library Whitelist
                         </h2>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                        Configure Plex, Jellyfin, and Emby instances. Control strictly which servers and libraries your Full Members are allowed to self-select. (Trial member access is managed via the <Link href="/settings/access?tab=onboarding#trial-safe-pool" className="text-purple-300 hover:text-purple-200 underline font-semibold">Trial Safe Pool</Link> in Access Control).
+                        Configure Plex, Jellyfin, and Emby instances. Control strictly which servers and libraries your Full Members are allowed to self-select. (Trial member access is managed via the <Link href="/settings/access?tab=onboarding#trial-safe-pool" className="text-amber-400 hover:text-amber-300 underline font-semibold">Trial Safe Pool</Link> in Access Control).
                     </p>
                 </div>
 

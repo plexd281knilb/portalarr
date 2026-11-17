@@ -236,8 +236,9 @@ export function BookMatchModal({
               <div>
                 <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
                   Match & Link Book Metadata
-                  <Badge variant="outline" className="text-[10px] font-mono border-primary/30 text-primary uppercase">
-                    {isAudiobook ? "🎧 Audiobook" : "📖 Ebook"}
+                  <Badge variant="outline" className="text-[10px] font-mono border-primary/30 text-primary uppercase inline-flex items-center gap-1">
+                    {isAudiobook ? <Headphones className="h-3 w-3 shrink-0" /> : <BookOpen className="h-3 w-3 shrink-0" />}
+                    <span>{isAudiobook ? "Audiobook" : "Ebook"}</span>
                   </Badge>
                 </CardTitle>
                 <CardDescription className="text-xs text-muted-foreground">
