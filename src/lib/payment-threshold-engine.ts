@@ -123,6 +123,7 @@ export function evaluatePaymentThreshold(params: {
     const paymentDate = payment.emailDate ? new Date(payment.emailDate) : new Date();
     const payYear = paymentDate.getFullYear();
     const existingExpiry = user.subscriptionEndsAt ? new Date(user.subscriptionEndsAt) : null;
+    const explicitCadence = (user.subscriptionCadence || "").toUpperCase();
 
     // 1. Full Yearly Fulfillment (meets or exceeds annual subscription threshold or referral-discounted annual target)
     if (totalCredit >= yearlyPrice || (referralDiscount > 0 && totalCredit >= effectiveYearlyTarget)) {
@@ -136,7 +137,8 @@ export function evaluatePaymentThreshold(params: {
             totalAmount: yearsGranted * yearlyPrice,
             yearlyPrice,
             monthlyPrice,
-            existingExpiry
+            existingExpiry,
+            forceCadence: "YEARLY"
         });
 
         return {
@@ -156,9 +158,12 @@ export function evaluatePaymentThreshold(params: {
     }
 
     // 1b. Rest-of-Year Prorated Annual Fulfillment
-    // Checks if a new, trial, expired, or non-renewed user is paying the Rest-of-Year prorated annual quote
+    // Checks if a new, trial, expired, or yearly-cadence user is paying the Rest-of-Year prorated annual quote
+    // Explicit MONTHLY subscribers stay on monthly fulfillment unless paying full annual rate in Step 1.
     const isAlreadyCoveredForUpcomingYear = existingExpiry && existingExpiry.getTime() >= new Date(payYear + 1, 0, 1).getTime();
-    if (!isAlreadyCoveredForUpcomingYear) {
+    const monthsExactCount = monthlyPrice > 0 ? Math.round(totalCredit / monthlyPrice) : 0;
+    const isExactMonthlyMultiple = monthsExactCount >= 1 && Math.abs(totalCredit - (monthsExactCount * monthlyPrice)) <= 0.05;
+    if (!isAlreadyCoveredForUpcomingYear && explicitCadence !== "MONTHLY") {
         const proratedNow = calculateProratedBilling({
             startDate: paymentDate,
             trialDays: 0,
@@ -190,9 +195,10 @@ export function evaluatePaymentThreshold(params: {
             q => Math.abs(totalCredit - q) <= 1.00 && Math.abs(totalCredit - monthlyPrice) > 0.50
         );
 
-        // Or in Jan-Sep (Q1-Q3), if totalCredit meets or exceeds the Rest-of-Year prorated quote
+        // Or in Jan-Sep (Q1-Q3), if totalCredit meets or exceeds the Rest-of-Year prorated quote (and isn't an exact multi-month prepayment)
         const minRestOfYearQuote = candidateAnnualQuotes.length > 0 ? Math.min(...candidateAnnualQuotes) : yearlyPrice;
         const isMidYearRestOfYearFulfillment =
+            !isExactMonthlyMultiple &&
             paymentDate.getMonth() < 9 &&
             totalCredit >= Math.max(monthlyPrice + 5, minRestOfYearQuote - 2);
 
@@ -224,11 +230,12 @@ export function evaluatePaymentThreshold(params: {
     }
 
     // 2. Partial Yearly Payment (installment towards annual subscription)
-    // Matches if amount is near effectiveYearlyTarget (shortfall <= $30), OR if user was explicitly on yearly cadence and amount >= 50% of yearly rate
-    const isYearlyIntent = totalCredit < effectiveYearlyTarget && (
-        (effectiveYearlyTarget - totalCredit <= 30) ||
-        (user.subscriptionCadence === "YEARLY" && totalCredit >= (effectiveYearlyTarget * 0.5)) ||
-        (totalCredit >= 50 && totalCredit > (monthlyPrice * 2.5))
+    // Never trap explicit MONTHLY users or exact multi-month prepayments (e.g. 3x or 4x monthlyPrice) as underpaid yearly installments.
+    const isNearYearlyTarget = (effectiveYearlyTarget - totalCredit) <= 30;
+    const isYearlyIntent = totalCredit < effectiveYearlyTarget && explicitCadence !== "MONTHLY" && (
+        isNearYearlyTarget ||
+        (explicitCadence === "YEARLY" && totalCredit >= (effectiveYearlyTarget * 0.5)) ||
+        (!isExactMonthlyMultiple && totalCredit >= 50 && totalCredit > (monthlyPrice * 2.5))
     );
 
     if (isYearlyIntent) {
@@ -256,7 +263,8 @@ export function evaluatePaymentThreshold(params: {
             totalAmount: costUsed,
             yearlyPrice,
             monthlyPrice,
-            existingExpiry
+            existingExpiry,
+            forceCadence: "MONTHLY"
         });
 
         return {

@@ -632,6 +632,68 @@ async function runTestSuite() {
             throw new Error(`Expected prorated monthly payment ($9.03) to fulfill FULL_MONTHLY, got: ${JSON.stringify(proratedMonthlyEval)}`);
         }
 
+        // 5e. Multi-month prepayment ($52.50 = 3 months @ $17.50) in Q4 (Nov) & Q3 (Sep) does not fall into PARTIAL_YEARLY or flip MONTHLY user
+        const novThreeMonthsEval = evaluatePaymentThreshold({
+            user: { status: "EXPIRED", membershipTier: "STANDARD" },
+            payment: { amount: 52.5, provider: "VENMO", emailDate: new Date("2026-11-16T12:00:00Z") }
+        });
+        if (novThreeMonthsEval.action !== "FULL_MONTHLY" || novThreeMonthsEval.monthsGranted !== 3 || novThreeMonthsEval.cadence !== "MONTHLY") {
+            throw new Error(`Expected $52.50 in Nov to grant 3 monthly passes, got: ${JSON.stringify(novThreeMonthsEval)}`);
+        }
+        const sepMonthlyUserEval = evaluatePaymentThreshold({
+            user: { status: "APPROVED", membershipTier: "STANDARD", subscriptionCadence: "MONTHLY", subscriptionEndsAt: new Date("2026-10-01T23:59:59Z") },
+            payment: { amount: 52.5, provider: "VENMO", emailDate: new Date("2026-09-20T12:00:00Z") }
+        });
+        if (sepMonthlyUserEval.action !== "FULL_MONTHLY" || sepMonthlyUserEval.monthsGranted !== 3 || sepMonthlyUserEval.cadence !== "MONTHLY") {
+            throw new Error(`Expected $52.50 for MONTHLY user in Sep to remain FULL_MONTHLY (3 mos), got: ${JSON.stringify(sepMonthlyUserEval)}`);
+        }
+
+        // 5f. Non-multiple partial yearly payment ($100) still yields PARTIAL_YEARLY for yearly/unset cadence, while MONTHLY stays FULL_MONTHLY
+        const partialYearlyEval = evaluatePaymentThreshold({
+            user: { status: "EXPIRED", membershipTier: "STANDARD", subscriptionCadence: "YEARLY" },
+            payment: { amount: 100, provider: "ZELLE", emailDate: new Date("2026-11-16T12:00:00Z") }
+        });
+        if (partialYearlyEval.action !== "PARTIAL_YEARLY" || partialYearlyEval.shortfall !== 80) {
+            throw new Error(`Expected $100 for YEARLY user to yield PARTIAL_YEARLY ($80 shortfall), got: ${JSON.stringify(partialYearlyEval)}`);
+        }
+        const monthlyCreditOverpayEval = evaluatePaymentThreshold({
+            user: { status: "APPROVED", membershipTier: "STANDARD", subscriptionCadence: "MONTHLY" },
+            payment: { amount: 100, provider: "ZELLE", emailDate: new Date("2026-11-16T12:00:00Z") }
+        });
+        if (monthlyCreditOverpayEval.action !== "FULL_MONTHLY" || monthlyCreditOverpayEval.monthsGranted !== 5 || monthlyCreditOverpayEval.newAccountCredit !== 12.5) {
+            throw new Error(`Expected $100 for MONTHLY user to grant 5 mos + $12.50 credit, got: ${JSON.stringify(monthlyCreditOverpayEval)}`);
+        }
+
+        // 5g. Mid-month 1-month vs 2-month dates diverge properly & Dec 31 expiry aligns forward
+        const oneMoNov16 = calculateAlignedExpiryDate({
+            paymentDate: new Date("2026-11-16T12:00:00Z"),
+            totalAmount: 17.5,
+            yearlyPrice: 180,
+            monthlyPrice: 17.5,
+            forceCadence: "MONTHLY"
+        });
+        const twoMoNov16 = calculateAlignedExpiryDate({
+            paymentDate: new Date("2026-11-16T12:00:00Z"),
+            totalAmount: 35,
+            yearlyPrice: 180,
+            monthlyPrice: 17.5,
+            forceCadence: "MONTHLY"
+        });
+        if (twoMoNov16.newExpiryDate.getTime() <= oneMoNov16.newExpiryDate.getTime()) {
+            throw new Error(`Expected 2-month expiry (${twoMoNov16.newExpiryDate.toISOString()}) > 1-month expiry (${oneMoNov16.newExpiryDate.toISOString()})`);
+        }
+        const dec31Switch = calculateAlignedExpiryDate({
+            paymentDate: new Date("2026-12-28T12:00:00Z"),
+            totalAmount: 17.5,
+            yearlyPrice: 180,
+            monthlyPrice: 17.5,
+            existingExpiry: new Date(2026, 11, 31, 23, 59, 59, 999),
+            forceCadence: "MONTHLY"
+        });
+        if (dec31Switch.newExpiryDate.getFullYear() !== 2027 || dec31Switch.newExpiryDate.getMonth() !== 1) {
+            throw new Error(`Expected Dec 31 expiry + 1 monthly pass to advance to Feb 1 2027, got: ${dec31Switch.newExpiryDate.toISOString()}`);
+        }
+
         // 6. Renewal reminder parsing
         const reminderDays = parseReminderDays("14,7,3,1");
         if (reminderDays.length !== 4 || reminderDays[0] !== 14 || reminderDays[3] !== 1) {
