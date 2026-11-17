@@ -119,8 +119,8 @@ export default function PendingClient({ initialUser, initialPaymentConfig }: Pen
   const effectiveAmount = selectedCadence === "yearly" ? yearlyAmountDue : monthlyAmountDue;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background via-muted/50 to-background px-3 sm:px-4 py-6 sm:py-12">
-      <Card className="w-full max-w-lg sm:max-w-xl border-border/50 shadow-2xl bg-[#121218]/90 backdrop-blur-md">
+    <div className="flex min-h-dvh items-center justify-center bg-gradient-to-br from-background via-muted/50 to-background px-3 sm:px-4 py-6 sm:py-12">
+      <Card className="w-full max-w-lg sm:max-w-xl border-border shadow-2xl bg-card/95 backdrop-blur-md">
         <CardHeader className="text-center space-y-3 pb-4">
           <div className={`mx-auto p-4 rounded-2xl w-fit shadow-lg ${
             isExpired || isSuspended 

@@ -774,10 +774,10 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                     </TabsTrigger>
                     <TabsTrigger value="users" className="text-xs font-bold gap-1.5 rounded-xl">
                         <Users className="h-3.5 w-3.5 text-blue-400" />
-                        User Access ({pendingApprovals.length > 0 ? `🚨 ${pendingApprovals.length}` : usersList.length})
+                        User Access ({pendingApprovals.length > 0 ? `${pendingApprovals.length} pending` : usersList.length})
                     </TabsTrigger>
                     <TabsTrigger value="catalog" className="text-xs font-bold gap-1.5 rounded-xl">
-                        <ListPlus className="h-3.5 w-3.5 text-purple-400" />
+                        <ListPlus className="h-3.5 w-3.5 text-sky-400" />
                         Channel Requests ({channelRequests.filter(r => r.status === "PENDING").length})
                     </TabsTrigger>
                 </TabsList>
@@ -1231,7 +1231,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                 <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                                     Jellyfin Live TV
                                 </div>
-                                <div className="text-xl font-black text-purple-300 mt-0.5">
+                                <div className="text-xl font-black text-sky-300 mt-0.5 tabular-nums">
                                     {auditReport?.jellyfinLiveTvUsersCount ?? usersList.filter(u => u.hasJellyfinLiveTvAccess).length} Users
                                 </div>
                                 <p className="text-[10px] text-muted-foreground mt-0.5">
@@ -1242,19 +1242,19 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
 
                         {/* Plex Home Capacity Alert Banner */}
                         {(auditReport?.plexHomeAvailableSlots ?? (14 - usersList.filter(u => u.isPlexHomeMember && u.role !== "ADMIN").length)) <= 0 && (
-                            <div className="p-4 rounded-xl border border-purple-500/30 bg-purple-500/10 flex items-start gap-3 text-xs">
-                                <div className="p-2 rounded-lg bg-purple-500/20 text-purple-300 shrink-0">
+                            <div className="p-4 rounded-xl border border-sky-500/30 bg-sky-500/10 flex items-start gap-3 text-xs">
+                                <div className="p-2 rounded-lg bg-sky-500/20 text-sky-300 shrink-0">
                                     <Layers className="h-4 w-4" />
                                 </div>
                                 <div>
                                     <div className="flex items-center gap-2">
-                                        <span className="font-bold text-purple-200">Plex Home is at Capacity (14/14 Member Slots Occupied)</span>
-                                        <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/40 text-[10px] font-bold">
+                                        <span className="font-bold text-sky-200">Plex Home is at Capacity (14/14 Member Slots Occupied)</span>
+                                        <Badge className="bg-sky-500/20 text-sky-300 border-sky-500/40 text-[10px] font-bold">
                                             Jellyfin Unlimited Mode
                                         </Badge>
                                     </div>
                                     <p className="text-muted-foreground mt-0.5 leading-relaxed">
-                                        Plex caps shared tuner pools to 14 members. You can grant unlimited Live TV access using <b>&ldquo;⚡ Provision on Jellyfin&rdquo;</b> in pending requests below or by toggling <b>&ldquo;Jellyfin: OFF&rdquo;</b> without consuming a Plex Home slot.
+                                        Plex caps shared tuner pools to 14 members. You can grant unlimited Live TV access using <b>&ldquo;Provision on Jellyfin&rdquo;</b> in pending requests below or by toggling <b>&ldquo;Jellyfin: OFF&rdquo;</b> without consuming a Plex Home slot.
                                     </p>
                                 </div>
                             </div>
@@ -1301,7 +1301,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                                 size="sm"
                                                 onClick={() => handleProvisionJellyfin(app.id, app.userId)}
                                                 disabled={isPending}
-                                                className="h-8 text-xs bg-purple-600 hover:bg-purple-500 text-white font-bold gap-1 rounded-xl"
+                                                className="h-8 text-xs bg-sky-600 hover:bg-sky-500 text-white font-bold gap-1 rounded-xl"
                                             >
                                                 <Sparkles className="h-3 w-3" />
                                                 Provision on Jellyfin
@@ -1358,7 +1358,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                         }`}
                                     >
                                         {/* User Identity Info */}
-                                        <div className="space-y-1 min-w-[200px]">
+                                        <div className="space-y-1 min-w-0 sm:min-w-[200px]">
                                             <div className="flex items-center gap-2 flex-wrap">
                                                 <span className="font-bold text-foreground text-sm">
                                                     {u.name && !/server/i.test(u.name) ? u.name : (u.username || u.plexUsername)}
@@ -1493,7 +1493,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                                 disabled={isPending}
                                                 className={`h-7 text-[11px] font-bold rounded-xl ${
                                                     u.hasJellyfinLiveTvAccess
-                                                        ? "bg-purple-600 hover:bg-purple-500 text-white"
+                                                        ? "bg-sky-600 hover:bg-sky-500 text-white"
                                                         : "border-border/60 text-muted-foreground hover:text-foreground"
                                                 }`}
                                             >
@@ -1546,7 +1546,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                                             </Badge>
                                                         )}
                                                         {isProfileMoveRequest && (
-                                                            <Badge className="text-[10px] bg-purple-500/15 text-purple-300 border-purple-500/30 gap-1">
+                                                            <Badge className="text-[10px] bg-amber-500/15 text-amber-300 border-amber-500/30 gap-1">
                                                                 <ArrowRightLeft className="h-3 w-3" /> Profile Move
                                                             </Badge>
                                                         )}
@@ -1593,7 +1593,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                                                 disabled={isPending}
                                                                 className={`h-8 text-xs text-white font-bold gap-1 rounded-xl ${
                                                                     isProfileMoveRequest
-                                                                        ? "bg-purple-600 hover:bg-purple-500"
+                                                                        ? "bg-amber-600 hover:bg-amber-500"
                                                                         : "bg-sky-600 hover:bg-sky-500"
                                                                 }`}
                                                             >
@@ -1646,7 +1646,7 @@ export function AdminIptvClient({ initialData }: AdminIptvClientProps) {
                                                             }}
                                                             className="h-6 text-[10px] text-teal-300 hover:text-teal-200 px-2"
                                                         >
-                                                            {copiedKey === `prompt-${r.id}` ? "✓ Copied!" : "📋 Copy AI Prompt"}
+                                                            {copiedKey === `prompt-${r.id}` ? "✓ Copied!" : "Copy AI Prompt"}
                                                         </Button>
                                                     </div>
                                                     <pre className="p-2.5 rounded-lg bg-slate-950/80 border border-border/60 text-[10px] font-mono text-teal-200/90 whitespace-pre-wrap leading-relaxed max-h-40 overflow-y-auto select-all">

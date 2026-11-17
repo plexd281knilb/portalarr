@@ -21,7 +21,7 @@ function CardSkeleton() {
 
 export default function Loading() {
   return (
-    <div className="min-h-screen bg-background flex flex-col animate-in fade-in duration-500">
+    <div className="min-h-dvh bg-background flex flex-col animate-in fade-in duration-500">
       <main className="flex-1 p-6 max-w-7xl mx-auto w-full space-y-8">
         <section className="text-center space-y-4 py-8">
           <Skeleton className="h-12 w-2/3 mx-auto" />

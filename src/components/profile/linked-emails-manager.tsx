@@ -282,7 +282,7 @@ export function LinkedEmailsManager({ targetUserId, onChanged }: LinkedEmailsMan
                     </div>
                 ) : linkedEmails.length === 0 ? (
                     <div className="p-6 text-center rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-2">
-                        <Users className="h-8 w-8 text-muted-foreground/40 mx-auto" />
+                        <Users className="h-8 w-8 text-muted-foreground/70 mx-auto" />
                         <p className="text-xs font-medium text-foreground">No linked inboxes configured yet</p>
                         <p className="text-[11px] text-muted-foreground max-w-md mx-auto">
                             All your notifications currently go to your primary account email {primaryEmail ? `(${primaryEmail})` : ""}. Click &quot;Add Linked Inbox&quot; to send alerts to a partner, spouse, or secondary address.
@@ -369,7 +369,7 @@ export function LinkedEmailsManager({ targetUserId, onChanged }: LinkedEmailsMan
                                             onClick={() => handleQuickToggle(item, "receiveAnnouncements", item.receiveAnnouncements)}
                                             className={`text-[11px] px-2.5 py-1 rounded-full border transition-all flex items-center gap-1.5 ${
                                                 item.receiveAnnouncements
-                                                    ? "bg-purple-500/15 border-purple-500/40 text-purple-300 font-medium"
+                                                    ? "bg-teal-500/15 border-teal-500/40 text-teal-300 font-medium"
                                                     : "bg-white/[0.02] border-white/[0.06] text-muted-foreground opacity-50 line-through"
                                             }`}
                                         >
@@ -408,7 +408,7 @@ export function LinkedEmailsManager({ targetUserId, onChanged }: LinkedEmailsMan
                                             onClick={() => handleQuickToggle(item, "receiveNewContent", item.receiveNewContent)}
                                             className={`text-[11px] px-2.5 py-1 rounded-full border transition-all flex items-center gap-1.5 ${
                                                 item.receiveNewContent
-                                                    ? "bg-indigo-500/15 border-indigo-500/40 text-indigo-300 font-medium"
+                                                    ? "bg-cyan-500/15 border-cyan-500/40 text-cyan-300 font-medium"
                                                     : "bg-white/[0.02] border-white/[0.06] text-muted-foreground opacity-50 line-through"
                                             }`}
                                         >
@@ -535,8 +535,8 @@ export function LinkedEmailsManager({ targetUserId, onChanged }: LinkedEmailsMan
                                 {/* 2. Announcements */}
                                 <div className="p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.05] flex items-center justify-between gap-3">
                                     <div className="flex items-center gap-2.5 min-w-0">
-                                        <div className="h-7 w-7 rounded bg-purple-500/10 border border-purple-500/20 flex items-center justify-center shrink-0">
-                                            <Megaphone className="h-3.5 w-3.5 text-purple-400" />
+                                        <div className="h-7 w-7 rounded bg-teal-500/10 border border-teal-500/20 flex items-center justify-center shrink-0">
+                                            <Megaphone className="h-3.5 w-3.5 text-teal-400" />
                                         </div>
                                         <div className="min-w-0">
                                             <p className="text-xs font-medium text-foreground">Server Announcements & News</p>
@@ -577,8 +577,8 @@ export function LinkedEmailsManager({ targetUserId, onChanged }: LinkedEmailsMan
                                 {/* 5. Weekly Digest */}
                                 <div className="p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.05] flex items-center justify-between gap-3">
                                     <div className="flex items-center gap-2.5 min-w-0">
-                                        <div className="h-7 w-7 rounded bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center shrink-0">
-                                            <BookOpen className="h-3.5 w-3.5 text-indigo-400" />
+                                        <div className="h-7 w-7 rounded bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center shrink-0">
+                                            <BookOpen className="h-3.5 w-3.5 text-cyan-400" />
                                         </div>
                                         <div className="min-w-0">
                                             <p className="text-xs font-medium text-foreground">New Content Weekly Digest</p>

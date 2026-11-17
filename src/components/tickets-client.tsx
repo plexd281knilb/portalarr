@@ -396,7 +396,7 @@ export default function TicketsClient({ initialData }: { initialData?: TicketsBo
                                                 {isPageFix && (
                                                     <Badge variant="outline" className="font-semibold text-[10px] px-2 py-0.5 h-5 bg-amber-500/15 text-amber-300 border-amber-500/30 gap-1">
                                                         <Wrench className="h-2.5 w-2.5 text-amber-400" />
-                                                        <span>🛠️ Page Fix Request</span>
+                                                        <span>Page Fix Request</span>
                                                     </Badge>
                                                 )}
                                             </div>
@@ -434,7 +434,7 @@ export default function TicketsClient({ initialData }: { initialData?: TicketsBo
                                                     className={`h-8 text-xs font-semibold active:scale-95 transition-all duration-200 cursor-pointer ${
                                                         copiedPromptId === ticket.id
                                                             ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/50 ring-2 ring-emerald-500/40"
-                                                            : "border-purple-500/40 text-purple-300 hover:bg-purple-500/10 hover:ring-2 hover:ring-purple-500/40"
+                                                            : "border-sky-500/40 text-sky-300 hover:bg-sky-500/10 hover:ring-2 hover:ring-sky-500/40"
                                                     }`}
                                                 >
                                                     {copiedPromptId === ticket.id ? (
@@ -444,8 +444,8 @@ export default function TicketsClient({ initialData }: { initialData?: TicketsBo
                                                         </>
                                                     ) : (
                                                         <>
-                                                            <Copy className="h-3.5 w-3.5 mr-1.5 text-purple-400" />
-                                                            <span>📋 Copy Prompt for AI</span>
+                                                            <Copy className="h-3.5 w-3.5 mr-1.5 text-sky-400" />
+                                                            <span>Copy Prompt for AI</span>
                                                         </>
                                                     )}
                                                 </Button>
@@ -474,9 +474,9 @@ export default function TicketsClient({ initialData }: { initialData?: TicketsBo
                                                 <Tv className="h-3.5 w-3.5 mr-1.5 text-cyan-400" /> Sonarr (TV)
                                             </Link>
                                         </Button>
-                                        <Button asChild variant="outline" size="sm" className="h-8 text-xs font-semibold border-purple-500/30 text-purple-400 hover:bg-purple-500/10 hover:ring-2 hover:ring-purple-500/40 active:scale-95 transition-all duration-200">
+                                        <Button asChild variant="outline" size="sm" className="h-8 text-xs font-semibold border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 hover:ring-2 hover:ring-emerald-500/40 active:scale-95 transition-all duration-200">
                                             <Link href="/library">
-                                                <BookOpen className="h-3.5 w-3.5 mr-1.5 text-purple-400" /> Book Library
+                                                <BookOpen className="h-3.5 w-3.5 mr-1.5 text-emerald-400" /> Book Library
                                             </Link>
                                         </Button>
                                     </div>
@@ -552,7 +552,7 @@ export default function TicketsClient({ initialData }: { initialData?: TicketsBo
                                                     {isPageFix && (
                                                         <Badge variant="outline" className="font-semibold text-[10px] px-2 py-0.5 h-5 bg-amber-500/15 text-amber-300 border-amber-500/30 gap-1">
                                                             <Wrench className="h-2.5 w-2.5 text-amber-400" />
-                                                            <span>🛠️ Page Fix Request</span>
+                                                            <span>Page Fix Request</span>
                                                         </Badge>
                                                     )}
                                                     {getStatusBadge(ticket.status)}

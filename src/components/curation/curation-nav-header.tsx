@@ -88,7 +88,7 @@ export function CurationNavHeader({
                 <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap w-full sm:w-auto">
                     <FeatureGuideModal guideId="curation-studio" triggerText="Curation Guide" />
                     <Badge variant="outline" className="bg-slate-900/80 border-slate-800 text-slate-300 px-3 py-2 text-xs font-semibold flex items-center gap-2 shrink-0">
-                        <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                        <span className="h-2 w-2 rounded-full bg-emerald-400" />
                         <span>{serversCount} Connected {serversCount === 1 ? 'Server' : 'Servers'}</span>
                     </Badge>
                 </div>
@@ -101,15 +101,15 @@ export function CurationNavHeader({
                         type="button"
                         className={`w-full flex flex-col sm:flex-row items-center justify-center gap-1.5 sm:gap-2 px-2.5 py-2.5 sm:px-3 sm:py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer min-w-0 ${
                             isKometa
-                                ? "bg-purple-600 text-white shadow-lg shadow-purple-950/60 border border-purple-400/50 ring-1 ring-purple-400/40"
+                                ? "bg-sky-600 text-white shadow-lg border border-sky-400/50 ring-1 ring-sky-400/40"
                                 : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
                         }`}
                     >
                         <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
-                            <Sparkles className={`h-4 w-4 shrink-0 ${isKometa ? "text-white" : "text-purple-400"}`} />
+                            <Sparkles className={`h-4 w-4 shrink-0 ${isKometa ? "text-white" : "text-sky-400"}`} />
                             <span className="font-bold text-xs whitespace-nowrap">Kometa Overlays</span>
                         </div>
-                        <Badge variant="outline" className={`text-[10px] px-1.5 py-0 shrink-0 font-medium ${isKometa ? "border-purple-300 text-purple-100 bg-purple-700/60" : "border-slate-700 text-slate-400"}`}>
+                        <Badge variant="outline" className={`text-[10px] px-1.5 py-0 shrink-0 font-medium ${isKometa ? "border-sky-300 text-sky-100 bg-sky-700/60" : "border-slate-700 text-slate-400"}`}>
                             Badges
                         </Badge>
                     </button>

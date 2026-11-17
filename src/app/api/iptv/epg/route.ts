@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getIptvSettings } from "@/lib/iptv/provider-vault";
 import { ensureDefaultIptvProfiles } from "@/lib/iptv/dispatcharr-client";
+import { validateClientIp } from "@/lib/security";
 
 function escapeXml(val: string | number | null | undefined): string {
     return String(val ?? "")
@@ -43,7 +44,7 @@ export async function GET(req: NextRequest) {
             return new NextResponse("Forbidden: IPTV Hub is disabled", { status: 403 });
         }
 
-        const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "127.0.0.1";
+        const clientIp = validateClientIp(req.headers.get("cf-connecting-ip") || req.headers.get("x-real-ip") || req.headers.get("x-forwarded-for"));
         await prisma.iptvUserToken.update({
             where: { id: userToken.id },
             data: { lastAccessIp: clientIp, lastAccessAt: new Date() }

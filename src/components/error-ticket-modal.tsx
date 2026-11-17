@@ -206,7 +206,7 @@ export default function ErrorTicketModal({
                                 </>
                             ) : (
                                 <>
-                                    <LifeBuoy className="h-3.5 w-3.5" /> 🎫 Submit Support Ticket
+                                    <LifeBuoy className="h-3.5 w-3.5" /> Submit Support Ticket
                                 </>
                             )}
                         </Button>

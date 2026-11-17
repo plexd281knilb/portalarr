@@ -136,9 +136,9 @@ export function PlexHomeGuideModal({ open, onOpenChange, isAdminView }: PlexHome
                     </div>
 
                     {/* Step 4: Pin Live TV */}
-                    <div className="p-4 rounded-xl border border-purple-500/20 bg-purple-500/5 space-y-2">
-                        <div className="flex items-center gap-2.5 font-bold text-sm text-purple-300">
-                            <div className="h-7 w-7 rounded-lg bg-purple-500/20 flex items-center justify-center shrink-0">
+                    <div className="p-4 rounded-xl border border-sky-500/20 bg-sky-500/5 space-y-2">
+                        <div className="flex items-center gap-2.5 font-bold text-sm text-sky-300">
+                            <div className="h-7 w-7 rounded-lg bg-sky-500/20 flex items-center justify-center shrink-0">
                                 <Bookmark className="h-4 w-4" />
                             </div>
                             <span>4. Pin &ldquo;Live TV &amp; DVR&rdquo; to Your Sidebar</span>

@@ -119,24 +119,24 @@ export function KindleSenderUpdateModal({
                     )}
 
                     {/* Sender Address Highlight Card */}
-                    <div className="p-3.5 rounded-xl bg-purple-500/[0.08] border border-purple-500/30 space-y-2">
+                    <div className="p-3.5 rounded-xl bg-amber-500/[0.08] border border-amber-500/30 space-y-2">
                         <div className="flex items-center justify-between gap-2">
-                            <span className="text-[11px] font-bold text-purple-300 uppercase tracking-wider flex items-center gap-1.5">
-                                <Mail className="h-3.5 w-3.5 text-purple-400" /> New Server Sending Address:
+                            <span className="text-[11px] font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                                <Mail className="h-3.5 w-3.5 text-amber-400" /> New Server Sending Address:
                             </span>
                             <span className="text-[10px] text-muted-foreground">Add to Amazon</span>
                         </div>
                         <div className="flex items-center gap-2">
-                            <div className="flex-1 p-2 rounded-lg bg-black/60 border border-purple-500/30 font-mono text-sm font-bold text-white select-all truncate">
+                            <div className="flex-1 p-2 rounded-lg bg-black/60 border border-amber-500/30 font-mono text-sm font-bold text-white select-all truncate">
                                 {senderEmail}
                             </div>
                             <Button
                                 type="button"
                                 size="sm"
                                 onClick={handleCopy}
-                                className="h-9 px-3 gap-1.5 bg-purple-600 hover:bg-purple-700 text-white font-semibold shrink-0 shadow-md shadow-purple-900/30"
+                                className="h-9 px-3 gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shrink-0 shadow-md"
                             >
-                                {copied ? <Check className="h-3.5 w-3.5 text-emerald-300" /> : <Copy className="h-3.5 w-3.5" />}
+                                {copied ? <Check className="h-3.5 w-3.5 text-emerald-950" /> : <Copy className="h-3.5 w-3.5" />}
                                 <span>{copied ? "Copied!" : "Copy Email"}</span>
                             </Button>
                         </div>
@@ -154,7 +154,7 @@ export function KindleSenderUpdateModal({
                                     href="https://www.amazon.com/hz/mycd/myx#/home/settings/payment"
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="text-purple-400 hover:text-purple-300 underline font-semibold break-all inline-flex items-center gap-1"
+                                    className="text-amber-400 hover:text-amber-300 underline font-semibold break-all inline-flex items-center gap-1"
                                 >
                                     <span>https://www.amazon.com/hz/mycd/myx#/home/settings/payment</span>
                                     <ExternalLink className="h-3 w-3 shrink-0" />
@@ -167,13 +167,13 @@ export function KindleSenderUpdateModal({
                                 Click <strong className="text-foreground">"Add a new approved e-mail address"</strong>.
                             </li>
                             <li>
-                                Paste <code className="bg-black/40 text-purple-300 px-1.5 py-0.5 rounded font-mono font-bold">{senderEmail}</code> and click <strong className="text-foreground">Add Address</strong>.
+                                Paste <code className="bg-black/40 text-amber-300 px-1.5 py-0.5 rounded font-mono font-bold">{senderEmail}</code> and click <strong className="text-foreground">Add Address</strong>.
                             </li>
                         </ol>
                     </div>
 
-                    <p className="text-[11px] text-muted-foreground/90 italic">
-                        💡 Once authorized on Amazon, any requested ebook will download and fly wirelessly to your Kindle without any delivery rejections or bounces.
+                    <p className="text-[11px] text-muted-foreground">
+                        Once authorized on Amazon, any requested ebook will download and deliver wirelessly to your Kindle without bounces.
                     </p>
                 </div>
 
@@ -194,7 +194,7 @@ export function KindleSenderUpdateModal({
                             variant="outline"
                             size="sm"
                             asChild
-                            className="text-xs gap-1 border-purple-500/30 text-purple-300 hover:bg-purple-500/10 w-full sm:w-auto shrink-0 whitespace-nowrap"
+                            className="text-xs gap-1 border-amber-500/30 text-amber-300 hover:bg-amber-500/10 w-full sm:w-auto shrink-0 whitespace-nowrap"
                         >
                             <a
                                 href="https://www.amazon.com/hz/mycd/myx#/home/settings/payment"
@@ -210,7 +210,7 @@ export function KindleSenderUpdateModal({
                             size="sm"
                             onClick={handleConfirm}
                             disabled={acknowledging}
-                            className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs gap-1.5 shadow-lg shadow-purple-900/30 w-full sm:w-auto shrink-0 whitespace-nowrap"
+                            className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs gap-1.5 shadow-lg w-full sm:w-auto shrink-0 whitespace-nowrap"
                         >
                             <Check className="h-3.5 w-3.5 shrink-0" />
                             <span className="whitespace-nowrap">{acknowledging ? "Updating..." : "I've Updated on Amazon"}</span>

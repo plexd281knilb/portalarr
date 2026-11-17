@@ -131,9 +131,9 @@ export function PaidThroughHeader({ user, referralInfo, className = "" }: PaidTh
                     {accountCredit > 0 && (
                         <Badge 
                             variant="outline" 
-                            className="bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30 text-[11px] font-semibold gap-1 hidden lg:inline-flex"
+                            className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 text-[11px] font-semibold gap-1 hidden lg:inline-flex tabular-nums"
                         >
-                            <Gift className="h-3 w-3 text-purple-600 dark:text-purple-400" />
+                            <Gift className="h-3 w-3 text-amber-600 dark:text-amber-400" />
                             <span>${accountCredit.toFixed(2)} Balance Credit</span>
                         </Badge>
                     )}

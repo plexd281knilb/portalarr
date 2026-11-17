@@ -167,17 +167,17 @@ export default function RequestLibraryAccess() {
                                     {/* Option 2: Direct Download Bypass */}
                                     <div 
                                         onClick={() => setBypassKindle(!bypassKindle)}
-                                        className={`p-3 rounded-xl border transition-all cursor-pointer flex items-start gap-2.5 ${bypassKindle ? "bg-purple-950/30 border-purple-500/50 ring-1 ring-purple-500/40" : "bg-muted/10 border-border/40 hover:bg-muted/20"}`}
+                                        className={`p-3 rounded-xl border transition-all cursor-pointer flex items-start gap-2.5 ${bypassKindle ? "bg-emerald-950/30 border-emerald-500/50 ring-1 ring-emerald-500/40" : "bg-muted/10 border-border/40 hover:bg-muted/20"}`}
                                     >
                                         <input 
                                             type="checkbox"
                                             checked={bypassKindle}
                                             onChange={(e) => setBypassKindle(e.target.checked)}
-                                            className="mt-0.5 rounded border-border text-purple-500 focus:ring-purple-400 accent-purple-500 cursor-pointer"
+                                            className="mt-0.5 rounded border-border text-emerald-500 focus:ring-emerald-400 accent-emerald-500 cursor-pointer"
                                         />
                                         <div className="space-y-0.5">
                                             <div className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                                                <Download className="h-3.5 w-3.5 text-purple-400" />
+                                                <Download className="h-3.5 w-3.5 text-emerald-400" />
                                                 Bypass Kindle (Direct Phone/PC Download)
                                             </div>
                                             <p className="text-[11px] text-muted-foreground leading-relaxed">

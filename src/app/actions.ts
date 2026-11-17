@@ -33,6 +33,16 @@ import { encryptData, decryptData } from "@/lib/encryption";
 import { calculateProratedBilling } from "@/lib/prorated-billing";
 import { calculateUserRenewalSummary } from "@/lib/referral-rewards";
 import { logger, maskToken } from "@/lib/logger";
+import {
+    canonicalizeIdentifier,
+    checkRateLimit,
+    escapeHtml,
+    sanitizeHttpUrl,
+    secureRandomPassword,
+    secureRandomSlug,
+    stripDangerousUnicode,
+    validateUsernameInput,
+} from "@/lib/security";
 import { 
     renderEmailTemplate, 
     DEFAULT_EMAIL_TEMPLATES, 
@@ -598,6 +608,9 @@ const MISSING_SERIES_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
 export async function findMissingBooksInSeries(seriesName: string, author: string, libraryId?: string) {
     try {
+        if (await isDirectExternalServerActionCall()) {
+            await verifyUser();
+        }
         const seriesCacheKey = `${seriesName.toLowerCase().trim()}:::${(author || "").toLowerCase().trim()}`;
         const cachedSeries = missingSeriesCandidatesCache.get(seriesCacheKey);
         let validCandidates: { title: string; author: string; coverUrl?: string | null; volumeNumber?: string | null }[] = [];
@@ -1030,11 +1043,31 @@ async function fetchITunesCover(title: string, author: string, mediaType: string
 }
 
 export async function fetchBookCover(title: string, author: string, mediaType: string = "ebook", bookFolder?: string): Promise<string | null> {
+    const isExternalCall = await isDirectExternalServerActionCall();
+    let allowDiskWrite = !isExternalCall;
+    if (isExternalCall) {
+        const caller = await verifyUser();
+        allowDiskWrite = String(caller?.role || "").toUpperCase() === "ADMIN";
+    }
     console.log(`[COVER-ENGINE] 🖼️ Resolving cover artwork for "${title}" by "${author}" (MediaType: ${mediaType})...`);
 
-    if (bookFolder) {
-        if (fs.existsSync(require("path").join(bookFolder, "cover.jpg"))) return "local";
-        if (fs.existsSync(require("path").join(bookFolder, "cover.png"))) return "local";
+    let safeBookFolder = "";
+    if (bookFolder && allowDiskWrite) {
+        const libraries = await prisma.library.findMany({ select: { path: true } }).catch(() => []);
+        const dataBooksBase = path.join(/*turbopackIgnore: true*/ process.cwd(), "data");
+        const allowedBases = [dataBooksBase, ...libraries.map((l) => l.path).filter(Boolean)];
+        for (const base of allowedBases) {
+            const candidate = resolveContainedPath(base, path.relative(base, path.resolve(bookFolder)));
+            if (candidate && (candidate === path.resolve(base) || candidate.startsWith(path.resolve(base) + path.sep))) {
+                safeBookFolder = candidate;
+                break;
+            }
+        }
+    }
+
+    if (safeBookFolder) {
+        if (fs.existsSync(path.join(safeBookFolder, "cover.jpg"))) return "local";
+        if (fs.existsSync(path.join(safeBookFolder, "cover.png"))) return "local";
     }
 
     let resolvedUrl: string | null = null;
@@ -1124,18 +1157,16 @@ export async function fetchBookCover(title: string, author: string, mediaType: s
         if (!resolvedUrl) resolvedUrl = await tryGoogleBooks();
     }
 
-    if (resolvedUrl && bookFolder) {
+    if (resolvedUrl && safeBookFolder && allowDiskWrite) {
         try {
-            const fs = require("fs");
-            const path = require("path");
-            if (!fs.existsSync(bookFolder)) {
-                fs.mkdirSync(bookFolder, { recursive: true });
+            if (!fs.existsSync(safeBookFolder)) {
+                fs.mkdirSync(safeBookFolder, { recursive: true });
             }
             const imgRes = await fetch(resolvedUrl);
             if (imgRes.ok) {
                 const buffer = await imgRes.arrayBuffer();
-                fs.writeFileSync(path.join(bookFolder, "cover.jpg"), Buffer.from(buffer));
-                console.log(`[COVER-ENGINE] 💾 Downloaded cover to ${path.join(bookFolder, "cover.jpg")}`);
+                fs.writeFileSync(path.join(safeBookFolder, "cover.jpg"), Buffer.from(buffer));
+                console.log(`[COVER-ENGINE] 💾 Downloaded cover to ${path.join(safeBookFolder, "cover.jpg")}`);
                 return "local";
             }
         } catch (e: any) {}
@@ -2112,10 +2143,15 @@ export async function sendTestEmailTemplateAction(id: string, customSubject?: st
         }
     }
 
+    const URL_VAR_KEYS = new Set(["appUrl", "loginUrl", "accessUrl", "actionUrl"]);
     for (const [k, val] of Object.entries(mockVars)) {
-        const reg = new RegExp(`\\{${k}\\}`, "g");
-        subject = subject.replace(reg, val);
-        body = body.replace(reg, val);
+        const placeholder = `{${k}}`;
+        const safeSub = String(val ?? "").replace(/[\r\n]+/g, " ");
+        const safeBody = URL_VAR_KEYS.has(k)
+            ? escapeHtml(sanitizeHttpUrl(val) || val)
+            : escapeHtml(val);
+        subject = subject.split(placeholder).join(safeSub);
+        body = body.split(placeholder).join(safeBody);
     }
 
     const isFullDoc = body.includes("<html") || body.includes("<!DOCTYPE");
@@ -2272,10 +2308,15 @@ export async function sendBroadcastEmailAction(payload: {
         let personalizedSubject = payload.subject;
         let personalizedBody = payload.body;
 
+        const URL_VAR_KEYS = new Set(["appUrl", "loginUrl", "accessUrl", "actionUrl"]);
         for (const [k, v] of Object.entries(userVars)) {
-            const reg = new RegExp(`\\{${k}\\}`, "g");
-            personalizedSubject = personalizedSubject.replace(reg, v);
-            personalizedBody = personalizedBody.replace(reg, v);
+            const placeholder = `{${k}}`;
+            const safeSub = String(v ?? "").replace(/[\r\n]+/g, " ");
+            const safeBody = URL_VAR_KEYS.has(k)
+                ? escapeHtml(sanitizeHttpUrl(v) || v)
+                : escapeHtml(v);
+            personalizedSubject = personalizedSubject.split(placeholder).join(safeSub);
+            personalizedBody = personalizedBody.split(placeholder).join(safeBody);
         }
 
         const personalizedHtml = isFullDoc ? personalizedBody : wrapInPortalarrEmailLayout({
@@ -2358,10 +2399,15 @@ export async function sendTestBroadcastEmailAction(payload: { subject: string; b
     let personalizedSubject = payload.subject || "DomsHomeLab Broadcast Test";
     let personalizedBody = payload.body || "<p>This is a test broadcast email message.</p>";
 
+    const URL_VAR_KEYS = new Set(["appUrl", "loginUrl", "accessUrl", "actionUrl"]);
     for (const [k, v] of Object.entries(mockVars)) {
-        const reg = new RegExp(`\\{${k}\\}`, "g");
-        personalizedSubject = personalizedSubject.replace(reg, v);
-        personalizedBody = personalizedBody.replace(reg, v);
+        const placeholder = `{${k}}`;
+        const safeSub = String(v ?? "").replace(/[\r\n]+/g, " ");
+        const safeBody = URL_VAR_KEYS.has(k)
+            ? escapeHtml(sanitizeHttpUrl(v) || v)
+            : escapeHtml(v);
+        personalizedSubject = personalizedSubject.split(placeholder).join(safeSub);
+        personalizedBody = personalizedBody.split(placeholder).join(safeBody);
     }
 
     const isFullDoc = payload.isCustomHtml && (personalizedBody.includes("<html") || personalizedBody.includes("<!DOCTYPE"));
@@ -4027,22 +4073,29 @@ export async function getAppUsers() {
 
 export async function createAppUser(formData: FormData) {
     await verifyAdmin();
-    const username = (formData.get("username") as string)?.trim();
-    const email = (formData.get("email") as string)?.trim().toLowerCase();
+    const userCheck = validateUsernameInput(formData.get("username"));
+    const email = stripDangerousUnicode(formData.get("email")).toLowerCase();
     const password = formData.get("password") as string;
     const role = (formData.get("role") as string) || "USER";
     const status = (formData.get("status") as string) || "APPROVED";
-    const plexUsername = (formData.get("plexUsername") as string)?.trim() || null;
-    const plexEmail = (formData.get("plexEmail") as string)?.trim() || null;
+    const plexUsername = stripDangerousUnicode(formData.get("plexUsername")) || null;
+    const plexEmail = stripDangerousUnicode(formData.get("plexEmail")) || null;
 
+    if (!userCheck.valid) return { error: userCheck.error || "Invalid username" };
+    const username = userCheck.display;
     if (!username || !password || !email) return { error: "Username, email, and password required" };
+
+    const existingUsers = await prisma.user.findMany({ select: { id: true, username: true, email: true } });
+    if (existingUsers.some((u) => canonicalizeIdentifier(u.username) === userCheck.canonical || u.email.trim().toLowerCase() === email)) {
+        return { error: "An account with that username or email already exists." };
+    }
     const hashedPassword = await hash(password, 10);
 
-    const refSlug = username.toLowerCase().replace(/[^a-z0-9_-]/g, "");
+    const refSlug = username.toLowerCase().replace(/[^a-z0-9_-]/g, "") || "member";
     let referralCode = refSlug;
     const existingRef = await prisma.user.findUnique({ where: { referralCode } });
     if (existingRef) {
-        referralCode = `${refSlug}-${Math.random().toString(36).substring(2, 6)}`;
+        referralCode = `${refSlug}-${secureRandomSlug(6)}`;
     }
 
     try {
@@ -6894,13 +6947,20 @@ export async function registerTrialUserFromInvite(data: {
     referralCode?: string;
 }) {
     try {
-        const cleanUser = data.username.trim();
-        const cleanEmail = data.email.trim().toLowerCase();
-        const cleanPlex = (data.plexEmailOrUser || cleanEmail).trim();
-        const refCode = (data.referralCode || "").trim();
+        const userCheck = validateUsernameInput(data.username);
+        if (!userCheck.valid) {
+            return { success: false, error: userCheck.error || "Invalid username." };
+        }
+        const cleanUser = userCheck.display;
+        const cleanEmail = stripDangerousUnicode(data.email).toLowerCase();
+        const cleanPlex = stripDangerousUnicode(data.plexEmailOrUser || cleanEmail);
+        const refCode = stripDangerousUnicode(data.referralCode || "");
 
         if (!cleanUser || !cleanEmail || !data.password) {
             return { success: false, error: "Username, email, and password are required." };
+        }
+        if (process.env.PORTALARR_TEST !== "true" && !checkRateLimit("invite_reg", cleanEmail, 10, 60_000)) {
+            return { success: false, error: "Too many registration attempts. Please try again later." };
         }
 
         const settings = await prisma.settings.findUnique({ where: { id: "global" } });
@@ -6929,15 +6989,11 @@ export async function registerTrialUserFromInvite(data: {
             return { success: false, error: "Invalid referral code or member reference. You must be invited by an active member." };
         }
 
-        // Check if username or email already taken
-        const existing = await prisma.user.findFirst({
-            where: {
-                OR: [
-                    { username: cleanUser },
-                    { email: cleanEmail }
-                ]
-            }
-        });
+        // Check if username or email already taken (case-insensitive & Unicode confusable safe)
+        const allUsersForCollision = await prisma.user.findMany({ select: { id: true, username: true, email: true } });
+        const existing = allUsersForCollision.find(
+            (u) => canonicalizeIdentifier(u.username) === userCheck.canonical || u.email.trim().toLowerCase() === cleanEmail
+        );
         if (existing) {
             return { success: false, error: "An account with that username or email already exists. Please log in." };
         }
@@ -6946,11 +7002,11 @@ export async function registerTrialUserFromInvite(data: {
         const trialDays = settings?.defaultTrialDays || 14;
         const trialEndsAt = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000);
 
-        const refSlug = cleanUser.toLowerCase().replace(/[^a-z0-9_-]/g, "");
+        const refSlug = cleanUser.toLowerCase().replace(/[^a-z0-9_-]/g, "") || "member";
         let userReferralCode = refSlug;
         const existingRef = await prisma.user.findUnique({ where: { referralCode: userReferralCode } });
         if (existingRef) {
-            userReferralCode = `${refSlug}-${Math.random().toString(36).substring(2, 6)}`;
+            userReferralCode = `${refSlug}-${secureRandomSlug(6)}`;
         }
 
         const trialLibConfig = settings?.defaultTrialPlexLibraries || settings?.defaultPlexLibraries || "";
@@ -8026,10 +8082,10 @@ export async function createOrUpdateSubAccountAction(payload: {
             }
 
             // Generate unique sub-account username & internal email
-            const randomSuffix = Math.random().toString(36).substring(2, 7);
+            const randomSuffix = secureRandomSlug(6);
             const subUsername = `${parentUser.username}_${cleanType.toLowerCase()}_${randomSuffix}`;
             const subEmail = `${subUsername}@domshomelab.subaccount.local`;
-            const dummyPassword = await hash(Math.random().toString(36), 10);
+            const dummyPassword = await hash(secureRandomPassword(), 10);
 
             // Inherit parent's status and expiration dates
             const newSub = await prisma.user.create({
@@ -10221,7 +10277,7 @@ async function verifyUser() {
     }
     if (!session) throw new Error("Unauthorized");
     try {
-        const { payload } = await jwtVerify(session, getJwtSecret());
+        const { payload } = await jwtVerify(session, getJwtSecret(), { algorithms: ["HS256"] });
         const userId = (payload.userId || payload.id) as string;
         const username = (payload.username || "") as string;
         const email = (payload.email || "") as string;
@@ -14426,7 +14482,7 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
                     // Fire off background cover fetcher for the missing stub
                     (async () => {
                         try {
-                            const localCov = await fetchBookCover(title, author || "Unknown Author", reqMediaType, folderPath);
+                            const localCov = await runAsServerInternal(() => fetchBookCover(title, author || "Unknown Author", reqMediaType, folderPath));
                             if (localCov === "local") {
                                 await prisma.book.update({ 
                                     where: { id: newBook.id }, 
@@ -18470,7 +18526,7 @@ export async function syncPlexFriendsInternal() {
                     safeEmail = `${safeUsername.toLowerCase()}@plex.local`;
                 }
 
-                const randomPassword = Math.random().toString(36).slice(-16) + "Plex!1";
+                const randomPassword = secureRandomPassword();
                 const hashedPassword = await hash(randomPassword, 10);
 
                 const isValidNewFriendName = Boolean(

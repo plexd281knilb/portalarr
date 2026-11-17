@@ -37,7 +37,7 @@ Portalarr adheres to an ultra-dark cinematic aesthetic designed for high contras
 | **Cyan / Sky** | `text-sky-400 bg-sky-950/40 border-sky-500/30` | 4K UHD badges, stream telemetry, Live TV, speed test, Kometa overlays |
 | **Crimson / Rose** | `text-rose-400 bg-rose-950/40 border-rose-500/30` | Prune deletions, Leaving Soon, stream termination, rejected |
 
-> **Ban on Decorative Purple Slop**: Never use decorative `from-purple-*`, `via-purple-*`, `to-purple-*`, `from-indigo-*`, `to-indigo-*`, or `from-violet-*` gradients in UI components or routes (enforced by `Suite 25`).
+> **Ban on Decorative Purple Slop, Italics & Dark Low-Contrast**: Never use decorative `from-purple-*`/`from-indigo-*`/`from-violet-*` gradients, non-preview `purple`/`indigo`/`violet` chrome, unnecessary `italic` typography, or dark low-contrast tokens (`text-zinc-600`, `placeholder:text-slate-600`, `text-muted-foreground/40`) outside intentional poster badge/banner theme previews (enforced across all `src/app` and `src/components` files by `Suite 25`).
 
 ## 4. Typography & Unified Concentric Radius (`--radius: 0.5rem`)
 

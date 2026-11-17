@@ -147,7 +147,7 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
     const getDeviceIcon = (id: string) => {
         switch (id) {
             case "appletv": return <Tv className="h-4 w-4 text-cyan-400" />;
-            case "roku": return <Tv2 className="h-4 w-4 text-purple-400" />;
+            case "roku": return <Tv2 className="h-4 w-4 text-teal-400" />;
             case "firetv": return <Flame className="h-4 w-4 text-orange-400" />;
             case "smarttv": return <Monitor className="h-4 w-4 text-blue-400" />;
             case "googletv": return <Smartphone className="h-4 w-4 text-emerald-400" />;
@@ -159,7 +159,7 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
 
     if (loadingConfig) {
         return (
-            <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[#0a0a0f] via-[#101018] to-[#0a0a0f] p-4">
+            <div className="flex min-h-dvh items-center justify-center bg-background p-4">
                 <div className="flex flex-col items-center gap-3 text-center">
                     <Loader2 className="h-10 w-10 animate-spin text-primary" />
                     <p className="text-sm font-semibold text-muted-foreground">Preparing your media server invitation...</p>
@@ -171,7 +171,7 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
     const trialDays = config?.defaultTrialDays || 14;
 
     return (
-        <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[#0a0a0f] via-[#12121c] to-[#0a0a0f] p-3 sm:p-6">
+        <div className="flex min-h-dvh items-center justify-center bg-gradient-to-br from-background via-muted/40 to-background p-3 sm:p-6">
             <div className="w-full max-w-2xl sm:max-w-3xl space-y-6 transition-all duration-300">
                 
                 {/* STEP INDICATOR - ONLY SHOWN ONCE INVITE IS VERIFIED */}
@@ -182,19 +182,19 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
                         }`}>
                             <span>1. Welcome</span>
                         </div>
-                        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50" />
+                        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/75" />
                         <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-all ${
                             step === 2 ? "bg-primary/20 text-primary border-primary/50 shadow-sm" : step > 2 ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : "bg-muted/20 border-border/30"
                         }`}>
                             <span>2. Account</span>
                         </div>
-                        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50" />
+                        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/75" />
                         <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-all ${
                             step === 3 || step === 4 ? "bg-primary/20 text-primary border-primary/50 shadow-sm" : step > 4 ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : "bg-muted/20 border-border/30"
                         }`}>
                             <span>3. Devices</span>
                         </div>
-                        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50" />
+                        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/75" />
                         <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-all ${
                             step === 5 ? "bg-primary/20 text-primary border-primary/50 shadow-sm" : "bg-muted/20 border-border/30"
                         }`}>
@@ -340,32 +340,32 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
                                 </div>
 
                                 {/* FULL MEMBERSHIP UPGRADE PERKS */}
-                                <div className="p-4 rounded-2xl bg-purple-500/[0.04] border border-purple-500/20 space-y-3">
-                                    <div className="flex items-center gap-2 border-b border-purple-500/20 pb-2">
-                                        <div className="p-1.5 bg-purple-500/20 text-purple-300 rounded-lg">
+                                <div className="p-4 rounded-2xl bg-sky-500/[0.04] border border-sky-500/20 space-y-3">
+                                    <div className="flex items-center gap-2 border-b border-sky-500/20 pb-2">
+                                        <div className="p-1.5 bg-sky-500/20 text-sky-300 rounded-lg">
                                             <Crown className="h-4 w-4" />
                                         </div>
                                         <div>
-                                            <h4 className="text-xs font-bold text-purple-300 uppercase tracking-wider">Upgrade to Full Membership</h4>
+                                            <h4 className="text-xs font-bold text-sky-300 uppercase tracking-wider">Upgrade to Full Membership</h4>
                                             <p className="text-[11px] text-muted-foreground">Unlock all extra server perks & features</p>
                                         </div>
                                     </div>
 
                                     <ul className="space-y-2 text-xs">
                                         <li className="flex items-start gap-2 text-muted-foreground">
-                                            <Sparkles className="h-4 w-4 text-purple-400 shrink-0 mt-0.5" />
+                                            <Sparkles className="h-4 w-4 text-sky-400 shrink-0 mt-0.5" />
                                             <span><strong className="text-foreground">Priority Streaming:</strong> Highest server bandwidth priority & uninterrupted playback.</span>
                                         </li>
                                         <li className="flex items-start gap-2 text-muted-foreground">
-                                            <BookOpen className="h-4 w-4 text-purple-400 shrink-0 mt-0.5" />
+                                            <BookOpen className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
                                             <span><strong className="text-foreground">Digital Ebook & Audiobook Library:</strong> Read in-browser with Kindle Paperwhite mode, stream on Plex, or Send-to-Kindle.</span>
                                         </li>
                                         <li className="flex items-start gap-2 text-muted-foreground">
-                                            <Users className="h-4 w-4 text-purple-400 shrink-0 mt-0.5" />
+                                            <Users className="h-4 w-4 text-sky-400 shrink-0 mt-0.5" />
                                             <span><strong className="text-foreground">Dedicated Kids & Living Room Profiles (Coming Soon):</strong> Managed sub-accounts with custom age ratings, PIN safety, and kid-safe library curation.</span>
                                         </li>
                                         <li className="flex items-start gap-2 text-muted-foreground">
-                                            <Sparkles className="h-4 w-4 text-purple-400 shrink-0 mt-0.5" />
+                                            <Sparkles className="h-4 w-4 text-sky-400 shrink-0 mt-0.5" />
                                             <span><strong className="text-foreground">Book & Audiobook Requests:</strong> 1-click requests for bestsellers, new books, and audiobooks.</span>
                                         </li>
                                         <li className="flex items-start gap-2 text-muted-foreground">
@@ -635,13 +635,13 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
                             </div>
 
                             {config?.discordInviteUrl && (
-                                <div className="p-4 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 space-y-2.5 text-xs">
+                                <div className="p-4 rounded-2xl bg-sky-500/10 border border-sky-500/30 space-y-2.5 text-xs">
                                     <div className="flex items-center justify-between gap-2">
                                         <div className="flex items-center gap-2 font-bold text-foreground">
-                                            <MessageSquare className="h-4 w-4 text-indigo-400" />
+                                            <MessageSquare className="h-4 w-4 text-sky-400" />
                                             <span>Join Our Community Discord</span>
                                         </div>
-                                        <Badge variant="outline" className="bg-indigo-500/20 text-indigo-300 border-indigo-500/40 text-[10px]">
+                                        <Badge variant="outline" className="bg-sky-500/20 text-sky-300 border-sky-500/40 text-[10px]">
                                             Community
                                         </Badge>
                                     </div>
@@ -652,7 +652,7 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
                                         href={config.discordInviteUrl} 
                                         target="_blank" 
                                         rel="noopener noreferrer"
-                                        className="inline-flex items-center justify-center gap-1.5 w-full py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all hover:ring-2 hover:ring-indigo-400/40 active:scale-95"
+                                        className="inline-flex items-center justify-center gap-1.5 w-full py-2 px-3 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs transition-all hover:ring-2 hover:ring-sky-400/40 active:scale-95"
                                     >
                                         <MessageSquare className="h-3.5 w-3.5" /> Join Discord Server <ExternalLink className="h-3 w-3 ml-0.5" />
                                     </a>
@@ -839,9 +839,9 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
                                 {config?.proratedBilling ? (
                                     <div className="space-y-3 pt-1 border-t border-border/30">
                                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-                                            <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 space-y-1">
+                                            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 space-y-1">
                                                 <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Free Trial</span>
-                                                <p className="font-bold text-purple-300 text-sm">{config.proratedBilling.trialDays} Days</p>
+                                                <p className="font-bold text-amber-300 text-sm tabular-nums">{config.proratedBilling.trialDays} Days</p>
                                                 <p className="text-[10px] text-muted-foreground">Ends in {config.proratedBilling.trialEndMonthName}</p>
                                             </div>
                                             <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 space-y-1">
@@ -904,7 +904,7 @@ function JoinWizardContent({ initialConfig, initialGuides, initialRef }: JoinCli
 export default function JoinClient(props: JoinClientProps) {
     return (
         <Suspense fallback={
-            <div className="flex min-h-screen items-center justify-center bg-[#0a0a0f] p-4">
+            <div className="flex min-h-dvh items-center justify-center bg-background p-4">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
         }>

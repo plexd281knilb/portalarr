@@ -41,7 +41,7 @@ export function MediaCard({ item, availability, onSelect, onRequest, compact = f
         }
         if (availability?.inMainLibraryOnly) {
             return (
-                <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/25 text-indigo-300 border border-indigo-500/40 text-[10px] font-bold backdrop-blur-md shadow-sm">
+                <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-bold backdrop-blur-md shadow-sm">
                     <span>Main Library</span>
                 </div>
             );
@@ -56,7 +56,7 @@ export function MediaCard({ item, availability, onSelect, onRequest, compact = f
         }
         if (availability?.isMonitored4k && !availability?.isMonitored1080p) {
             return (
-                <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40 text-[10px] font-bold backdrop-blur-md shadow-sm">
+                <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/40 text-[10px] font-bold backdrop-blur-md shadow-sm">
                     <Clock className="h-3 w-3 shrink-0" />
                     <span>4K Monitored</span>
                 </div>
@@ -160,7 +160,7 @@ export function MediaCard({ item, availability, onSelect, onRequest, compact = f
 
                     <div className="flex items-center gap-1">
                         {has4k && (
-                            <Badge variant="outline" className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-purple-500/25 text-purple-300 border-purple-500/40 backdrop-blur-md">
+                            <Badge variant="outline" className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-sky-500/25 text-sky-300 border-sky-500/40 backdrop-blur-md">
                                 4K
                             </Badge>
                         )}

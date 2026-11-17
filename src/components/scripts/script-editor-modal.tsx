@@ -147,7 +147,7 @@ export function ScriptEditorModal({
                 {/* Header */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 sm:px-5 py-3 sm:py-4 border-b border-zinc-800 bg-zinc-950/70">
                     <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 shrink-0">
+                        <div className="p-2 rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400 shrink-0">
                             <FileCode className="h-5 w-5" />
                         </div>
                         <div className="min-w-0">
@@ -320,13 +320,13 @@ export function ScriptEditorModal({
                     </div>
 
                     {/* Code Textarea */}
-                    <div className="relative rounded-lg border border-zinc-800 bg-[#07080b] overflow-hidden focus-within:border-indigo-500/50">
+                    <div className="relative rounded-lg border border-zinc-800 bg-[#07080b] overflow-hidden focus-within:border-amber-500/50">
                         <textarea
                             value={content}
                             onChange={(e) => setContent(e.target.value)}
                             rows={16}
                             spellCheck={false}
-                            className="w-full p-4 font-mono text-xs text-zinc-200 bg-transparent resize-y outline-none leading-relaxed selection:bg-indigo-500/30 selection:text-white"
+                            className="w-full p-4 font-mono text-xs text-zinc-200 bg-transparent resize-y outline-none leading-relaxed selection:bg-amber-500/30 selection:text-white"
                             placeholder="#!/bin/bash&#10;# Write your script code here..."
                         />
                     </div>

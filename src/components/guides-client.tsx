@@ -245,7 +245,7 @@ function GuidesContent({ initialGuides, initialUser, initialAccess }: GuidesClie
     const getDeviceIcon = (id: string) => {
         switch (id) {
             case "appletv": return <Tv className="h-4 w-4 text-cyan-400" />;
-            case "roku": return <Tv2 className="h-4 w-4 text-purple-400" />;
+            case "roku": return <Tv2 className="h-4 w-4 text-teal-400" />;
             case "firetv": return <Flame className="h-4 w-4 text-orange-400" />;
             case "smarttv": return <Monitor className="h-4 w-4 text-blue-400" />;
             case "googletv": return <Smartphone className="h-4 w-4 text-emerald-400" />;

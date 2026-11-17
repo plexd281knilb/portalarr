@@ -262,18 +262,18 @@ export default function CloudflarePolicyCard() {
                         <div className="space-y-2">
                             <div className="flex items-center justify-between">
                                 <span className="font-bold text-xs text-foreground flex items-center gap-1.5">
-                                    <Film className="h-4 w-4 text-purple-400" />
+                                    <Film className="h-4 w-4 text-sky-400" />
                                     Media Apps (Open Edge • Role Gated)
                                 </span>
-                                <Badge variant="outline" className="text-[10px] bg-purple-500/10 text-purple-300 border-purple-500/30">
+                                <Badge variant="outline" className="text-[10px] bg-sky-500/10 text-sky-300 border-sky-500/30">
                                     SUPER_USER &amp; ADMIN
                                 </Badge>
                             </div>
                             <p className="text-[11px] text-muted-foreground leading-relaxed">
-                                Radarr &amp; Sonarr pass through Cloudflare directly to DomsHomeLab. The built-in session engine strictly restricts access to <code className="text-purple-300">SUPER_USER</code> and <code className="text-purple-300">ADMIN</code> roles:
+                                Radarr &amp; Sonarr pass through Cloudflare directly to DomsHomeLab. The built-in session engine strictly restricts access to <code className="text-sky-300">SUPER_USER</code> and <code className="text-sky-300">ADMIN</code> roles:
                             </p>
 
-                            <pre className="p-2.5 rounded-lg bg-black/50 border border-white/10 font-mono text-[11px] text-purple-300/90 whitespace-pre overflow-x-auto max-h-48">
+                            <pre className="p-2.5 rounded-lg bg-black/50 border border-white/10 font-mono text-[11px] text-sky-300/90 whitespace-pre overflow-x-auto max-h-48">
                                 {superUserPaths.join("\n")}
                             </pre>
                         </div>
@@ -282,9 +282,9 @@ export default function CloudflarePolicyCard() {
                             size="sm"
                             variant="outline"
                             onClick={() => handleCopy(superUserPaths.join("\n"), "superuser")}
-                            className="w-full text-xs font-semibold gap-1.5 border-purple-500/30 hover:bg-purple-500/10 text-purple-400"
+                            className="w-full text-xs font-semibold gap-1.5 border-sky-500/30 hover:bg-sky-500/10 text-sky-400"
                         >
-                            {copiedSuperUser ? <Check className="h-3.5 w-3.5 text-purple-400" /> : <Copy className="h-3.5 w-3.5" />}
+                            {copiedSuperUser ? <Check className="h-3.5 w-3.5 text-sky-400" /> : <Copy className="h-3.5 w-3.5" />}
                             {copiedSuperUser ? "Copied Media Apps Paths!" : "Copy Media Apps Paths"}
                         </Button>
                     </div>
@@ -325,13 +325,13 @@ export default function CloudflarePolicyCard() {
                         </div>
 
                         <div className="p-2.5 rounded-lg bg-black/40 border border-white/[0.06] space-y-1.5">
-                            <span className="font-semibold text-purple-300 flex items-center gap-1">
-                                <Server className="h-3 w-3 text-purple-400" />
+                            <span className="font-semibold text-sky-300 flex items-center gap-1">
+                                <Server className="h-3 w-3 text-sky-400" />
                                 3. Native Origin Session &amp; RBAC
                             </span>
                             <ul className="list-disc list-inside space-y-1 text-slate-300/90">
                                 <li><strong>Origin Security:</strong> DomsHomeLab&apos;s built-in JWT session engine gates all requests at origin.</li>
-                                <li><strong>Media Management:</strong> <code className="text-purple-300">/radarr*</code> and <code className="text-purple-300">/sonarr*</code> require a valid session with <code className="text-purple-300">SUPER_USER</code> or <code className="text-purple-300">ADMIN</code> role.</li>
+                                <li><strong>Media Management:</strong> <code className="text-sky-300">/radarr*</code> and <code className="text-sky-300">/sonarr*</code> require a valid session with <code className="text-sky-300">SUPER_USER</code> or <code className="text-sky-300">ADMIN</code> role.</li>
                                 <li><strong>Defense-in-Depth:</strong> Admin routes have dual protection: Cloudflare edge blocks plus origin admin checks.</li>
                             </ul>
                         </div>

@@ -262,7 +262,7 @@ export function KindleSenderUpdateBanner({
                             size="sm"
                             variant="secondary"
                             onClick={() => setNoticeModalOpen(true)}
-                            className="text-xs bg-purple-950/60 hover:bg-purple-900/60 text-purple-200 border border-purple-500/30 h-8 sm:h-9 gap-1 shrink-0 whitespace-nowrap cursor-pointer"
+                            className="text-xs bg-amber-950/60 hover:bg-amber-900/60 text-amber-200 border border-amber-500/30 h-8 sm:h-9 gap-1 shrink-0 whitespace-nowrap cursor-pointer"
                         >
                             <BookOpen className="h-3.5 w-3.5 shrink-0" />
                             <span className="whitespace-nowrap">View Guide</span>
@@ -273,7 +273,7 @@ export function KindleSenderUpdateBanner({
                             size="sm"
                             onClick={handleAcknowledge}
                             disabled={acknowledging}
-                            className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs gap-1.5 shadow-md shadow-purple-900/30 h-8 sm:h-9 shrink-0 whitespace-nowrap cursor-pointer"
+                            className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs gap-1.5 shadow-md h-8 sm:h-9 shrink-0 whitespace-nowrap cursor-pointer"
                         >
                             <Check className="h-3.5 w-3.5 shrink-0" />
                             <span className="whitespace-nowrap">{acknowledging ? "Saving..." : "I've Updated on Amazon"}</span>

@@ -650,7 +650,7 @@ export default function PaymentEmailManager() {
             case "PAYPAL":
                 return <Badge className="bg-sky-600 hover:bg-sky-500 text-white font-bold text-[10px]">PayPal</Badge>;
             case "ZELLE":
-                return <Badge className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-[10px]">Zelle</Badge>;
+                return <Badge className="bg-amber-600 hover:bg-amber-500 text-white font-bold text-[10px]">Zelle</Badge>;
             case "CASHAPP":
                 return <Badge className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px]">Cash App</Badge>;
             default:
@@ -1109,7 +1109,7 @@ export default function PaymentEmailManager() {
 
                 <CardContent className="p-0">
                     {transactions.length === 0 ? (
-                        <div className="text-center py-12 px-4 text-muted-foreground text-xs italic">
+                        <div className="text-center py-12 px-4 text-muted-foreground text-xs">
                             No payment transactions found matching the selected filter. Run a scan to fetch recent emails.
                         </div>
                     ) : (

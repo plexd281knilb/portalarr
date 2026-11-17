@@ -296,7 +296,7 @@ export function BookDetailModal({
                                 />
                             ) : (
                                 <div className="w-full h-full flex flex-col items-center justify-center p-3 text-center bg-muted/80 text-muted-foreground/60">
-                                    {isAudiobook ? <Headphones className="h-10 w-10 text-amber-400/40" /> : <BookOpen className="h-10 w-10 text-purple-400/40" />}
+                                    {isAudiobook ? <Headphones className="h-10 w-10 text-amber-400/70" /> : <BookOpen className="h-10 w-10 text-emerald-400/70" />}
                                     <span className="text-[10px] mt-2 font-medium line-clamp-2">{activeBook.title}</span>
                                 </div>
                             )}
@@ -430,7 +430,7 @@ export function BookDetailModal({
                                     <div className="flex items-center justify-between p-2 rounded-lg bg-background/50 border border-border/40 min-w-0">
                                         <div className="space-y-0.5 min-w-0 pr-2">
                                             <Label htmlFor="send-kindle" className="text-xs font-medium text-foreground flex items-center gap-1.5">
-                                                <Send className="h-3 w-3 text-purple-400 shrink-0" />
+                                                <Send className="h-3 w-3 text-emerald-400 shrink-0" />
                                                 <span className="truncate">Auto-Send to Kindle</span>
                                             </Label>
                                             <p className="text-[10px] text-muted-foreground truncate">
@@ -535,7 +535,7 @@ export function BookDetailModal({
                     <div className="pt-4 border-t border-border/40 space-y-3 min-w-0 w-full overflow-hidden">
                         <div className="flex items-center justify-between gap-2 min-w-0">
                             <div className="flex items-center gap-2 min-w-0">
-                                <Sparkles className="h-4 w-4 text-purple-400 shrink-0" />
+                                <Sparkles className="h-4 w-4 text-emerald-400 shrink-0" />
                                 <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground truncate">
                                     Similar Books & Recommendations
                                 </h4>
@@ -608,7 +608,7 @@ export function BookDetailModal({
                                                     />
                                                 ) : (
                                                     <div className="w-full h-full flex flex-col items-center justify-center p-2 text-center text-muted-foreground">
-                                                        {simIsAudio ? <Headphones className="h-5 w-5 text-amber-400/40" /> : <BookOpen className="h-5 w-5 text-purple-400/40" />}
+                                                        {simIsAudio ? <Headphones className="h-5 w-5 text-amber-400/70" /> : <BookOpen className="h-5 w-5 text-emerald-400/70" />}
                                                     </div>
                                                 )}
                                                 {sim.rating && sim.rating > 0 ? (

@@ -399,6 +399,57 @@ async function runTestSuite() {
                     throw new Error("CRITICAL SECURITY BREACH: settings.mainPlexToken was hijacked by regular user Plex login!");
                 }
 
+                // 2b. Unverified non-mock Plex token MUST fail closed (never trust client-supplied username/email)
+                const badPlexRes = await handlePlexCallback("invalid_untrusted_plex_token_abc", aliasUser.plexUsername!, aliasUser.plexEmail!, false);
+                if (!badPlexRes?.error) {
+                    throw new Error("CRITICAL SECURITY BREACH: handlePlexCallback accepted an unverified non-mock Plex token!");
+                }
+
+                // 2c. Security Edge Cases: 52-char username, SQL-syntax username, Unicode SPOTIFY confusables, HTML/SVG/Regex/IP sanitization
+                const sec = await import("../src/lib/security");
+                const u52 = sec.validateUsernameInput("u".repeat(52));
+                if (!u52.valid || u52.display.length !== 52) {
+                    throw new Error("52-char username validation failed unexpectedly");
+                }
+                const uSql = sec.validateUsernameInput("admin'; DROP TABLE users;--");
+                if (!uSql.valid) {
+                    throw new Error("SQL-syntax username should be accepted safely via parameterized queries");
+                }
+                const sqlUser = await prisma.user.create({
+                    data: {
+                        username: `${uSql.display}_${testId}`,
+                        email: `sqluser_${testId}@example.com`,
+                        password: hashedPassword,
+                        role: "USER",
+                        status: "APPROVED"
+                    }
+                });
+                const fetchedSqlUser = await prisma.user.findUnique({ where: { id: sqlUser.id } });
+                if (!fetchedSqlUser || !fetchedSqlUser.username.includes("DROP TABLE")) {
+                    throw new Error("SQL-syntax username storage/retrieval broke");
+                }
+                await prisma.user.delete({ where: { id: sqlUser.id } });
+
+                if (
+                    sec.canonicalizeIdentifier("SPOTIFY") !== sec.canonicalizeIdentifier("\u0405\u0420\u041E\u0422\u0406F\u0423") ||
+                    sec.canonicalizeIdentifier("spotify") !== sec.canonicalizeIdentifier("\u017Fpotify") ||
+                    sec.canonicalizeIdentifier("kelvin") !== sec.canonicalizeIdentifier("\u212Aelvin")
+                ) {
+                    throw new Error("Unicode confusable canonicalization failed");
+                }
+                if (sec.validateUsernameInput("spot\u200Bify").valid || sec.validateUsernameInput("bad\u202Euser").valid) {
+                    throw new Error("Zero-width / bidi spoof characters must be rejected");
+                }
+                if (sec.sanitizeSvgContent('<svg onload="alert(1)"><script>evil()</script><rect/></svg>').includes("<script")) {
+                    throw new Error("SVG sanitizer failed to strip <script>");
+                }
+                if (sec.validateClientIp("10.0.0.5\r\nFakeHeader: 1") !== "127.0.0.1") {
+                    throw new Error("Spoofed IP header validation failed to reject malformed value");
+                }
+                if (sec.escapeRegex("Author (2026) [Spec]").includes("(2026)")) {
+                    throw new Error("escapeRegex failed to escape regex metacharacters");
+                }
+
                 // 3. Sub-account lifecycle cascade (setUserTrialOrSubscriptionInternal + expireDueTrialsAndSubscriptionsInternal)
                 const { setUserTrialOrSubscriptionInternal, expireDueTrialsAndSubscriptionsInternal } = await import("../src/app/actions");
                 const { getUserMediaServersAndLibrariesAction } = await import("../src/app/media-server-actions");
@@ -4340,6 +4391,16 @@ async function runTestSuite() {
         if (!globalsCssSrc.includes("text-wrap: balance") || !globalsCssSrc.includes("tabular-nums")) {
             throw new Error("src/app/globals.css must enforce balanced heading wraps and tabular numerals");
         }
+        if (!globalsCssSrc.includes("color-scheme: light") || !globalsCssSrc.includes(".scrollbar-none")) {
+            throw new Error("src/app/globals.css must define light color-scheme and cross-browser scrollbar utilities");
+        }
+        if (rootLayoutSrc.includes('forcedTheme="dark"') || rootLayoutSrc.includes("userScalable: false")) {
+            throw new Error("src/app/layout.tsx must support light/dark theme switching and pinch-zoom accessibility");
+        }
+        const themeToggleSrc = fs.readFileSync(path.join(componentsDir, "theme-toggle.tsx"), "utf8");
+        if (!themeToggleSrc.includes("export function ThemeToggle")) {
+            throw new Error("src/components/theme-toggle.tsx must export ThemeToggle");
+        }
 
         // 2. Reusable Empty State, Route Skeleton, 404 & Humanized Error Boundaries
         if (!emptyStateSrc.includes("export function EmptyState") || !routeSkeletonSrc.includes("export function RouteLoadingShell")) {
@@ -4352,7 +4413,7 @@ async function runTestSuite() {
             throw new Error("Error boundaries must map exceptions through humanized getFriendlyErrorDisplay()");
         }
 
-        // 3. No decorative purple/indigo/violet gradient slop in UI components or app routes
+        // 3. No decorative purple/indigo/violet gradient slop, italic chrome, or dark low-contrast tokens
         const tsxFiles: string[] = [];
         const walkTsx = (dir: string) => {
             for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -4366,13 +4427,31 @@ async function runTestSuite() {
 
         const forbiddenGradientRe = /\b(?:from|via|to)-(?:purple|indigo|violet)-/;
         const decorativeOrbRe = /\bw-(?:56|64|72|80|96)\s+h-(?:56|64|72|80|96)[^"]*blur-[23]xl/;
+        const italicClassRe = /\bclass(?:Name)?=[^\n>]*\bitalic\b/;
+        const darkLowContrastRe = /\b(?:text-zinc-600|placeholder:text-slate-600|text-muted-foreground\/(?:10|20|30|40|50))\b/;
+        const purpleChromeAllowlist = new Set([
+            "src/components/curation/kometa-studio.tsx", // Intentional poster badge theme preview styles (royal/cyber/purple)
+            "src/components/curation/prune-studio.tsx",  // Intentional simulated Leaving Soon poster banner theme
+        ]);
+        const forbiddenPurpleClassRe = /\b(?:purple|indigo|violet)-\d{2,3}/;
+
         for (const f of tsxFiles) {
+            const rel = path.relative(process.cwd(), f).replace(/\\/g, "/");
             const content = fs.readFileSync(f, "utf8");
             if (forbiddenGradientRe.test(content)) {
-                throw new Error(`Decorative purple/indigo/violet gradient found in ${path.relative(process.cwd(), f)}`);
+                throw new Error(`Decorative purple/indigo/violet gradient found in ${rel}`);
             }
             if (decorativeOrbRe.test(content)) {
-                throw new Error(`Decorative blur orb embellishment found in ${path.relative(process.cwd(), f)}`);
+                throw new Error(`Decorative blur orb embellishment found in ${rel}`);
+            }
+            if (italicClassRe.test(content)) {
+                throw new Error(`Unnecessary italic class found in ${rel}`);
+            }
+            if (darkLowContrastRe.test(content)) {
+                throw new Error(`Dark low-contrast text token found in ${rel}`);
+            }
+            if (!purpleChromeAllowlist.has(rel) && forbiddenPurpleClassRe.test(content)) {
+                throw new Error(`Unauthorized purple/indigo/violet chrome found in ${rel}`);
             }
         }
 
@@ -4457,9 +4536,17 @@ async function runTestSuite() {
             "src/components/kindle-sender-update-banner.tsx",
             "src/components/kindle-sender-update-modal.tsx",
             "src/components/kindle-setup-guide-modal.tsx",
-            "src/components/stream-quality-doctor-banner.tsx"
+            "src/components/stream-quality-doctor-banner.tsx",
+            "src/components/build-badge.tsx",
+            "src/components/system-schedules-dashboard.tsx",
+            "src/components/admin-detailed-streams.tsx",
+            "src/components/admin-user-switcher.tsx",
+            "src/components/sent-email-audit-log.tsx",
+            "src/components/error-ticket-modal.tsx",
+            "src/components/curation/server-guard-rails-modal.tsx",
+            "src/components/curation/plex-poster-picker-modal.tsx"
         ];
-        const bannedUiEmojiRe = /[⚡🎬📚📖🎧🧸📌]/u;
+        const bannedUiEmojiRe = /[⚡🎬📚📖🎧🧸📌🧪🛡📋💡🌐📉✨💬🔥🚨🏡📱🔁🤖⏱👑🧒⭐👶📁🔄📤📥🎨📍🧬🥞📄🎫🎯⚠🗑🔍✅]/u;
         for (const relComp of emojiFreeComponents) {
             const compSrc = fs.readFileSync(path.join(process.cwd(), relComp), "utf8");
             if (bannedUiEmojiRe.test(compSrc)) {

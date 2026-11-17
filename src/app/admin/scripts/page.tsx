@@ -190,7 +190,7 @@ export default function AdminScriptsPage() {
             case "Database": return <Database className="h-3.5 w-3.5 text-cyan-400" />;
             case "Docker": return <Container className="h-3.5 w-3.5 text-sky-400" />;
             case "System & Backup": return <HardDrive className="h-3.5 w-3.5 text-emerald-400" />;
-            default: return <FileCode className="h-3.5 w-3.5 text-purple-400" />;
+            default: return <FileCode className="h-3.5 w-3.5 text-sky-400" />;
         }
     };
 
@@ -291,9 +291,9 @@ export default function AdminScriptsPage() {
                 <Card className="bg-[#12131a]/80 border-zinc-800/80 p-3.5 flex flex-col justify-between">
                     <div className="flex items-center justify-between">
                         <span className="text-xs text-muted-foreground">Recent Runs</span>
-                        <History className="h-4 w-4 text-purple-400" />
+                        <History className="h-4 w-4 text-amber-400" />
                     </div>
-                    <div className="text-xl font-bold text-zinc-100 mt-2">{recentRuns.length}</div>
+                    <div className="text-xl font-bold text-zinc-100 mt-2 tabular-nums">{recentRuns.length}</div>
                 </Card>
 
                 <Card className="bg-[#12131a]/80 border-zinc-800/80 p-3.5 flex flex-col justify-between">
@@ -344,7 +344,7 @@ export default function AdminScriptsPage() {
                 </div>
             ) : filteredScripts.length === 0 ? (
                 <Card className="bg-[#12131a]/60 border-zinc-800 p-8 text-center space-y-3">
-                    <FileCode className="h-8 w-8 text-zinc-600 mx-auto" />
+                    <FileCode className="h-8 w-8 text-zinc-400 mx-auto" />
                     <div className="text-sm font-semibold text-zinc-300">No scripts found</div>
                     <p className="text-xs text-muted-foreground max-w-sm mx-auto">
                         {searchQuery ? "No scripts match your search criteria." : "Create your first script to automate tasks."}
@@ -387,7 +387,7 @@ export default function AdminScriptsPage() {
                                                     {getCategoryIcon(script.category)}
                                                     <span>{script.category}</span>
                                                 </Badge>
-                                                <Badge variant="outline" className="text-[10px] font-mono uppercase bg-indigo-500/10 border-indigo-500/30 text-indigo-300">
+                                                <Badge variant="outline" className="text-[10px] font-mono uppercase bg-sky-500/10 border-sky-500/30 text-sky-300">
                                                     {script.interpreter}
                                                 </Badge>
                                             </div>
@@ -443,7 +443,7 @@ export default function AdminScriptsPage() {
 
                                     {/* Action buttons */}
                                     <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-zinc-800/60">
-                                        <div className="flex items-center gap-1.5 flex-1 min-w-[200px]">
+                                        <div className="flex items-center gap-1.5 flex-1 min-w-0 sm:min-w-[200px]">
                                             <Button
                                                 variant="default"
                                                 size="sm"

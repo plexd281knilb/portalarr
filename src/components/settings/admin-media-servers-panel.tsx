@@ -444,7 +444,7 @@ export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServers
                         const badgeColor = isPlex 
                             ? "bg-amber-500/15 text-amber-300 border-amber-500/40" 
                             : isJellyfin 
-                            ? "bg-purple-500/15 text-purple-300 border-purple-500/40" 
+                            ? "bg-sky-500/15 text-sky-300 border-sky-500/40" 
                             : "bg-emerald-500/15 text-emerald-300 border-emerald-500/40";
 
                         return (
@@ -454,7 +454,7 @@ export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServers
                                         <div className="flex items-center gap-3">
                                             <div className={`h-10 w-10 rounded-xl flex items-center justify-center border shrink-0 ${
                                                 isPlex ? "bg-amber-500/10 border-amber-500/30 text-amber-400" :
-                                                isJellyfin ? "bg-purple-500/10 border-purple-500/30 text-purple-400" :
+                                                isJellyfin ? "bg-sky-500/10 border-sky-500/30 text-sky-400" :
                                                 "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
                                             }`}>
                                                 <Server className="h-5 w-5" />
@@ -528,7 +528,7 @@ export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServers
                                                     onClick={() => handleOpenEdit(srv)}
                                                     className="h-8 text-xs border-border/60 hover:bg-white/[0.04] gap-1.5 text-foreground"
                                                 >
-                                                    <Pencil className="h-3.5 w-3.5 text-purple-400" />
+                                                    <Pencil className="h-3.5 w-3.5 text-amber-400" />
                                                     <span>Edit</span>
                                                 </Button>
                                             )}
@@ -599,17 +599,17 @@ export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServers
                                         <div className="flex items-center justify-between gap-3 border-t sm:border-t-0 sm:border-l border-border/30 sm:pl-3 pt-2 sm:pt-0">
                                             <div className="space-y-0.5">
                                                 <div className="flex items-center gap-1.5">
-                                                    <Shield className="h-3.5 w-3.5 text-purple-400" />
+                                                    <Shield className="h-3.5 w-3.5 text-amber-400" />
                                                     <Label className="text-xs font-semibold text-foreground">
                                                         Trial Accounts Policy
                                                     </Label>
                                                 </div>
                                                 <p className="text-[11px] text-muted-foreground">
-                                                    Governed centrally via the <Link href="/settings/access?tab=onboarding#trial-safe-pool" className="text-purple-300 hover:text-purple-200 underline font-semibold inline-flex items-center gap-1">Trial Safe Pool in Access Control <ExternalLink className="h-2.5 w-2.5 inline" /></Link>.
+                                                    Governed centrally via the <Link href="/settings/access?tab=onboarding#trial-safe-pool" className="text-amber-300 hover:text-amber-200 underline font-semibold inline-flex items-center gap-1">Trial Safe Pool in Access Control <ExternalLink className="h-2.5 w-2.5 inline" /></Link>.
                                                 </p>
                                             </div>
                                             <Link href="/settings/access?tab=onboarding#trial-safe-pool">
-                                                <Badge variant="outline" className="text-[10px] bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border-purple-500/30 shrink-0 cursor-pointer transition-colors flex items-center gap-1">
+                                                <Badge variant="outline" className="text-[10px] bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30 shrink-0 cursor-pointer transition-colors flex items-center gap-1">
                                                     Configure Access <ExternalLink className="h-2.5 w-2.5" />
                                                 </Badge>
                                             </Link>
@@ -690,7 +690,7 @@ export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServers
                                                                             {lib.type.includes("movie") ? (
                                                                                 <Film className="h-3 w-3 text-cyan-400 shrink-0" />
                                                                             ) : lib.type.includes("show") || lib.type.includes("tv") ? (
-                                                                                <Tv className="h-3 w-3 text-purple-400 shrink-0" />
+                                                                                <Tv className="h-3 w-3 text-sky-400 shrink-0" />
                                                                             ) : lib.type.includes("music") ? (
                                                                                 <Music className="h-3 w-3 text-emerald-400 shrink-0" />
                                                                             ) : (

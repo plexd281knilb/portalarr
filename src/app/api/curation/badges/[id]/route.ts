@@ -5,6 +5,7 @@ import path from "path";
 import { getCurrentUser } from "@/app/auth-actions";
 import { DEFAULT_BUILTIN_BADGE_DEFINITIONS } from "@/lib/curation/presets";
 import { resolveContainedPath } from "@/lib/book-route-auth";
+import { sanitizeSvgContent } from "@/lib/security";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
@@ -70,11 +71,17 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
                         else if (ext === ".webp") mimeType = "image/webp";
                         else if (ext === ".png") mimeType = "image/png";
 
-                        const fileBuffer = fs.readFileSync(cand);
-                        return new NextResponse(fileBuffer, {
+                        const rawBuffer = fs.readFileSync(cand);
+                        const isSvg = mimeType.includes("svg");
+                        const outBuffer = isSvg
+                            ? Buffer.from(sanitizeSvgContent(rawBuffer.toString("utf-8")), "utf-8")
+                            : rawBuffer;
+                        return new NextResponse(outBuffer, {
                             headers: {
                                 "Content-Type": mimeType,
-                                "Cache-Control": "public, max-age=86400, stale-while-revalidate=43200"
+                                "Cache-Control": "private, max-age=3600",
+                                "X-Content-Type-Options": "nosniff",
+                                ...(isSvg ? { "Content-Security-Policy": "sandbox; default-src 'none'" } : {})
                             }
                         });
                     }
@@ -93,7 +100,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
             return new NextResponse(directBuiltin.svgContent, {
                 headers: {
                     "Content-Type": "image/svg+xml; charset=utf-8",
-                    "Cache-Control": "public, max-age=86400, stale-while-revalidate=43200"
+                    "Content-Security-Policy": "sandbox; default-src 'none'",
+                    "X-Content-Type-Options": "nosniff",
+                    "Cache-Control": "private, max-age=3600"
                 }
             });
         }
@@ -115,7 +124,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
                 return new NextResponse(fallbackBuiltin.svgContent, {
                     headers: {
                         "Content-Type": "image/svg+xml; charset=utf-8",
-                        "Cache-Control": "public, max-age=86400, stale-while-revalidate=43200"
+                        "Content-Security-Policy": "sandbox; default-src 'none'",
+                        "X-Content-Type-Options": "nosniff",
+                        "Cache-Control": "private, max-age=3600"
                     }
                 });
             }

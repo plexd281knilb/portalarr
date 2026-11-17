@@ -709,12 +709,12 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                         variant={activeTab === "ebooks" ? "default" : "ghost"}
                         className={`h-9 px-3.5 text-xs font-bold rounded-xl transition-all ${
                             activeTab === "ebooks" 
-                                ? "bg-purple-600 hover:bg-purple-500 text-white shadow-md shadow-purple-600/20" 
+                                ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/20" 
                                 : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
                         }`}
                         onClick={() => handleTabChange("ebooks")}
                     >
-                        <BookOpen className="h-4 w-4 mr-1.5 text-purple-400" />
+                        <BookOpen className="h-4 w-4 mr-1.5 text-emerald-400" />
                         Ebooks
                     </Button>
 
@@ -737,12 +737,12 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                         variant={activeTab === "requests" ? "default" : "ghost"}
                         className={`h-9 px-3.5 text-xs font-bold rounded-xl transition-all ${
                             activeTab === "requests" 
-                                ? "bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/20" 
+                                ? "bg-sky-600 hover:bg-sky-500 text-white shadow-md shadow-sky-600/20" 
                                 : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
                         }`}
                         onClick={() => handleTabChange("requests")}
                     >
-                        <Inbox className="h-4 w-4 mr-1.5 text-indigo-400" />
+                        <Inbox className="h-4 w-4 mr-1.5 text-sky-400" />
                         Requests
                     </Button>
                 </div>
@@ -943,12 +943,12 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                                 <div className="space-y-3 animate-in fade-in duration-300">
                                     <div className="flex items-center justify-between">
                                         <h3 className="text-sm font-bold text-muted-foreground flex items-center gap-1.5">
-                                            <BookOpen className="h-4 w-4 text-purple-400" />
+                                            <BookOpen className="h-4 w-4 text-emerald-400" />
                                             <span>Books {bookResults.length > 0 && `(${bookResults.length})`}</span>
                                         </h3>
                                         {isSearchingBooks && (
-                                            <div className="flex items-center gap-1.5 text-xs text-purple-400">
-                                                <div className="w-3 h-3 border-2 border-purple-400/30 border-t-purple-400 rounded-full animate-spin" />
+                                            <div className="flex items-center gap-1.5 text-xs text-emerald-400">
+                                                <div className="w-3 h-3 border-2 border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin" />
                                                 <span>Searching books...</span>
                                             </div>
                                         )}
@@ -1054,7 +1054,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                                         {bsec.mediaType === "audiobook" ? (
                                             <Headphones className="h-5 w-5 text-amber-400" />
                                         ) : (
-                                            <BookOpen className="h-5 w-5 text-purple-400" />
+                                            <BookOpen className="h-5 w-5 text-emerald-400" />
                                         )}
                                         <h3 className="text-base sm:text-lg font-bold text-foreground tracking-tight">
                                             {bsec.title}
@@ -1149,7 +1149,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                                         {activeTab === "audiobooks" ? (
                                             <Headphones className="h-5 w-5 text-amber-400" />
                                         ) : (
-                                            <BookOpen className="h-5 w-5 text-purple-400" />
+                                            <BookOpen className="h-5 w-5 text-emerald-400" />
                                         )}
                                         <h3 className="text-base sm:text-lg font-bold text-foreground tracking-tight">
                                             {sec.title}

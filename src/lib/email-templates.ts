@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getAppUrl } from "@/lib/app-url";
 import { decryptData } from "@/lib/encryption";
+import { escapeHtml, sanitizeHttpUrl, sanitizeRichHtml } from "@/lib/security";
 
 export interface TemplateVariableInfo {
     key: string;
@@ -1773,11 +1774,18 @@ export async function renderEmailTemplate(
         )
     };
 
-    // Replace all {key} placeholders
-    for (const [key, val] of Object.entries(allVars)) {
-        const regex = new RegExp(`\\{${key}\\}`, "g");
-        subject = subject.replace(regex, val);
-        body = body.replace(regex, val);
+    const URL_VAR_KEYS = new Set(["appUrl", "loginUrl", "accessUrl", "actionUrl", "ticketsUrl", "billingUrl", "requestsUrl"]);
+    // Replace all {key} placeholders with escaped values (prevents HTML injection & $' sequence tampering)
+    for (const [key, rawVal] of Object.entries(allVars)) {
+        const placeholder = `{${key}}`;
+        const safeSubjectVal = String(rawVal ?? "").replace(/[\r\n]+/g, " ");
+        const safeBodyVal = URL_VAR_KEYS.has(key)
+            ? escapeHtml(sanitizeHttpUrl(rawVal) || rawVal)
+            : key === "detailsHtml" || key === "customHtml"
+            ? sanitizeRichHtml(rawVal)
+            : escapeHtml(rawVal);
+        subject = subject.split(placeholder).join(safeSubjectVal);
+        body = body.split(placeholder).join(safeBodyVal);
     }
 
     // Wrap in standard layout if requested or if body isn't a full HTML document

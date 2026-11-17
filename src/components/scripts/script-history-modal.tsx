@@ -132,7 +132,7 @@ export function ScriptHistoryModal({
                                 <span>Loading run records...</span>
                             </div>
                         ) : runs.length === 0 ? (
-                            <div className="p-6 text-center text-xs text-zinc-500 italic">
+                            <div className="p-6 text-center text-xs text-zinc-400">
                                 No previous execution runs recorded for this script.
                             </div>
                         ) : (
@@ -219,7 +219,7 @@ export function ScriptHistoryModal({
                             ) : runLog ? (
                                 runLog
                             ) : (
-                                <div className="text-zinc-500 italic">No log available.</div>
+                                <div className="text-zinc-400">No log available.</div>
                             )}
                         </div>
                     </div>

@@ -207,7 +207,7 @@ export function ScriptTerminalModal({
         } else if (line.includes("[WARN]")) {
             textColor = "text-amber-400";
         } else if (line.includes("--- Checking") || line.includes("--- Optimizing") || line.includes("---")) {
-            textColor = "text-indigo-300 font-medium";
+            textColor = "text-sky-300 font-medium";
         } else if (line.includes("[ABORTED]")) {
             textColor = "text-orange-400 font-semibold";
         }
@@ -311,7 +311,7 @@ export function ScriptTerminalModal({
                 {/* Monospace Terminal Body */}
                 <div className="flex-1 p-4 bg-[#07080b] font-mono text-xs overflow-y-auto max-h-[56vh] min-h-[350px] space-y-1 select-text scrollbar-thin scrollbar-thumb-zinc-800">
                     {logs.length === 0 ? (
-                        <div className="text-zinc-500 flex items-center gap-2 italic py-4">
+                        <div className="text-zinc-400 flex items-center gap-2 py-4">
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
                             <span>Initializing process environment...</span>
                         </div>

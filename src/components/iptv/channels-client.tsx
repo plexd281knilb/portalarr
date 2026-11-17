@@ -103,7 +103,7 @@ const genreIcons: Record<string, any> = {
 interface ChannelCardProps {
     ch: any;
     specialBadge?: string;
-    badgeColor?: "teal" | "amber" | "emerald" | "purple" | "rose" | "blue";
+    badgeColor?: "teal" | "amber" | "emerald" | "sky" | "rose" | "blue";
     onAddToProfile?: (channel: any) => void;
 }
 
@@ -124,7 +124,7 @@ function ChannelCard({ ch, specialBadge, badgeColor = "teal", onAddToProfile }: 
         teal: "bg-teal-500/10 border-teal-500/30 text-teal-300",
         amber: "bg-amber-500/10 border-amber-500/30 text-amber-300",
         emerald: "bg-emerald-500/10 border-emerald-500/30 text-emerald-300",
-        purple: "bg-purple-500/10 border-purple-500/30 text-purple-300",
+        sky: "bg-sky-500/10 border-sky-500/30 text-sky-300",
         rose: "bg-rose-500/10 border-rose-500/30 text-rose-300",
         blue: "bg-sky-500/10 border-sky-500/30 text-sky-300"
     }[badgeColor];
@@ -765,7 +765,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                             <Button
                                 onClick={handleActivateJellyfin}
                                 disabled={isPending}
-                                className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-md whitespace-nowrap gap-1.5"
+                                className="bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs shadow-md whitespace-nowrap gap-1.5"
                             >
                                 <Sparkles className="h-3.5 w-3.5" />
                                 Activate Instant Jellyfin Live TV
@@ -776,7 +776,7 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                                     size="sm"
                                     onClick={handleRequestAccess}
                                     disabled={isPending}
-                                    className="text-xs border-purple-500/40 text-purple-300 hover:bg-purple-500/10 whitespace-nowrap"
+                                    className="text-xs border-sky-500/40 text-sky-300 hover:bg-sky-500/10 whitespace-nowrap"
                                 >
                                     Plex Waitlist
                                 </Button>
@@ -1300,22 +1300,22 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
                 {displayedChannels.map((ch) => {
                     let specialBadge: string | undefined = undefined;
-                    let badgeColor: "teal" | "amber" | "emerald" | "purple" | "rose" | "blue" = "teal";
+                    let badgeColor: "teal" | "amber" | "emerald" | "sky" | "rose" | "blue" = "teal";
 
                     if (activeHub === "local") {
-                        specialBadge = currentMarket.isHostServer ? "⭐️ Dallas Anchor" : `📍 ${currentMarket.shortName}`;
+                        specialBadge = currentMarket.isHostServer ? "Dallas Anchor" : currentMarket.shortName;
                         badgeColor = currentMarket.isHostServer ? "amber" : "blue";
                     } else if (activeHub === "unassigned") {
-                        specialBadge = "⚠️ Needs Profile";
+                        specialBadge = "Needs Profile";
                         badgeColor = "amber";
                     } else if (activeHub === "sports") {
                         const nameLower = ch.name.toLowerCase();
                         if (nameLower.includes("redzone") || nameLower.includes("nfl network")) {
-                            specialBadge = "🏈 NFL Live";
+                            specialBadge = "NFL Live";
                             badgeColor = "rose";
                         } else if (nameLower.includes("sec") || nameLower.includes("big ten") || nameLower.includes("acc") || nameLower.includes("espnu")) {
-                            specialBadge = "🎓 NCAA Sports";
-                            badgeColor = "purple";
+                            specialBadge = "NCAA Sports";
+                            badgeColor = "sky";
                         }
                     }
 
@@ -1445,16 +1445,16 @@ export function ChannelsClient({ initialData }: ChannelsClientProps) {
                         </div>
 
                         {/* Jellyfin Guide Card */}
-                        <div className="p-4 rounded-xl border border-purple-500/20 bg-purple-500/5 space-y-2">
-                            <div className="flex items-center gap-2 font-bold text-sm text-purple-300">
+                        <div className="p-4 rounded-xl border border-sky-500/20 bg-sky-500/5 space-y-2">
+                            <div className="flex items-center gap-2 font-bold text-sm text-sky-300">
                                 <Layers className="h-4 w-4" />
-                                <span>Jellyfin & Swiftfin</span>
+                                <span>Jellyfin &amp; Swiftfin</span>
                             </div>
                             <p className="text-xs text-muted-foreground leading-relaxed">
                                 Launch Jellyfin or Swiftfin on your streaming device. Click <b className="text-foreground">Live TV</b> from the home screen dashboard to view all active tuner feeds and watch live events with direct audio/video passthrough.
                             </p>
                             <div className="pt-2 flex items-center gap-2">
-                                <Badge className="bg-purple-500/15 text-purple-300 border-purple-500/30 text-[10px] font-bold">
+                                <Badge className="bg-sky-500/15 text-sky-300 border-sky-500/30 text-[10px] font-bold">
                                     Unlimited Viewer Slots
                                 </Badge>
                                 {hasJellyfinState && (

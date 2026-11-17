@@ -2,7 +2,7 @@ import { Loader2, Sparkles } from "lucide-react";
 
 export default function BetaLoading() {
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center space-y-4">
+    <div className="min-h-dvh bg-background flex flex-col items-center justify-center space-y-4">
       <div className="flex items-center gap-2 animate-pulse mb-4">
         <Sparkles className="h-10 w-10 text-primary" />
       </div>

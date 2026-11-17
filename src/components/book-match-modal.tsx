@@ -375,9 +375,9 @@ export function BookMatchModal({
                             }}
                           />
                         ) : isAudiobook ? (
-                          <Headphones className="h-5 w-5 text-zinc-600" />
+                          <Headphones className="h-5 w-5 text-zinc-400" />
                         ) : (
-                          <BookOpen className="h-5 w-5 text-zinc-600" />
+                          <BookOpen className="h-5 w-5 text-zinc-400" />
                         )}
                       </div>
 
@@ -400,7 +400,7 @@ export function BookMatchModal({
                             variant="outline"
                             className={`text-[9px] px-1 py-0 h-4 uppercase ${
                               sug.source === "database"
-                                ? "border-purple-500/30 text-purple-400 bg-purple-500/10"
+                                ? "border-emerald-500/30 text-emerald-400 bg-emerald-500/10"
                                 : sug.source === "ai"
                                 ? "border-amber-500/30 text-amber-400 bg-amber-500/10"
                                 : "border-blue-500/30 text-blue-400 bg-blue-500/10"

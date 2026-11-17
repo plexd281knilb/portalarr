@@ -56,7 +56,7 @@ const CATEGORY_ICONS: Record<string, React.ReactNode> = {
     "Subtitles": <Captions className="h-3.5 w-3.5 text-pink-400" />,
     "Notifications": <BellRing className="h-3.5 w-3.5 text-blue-400" />,
     "Stats": <BarChart3 className="h-3.5 w-3.5 text-emerald-400" />,
-    "Ebooks": <BookOpen className="h-3.5 w-3.5 text-purple-400" />,
+    "Ebooks": <BookOpen className="h-3.5 w-3.5 text-emerald-400" />,
 };
 
 export default function FeatureVotingPoll({ isAdmin = false }: { isAdmin?: boolean }) {
@@ -366,7 +366,7 @@ export default function FeatureVotingPoll({ isAdmin = false }: { isAdmin?: boole
                                     : "border-border/60 hover:bg-zinc-800 text-muted-foreground hover:text-foreground"
                             }`}
                         >
-                            <Sparkles className="h-3.5 w-3.5 text-purple-400" />
+                            <Sparkles className="h-3.5 w-3.5 text-amber-400" />
                             Newest
                         </Button>
 

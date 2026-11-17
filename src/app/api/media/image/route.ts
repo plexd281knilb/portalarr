@@ -4,10 +4,11 @@ import { getJwtSecret } from "@/lib/auth-secret";
 import prisma from "@/lib/prisma";
 import { decryptData } from "@/lib/encryption";
 import { getPlexServers, resolveWorkingPlexServerConnection } from "@/lib/plex";
+import { escapeHtml, sanitizeSvgContent } from "@/lib/security";
 
 function generateFallbackPosterSvg(title: string, year: string): string {
     const cleanTitle = (title || "Plex Media").slice(0, 36);
-    const cleanYear = year ? `(${year})` : "";
+    const cleanYear = year ? `(${String(year).slice(0, 12)})` : "";
     return `<svg width="600" height="900" viewBox="0 0 600 900" xmlns="http://www.w3.org/2000/svg">
         <defs>
             <linearGradient id="posterBg" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -31,8 +32,8 @@ function generateFallbackPosterSvg(title: string, year: string): string {
             <polygon points="28,22 48,35 28,48" fill="#f59e0b" stroke="none" />
         </g>
         <rect x="80" y="540" width="440" height="2" fill="url(#accentGrad)" opacity="0.7" />
-        <text x="300" y="600" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="26" fill="#f8fafc" text-anchor="middle">${cleanTitle.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")}</text>
-        ${cleanYear ? `<text x="300" y="640" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="700" font-size="18" fill="#94a3b8" text-anchor="middle">${cleanYear}</text>` : ""}
+        <text x="300" y="600" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="26" fill="#f8fafc" text-anchor="middle">${escapeHtml(cleanTitle)}</text>
+        ${cleanYear ? `<text x="300" y="640" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="700" font-size="18" fill="#94a3b8" text-anchor="middle">${escapeHtml(cleanYear)}</text>` : ""}
         <text x="300" y="810" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="800" font-size="12" fill="#94a3b8" text-anchor="middle" letter-spacing="3">DOMSHOMELAB MEDIA</text>
     </svg>`;
 }
@@ -108,10 +109,17 @@ async function tryFetchImage(url: string, headers: Record<string, string> = {}, 
             if (contentType.startsWith("image/") || contentType.includes("octet-stream")) {
                 const buffer = await res.arrayBuffer();
                 if (buffer.byteLength > 200) {
-                    return new NextResponse(Buffer.from(buffer), {
+                    const outType = contentType.startsWith("image/") ? contentType : "image/jpeg";
+                    const isSvg = outType.toLowerCase().includes("svg");
+                    const payload = isSvg
+                        ? Buffer.from(sanitizeSvgContent(Buffer.from(buffer).toString("utf-8")), "utf-8")
+                        : Buffer.from(buffer);
+                    return new NextResponse(payload, {
                         headers: {
-                            "Content-Type": contentType.startsWith("image/") ? contentType : "image/jpeg",
-                            "Cache-Control": "public, max-age=86400, stale-while-revalidate=43200"
+                            "Content-Type": outType,
+                            "Cache-Control": "private, max-age=3600",
+                            "X-Content-Type-Options": "nosniff",
+                            ...(isSvg ? { "Content-Security-Policy": "sandbox; default-src 'none'" } : {})
                         }
                     });
                 }
@@ -429,7 +437,9 @@ export async function GET(req: NextRequest) {
         return new NextResponse(svg, {
             headers: {
                 "Content-Type": "image/svg+xml",
-                "Cache-Control": "public, max-age=86400"
+                "Content-Security-Policy": "sandbox; default-src 'none'",
+                "X-Content-Type-Options": "nosniff",
+                "Cache-Control": "private, max-age=3600"
             }
         });
 
@@ -438,7 +448,9 @@ export async function GET(req: NextRequest) {
         return new NextResponse(svg, {
             headers: {
                 "Content-Type": "image/svg+xml",
-                "Cache-Control": "public, max-age=3600"
+                "Content-Security-Policy": "sandbox; default-src 'none'",
+                "X-Content-Type-Options": "nosniff",
+                "Cache-Control": "private, no-store"
             }
         });
     }

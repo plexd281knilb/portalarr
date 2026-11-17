@@ -7,18 +7,16 @@ async function getAdaptiveCookieOptions(customMaxAge?: number) {
   let isSecure = process.env.NODE_ENV === "production";
   try {
     const h = await headers();
-    const proto = h.get("x-forwarded-proto");
-    const referer = h.get("referer");
-    const host = h.get("host") || "";
+    const proto = (h.get("x-forwarded-proto") || "").split(",")[0].trim().toLowerCase();
+    const host = (h.get("host") || "").trim().toLowerCase();
+    const isLocalHost = /^(localhost|127\.0\.0\.1|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)(:|$)/.test(host);
 
-    if (proto === "http" || referer?.startsWith("http://")) {
-      isSecure = false;
-    } else if (proto === "https" || referer?.startsWith("https://")) {
+    if (proto === "https") {
       isSecure = true;
-    } else if (/^(localhost|127\.0\.0\.1|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/.test(host)) {
-      if (proto !== "https" && !referer?.startsWith("https://")) {
-        isSecure = false;
-      }
+    } else if (isLocalHost && proto !== "https") {
+      isSecure = false;
+    } else if (proto === "http" && process.env.NODE_ENV !== "production") {
+      isSecure = false;
     }
   } catch {
     // In contexts where headers() cannot be read, fallback safely

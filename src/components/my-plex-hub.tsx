@@ -228,7 +228,7 @@ export default function MyPlexHub() {
                                                         }}
                                                     />
                                                 )}
-                                                <div className="absolute inset-0 flex items-center justify-center text-muted-foreground/40 bg-muted/10">
+                                                <div className="absolute inset-0 flex items-center justify-center text-muted-foreground/70 bg-muted/10">
                                                     <Film className="h-6 w-6" />
                                                 </div>
                                                 <div className="absolute bottom-1 right-1 p-1 rounded-full bg-black/70 backdrop-blur-xs z-20">
@@ -246,7 +246,7 @@ export default function MyPlexHub() {
                                                         <Activity className="h-3 w-3 mr-1 animate-pulse" /> LIVE NOW
                                                     </Badge>
                                                     <Badge variant="outline" className={`text-[10px] ${
-                                                        stream.serverType === "JELLYFIN" ? "bg-purple-500/10 text-purple-400 border-purple-500/30 font-semibold" :
+                                                        stream.serverType === "JELLYFIN" ? "bg-sky-500/10 text-sky-400 border-sky-500/30 font-semibold" :
                                                         stream.serverType === "EMBY" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-semibold" :
                                                         "text-muted-foreground"
                                                     }`}>
@@ -390,9 +390,9 @@ export default function MyPlexHub() {
 
                 <div className="p-3.5 rounded-xl bg-[#121218]/80 border border-border/40 backdrop-blur-md space-y-1">
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
-                        <Tv className="h-3.5 w-3.5 text-purple-400" /> Episodes Watched
+                        <Tv className="h-3.5 w-3.5 text-amber-400" /> Episodes Watched
                     </div>
-                    <div className="text-xl font-bold tracking-tight text-purple-400">
+                    <div className="text-xl font-bold tracking-tight text-amber-400 tabular-nums">
                         {stats.episodesWatched || 0}
                     </div>
                 </div>
@@ -433,7 +433,7 @@ export default function MyPlexHub() {
                                             }}
                                         />
                                     )}
-                                    <div className="absolute inset-0 flex items-center justify-center text-muted-foreground/40 bg-muted/10">
+                                    <div className="absolute inset-0 flex items-center justify-center text-muted-foreground/70 bg-muted/10">
                                         <Film className="h-6 w-6" />
                                     </div>
                                     <div className="absolute top-1.5 right-1.5">
@@ -678,7 +678,7 @@ export default function MyPlexHub() {
                                                     </Badge>
                                                 )}
                                                 {srv.tautulli && (
-                                                    <Badge variant="outline" className="text-[9px] font-semibold bg-purple-500/10 text-purple-400 border-purple-500/30">
+                                                    <Badge variant="outline" className="text-[9px] font-semibold bg-sky-500/10 text-sky-400 border-sky-500/30">
                                                         Stream Monitor
                                                     </Badge>
                                                 )}

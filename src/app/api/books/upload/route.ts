@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
 
     let payload;
     try {
-        const decoded = await jwtVerify(session, getJwtSecret());
+        const decoded = await jwtVerify(session, getJwtSecret(), { algorithms: ["HS256"] });
         payload = decoded.payload;
     } catch (e) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

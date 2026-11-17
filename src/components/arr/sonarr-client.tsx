@@ -1435,7 +1435,7 @@ export default function SonarrClient({ initialInstances, initialInstancesError }
               <>
                 {releases.length === 0 ? (
                   <div className="text-center py-12 text-muted-foreground flex flex-col items-center">
-                    <XCircle className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                    <XCircle className="h-12 w-12 text-muted-foreground/70 mb-4" />
                     <p className="text-sm">No releases found.</p>
                   </div>
                 ) : (

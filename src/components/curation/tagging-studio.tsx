@@ -801,7 +801,7 @@ export function TaggingStudio() {
                                         <span>Querying library sections for {currentServer?.serverName || "server"}...</span>
                                     </div>
                                 ) : currentSections.length === 0 ? (
-                                    <span className="text-xs text-slate-500 italic py-1">No library sections found on this server.</span>
+                                    <span className="text-xs text-slate-400 py-1">No library sections found on this server.</span>
                                 ) : (
                                     currentSections.map((sec: any) => {
                                         const isSelected = String(sec.key) === selectedSectionKey;
@@ -1088,7 +1088,7 @@ export function TaggingStudio() {
                                                         </Badge>
                                                     ))
                                                 ) : (
-                                                    <span className="text-[11px] text-slate-400 italic px-1">No libraries active (Tagging paused)</span>
+                                                    <span className="text-[11px] text-slate-400 px-1">No libraries active (Tagging paused)</span>
                                                 )}
                                                 {excludedSections.length > 0 && (
                                                     <Badge
@@ -1520,8 +1520,8 @@ export function TaggingStudio() {
                                     <p className="text-xs text-slate-400">Fetching library media content advisories...</p>
                                 </div>
                             ) : filteredAdvisories.length === 0 ? (
-                                <div className="p-12 text-center space-y-2 text-slate-500">
-                                    <Shield className="h-8 w-8 mx-auto text-slate-600" />
+                                <div className="p-12 text-center space-y-2 text-slate-400">
+                                    <Shield className="h-8 w-8 mx-auto text-slate-400" />
                                     {searchQuery ? (
                                         <p className="text-xs">No media items matching &quot;{searchQuery}&quot; found in loaded library.</p>
                                     ) : (
@@ -1534,7 +1534,7 @@ export function TaggingStudio() {
                                         <div key={item.ratingKey} className="p-3.5 hover:bg-slate-800/40 transition-colors flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                                             <div className="space-y-1 min-w-0 max-w-full">
                                                 <div className="flex items-center gap-2 flex-wrap">
-                                                    <span className="font-bold text-xs text-white truncate max-w-[200px] xs:max-w-[300px] sm:max-w-[420px]" title={item.title}>{item.title}</span>
+                                                    <span className="font-bold text-xs text-white truncate max-w-[220px] sm:max-w-[420px]" title={item.title}>{item.title}</span>
                                                     {item.year && (
                                                         <span className="text-[10px] text-slate-400">({item.year})</span>
                                                     )}
@@ -1545,7 +1545,7 @@ export function TaggingStudio() {
                                                     )}
                                                 </div>
                                                 {item.advisory?.summary && (
-                                                    <p className="text-[11px] text-slate-400 line-clamp-1 italic">
+                                                    <p className="text-[11px] text-slate-400 line-clamp-1">
                                                         &quot;{item.advisory.summary}&quot;
                                                     </p>
                                                 )}
@@ -1578,7 +1578,7 @@ export function TaggingStudio() {
                                                         );
                                                     })
                                                 ) : (
-                                                    <span className="text-[11px] text-slate-500 italic">No advisory cached</span>
+                                                    <span className="text-[11px] text-slate-400">No advisory cached</span>
                                                 )}
                                             </div>
                                         </div>
@@ -1822,12 +1822,12 @@ export function TaggingStudio() {
                                     <div className="space-y-3">
                                         <div className="flex items-center justify-between">
                                             <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-400">
-                                                🏷️ Plex Labels ({auditData.labels.length})
+                                                Plex Labels ({auditData.labels.length})
                                             </h3>
                                         </div>
                                         <div className="p-3 bg-slate-950/70 border border-slate-800 rounded-xl space-y-2 max-h-[400px] overflow-y-auto">
                                             {auditData.labels.length === 0 ? (
-                                                <p className="text-xs text-slate-500 italic p-4 text-center">No active labels found</p>
+                                                <p className="text-xs text-slate-400 p-4 text-center">No active labels found</p>
                                             ) : (
                                                 auditData.labels.map(l => (
                                                     <div key={l.tag} className="flex items-center justify-between p-2 rounded-lg bg-slate-900/60 hover:bg-slate-900 border border-slate-800/80 text-xs">
@@ -1855,12 +1855,12 @@ export function TaggingStudio() {
                                     <div className="space-y-3">
                                         <div className="flex items-center justify-between">
                                             <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400">
-                                                🎭 Plex Genres ({auditData.genres.length})
+                                                Plex Genres ({auditData.genres.length})
                                             </h3>
                                         </div>
                                         <div className="p-3 bg-slate-950/70 border border-slate-800 rounded-xl space-y-2 max-h-[400px] overflow-y-auto">
                                             {auditData.genres.length === 0 ? (
-                                                <p className="text-xs text-slate-500 italic p-4 text-center">No active genres found</p>
+                                                <p className="text-xs text-slate-400 p-4 text-center">No active genres found</p>
                                             ) : (
                                                 auditData.genres.map(g => (
                                                     <div key={g.tag} className="flex items-center justify-between p-2 rounded-lg bg-slate-900/60 hover:bg-slate-900 border border-slate-800/80 text-xs">
@@ -1887,13 +1887,13 @@ export function TaggingStudio() {
                                     {/* Collections Column */}
                                     <div className="space-y-3">
                                         <div className="flex items-center justify-between">
-                                            <h3 className="text-xs font-bold uppercase tracking-wider text-purple-400">
-                                                📦 Collections ({auditData.collections.length})
+                                            <h3 className="text-xs font-bold uppercase tracking-wider text-sky-400">
+                                                Collections ({auditData.collections.length})
                                             </h3>
                                         </div>
                                         <div className="p-3 bg-slate-950/70 border border-slate-800 rounded-xl space-y-2 max-h-[400px] overflow-y-auto">
                                             {auditData.collections.length === 0 ? (
-                                                <p className="text-xs text-slate-500 italic p-4 text-center">No collections found</p>
+                                                <p className="text-xs text-slate-400 p-4 text-center">No collections found</p>
                                             ) : (
                                                 auditData.collections.map(c => (
                                                     <div key={c.tag} className="flex items-center justify-between p-2 rounded-lg bg-slate-900/60 hover:bg-slate-900 border border-slate-800/80 text-xs">
@@ -1970,7 +1970,7 @@ export function TaggingStudio() {
                                             >
                                                 Enable All
                                             </Button>
-                                            <span className="text-slate-600">•</span>
+                                            <span className="text-slate-400">•</span>
                                             <Button
                                                 type="button"
                                                 size="sm"
@@ -2014,7 +2014,7 @@ export function TaggingStudio() {
                                                             <Badge className={`text-[10px] font-bold ${
                                                                 enabled ? "bg-emerald-600 text-white" : "bg-slate-800 text-slate-400 border border-slate-700"
                                                             }`}>
-                                                                {enabled ? "🟢 ACTIVE" : "⚪ EXCLUDED"}
+                                                                {enabled ? "Active" : "Excluded"}
                                                             </Badge>
                                                             <Switch
                                                                 checked={enabled}
@@ -2026,7 +2026,7 @@ export function TaggingStudio() {
                                             })}
                                         </div>
                                     ) : (
-                                        <p className="text-xs text-slate-500 italic py-1">No library sections loaded for this server.</p>
+                                        <p className="text-xs text-slate-400 py-1">No library sections loaded for this server.</p>
                                     )}
                                 </div>
                             );

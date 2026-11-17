@@ -309,6 +309,18 @@ export async function toggleLinkedEmailCategoryAction(
             return { success: false, error: "Linked email record not found or access denied." };
         }
 
+        const ALLOWED_LINKED_EMAIL_CATEGORIES = new Set([
+            "receiveSubscriptionReminders",
+            "receiveAnnouncements",
+            "receiveMediaReady",
+            "receiveRequestApproved",
+            "receiveNewContent",
+            "receiveSupportTickets",
+        ]);
+        if (!ALLOWED_LINKED_EMAIL_CATEGORIES.has(category)) {
+            return { success: false, error: "Invalid notification category." };
+        }
+
         const updated = await prisma.userLinkedEmail.update({
             where: { id },
             data: {

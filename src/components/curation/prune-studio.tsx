@@ -1940,7 +1940,7 @@ export function PruneStudio() {
                                         <span>Querying library sections for {currentServer?.serverName || "server"}...</span>
                                     </div>
                                 ) : currentSections.length === 0 ? (
-                                    <span className="text-xs text-slate-500 italic py-1">No library sections found on this server.</span>
+                                    <span className="text-xs text-slate-400 py-1">No library sections found on this server.</span>
                                 ) : (
                                     currentSections.map((sec: any) => {
                                         const isSelected = String(sec.key) === selectedSectionKey;
@@ -2239,7 +2239,7 @@ export function PruneStudio() {
                                                         </Badge>
                                                     ))
                                                 ) : (
-                                                    <span className="text-[11px] text-slate-400 italic px-1">No libraries active (Pruning paused)</span>
+                                                    <span className="text-[11px] text-slate-400 px-1">No libraries active (Pruning paused)</span>
                                                 )}
                                                 {excludedSections.length > 0 && (
                                                     <Badge
@@ -2483,7 +2483,7 @@ export function PruneStudio() {
                                         value={selectedGlancesDiskId || (glancesDisks[0]?.id || "")}
                                         onValueChange={setSelectedGlancesDiskId}
                                     >
-                                        <SelectTrigger className="bg-slate-950 border-slate-700 text-xs h-8 min-w-[260px] text-slate-200">
+                                        <SelectTrigger className="bg-slate-950 border-slate-700 text-xs h-8 w-full sm:w-auto sm:min-w-[260px] text-slate-200">
                                             <SelectValue placeholder="Select Glances Storage Array..." />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -2832,7 +2832,7 @@ export function PruneStudio() {
                                                             {isSelected ? (
                                                                 <CheckSquare className="h-4 w-4 text-rose-500" />
                                                             ) : (
-                                                                <Square className="h-4 w-4 text-slate-600 hover:text-slate-400" />
+                                                                <Square className="h-4 w-4 text-slate-400 hover:text-slate-200" />
                                                             )}
                                                         </button>
                                                         <div className="space-y-1 min-w-0">
@@ -3481,7 +3481,7 @@ export function PruneStudio() {
                             <div className="space-y-1.5 p-3 bg-slate-950/60 rounded-xl border border-slate-800 flex flex-col justify-between min-w-0">
                                 <div className="flex items-center justify-between gap-1">
                                     <Label className="text-xs text-slate-300 font-semibold flex items-center gap-1.5 min-w-0">
-                                        <Tv className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
+                                        <Tv className="h-3.5 w-3.5 text-sky-400 shrink-0" />
                                         <span className="truncate">TV Seasons:</span>
                                     </Label>
                                     <Switch checked={simEvaluateSeasons} onCheckedChange={setSimEvaluateSeasons} className="shrink-0" />
@@ -3712,16 +3712,16 @@ export function PruneStudio() {
                                                                             </Badge>
                                                                         ) : c.lane === "watched" ? (
                                                                             <Badge className="bg-amber-950 text-amber-300 border-amber-500/40 text-[10px] font-mono py-0 px-1.5 font-bold">
-                                                                                👁️ Lane 1: Oldest Watched
+                                                                                Lane 1: Oldest Watched
                                                                             </Badge>
                                                                         ) : null}
                                                                         {c.seasonNumber !== undefined && (
-                                                                            <Badge className="bg-indigo-950 text-indigo-300 border-indigo-500/40 text-[10px] font-mono py-0 px-1.5 font-bold">
+                                                                            <Badge className="bg-sky-950 text-sky-300 border-sky-500/40 text-[10px] font-mono py-0 px-1.5 font-bold">
                                                                                 Season {c.seasonNumber}
                                                                             </Badge>
                                                                         )}
                                                                         {c.episodeCount !== undefined && (
-                                                                            <Badge variant="outline" className="text-[10px] py-0 px-1.5 border-indigo-700/50 text-indigo-300 bg-indigo-950/20">
+                                                                            <Badge variant="outline" className="text-[10px] py-0 px-1.5 border-sky-700/50 text-sky-300 bg-sky-950/20">
                                                                                 {c.episodeCount} eps
                                                                             </Badge>
                                                                         )}
@@ -3731,8 +3731,8 @@ export function PruneStudio() {
                                                                             </span>
                                                                         )}
                                                                         {c.serverSources && c.serverSources.length > 1 ? (
-                                                                            <Badge variant="outline" className="text-[10px] py-0 px-1.5 border-purple-500/50 text-purple-300 bg-purple-950/40 font-bold" title={c.serverSources.map((s: any) => `${s.serverName}: ${s.viewCount} plays`).join(' • ')}>
-                                                                                🔗 {c.serverSources.length} servers linked
+                                                                            <Badge variant="outline" className="text-[10px] py-0 px-1.5 border-sky-500/50 text-sky-300 bg-sky-950/40 font-bold" title={c.serverSources.map((s: any) => `${s.serverName}: ${s.viewCount} plays`).join(' • ')}>
+                                                                                {c.serverSources.length} servers linked
                                                                             </Badge>
                                                                         ) : c.serverName ? (
                                                                             <Badge variant="outline" className="text-[10px] py-0 px-1.5 border-slate-700 text-slate-400">
@@ -3786,7 +3786,7 @@ export function PruneStudio() {
                                                                 {c.viewCount > 0 && lastWatchedDateStr ? (
                                                                     <span>
                                                                         Watched: <strong className="text-white">{lastWatchedDateStr}</strong> ({daysSinceViewed}d ago)
-                                                                        {c.watchedOnServerName ? <span className="text-purple-300 text-[10px] ml-1">[{c.watchedOnServerName}]</span> : null}
+                                                                        {c.watchedOnServerName ? <span className="text-sky-300 text-[10px] ml-1">[{c.watchedOnServerName}]</span> : null}
                                                                     </span>
                                                                 ) : (
                                                                     <Badge className="bg-cyan-950/80 text-cyan-300 border-cyan-600/40 text-[10px] py-0 px-1.5">
@@ -4160,7 +4160,7 @@ export function PruneStudio() {
                                 <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 flex items-center justify-between">
                                     <div className="space-y-0.5">
                                         <span className="text-xs font-bold text-slate-200 block flex items-center gap-1.5">
-                                            <Tv className="h-3.5 w-3.5 text-indigo-400" /> Season-Level TV Pruning
+                                            <Tv className="h-3.5 w-3.5 text-sky-400" /> Season-Level TV Pruning
                                         </span>
                                         <p className="text-[10px] text-slate-400">
                                             {pruneEvaluateSeasonsSetting ? "Evaluates and stages individual inactive TV seasons instead of wiping whole series." : "Evaluates TV series at the whole show level."}
@@ -4400,7 +4400,7 @@ export function PruneStudio() {
                         {/* Artwork Backup Vault Stats */}
                         <Card className="bg-slate-900/90 border-slate-800 shadow-xl p-6 space-y-4">
                             <CardTitle className="text-base font-bold text-white flex items-center gap-2">
-                                <Archive className="h-5 w-5 text-purple-400" />
+                                <Archive className="h-5 w-5 text-sky-400" />
                                 <span>Artwork Backup Vault Health</span>
                             </CardTitle>
                             <p className="text-xs text-slate-400">
@@ -4408,20 +4408,20 @@ export function PruneStudio() {
                             </p>
 
                             <div className="space-y-3 font-mono text-xs">
-                                <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
+                                <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-2 tabular-nums">
                                     <div className="flex justify-between">
                                         <span className="text-slate-400">Original Posters Backed Up:</span>
-                                        <strong className="text-purple-300">{vaultStats?.backupCount || 0} files</strong>
+                                        <strong className="text-sky-300">{vaultStats?.backupCount || 0} files</strong>
                                     </div>
                                     <div className="flex justify-between">
                                         <span className="text-slate-400">Vault Disk Usage:</span>
-                                        <strong className="text-purple-300">
+                                        <strong className="text-sky-300">
                                             {vaultStats?.backupBytes ? `${(vaultStats.backupBytes / (1024 * 1024)).toFixed(1)} MB` : "0 MB"}
                                         </strong>
                                     </div>
                                     <div className="flex justify-between">
                                         <span className="text-slate-400">Custom Badges Vault:</span>
-                                        <strong className="text-purple-300">{vaultStats?.badgeCount || 0} badges</strong>
+                                        <strong className="text-sky-300">{vaultStats?.badgeCount || 0} badges</strong>
                                     </div>
                                 </div>
                             </div>
@@ -4640,7 +4640,7 @@ export function PruneStudio() {
                                             >
                                                 Enable All
                                             </Button>
-                                            <span className="text-slate-600">•</span>
+                                            <span className="text-slate-400">•</span>
                                             <Button
                                                 type="button"
                                                 size="sm"
@@ -4684,7 +4684,7 @@ export function PruneStudio() {
                                                             <Badge className={`text-[10px] font-bold ${
                                                                 enabled ? "bg-emerald-600 text-white" : "bg-slate-800 text-slate-400 border border-slate-700"
                                                             }`}>
-                                                                {enabled ? "🟢 ACTIVE" : "⚪ EXCLUDED"}
+                                                                {enabled ? "Active" : "Excluded"}
                                                             </Badge>
                                                             <Switch
                                                                 checked={enabled}
@@ -4696,7 +4696,7 @@ export function PruneStudio() {
                                             })}
                                         </div>
                                     ) : (
-                                        <p className="text-xs text-slate-500 italic py-1">No library sections loaded for this server.</p>
+                                        <p className="text-xs text-slate-400 py-1">No library sections loaded for this server.</p>
                                     )}
                                 </div>
                             );

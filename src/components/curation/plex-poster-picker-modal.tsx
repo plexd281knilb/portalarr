@@ -236,13 +236,13 @@ export function PlexPosterPickerModal({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="w-[96vw] sm:max-w-5xl max-h-[85vh] bg-slate-950 border-slate-800 text-white flex flex-col p-4 sm:p-6 overflow-hidden shadow-2xl shadow-purple-950/40">
+            <DialogContent className="w-[96vw] sm:max-w-5xl max-h-[85vh] bg-slate-950 border-slate-800 text-white flex flex-col p-4 sm:p-6 overflow-hidden shadow-2xl">
                 {/* Header */}
                 <DialogHeader className="pb-3 border-b border-slate-800/80 shrink-0">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div>
                             <DialogTitle className="text-lg font-black flex items-center gap-2 text-white">
-                                <Sparkles className="h-5 w-5 text-purple-400" />
+                                <Sparkles className="h-5 w-5 text-amber-400" />
                                 <span>Pull Real Poster &amp; Telemetry from Plex</span>
                             </DialogTitle>
                             <DialogDescription className="text-xs text-slate-400 flex items-center gap-1.5 mt-0.5">
@@ -256,7 +256,7 @@ export function PlexPosterPickerModal({
                                 {servers.length > 1 && (
                                     <Select value={currentServerId} onValueChange={handleServerChange}>
                                         <SelectTrigger className="h-8 bg-slate-900 border-slate-800 text-xs w-[160px] text-slate-200">
-                                            <HardDrive className="h-3.5 w-3.5 text-purple-400 mr-1 shrink-0" />
+                                            <HardDrive className="h-3.5 w-3.5 text-sky-400 mr-1 shrink-0" />
                                             <SelectValue placeholder="Select Server" />
                                         </SelectTrigger>
                                         <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
@@ -295,14 +295,14 @@ export function PlexPosterPickerModal({
 
                 {/* Server Guard Rail Status Banner */}
                 {guardRail?.enabled && (
-                    <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-xl bg-purple-950/40 border border-purple-500/30 text-xs my-1 shrink-0">
+                    <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-xl bg-sky-950/40 border border-sky-500/30 text-xs my-1 shrink-0">
                         <div className="flex items-center gap-2">
                             <ShieldCheck className="h-4 w-4 text-emerald-400 shrink-0" />
                             <span className="font-bold text-white">
-                                {guardRail.customBadgeLabel || `🛡️ Guard Rails Active: Max ${guardRail.maxRating}`}
+                                {guardRail.customBadgeLabel || `Guard Rails Active: Max ${guardRail.maxRating}`}
                             </span>
                             <Badge variant="outline" className="text-[10px] border-emerald-500/50 text-emerald-300 bg-emerald-950/60 font-bold px-1.5 py-0">
-                                {guardRail.preset === 'kid_safe' ? '👶 Kid-Safe' : guardRail.preset === 'family' ? '👨‍👩‍👧‍👦 Family-Safe' : guardRail.preset === 'teen' ? '🧑‍🎤 Teen' : 'Strict Policy'}
+                                {guardRail.preset === 'kid_safe' ? 'Kid-Safe' : guardRail.preset === 'family' ? 'Family-Safe' : guardRail.preset === 'teen' ? 'Teen' : 'Strict Policy'}
                             </Badge>
                         </div>
                         {blockedCount > 0 && (
@@ -336,7 +336,7 @@ export function PlexPosterPickerModal({
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             placeholder={`Search ${activeSection?.title || 'titles'} (e.g. Lord of the Rings, Dune, Inception)...`}
-                            className="bg-slate-900 border-slate-800 pl-10 pr-9 text-xs text-slate-100 placeholder:text-slate-500 rounded-xl h-9 focus-visible:ring-purple-500"
+                            className="bg-slate-900 border-slate-800 pl-10 pr-9 text-xs text-slate-100 placeholder:text-slate-500 rounded-xl h-9 focus-visible:ring-amber-500"
                         />
                         {searchQuery && (
                             <button
@@ -356,7 +356,7 @@ export function PlexPosterPickerModal({
                             onClick={() => setQualityFilter("all")}
                             className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all border ${
                                 qualityFilter === "all"
-                                    ? "bg-purple-600 text-white border-purple-500 shadow-sm"
+                                    ? "bg-primary text-primary-foreground border-primary/80 shadow-sm"
                                     : "bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800 hover:text-slate-200"
                             }`}
                         >
@@ -378,8 +378,8 @@ export function PlexPosterPickerModal({
                             onClick={() => setQualityFilter("hdr")}
                             className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all border flex items-center gap-1 ${
                                 qualityFilter === "hdr"
-                                    ? "bg-purple-900/90 text-purple-200 border-purple-500 shadow-sm"
-                                    : "bg-slate-900 text-purple-300 border-slate-800 hover:bg-slate-800"
+                                    ? "bg-sky-900/90 text-sky-200 border-sky-500 shadow-sm"
+                                    : "bg-slate-900 text-sky-300 border-slate-800 hover:bg-slate-800"
                             }`}
                         >
                             <span>DV / HDR</span>
@@ -404,7 +404,7 @@ export function PlexPosterPickerModal({
                         <div className="shrink-0">
                             <Select value={String(batchLimit)} onValueChange={(val) => setBatchLimit(Number(val))}>
                                 <SelectTrigger className="h-9 bg-slate-900 border-slate-800 text-xs w-[110px] text-slate-300">
-                                    <Filter className="h-3 w-3 text-purple-400 mr-1 shrink-0" />
+                                    <Filter className="h-3 w-3 text-sky-400 mr-1 shrink-0" />
                                     <SelectValue placeholder="Show" />
                                 </SelectTrigger>
                                 <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
@@ -440,12 +440,12 @@ export function PlexPosterPickerModal({
                 <div className="flex-1 overflow-y-auto pr-1 -mr-1 min-h-[300px]">
                     {loading && items.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-56 gap-2 text-slate-400">
-                            <Loader2 className="h-8 w-8 animate-spin text-purple-400" />
+                            <Loader2 className="h-8 w-8 animate-spin text-amber-400" />
                             <p className="text-xs">Fetching library items and stream telemetry from Plex...</p>
                         </div>
                     ) : filteredItems.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center h-56 gap-2 text-slate-500 text-xs">
-                            <Film className="h-9 w-9 text-slate-600" />
+                        <div className="flex flex-col items-center justify-center h-56 gap-2 text-slate-400 text-xs">
+                            <Film className="h-9 w-9 text-slate-400" />
                             <p>No matching titles found with the active search or filters.</p>
                             {(searchQuery || qualityFilter !== "all") && (
                                 <Button
@@ -508,8 +508,8 @@ export function PlexPosterPickerModal({
                                             it.isBlockedByGuardRail
                                                 ? 'border-rose-900/60 bg-slate-950/80 opacity-70 cursor-not-allowed'
                                                 : isSelected 
-                                                    ? 'border-purple-500 ring-2 ring-purple-500/60 shadow-xl shadow-purple-950/70 cursor-pointer bg-slate-900/90' 
-                                                    : 'border-slate-800/90 hover:border-purple-500/50 hover:shadow-lg hover:shadow-black/50 cursor-pointer bg-slate-900/90 hover:bg-slate-800/90'
+                                                    ? 'border-amber-500 ring-2 ring-amber-500/60 shadow-xl cursor-pointer bg-slate-900/90' 
+                                                    : 'border-slate-800/90 hover:border-amber-500/50 hover:shadow-lg hover:shadow-black/50 cursor-pointer bg-slate-900/90 hover:bg-slate-800/90'
                                         }`}
                                     >
                                         {/* Poster Container */}
@@ -561,7 +561,7 @@ export function PlexPosterPickerModal({
                                                 ) : null}
 
                                                 {hasDv ? (
-                                                    <span className="bg-purple-950/95 text-purple-300 border border-purple-500/70 text-[8px] font-black px-1.5 py-0.2 rounded shadow-md tracking-wider">
+                                                    <span className="bg-teal-950/95 text-teal-300 border border-teal-500/70 text-[8px] font-black px-1.5 py-0.2 rounded shadow-md tracking-wider">
                                                         DOLBY VISION
                                                     </span>
                                                 ) : hasHdr ? (
@@ -590,15 +590,15 @@ export function PlexPosterPickerModal({
                                             {audio && (
                                                 <div className="absolute bottom-1.5 right-1.5">
                                                     <span className="bg-slate-950/90 text-slate-300 border border-slate-700 text-[7.5px] font-bold px-1 py-0.2 rounded shadow flex items-center gap-0.5">
-                                                        <Volume2 className="h-2 w-2 text-indigo-400" />
+                                                        <Volume2 className="h-2 w-2 text-sky-400" />
                                                         <span>{audio}</span>
                                                     </span>
                                                 </div>
                                             )}
 
                                             {/* Hover Selection Overlay */}
-                                            <div className="absolute inset-0 bg-purple-950/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center p-2 text-center pointer-events-none">
-                                                <span className="bg-purple-600 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg shadow-lg flex items-center gap-1.5">
+                                            <div className="absolute inset-0 bg-slate-950/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center p-2 text-center pointer-events-none">
+                                                <span className="bg-primary text-primary-foreground text-[11px] font-bold px-3 py-1.5 rounded-lg shadow-lg flex items-center gap-1.5">
                                                     <Check className="h-3.5 w-3.5" /> Select Poster
                                                 </span>
                                             </div>
@@ -607,7 +607,7 @@ export function PlexPosterPickerModal({
                                         {/* Card Body / Metadata Footer */}
                                         <div className="p-2.5 flex flex-col justify-between flex-1 gap-1">
                                             <div>
-                                                <p className="text-xs font-bold text-slate-100 line-clamp-2 min-h-[32px] group-hover:text-purple-300 transition-colors leading-tight">
+                                                <p className="text-xs font-bold text-slate-100 line-clamp-2 min-h-[32px] group-hover:text-amber-300 transition-colors leading-tight">
                                                     {it.title}
                                                 </p>
                                                 {edition && (

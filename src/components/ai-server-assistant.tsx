@@ -62,12 +62,12 @@ import {
     ChevronRight,
     Clock,
     Flame,
-    BookOpen
+    BookOpen,
+    Lightbulb
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
-import rehypeRaw from "rehype-raw";
 import { askAiServerMasterAction, getUserAiDiagnosticSnapshotAction } from "@/app/actions";
 import { UserDiagnosticSnapshot, AiChatMessage } from "@/lib/ai-server-assistant-types";
 import PlexSetupGuides from "@/components/plex-setup-guides";
@@ -200,7 +200,7 @@ export function AiServerAssistant() {
                     ...updatedHistory,
                     {
                         role: "assistant",
-                        content: `⚠️ **Diagnostic Notice:** ${res.error || "Could not retrieve response from AI Master. Please verify your connection or try again."}`,
+                        content: `**Diagnostic Notice:** ${res.error || "Could not retrieve response from AI Master. Please verify your connection or try again."}`,
                         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                     }
                 ]);
@@ -210,7 +210,7 @@ export function AiServerAssistant() {
                 ...updatedHistory,
                 {
                     role: "assistant",
-                    content: `⚠️ **Error:** ${err.message || "Failed to query server master"}`,
+                    content: `**Error:** ${err.message || "Failed to query server master"}`,
                     timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                 }
             ]);
@@ -450,7 +450,7 @@ export function AiServerAssistant() {
                                         variant="outline"
                                         size="sm"
                                         onClick={() => setIsOpen(true)}
-                                        className="h-7 text-xs border-purple-500/30 text-purple-300 hover:bg-purple-950/30 px-2.5 rounded-lg flex-1 sm:flex-none justify-center"
+                                        className="h-7 text-xs border-sky-500/30 text-sky-300 hover:bg-sky-950/30 px-2.5 rounded-lg flex-1 sm:flex-none justify-center"
                                     >
                                         Inspect Stream ➔
                                     </Button>
@@ -459,15 +459,15 @@ export function AiServerAssistant() {
                         ) : (
                             <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.05] flex items-center justify-between gap-2 text-xs text-muted-foreground">
                                 <div className="flex items-center gap-2 truncate">
-                                    <span className="h-2 w-2 rounded-full bg-cyan-400 shrink-0" />
-                                    <span className="truncate">💡 Need help? Click any issue chip above or type your question for instant device &amp; playback solutions.</span>
+                                    <Lightbulb className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                                    <span className="truncate">Need help? Click any issue chip above or type your question for instant device &amp; playback solutions.</span>
                                 </div>
                                 <Button
                                     type="button"
                                     variant="ghost"
                                     size="sm"
                                     onClick={() => setIsOpen(true)}
-                                    className="h-7 text-xs text-purple-400 hover:text-purple-300 hover:bg-purple-950/20 shrink-0 font-semibold"
+                                    className="h-7 text-xs text-amber-400 hover:text-amber-300 hover:bg-amber-950/20 shrink-0 font-semibold"
                                 >
                                     Open Full AI Assistant ➔
                                 </Button>
@@ -490,9 +490,9 @@ export function AiServerAssistant() {
                     }
                 }}
             >
-                <DialogContent className="w-[98vw] sm:max-w-4xl max-h-[92vh] h-[86vh] flex flex-col bg-[#0c0d14]/98 border-border/60 backdrop-blur-md shadow-2xl p-0 overflow-hidden text-foreground">
+                <DialogContent className="w-[98vw] sm:max-w-4xl max-h-[92dvh] h-[86dvh] flex flex-col bg-card/95 border-border backdrop-blur-md shadow-2xl p-0 overflow-hidden text-foreground">
                     {/* Top Mission Control Header */}
-                    <DialogHeader className="p-4 sm:p-5 pb-3 border-b border-border/50 bg-gradient-to-r from-slate-900/95 via-background to-slate-900/90 shrink-0">
+                    <DialogHeader className="p-4 sm:p-5 pb-3 border-b border-border/50 bg-muted/40 shrink-0">
                         <div className="flex flex-wrap items-center justify-between gap-3">
                             <div className="flex items-center gap-3 min-w-0">
                                 <div className="relative flex items-center justify-center p-2.5 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/35 shadow-sm shrink-0">
@@ -529,7 +529,7 @@ export function AiServerAssistant() {
                                     className="h-8 px-2.5 text-xs border-slate-700 bg-slate-900/60 hover:bg-slate-800 text-slate-300 hover:text-white gap-1 cursor-pointer"
                                     title="Refresh telemetry & stream snapshot"
                                 >
-                                    <RefreshCw className={`h-3.5 w-3.5 ${diagLoading ? "animate-spin text-purple-400" : "text-slate-400"}`} />
+                                    <RefreshCw className={`h-3.5 w-3.5 ${diagLoading ? "animate-spin text-amber-400" : "text-slate-400"}`} />
                                     <span className="hidden sm:inline">Refresh</span>
                                 </Button>
                             </div>
@@ -542,14 +542,14 @@ export function AiServerAssistant() {
                                 onClick={() => setActiveTab("chat")}
                                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
                                     activeTab === "chat"
-                                        ? "bg-purple-600 text-white shadow-sm shadow-purple-950/50"
+                                        ? "bg-primary text-primary-foreground shadow-sm"
                                         : "bg-slate-900/70 text-slate-400 hover:text-slate-200 hover:bg-slate-800/80 border border-slate-800"
                                 }`}
                             >
                                 <Bot className="h-3.5 w-3.5" />
                                 <span>Diagnostic Chat</span>
                                 {messages.length > 0 && (
-                                    <span className={`text-[10px] px-1.5 py-0 rounded-full font-mono font-bold ${activeTab === "chat" ? "bg-purple-950/80 text-purple-200" : "bg-slate-800 text-slate-300"}`}>
+                                    <span className={`text-[10px] px-1.5 py-0 rounded-full font-mono font-bold ${activeTab === "chat" ? "bg-black/25 text-amber-950" : "bg-slate-800 text-slate-300"}`}>
                                         {messages.length}
                                     </span>
                                 )}
@@ -560,7 +560,7 @@ export function AiServerAssistant() {
                                 onClick={() => setActiveTab("telemetry")}
                                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
                                     activeTab === "telemetry"
-                                        ? "bg-purple-600 text-white shadow-sm shadow-purple-950/50"
+                                        ? "bg-primary text-primary-foreground shadow-sm"
                                         : "bg-slate-900/70 text-slate-400 hover:text-slate-200 hover:bg-slate-800/80 border border-slate-800"
                                 }`}
                             >
@@ -578,13 +578,13 @@ export function AiServerAssistant() {
                                 onClick={() => setActiveTab("probes")}
                                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
                                     activeTab === "probes"
-                                        ? "bg-purple-600 text-white shadow-sm shadow-purple-950/50"
+                                        ? "bg-primary text-primary-foreground shadow-sm"
                                         : "bg-slate-900/70 text-slate-400 hover:text-slate-200 hover:bg-slate-800/80 border border-slate-800"
                                 }`}
                             >
                                 <Activity className="h-3.5 w-3.5" />
                                 <span>Server Health Check</span>
-                                <span className={`text-[10px] px-1.5 py-0 rounded-full font-mono font-bold ${activeTab === "probes" ? "bg-purple-950/80 text-purple-200" : "bg-slate-800 text-slate-300"}`}>
+                                <span className={`text-[10px] px-1.5 py-0 rounded-full font-mono font-bold ${activeTab === "probes" ? "bg-black/25 text-amber-950" : "bg-slate-800 text-slate-300"}`}>
                                     {snapshot?.serversOnlineCount || snapshot?.serverNodes?.length || 4}
                                 </span>
                             </button>
@@ -594,11 +594,11 @@ export function AiServerAssistant() {
                                 onClick={() => setActiveTab("fixes")}
                                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
                                     activeTab === "fixes"
-                                        ? "bg-purple-600 text-white shadow-sm shadow-purple-950/50"
+                                        ? "bg-primary text-primary-foreground shadow-sm"
                                         : "bg-slate-900/70 text-slate-400 hover:text-slate-200 hover:bg-slate-800/80 border border-slate-800"
                                 }`}
                             >
-                                <Zap className="h-3.5 w-3.5 text-amber-400" />
+                                <Zap className={`h-3.5 w-3.5 ${activeTab === "fixes" ? "text-primary-foreground" : "text-amber-400"}`} />
                                 <span>Quick Fixes</span>
                                 {detectedIssues.length > 0 && (
                                     <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-amber-500/20 text-amber-300 border-amber-500/40">
@@ -651,9 +651,9 @@ export function AiServerAssistant() {
                                                     size="sm"
                                                     variant="ghost"
                                                     onClick={() => handleSend(`Diagnose my current stream of "${activeStream.title}" playing on ${activeStream.player}. Why is it ${activeStream.transcodeDecision} and how can I get 100% Direct Play?`)}
-                                                    className="h-6 text-[10px] px-2 text-purple-300 bg-purple-950/40 hover:bg-purple-900/60 border border-purple-500/30 gap-1 cursor-pointer"
+                                                    className="h-6 text-[10px] px-2 text-sky-300 bg-sky-950/40 hover:bg-sky-900/60 border border-sky-500/30 gap-1 cursor-pointer"
                                                 >
-                                                    <Sparkles className="h-3 w-3 text-purple-400" />
+                                                    <Sparkles className="h-3 w-3 text-sky-400" />
                                                     <span>Diagnose Stream</span>
                                                 </Button>
                                             )}
@@ -766,22 +766,22 @@ export function AiServerAssistant() {
                                                                 key={aIdx}
                                                                 className={`p-2.5 rounded-xl text-[11px] flex items-start gap-2.5 border ${
                                                                     act.action === "RADARR_SEARCH_GRAB" 
-                                                                        ? "bg-purple-950/40 border-purple-500/40 text-purple-200" 
+                                                                        ? "bg-amber-950/40 border-amber-500/40 text-amber-200" 
                                                                         : act.action === "ESCALATE_ADMIN_TICKET"
-                                                                        ? "bg-amber-950/40 border-amber-500/40 text-amber-200"
+                                                                        ? "bg-rose-950/40 border-rose-500/40 text-rose-200"
                                                                         : act.action === "BOOK_RECOMMENDATION"
-                                                                        ? "bg-pink-950/40 border-pink-500/40 text-pink-200"
-                                                                        : "bg-cyan-950/30 border-cyan-500/30 text-cyan-200"
+                                                                        ? "bg-emerald-950/40 border-emerald-500/40 text-emerald-200"
+                                                                        : "bg-sky-950/30 border-sky-500/30 text-sky-200"
                                                                 }`}
                                                             >
                                                                 {act.action === "RADARR_SEARCH_GRAB" ? (
-                                                                    <Download className="h-4 w-4 text-purple-400 shrink-0 mt-0.5" />
+                                                                    <Download className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
                                                                 ) : act.action === "ESCALATE_ADMIN_TICKET" ? (
-                                                                    <LifeBuoy className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+                                                                    <LifeBuoy className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />
                                                                 ) : act.action === "BOOK_RECOMMENDATION" ? (
-                                                                    <BookOpen className="h-4 w-4 text-pink-400 shrink-0 mt-0.5" />
+                                                                    <BookOpen className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
                                                                 ) : (
-                                                                    <Film className="h-4 w-4 text-cyan-400 shrink-0 mt-0.5" />
+                                                                    <Film className="h-4 w-4 text-sky-400 shrink-0 mt-0.5" />
                                                                 )}
                                                                 <div className="min-w-0 flex-1">
                                                                     <div className="font-semibold flex items-center justify-between gap-1.5 flex-wrap">
@@ -879,10 +879,10 @@ export function AiServerAssistant() {
 
                                                 {/* Playback Synthetic Health Probe Diagnostic Card (if any) */}
                                                 {msg.playbackProbe && msg.playbackProbe.servers && msg.playbackProbe.servers.length > 0 && (
-                                                    <div className="p-3.5 rounded-xl bg-slate-950/80 border border-purple-500/30 space-y-2.5 text-[11px]">
+                                                    <div className="p-3.5 rounded-xl bg-slate-950/80 border border-sky-500/30 space-y-2.5 text-[11px]">
                                                         <div className="flex items-center justify-between gap-2 border-b border-border/40 pb-2">
                                                             <div className="flex items-center gap-2 min-w-0">
-                                                                <PlayCircle className="h-4 w-4 text-purple-400 shrink-0" />
+                                                                <PlayCircle className="h-4 w-4 text-sky-400 shrink-0" />
                                                                 <span className="font-bold text-white truncate">Synthetic Server Playback Probe</span>
                                                                 <span className="text-[10px] text-muted-foreground">({msg.playbackProbe.operationalServers}/{msg.playbackProbe.totalServers} Online)</span>
                                                             </div>
@@ -928,10 +928,9 @@ export function AiServerAssistant() {
                                                 <div className="prose prose-invert prose-xs max-w-none text-xs leading-relaxed break-words">
                                                     <ReactMarkdown
                                                         remarkPlugins={[remarkGfm, remarkBreaks]}
-                                                        rehypePlugins={[rehypeRaw]}
                                                         components={{
                                                             h3: ({ node, ...props }) => (
-                                                                <h3 className="text-sm font-bold text-purple-300 mt-2.5 mb-1.5 flex items-center gap-1.5" {...props} />
+                                                                <h3 className="text-sm font-bold text-amber-300 mt-2.5 mb-1.5 flex items-center gap-1.5" {...props} />
                                                             ),
                                                             h4: ({ node, ...props }) => (
                                                                 <h4 className="text-xs font-bold text-cyan-300 mt-2 mb-1" {...props} />
@@ -1046,13 +1045,13 @@ export function AiServerAssistant() {
                                         value={inputQuestion}
                                         onChange={(e) => setInputQuestion(e.target.value)}
                                         placeholder="Ask for book recommendations, describe buffering, or request fixes (e.g. recommend books like Dune)..."
-                                        className="h-10 text-xs bg-slate-950 border-slate-800 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 rounded-xl"
+                                        className="h-10 text-xs bg-slate-950 border-slate-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 rounded-lg"
                                         disabled={loading}
                                     />
                                     <Button
                                         type="submit"
                                         disabled={loading || !inputQuestion.trim()}
-                                        className="h-10 px-4 bg-purple-600 hover:bg-purple-500 text-white font-semibold transition-all shadow-md shadow-purple-950/50 flex items-center gap-1.5 shrink-0 rounded-xl cursor-pointer disabled:opacity-50"
+                                        className="h-10 px-4 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition-all shadow-md flex items-center gap-1.5 shrink-0 rounded-lg cursor-pointer disabled:opacity-50"
                                     >
                                         {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                                         <span className="hidden sm:inline">Ask AI</span>
@@ -1069,10 +1068,10 @@ export function AiServerAssistant() {
                         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5">
                             {/* Primary Active Stream Card */}
                             {activeStream ? (
-                                <div className="p-4 sm:p-5 rounded-2xl bg-slate-900/90 border border-purple-500/40 space-y-4 shadow-xl">
+                                <div className="p-4 sm:p-5 rounded-xl bg-slate-900/90 border border-sky-500/40 space-y-4 shadow-xl">
                                     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
                                         <div className="flex items-center gap-2.5 min-w-0">
-                                            <div className="p-2 rounded-xl bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                                            <div className="p-2 rounded-lg bg-sky-500/20 text-sky-300 border border-sky-500/30">
                                                 <Tv className="h-5 w-5" />
                                             </div>
                                             <div className="min-w-0">
@@ -1116,17 +1115,17 @@ export function AiServerAssistant() {
                                             <span className="text-[10px] text-slate-400 block">{activeStream.streamAudioCodec ? `Stream: ${activeStream.streamAudioCodec}` : "Pass-through"}</span>
                                         </div>
 
-                                        <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 space-y-0.5">
+                                        <div className="p-3 rounded-lg bg-slate-950/60 border border-slate-800 space-y-0.5">
                                             <span className="text-[10px] text-slate-500 uppercase font-mono block">Bitrate</span>
-                                            <span className="font-bold text-purple-300">
+                                            <span className="font-bold text-sky-300 tabular-nums">
                                                 {activeStream.streamBitrate ? `${(activeStream.streamBitrate / 1000).toFixed(1)} Mbps` : "Auto"}
                                             </span>
                                             <span className="text-[10px] text-slate-400 block">Bandwidth</span>
                                         </div>
 
-                                        <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 space-y-0.5">
+                                        <div className="p-3 rounded-lg bg-slate-950/60 border border-slate-800 space-y-0.5">
                                             <span className="text-[10px] text-slate-500 uppercase font-mono block">Processing Speed</span>
-                                            <span className="font-bold text-emerald-400">{activeStream.transcodeSpeed || "1.0x (Direct)"}</span>
+                                            <span className="font-bold text-emerald-400 tabular-nums">{activeStream.transcodeSpeed || "1.0x (Direct)"}</span>
                                             <span className="text-[10px] text-slate-400 block">{activeStream.serverName || "Main Server"}</span>
                                         </div>
                                     </div>
@@ -1142,7 +1141,7 @@ export function AiServerAssistant() {
                                                 setActiveTab("chat");
                                                 handleSend(`Analyze my current stream: "${activeStream.title}" playing on ${activeStream.player}. Why is it ${activeStream.transcodeDecision}? Give me exact steps to optimize quality.`);
                                             }}
-                                            className="h-8 px-3 text-xs bg-purple-600 hover:bg-purple-500 text-white font-semibold gap-1.5 cursor-pointer"
+                                            className="h-8 px-3 text-xs bg-primary hover:bg-primary/90 text-primary-foreground font-semibold gap-1.5 cursor-pointer"
                                         >
                                             <Sparkles className="h-3.5 w-3.5" />
                                             <span>Diagnose Stream With AI</span>
@@ -1220,21 +1219,21 @@ export function AiServerAssistant() {
                             {/* Chronic Pattern Insights (if any) */}
                             {patternInsights.length > 0 && (
                                 <div className="space-y-3">
-                                    <h4 className="text-xs font-bold uppercase tracking-wider text-purple-400 flex items-center gap-1.5">
-                                        <Sparkles className="h-3.5 w-3.5 text-purple-400" />
+                                    <h4 className="text-xs font-bold uppercase tracking-wider text-sky-400 flex items-center gap-1.5">
+                                        <Sparkles className="h-3.5 w-3.5 text-sky-400" />
                                         <span>Long-Term Playback Insights</span>
                                     </h4>
                                     <div className="space-y-2">
                                         {patternInsights.map((pat, pIdx) => (
-                                            <div key={pIdx} className="p-3.5 rounded-xl bg-purple-950/20 border border-purple-500/30 text-xs space-y-1.5">
+                                            <div key={pIdx} className="p-3.5 rounded-xl bg-sky-950/20 border border-sky-500/30 text-xs space-y-1.5">
                                                 <div className="flex items-center justify-between gap-2">
-                                                    <span className="font-bold text-purple-200">{pat.title}</span>
-                                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-purple-500/40 text-purple-300 bg-purple-950/40">
+                                                    <span className="font-bold text-sky-200">{pat.title}</span>
+                                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-sky-500/40 text-sky-300 bg-sky-950/40">
                                                         {pat.occurrenceCount} Occurrence(s)
                                                     </Badge>
                                                 </div>
                                                 <p className="text-[11px] text-slate-300">{pat.description}</p>
-                                                <p className="text-[11px] text-purple-300 font-medium">Remedy: {pat.remedy}</p>
+                                                <p className="text-[11px] text-amber-300 font-medium">Remedy: {pat.remedy}</p>
                                             </div>
                                         ))}
                                     </div>
@@ -1248,7 +1247,7 @@ export function AiServerAssistant() {
                     {/* ======================================================== */}
                     {activeTab === "probes" && (
                         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5">
-                            <div className="flex items-center justify-between gap-3 p-4 rounded-2xl bg-slate-900 border border-slate-800">
+                            <div className="flex items-center justify-between gap-3 p-4 rounded-xl bg-slate-900 border border-slate-800">
                                 <div className="space-y-0.5">
                                     <h3 className="font-bold text-white text-sm flex items-center gap-2">
                                         <Activity className="h-4 w-4 text-emerald-400" />
@@ -1264,7 +1263,7 @@ export function AiServerAssistant() {
                                         setActiveTab("chat");
                                         handleSend("Run a live synthetic playback and disk access probe across all media servers.");
                                     }}
-                                    className="h-8 px-3 text-xs bg-purple-600 hover:bg-purple-500 text-white font-semibold gap-1.5 cursor-pointer"
+                                    className="h-8 px-3 text-xs bg-primary hover:bg-primary/90 text-primary-foreground font-semibold gap-1.5 cursor-pointer"
                                 >
                                     <Sparkles className="h-3.5 w-3.5" />
                                     <span>Test Server Health</span>
@@ -1311,7 +1310,7 @@ export function AiServerAssistant() {
                                                 </div>
                                                 <div className="flex justify-between text-slate-300">
                                                     <span className="text-slate-400 flex items-center gap-1.5">
-                                                        <Activity className="h-3.5 w-3.5 text-purple-400" />
+                                                        <Activity className="h-3.5 w-3.5 text-sky-400" />
                                                         Connection:
                                                     </span>
                                                     <span className="font-mono text-slate-200">{srvNode.isLocal ? "Local Direct" : srvNode.isRelay ? "Relay" : "Direct Remote"}</span>

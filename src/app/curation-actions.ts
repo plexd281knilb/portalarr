@@ -8,6 +8,7 @@ import { isPlexMaintenanceWindow, isSeasonalCollectionInSeason, isCollectionSche
 import { decryptData, encryptData } from "@/lib/encryption";
 import { getCurrentUser } from "@/app/auth-actions";
 import { logger } from "@/lib/logger";
+import { sanitizeSvgContent, secureRandomSlug } from "@/lib/security";
 import { getPlexServerLibrarySections, getPlexServerSections, getPlexServerList, getPlexServers, resolveWorkingPlexServerConnection } from "@/lib/plex";
 import { 
     getPlexLibraryMediaItems, 
@@ -4264,9 +4265,13 @@ export async function uploadCustomBadgeAction(formData: FormData) {
         }
 
         const arrayBuffer = await file.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
+        const rawBuffer = Buffer.from(arrayBuffer);
         const ext = path.extname(file.name).toLowerCase() || ".png";
-        const fileId = `custom_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        if (![".svg", ".png", ".jpg", ".jpeg", ".webp"].includes(ext)) {
+            return { success: false, error: `Unsupported badge file extension: ${ext}` };
+        }
+        const buffer = ext === ".svg" ? Buffer.from(sanitizeSvgContent(rawBuffer.toString("utf-8")), "utf-8") : rawBuffer;
+        const fileId = `custom_${Date.now()}_${secureRandomSlug(6)}`;
         const destPath = path.join(badgeVaultDir, `${fileId}${ext}`);
 
         fs.writeFileSync(destPath, buffer);
@@ -8934,10 +8939,15 @@ export async function importGitHubBadgesAction(badges: Array<{
                 }
 
                 const arrayBuf = await res.arrayBuffer();
-                const buffer = Buffer.from(arrayBuf);
+                const rawBuffer = Buffer.from(arrayBuf);
                 const ext = path.extname(it.filename || it.downloadUrl).toLowerCase() || ".png";
+                if (![".svg", ".png", ".jpg", ".jpeg", ".webp"].includes(ext)) {
+                    skippedCount++;
+                    continue;
+                }
+                const buffer = ext === ".svg" ? Buffer.from(sanitizeSvgContent(rawBuffer.toString("utf-8")), "utf-8") : rawBuffer;
                 const cleanName = it.name.replace(/[^a-zA-Z0-9_-]/g, "_").toLowerCase();
-                const fileId = `badge_gh_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+                const fileId = `badge_gh_${Date.now()}_${secureRandomSlug(6)}`;
                 const fileName = `${fileId}_${cleanName}${ext}`;
                 const filePath = path.join(badgesDir, fileName);
 

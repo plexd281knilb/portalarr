@@ -197,12 +197,12 @@ export function PaymentQrModal({
 
                                     {/* MEMO & ACTION BUTTON */}
                                     <div className="space-y-2">
-                                        <div className="flex items-center justify-between p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-xs">
+                                        <div className="flex items-center justify-between p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs">
                                             <div className="space-y-0.5 truncate pr-2">
                                                 <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">
                                                     Payment Note / Memo
                                                 </span>
-                                                <span className="font-mono font-bold text-purple-300 truncate block">
+                                                <span className="font-mono font-bold text-amber-300 truncate block">
                                                     {memoTag}
                                                 </span>
                                             </div>
@@ -211,7 +211,7 @@ export function PaymentQrModal({
                                                 size="sm"
                                                 variant="outline"
                                                 onClick={() => handleCopy(memoTag, "memo")}
-                                                className="h-8 text-xs shrink-0 border-purple-500/30 hover:bg-purple-500/20 font-semibold"
+                                                className="h-8 text-xs shrink-0 border-amber-500/30 hover:bg-amber-500/20 font-semibold"
                                             >
                                                 {copiedKey === "memo" ? (
                                                     <Check className="h-3.5 w-3.5 text-emerald-400" />

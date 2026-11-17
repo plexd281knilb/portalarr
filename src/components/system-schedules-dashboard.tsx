@@ -18,7 +18,8 @@ import {
     Loader2,
     Check,
     AlertCircle,
-    Info
+    Info,
+    Zap
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -169,7 +170,7 @@ export function SystemSchedulesDashboard({ onFrequencyUpdated }: SystemSchedules
             case "plex":
                 return <Server className="h-4 w-4 text-amber-400" />;
             case "curation":
-                return <Sparkles className="h-4 w-4 text-purple-400" />;
+                return <Sparkles className="h-4 w-4 text-amber-400" />;
             case "billing":
                 return <CreditCard className="h-4 w-4 text-emerald-400" />;
             case "requests":
@@ -187,7 +188,7 @@ export function SystemSchedulesDashboard({ onFrequencyUpdated }: SystemSchedules
             case "plex":
                 return "bg-amber-500/10 text-amber-400 border-amber-500/30";
             case "curation":
-                return "bg-purple-500/10 text-purple-400 border-purple-500/30";
+                return "bg-amber-500/15 text-amber-300 border-amber-500/40";
             case "billing":
                 return "bg-emerald-500/10 text-emerald-400 border-emerald-500/30";
             case "requests":
@@ -206,7 +207,7 @@ export function SystemSchedulesDashboard({ onFrequencyUpdated }: SystemSchedules
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
                         <CardTitle className="flex items-center gap-2 text-lg sm:text-xl font-bold">
-                            <CalendarClock className="h-5 w-5 text-indigo-400" />
+                            <CalendarClock className="h-5 w-5 text-sky-400" />
                             <span>System Automation Schedules</span>
                         </CardTitle>
                         <CardDescription className="text-xs sm:text-sm mt-1">
@@ -216,7 +217,7 @@ export function SystemSchedulesDashboard({ onFrequencyUpdated }: SystemSchedules
                     <div className="flex items-center gap-2 shrink-0">
                         {serverTime && (
                             <Badge variant="outline" className="h-8 px-2.5 bg-slate-900/60 border-slate-700/60 text-slate-300 font-mono text-[11px] flex items-center gap-1.5">
-                                <Clock className="h-3 w-3 text-indigo-400" />
+                                <Clock className="h-3 w-3 text-sky-400" />
                                 <span>Host: {serverTime}</span>
                             </Badge>
                         )}
@@ -228,7 +229,7 @@ export function SystemSchedulesDashboard({ onFrequencyUpdated }: SystemSchedules
                             disabled={refreshing || loading}
                             onClick={() => loadSchedules(true)}
                         >
-                            <RefreshCw className={`h-3.5 w-3.5 text-indigo-400 ${refreshing ? "animate-spin" : ""}`} />
+                            <RefreshCw className={`h-3.5 w-3.5 text-sky-400 ${refreshing ? "animate-spin" : ""}`} />
                             <span>Refresh</span>
                         </Button>
                     </div>
@@ -238,9 +239,9 @@ export function SystemSchedulesDashboard({ onFrequencyUpdated }: SystemSchedules
             <CardContent className="space-y-5">
                 {/* METRICS HEADER CARDS */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-                    <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80">
+                    <div className="p-3 rounded-lg bg-slate-950/60 border border-slate-800/80">
                         <div className="text-[11px] font-medium text-muted-foreground flex items-center gap-1.5">
-                            <CalendarClock className="h-3.5 w-3.5 text-indigo-400" /> Total Background Jobs
+                            <CalendarClock className="h-3.5 w-3.5 text-sky-400" /> Total Background Jobs
                         </div>
                         <div className="text-xl font-black mt-1 text-foreground font-mono">
                             {tasks.length || 13}
@@ -298,9 +299,9 @@ export function SystemSchedulesDashboard({ onFrequencyUpdated }: SystemSchedules
                         </div>
                     </div>
                 ) : (
-                    <div className="p-3 rounded-xl bg-indigo-950/30 border border-indigo-900/40 text-slate-300 text-xs flex items-center justify-between gap-3">
+                    <div className="p-3 rounded-lg bg-sky-950/25 border border-sky-500/25 text-slate-300 text-xs flex items-center justify-between gap-3">
                         <div className="flex items-center gap-2">
-                            <Info className="h-4 w-4 text-indigo-400 shrink-0" />
+                            <Info className="h-4 w-4 text-sky-400 shrink-0" />
                             <span>
                                 <strong>Smart Host Protection:</strong> Background runners automatically pause every morning between <strong>5:00 AM – 5:30 AM</strong> to prevent spinning disk wakeups and container lockups during scheduled Unraid parity and database checks.
                             </span>
@@ -325,12 +326,12 @@ export function SystemSchedulesDashboard({ onFrequencyUpdated }: SystemSchedules
                             onClick={() => setSelectedCategory(pill.key as CategoryFilter)}
                             className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
                                 selectedCategory === pill.key
-                                    ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 shadow-xs"
+                                    ? "bg-sky-500/20 text-sky-300 border border-sky-500/40 shadow-xs"
                                     : "text-muted-foreground hover:text-foreground bg-white/[0.03] border border-white/5 hover:bg-white/[0.06]"
                             }`}
                         >
                             <span>{pill.label}</span>
-                            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-900/80 border border-slate-700/40 text-slate-400 font-mono">
+                            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-900/80 border border-slate-700/40 text-slate-400 font-mono tabular-nums">
                                 {pill.count}
                             </span>
                         </button>
@@ -340,7 +341,7 @@ export function SystemSchedulesDashboard({ onFrequencyUpdated }: SystemSchedules
                 {/* SCHEDULES TASK LIST */}
                 {loading ? (
                     <div className="py-12 flex flex-col items-center justify-center gap-3 text-muted-foreground">
-                        <Loader2 className="h-6 w-6 animate-spin text-indigo-400" />
+                        <Loader2 className="h-6 w-6 animate-spin text-sky-400" />
                         <span className="text-xs">Loading system automation schedules...</span>
                     </div>
                 ) : (
@@ -379,30 +380,31 @@ export function SystemSchedulesDashboard({ onFrequencyUpdated }: SystemSchedules
                                                                 onValueChange={(val) => handleFrequencyChange(task.id, val)}
                                                                 disabled={updatingTaskId === task.id}
                                                             >
-                                                                <SelectTrigger className="h-6 text-[10px] font-mono bg-slate-900/90 border-slate-700/80 text-indigo-300 hover:border-indigo-500/50 hover:bg-slate-800/80 px-2 py-0 w-auto min-w-[130px] gap-1 focus:ring-1 focus:ring-indigo-500">
+                                                                <SelectTrigger className="h-6 text-[10px] font-mono bg-slate-900/90 border-slate-700/80 text-sky-300 hover:border-sky-500/50 hover:bg-slate-800/80 px-2 py-0 w-auto min-w-[130px] gap-1 focus:ring-1 focus:ring-sky-500">
                                                                     {updatingTaskId === task.id ? (
-                                                                        <Loader2 className="h-3 w-3 animate-spin text-indigo-400" />
+                                                                        <Loader2 className="h-3 w-3 animate-spin text-sky-400" />
                                                                     ) : (
-                                                                        <Clock className="h-3 w-3 text-indigo-400 shrink-0" />
+                                                                        <Clock className="h-3 w-3 text-sky-400 shrink-0" />
                                                                     )}
                                                                     <SelectValue />
                                                                 </SelectTrigger>
                                                                 <SelectContent position="popper" className="bg-slate-950 border-slate-800 text-slate-200 z-50">
                                                                     {task.availableFrequencies.map((opt) => (
-                                                                        <SelectItem key={opt.value} value={opt.value} className="text-xs font-mono py-1.5 focus:bg-indigo-600/20 focus:text-indigo-200 cursor-pointer">
+                                                                        <SelectItem key={opt.value} value={opt.value} className="text-xs font-mono py-1.5 focus:bg-sky-600/20 focus:text-sky-200 cursor-pointer">
                                                                             {opt.label}
                                                                         </SelectItem>
                                                                     ))}
                                                                 </SelectContent>
                                                             </Select>
-                                                            <Badge variant="outline" className="text-[9px] font-mono uppercase bg-indigo-500/10 text-indigo-300 border-indigo-500/30 hidden sm:inline-flex">
+                                                            <Badge variant="outline" className="text-[9px] font-mono uppercase bg-sky-500/10 text-sky-300 border-sky-500/30 hidden sm:inline-flex">
                                                                 Editable
                                                             </Badge>
                                                         </div>
                                                     ) : (
                                                         <div className="inline-flex items-center gap-1.5">
-                                                            <Badge variant="outline" className="text-[10px] font-mono bg-slate-900/60 border-slate-700/60 text-slate-300">
-                                                                ⏱️ {task.cadenceLabel}
+                                                            <Badge variant="outline" className="text-[10px] font-mono bg-slate-900/60 border-slate-700/60 text-slate-300 inline-flex items-center gap-1">
+                                                                <Clock className="h-3 w-3 text-slate-400 shrink-0" />
+                                                                <span>{task.cadenceLabel}</span>
                                                             </Badge>
                                                             <Badge variant="outline" className="text-[9px] font-mono uppercase bg-slate-800/40 text-slate-400 border-slate-700/30 hidden sm:inline-flex">
                                                                 Core Runner
@@ -427,20 +429,23 @@ export function SystemSchedulesDashboard({ onFrequencyUpdated }: SystemSchedules
                                             <div className="flex items-center gap-2">
                                                 <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Next Run:</span>
                                                 {task.status === "blackout" ? (
-                                                    <Badge className="bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-mono">
-                                                        ⚠️ Paused (Resumes 5:30 AM)
+                                                    <Badge className="bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-mono inline-flex items-center gap-1">
+                                                        <AlertTriangle className="h-3 w-3 shrink-0" />
+                                                        <span>Paused (Resumes 5:30 AM)</span>
                                                     </Badge>
                                                 ) : !task.enabled ? (
                                                     <Badge variant="outline" className="bg-slate-900/40 text-slate-400 border-slate-800 text-xs">
                                                         Disabled
                                                     </Badge>
                                                 ) : task.isDue ? (
-                                                    <Badge className="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-mono animate-pulse">
-                                                        ⚡ Due on next tick
+                                                    <Badge className="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-mono inline-flex items-center gap-1">
+                                                        <Zap className="h-3 w-3 shrink-0" />
+                                                        <span>Due on next tick</span>
                                                     </Badge>
                                                 ) : (
-                                                    <Badge className="bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 text-xs font-mono">
-                                                        ⏱️ {task.nextRunRelative}
+                                                    <Badge className="bg-sky-500/15 text-sky-300 border border-sky-500/30 text-xs font-mono inline-flex items-center gap-1">
+                                                        <Clock className="h-3 w-3 shrink-0" />
+                                                        <span>{task.nextRunRelative}</span>
                                                     </Badge>
                                                 )}
                                             </div>
@@ -451,12 +456,12 @@ export function SystemSchedulesDashboard({ onFrequencyUpdated }: SystemSchedules
                                                 size="sm"
                                                 disabled={isRunning}
                                                 onClick={() => handleRunTask(task)}
-                                                className="h-7 px-2.5 text-xs font-semibold gap-1.5 border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/10 hover:border-indigo-500/50 active:scale-95 transition-all"
+                                                className="h-7 px-2.5 text-xs font-semibold gap-1.5 border-sky-500/30 text-sky-300 hover:bg-sky-500/10 hover:border-sky-500/50 active:scale-95 transition-all"
                                             >
                                                 {isRunning ? (
-                                                    <Loader2 className="h-3 w-3 animate-spin text-indigo-400" />
+                                                    <Loader2 className="h-3 w-3 animate-spin text-sky-400" />
                                                 ) : (
-                                                    <Play className="h-3 w-3 text-indigo-400 fill-indigo-400/30" />
+                                                    <Play className="h-3 w-3 text-sky-400 fill-sky-400/30" />
                                                 )}
                                                 <span>{isRunning ? "Executing..." : "Run Now"}</span>
                                             </Button>
