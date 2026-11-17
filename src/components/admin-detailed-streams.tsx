@@ -23,7 +23,7 @@ import {
     Play, Pause, XCircle, Zap, Shield, Sparkles, Loader2, Server,
     Layers, Trophy, Flame, Filter, BarChart3, CheckCircle2,
     ShieldAlert, History, Users, Search, Trash2, Clock, Globe,
-    ArrowUpDown, Volume2
+    ArrowUpDown, Volume2, TrendingDown, MessageSquare, AlertTriangle, Check, User
 } from "lucide-react";
 
 interface AdminDetailedStreamsProps {
@@ -424,7 +424,7 @@ export default function AdminDetailedStreams({ devRoadmapText = "", roadmapText 
                                                     </div>
                                                 </div>
                                             ) : (
-                                                <div className="text-[11px] text-muted-foreground italic px-1">
+                                                <div className="text-[11px] text-muted-foreground px-1">
                                                     {g.monitored === false 
                                                         ? "Monitoring paused in Settings" 
                                                         : "Host unreachable (verify Glances is active on port 61208)"}
@@ -650,7 +650,7 @@ export default function AdminDetailedStreams({ devRoadmapText = "", roadmapText 
                                     <div className="flex items-start gap-3 flex-1 min-w-0">
                                         <div className="relative w-12 h-16 sm:w-14 sm:h-20 rounded-lg overflow-hidden shrink-0 bg-muted/30 border border-white/10 flex items-center justify-center">
                                             <div className="absolute inset-0 flex items-center justify-center bg-muted/20">
-                                                {stream.mediaType === "episode" ? <Tv className="h-5 w-5 text-muted-foreground/30" /> : <Film className="h-5 w-5 text-muted-foreground/30" />}
+                                                {stream.mediaType === "episode" ? <Tv className="h-5 w-5 text-muted-foreground/70" /> : <Film className="h-5 w-5 text-muted-foreground/70" />}
                                             </div>
                                             {stream.thumb && (
                                                 <img 
@@ -675,7 +675,7 @@ export default function AdminDetailedStreams({ devRoadmapText = "", roadmapText 
                                                     {stream.userThumb ? (
                                                         <img src={stream.userThumb} alt="" className="w-3.5 h-3.5 rounded-full object-cover shrink-0" onError={(e) => { (e.target as HTMLElement).style.display = "none"; }} />
                                                     ) : (
-                                                        <span>👤</span>
+                                                        <User className="h-3 w-3 shrink-0" />
                                                     )}
                                                     {stream.user}
                                                 </Badge>
@@ -688,12 +688,13 @@ export default function AdminDetailedStreams({ devRoadmapText = "", roadmapText 
                                                         {stream.householdBadge.label}
                                                     </Badge>
                                                 )}
-                                                <Badge variant="outline" className={`text-[10px] max-w-[140px] sm:max-w-none truncate ${
-                                                        stream.serverType === "JELLYFIN" ? "bg-purple-500/10 text-purple-400 border-purple-500/30" :
+                                                <Badge variant="outline" className={`text-[10px] max-w-[140px] sm:max-w-none truncate inline-flex items-center gap-1 ${
+                                                        stream.serverType === "JELLYFIN" ? "bg-sky-500/10 text-sky-300 border-sky-500/30" :
                                                         stream.serverType === "EMBY" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" :
                                                         "text-muted-foreground"
                                                     }`}>
-                                                    🖥️ {stream.serverName}
+                                                    <Server className="h-3 w-3 shrink-0" />
+                                                    <span>{stream.serverName}</span>
                                                 </Badge>
                                                 <span className="text-[10px] font-mono text-muted-foreground/80 max-w-[130px] sm:max-w-none truncate">
                                                     {stream.connectionLabel || (stream.ipAddress ? `(${stream.ipAddress})` : "")}
@@ -783,19 +784,20 @@ export default function AdminDetailedStreams({ devRoadmapText = "", roadmapText 
                                                     {stream.player} {stream.device ? `• ${stream.device}` : ""}
                                                 </span>
                                                 {stream.sourceResolution && (
-                                                    <span className={`px-1.5 py-0.5 rounded font-mono font-bold text-[9px] border ${
+                                                    <span className={`px-1.5 py-0.5 rounded font-mono font-bold text-[9px] border inline-flex items-center gap-1 ${
                                                         stream.sourceResolution !== stream.streamResolution && stream.streamResolution
                                                             ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
                                                             : "bg-white/[0.06] text-foreground border-white/10"
                                                     }`}>
-                                                        {stream.sourceResolution !== stream.streamResolution && stream.streamResolution 
-                                                            ? `📉 ${stream.sourceResolution} ➔ ${stream.streamResolution}` 
-                                                            : (stream.streamResolution || stream.sourceResolution)}
+                                                        {stream.sourceResolution !== stream.streamResolution && stream.streamResolution ? (
+                                                            <><TrendingDown className="h-2.5 w-2.5 shrink-0" /> {stream.sourceResolution} ➔ {stream.streamResolution}</>
+                                                        ) : (stream.streamResolution || stream.sourceResolution)}
                                                     </span>
                                                 )}
                                                 {stream.hdrFormat && (
-                                                    <Badge className="text-[9px] font-bold bg-amber-500/20 text-amber-300 border-amber-500/30 font-mono py-0">
-                                                        ✨ {stream.hdrFormat} {stream.isToneMapping ? "➔ SDR Tone Mapped" : ""}
+                                                    <Badge className="text-[9px] font-bold bg-amber-500/20 text-amber-300 border-amber-500/30 font-mono py-0 inline-flex items-center gap-1">
+                                                        <Sparkles className="h-2.5 w-2.5 shrink-0" />
+                                                        <span>{stream.hdrFormat} {stream.isToneMapping ? "➔ SDR Tone Mapped" : ""}</span>
                                                     </Badge>
                                                 )}
                                                 <span>•</span>
@@ -853,8 +855,8 @@ export default function AdminDetailedStreams({ devRoadmapText = "", roadmapText 
                                                         ? "Transcode speed is faster than real-time playback"
                                                         : "Transcode speed is slower than real-time playback (buffering risk!)"
                                             }>
-                                                <Clock className="h-2.5 w-2.5" />
-                                                ⚡ {stream.transcodeSpeed || "0.0x"} speed {stream.transcodeThrottled ? "(Throttled • Power Saving)" : stream.transcodeSpeedHealthy !== false ? "(Real-Time OK)" : "(Slow)"}
+                                                <Zap className="h-2.5 w-2.5 shrink-0" />
+                                                <span>{stream.transcodeSpeed || "0.0x"} speed {stream.transcodeThrottled ? "(Throttled • Power Saving)" : stream.transcodeSpeedHealthy !== false ? "(Real-Time OK)" : "(Slow)"}</span>
                                             </Badge>
                                         )}
 
@@ -875,10 +877,10 @@ export default function AdminDetailedStreams({ devRoadmapText = "", roadmapText 
 
                                         {stream.hasSubtitle && (
                                             <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                                                <span>💬 {stream.subtitleLanguage || "Sub"} {stream.subtitleCodec ? `(${stream.subtitleCodec})` : ""}</span>
+                                                <span className="inline-flex items-center gap-1"><MessageSquare className="h-3 w-3 shrink-0" /> {stream.subtitleLanguage || "Sub"} {stream.subtitleCodec ? `(${stream.subtitleCodec})` : ""}</span>
                                                 {stream.isSubtitleBurnIn && (
-                                                    <Badge variant="outline" className="text-[9px] font-bold bg-rose-500/20 text-rose-300 border-rose-500/40 animate-pulse" title="Subtitles are being burned into video, forcing CPU/GPU transcode">
-                                                        🔥 Burned In
+                                                    <Badge variant="outline" className="text-[9px] font-bold bg-rose-500/20 text-rose-300 border-rose-500/40 animate-pulse inline-flex items-center gap-1" title="Subtitles are being burned into video, forcing CPU/GPU transcode">
+                                                        <Flame className="h-2.5 w-2.5 shrink-0" /> Burned In
                                                     </Badge>
                                                 )}
                                             </div>
@@ -962,7 +964,7 @@ export default function AdminDetailedStreams({ devRoadmapText = "", roadmapText 
                                     { id: "all", label: "All Activity" },
                                     { id: "movies", label: "Movies" },
                                     { id: "episodes", label: "Episodes" },
-                                    { id: "sharing", label: "🚨 Sharing Alerts" },
+                                    { id: "sharing", label: "Sharing Alerts" },
                                 ].map((tab) => (
                                     <Button
                                         key={tab.id}
@@ -972,9 +974,10 @@ export default function AdminDetailedStreams({ devRoadmapText = "", roadmapText 
                                             setHistoryFilter(tab.id);
                                             loadHistory(tab.id, historySearch);
                                         }}
-                                        className="h-7 text-xs px-2.5"
+                                        className="h-7 text-xs px-2.5 gap-1"
                                     >
-                                        {tab.label}
+                                        {tab.id === "sharing" && <ShieldAlert className="h-3.5 w-3.5 text-rose-400 shrink-0" />}
+                                        <span>{tab.label}</span>
                                     </Button>
                                 ))}
                             </div>
@@ -1026,7 +1029,7 @@ export default function AdminDetailedStreams({ devRoadmapText = "", roadmapText 
                             </div>
                         ) : !historyData?.items || historyData.items.length === 0 ? (
                             <div className="py-20 flex flex-col items-center justify-center gap-2 text-muted-foreground">
-                                <History className="h-8 w-8 text-muted-foreground/30" />
+                                <History className="h-8 w-8 text-muted-foreground/70" />
                                 <span className="text-xs">No stream activity records match your filter.</span>
                             </div>
                         ) : (
@@ -1057,7 +1060,7 @@ export default function AdminDetailedStreams({ devRoadmapText = "", roadmapText 
                                         <div className="flex items-start gap-3 flex-1 min-w-0">
                                             {/* Poster Thumbnail */}
                                             <div className="relative w-10 h-14 rounded overflow-hidden shrink-0 bg-muted/30 border border-white/10 flex items-center justify-center">
-                                                <div className="absolute inset-0 flex items-center justify-center text-muted-foreground/40">
+                                                <div className="absolute inset-0 flex items-center justify-center text-muted-foreground/70">
                                                     {item.mediaType === "episode" ? <Tv className="h-4 w-4" /> : <Film className="h-4 w-4" />}
                                                 </div>
                                                 {item.thumb && (
@@ -1073,11 +1076,13 @@ export default function AdminDetailedStreams({ devRoadmapText = "", roadmapText 
                                             {/* Title & Metadata */}
                                             <div className="space-y-1 min-w-0 flex-1">
                                                 <div className="flex flex-wrap items-center gap-1.5">
-                                                    <Badge className="text-[10px] font-bold bg-primary/20 text-primary border-primary/30">
-                                                        👤 {item.user}
+                                                    <Badge className="text-[10px] font-bold bg-primary/20 text-primary border-primary/30 inline-flex items-center gap-1">
+                                                        <User className="h-3 w-3 shrink-0" />
+                                                        <span>{item.user}</span>
                                                     </Badge>
-                                                    <Badge variant="outline" className="text-[10px] text-muted-foreground">
-                                                        🖥️ {item.serverName}
+                                                    <Badge variant="outline" className="text-[10px] text-muted-foreground inline-flex items-center gap-1">
+                                                        <Server className="h-3 w-3 shrink-0" />
+                                                        <span>{item.serverName}</span>
                                                     </Badge>
                                                     {item.isSharingAlert && (
                                                         <Badge className="text-[10px] font-extrabold bg-rose-500/20 text-rose-300 border-rose-500/40 gap-1 animate-pulse">
@@ -1086,8 +1091,9 @@ export default function AdminDetailedStreams({ devRoadmapText = "", roadmapText 
                                                         </Badge>
                                                     )}
                                                     {item.completed && (
-                                                        <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
-                                                            ✓ Finished
+                                                        <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-400 border-emerald-500/30 inline-flex items-center gap-1">
+                                                            <Check className="h-3 w-3 shrink-0" />
+                                                            <span>Finished</span>
                                                         </Badge>
                                                     )}
                                                 </div>
@@ -1131,8 +1137,9 @@ export default function AdminDetailedStreams({ devRoadmapText = "", roadmapText 
                                                 </div>
 
                                                 {item.isSharingAlert && item.sharingAlertNote && (
-                                                    <div className="text-[11px] text-rose-300/90 font-medium bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20 mt-1">
-                                                        ⚠️ {item.sharingAlertNote}
+                                                    <div className="text-[11px] text-rose-300/90 font-medium bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20 mt-1 flex items-center gap-1.5">
+                                                        <AlertTriangle className="h-3 w-3 text-rose-400 shrink-0" />
+                                                        <span>{item.sharingAlertNote}</span>
                                                     </div>
                                                 )}
                                             </div>

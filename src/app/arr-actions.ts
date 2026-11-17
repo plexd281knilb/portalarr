@@ -78,7 +78,7 @@ export async function testArrConfig(url: string, apiKey: string) {
 
 export async function getArrProfilesAndFolders(appId: string, type?: "radarr" | "sonarr") {
     try {
-        await verifyUser();
+        const session = await verifyUser();
         if (!appId || appId === "none") {
             return { success: true, profiles: [], folders: [], data: { profiles: [], folders: [] } };
         }
@@ -89,6 +89,11 @@ export async function getArrProfilesAndFolders(appId: string, type?: "radarr" | 
 
         if (!app) {
             return { success: false, error: "Media app not found", profiles: [], folders: [], data: { profiles: [], folders: [] } };
+        }
+
+        const isPrivileged = session.role === "ADMIN" || session.role === "SUPER_USER";
+        if (!isPrivileged && !app.enabledForUsers) {
+            return { success: false, error: "Forbidden", profiles: [], folders: [], data: { profiles: [], folders: [] } };
         }
 
         const decryptedApp = {

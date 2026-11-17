@@ -274,17 +274,17 @@ export function ServerGuardRailsModal({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-4xl max-h-[92vh] bg-slate-950 border-slate-800 text-white flex flex-col p-6 overflow-hidden shadow-2xl shadow-purple-950/40">
+            <DialogContent className="max-w-4xl max-h-[92dvh] bg-slate-950 border-slate-800 text-white flex flex-col p-4 sm:p-6 overflow-hidden shadow-2xl">
                 {/* Header */}
                 <DialogHeader className="pb-3 border-b border-slate-800/80 shrink-0">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div>
                             <DialogTitle className="text-xl font-black flex items-center gap-2 text-white">
-                                <div className="p-1.5 rounded-lg bg-purple-500/20 text-purple-400 border border-purple-500/30">
+                                <div className="p-1.5 rounded-lg bg-sky-500/20 text-sky-400 border border-sky-500/30">
                                     <ShieldCheck className="h-5 w-5" />
                                 </div>
                                 <span>Strict Server Guard Rails</span>
-                                <Badge variant="outline" className="border-purple-500/40 text-purple-300 bg-purple-950/40 text-[10px] ml-1.5 font-bold">
+                                <Badge variant="outline" className="border-sky-500/40 text-sky-300 bg-sky-950/40 text-[10px] ml-1.5 font-bold">
                                     Per-Server Isolation
                                 </Badge>
                             </DialogTitle>
@@ -297,8 +297,8 @@ export function ServerGuardRailsModal({
                         {servers.length > 0 && (
                             <div className="flex items-center gap-2">
                                 <Select value={selectedServerId} onValueChange={setSelectedServerId}>
-                                    <SelectTrigger className="h-9 bg-slate-900 border-slate-800 text-xs w-[190px] text-slate-200">
-                                        <HardDrive className="h-3.5 w-3.5 text-purple-400 mr-1.5 shrink-0" />
+                                    <SelectTrigger className="h-9 bg-slate-900 border-slate-800 text-xs w-full sm:w-[190px] text-slate-200">
+                                        <HardDrive className="h-3.5 w-3.5 text-sky-400 mr-1.5 shrink-0" />
                                         <SelectValue placeholder="Select Server" />
                                     </SelectTrigger>
                                     <SelectContent className="bg-slate-900 border-slate-800 text-white text-xs">
@@ -310,8 +310,8 @@ export function ServerGuardRailsModal({
                                                     <div className="flex items-center justify-between gap-2 w-full">
                                                         <span>{s.serverName}</span>
                                                         {isGuarded && (
-                                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-500/40 font-bold shrink-0">
-                                                                🛡️ {cfg.maxRating}
+                                                            <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-500/40 font-bold shrink-0">
+                                                                <Shield className="w-2.5 h-2.5" /> {cfg.maxRating}
                                                             </span>
                                                         )}
                                                     </div>
@@ -394,7 +394,7 @@ export function ServerGuardRailsModal({
                             {/* 1-Click Guard Rail Presets */}
                             <div className="space-y-2">
                                 <Label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                                    <Sparkles className="h-3.5 w-3.5 text-purple-400" />
+                                    <Sparkles className="h-3.5 w-3.5 text-amber-400" />
                                     <span>1-Click Guard Rail Profiles</span>
                                 </Label>
                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
@@ -404,16 +404,16 @@ export function ServerGuardRailsModal({
                                         onClick={() => applyPreset("kid_safe")}
                                         className={`p-3 rounded-xl border text-left transition-all ${
                                             activeConfig.preset === "kid_safe"
-                                                ? "bg-purple-950/80 border-purple-500 ring-1 ring-purple-500/50 shadow-md shadow-purple-950/60"
+                                                ? "bg-sky-950/80 border-sky-500 ring-1 ring-sky-500/50 shadow-md"
                                                 : "bg-slate-900/80 border-slate-800 hover:bg-slate-800/80 hover:border-slate-700"
                                         }`}
                                     >
                                         <div className="flex items-center justify-between mb-1">
-                                            <span className="text-lg">👶</span>
-                                            {activeConfig.preset === "kid_safe" && <Check className="h-3.5 w-3.5 text-purple-400" />}
+                                            <Baby className="h-4 w-4 text-sky-400" />
+                                            {activeConfig.preset === "kid_safe" && <Check className="h-3.5 w-3.5 text-sky-400" />}
                                         </div>
                                         <div className="text-xs font-black text-white">Kid-Safe Mode</div>
-                                        <div className="text-[10px] text-purple-300/80 font-bold mt-0.5">Max G / TV-Y7</div>
+                                        <div className="text-[10px] text-sky-300/90 font-bold mt-0.5">Max G / TV-Y7</div>
                                         <p className="text-[10px] text-slate-400 mt-1 line-clamp-2">
                                             Toddlers &amp; young kids. Zero adult themes, horror, or violence.
                                         </p>
@@ -425,12 +425,12 @@ export function ServerGuardRailsModal({
                                         onClick={() => applyPreset("family")}
                                         className={`p-3 rounded-xl border text-left transition-all ${
                                             activeConfig.preset === "family"
-                                                ? "bg-emerald-950/80 border-emerald-500 ring-1 ring-emerald-500/50 shadow-md shadow-emerald-950/60"
+                                                ? "bg-emerald-950/80 border-emerald-500 ring-1 ring-emerald-500/50 shadow-md"
                                                 : "bg-slate-900/80 border-slate-800 hover:bg-slate-800/80 hover:border-slate-700"
                                         }`}
                                     >
                                         <div className="flex items-center justify-between mb-1">
-                                            <span className="text-lg">👨‍👩‍👧‍👦</span>
+                                            <Users className="h-4 w-4 text-emerald-400" />
                                             {activeConfig.preset === "family" && <Check className="h-3.5 w-3.5 text-emerald-400" />}
                                         </div>
                                         <div className="text-xs font-black text-white">Family-Safe</div>
@@ -446,12 +446,12 @@ export function ServerGuardRailsModal({
                                         onClick={() => applyPreset("teen")}
                                         className={`p-3 rounded-xl border text-left transition-all ${
                                             activeConfig.preset === "teen"
-                                                ? "bg-amber-950/80 border-amber-500 ring-1 ring-amber-500/50 shadow-md shadow-amber-950/60"
+                                                ? "bg-amber-950/80 border-amber-500 ring-1 ring-amber-500/50 shadow-md"
                                                 : "bg-slate-900/80 border-slate-800 hover:bg-slate-800/80 hover:border-slate-700"
                                         }`}
                                     >
                                         <div className="flex items-center justify-between mb-1">
-                                            <span className="text-lg">🧑‍🎤</span>
+                                            <UserCheck className="h-4 w-4 text-amber-400" />
                                             {activeConfig.preset === "teen" && <Check className="h-3.5 w-3.5 text-amber-400" />}
                                         </div>
                                         <div className="text-xs font-black text-white">Teen-Friendly</div>
@@ -472,7 +472,7 @@ export function ServerGuardRailsModal({
                                         }`}
                                     >
                                         <div className="flex items-center justify-between mb-1">
-                                            <span className="text-lg">🔓</span>
+                                            <Unlock className="h-4 w-4 text-slate-300" />
                                             {(activeConfig.preset === "unrestricted" || (!activeConfig.enabled && activeConfig.maxRating === "UNRESTRICTED")) && (
                                                 <Check className="h-3.5 w-3.5 text-slate-300" />
                                             )}
@@ -493,7 +493,7 @@ export function ServerGuardRailsModal({
                                     <div className="space-y-2">
                                         <Label className="text-xs font-bold text-slate-200 flex items-center justify-between">
                                             <span>Content Rating Ceiling (Max Allowed)</span>
-                                            <Badge variant="outline" className="text-[10px] border-purple-500/40 text-purple-300">
+                                            <Badge variant="outline" className="text-[10px] border-sky-500/40 text-sky-300">
                                                 Ceiling: {activeConfig.maxRating}
                                             </Badge>
                                         </Label>
@@ -667,7 +667,7 @@ export function ServerGuardRailsModal({
                                         type="button"
                                         size="sm"
                                         onClick={addCustomKeyword}
-                                        className="h-8 text-xs bg-purple-600 hover:bg-purple-500 text-white shrink-0 px-3 rounded-xl font-bold"
+                                        className="h-8 text-xs bg-sky-600 hover:bg-sky-500 text-white shrink-0 px-3 rounded-xl font-bold"
                                     >
                                         <Plus className="h-3.5 w-3.5 mr-1" /> Add Keyword
                                     </Button>
@@ -741,7 +741,7 @@ export function ServerGuardRailsModal({
                 {/* Footer Actions */}
                 <div className="pt-3 border-t border-slate-800/80 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shrink-0">
                     <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
-                        <Info className="h-3.5 w-3.5 text-purple-400 shrink-0" />
+                        <Info className="h-3.5 w-3.5 text-sky-400 shrink-0" />
                         <span>Changes take effect immediately across all curation workflows for {activeServer.serverName}.</span>
                     </div>
 
@@ -760,7 +760,7 @@ export function ServerGuardRailsModal({
                             size="sm"
                             onClick={handleSave}
                             disabled={saving}
-                            className="h-9 text-xs bg-purple-600 hover:bg-purple-500 text-white font-bold px-4 rounded-xl shadow-lg shadow-purple-950/60"
+                            className="h-9 text-xs bg-primary hover:bg-primary/90 text-primary-foreground font-bold px-4 rounded-xl shadow-lg"
                         >
                             {saving ? (
                                 <>

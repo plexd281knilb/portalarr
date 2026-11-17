@@ -75,7 +75,7 @@ import remarkBreaks from "remark-breaks";
 export default function SettingsPage() {
     return (
         <Suspense fallback={
-            <div className="flex min-h-screen items-center justify-center bg-background">
+            <div className="flex min-h-dvh items-center justify-center bg-background">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
         }>
@@ -1646,8 +1646,8 @@ function SettingsPageContent() {
                     </TabsTrigger>
 
                     {/* HUB 5: COMMUNICATIONS */}
-                    <TabsTrigger value="communications" className="group py-2.5 px-3 flex items-center justify-center gap-2 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-indigo-400/80 hover:ring-offset-1 hover:ring-offset-background hover:shadow-[0_0_12px_rgba(99,102,241,0.25)] hover:bg-muted/80 data-[state=active]:text-indigo-400 data-[state=active]:bg-indigo-500/10 data-[state=active]:border-indigo-500/40 data-[state=active]:shadow-sm min-w-0">
-                        <MessageSquare className="h-4 w-4 text-indigo-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
+                    <TabsTrigger value="communications" className="group py-2.5 px-3 flex items-center justify-center gap-2 text-xs font-semibold cursor-pointer rounded-lg transition-all duration-200 hover:ring-2 hover:ring-sky-400/80 hover:ring-offset-1 hover:ring-offset-background hover:bg-muted/80 data-[state=active]:text-sky-400 data-[state=active]:bg-sky-500/10 data-[state=active]:border-sky-500/40 data-[state=active]:shadow-sm min-w-0">
+                        <MessageSquare className="h-4 w-4 text-sky-400 shrink-0 transition-transform duration-200 group-hover:scale-110" />
                         <span className="truncate">Communications & Community</span>
                         {isCommunicationsHubDirty && (
                             <span className="ml-1 flex h-2 w-2 relative shrink-0">
@@ -1856,20 +1856,20 @@ function SettingsPageContent() {
                                         <Sparkles className="h-3.5 w-3.5 text-primary" /> Generated Links Preview
                                     </div>
                                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 font-mono text-[11px]">
-                                        <div className="p-2 rounded-lg bg-black/40 border border-purple-500/20 truncate">
-                                            <span className="text-[9px] uppercase font-bold text-purple-400 block tracking-wider font-sans">🎁 Invite Friends</span>
+                                        <div className="p-2 rounded-lg bg-black/40 border border-amber-500/20 truncate">
+                                            <span className="text-[9px] uppercase font-bold text-amber-400 block tracking-wider font-sans">Invite Friends</span>
                                             <span className="text-muted-foreground truncate block">
                                                 {appUrlInput ? `${appUrlInput.replace(/\/+$/, "")}/join?ref=invite` : "http://localhost:3000/join?ref=invite"}
                                             </span>
                                         </div>
                                         <div className="p-2 rounded-lg bg-black/40 border border-blue-500/20 truncate">
-                                            <span className="text-[9px] uppercase font-bold text-blue-400 block tracking-wider font-sans">📧 Email Login Link</span>
+                                            <span className="text-[9px] uppercase font-bold text-blue-400 block tracking-wider font-sans">Email Login Link</span>
                                             <span className="text-muted-foreground truncate block">
                                                 {appUrlInput ? `${appUrlInput.replace(/\/+$/, "")}/login` : "http://localhost:3000/login"}
                                             </span>
                                         </div>
                                         <div className="p-2 rounded-lg bg-black/40 border border-emerald-500/20 truncate">
-                                            <span className="text-[9px] uppercase font-bold text-emerald-400 block tracking-wider font-sans">🛡️ Admin Approvals</span>
+                                            <span className="text-[9px] uppercase font-bold text-emerald-400 block tracking-wider font-sans">Admin Approvals</span>
                                             <span className="text-muted-foreground truncate block">
                                                 {appUrlInput ? `${appUrlInput.replace(/\/+$/, "")}/settings/access` : "http://localhost:3000/settings/access"}
                                             </span>
@@ -1965,7 +1965,7 @@ function SettingsPageContent() {
                                                     value={inputDownloadsPath}
                                                     onChange={(e) => setInputDownloadsPath(e.target.value)}
                                                     placeholder="/downloads"
-                                                    className="flex-1 min-w-[200px]"
+                                                    className="flex-1 min-w-0 sm:min-w-[200px]"
                                                 />
                                                 <Button 
                                                     type="button" 
@@ -2010,25 +2010,25 @@ function SettingsPageContent() {
 
                                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 font-mono text-[11px]">
                                                         <div className="flex items-center justify-between p-2 rounded bg-background/60 border border-muted/30">
-                                                            <span>📁 Path Exists:</span>
+                                                            <span>Path Exists:</span>
                                                             <span className={permResult.results?.exists ? "text-emerald-400 font-bold" : "text-red-400 font-bold"}>
                                                                 {permResult.results?.exists ? "✓ PASS" : "✗ FAIL"}
                                                             </span>
                                                         </div>
                                                         <div className="flex items-center justify-between p-2 rounded bg-background/60 border border-muted/30">
-                                                            <span>📖 Read Access:</span>
+                                                            <span>Read Access:</span>
                                                             <span className={permResult.results?.canRead ? "text-emerald-400 font-bold" : "text-red-400 font-bold"}>
                                                                 {permResult.results?.canRead ? "✓ PASS" : "✗ FAIL"}
                                                             </span>
                                                         </div>
                                                         <div className="flex items-center justify-between p-2 rounded bg-background/60 border border-muted/30">
-                                                            <span>✏️ Write Access:</span>
+                                                            <span>Write Access:</span>
                                                             <span className={permResult.results?.canWrite ? "text-emerald-400 font-bold" : "text-red-400 font-bold"}>
                                                                 {permResult.results?.canWrite ? "✓ PASS" : "✗ FAIL"}
                                                             </span>
                                                         </div>
                                                         <div className="flex items-center justify-between p-2 rounded bg-background/60 border border-muted/30">
-                                                            <span>🗑️ Delete Access:</span>
+                                                            <span>Delete Access:</span>
                                                             <span className={permResult.results?.canDelete ? "text-emerald-400 font-bold" : "text-red-400 font-bold"}>
                                                                 {permResult.results?.canDelete ? "✓ PASS" : "✗ FAIL"}
                                                             </span>
@@ -2116,15 +2116,15 @@ function SettingsPageContent() {
                                     <div className="flex justify-between items-start">
                                         <div>
                                             <CardTitle className="flex items-center gap-2">
-                                                <RefreshCw className="h-5 w-5 text-indigo-400" /> Library Auto-Scan & Sync Frequency
+                                                <RefreshCw className="h-5 w-5 text-sky-400" /> Library Auto-Scan &amp; Sync Frequency
                                             </CardTitle>
                                             <CardDescription>
                                                 Configure how frequently Portalarr scans filesystem storage for media updates and syncs live Plex friends.
                                             </CardDescription>
                                         </div>
                                         {isAutoSyncIntervalDirty && (
-                                            <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
-                                                ● Unsaved Changes
+                                            <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px]">
+                                                Unsaved Changes
                                             </Badge>
                                         )}
                                     </div>
@@ -2168,8 +2168,8 @@ function SettingsPageContent() {
                                                             size="sm"
                                                             className={`h-6 px-2 text-[10px] font-mono border-muted/50 transition-all ${
                                                                 String(autoSyncIntervalInput) === preset.value
-                                                                    ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/50"
-                                                                    : "text-muted-foreground hover:text-indigo-300 hover:border-indigo-500/40"
+                                                                    ? "bg-sky-500/20 text-sky-300 border-sky-500/50"
+                                                                    : "text-muted-foreground hover:text-sky-300 hover:border-sky-500/40"
                                                             }`}
                                                             onClick={() => setAutoSyncIntervalInput(preset.value)}
                                                         >
@@ -2185,17 +2185,17 @@ function SettingsPageContent() {
                                                 onChange={(e) => setAutoSyncIntervalInput(e.target.value)} 
                                                 placeholder="60"
                                             />
-                                            <div className="p-3 rounded-lg bg-indigo-950/30 border border-indigo-900/40 text-[11px] text-slate-300 space-y-1">
-                                                <div className="font-semibold text-indigo-300 flex items-center gap-1.5">
-                                                    <Clock className="h-3.5 w-3.5 text-indigo-400" />
-                                                    Storage & Spinning Disk Best Practices
+                                            <div className="p-3 rounded-lg bg-sky-950/30 border border-sky-900/40 text-[11px] text-slate-300 space-y-1">
+                                                <div className="font-semibold text-sky-300 flex items-center gap-1.5">
+                                                    <Clock className="h-3.5 w-3.5 text-sky-400" />
+                                                    Storage &amp; Spinning Disk Best Practices
                                                 </div>
                                                 <p className="text-slate-400">
                                                     If your Plex media files reside on spinning hard drives (e.g. Unraid array), a longer interval such as <strong>360 minutes (6 hours)</strong> prevents drive wake-ups and avoids spin-up delays during routine parity checks.
                                                 </p>
                                             </div>
                                         </div>
-                                        <Button type="submit" variant="secondary" className="w-full font-semibold hover:ring-2 hover:ring-indigo-500/30 active:scale-95 transition-all">
+                                        <Button type="submit" variant="secondary" className="w-full font-semibold hover:ring-2 hover:ring-sky-500/30 active:scale-95 transition-all">
                                             Save Scan Frequency
                                         </Button>
                                     </form>
@@ -2276,8 +2276,8 @@ function SettingsPageContent() {
                         <CardContent>
                             <Tabs defaultValue="user-roadmap" className="w-full">
                                 <TabsList className="mb-4 grid w-full max-w-md grid-cols-2 bg-black/40 border border-white/[0.08]">
-                                    <TabsTrigger value="user-roadmap" className="gap-1.5 text-xs font-semibold data-[state=active]:bg-purple-500/20 data-[state=active]:text-purple-300">
-                                        <Sparkles className="h-3.5 w-3.5 text-purple-400" />
+                                    <TabsTrigger value="user-roadmap" className="gap-1.5 text-xs font-semibold data-[state=active]:bg-sky-500/20 data-[state=active]:text-sky-300">
+                                        <Sparkles className="h-3.5 w-3.5 text-sky-400" />
                                         <span>User Roadmap</span>
                                         {isRoadmapDirty && <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />}
                                     </TabsTrigger>
@@ -2487,7 +2487,7 @@ function SettingsPageContent() {
                                         </div>
                                     </div>
                                     <div className="flex gap-2">
-                                        <Button type="submit" className="flex-1 font-semibold hover:ring-2 hover:ring-purple-400/40 active:scale-95 transition-all">{editingBetaCard ? "Update Beta Card" : "Add Beta Card"}</Button>
+                                        <Button type="submit" className="flex-1 font-semibold hover:ring-2 hover:ring-primary/40 active:scale-95 transition-all">{editingBetaCard ? "Update Beta Card" : "Add Beta Card"}</Button>
                                         {editingBetaCard && <Button type="button" variant="outline" className="hover:ring-1 hover:ring-border active:scale-95 transition-all" onClick={() => { setEditingBetaCard(null); setBetaCardContent(""); }}><X className="h-4 w-4"/></Button>}
                                     </div>
                                 </form>
@@ -2938,7 +2938,7 @@ function SettingsPageContent() {
                                                 );
                                             }
                                             return (
-                                                <div className="text-[11px] text-muted-foreground italic pt-1">
+                                                <div className="text-[11px] text-muted-foreground pt-1">
                                                     No snapshot database currently saved for {targetServer?.name || "this server"}. Curation queries run over standard Plex HTTP API.
                                                 </div>
                                             );
@@ -3004,7 +3004,7 @@ function SettingsPageContent() {
                                     {!editingPlexServer && (
                                         <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
                                             {plexServers.length === 0 ? (
-                                                <div className="text-xs text-muted-foreground p-3 rounded-lg border border-dashed border-muted/50 text-center italic">
+                                                <div className="text-xs text-muted-foreground p-3 rounded-lg border border-dashed border-muted/50 text-center">
                                                     No manual Plex servers configured yet. Add your first server below!
                                                 </div>
                                             ) : (
@@ -3020,7 +3020,7 @@ function SettingsPageContent() {
                                                                         </Badge>
                                                                     )}
                                                                     {server.token ? (
-                                                                        <Badge variant="outline" className="bg-purple-500/10 text-purple-300 border-purple-500/30 text-[9px] px-1.5 py-0">
+                                                                        <Badge variant="outline" className="bg-sky-500/10 text-sky-300 border-sky-500/30 text-[9px] px-1.5 py-0">
                                                                             Custom Token
                                                                         </Badge>
                                                                     ) : (
@@ -3030,7 +3030,7 @@ function SettingsPageContent() {
                                                                     )}
                                                                     {server.databasePath ? (
                                                                         <Badge variant="outline" className="bg-emerald-500/10 text-emerald-300 border-emerald-500/30 text-[9px] px-1.5 py-0 flex items-center gap-1" title={server.databasePath}>
-                                                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Direct Snapshot
+                                                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Direct Snapshot
                                                                         </Badge>
                                                                     ) : (
                                                                         <Badge variant="outline" className="bg-slate-500/10 text-slate-400 border-slate-500/30 text-[9px] px-1.5 py-0 flex items-center gap-1" title="Using standard HTTP connection">
@@ -3483,7 +3483,7 @@ function SettingsPageContent() {
                                     </div>
                                     <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
                                         {plexServers.length === 0 && (
-                                            <p className="text-xs text-muted-foreground italic">No Plex servers configured. Import from discovered servers below or add one in General & Setup.</p>
+                                            <p className="text-xs text-muted-foreground">No Plex servers configured. Import from discovered servers below or add one in General &amp; Setup.</p>
                                         )}
                                         {plexServers.map(s => (
                                             <div key={s.id} className="space-y-1.5 border border-border/40 p-2.5 rounded-xl bg-[#101014]/90 backdrop-blur-md hover:border-border/80 transition-all text-sm">
@@ -3583,7 +3583,7 @@ function SettingsPageContent() {
                                     </div>
 
                                     {discoveredPlexServersMsg && (
-                                        <p className="text-xs text-muted-foreground italic bg-muted/20 p-2 rounded-md border border-border/30">
+                                        <p className="text-xs text-muted-foreground bg-muted/20 p-2 rounded-md border border-border/30">
                                             {discoveredPlexServersMsg}
                                         </p>
                                     )}
@@ -3731,7 +3731,7 @@ function SettingsPageContent() {
                             </div>
                         </div>
                         <Link href="/admin/tautulli">
-                            <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1.5 border-purple-500/30 text-purple-400 hover:bg-purple-500/10 shrink-0 cursor-pointer">
+                            <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1.5 border-amber-500/30 text-amber-400 hover:bg-amber-500/10 shrink-0 cursor-pointer">
                                 <History className="h-3.5 w-3.5" />
                                 <span>Historical Backfill Tool</span>
                             </Button>
@@ -3745,11 +3745,11 @@ function SettingsPageContent() {
                                 <div className="flex justify-between items-start">
                                     <div>
                                         <CardTitle className="flex items-center gap-2">
-                                            <History className="h-5 w-5 text-purple-400"/> {editingTautulli ? "Edit Historical Archive" : "Tautulli (Historical Watch Archive)"}
+                                            <History className="h-5 w-5 text-amber-400"/> {editingTautulli ? "Edit Historical Archive" : "Tautulli (Historical Watch Archive)"}
                                         </CardTitle>
                                         <CardDescription>{editingTautulli ? `Modifying ${editingTautulli.name}` : "Optional watch archive for importing historical play records into DomsHomeLab."}</CardDescription>
                                     </div>
-                                    <Badge variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/30 text-[10px] shrink-0">
+                                    <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-[10px] shrink-0">
                                         Optional • History Import
                                     </Badge>
                                 </div>
@@ -3777,8 +3777,8 @@ function SettingsPageContent() {
                                                             />
                                                             <Label htmlFor={`monitored-tautulli-${t.id}`} className="text-[10px] cursor-pointer font-medium select-none">
                                                                 {t.monitored !== false ? (
-                                                                    <span className="text-purple-400 font-semibold flex items-center gap-1">
-                                                                        <span className="w-1.5 h-1.5 rounded-full bg-purple-400" /> Archive Active
+                                                                    <span className="text-amber-400 font-semibold flex items-center gap-1">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400" /> Archive Active
                                                                     </span>
                                                                 ) : (
                                                                     <span className="text-muted-foreground flex items-center gap-1">
@@ -3790,7 +3790,7 @@ function SettingsPageContent() {
                                                         <Button 
                                                             size="sm" 
                                                             variant="ghost" 
-                                                            className="h-7 text-[11px] px-2 text-purple-400 hover:ring-1 hover:ring-purple-400/40 active:scale-95 transition-all"
+                                                            className="h-7 text-[11px] px-2 text-amber-400 hover:ring-1 hover:ring-amber-400/40 active:scale-95 transition-all"
                                                             disabled={testingTautulliId === t.id}
                                                             onClick={() => handleTestTautulli(t.id)}
                                                         >
@@ -3882,7 +3882,7 @@ function SettingsPageContent() {
                                             name="monitored" 
                                             value="true" 
                                             defaultChecked={editingTautulli ? editingTautulli.monitored !== false : true} 
-                                            className="h-4 w-4 rounded border-gray-300 text-purple-500 focus:ring-purple-400" 
+                                            className="h-4 w-4 rounded border-gray-300 text-amber-500 focus:ring-amber-400" 
                                         />
                                         <Label htmlFor="tautulli-monitored" className="text-xs font-medium cursor-pointer">
                                             Enable reachability audits & historical sync for this instance
@@ -3917,13 +3917,13 @@ function SettingsPageContent() {
                                     </div>
                                 </form>
 
-                                <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-between gap-3 text-xs">
+                                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-between gap-3 text-xs">
                                     <div className="space-y-0.5">
-                                        <span className="font-semibold text-purple-300 block">Looking to import past history?</span>
+                                        <span className="font-semibold text-amber-300 block">Looking to import past history?</span>
                                         <span className="text-[11px] text-muted-foreground block">Run a 1-click historical backfill across all past sessions.</span>
                                     </div>
                                     <Link href="/admin/tautulli">
-                                        <Button size="sm" variant="outline" className="h-7 text-[10px] px-2.5 border-purple-500/30 text-purple-300 hover:bg-purple-500/20 shrink-0 cursor-pointer">
+                                        <Button size="sm" variant="outline" className="h-7 text-[10px] px-2.5 border-amber-500/30 text-amber-300 hover:bg-amber-500/20 shrink-0 cursor-pointer">
                                             Open Backfill Tool
                                         </Button>
                                     </Link>
@@ -3942,7 +3942,7 @@ function SettingsPageContent() {
                             <CardContent className="space-y-4 flex-1">
                                 {!editingGlances && (
                                     <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
-                                        {glances.length === 0 && <p className="text-xs text-muted-foreground italic">No Glances instances added.</p>}
+                                        {glances.length === 0 && <p className="text-xs text-muted-foreground">No Glances instances added.</p>}
                                         {glances.map(g => (
                                             <div key={g.id} className="space-y-1.5 border border-border/40 p-2.5 rounded-xl bg-[#101014]/90 backdrop-blur-md hover:border-border/80 transition-all text-sm">
                                                 <div className="flex justify-between items-center">
@@ -4151,7 +4151,7 @@ function SettingsPageContent() {
                             <CardContent className="space-y-4 flex-1">
                                 {!editingApp && (
                                     <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
-                                        {mediaApps.length === 0 && <p className="text-xs text-muted-foreground italic">No applications configured.</p>}
+                                        {mediaApps.length === 0 && <p className="text-xs text-muted-foreground">No applications configured.</p>}
                                         {mediaApps.map(app => (
                                             <div key={app.id} className="space-y-1.5 border border-border/40 p-2.5 rounded-xl bg-[#101014]/90 backdrop-blur-md hover:border-border/80 transition-all text-sm">
                                                 <div className="flex justify-between items-center">
@@ -4455,16 +4455,16 @@ function SettingsPageContent() {
                     {hubSubTabs.integrations === "ai" && (
                         <div className="space-y-6">
                                                         {/* AI METADATA AGENT CARD */}
-                            <Card className={`border-purple-500/40 bg-[#121218]/80 backdrop-blur-md shadow-lg transition-all duration-300 ${
+                            <Card className={`border-sky-500/40 bg-[#121218]/80 backdrop-blur-md shadow-lg transition-all duration-300 ${
                                 isAiDirty 
-                                    ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" 
-                                    : "shadow-purple-950/20"
+                                    ? "border-amber-400/80 ring-2 ring-amber-400/50" 
+                                    : ""
                             }`}>
                                 <CardHeader>
                                     <div className="flex justify-between items-start">
                                         <div>
-                                            <CardTitle className="flex items-center gap-2 text-purple-400">
-                                                <Bot className="h-5 w-5 text-purple-400"/> AI Metadata Agent & Support Assistant
+                                            <CardTitle className="flex items-center gap-2 text-sky-400">
+                                                <Bot className="h-5 w-5 text-sky-400"/> AI Metadata Agent &amp; Support Assistant
                                             </CardTitle>
                                             <CardDescription>
                                                 Configure the AI engine for media metadata extraction and set the autonomy level for the AI Support Bot.
@@ -4472,11 +4472,11 @@ function SettingsPageContent() {
                                         </div>
                                         <div className="flex items-center gap-1.5">
                                             {isAiDirty && (
-                                                <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
-                                                    ● Unsaved Changes
+                                                <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px]">
+                                                    Unsaved Changes
                                                 </Badge>
                                             )}
-                                            <Badge className="bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[10px]">
+                                            <Badge className="bg-sky-500/20 text-sky-300 border border-sky-500/30 text-[10px]">
                                                 {aiProviderSelect === "default" ? "Built-In Heuristic" : aiProviderSelect === "gemini" ? "Google Gemini" : "OpenAI"}
                                             </Badge>
                                         </div>
@@ -4585,7 +4585,7 @@ function SettingsPageContent() {
                                                             type="button" 
                                                             variant="ghost" 
                                                             size="sm" 
-                                                            className="h-6 text-xs px-2 hover:ring-1 hover:ring-purple-400/40 active:scale-95 transition-all"
+                                                            className="h-6 text-xs px-2 hover:ring-1 hover:ring-sky-400/40 active:scale-95 transition-all"
                                                             onClick={handleLoadModels}
                                                             disabled={loadingModels}
                                                         >
@@ -4617,7 +4617,7 @@ function SettingsPageContent() {
                                                                     {dynamicModels.map(m => (
                                                                         <SelectItem key={m} value={m}>{m}</SelectItem>
                                                                     ))}
-                                                                    <SelectItem value="custom">✏️ Custom Model Name...</SelectItem>
+                                                                    <SelectItem value="custom">Custom Model Name...</SelectItem>
                                                                 </>
                                                             ) : aiProviderSelect === "gemini" ? (
                                                                 <>
@@ -4627,7 +4627,7 @@ function SettingsPageContent() {
                                                                     <SelectItem value="gemini-3.7-flash">gemini-3.7-flash (Flash 3.7 - 20 RPD)</SelectItem>
                                                                     <SelectItem value="gemini-3.5-flash">gemini-3.5-flash (Standard Flash - 20 RPD)</SelectItem>
                                                                     <SelectItem value="gemini-3.1-pro-preview">gemini-3.1-pro-preview (Deep Reasoning Pro - Paid Tier Only)</SelectItem>
-                                                                    <SelectItem value="custom">✏️ Custom Model Name...</SelectItem>
+                                                                    <SelectItem value="custom">Custom Model Name...</SelectItem>
                                                                 </>
                                                             ) : (
                                                                 <>
@@ -4635,7 +4635,7 @@ function SettingsPageContent() {
                                                                     <SelectItem value="gpt-4o">gpt-4o (High Performance)</SelectItem>
                                                                     <SelectItem value="gpt-4.5-preview">gpt-4.5-preview</SelectItem>
                                                                     <SelectItem value="gpt-3.5-turbo">gpt-3.5-turbo</SelectItem>
-                                                                    <SelectItem value="custom">✏️ Custom Model Name...</SelectItem>
+                                                                    <SelectItem value="custom">Custom Model Name...</SelectItem>
                                                                 </>
                                                             )}
                                                         </SelectContent>
@@ -4668,11 +4668,11 @@ function SettingsPageContent() {
                                         </div>
 
                                         {/* AI SUPPORT BOT AUTONOMY & CAPABILITY SLIDER */}
-                                        <div className="pt-4 border-t border-purple-500/20 space-y-4">
+                                        <div className="pt-4 border-t border-sky-500/20 space-y-4">
                                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                                                 <div>
-                                                    <Label className="text-sm font-semibold flex items-center gap-1.5 text-purple-300">
-                                                        <Sliders className="h-4 w-4 text-purple-400" /> AI Support Bot Autonomy Level
+                                                    <Label className="text-sm font-semibold flex items-center gap-1.5 text-sky-300">
+                                                        <Sliders className="h-4 w-4 text-sky-400" /> AI Support Bot Autonomy Level
                                                     </Label>
                                                     <p className="text-xs text-muted-foreground mt-0.5">
                                                         Controls what troubleshooting, playback probes, and self-healing actions the AI Support Bot is permitted to execute.
@@ -4683,11 +4683,11 @@ function SettingsPageContent() {
                                                         ? "bg-sky-500/20 text-sky-300 border-sky-500/40"
                                                         : aiAutonomyLevel === "assisted"
                                                         ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
-                                                        : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-[0_0_10px_rgba(16,185,129,0.2)]"
+                                                        : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
                                                 }`}>
-                                                    {aiAutonomyLevel === "advisory" && "🔍 Level 1: Advisory (Passive)"}
-                                                    {aiAutonomyLevel === "assisted" && "🛡️ Level 2: Assisted (Guided)"}
-                                                    {aiAutonomyLevel === "autonomous" && "⚡ Level 3: Full Autonomous"}
+                                                    {aiAutonomyLevel === "advisory" && "Level 1: Advisory (Passive)"}
+                                                    {aiAutonomyLevel === "assisted" && "Level 2: Assisted (Guided)"}
+                                                    {aiAutonomyLevel === "autonomous" && "Level 3: Full Autonomous"}
                                                 </Badge>
                                             </div>
 
@@ -4706,7 +4706,7 @@ function SettingsPageContent() {
                                                             else if (val === 2) setAiAutonomyLevel("assisted");
                                                             else setAiAutonomyLevel("autonomous");
                                                         }}
-                                                        className="w-full h-2.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-400/50"
+                                                        className="w-full h-2.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-400/50"
                                                     />
                                                 </div>
                                                 {/* Stepper Labels */}
@@ -4811,17 +4811,17 @@ function SettingsPageContent() {
                                             </div>
 
                                             {/* MAX RADARR & SONARR INTERACTIONS SLIDER */}
-                                            <div className="pt-3 border-t border-purple-500/20 space-y-3">
+                                            <div className="pt-3 border-t border-sky-500/20 space-y-3">
                                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                                                     <div>
-                                                        <Label className="text-sm font-semibold flex items-center gap-1.5 text-purple-300">
-                                                            <Activity className="h-4 w-4 text-purple-400" /> Max Daily Radarr / Sonarr Interactions
+                                                        <Label className="text-sm font-semibold flex items-center gap-1.5 text-sky-300">
+                                                            <Activity className="h-4 w-4 text-sky-400" /> Max Daily Radarr / Sonarr Interactions
                                                         </Label>
                                                         <p className="text-xs text-muted-foreground mt-0.5">
                                                             Safety rate limit on automated replacement searches & downloads the AI can dispatch to Radarr & Sonarr per user within a 24-hour window.
                                                         </p>
                                                     </div>
-                                                    <Badge className="text-xs px-2.5 py-0.5 font-semibold self-start sm:self-auto bg-purple-500/20 text-purple-300 border border-purple-500/40">
+                                                    <Badge className="text-xs px-2.5 py-0.5 font-semibold self-start sm:self-auto bg-sky-500/20 text-sky-300 border border-sky-500/40 tabular-nums">
                                                         {aiMaxDailyGrabs} grabs / user / 24h
                                                     </Badge>
                                                 </div>
@@ -4835,35 +4835,35 @@ function SettingsPageContent() {
                                                             step={1}
                                                             value={aiMaxDailyGrabs}
                                                             onChange={(e) => setAiMaxDailyGrabs(Number(e.target.value))}
-                                                            className="w-full h-2.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-400/50"
+                                                            className="w-full h-2.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-400/50"
                                                         />
                                                     </div>
                                                     <div className="flex justify-between text-[11px] text-muted-foreground px-0.5">
                                                         <button 
                                                             type="button" 
                                                             onClick={() => setAiMaxDailyGrabs(1)}
-                                                            className={`hover:text-foreground transition-colors ${aiMaxDailyGrabs === 1 ? "text-purple-400 font-bold" : ""}`}
+                                                            className={`hover:text-foreground transition-colors ${aiMaxDailyGrabs === 1 ? "text-sky-400 font-bold" : ""}`}
                                                         >
                                                             1 (Conservative)
                                                         </button>
                                                         <button 
                                                             type="button" 
                                                             onClick={() => setAiMaxDailyGrabs(3)}
-                                                            className={`hover:text-foreground transition-colors ${aiMaxDailyGrabs === 3 ? "text-purple-400 font-bold" : ""}`}
+                                                            className={`hover:text-foreground transition-colors ${aiMaxDailyGrabs === 3 ? "text-sky-400 font-bold" : ""}`}
                                                         >
                                                             3 (Default)
                                                         </button>
                                                         <button 
                                                             type="button" 
                                                             onClick={() => setAiMaxDailyGrabs(5)}
-                                                            className={`hover:text-foreground transition-colors ${aiMaxDailyGrabs === 5 ? "text-purple-400 font-bold" : ""}`}
+                                                            className={`hover:text-foreground transition-colors ${aiMaxDailyGrabs === 5 ? "text-sky-400 font-bold" : ""}`}
                                                         >
                                                             5 (Moderate)
                                                         </button>
                                                         <button 
                                                             type="button" 
                                                             onClick={() => setAiMaxDailyGrabs(10)}
-                                                            className={`hover:text-foreground transition-colors ${aiMaxDailyGrabs === 10 ? "text-purple-400 font-bold" : ""}`}
+                                                            className={`hover:text-foreground transition-colors ${aiMaxDailyGrabs === 10 ? "text-sky-400 font-bold" : ""}`}
                                                         >
                                                             10 (Max)
                                                         </button>
@@ -4872,7 +4872,7 @@ function SettingsPageContent() {
                                             </div>
 
                                             <div className="p-2.5 rounded-lg bg-neutral-900/40 border border-neutral-800/60 text-[11px] text-muted-foreground flex items-center gap-2">
-                                                <Shield className="h-3.5 w-3.5 text-purple-400 shrink-0" />
+                                                <Shield className="h-3.5 w-3.5 text-sky-400 shrink-0" />
                                                 <span>
                                                     <strong>Security Boundary:</strong> Regardless of autonomy level, strict user isolation is always enforced: non-admin users can never view or terminate streams belonging to other users.
                                                 </span>
@@ -4880,10 +4880,10 @@ function SettingsPageContent() {
                                         </div>
 
                                         {testAiResult && (
-                                            <div className="text-xs bg-purple-950/40 border border-purple-800/40 p-3 rounded-lg space-y-1.5 font-mono text-purple-200">
-                                                <div className="font-bold flex items-center justify-between text-purple-300">
+                                            <div className="text-xs bg-sky-950/40 border border-sky-800/40 p-3 rounded-lg space-y-1.5 font-mono text-sky-200">
+                                                <div className="font-bold flex items-center justify-between text-sky-300">
                                                     <span className="flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5" /> AI Resolution Result:</span>
-                                                    <Badge variant="outline" className="text-[10px] bg-purple-500/20 border-purple-500/30 text-purple-300">
+                                                    <Badge variant="outline" className="text-[10px] bg-sky-500/20 border-sky-500/30 text-sky-300">
                                                         {testAiResult.providerUsed}
                                                     </Badge>
                                                 </div>
@@ -4902,13 +4902,13 @@ function SettingsPageContent() {
                                         )}
 
                                         <div className="flex flex-wrap gap-2 pt-2">
-                                            <Button type="submit" className="flex-1 bg-purple-600 hover:bg-purple-700 font-bold text-white hover:ring-2 hover:ring-purple-400/50 active:scale-95 transition-all shadow-md shadow-purple-950/30">
+                                            <Button type="submit" className="flex-1 bg-primary hover:bg-primary/90 font-bold text-primary-foreground hover:ring-2 hover:ring-primary/50 active:scale-95 transition-all shadow-md">
                                                 Save AI Agent Settings
                                             </Button>
                                             <Button 
                                                 type="button" 
                                                 variant="outline" 
-                                                className="border-purple-500/40 text-purple-300 hover:bg-purple-500/10 font-semibold gap-1 hover:ring-2 hover:ring-purple-400/40 active:scale-95 transition-all"
+                                                className="border-sky-500/40 text-sky-300 hover:bg-sky-500/10 font-semibold gap-1 hover:ring-2 hover:ring-sky-400/40 active:scale-95 transition-all"
                                                 onClick={handleTestAiAgent}
                                                 disabled={testAiLoading}
                                             >
@@ -4918,12 +4918,12 @@ function SettingsPageContent() {
                                             <Button 
                                                 type="button" 
                                                 variant="secondary" 
-                                                className="bg-purple-500/20 text-purple-300 border border-purple-500/40 hover:bg-purple-500/30 font-bold gap-1.5 w-full sm:w-auto hover:ring-2 hover:ring-purple-400/50 active:scale-95 transition-all shadow-sm"
+                                                className="bg-sky-500/20 text-sky-300 border border-sky-500/40 hover:bg-sky-500/30 font-bold gap-1.5 w-full sm:w-auto hover:ring-2 hover:ring-sky-400/50 active:scale-95 transition-all shadow-sm"
                                                 onClick={handleRunAiBatchScan}
                                                 disabled={batchScanning}
                                             >
-                                                {batchScanning ? <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-300" /> : <Sparkles className="h-3.5 w-3.5 text-purple-300" />}
-                                                🪄 Run AI Batch Resolution on All Libraries
+                                                {batchScanning ? <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-300" /> : <Sparkles className="h-3.5 w-3.5 text-sky-300" />}
+                                                Run AI Batch Resolution on All Libraries
                                             </Button>
                                         </div>
                                     </form>
@@ -4932,16 +4932,16 @@ function SettingsPageContent() {
 
                             <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
                                                             {/* CURATION, KOMETA & AGREGARR API KEYS CARD */}
-                            <Card className={`border-indigo-500/40 bg-[#121218]/80 backdrop-blur-md shadow-lg transition-all duration-300 ${
+                            <Card className={`border-amber-500/40 bg-[#121218]/80 backdrop-blur-md shadow-lg transition-all duration-300 ${
                                 isCurationDirty 
-                                    ? "border-amber-400/80 ring-2 ring-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.25)]" 
-                                    : "shadow-indigo-950/20"
+                                    ? "border-amber-400/80 ring-2 ring-amber-400/50" 
+                                    : ""
                             }`}>
                                 <CardHeader>
                                     <div className="flex justify-between items-start">
                                         <div>
-                                            <CardTitle className="flex items-center gap-2 text-indigo-400">
-                                                <Sparkles className="h-5 w-5 text-indigo-400"/> Curation & Discovery API Keys
+                                            <CardTitle className="flex items-center gap-2 text-amber-400">
+                                                <Sparkles className="h-5 w-5 text-amber-400"/> Curation &amp; Discovery API Keys
                                             </CardTitle>
                                             <CardDescription>
                                                 Configure TMDb, Trakt.tv, and IMDb / Community Ratings (MDBList) API keys for automated movie/TV collections, ratings badges, and theatrical vs digital release calendars.
@@ -5092,7 +5092,7 @@ function SettingsPageContent() {
                                         </div>
 
                                         <div className="flex items-center gap-2 pt-1">
-                                            <Button type="submit" size="sm" className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs h-8">
+                                            <Button type="submit" size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs h-8">
                                                 Save Curation Keys
                                             </Button>
                                             <Button 
@@ -5103,7 +5103,7 @@ function SettingsPageContent() {
                                                 onClick={handleTestCurationKeys}
                                                 className="text-xs h-8 border-slate-700 font-semibold gap-1.5"
                                             >
-                                                {testingCurationKeys ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 text-indigo-400" />}
+                                                {testingCurationKeys ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 text-amber-400" />}
                                                 Test API Keys
                                             </Button>
                                         </div>
@@ -5208,14 +5208,14 @@ function SettingsPageContent() {
                             onClick={() => handleSubTabChange("communications", "smtp")}
                             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
                                 hubSubTabs.communications === "smtp"
-                                    ? "bg-indigo-500/20 text-indigo-400 border border-indigo-500/40 shadow-xs"
+                                    ? "bg-sky-500/20 text-sky-400 border border-sky-500/40 shadow-xs"
                                     : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05]"
                             }`}
                         >
                             <Mail className="h-3.5 w-3.5" />
-                            <span>Global SMTP & Kindle Delivery</span>
+                            <span>Global SMTP &amp; Kindle Delivery</span>
                             {isSmtpDirty && (
-                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse ml-0.5" />
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 ml-0.5" />
                             )}
                         </button>
                         <button
@@ -5223,19 +5223,19 @@ function SettingsPageContent() {
                             onClick={() => handleSubTabChange("communications", "broadcast")}
                             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
                                 hubSubTabs.communications === "broadcast"
-                                    ? "bg-indigo-500/20 text-indigo-400 border border-indigo-500/40 shadow-xs"
+                                    ? "bg-sky-500/20 text-sky-400 border border-sky-500/40 shadow-xs"
                                     : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05]"
                             }`}
                         >
                             <Bell className="h-3.5 w-3.5" />
-                            <span>Broadcasts & Notification Templates</span>
+                            <span>Broadcasts &amp; Notification Templates</span>
                         </button>
                         <button
                             type="button"
                             onClick={() => handleSubTabChange("communications", "discord")}
                             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
                                 hubSubTabs.communications === "discord"
-                                    ? "bg-indigo-500/20 text-indigo-400 border border-indigo-500/40 shadow-xs"
+                                    ? "bg-sky-500/20 text-sky-400 border border-sky-500/40 shadow-xs"
                                     : "text-muted-foreground hover:text-foreground hover:bg-white/[0.05]"
                             }`}
                         >
@@ -5260,17 +5260,17 @@ function SettingsPageContent() {
                                         </div>
                                         <div className="flex flex-wrap items-center gap-1.5">
                                             {isSmtpDirty && (
-                                                <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] animate-pulse">
-                                                    ● Unsaved Changes
+                                                <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px]">
+                                                    Unsaved Changes
                                                 </Badge>
                                             )}
                                             {systemSettings?.emailProviderMode === "resend" || systemSettings?.smtpHost?.includes("resend") ? (
-                                                <Badge className="bg-purple-500/15 text-purple-300 border border-purple-500/30 text-[10px] gap-1">
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Active: Resend
+                                                <Badge className="bg-sky-500/15 text-sky-300 border border-sky-500/30 text-[10px] gap-1">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Active: Resend
                                                 </Badge>
                                             ) : systemSettings?.smtpHost ? (
                                                 <Badge className="bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 text-[10px] gap-1">
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Active: Custom SMTP
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Active: Custom SMTP
                                                 </Badge>
                                             ) : (
                                                 <Badge variant="outline" className="bg-red-500/10 text-red-400 border-red-500/30 text-[10px]">
@@ -5405,20 +5405,20 @@ function SettingsPageContent() {
                                         </div>
 
                                         {emailProviderMode === "resend" ? (
-                                            <div className="p-4 rounded-xl bg-purple-950/20 border border-purple-500/30 space-y-4">
+                                            <div className="p-4 rounded-xl bg-sky-950/20 border border-sky-500/30 space-y-4">
                                                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                                                     <div className="space-y-0.5">
                                                         <div className="text-sm font-extrabold text-foreground flex items-center gap-1.5">
-                                                            <Zap className="h-4 w-4 text-purple-400" /> Resend API Key & Outbound Delivery
+                                                            <Zap className="h-4 w-4 text-sky-400" /> Resend API Key &amp; Outbound Delivery
                                                         </div>
                                                         <p className="text-xs text-muted-foreground leading-relaxed">
-                                                            Enter your Resend API Key below. Portalarr automatically routes emails through Resend's SMTP server (<code className="text-purple-300 font-mono text-[11px]">smtp.resend.com:465</code>) using your verified domain.
+                                                            Enter your Resend API Key below. Portalarr automatically routes emails through Resend's SMTP server (<code className="text-sky-300 font-mono text-[11px]">smtp.resend.com:465</code>) using your verified domain.
                                                         </p>
                                                     </div>
                                                     <div className="flex flex-wrap items-center gap-2 shrink-0">
                                                         {emailProviderMode === "resend" ? (
                                                             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Active Engine
+                                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Active Engine
                                                             </span>
                                                         ) : (
                                                             <Button
@@ -5426,9 +5426,9 @@ function SettingsPageContent() {
                                                                 size="sm"
                                                                 variant="outline"
                                                                 onClick={() => setEmailProviderMode("resend")}
-                                                                className="text-xs h-7 px-3 gap-1.5 font-bold border-purple-500/40 text-purple-300 hover:bg-purple-500/20"
+                                                                className="text-xs h-7 px-3 gap-1.5 font-bold border-sky-500/40 text-sky-300 hover:bg-sky-500/20"
                                                             >
-                                                                <CheckCircle2 className="h-3.5 w-3.5 text-purple-400" />
+                                                                <CheckCircle2 className="h-3.5 w-3.5 text-sky-400" />
                                                                 <span>Set Active</span>
                                                             </Button>
                                                         )}
@@ -5436,7 +5436,7 @@ function SettingsPageContent() {
                                                             href="https://resend.com/api-keys"
                                                             target="_blank"
                                                             rel="noopener noreferrer"
-                                                            className="text-[11px] text-purple-400 hover:text-purple-300 flex items-center gap-1 font-medium underline underline-offset-2 ml-1"
+                                                            className="text-[11px] text-sky-400 hover:text-sky-300 flex items-center gap-1 font-medium underline underline-offset-2 ml-1"
                                                         >
                                                             Resend Dashboard <ExternalLink className="h-3 w-3" />
                                                         </a>
@@ -5446,7 +5446,7 @@ function SettingsPageContent() {
                                                 <div className="space-y-2">
                                                     <Label className="text-xs font-semibold flex items-center justify-between">
                                                         <span>Resend API Key</span>
-                                                        <span className="text-[10px] text-muted-foreground font-normal">Starts with <code className="text-purple-300">re_</code></span>
+                                                        <span className="text-[10px] text-muted-foreground font-normal">Starts with <code className="text-sky-300">re_</code></span>
                                                     </Label>
                                                     <div className="relative">
                                                         <Input 
@@ -5454,7 +5454,7 @@ function SettingsPageContent() {
                                                             type={showSmtpKey ? "text" : "password"} 
                                                             value={resendApiKeyInput} 
                                                             onChange={(e) => setResendApiKeyInput(e.target.value)} 
-                                                            className="pr-9 font-mono text-xs border-purple-500/30 focus-visible:ring-purple-500/40 bg-black/40"
+                                                            className="pr-9 font-mono text-xs border-sky-500/30 focus-visible:ring-sky-500/40 bg-black/40"
                                                             placeholder="re_123456789_abcdef..."
                                                             autoComplete="new-password"
                                                             data-1p-ignore="true"
@@ -5485,7 +5485,7 @@ function SettingsPageContent() {
                                                         value={resendFromInput} 
                                                         onChange={(e) => setResendFromInput(e.target.value)} 
                                                         placeholder="notifications@domshomelab.com" 
-                                                        className="border-purple-500/30 font-mono text-xs bg-black/40"
+                                                        className="border-sky-500/30 font-mono text-xs bg-black/40"
                                                         autoComplete="off" 
                                                         data-1p-ignore="true" 
                                                         data-lpignore="true"
@@ -5507,11 +5507,11 @@ function SettingsPageContent() {
                                                             </Button>
                                                         </div>
                                                     )}
-                                                    <div className="text-[11px] text-muted-foreground bg-black/40 p-2.5 rounded-lg border border-purple-500/20 space-y-1">
-                                                        <div className="font-semibold text-purple-200 flex items-center gap-1">
-                                                            <Send className="h-3 w-3 text-purple-400" /> Send-to-Kindle Dispatch:
+                                                    <div className="text-[11px] text-muted-foreground bg-black/40 p-2.5 rounded-lg border border-sky-500/20 space-y-1">
+                                                        <div className="font-semibold text-sky-200 flex items-center gap-1">
+                                                            <Send className="h-3 w-3 text-sky-400" /> Send-to-Kindle Dispatch:
                                                         </div>
-                                                        <div>Kindle deliveries are automatically sent from <code className="bg-black/60 text-purple-300 px-1 py-0.5 rounded font-mono font-bold">kindle@domshomelab.com</code>. Ensure this address is added to users' <strong>Amazon Approved Personal Document E-mail List</strong>.</div>
+                                                        <div>Kindle deliveries are automatically sent from <code className="bg-black/60 text-sky-300 px-1 py-0.5 rounded font-mono font-bold">kindle@domshomelab.com</code>. Ensure this address is added to users' <strong>Amazon Approved Personal Document E-mail List</strong>.</div>
                                                     </div>
                                                 </div>
 

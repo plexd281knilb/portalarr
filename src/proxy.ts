@@ -25,7 +25,7 @@ export async function proxy(req: NextRequest) {
   if (pathname === "/login") {
     if (session) {
       try {
-        const { payload } = await jwtVerify(session, getJwtSecret());
+        const { payload } = await jwtVerify(session, getJwtSecret(), { algorithms: ["HS256"] });
         const isAdmin = payload.role === "ADMIN";
         let status = (payload.status as string) || "APPROVED";
         const now = Date.now();
@@ -64,7 +64,7 @@ export async function proxy(req: NextRequest) {
   }
 
   try {
-    const { payload } = await jwtVerify(session, getJwtSecret());
+    const { payload } = await jwtVerify(session, getJwtSecret(), { algorithms: ["HS256"] });
     const isAdmin = payload.role === "ADMIN";
     let userStatus = (payload.status as string) || "APPROVED";
 

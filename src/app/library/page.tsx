@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, Suspense, useMemo } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { escapeRegex } from "@/lib/security";
 import {
   getLibraries,
   getLibraryBooks,
@@ -144,7 +145,7 @@ function getAccessBadge(lib: any) {
   }
   return {
     label: "Private",
-    color: "bg-purple-500/10 text-purple-400 border-purple-500/30",
+    color: "bg-amber-500/10 text-amber-400 border-amber-500/30",
   };
 }
 
@@ -218,7 +219,7 @@ function extractSeriesInfo(
 
         // Clean the title
         let cleanBookTitle = title
-          .replace(new RegExp(series, "gi"), "")
+          .replace(new RegExp(escapeRegex(series), "gi"), "")
           .replace(/(?:#|v|vol|vol\.|book|part|no|no\.)\.?\s*\d+/gi, "")
           .replace(/\(\s*\)/g, "")
           .replace(/\[\s*\]/g, "")
@@ -296,7 +297,7 @@ export default function BookLibraryPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="flex min-h-dvh items-center justify-center bg-background">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       }
@@ -1042,9 +1043,9 @@ function BookLibraryPageContent() {
                         onClick={() => handleRefreshCover(book.id)}
                       >
                         {refreshingCoverId === book.id ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-400" />
+                          <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-400" />
                         ) : (
-                          <ImageIcon className="h-3.5 w-3.5 text-purple-400" />
+                          <ImageIcon className="h-3.5 w-3.5 text-amber-400" />
                         )}
                         <span>Fetch Cover Artwork</span>
                       </DropdownMenuItem>
@@ -1068,7 +1069,7 @@ function BookLibraryPageContent() {
                           <DropdownMenuLabel>Administration</DropdownMenuLabel>
 
                           <DropdownMenuItem onClick={() => handleOpenMatchModal(book)}>
-                            <Link2 className="h-3.5 w-3.5 text-indigo-400" />
+                            <Link2 className="h-3.5 w-3.5 text-sky-400" />
                             <span>Match &amp; Link Series</span>
                           </DropdownMenuItem>
 
@@ -1086,9 +1087,9 @@ function BookLibraryPageContent() {
                             }}
                           >
                             {resolvingAiId === book.id ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-400" />
+                              <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-400" />
                             ) : (
-                              <Bot className="h-3.5 w-3.5 text-purple-400" />
+                              <Bot className="h-3.5 w-3.5 text-sky-400" />
                             )}
                             <span>AI Metadata Agent</span>
                           </DropdownMenuItem>
@@ -1317,9 +1318,9 @@ function BookLibraryPageContent() {
                   onClick={() => handleRefreshCover(book.id)}
                 >
                   {refreshingCoverId === book.id ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-400" />
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-400" />
                   ) : (
-                    <ImageIcon className="h-3.5 w-3.5 text-purple-400" />
+                    <ImageIcon className="h-3.5 w-3.5 text-amber-400" />
                   )}
                   <span>Fetch Cover Artwork</span>
                 </DropdownMenuItem>
@@ -1343,7 +1344,7 @@ function BookLibraryPageContent() {
                     <DropdownMenuLabel>Administration</DropdownMenuLabel>
 
                     <DropdownMenuItem onClick={() => handleOpenMatchModal(book)}>
-                      <Link2 className="h-3.5 w-3.5 text-indigo-400" />
+                      <Link2 className="h-3.5 w-3.5 text-sky-400" />
                       <span>Match &amp; Link Series</span>
                     </DropdownMenuItem>
 
@@ -2413,7 +2414,7 @@ function BookLibraryPageContent() {
           let sName = seriesNameCandidate;
           if (book.author && book.author !== "Unknown Author") {
             sName = sName
-              .replace(new RegExp("^" + book.author + "[:\\-\\s]+", "i"), "")
+              .replace(new RegExp("^" + escapeRegex(book.author) + "[:\\-\\s]+", "i"), "")
               .trim();
           }
           const formattedSeriesName = sName
@@ -2485,7 +2486,7 @@ function BookLibraryPageContent() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
+      <div className="flex min-h-dvh items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
@@ -2496,7 +2497,7 @@ function BookLibraryPageContent() {
 
   if (!isKindleConfigured) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background via-muted/50 to-background px-4 py-12">
+      <div className="flex min-h-dvh items-center justify-center bg-gradient-to-br from-background via-muted/50 to-background px-4 py-12">
         <Card className="w-full max-w-lg border-primary/30 shadow-2xl bg-card/95 backdrop-blur-sm">
           <CardHeader className="text-center space-y-3 pb-4">
             <div className="mx-auto bg-primary/10 border border-primary/20 p-4 rounded-2xl w-fit">
@@ -2569,9 +2570,9 @@ function BookLibraryPageContent() {
               </div>
 
               <div className="space-y-3 pt-2">
-                <div className="p-3.5 bg-purple-500/10 border border-purple-500/30 rounded-xl space-y-2.5 mb-4">
+                <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl space-y-2.5 mb-4">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-bold text-purple-300 flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
                       <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" />
                       Required: Authorize Sender on Amazon
                     </span>
@@ -2580,7 +2581,7 @@ function BookLibraryPageContent() {
                       size="sm"
                       variant="outline"
                       asChild
-                      className="text-[11px] h-7 px-2 border-purple-500/30 text-purple-300 hover:bg-purple-500/10"
+                      className="text-[11px] h-7 px-2 border-amber-500/30 text-amber-300 hover:bg-amber-500/10"
                     >
                       <a
                         href="https://www.amazon.com/hz/mycd/myx#/home/settings/payment"
@@ -2598,16 +2599,16 @@ function BookLibraryPageContent() {
                     <strong className="text-foreground">&quot;Approved Personal Document E-mail List&quot;</strong> before books can be delivered.
                   </p>
                   <div className="flex items-center gap-2">
-                    <div className="flex-1 bg-black/60 p-2 rounded-lg text-xs font-mono font-bold text-white border border-purple-500/30 select-all truncate">
+                    <div className="flex-1 bg-black/60 p-2 rounded-lg text-xs font-mono font-bold text-white border border-amber-500/30 select-all truncate">
                       {serverSmtpFrom || "kindle@domshomelab.com"}
                     </div>
                     <Button
                       type="button"
                       size="sm"
                       onClick={handleCopyServerSmtp}
-                      className="h-9 px-3 gap-1.5 bg-purple-600 hover:bg-purple-700 text-white font-semibold shrink-0 shadow-md shadow-purple-900/30 cursor-pointer"
+                      className="h-9 px-3 gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shrink-0 shadow-md cursor-pointer"
                     >
-                      {copiedServerSmtp ? <Check className="h-3.5 w-3.5 text-emerald-300" /> : <Copy className="h-3.5 w-3.5" />}
+                      {copiedServerSmtp ? <Check className="h-3.5 w-3.5 text-emerald-700" /> : <Copy className="h-3.5 w-3.5" />}
                       <span>{copiedServerSmtp ? "Copied!" : "Copy Email"}</span>
                     </Button>
                   </div>
@@ -2617,7 +2618,7 @@ function BookLibraryPageContent() {
                       href="https://www.amazon.com/hz/mycd/myx#/home/settings/payment"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-purple-400 underline hover:text-purple-300 inline-flex items-center gap-0.5 font-semibold"
+                      className="text-amber-400 underline hover:text-amber-300 inline-flex items-center gap-0.5 font-semibold"
                     >
                       <span>https://www.amazon.com/hz/mycd/myx#/home/settings/payment</span>
                       <ExternalLink className="h-2.5 w-2.5 inline shrink-0" />
@@ -2796,10 +2797,10 @@ function BookLibraryPageContent() {
           </TabsTrigger>
           <TabsTrigger
             value="help"
-            className="group py-2 px-2.5 sm:px-4 flex-1 min-w-[90px] sm:min-w-0 flex items-center justify-center gap-1.5 sm:gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-purple-400/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:shadow-[0_0_15px_rgba(192,132,252,0.35)] hover:bg-slate-800/90 hover:text-white data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
+            className="group py-2 px-2.5 sm:px-4 flex-1 min-w-[90px] sm:min-w-0 flex items-center justify-center gap-1.5 sm:gap-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-sky-400/80 hover:ring-offset-1 hover:ring-offset-slate-900 hover:bg-slate-800/90 hover:text-white data-[state=active]:bg-primary data-[state=active]:text-slate-950 data-[state=active]:font-bold data-[state=active]:shadow-md data-[state=active]:ring-0"
           >
-            <HelpCircle className="h-4 w-4 text-purple-400 data-[state=active]:text-slate-950 shrink-0 transition-transform duration-200 group-hover:scale-110" />{" "}
-            <span className="truncate">Help & Guide</span>
+            <HelpCircle className="h-4 w-4 text-sky-400 data-[state=active]:text-slate-950 shrink-0 transition-transform duration-200 group-hover:scale-110" />{" "}
+            <span className="truncate">Help &amp; Guide</span>
           </TabsTrigger>
         </TabsList>
 
@@ -2838,7 +2839,7 @@ function BookLibraryPageContent() {
                 </CardHeader>
                 <CardContent className="p-2 space-y-1">
                   {ebookLibraries.length === 0 ? (
-                    <div className="p-4 text-center text-xs text-muted-foreground italic">
+                    <div className="p-4 text-center text-xs text-muted-foreground">
                       No ebook libraries available.
                     </div>
                   ) : (
@@ -3285,7 +3286,7 @@ function BookLibraryPageContent() {
                               )}
                               {missingBooksMap[seriesName] !== undefined &&
                                 actualMissing.length === 0 && (
-                                  <div className="mt-4 text-xs text-muted-foreground italic">
+                                  <div className="mt-4 text-xs text-muted-foreground">
                                     No missing books found for this series.
                                   </div>
                                 )}
@@ -3394,7 +3395,7 @@ function BookLibraryPageContent() {
                 </CardHeader>
                 <CardContent className="p-2 space-y-1">
                   {audiobookLibraries.length === 0 ? (
-                    <div className="p-4 text-center text-xs text-muted-foreground italic space-y-3">
+                    <div className="p-4 text-center text-xs text-muted-foreground space-y-3">
                       <p>No audiobook libraries configured yet.</p>
                       {isAdmin && (
                         <Button
@@ -3554,7 +3555,7 @@ function BookLibraryPageContent() {
                     </div>
                   ) : sortedBooks.length === 0 ? (
                     <div className="text-center p-12 text-muted-foreground border border-dashed rounded-lg bg-muted/5 space-y-2">
-                      <Headphones className="h-10 w-10 mx-auto text-muted-foreground/40" />
+                      <Headphones className="h-10 w-10 mx-auto text-muted-foreground/70" />
                       <p className="text-sm font-semibold">
                         No audiobooks found in this library.
                       </p>
@@ -3765,7 +3766,7 @@ function BookLibraryPageContent() {
                           <div className="space-y-2">
                             <div className="flex flex-wrap gap-1 max-h-36 overflow-y-auto p-0.5">
                               {allUsers.length === 0 ? (
-                                <span className="text-[10px] text-muted-foreground italic">
+                                <span className="text-[10px] text-muted-foreground">
                                   No users found.
                                 </span>
                               ) : (
@@ -3849,7 +3850,7 @@ function BookLibraryPageContent() {
                         <div className="space-y-2">
                           <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto p-0.5">
                             {allUsers.length === 0 ? (
-                              <span className="text-[10px] text-muted-foreground italic">
+                              <span className="text-[10px] text-muted-foreground">
                                 No users found.
                               </span>
                             ) : (
@@ -3950,7 +3951,7 @@ function BookLibraryPageContent() {
                   <CardContent className="p-0">
                     {libraries.length === 0 ? (
                       <div className="p-8 text-center text-sm text-muted-foreground flex flex-col items-center justify-center gap-3">
-                        <p className="italic">
+                        <p>
                           No libraries configured yet. Fill out the form on the
                           left or seed standard default libraries to get started
                           instantly!
@@ -3992,7 +3993,7 @@ function BookLibraryPageContent() {
                                     </Badge>
                                   )}
                                   <Badge variant="outline" className="text-[10px] uppercase font-mono">
-                                    {lib.mediaType === "audiobook" ? "🎧 Audiobook" : "📖 Ebook"}
+                                    {lib.mediaType === "audiobook" ? "Audiobook" : "Ebook"}
                                   </Badge>
                                 </div>
                                 <p className="text-xs text-muted-foreground">
@@ -4416,7 +4417,7 @@ function BookLibraryPageContent() {
                   <Loader2 className="h-4 w-4 animate-spin text-primary" /> Loading delivery history...
                 </div>
               ) : kindleLogs.length === 0 ? (
-                <div className="p-8 text-center text-sm text-muted-foreground italic">
+                <div className="p-8 text-center text-sm text-muted-foreground">
                   No Send-to-Kindle delivery attempts logged yet. Whenever you or an admin sends a book to Kindle, the transaction log and delivery verification will appear here.
                 </div>
               ) : (
@@ -4445,7 +4446,7 @@ function BookLibraryPageContent() {
                                     : "bg-amber-500/15 text-amber-400 border border-amber-500/30"
                               }`}
                             >
-                              {isDelivered ? "🟢 DELIVERED" : isFailed ? "🔴 DELIVERY FAILED" : "🟡 RETRYING"}
+                              {isDelivered ? "DELIVERED" : isFailed ? "DELIVERY FAILED" : "RETRYING"}
                             </Badge>
                           </div>
 
@@ -4898,11 +4899,11 @@ function BookLibraryPageContent() {
                       )
                     }
                   >
-                    <Copy className="h-3 w-3" /> 📋 Copy Error Message
+                    <Copy className="h-3 w-3" /> Copy Error Message
                   </Button>
                 </div>
               ) : prowlarrResults.length === 0 ? (
-                <div className="p-12 text-center text-sm text-muted-foreground italic">
+                <div className="p-12 text-center text-sm text-muted-foreground">
                   No matching releases found in online catalogs.
                 </div>
               ) : (
@@ -4943,8 +4944,9 @@ function BookLibraryPageContent() {
                             </div>
                             
                             {release.warning && (
-                              <p className="text-[10px] text-amber-400/90 font-medium">
-                                ⚠️ {release.warning}
+                              <p className="text-[10px] text-amber-400/90 font-medium flex items-center gap-1">
+                                <AlertTriangle className="h-3 w-3 shrink-0" />
+                                <span>{release.warning}</span>
                               </p>
                             )}
 
@@ -4980,7 +4982,7 @@ function BookLibraryPageContent() {
                     })}
                     {releaseFilter === "matches" && prowlarrResults.filter((r: any) => r.matchQuality !== "mismatch").length === 0 && (
                       <div className="p-8 text-center space-y-2">
-                        <p className="text-xs text-muted-foreground italic">
+                        <p className="text-xs text-muted-foreground">
                           No exact author/title matches found in the {prowlarrResults.length} releases returned.
                         </p>
                         <Button
@@ -5272,24 +5274,24 @@ function BookLibraryPageContent() {
                           <Edit2 className="h-3.5 w-3.5" />
                           {isEditingChapters
                             ? "Cancel Editing"
-                            : "✏️ Reorder Chapters"}
+                            : "Reorder Chapters"}
                         </Button>
                       )}
                       {chaptersList.length > 0 && (
                         <Button
                           size="sm"
                           variant="secondary"
-                          className="h-7 text-xs font-extrabold bg-purple-500/20 text-purple-300 border border-purple-500/40 hover:bg-purple-500/30 gap-1.5"
+                          className="h-7 text-xs font-extrabold bg-sky-500/20 text-sky-300 border border-sky-500/40 hover:bg-sky-500/30 gap-1.5"
                           disabled={analyzingAiChapters}
                           onClick={handleAnalyzeChaptersWithAI}
                           title="AI Auto-Detect & Name Chapters"
                         >
                           {analyzingAiChapters ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-300" />
+                            <Loader2 className="h-3.5 w-3.5 animate-spin text-sky-300" />
                           ) : (
-                            <Sparkles className="h-3.5 w-3.5 text-purple-300" />
+                            <Sparkles className="h-3.5 w-3.5 text-sky-300" />
                           )}
-                          🪄 AI Name Chapters
+                          AI Name Chapters
                         </Button>
                       )}
                     </div>

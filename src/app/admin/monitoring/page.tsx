@@ -73,7 +73,7 @@ function getContainerAppBranding(name: any, image: any): AppBranding {
         return { icon: Activity, color: "text-orange-400", bg: "bg-orange-500/10", border: "border-orange-500/30" };
     }
     if (combined.includes("immich") || combined.includes("photo")) {
-        return { icon: Image, color: "text-purple-400", bg: "bg-purple-500/10", border: "border-purple-500/30" };
+        return { icon: Image, color: "text-pink-400", bg: "bg-pink-500/10", border: "border-pink-500/30" };
     }
     if (combined.includes("grafana")) {
         return { icon: BarChart2, color: "text-orange-400", bg: "bg-orange-500/10", border: "border-orange-500/30" };
@@ -88,7 +88,7 @@ function getContainerAppBranding(name: any, image: any): AppBranding {
         return { icon: HardDrive, color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/30" };
     }
     if (combined.includes("overseerr") || combined.includes("seerr") || combined.includes("jellyseerr")) {
-        return { icon: Layers, color: "text-indigo-400", bg: "bg-indigo-500/10", border: "border-indigo-500/30" };
+        return { icon: Layers, color: "text-sky-400", bg: "bg-sky-500/10", border: "border-sky-500/30" };
     }
     if (combined.includes("pihole") || combined.includes("adguard") || combined.includes("vaultwarden")) {
         return { icon: Shield, color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/30" };
@@ -473,14 +473,14 @@ export default function AdminFleetMonitoringPage() {
                 <div className="p-3.5 rounded-2xl bg-[#121218]/90 border border-white/[0.08] backdrop-blur-md shadow-md space-y-1">
                     <div className="flex items-center justify-between">
                         <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Systems & Services</span>
-                        <Server className="h-4 w-4 text-purple-400" />
+                        <Server className="h-4 w-4 text-sky-400" />
                     </div>
                     <div className="flex items-baseline gap-2">
-                        <span className="text-2xl font-black text-foreground">
+                        <span className="text-2xl font-black text-foreground tabular-nums">
                             {services.filter(s => s.status === "ONLINE").length}
                             <span className="text-xs font-semibold text-muted-foreground">/{services.length}</span>
                         </span>
-                        <Badge variant="outline" className="text-[9px] bg-sky-500/10 text-sky-400 border-sky-500/30">
+                        <Badge variant="outline" className="text-[9px] bg-sky-500/10 text-sky-400 border-sky-500/30 tabular-nums">
                             {services.filter(s => s.status === "OFFLINE").length} down
                         </Badge>
                     </div>
@@ -494,10 +494,10 @@ export default function AdminFleetMonitoringPage() {
                 }`}>
                     <div className="flex items-center justify-between">
                         <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Active Incidents</span>
-                        <AlertTriangle className={`h-4 w-4 ${activeIncidentsCount > 0 ? "text-rose-400 animate-pulse" : "text-muted-foreground/40"}`} />
+                        <AlertTriangle className={`h-4 w-4 ${activeIncidentsCount > 0 ? "text-rose-400" : "text-muted-foreground/70"}`} />
                     </div>
                     <div className="flex items-baseline gap-2">
-                        <span className={`text-2xl font-black ${activeIncidentsCount > 0 ? "text-rose-400" : "text-emerald-400"}`}>
+                        <span className={`text-2xl font-black tabular-nums ${activeIncidentsCount > 0 ? "text-rose-400" : "text-emerald-400"}`}>
                             {activeIncidentsCount}
                         </span>
                         <span className="text-[10px] text-muted-foreground">
@@ -972,7 +972,7 @@ export default function AdminFleetMonitoringPage() {
 
                                                     {c.hostName && (
                                                         <span className="text-[9px] font-medium text-muted-foreground/80 bg-white/[0.04] px-1.5 py-0.5 rounded border border-white/[0.06] flex items-center gap-1 shrink-0">
-                                                            <Server className="h-2.5 w-2.5 text-muted-foreground/50" />
+                                                            <Server className="h-2.5 w-2.5 text-muted-foreground/70" />
                                                             <span>{c.hostName}</span>
                                                         </span>
                                                     )}
@@ -994,7 +994,7 @@ export default function AdminFleetMonitoringPage() {
                                                                 </span>
                                                                 <span className="font-mono font-bold flex items-center gap-1.5">
                                                                     <span className={isHighCpu ? "text-rose-400 font-black" : isMediumCpu ? "text-amber-400" : "text-foreground"}>
-                                                                        {isHighCpu && "🔥 "}{c.cpuPercent}%
+                                                                        {c.cpuPercent}%
                                                                     </span>
                                                                     {isHighCpu && (
                                                                         <span className="text-[9px] text-rose-400/80 font-normal">

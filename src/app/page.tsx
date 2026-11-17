@@ -131,7 +131,7 @@ export default async function UserLandingPage() {
     const otherRequestApps = requestApps.filter(a => !isOmbiApp(a));
 
     return (
-        <div className="min-h-screen bg-background flex flex-col">
+        <div className="min-h-dvh bg-background flex flex-col">
             
             {/* --- ALERT BANNER --- */}
             {alertBanner.enabled && alertBanner.text && (
@@ -164,7 +164,7 @@ export default async function UserLandingPage() {
                                     Super User
                                 </Badge>
                             ) : isAdmin ? (
-                                <Badge variant="outline" className="bg-purple-500/15 text-purple-300 border-purple-500/30 text-xs font-semibold">
+                                <Badge variant="outline" className="bg-sky-500/15 text-sky-300 border-sky-500/30 text-xs font-semibold">
                                     Admin Mission Control
                                 </Badge>
                             ) : (
@@ -477,8 +477,8 @@ export default async function UserLandingPage() {
                             </Link>
 
                             <Link href="/settings" className="block group">
-                                <div className="p-2.5 sm:p-3 rounded-xl bg-white/[0.02] border border-border/50 group-hover:border-purple-500/50 text-center space-y-1.5 transition-all">
-                                    <Settings className="h-5 w-5 mx-auto text-purple-400" />
+                                <div className="p-2.5 sm:p-3 rounded-xl bg-white/[0.02] border border-border/50 group-hover:border-amber-500/50 text-center space-y-1.5 transition-all">
+                                    <Settings className="h-5 w-5 mx-auto text-amber-400" />
                                     <span className="text-xs font-bold block text-foreground truncate">Settings</span>
                                 </div>
                             </Link>

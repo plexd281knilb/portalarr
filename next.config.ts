@@ -118,6 +118,7 @@ const nextConfig: NextConfig = {
     ],
     serverActions: {
       allowedOrigins: allowedOrigins,
+      bodySizeLimit: "10mb",
     },
   },
   

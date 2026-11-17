@@ -22,7 +22,7 @@ export default async function CurationKometaSubPage() {
         <div className="max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[2200px] 4xl:max-w-[2560px] mx-auto space-y-4 sm:space-y-6 w-full min-w-0">
             <Suspense fallback={
                 <div className="flex min-h-[400px] items-center justify-center">
-                    <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
+                    <Loader2 className="h-8 w-8 animate-spin text-sky-400" />
                 </div>
             }>
                 <KometaStudio />

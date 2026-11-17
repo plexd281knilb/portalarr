@@ -700,7 +700,7 @@ export function MediaDetailModal({
                                             )}
 
                                             {is4kMonitored && (
-                                                <Badge variant="outline" className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/25 text-purple-300 border-purple-500/50 backdrop-blur-md flex items-center gap-1">
+                                                <Badge variant="outline" className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-500/25 text-sky-300 border-sky-500/50 backdrop-blur-md flex items-center gap-1">
                                                     <Check className="h-3 w-3" />
                                                     <span>4K UHD Monitored</span>
                                                 </Badge>
@@ -758,7 +758,7 @@ export function MediaDetailModal({
                                                 {details.title}
                                             </DialogTitle>
                                             {details.tagline && (
-                                                <p className="text-xs sm:text-sm text-gray-400 italic mt-0.5">
+                                                <p className="text-xs sm:text-sm text-gray-400 mt-0.5">
                                                     "{details.tagline}"
                                                 </p>
                                             )}
@@ -796,7 +796,7 @@ export function MediaDetailModal({
                                                     {canRequest4k && (
                                                         <Button
                                                             size="sm"
-                                                            className="h-8 sm:h-9 px-3.5 rounded-xl font-bold bg-purple-600 hover:bg-purple-500 text-white shadow-lg shadow-purple-600/20 active:scale-95 transition-all flex items-center gap-1.5 text-xs"
+                                                            className="h-8 sm:h-9 px-3.5 rounded-xl font-bold bg-sky-600 hover:bg-sky-500 text-white shadow-lg shadow-sky-600/20 active:scale-95 transition-all flex items-center gap-1.5 text-xs"
                                                             onClick={() => {
                                                                 setIs4k(true);
                                                                 setActiveTab("request");
@@ -809,8 +809,8 @@ export function MediaDetailModal({
                                                 </div>
                                             ) : is4kMonitored && !is1080pMonitored ? (
                                                 <div className="flex items-center gap-2">
-                                                    <div className="h-8 sm:h-9 px-3 rounded-xl bg-purple-500/15 border border-purple-500/40 text-purple-300 flex items-center gap-1.5 text-xs font-bold">
-                                                        <Clock className="h-3.5 w-3.5 text-purple-400 shrink-0" />
+                                                    <div className="h-8 sm:h-9 px-3 rounded-xl bg-sky-500/15 border border-sky-500/40 text-sky-300 flex items-center gap-1.5 text-xs font-bold">
+                                                        <Clock className="h-3.5 w-3.5 text-sky-400 shrink-0" />
                                                         <span>4K UHD Monitored</span>
                                                     </div>
                                                     <Button
@@ -826,8 +826,8 @@ export function MediaDetailModal({
                                                     </Button>
                                                 </div>
                                             ) : inMainOnly ? (
-                                                <div className="h-8 sm:h-9 px-3 rounded-xl bg-indigo-500/15 border border-indigo-500/40 text-indigo-300 flex items-center gap-1.5 text-xs font-bold">
-                                                    <Info className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
+                                                <div className="h-8 sm:h-9 px-3 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-300 flex items-center gap-1.5 text-xs font-bold">
+                                                    <Info className="h-3.5 w-3.5 text-amber-400 shrink-0" />
                                                     <span>In Main Library Only ({availability?.quality || "1080p"})</span>
                                                 </div>
                                             ) : (
@@ -1006,16 +1006,16 @@ export function MediaDetailModal({
                                             </div>
                                         </div>
                                     ) : is4kMonitored && !is1080pMonitored ? (
-                                        <div className="p-3.5 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-between gap-3 text-purple-300">
+                                        <div className="p-3.5 rounded-xl bg-sky-500/10 border border-sky-500/30 flex items-center justify-between gap-3 text-sky-300">
                                             <div className="flex items-center gap-3">
-                                                <div className="h-8 w-8 rounded-lg bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-300 shrink-0">
+                                                <div className="h-8 w-8 rounded-lg bg-sky-500/20 border border-sky-500/40 flex items-center justify-center text-sky-300 shrink-0">
                                                     <Check className="h-4 w-4" />
                                                 </div>
                                                 <div>
-                                                    <h4 className="text-xs sm:text-sm font-bold text-purple-200">
+                                                    <h4 className="text-xs sm:text-sm font-bold text-sky-200">
                                                         Monitored in 4K UHD ({arrDetails?.app4kName || "4K Instance"})
                                                     </h4>
-                                                    <p className="text-[11px] text-purple-300/80">
+                                                    <p className="text-[11px] text-sky-300/80">
                                                         {isTv
                                                             ? `This series is currently monitored for 4K UHD. You can request companion 1080p standard versions or unmonitored episodes below!`
                                                             : `This movie is already monitored for 4K UHD. You can request a companion 1080p standard version below!`}
@@ -1059,9 +1059,9 @@ export function MediaDetailModal({
 
                                         {/* 4K UHD Quality Selection Toggle */}
                                         {canRequest4k && !isMatureInKids && !isDisallowed && (
-                                            <div className="flex items-center justify-between p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/30">
+                                            <div className="flex items-center justify-between p-2.5 rounded-xl bg-sky-500/10 border border-sky-500/30">
                                                 <div className="flex items-center gap-2">
-                                                    <Badge variant="outline" className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-purple-500/30 text-purple-300 border-purple-500/50">
+                                                    <Badge variant="outline" className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-sky-500/30 text-sky-300 border-sky-500/50">
                                                         4K UHD
                                                     </Badge>
                                                     <div>
@@ -1162,7 +1162,7 @@ export function MediaDetailModal({
                                                                     )}
 
                                                                     {!is4k && canRequest4k && seasonMon4k?.isFullyMonitored && (
-                                                                        <span className="px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 text-[9px] font-bold border border-purple-500/40">
+                                                                        <span className="px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-300 text-[9px] font-bold border border-sky-500/40">
                                                                             4K
                                                                         </span>
                                                                     )}
@@ -1406,7 +1406,7 @@ export function MediaDetailModal({
                                             {canRequest4k && (
                                                 <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-white/[0.04] border border-border/40 text-[11px]">
                                                     <span className="text-muted-foreground">Target:</span>
-                                                    <span className={`font-bold ${is4k ? "text-purple-300" : "text-blue-300"}`}>
+                                                    <span className={`font-bold ${is4k ? "text-sky-300" : "text-blue-300"}`}>
                                                         {is4k ? "4K UHD" : "1080p"}
                                                     </span>
                                                 </div>
@@ -1527,7 +1527,7 @@ export function MediaDetailModal({
                                                                                 4K Downloaded
                                                                             </span>
                                                                         ) : mon4k?.monitored ? (
-                                                                            <span className="px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 text-[10px] font-bold border border-purple-500/40 flex items-center gap-1">
+                                                                            <span className="px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-300 text-[10px] font-bold border border-sky-500/40 flex items-center gap-1">
                                                                                 <Clock className="h-3 w-3" />
                                                                                 4K Monitored
                                                                             </span>

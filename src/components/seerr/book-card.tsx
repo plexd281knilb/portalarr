@@ -92,9 +92,9 @@ export function BookCard({ item, availability, onSelect, onRequest, compact = fa
                 ) : (
                     <div className="w-full h-full flex flex-col items-center justify-center gap-2 p-4 text-center bg-gradient-to-b from-muted/30 to-muted/80 text-muted-foreground/60">
                         {isAudiobook ? (
-                            <Headphones className="h-10 w-10 text-amber-500/40" />
+                            <Headphones className="h-10 w-10 text-amber-400/70" />
                         ) : (
-                            <BookOpen className="h-10 w-10 text-purple-500/40" />
+                            <BookOpen className="h-10 w-10 text-emerald-400/70" />
                         )}
                         <span className="text-xs font-medium line-clamp-2 px-2 text-foreground/70">{item.title}</span>
                     </div>

@@ -18,6 +18,7 @@ import {
     Clock, User, ArrowLeft, ArrowRight, ExternalLink, Sparkles, Filter
 } from "lucide-react";
 import { format } from "date-fns";
+import { sanitizeRichHtml } from "@/lib/security";
 
 interface SentEmailAuditLogProps {
     onCountChange?: (count: number) => void;
@@ -256,13 +257,13 @@ export default function SentEmailAuditLog({ onCountChange }: SentEmailAuditLogPr
                 </Card>
 
                 {/* Sent Automatically */}
-                <Card className="bg-[#121218] border-purple-500/20 shadow-sm hover:border-purple-500/40 transition-all">
+                <Card className="bg-[#121218] border-sky-500/20 shadow-sm hover:border-sky-500/40 transition-all">
                     <CardContent className="pt-4 pb-4">
                         <div className="flex items-center justify-between">
                             <span className="text-xs font-medium text-muted-foreground">Sent Automatically</span>
-                            <Bot className="h-4 w-4 text-purple-400" />
+                            <Bot className="h-4 w-4 text-sky-400" />
                         </div>
-                        <div className="mt-2 text-2xl font-black text-purple-400">{counts.automaticCount}</div>
+                        <div className="mt-2 text-2xl font-black text-sky-400 tabular-nums">{counts.automaticCount}</div>
                         <p className="text-[11px] text-muted-foreground mt-1 truncate">System alerts & notifications</p>
                     </CardContent>
                 </Card>
@@ -338,7 +339,7 @@ export default function SentEmailAuditLog({ onCountChange }: SentEmailAuditLogPr
                             setStatusFilter("ALL");
                         }}
                         className={`h-8 px-2.5 text-xs font-bold gap-1.5 ${
-                            modeFilter === "AUTOMATIC" ? "bg-purple-600 hover:bg-purple-500 text-white" : "text-purple-400 border-purple-500/30 hover:bg-purple-500/10"
+                            modeFilter === "AUTOMATIC" ? "bg-sky-600 hover:bg-sky-500 text-white" : "text-sky-400 border-sky-500/30 hover:bg-sky-500/10"
                         }`}
                     >
                         <Bot className="h-3.5 w-3.5" />
@@ -428,7 +429,7 @@ export default function SentEmailAuditLog({ onCountChange }: SentEmailAuditLogPr
                                         ? "border-rose-500/30 bg-rose-500/5 hover:border-rose-500/50"
                                         : isApproved
                                         ? "border-emerald-500/25 bg-emerald-500/5 hover:border-emerald-500/40"
-                                        : "border-purple-500/20 bg-[#121218]/90 hover:border-purple-500/35"
+                                        : "border-sky-500/20 bg-[#121218]/90 hover:border-sky-500/35"
                                 }`}
                             >
                                 <CardContent className="pt-4 pb-4">
@@ -444,7 +445,7 @@ export default function SentEmailAuditLog({ onCountChange }: SentEmailAuditLogPr
                                                         Approved & Sent
                                                     </Badge>
                                                 ) : (
-                                                    <Badge className="bg-purple-500/15 text-purple-400 border-purple-500/40 gap-1.5 text-[11px] font-bold">
+                                                    <Badge className="bg-sky-500/15 text-sky-400 border-sky-500/40 gap-1.5 text-[11px] font-bold">
                                                         <Bot className="h-3.5 w-3.5" />
                                                         Sent Automatically
                                                     </Badge>
@@ -512,7 +513,7 @@ export default function SentEmailAuditLog({ onCountChange }: SentEmailAuditLogPr
 
                                             {/* Body preview snippet */}
                                             {item.bodyPreview && (
-                                                <p className="text-xs text-muted-foreground line-clamp-1 italic">
+                                                <p className="text-xs text-muted-foreground line-clamp-1">
                                                     "{item.bodyPreview}"
                                                 </p>
                                             )}
@@ -622,7 +623,7 @@ export default function SentEmailAuditLog({ onCountChange }: SentEmailAuditLogPr
                                                 <ShieldCheck className="h-3.5 w-3.5" /> Approved & Sent
                                             </Badge>
                                         ) : (
-                                            <Badge className="bg-purple-500/15 text-purple-400 border-purple-500/40 gap-1.5 text-xs font-bold">
+                                            <Badge className="bg-sky-500/15 text-sky-400 border-sky-500/40 gap-1.5 text-xs font-bold">
                                                 <Bot className="h-3.5 w-3.5" /> Sent Automatically
                                             </Badge>
                                         )}
@@ -697,7 +698,7 @@ export default function SentEmailAuditLog({ onCountChange }: SentEmailAuditLogPr
                                     {selectedEmail.html ? (
                                         <div className="rounded-xl border border-white/10 bg-white overflow-hidden p-4 text-black shadow-inner min-h-[320px]">
                                             <div
-                                                dangerouslySetInnerHTML={{ __html: selectedEmail.html }}
+                                                dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(selectedEmail.html) }}
                                                 className="prose prose-sm max-w-none text-slate-800"
                                             />
                                         </div>

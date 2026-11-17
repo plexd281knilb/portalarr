@@ -30,7 +30,7 @@ export interface PortalarrCurationLabelDefinition {
     category: "parental" | "placeholders" | "prune" | "quality";
     categoryTitle: string;
     icon: string;
-    color: "rose" | "orange" | "amber" | "sky" | "cyan" | "indigo" | "purple" | "emerald" | "slate";
+    color: "rose" | "orange" | "amber" | "sky" | "cyan" | "emerald" | "slate";
     description?: string;
     aliases?: string[];
 }
@@ -218,7 +218,7 @@ export const PORTALARR_CURATION_LABELS: PortalarrCurationLabelDefinition[] = [
         category: "placeholders", 
         categoryTitle: "Coming Soon & Placeholders", 
         icon: "✨", 
-        color: "indigo", 
+        color: "sky", 
         description: "Upcoming media monitored for grab",
         aliases: ["coming-soon", "coming soon"]
     },
@@ -264,7 +264,7 @@ export const PORTALARR_CURATION_LABELS: PortalarrCurationLabelDefinition[] = [
         category: "quality", 
         categoryTitle: "Specs & Media Formats", 
         icon: "📺", 
-        color: "purple", 
+        color: "amber", 
         description: "Ultra-High-Definition 2160p releases" 
     },
     { 
@@ -274,7 +274,7 @@ export const PORTALARR_CURATION_LABELS: PortalarrCurationLabelDefinition[] = [
         category: "quality", 
         categoryTitle: "Specs & Media Formats", 
         icon: "✨", 
-        color: "purple", 
+        color: "amber", 
         description: "Dynamic HDR Dolby Vision releases" 
     },
     { 
@@ -284,7 +284,7 @@ export const PORTALARR_CURATION_LABELS: PortalarrCurationLabelDefinition[] = [
         category: "quality", 
         categoryTitle: "Specs & Media Formats", 
         icon: "🔊", 
-        color: "purple", 
+        color: "amber", 
         description: "Spatial 3D object-based audio releases" 
     },
     { 
@@ -314,7 +314,7 @@ export const PORTALARR_CURATION_LABELS: PortalarrCurationLabelDefinition[] = [
         category: "quality", 
         categoryTitle: "Specs & Media Formats", 
         icon: "📼", 
-        color: "indigo", 
+        color: "cyan", 
         description: "1980s decade releases" 
     },
     { 
@@ -324,7 +324,7 @@ export const PORTALARR_CURATION_LABELS: PortalarrCurationLabelDefinition[] = [
         category: "quality", 
         categoryTitle: "Specs & Media Formats", 
         icon: "📼", 
-        color: "indigo", 
+        color: "sky", 
         description: "1990s decade releases" 
     }
 ];
@@ -559,12 +559,8 @@ export function ExcludedLabelsSelector({
                 return "bg-slate-900/80 text-sky-300 border-sky-900/40 hover:border-sky-500/60 hover:bg-sky-950/30";
             case "cyan":
                 return "bg-slate-900/80 text-cyan-300 border-cyan-900/40 hover:border-cyan-500/60 hover:bg-cyan-950/30";
-            case "purple":
-                return "bg-slate-900/80 text-purple-300 border-purple-900/40 hover:border-purple-500/60 hover:bg-purple-950/30";
             case "emerald":
                 return "bg-slate-900/80 text-emerald-300 border-emerald-900/40 hover:border-emerald-500/60 hover:bg-emerald-950/30";
-            case "indigo":
-                return "bg-slate-900/80 text-indigo-300 border-indigo-900/40 hover:border-indigo-500/60 hover:bg-indigo-950/30";
             default:
                 return "bg-slate-900/80 text-slate-300 border-slate-800 hover:border-slate-600 hover:bg-slate-800";
         }
@@ -703,7 +699,7 @@ export function ExcludedLabelsSelector({
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         placeholder="Search labels..."
-                        className="h-6 text-[10px] pl-6 bg-slate-900 border-slate-800 text-slate-200 placeholder:text-slate-600 rounded-md"
+                        className="h-6 text-[10px] pl-6 bg-slate-900 border-slate-800 text-slate-200 placeholder:text-slate-400 rounded-md"
                     />
                     {searchQuery && (
                         <button
@@ -833,7 +829,7 @@ export function ExcludedLabelsSelector({
                     value={value}
                     onChange={(e) => onChange(e.target.value)}
                     placeholder="e.g. IMDb-Nudity: Severe, trailer-placeholder, trailers, coming_soon, leaving-soon"
-                    className="h-8 text-xs bg-slate-900 border-slate-700 font-mono text-rose-300 placeholder:text-slate-600"
+                    className="h-8 text-xs bg-slate-900 border-slate-700 font-mono text-rose-300 placeholder:text-slate-400"
                 />
             </div>
         </div>

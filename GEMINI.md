@@ -8,15 +8,15 @@ Portalarr is a centralized, self-hosted dashboard designed to manage a media ser
 
 Portalarr adheres to strict Semantic Versioning (`MAJOR.MINOR.PATCH`):
 - **Production Release (`prod` branch, formerly `stable`)**: `v1.4.15` is the production milestone baseline release on `prod`.
-- **Beta Testing (`beta` branch)**: `v1.4.26` — 20-point UI/UX unslop design system polish (Inter + JetBrains Mono typography, unified concentric `inner = outer - padding` radii, Plex amber accent & slate surfaces, `text-wrap: balance`, `tabular-nums`, zero `blur-3xl` glow orbs/filler badges/ornamental italics, crisp contrast, `prefers-reduced-motion`, route-level tab titles & `loading.tsx` skeletons, custom `not-found.tsx`, humanized error boundaries, `<EmptyState />` & Lucide icons, Suite 25 UI regression checks, and synced project/global skills) on top of the 9-phase full codebase + test coverage audit hardening across Auth/Billing/Seerr/Books/Curation/Overlay/Maintainerr/Telemetry/AI/Scripts undergoing testing before production deployment.
-- **Active Feature Development (`dev` branch, formerly `main`)**: `v1.5.35` is the active feature release (future releases in testing on `dev`).
+- **Beta Testing (`beta` branch)**: `v1.4.27` — Light/dark theme switcher, mobile/cross-browser responsiveness polish, 21-point security hardening (JWT alg pinning, Unicode confusable & SQL/52-char username checks, timing-safe PIN/OAuth, SVG sandboxing, CSRF/SSRF/ownership guards, CSPRNG slugs/passwords), Wave 5 full secondary/admin UI completion sweep, and Suite 25 regression checks on top of the 9-phase full codebase + test coverage audit hardening across Auth/Billing/Seerr/Books/Curation/Overlay/Maintainerr/Telemetry/AI/Scripts undergoing testing before production deployment.
+- **Active Feature Development (`dev` branch, formerly `main`)**: `v1.5.45` is the active feature release (future releases in testing on `dev`).
 - **Strict SemVer Policy**:
   - **PATCH increments (`1.3.22` ➔ `1.3.23`)**: Bug fixes, security patches, styling polish, telemetry adjustments, and non-breaking corrections.
   - **MINOR increments (`1.1.2` ➔ `1.2.0`)**: Backwards-compatible new features, new curation studios, new third-party integrations, or major enhancements.
   - **MAJOR increments (`1.2.0` ➔ `2.0.0`)**: Breaking architectural changes, major database redesigns, or backwards-incompatible API shifts.
 - **Automatic Environment Branch Telemetry**:
-  - **Development Environment (`dev` branch)**: `BuildBadge` renders `DEV • v<version>` with an amber pulsing dot (`bg-amber-400 animate-pulse`). Targets Docker tag `ghcr.io/plexd281knilb/portalarr:dev`.
-  - **Beta Preview Environment (`beta` branch)**: `BuildBadge` renders `BETA • v<version>` with a glowing, pulsing purple dot (`bg-purple-400 animate-pulse`). Targets Docker tag `ghcr.io/plexd281knilb/portalarr:beta`.
+  - **Development Environment (`dev` branch)**: `BuildBadge` renders `DEV • v<version>` with an amber dot (`bg-amber-400`). Targets Docker tag `ghcr.io/plexd281knilb/portalarr:dev`.
+  - **Beta Preview Environment (`beta` branch)**: `BuildBadge` renders `BETA • v<version>` with a sky blue dot (`bg-sky-400`). Targets Docker tag `ghcr.io/plexd281knilb/portalarr:beta`.
   - **Production Release Environment (`prod` branch)**: `BuildBadge` renders `PROD • v<version>` with a solid emerald green dot (`bg-emerald-400`). Targets Docker tag `ghcr.io/plexd281knilb/portalarr:prod` (and `:latest`).
   - **Automatic `-beta.x` / `-dev.x` Suffix Stripping**: When running on the `prod` branch, `src/lib/version.ts` automatically strips `-(beta|dev)(\.\d+)?` from `rawVersion`, ensuring production builds display a pristine semantic version without manual package tampering.
 

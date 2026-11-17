@@ -1470,9 +1470,9 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                 isTrial 
                                     ? "bg-amber-500/20 text-amber-300 border-amber-500/40" 
                                     : user?.role === "ADMIN"
-                                        ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/40"
+                                        ? "bg-sky-500/20 text-sky-300 border-sky-500/40"
                                         : user?.role === "SUPER_USER"
-                                            ? "bg-purple-500/20 text-purple-300 border-purple-500/40"
+                                            ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
                                             : "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
                             }`}>
                                 {isTrial ? "Trial User" : (user?.role === "ADMIN" ? "Administrator" : (user?.role === "SUPER_USER" ? "Super User" : "Full Member"))}
@@ -1491,7 +1491,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                         <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-1">
                             <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Account Status</span>
                             <p className="font-bold text-foreground text-sm flex items-center gap-1.5">
-                                <ShieldCheck className={`h-4 w-4 ${isTrial ? "text-amber-400" : (user?.role === "ADMIN" ? "text-indigo-400" : (user?.role === "SUPER_USER" ? "text-purple-400" : "text-emerald-400"))}`} />
+                                <ShieldCheck className={`h-4 w-4 ${isTrial ? "text-amber-400" : (user?.role === "ADMIN" ? "text-sky-400" : (user?.role === "SUPER_USER" ? "text-amber-400" : "text-emerald-400"))}`} />
                                 {isTrial ? "Trial User" : (user?.role === "ADMIN" ? "Server Administrator" : (user?.role === "SUPER_USER" ? "Super User" : "Full Member"))}
                             </p>
                             <p className="text-[10px] text-muted-foreground">
@@ -1590,11 +1590,11 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                         }
                                     </p>
                                 </div>
-                                <div className="p-2.5 rounded-lg bg-black/40 border border-purple-500/20 space-y-1">
+                                <div className="p-2.5 rounded-lg bg-black/40 border border-sky-500/20 space-y-1">
                                     <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Annual Discounted Plan (${(referralInfo?.renewalSummary?.discountedYearlyPrice ?? effectiveYearlyPrice).toFixed(2)}/yr)</span>
                                     <p className="font-semibold text-foreground text-xs">
                                         {((referralInfo?.renewalSummary?.discountedYearlyPrice ?? effectiveYearlyPrice) - user.accountCredit) > 0 
-                                            ? <>Send <strong className="text-purple-400">${((referralInfo?.renewalSummary?.discountedYearlyPrice ?? effectiveYearlyPrice) - user.accountCredit).toFixed(2)}</strong> more for 1 full year (${((referralInfo?.renewalSummary?.discountedYearlyPrice ?? effectiveYearlyPrice) / 12).toFixed(0)}/mo)</>
+                                            ? <>Send <strong className="text-sky-400">${((referralInfo?.renewalSummary?.discountedYearlyPrice ?? effectiveYearlyPrice) - user.accountCredit).toFixed(2)}</strong> more for 1 full year (${((referralInfo?.renewalSummary?.discountedYearlyPrice ?? effectiveYearlyPrice) / 12).toFixed(0)}/mo)</>
                                             : <span className="text-emerald-400 font-bold">Credit covers yearly rate!</span>
                                         }
                                     </p>
@@ -1618,10 +1618,10 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                     )}
 
                     {user?.role === "ADMIN" ? (
-                        <div className="p-3.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-xs space-y-1.5">
+                        <div className="p-3.5 rounded-xl bg-sky-500/10 border border-sky-500/20 text-xs space-y-1.5">
                             <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Access Level</span>
-                            <p className="font-bold text-indigo-400 text-sm flex items-center gap-1.5">
-                                <ShieldCheck className="h-4 w-4 text-indigo-400" /> Platform Administrator
+                            <p className="font-bold text-sky-400 text-sm flex items-center gap-1.5">
+                                <ShieldCheck className="h-4 w-4 text-sky-400" /> Platform Administrator
                             </p>
                             <p className="text-[11px] text-muted-foreground leading-relaxed">
                                 Unrestricted administrator privileges with permanent lifetime access. You are exempt from all subscription plans, renewals, and expiration dates.
@@ -1640,9 +1640,9 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                     <p className="font-bold text-emerald-400 text-sm">{activeTrialProrated.amountDueText}</p>
                                     <p className="text-[10px] text-muted-foreground">{activeTrialProrated.remainingMonthsText}</p>
                                 </div>
-                                <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 space-y-1">
+                                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 space-y-1">
                                     <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Annual Renewal</span>
-                                    <p className="font-bold text-purple-300 text-sm">${effectiveYearlyPrice} / yr</p>
+                                    <p className="font-bold text-amber-300 text-sm">${effectiveYearlyPrice} / yr</p>
                                     <p className="text-[10px] text-muted-foreground">Renews {activeTrialProrated.nextRenewalDate}</p>
                                 </div>
                             </div>
@@ -1657,8 +1657,8 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                     {user.subscriptionCadence === "MONTHLY" ? "Active Monthly Subscription" : "Active Annual Subscription"}
                                 </span>
                                 {referralInfo?.renewalSummary?.convertedReferralsCount > 0 && (
-                                    <Badge variant="outline" className="bg-purple-500/15 text-purple-300 border-purple-500/30 text-[10px] gap-1 font-semibold">
-                                        <Gift className="h-3 w-3 text-purple-400" />
+                                    <Badge variant="outline" className="bg-amber-500/15 text-amber-300 border-amber-500/30 text-[10px] gap-1 font-semibold">
+                                        <Gift className="h-3 w-3 text-amber-400" />
                                         {referralInfo.renewalSummary.convertedReferralsCount} Free Mo Earned
                                     </Badge>
                                 )}
@@ -1668,10 +1668,10 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                             </p>
 
                             {referralInfo?.renewalSummary?.convertedReferralsCount > 0 ? (
-                                <div className="p-2.5 rounded-lg bg-black/30 border border-purple-500/25 space-y-1.5">
+                                <div className="p-2.5 rounded-lg bg-black/30 border border-amber-500/25 space-y-1.5">
                                     <div className="flex items-center justify-between text-xs">
-                                        <span className="font-semibold text-purple-300 flex items-center gap-1">
-                                            <Sparkles className="h-3.5 w-3.5 text-purple-400" />
+                                        <span className="font-semibold text-amber-300 flex items-center gap-1">
+                                            <Sparkles className="h-3.5 w-3.5 text-amber-400" />
                                             Referral Reward Applied
                                         </span>
                                         <span className="font-bold text-emerald-400">
@@ -1843,7 +1843,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                             <div className="flex items-center justify-between gap-2">
                                                 <div className="flex items-center gap-2 min-w-0">
                                                     {addon.icon === "server" ? (
-                                                        <Server className="h-4 w-4 text-purple-400 shrink-0" />
+                                                        <Server className="h-4 w-4 text-amber-400 shrink-0" />
                                                     ) : addon.icon === "tv" ? (
                                                         <Tv className="h-4 w-4 text-cyan-400 shrink-0" />
                                                     ) : addon.icon === "music" ? (
@@ -1851,11 +1851,11 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                                     ) : addon.icon === "book" ? (
                                                         <BookOpen className="h-4 w-4 text-amber-400 shrink-0" />
                                                     ) : addon.icon === "headphones" ? (
-                                                        <Headphones className="h-4 w-4 text-purple-400 shrink-0" />
+                                                        <Headphones className="h-4 w-4 text-sky-400 shrink-0" />
                                                     ) : addon.icon === "baby" ? (
-                                                        <Baby className="h-4 w-4 text-purple-400 shrink-0" />
+                                                        <Baby className="h-4 w-4 text-emerald-400 shrink-0" />
                                                     ) : addon.icon === "monitor" ? (
-                                                        <Monitor className="h-4 w-4 text-indigo-400 shrink-0" />
+                                                        <Monitor className="h-4 w-4 text-sky-400 shrink-0" />
                                                     ) : addon.icon === "sparkles" ? (
                                                         <Sparkles className="h-4 w-4 text-amber-400 shrink-0" />
                                                     ) : (
@@ -2043,12 +2043,12 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                             {/* 3. Subscription & Renewal Reminders */}
                             <div className={`p-3.5 sm:p-4 rounded-xl border transition-all flex items-start justify-between gap-3 ${
                                 notifPrefs.emailSubscriptionReminders
-                                    ? "bg-white/[0.03] border-white/[0.08] hover:border-purple-500/30"
+                                    ? "bg-white/[0.03] border-white/[0.08] hover:border-amber-500/30"
                                     : "bg-white/[0.01] border-white/[0.04] opacity-60"
                             }`}>
                                 <div className="flex items-start gap-3 min-w-0">
-                                    <div className="h-8 w-8 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center shrink-0 mt-0.5">
-                                        <Calendar className="h-4 w-4 text-purple-400" />
+                                    <div className="h-8 w-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0 mt-0.5">
+                                        <Calendar className="h-4 w-4 text-amber-400" />
                                     </div>
                                     <div className="space-y-1 min-w-0">
                                         <Label htmlFor="notif-sub-reminders" className="text-xs font-semibold text-foreground cursor-pointer block truncate">
@@ -2214,10 +2214,10 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                         <img 
                                             src={user.discordAvatar} 
                                             alt={user.discordUsername || "Discord Avatar"} 
-                                            className="w-10 h-10 rounded-full border border-indigo-500/30 object-cover shrink-0" 
+                                            className="w-10 h-10 rounded-full border border-sky-500/30 object-cover shrink-0" 
                                         />
                                     ) : (
-                                        <div className="w-10 h-10 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-300 shrink-0 font-bold">
+                                        <div className="w-10 h-10 rounded-full bg-sky-500/20 border border-sky-500/30 flex items-center justify-center text-sky-300 shrink-0 font-bold">
                                             {(user.discordUsername || "D").charAt(0).toUpperCase()}
                                         </div>
                                     )}
@@ -2230,15 +2230,16 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                         </p>
                                         <div className="flex items-center gap-2 pt-0.5">
                                             <span className="text-[11px] text-muted-foreground">Server Role:</span>
-                                            <Badge variant="outline" className="text-[10px] font-semibold bg-emerald-500/10 text-emerald-300 border-emerald-500/30">
-                                                {user?.role === "ADMIN" 
-                                                    ? "👑 Admin" 
-                                                    : isTrial 
-                                                        ? "⏱️ Trial Pass" 
-                                                        : currentAccountType === "KID" 
-                                                            ? "🧒 Kids Profile" 
-                                                            : "⭐ Member"
-                                                }
+                                            <Badge variant="outline" className="text-[10px] font-semibold bg-emerald-500/10 text-emerald-300 border-emerald-500/30 inline-flex items-center gap-1">
+                                                {user?.role === "ADMIN" ? (
+                                                    <><Crown className="h-3 w-3 text-amber-400 shrink-0" /><span>Admin</span></>
+                                                ) : isTrial ? (
+                                                    <><Timer className="h-3 w-3 text-sky-400 shrink-0" /><span>Trial Pass</span></>
+                                                ) : currentAccountType === "KID" ? (
+                                                    <><Baby className="h-3 w-3 text-emerald-400 shrink-0" /><span>Kids Profile</span></>
+                                                ) : (
+                                                    <><ShieldCheck className="h-3 w-3 text-emerald-400 shrink-0" /><span>Member</span></>
+                                                )}
                                             </Badge>
                                         </div>
                                     </div>
@@ -2249,7 +2250,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                         href={discordInviteUrl || paymentConfig?.discordInviteUrl || "https://discord.gg/KNvUSmPtD3"}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="text-xs h-8 px-2.5 inline-flex items-center rounded-md bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 gap-1.5 cursor-pointer font-semibold shrink-0"
+                                        className="text-xs h-8 px-2.5 inline-flex items-center rounded-md bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 border border-sky-500/30 gap-1.5 cursor-pointer font-semibold shrink-0"
                                     >
                                         <Gamepad2 className="h-3.5 w-3.5" />
                                         <span>Open Discord</span>
@@ -2261,7 +2262,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                         variant="outline"
                                         disabled={discordLoading}
                                         onClick={handleSyncMyDiscordRole}
-                                        className="text-xs h-8 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border-indigo-500/30 gap-1.5 cursor-pointer"
+                                        className="text-xs h-8 bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 border-sky-500/30 gap-1.5 cursor-pointer"
                                     >
                                         {discordLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
                                         Sync Role
@@ -2320,7 +2321,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                 <div>
                                     <span className="font-bold text-xs text-foreground block">Step 2: Link Your Discord Handle</span>
                                     <p className="text-xs text-muted-foreground leading-relaxed pt-0.5">
-                                        Enter your Discord username below. Linking your account automatically elevates you to <strong className="text-emerald-400">⭐ Member</strong> to unlock all community channels, movie & TV chats, and 4K guides!
+                                        Enter your Discord username below. Linking your account automatically elevates you to <strong className="text-emerald-400">Member</strong> to unlock all community channels, movie &amp; TV chats, and 4K guides!
                                     </p>
                                 </div>
                                 <form onSubmit={handleLinkDiscord} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
@@ -2337,7 +2338,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                     <Button
                                         type="submit"
                                         disabled={discordLoading || !discordInput.trim()}
-                                        className="font-bold text-xs h-9 bg-indigo-600 hover:bg-indigo-500 text-white gap-2 transition-all hover:ring-2 hover:ring-indigo-400/40 shrink-0 cursor-pointer"
+                                        className="font-bold text-xs h-9 bg-primary hover:bg-primary/90 text-primary-foreground gap-2 transition-all shrink-0 cursor-pointer"
                                     >
                                         {discordLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LinkIcon className="h-3.5 w-3.5" />}
                                         Link Discord Account
@@ -2545,16 +2546,16 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                     </form>
 
                     {/* AMAZON WHITELIST & SETUP INSTRUCTIONS */}
-                    <div className="p-3.5 rounded-xl bg-purple-500/5 border border-purple-500/20 space-y-2.5 text-xs">
+                    <div className="p-3.5 rounded-xl bg-amber-500/5 border border-amber-500/20 space-y-2.5 text-xs">
                         <div className="flex items-center justify-between gap-2">
                             <span className="font-bold text-foreground flex items-center gap-1.5 text-xs">
-                                <Sparkles className="h-3.5 w-3.5 text-purple-400" /> Amazon Approved Sender Whitelist
+                                <Sparkles className="h-3.5 w-3.5 text-amber-400" /> Amazon Approved Sender Whitelist
                             </span>
                             <a
                                 href="https://www.amazon.com/hz/mycd/myx#/home/settings/payment"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-[11px] text-purple-400 hover:text-purple-300 flex items-center gap-1 underline underline-offset-2 shrink-0 font-medium"
+                                className="text-[11px] text-amber-400 hover:text-amber-300 flex items-center gap-1 underline underline-offset-2 shrink-0 font-medium"
                             >
                                 Amazon Settings <ExternalLink className="h-3 w-3" />
                             </a>
@@ -2570,7 +2571,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                         
                         {paymentConfig?.kindleSenderEmail || paymentConfig?.smtpFrom ? (
                             <div className="flex flex-col sm:flex-row items-center gap-2 pt-1">
-                                <div className="p-2 rounded-lg bg-background/80 border border-purple-500/30 font-mono text-xs text-foreground flex-1 w-full truncate">
+                                <div className="p-2 rounded-lg bg-background/80 border border-amber-500/30 font-mono text-xs text-foreground flex-1 w-full truncate">
                                     {paymentConfig.kindleSenderEmail || paymentConfig.smtpFrom}
                                 </div>
                                 <Button
@@ -2578,7 +2579,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                     variant="outline"
                                     size="sm"
                                     onClick={() => handleCopy(paymentConfig.kindleSenderEmail || paymentConfig.smtpFrom, "smtpFrom")}
-                                    className="w-full sm:w-auto font-sans text-xs gap-1.5 shrink-0 border-purple-500/30 hover:bg-purple-500/10"
+                                    className="w-full sm:w-auto font-sans text-xs gap-1.5 shrink-0 border-amber-500/30 hover:bg-amber-500/10"
                                 >
                                     {copiedHandle === "smtpFrom" ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5 text-amber-400" />}
                                     {copiedHandle === "smtpFrom" ? "Copied Sender!" : "Copy Sender Email"}
@@ -2686,7 +2687,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                 <Lock className="h-3.5 w-3.5" /> Full Member Perk
                             </Badge>
                         ) : hasAudiobooksAccess ? (
-                            <Badge variant="outline" className="bg-purple-500/15 text-purple-400 border-purple-500/30 text-xs font-semibold w-fit flex items-center gap-1">
+                            <Badge variant="outline" className="bg-amber-500/15 text-amber-400 border-amber-500/30 text-xs font-semibold w-fit flex items-center gap-1">
                                 <CheckCircle2 className="h-3.5 w-3.5" /> Plex Library Granted
                             </Badge>
                         ) : (
@@ -2698,7 +2699,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                 </CardHeader>
                 <CardContent className="space-y-4">
                     {audiobooksAccessMsg && (
-                        <div className="text-xs text-purple-400 bg-purple-950/40 border border-purple-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
+                        <div className="text-xs text-amber-300 bg-amber-950/40 border border-amber-800/40 p-3 rounded-lg flex items-center gap-2 animate-in fade-in">
                             <CheckCircle2 className="h-4 w-4 shrink-0" />
                             <span>{audiobooksAccessMsg}</span>
                         </div>
@@ -2725,7 +2726,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                 <div className="space-y-0.5">
                                     <Label htmlFor="audiobooksLibraryToggle" className="text-xs font-semibold text-foreground cursor-pointer flex items-center gap-1.5">
                                         <span>Grant Audiobooks Plex Library Access</span>
-                                        {savingAudiobooksAccess && <Loader2 className="h-3 w-3 animate-spin text-purple-400" />}
+                                        {savingAudiobooksAccess && <Loader2 className="h-3 w-3 animate-spin text-amber-400" />}
                                     </Label>
                                     <p className="text-[11px] text-muted-foreground">
                                         When enabled, the server automatically updates your Plex account sharing permissions to grant access to the Audiobooks library section. Disabling will remove the Audiobooks library from your Plex dashboard.
@@ -2833,8 +2834,8 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                         <Timer className="h-3.5 w-3.5" /> {paymentConfig?.defaultTrialDays || 14}-Day Free Trial ({daysLeft ?? 0} days remaining)
                                     </Badge>
                                 ) : user?.role === "ADMIN" ? (
-                                    <Badge variant="outline" className="bg-indigo-500/20 text-indigo-300 border-indigo-500/40 gap-1.5 text-xs font-bold">
-                                        <ShieldCheck className="h-3.5 w-3.5 text-indigo-400" /> Platform Administrator (Permanent Access)
+                                    <Badge variant="outline" className="bg-sky-500/20 text-sky-300 border-sky-500/40 gap-1.5 text-xs font-bold">
+                                        <ShieldCheck className="h-3.5 w-3.5 text-sky-400" /> Platform Administrator (Permanent Access)
                                     </Badge>
                                 ) : user?.status === "APPROVED" && user?.subscriptionEndsAt ? (
                                     <Badge variant="outline" className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 gap-1.5 text-xs font-semibold">
@@ -2976,7 +2977,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                 <DialogContent className="w-[96vw] sm:max-w-md max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-slate-950 border border-slate-800 shadow-2xl">
                     <DialogHeader className="shrink-0">
                         <DialogTitle className="flex items-center gap-2 text-lg font-bold text-foreground">
-                            <Sparkles className="h-5 w-5 text-indigo-400" /> Request Feature or Add-On
+                            <Sparkles className="h-5 w-5 text-amber-400" /> Request Feature or Add-On
                         </DialogTitle>
                         <DialogDescription className="text-xs text-muted-foreground">
                             Submit a request to the server administrator to enable this feature or add-on for your account.
@@ -3031,7 +3032,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                 type="submit" 
                                 size="sm" 
                                 disabled={submittingUpgrade}
-                                className="font-bold text-xs bg-indigo-600 hover:bg-indigo-500 text-white gap-1.5 w-full sm:w-auto shrink-0 whitespace-nowrap"
+                                className="font-bold text-xs bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 w-full sm:w-auto shrink-0 whitespace-nowrap"
                             >
                                 {submittingUpgrade ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                                 Submit Upgrade Request
@@ -3046,7 +3047,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                 <DialogContent className="w-[96vw] sm:max-w-md max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-slate-950 border border-slate-800 shadow-2xl">
                     <DialogHeader className="shrink-0">
                         <DialogTitle className="flex items-center gap-2 text-lg font-bold text-foreground">
-                            <Users className="h-5 w-5 text-purple-400" />
+                            <Users className="h-5 w-5 text-sky-400" />
                             {subEditingId ? "Edit Household Sub-Account" : "Add Household Sub-Account"}
                         </DialogTitle>
                         <DialogDescription className="text-xs text-muted-foreground">
@@ -3075,8 +3076,18 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="LIVING_ROOM">📺 Living Room TV (Severe Nudity Excluded)</SelectItem>
-                                    <SelectItem value="KID">👶 Kids Account (Kids-Only Server & PG Ceiling)</SelectItem>
+                                    <SelectItem value="LIVING_ROOM">
+                                        <span className="inline-flex items-center gap-1.5">
+                                            <Tv className="h-3.5 w-3.5 text-sky-400 shrink-0" />
+                                            <span>Living Room TV (Severe Nudity Excluded)</span>
+                                        </span>
+                                    </SelectItem>
+                                    <SelectItem value="KID">
+                                        <span className="inline-flex items-center gap-1.5">
+                                            <Baby className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                                            <span>Kids Account (Kids-Only Server &amp; PG Ceiling)</span>
+                                        </span>
+                                    </SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -3133,7 +3144,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                 type="submit" 
                                 size="sm" 
                                 disabled={savingSub}
-                                className="font-bold text-xs bg-purple-600 hover:bg-purple-500 text-white gap-1.5 cursor-pointer w-full sm:w-auto shrink-0 whitespace-nowrap"
+                                className="font-bold text-xs bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 cursor-pointer w-full sm:w-auto shrink-0 whitespace-nowrap"
                             >
                                 {savingSub ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
                                 {subEditingId ? "Update Sub-Account" : "Create Sub-Account"}

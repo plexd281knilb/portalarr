@@ -34,7 +34,8 @@ import {
     ShieldAlert, History, Users, Search, Trash2, Clock, Globe,
     Radio, AlertTriangle, Copy, Check, Download, ExternalLink,
     Stethoscope, Info, ChevronRight, Smartphone, Laptop,
-    Home, Compass, ShieldCheck, ArrowUpDown, Volume2, Calendar
+    Home, Compass, ShieldCheck, ArrowUpDown, Volume2, Calendar,
+    TrendingDown, MessageSquare, Wifi
 } from "lucide-react";
 
 export default function StreamIntelligencePage() {
@@ -170,7 +171,7 @@ export default function StreamIntelligencePage() {
             return <Tv className="h-4 w-4 text-cyan-400" />;
         }
         if (str.includes("phone") || str.includes("ios") || str.includes("android") || str.includes("mobile")) {
-            return <Smartphone className="h-4 w-4 text-purple-400" />;
+            return <Smartphone className="h-4 w-4 text-sky-400" />;
         }
         if (str.includes("web") || str.includes("chrome") || str.includes("firefox") || str.includes("safari") || str.includes("mac") || str.includes("windows")) {
             return <Laptop className="h-4 w-4 text-emerald-400" />;
@@ -485,7 +486,7 @@ export default function StreamIntelligencePage() {
                     <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-slate-950/80 border border-slate-800 flex-1 sm:flex-initial justify-between sm:justify-end">
                         <div className="flex flex-col text-left sm:text-right">
                             <span className="text-[11px] font-bold text-white flex items-center gap-1.5 sm:justify-end">
-                                <span className={`w-2 h-2 rounded-full ${useBuiltIn ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" : "bg-purple-400"}`} />
+                                <span className={`w-2 h-2 rounded-full ${useBuiltIn ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" : "bg-amber-400"}`} />
                                 {useBuiltIn ? "Native Cluster Monitor" : "External Tautulli Monitor"}
                             </span>
                             <span className="text-[9px] text-muted-foreground">
@@ -585,7 +586,7 @@ export default function StreamIntelligencePage() {
                             }}
                             className={`h-7 px-3 text-xs rounded-full transition-all ${
                                 dateRange === "custom"
-                                    ? "bg-purple-500/20 text-purple-300 border-purple-500/40 font-bold shadow-sm"
+                                    ? "bg-amber-500/20 text-amber-300 border-amber-500/40 font-bold shadow-sm"
                                     : "border-slate-800 text-muted-foreground hover:text-white"
                             }`}
                         >
@@ -615,7 +616,7 @@ export default function StreamIntelligencePage() {
                             size="sm"
                             onClick={handleApplyCustomDates}
                             disabled={!customStartDate || !customEndDate}
-                            className="h-7 px-3 text-xs bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold shadow-sm"
+                            className="h-7 px-3 text-xs bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg font-bold shadow-sm"
                         >
                             Apply
                         </Button>
@@ -639,10 +640,10 @@ export default function StreamIntelligencePage() {
                     <CardContent className="p-4 flex items-center justify-between">
                         <div>
                             <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Active Streams</p>
-                            <h3 className="text-2xl font-black text-cyan-400 mt-0.5">{allSessions.length}</h3>
+                            <h3 className="text-2xl font-black text-cyan-400 mt-0.5 tabular-nums">{allSessions.length}</h3>
                             <p className="text-[10px] text-muted-foreground mt-0.5">Across {monitoredServers.length} monitored servers</p>
                         </div>
-                        <div className="h-10 w-10 rounded-xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+                        <div className="h-10 w-10 rounded-lg bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
                             <Activity className="h-5 w-5" />
                         </div>
                     </CardContent>
@@ -659,10 +660,10 @@ export default function StreamIntelligencePage() {
                                     </Badge>
                                 )}
                             </div>
-                            <h3 className="text-2xl font-black text-emerald-400 mt-0.5">{analytics.directPlayRatio ?? 100}%</h3>
-                            <p className="text-[10px] text-muted-foreground mt-0.5">{analytics.directPlayCount?.toLocaleString() || 0} Direct / {analytics.transcodeCount?.toLocaleString() || 0} Transcode</p>
+                            <h3 className="text-2xl font-black text-emerald-400 mt-0.5 tabular-nums">{analytics.directPlayRatio ?? 100}%</h3>
+                            <p className="text-[10px] text-muted-foreground mt-0.5 tabular-nums">{analytics.directPlayCount?.toLocaleString() || 0} Direct / {analytics.transcodeCount?.toLocaleString() || 0} Transcode</p>
                         </div>
-                        <div className="h-10 w-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                        <div className="h-10 w-10 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
                             <Zap className="h-5 w-5" />
                         </div>
                     </CardContent>
@@ -674,15 +675,15 @@ export default function StreamIntelligencePage() {
                             <div className="flex items-center gap-1.5">
                                 <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Hours Streamed</p>
                                 {dateRange !== "all" && (
-                                    <Badge variant="outline" className="text-[9px] py-0 px-1 bg-purple-500/10 text-purple-300 border-purple-500/30 font-medium">
+                                    <Badge variant="outline" className="text-[9px] py-0 px-1 bg-sky-500/10 text-sky-300 border-sky-500/30 font-medium">
                                         {getRangeLabel()}
                                     </Badge>
                                 )}
                             </div>
-                            <h3 className="text-2xl font-black text-purple-400 mt-0.5">{analytics.totalWatchHours?.toLocaleString() || 0} hrs</h3>
-                            <p className="text-[10px] text-muted-foreground mt-0.5">{analytics.totalSessions?.toLocaleString() || 0} total sessions logged</p>
+                            <h3 className="text-2xl font-black text-sky-400 mt-0.5 tabular-nums">{analytics.totalWatchHours?.toLocaleString() || 0} hrs</h3>
+                            <p className="text-[10px] text-muted-foreground mt-0.5 tabular-nums">{analytics.totalSessions?.toLocaleString() || 0} total sessions logged</p>
                         </div>
-                        <div className="h-10 w-10 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400">
+                        <div className="h-10 w-10 rounded-lg bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-400">
                             <Clock className="h-5 w-5" />
                         </div>
                     </CardContent>
@@ -764,7 +765,7 @@ export default function StreamIntelligencePage() {
 
                     <TabsTrigger 
                         value="analytics" 
-                        className="text-xs font-bold data-[state=active]:bg-purple-500/20 data-[state=active]:text-purple-300 data-[state=active]:border-purple-500/40 rounded-lg flex items-center gap-1.5"
+                        className="text-xs font-bold data-[state=active]:bg-amber-500/20 data-[state=active]:text-amber-300 data-[state=active]:border-amber-500/40 rounded-lg flex items-center gap-1.5"
                     >
                         <BarChart3 className="h-3.5 w-3.5" />
                         Libraries & Analytics
@@ -772,7 +773,7 @@ export default function StreamIntelligencePage() {
 
                     <TabsTrigger 
                         value="backfill" 
-                        className="text-xs font-bold data-[state=active]:bg-indigo-500/20 data-[state=active]:text-indigo-300 data-[state=active]:border-indigo-500/40 rounded-lg flex items-center gap-1.5"
+                        className="text-xs font-bold data-[state=active]:bg-sky-500/20 data-[state=active]:text-sky-300 data-[state=active]:border-sky-500/40 rounded-lg flex items-center gap-1.5"
                     >
                         <Download className="h-3.5 w-3.5" />
                         Tautulli Sync & Backfill
@@ -862,7 +863,7 @@ export default function StreamIntelligencePage() {
                                             {/* Poster & Header */}
                                             <div className="p-4 flex gap-3.5">
                                                 <div className="relative w-16 h-24 rounded-lg overflow-hidden shrink-0 bg-slate-950 border border-slate-800 flex items-center justify-center shadow-md">
-                                                    <div className="absolute inset-0 flex items-center justify-center text-slate-600">
+                                                    <div className="absolute inset-0 flex items-center justify-center text-slate-400">
                                                         {session.mediaType === "episode" ? <Tv className="h-6 w-6" /> : <Film className="h-6 w-6" />}
                                                     </div>
                                                     {session.thumb && (
@@ -881,7 +882,7 @@ export default function StreamIntelligencePage() {
                                                             {session.serverName}
                                                         </Badge>
                                                         {session.seasonEpisodeTag && (
-                                                            <Badge className="text-[10px] font-mono bg-purple-500/20 text-purple-300 border-purple-500/30">
+                                                            <Badge className="text-[10px] font-mono bg-amber-500/20 text-amber-300 border-amber-500/30">
                                                                 {session.seasonEpisodeTag}
                                                             </Badge>
                                                         )}
@@ -928,9 +929,13 @@ export default function StreamIntelligencePage() {
 
                                                     <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground truncate pt-0.5">
                                                         <span className="truncate">{session.player} • {session.device}</span>
-                                                        <span className="text-slate-600">•</span>
-                                                        <span className="font-mono text-slate-400 shrink-0">
-                                                            {session.connectionLabel || (session.location === "lan" ? "⚡ Direct LAN" : "🌐 Direct WAN")}
+                                                        <span className="text-slate-400">•</span>
+                                                        <span className="font-mono text-slate-400 shrink-0 inline-flex items-center gap-1">
+                                                            {session.connectionLabel ? session.connectionLabel : session.location === "lan" ? (
+                                                                <><Zap className="h-3 w-3 text-emerald-400 shrink-0" /> Direct LAN</>
+                                                            ) : (
+                                                                <><Globe className="h-3 w-3 text-sky-400 shrink-0" /> Direct WAN</>
+                                                            )}
                                                         </span>
                                                     </div>
                                                 </div>
@@ -945,21 +950,22 @@ export default function StreamIntelligencePage() {
 
                                                     {/* Resolution Conversion & Downscaling Badge */}
                                                     {session.sourceResolution && (
-                                                        <span className={`px-2 py-0.5 rounded font-mono font-bold text-[9px] border ${
+                                                        <span className={`px-2 py-0.5 rounded font-mono font-bold text-[9px] border inline-flex items-center gap-1 ${
                                                             session.sourceResolution !== session.streamResolution && session.streamResolution
                                                                 ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
                                                                 : "bg-slate-800 text-slate-200 border-slate-700"
                                                         }`}>
-                                                            {session.sourceResolution !== session.streamResolution && session.streamResolution 
-                                                                ? `📉 ${session.sourceResolution} ➔ ${session.streamResolution}` 
-                                                                : (session.streamResolution || session.sourceResolution)}
+                                                            {session.sourceResolution !== session.streamResolution && session.streamResolution ? (
+                                                                <><TrendingDown className="h-2.5 w-2.5 shrink-0" /> {session.sourceResolution} ➔ {session.streamResolution}</>
+                                                            ) : (session.streamResolution || session.sourceResolution)}
                                                         </span>
                                                     )}
 
                                                     {/* HDR & Tone Mapping */}
                                                     {session.hdrFormat && (
                                                         <Badge className="text-[9px] font-bold bg-amber-500/20 text-amber-300 border-amber-500/30 font-mono flex items-center gap-1">
-                                                            ✨ {session.hdrFormat} {session.isToneMapping ? "➔ SDR Tone Mapped" : ""}
+                                                            <Sparkles className="h-2.5 w-2.5 shrink-0" />
+                                                            <span>{session.hdrFormat} {session.isToneMapping ? "➔ SDR Tone Mapped" : ""}</span>
                                                         </Badge>
                                                     )}
 
@@ -991,8 +997,8 @@ export default function StreamIntelligencePage() {
                                                                     ? "Transcode speed is faster than real-time playback"
                                                                     : "Transcode speed is slower than real-time playback (buffering risk!)"
                                                         }>
-                                                            <Clock className="h-2.5 w-2.5" />
-                                                            ⚡ {session.transcodeSpeed || "0.0x"} speed {session.transcodeThrottled ? "(Throttled • Power Saving)" : session.transcodeSpeedHealthy !== false ? "(Real-Time OK)" : "(Slow)"}
+                                                            <Zap className="h-2.5 w-2.5 shrink-0" />
+                                                            <span>{session.transcodeSpeed || "0.0x"} speed {session.transcodeThrottled ? "(Throttled • Power Saving)" : session.transcodeSpeedHealthy !== false ? "(Real-Time OK)" : "(Slow)"}</span>
                                                         </Badge>
                                                     )}
 
@@ -1024,10 +1030,10 @@ export default function StreamIntelligencePage() {
                                                 </div>
                                                 {session.hasSubtitle && (
                                                     <div className="flex items-center gap-1.5 shrink-0">
-                                                        <span className="text-slate-400">💬 {session.subtitleLanguage || "Sub"} {session.subtitleCodec ? `(${session.subtitleCodec})` : ""}</span>
+                                                        <span className="text-slate-400 inline-flex items-center gap-1"><MessageSquare className="h-3 w-3 shrink-0" /> {session.subtitleLanguage || "Sub"} {session.subtitleCodec ? `(${session.subtitleCodec})` : ""}</span>
                                                         {session.isSubtitleBurnIn && (
-                                                            <Badge variant="outline" className="text-[9px] font-bold bg-rose-500/20 text-rose-300 border-rose-500/40 animate-pulse" title="Subtitles are being burned into video, forcing CPU/GPU transcode">
-                                                                🔥 Burned In
+                                                            <Badge variant="outline" className="text-[9px] font-bold bg-rose-500/20 text-rose-300 border-rose-500/40 animate-pulse inline-flex items-center gap-1" title="Subtitles are being burned into video, forcing CPU/GPU transcode">
+                                                                <Flame className="h-2.5 w-2.5 shrink-0" /> Burned In
                                                             </Badge>
                                                         )}
                                                     </div>
@@ -1151,9 +1157,10 @@ export default function StreamIntelligencePage() {
                                     </button>
                                     <button
                                         onClick={() => setHistoryFilter("alerts")}
-                                        className={`px-2.5 py-1 rounded-md font-medium ${historyFilter === "alerts" ? "bg-red-500/20 text-red-300 font-bold" : "text-muted-foreground"}`}
+                                        className={`px-2.5 py-1 rounded-md font-medium inline-flex items-center gap-1 ${historyFilter === "alerts" ? "bg-red-500/20 text-red-300 font-bold" : "text-muted-foreground"}`}
                                     >
-                                        🚨 Sharing Alerts
+                                        <ShieldAlert className="h-3.5 w-3.5 shrink-0" />
+                                        <span>Sharing Alerts</span>
                                     </button>
                                 </div>
                             </div>
@@ -1192,8 +1199,9 @@ export default function StreamIntelligencePage() {
                                                             {item.serverName}
                                                         </Badge>
                                                         {item.isSharingAlert && (
-                                                            <Badge className="text-[9px] py-0 bg-red-500/20 text-red-300 border-red-500/40">
-                                                                🚨 Sharing Alert
+                                                            <Badge className="text-[9px] py-0 bg-red-500/20 text-red-300 border-red-500/40 inline-flex items-center gap-1">
+                                                                <ShieldAlert className="h-2.5 w-2.5 shrink-0" />
+                                                                <span>Sharing Alert</span>
                                                             </Badge>
                                                         )}
                                                     </div>
@@ -1290,29 +1298,33 @@ export default function StreamIntelligencePage() {
                                     onClick={() => setUserSharingFilter("sharing")}
                                     className={`px-3 py-1 rounded-lg font-medium transition-all flex items-center gap-1.5 ${userSharingFilter === "sharing" ? "bg-red-500/20 text-red-300 border border-red-500/40 font-bold" : "bg-slate-950 border border-slate-800 text-muted-foreground hover:text-white"}`}
                                 >
-                                    <span>🚨 Suspected Sharing</span>
-                                    <span className="px-1.5 py-0.2 rounded-full bg-red-950/80 text-[10px] text-red-300 font-mono">{userSharingCounts.sharing}</span>
+                                    <ShieldAlert className="h-3.5 w-3.5 text-red-400 shrink-0" />
+                                    <span>Suspected Sharing</span>
+                                    <span className="px-1.5 py-0.2 rounded-full bg-red-950/80 text-[10px] text-red-300 font-mono tabular-nums">{userSharingCounts.sharing}</span>
                                 </button>
                                 <button
                                     onClick={() => setUserSharingFilter("travel")}
-                                    className={`px-3 py-1 rounded-lg font-medium transition-all flex items-center gap-1.5 ${userSharingFilter === "travel" ? "bg-purple-500/20 text-purple-300 border border-purple-500/40 font-bold" : "bg-slate-950 border border-slate-800 text-muted-foreground hover:text-white"}`}
+                                    className={`px-3 py-1 rounded-lg font-medium transition-all flex items-center gap-1.5 ${userSharingFilter === "travel" ? "bg-teal-500/20 text-teal-300 border border-teal-500/40 font-bold" : "bg-slate-950 border border-slate-800 text-muted-foreground hover:text-white"}`}
                                 >
-                                    <span>🏡 2nd Home / Vacation</span>
-                                    <span className="px-1.5 py-0.2 rounded-full bg-purple-950/80 text-[10px] text-purple-300 font-mono">{userSharingCounts.travel}</span>
+                                    <Compass className="h-3.5 w-3.5 text-teal-400 shrink-0" />
+                                    <span>2nd Home / Vacation</span>
+                                    <span className="px-1.5 py-0.2 rounded-full bg-teal-950/80 text-[10px] text-teal-300 font-mono tabular-nums">{userSharingCounts.travel}</span>
                                 </button>
                                 <button
                                     onClick={() => setUserSharingFilter("roaming")}
-                                    className={`px-3 py-1 rounded-lg font-medium transition-all flex items-center gap-1.5 ${userSharingFilter === "roaming" ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 font-bold" : "bg-slate-950 border border-slate-800 text-muted-foreground hover:text-white"}`}
+                                    className={`px-3 py-1 rounded-lg font-medium transition-all flex items-center gap-1.5 ${userSharingFilter === "roaming" ? "bg-sky-500/20 text-sky-300 border border-sky-500/40 font-bold" : "bg-slate-950 border border-slate-800 text-muted-foreground hover:text-white"}`}
                                 >
-                                    <span>📱 Mobile Roaming</span>
-                                    <span className="px-1.5 py-0.2 rounded-full bg-indigo-950/80 text-[10px] text-indigo-300 font-mono">{userSharingCounts.roaming}</span>
+                                    <Smartphone className="h-3.5 w-3.5 text-sky-400 shrink-0" />
+                                    <span>Mobile Roaming</span>
+                                    <span className="px-1.5 py-0.2 rounded-full bg-sky-950/80 text-[10px] text-sky-300 font-mono tabular-nums">{userSharingCounts.roaming}</span>
                                 </button>
                                 <button
                                     onClick={() => setUserSharingFilter("transcoding")}
                                     className={`px-3 py-1 rounded-lg font-medium transition-all flex items-center gap-1.5 ${userSharingFilter === "transcoding" ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold" : "bg-slate-950 border border-slate-800 text-muted-foreground hover:text-white"}`}
                                 >
-                                    <span>⚠️ Transcoders</span>
-                                    <span className="px-1.5 py-0.2 rounded-full bg-amber-950/80 text-[10px] text-amber-300 font-mono">{userSharingCounts.transcoding}</span>
+                                    <AlertTriangle className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                                    <span>Transcoders</span>
+                                    <span className="px-1.5 py-0.2 rounded-full bg-amber-950/80 text-[10px] text-amber-300 font-mono tabular-nums">{userSharingCounts.transcoding}</span>
                                 </button>
                             </div>
                         </CardHeader>
@@ -1341,18 +1353,21 @@ export default function StreamIntelligencePage() {
                                                         </Badge>
                                                     )}
                                                     {user.sharingAssessment?.fixedTvOverlapCount > 0 && (
-                                                        <Badge className="bg-red-500/20 text-red-300 border-red-500/40 text-[10px] animate-pulse">
-                                                            🚨 {user.sharingAssessment.fixedTvOverlapCount} Dual TV Overlaps
+                                                        <Badge className="bg-red-500/20 text-red-300 border-red-500/40 text-[10px] inline-flex items-center gap-1">
+                                                            <ShieldAlert className="h-3 w-3 shrink-0" />
+                                                            <span>{user.sharingAssessment.fixedTvOverlapCount} Dual TV Overlaps</span>
                                                         </Badge>
                                                     )}
                                                     {user.frequentTranscoder && (
-                                                        <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/30 text-[10px]">
-                                                            ⚠️ {user.transcodeRate}% Transcoding
+                                                        <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/30 text-[10px] inline-flex items-center gap-1">
+                                                            <AlertTriangle className="h-3 w-3 shrink-0" />
+                                                            <span>{user.transcodeRate}% Transcoding</span>
                                                         </Badge>
                                                     )}
                                                     {user.sharingAlerts > 0 && (
-                                                        <Badge className="bg-red-500/20 text-red-300 border-red-500/30 text-[10px]">
-                                                            🚨 {user.sharingAlerts} Sharing Alerts
+                                                        <Badge className="bg-red-500/20 text-red-300 border-red-500/30 text-[10px] inline-flex items-center gap-1">
+                                                            <ShieldAlert className="h-3 w-3 shrink-0" />
+                                                            <span>{user.sharingAlerts} Sharing Alerts</span>
                                                         </Badge>
                                                     )}
                                                 </div>
@@ -1367,7 +1382,7 @@ export default function StreamIntelligencePage() {
                                                         {user.devices?.length || user.devicesCount || user.platforms?.length || 1} {((user.devices?.length || user.devicesCount || 1) === 1) ? "Device" : "Devices"}
                                                     </span>
                                                     <span className="px-2 py-0.5 rounded-full bg-slate-950 border border-slate-800 text-slate-300 font-medium flex items-center gap-1">
-                                                        <Globe className="h-3 w-3 text-indigo-400" />
+                                                        <Globe className="h-3 w-3 text-sky-400" />
                                                         {user.ips?.length || user.ipsCount || 1} {((user.ips?.length || user.ipsCount || 1) === 1) ? "IP" : "IPs"}
                                                     </span>
                                                     {user.sharingAssessment?.primaryHomeIp && (
@@ -1377,8 +1392,8 @@ export default function StreamIntelligencePage() {
                                                         </span>
                                                     )}
                                                     {user.sharingAssessment?.secondaryHomeIp && (
-                                                        <span className="px-2 py-0.5 rounded-full bg-purple-950/40 border border-purple-800/40 text-purple-300 font-medium flex items-center gap-1">
-                                                            <Compass className="h-3 w-3 text-purple-400" />
+                                                        <span className="px-2 py-0.5 rounded-full bg-teal-950/40 border border-teal-800/40 text-teal-300 font-medium flex items-center gap-1">
+                                                            <Compass className="h-3 w-3 text-teal-400" />
                                                             2nd Home: {user.sharingAssessment.secondaryHomeIp}
                                                         </span>
                                                     )}
@@ -1540,7 +1555,7 @@ export default function StreamIntelligencePage() {
                                                 <div className="flex items-center gap-3 min-w-0 pr-2">
                                                     <span className="font-mono font-bold text-slate-500 w-5 text-right shrink-0">{idx + 1}.</span>
                                                     <div className="relative w-9 h-13 sm:w-10 sm:h-14 rounded-md overflow-hidden shrink-0 bg-slate-950 border border-slate-800 flex items-center justify-center shadow-md">
-                                                        <Film className="h-4 w-4 text-slate-600 absolute" />
+                                                        <Film className="h-4 w-4 text-slate-400 absolute" />
                                                         <img 
                                                             src={m.thumb || `/api/media/image?title=${encodeURIComponent(m.title)}&type=movie`} 
                                                             alt={m.title} 
@@ -1574,7 +1589,7 @@ export default function StreamIntelligencePage() {
                         <Card className="bg-slate-900/80 border-slate-800 backdrop-blur-md">
                             <CardHeader className="p-4 pb-2">
                                 <CardTitle className="text-sm font-bold text-white flex items-center gap-2">
-                                    <Tv className="h-4 w-4 text-purple-400" />
+                                    <Tv className="h-4 w-4 text-sky-400" />
                                     Top 10 Most Watched TV Series
                                 </CardTitle>
                             </CardHeader>
@@ -1588,7 +1603,7 @@ export default function StreamIntelligencePage() {
                                                 <div className="flex items-center gap-3 min-w-0 pr-2">
                                                     <span className="font-mono font-bold text-slate-500 w-5 text-right shrink-0">{idx + 1}.</span>
                                                     <div className="relative w-9 h-13 sm:w-10 sm:h-14 rounded-md overflow-hidden shrink-0 bg-slate-950 border border-slate-800 flex items-center justify-center shadow-md">
-                                                        <Tv className="h-4 w-4 text-slate-600 absolute" />
+                                                        <Tv className="h-4 w-4 text-slate-400 absolute" />
                                                         <img 
                                                             src={s.thumb || `/api/media/image?title=${encodeURIComponent(s.title)}&type=show`} 
                                                             alt={s.title} 
@@ -1608,7 +1623,7 @@ export default function StreamIntelligencePage() {
                                                         {s.year && <span className="text-[10px] text-muted-foreground font-mono">{s.year}</span>}
                                                     </div>
                                                 </div>
-                                                <Badge variant="outline" className="text-[10px] font-mono bg-purple-500/10 text-purple-300 border-purple-500/30 shrink-0">
+                                                <Badge variant="outline" className="text-[10px] font-mono bg-sky-500/10 text-sky-300 border-sky-500/30 shrink-0">
                                                     {s.plays} {s.plays === 1 ? "Play" : "Plays"}
                                                 </Badge>
                                             </div>
@@ -1627,7 +1642,7 @@ export default function StreamIntelligencePage() {
                     <Card className="bg-slate-900/80 border-slate-800 backdrop-blur-md">
                         <CardHeader className="p-5 pb-3">
                             <CardTitle className="text-base font-bold text-white flex items-center gap-2">
-                                <Download className="h-5 w-5 text-indigo-400" />
+                                <Download className="h-5 w-5 text-sky-400" />
                                 Tautulli Historical Backfill & Standalone Control
                             </CardTitle>
                             <CardDescription className="text-xs max-w-2xl">
@@ -1651,7 +1666,7 @@ export default function StreamIntelligencePage() {
                                                     <div className="font-bold text-white text-xs">{t.name}</div>
                                                     <div className="text-[10px] text-muted-foreground font-mono truncate max-w-[200px]">{t.url}</div>
                                                 </div>
-                                                <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30 text-[10px]">
+                                                <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/30 text-[10px]">
                                                     {useBuiltIn ? "Backfill Source" : "Active Tracking"}
                                                 </Badge>
                                             </div>
@@ -1665,7 +1680,7 @@ export default function StreamIntelligencePage() {
                                 <div className="space-y-1">
                                     <div className="flex items-center gap-2">
                                         <h4 className="text-xs font-bold text-white">Import Historical Sessions from Tautulli</h4>
-                                        <Badge variant="outline" className="text-[10px] bg-indigo-950/40 border-indigo-500/30 text-indigo-300">
+                                        <Badge variant="outline" className="text-[10px] bg-sky-950/40 border-sky-500/30 text-sky-300">
                                             Unlimited Supported
                                         </Badge>
                                     </div>
@@ -1689,14 +1704,14 @@ export default function StreamIntelligencePage() {
                                             <option value={5000}>5,000 records (Deep backfill)</option>
                                             <option value={10000}>10,000 records</option>
                                             <option value={25000}>25,000 records</option>
-                                            <option value={0}>✨ All Records / Unlimited (Complete History)</option>
+                                            <option value={0}>All Records / Unlimited (Complete History)</option>
                                         </select>
                                     </div>
 
                                     <Button
                                         onClick={handleRunBackfill}
                                         disabled={isBackfilling || tautulliInstances.length === 0}
-                                        className="h-8 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs"
+                                        className="h-8 px-4 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs"
                                     >
                                         {isBackfilling ? (
                                             <>
@@ -1719,8 +1734,8 @@ export default function StreamIntelligencePage() {
                                 </div>
 
                                 {backfillLimit === 0 && !isBackfilling && (
-                                    <div className="flex items-start gap-2 p-3 rounded-lg bg-indigo-950/30 border border-indigo-500/30 text-[11px] text-indigo-200">
-                                        <Sparkles className="h-4 w-4 text-indigo-400 shrink-0 mt-0.5" />
+                                    <div className="flex items-start gap-2 p-3 rounded-lg bg-sky-950/30 border border-sky-500/30 text-[11px] text-sky-200">
+                                        <Sparkles className="h-4 w-4 text-sky-400 shrink-0 mt-0.5" />
                                         <span>
                                             <strong>Complete Unlimited Mode:</strong> DomsHomeLab will paginate through your entire Tautulli history without any record caps until all sessions are imported. Runs asynchronously in the background even if it takes a long time, with live progress tracking and cancellation support below.
                                         </span>
@@ -1729,10 +1744,10 @@ export default function StreamIntelligencePage() {
 
                                 {/* Live Progress Cockpit */}
                                 {isBackfilling && (
-                                    <div className="p-4 rounded-xl bg-slate-900/90 border border-indigo-500/40 space-y-3 shadow-lg">
+                                    <div className="p-4 rounded-xl bg-slate-900/90 border border-sky-500/40 space-y-3 shadow-lg">
                                         <div className="flex flex-wrap items-center justify-between gap-2">
                                             <div className="flex items-center gap-2">
-                                                <Loader2 className="h-4 w-4 text-indigo-400 animate-spin" />
+                                                <Loader2 className="h-4 w-4 text-sky-400 animate-spin" />
                                                 <span className="text-xs font-semibold text-white">
                                                     {backfillProgress?.isUnlimited ? "Unlimited Complete Backfill in Progress..." : "Backfill in Progress..."}
                                                 </span>
@@ -1781,14 +1796,16 @@ export default function StreamIntelligencePage() {
 
                                         {/* Live Stat Badges */}
                                         <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px]">
-                                            <span className="px-2.5 py-1 rounded-md bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 font-medium">
-                                                ✨ {(backfillProgress?.importedCount || 0).toLocaleString()} Imported
+                                            <span className="px-2.5 py-1 rounded-md bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 font-medium inline-flex items-center gap-1.5 tabular-nums">
+                                                <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                                                <span>{(backfillProgress?.importedCount || 0).toLocaleString()} Imported</span>
                                             </span>
-                                            <span className="px-2.5 py-1 rounded-md bg-slate-950/80 border border-slate-800 text-muted-foreground font-medium">
-                                                🔁 {(backfillProgress?.skippedCount || 0).toLocaleString()} Skipped Duplicates
+                                            <span className="px-2.5 py-1 rounded-md bg-slate-950/80 border border-slate-800 text-muted-foreground font-medium inline-flex items-center gap-1.5 tabular-nums">
+                                                <RefreshCw className="h-3.5 w-3.5 shrink-0" />
+                                                <span>{(backfillProgress?.skippedCount || 0).toLocaleString()} Skipped Duplicates</span>
                                             </span>
                                             {backfillProgress?.currentPage ? (
-                                                <span className="px-2.5 py-1 rounded-md bg-indigo-950/40 border border-indigo-500/30 text-indigo-300 font-mono text-[10px]">
+                                                <span className="px-2.5 py-1 rounded-md bg-sky-950/40 border border-sky-500/30 text-sky-300 font-mono text-[10px] tabular-nums">
                                                     Page {backfillProgress.currentPage}{backfillProgress.totalPages ? ` of ${backfillProgress.totalPages}` : ""}
                                                 </span>
                                             ) : null}
@@ -1950,7 +1967,7 @@ export default function StreamIntelligencePage() {
                                     {userDetails?.totalPlays?.toLocaleString() ?? "..."} Total Plays {dateRange !== "all" && userModalViewRange === "active" ? `(${getRangeLabel()})` : "(All Time)"}
                                 </Badge>
                                 <Badge variant="outline" className="text-xs bg-slate-900 border-slate-800 text-slate-200 py-1 px-2.5">
-                                    <Clock className="h-3.5 w-3.5 text-purple-400 mr-1.5" />
+                                    <Clock className="h-3.5 w-3.5 text-amber-400 mr-1.5" />
                                     {userDetails?.totalWatchHours?.toLocaleString() ?? "..."} Watch Hours
                                 </Badge>
                                 <Badge variant="outline" className="text-xs bg-slate-900 border-slate-800 text-slate-200 py-1 px-2.5">
@@ -1962,7 +1979,7 @@ export default function StreamIntelligencePage() {
                                     {userDetails?.devices?.length ?? "..."} Devices Used
                                 </Badge>
                                 <Badge variant="outline" className="text-xs bg-slate-900 border-slate-800 text-slate-200 py-1 px-2.5">
-                                    <Globe className="h-3.5 w-3.5 text-indigo-400 mr-1.5" />
+                                    <Globe className="h-3.5 w-3.5 text-sky-400 mr-1.5" />
                                     {userDetails?.ips?.length ?? "..."} IP Addresses
                                 </Badge>
                                 {userDetails?.sharingAssessment && (
@@ -1990,7 +2007,7 @@ export default function StreamIntelligencePage() {
                                 </button>
                                 <button
                                     onClick={() => setUserModalTab("devices")}
-                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${userModalTab === "devices" ? "bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-sm" : "bg-slate-900 text-muted-foreground hover:text-white border border-slate-800"}`}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${userModalTab === "devices" ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm" : "bg-slate-900 text-muted-foreground hover:text-white border border-slate-800"}`}
                                 >
                                     <Smartphone className="h-3.5 w-3.5" />
                                     All Devices ({userDetails?.devices?.length || 0})
@@ -2080,7 +2097,7 @@ export default function StreamIntelligencePage() {
                                                 <div key={item.id} className="p-3.5 flex items-center justify-between gap-3 hover:bg-slate-800/30 transition-all text-xs">
                                                     <div className="flex items-center gap-3 min-w-0">
                                                         <div className="relative w-10 h-14 rounded-md overflow-hidden shrink-0 bg-slate-950 border border-slate-800 flex items-center justify-center shadow-sm">
-                                                            <div className="absolute inset-0 flex items-center justify-center text-slate-600">
+                                                            <div className="absolute inset-0 flex items-center justify-center text-slate-400">
                                                                 {item.mediaType === "episode" ? <Tv className="h-4 w-4" /> : <Film className="h-4 w-4" />}
                                                             </div>
                                                             {item.thumb && (
@@ -2102,13 +2119,13 @@ export default function StreamIntelligencePage() {
                                                                     {item.serverName}
                                                                 </Badge>
                                                                 {item.seasonNum && item.episodeNum && (
-                                                                    <Badge className="text-[9px] py-0 font-mono bg-purple-500/20 text-purple-300 border-purple-500/30">
+                                                                    <Badge className="text-[9px] py-0 font-mono bg-sky-500/20 text-sky-300 border-sky-500/30">
                                                                         S{String(item.seasonNum).padStart(2, "0")}E{String(item.episodeNum).padStart(2, "0")}
                                                                     </Badge>
                                                                 )}
                                                                 {item.isSharingAlert && (
-                                                                    <Badge className="text-[9px] py-0 bg-red-500/20 text-red-300 border-red-500/40">
-                                                                        🚨 Sharing Alert
+                                                                    <Badge className="text-[9px] py-0 bg-red-500/20 text-red-300 border-red-500/40 inline-flex items-center gap-1">
+                                                                        <ShieldAlert className="h-2.5 w-2.5 shrink-0" /> Sharing Alert
                                                                     </Badge>
                                                                 )}
                                                             </div>
@@ -2208,18 +2225,18 @@ export default function StreamIntelligencePage() {
                                                 <Card key={idx} className={`p-4 space-y-3 shadow-md border ${ip.sharingAlertCount > 0 ? "bg-red-950/20 border-red-500/40" : "bg-slate-950/70 border-slate-800"}`}>
                                                     <div className="flex items-start justify-between gap-2">
                                                         <div className="flex items-center gap-2.5">
-                                                            <div className={`p-2 rounded-lg border ${ip.isLan ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" : "bg-indigo-500/10 border-indigo-500/30 text-indigo-400"}`}>
+                                                            <div className={`p-2 rounded-lg border ${ip.isLan ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" : "bg-sky-500/10 border-sky-500/30 text-sky-400"}`}>
                                                                 <Globe className="h-4 w-4" />
                                                             </div>
                                                             <div>
                                                                 <h4 className="font-mono font-bold text-sm text-white">{ip.ip}</h4>
                                                                 <div className="flex items-center gap-1.5 mt-0.5">
-                                                                    <Badge className={`text-[9px] py-0 ${ip.isLan ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40" : "bg-indigo-500/20 text-indigo-300 border-indigo-500/40"}`}>
+                                                                    <Badge className={`text-[9px] py-0 ${ip.isLan ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40" : "bg-sky-500/20 text-sky-300 border-sky-500/40"}`}>
                                                                         {ip.isLan ? "LAN / Home Network" : `Public WAN (${ip.location || "Remote"})`}
                                                                     </Badge>
                                                                     {ip.sharingAlertCount > 0 && (
-                                                                        <Badge className="text-[9px] py-0 bg-red-500/20 text-red-300 border-red-500/40">
-                                                                            🚨 {ip.sharingAlertCount} Sharing Alerts
+                                                                        <Badge className="text-[9px] py-0 bg-red-500/20 text-red-300 border-red-500/40 inline-flex items-center gap-1">
+                                                                            <ShieldAlert className="h-2.5 w-2.5 shrink-0" /> {ip.sharingAlertCount} Sharing Alerts
                                                                         </Badge>
                                                                     )}
                                                                 </div>
@@ -2299,7 +2316,7 @@ export default function StreamIntelligencePage() {
                                         <Card className="bg-slate-950/70 border-slate-800 p-3.5 space-y-1.5 shadow-md">
                                             <div className="flex items-center justify-between text-muted-foreground text-xs">
                                                 <span className="flex items-center gap-1.5 font-medium">
-                                                    <Compass className="h-4 w-4 text-purple-400" />
+                                                    <Compass className="h-4 w-4 text-teal-400" />
                                                     Secondary Location
                                                 </span>
                                             </div>
@@ -2320,10 +2337,10 @@ export default function StreamIntelligencePage() {
                                                     Device Typology
                                                 </span>
                                             </div>
-                                            <div className="text-sm font-bold text-white flex items-center gap-2">
+                                            <div className="text-sm font-bold text-white flex items-center gap-2 tabular-nums">
                                                 <span className="text-cyan-300">{userDetails?.sharingAssessment?.fixedHomeDeviceCount || 0} Fixed TVs</span>
-                                                <span className="text-slate-600">/</span>
-                                                <span className="text-indigo-300">{userDetails?.sharingAssessment?.mobileDeviceCount || 0} Mobile</span>
+                                                <span className="text-slate-400">/</span>
+                                                <span className="text-sky-300">{userDetails?.sharingAssessment?.mobileDeviceCount || 0} Mobile</span>
                                             </div>
                                             <p className="text-[10px] text-muted-foreground">
                                                 Fixed living room TVs stay anchored; mobile phones roam safely.
@@ -2337,11 +2354,11 @@ export default function StreamIntelligencePage() {
                                                     Simultaneous Overlaps
                                                 </span>
                                             </div>
-                                            <div className="text-sm font-bold text-white flex items-center gap-2">
+                                            <div className="text-sm font-bold text-white flex items-center gap-2 tabular-nums">
                                                 <span className={(userDetails?.sharingAssessment?.fixedTvOverlapCount || 0) > 0 ? "text-red-400 font-black animate-pulse" : "text-slate-300"}>
                                                     {userDetails?.sharingAssessment?.fixedTvOverlapCount || 0} Dual TVs
                                                 </span>
-                                                <span className="text-slate-600">/</span>
+                                                <span className="text-slate-400">/</span>
                                                 <span className="text-slate-400">
                                                     {userDetails?.sharingAssessment?.concurrentOverlapCount || 0} Total
                                                 </span>
@@ -2378,14 +2395,18 @@ export default function StreamIntelligencePage() {
                                                     <Card key={idx} className={`p-4 space-y-3 border ${overlap.isDualTv ? "bg-red-950/20 border-red-500/50 ring-1 ring-red-500/30" : "bg-slate-950/70 border-slate-800"}`}>
                                                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-800/60 text-xs">
                                                             <div className="flex items-center gap-2">
-                                                                <Badge className={`text-[10px] ${overlap.isDualTv ? "bg-red-500/30 text-red-200 border-red-500/50 font-bold" : "bg-amber-500/20 text-amber-300 border-amber-500/40"}`}>
-                                                                    {overlap.isDualTv ? "🚨 HIGH CONFIDENCE: DUAL FIXED TV OVERLAP" : "⚠️ Simultaneous Multi-IP Stream"}
+                                                                <Badge className={`text-[10px] inline-flex items-center gap-1 ${overlap.isDualTv ? "bg-red-500/30 text-red-200 border-red-500/50 font-bold" : "bg-amber-500/20 text-amber-300 border-amber-500/40"}`}>
+                                                                    {overlap.isDualTv ? (
+                                                                        <><ShieldAlert className="h-3 w-3 shrink-0" /> HIGH CONFIDENCE: DUAL FIXED TV OVERLAP</>
+                                                                    ) : (
+                                                                        <><AlertTriangle className="h-3 w-3 shrink-0" /> Simultaneous Multi-IP Stream</>
+                                                                    )}
                                                                 </Badge>
                                                                 <span className="text-[11px] text-muted-foreground font-mono">
                                                                     {new Date(overlap.timestamp).toLocaleString()}
                                                                 </span>
                                                             </div>
-                                                            <span className="text-[10px] text-slate-400 italic">
+                                                            <span className="text-[10px] text-slate-400">
                                                                 {overlap.reason}
                                                             </span>
                                                         </div>

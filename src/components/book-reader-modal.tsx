@@ -720,7 +720,7 @@ export function BookReaderModal({ book, onClose }: BookReaderModalProps) {
               </Button>
             </div>
             {epubToc.length === 0 ? (
-              <p className="text-xs text-slate-500 italic p-2">No chapters found.</p>
+              <p className="text-xs text-slate-400 p-2">No chapters found.</p>
             ) : (
               <ul className="space-y-1">
                 {epubToc.map((chapter, idx) => (
@@ -745,7 +745,7 @@ export function BookReaderModal({ book, onClose }: BookReaderModalProps) {
 
         {/* Kindle Aa Typography Settings Popover Modal */}
         {isEpub && showTypographyMenu && (
-          <div className="absolute top-2 right-4 w-80 z-50 bg-slate-900/95 backdrop-blur-md border border-slate-800 rounded-xl p-4 shadow-2xl animate-in fade-in zoom-in-95 duration-150 text-slate-100 space-y-4">
+          <div className="absolute top-2 right-4 w-[min(20rem,calc(100vw-2rem))] z-50 bg-slate-900/95 backdrop-blur-md border border-slate-800 rounded-xl p-4 shadow-2xl animate-in fade-in zoom-in-95 duration-150 text-slate-100 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-2">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
                 <Settings2 className="h-4 w-4 text-primary" /> Kindle Display Settings

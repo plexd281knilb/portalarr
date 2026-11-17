@@ -105,10 +105,10 @@ export function MediaServerSetupGuideModal({
 
     const themeColor = isJellyfin 
         ? {
-            badge: "bg-purple-500/15 text-purple-300 border-purple-500/40",
-            iconBg: "bg-purple-500/15 border-purple-500/30 text-purple-400",
-            borderHighlight: "border-purple-500/40",
-            accentText: "text-purple-400"
+            badge: "bg-sky-500/15 text-sky-300 border-sky-500/40",
+            iconBg: "bg-sky-500/15 border-sky-500/30 text-sky-400",
+            borderHighlight: "border-sky-500/40",
+            accentText: "text-sky-400"
         }
         : {
             badge: "bg-emerald-500/15 text-emerald-300 border-emerald-500/40",
@@ -211,7 +211,7 @@ export function MediaServerSetupGuideModal({
                             </div>
                             <div className="flex items-center gap-1.5">
                                 {isProvisioning ? (
-                                    <Badge variant="outline" className="text-[10px] text-purple-300 border-purple-500/30 gap-1 bg-purple-500/10">
+                                    <Badge variant="outline" className="text-[10px] text-sky-300 border-sky-500/30 gap-1 bg-sky-500/10">
                                         <Loader2 className="h-2.5 w-2.5 animate-spin" /> Provisioning...
                                     </Badge>
                                 ) : provisionSuccess ? (
@@ -269,23 +269,23 @@ export function MediaServerSetupGuideModal({
                         </div>
 
                         {/* Quick Connect TV & Device Pairing */}
-                        <div className="p-3.5 rounded-xl bg-purple-950/20 border border-purple-500/30 space-y-2.5">
+                        <div className="p-3.5 rounded-xl bg-amber-950/20 border border-amber-500/30 space-y-2.5">
                             <div className="flex items-center justify-between">
-                                <Label className="text-xs font-bold text-purple-300 flex items-center gap-1.5">
-                                    <Sparkles className="h-3.5 w-3.5 text-purple-400" />
-                                    <span>⚡ Quick Connect (TV & Player Apps)</span>
+                                <Label className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                                    <Sparkles className="h-3.5 w-3.5 text-amber-400" />
+                                    <span>Quick Connect (TV &amp; Player Apps)</span>
                                 </Label>
-                                <Badge variant="outline" className="text-[10px] text-purple-300 border-purple-500/40 bg-purple-500/10 font-medium">
+                                <Badge variant="outline" className="text-[10px] text-amber-300 border-amber-500/40 bg-amber-500/10 font-medium">
                                     No Remote Typing
                                 </Badge>
                             </div>
                             <div className="text-[11px] text-muted-foreground leading-relaxed space-y-1">
                                 <p>
-                                    Opening <strong className="text-purple-300">{serverType}</strong> on an Apple TV, Roku, Fire TV, Android TV, or Smart TV? Skip typing passwords with the TV remote:
+                                    Opening <strong className="text-amber-300">{serverType}</strong> on an Apple TV, Roku, Fire TV, Android TV, or Smart TV? Skip typing passwords with the TV remote:
                                 </p>
                                 <ol className="list-decimal list-inside space-y-0.5 text-[10.5px] text-muted-foreground/90 pl-0.5">
                                     <li>Open {serverType} on your TV and select <strong className="text-foreground">"Quick Connect"</strong> on the sign-in screen.</li>
-                                    <li>Your TV will display a temporary <strong className="text-purple-300 font-mono">6-character pairing code</strong> (e.g. <code>834912</code>).</li>
+                                    <li>Your TV will display a temporary <strong className="text-amber-300 font-mono">6-character pairing code</strong> (e.g. <code>834912</code>).</li>
                                     <li>Type that TV code below and click <strong className="text-foreground">Authorize TV</strong>. Your TV logs in immediately!</li>
                                 </ol>
                             </div>
@@ -299,7 +299,7 @@ export function MediaServerSetupGuideModal({
                                         setQuickConnectSuccess(null);
                                     }}
                                     maxLength={12}
-                                    className="h-8 text-xs font-mono tracking-widest uppercase flex-1 bg-black/40 border-purple-500/30"
+                                    className="h-8 text-xs font-mono tracking-widest uppercase flex-1 bg-black/40 border-amber-500/30"
                                 />
                                 <Button
                                     type="button"
@@ -332,7 +332,7 @@ export function MediaServerSetupGuideModal({
                                         }
                                     }}
                                     disabled={authorizingQuickConnect || quickConnectCode.trim().length < 3}
-                                    className="h-8 text-xs font-semibold bg-purple-600 hover:bg-purple-500 text-white gap-1.5 shrink-0 cursor-pointer"
+                                    className="h-8 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 shrink-0 cursor-pointer"
                                 >
                                     {authorizingQuickConnect ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
                                     Authorize TV
@@ -357,7 +357,7 @@ export function MediaServerSetupGuideModal({
                                     variant="ghost"
                                     size="sm"
                                     asChild
-                                    className="h-6 px-1.5 text-[11px] text-purple-300 hover:text-purple-200 gap-1"
+                                    className="h-6 px-1.5 text-[11px] text-amber-300 hover:text-amber-200 gap-1"
                                 >
                                     <a href={`${resolvedUrl}/web/index.html#!/quickconnect.html`} target="_blank" rel="noopener noreferrer">
                                         <span>Open Web Quick Connect</span>
@@ -492,7 +492,7 @@ export function MediaServerSetupGuideModal({
                             {/* Roku */}
                             <div className="p-3 rounded-lg bg-black/20 border border-border/30 space-y-1">
                                 <div className="flex items-center gap-2 text-xs font-bold text-foreground">
-                                    <Monitor className="h-3.5 w-3.5 text-purple-400" />
+                                    <Monitor className="h-3.5 w-3.5 text-sky-400" />
                                     <span>Roku Streaming Devices</span>
                                 </div>
                                 <p className="text-[11px] text-muted-foreground leading-relaxed">

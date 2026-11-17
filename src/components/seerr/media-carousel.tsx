@@ -47,7 +47,7 @@ export function MediaCarousel({
             case "Calendar": return <Calendar className="h-4 w-4 text-blue-400" />;
             case "Tv": return <Tv className="h-4 w-4 text-cyan-400" />;
             case "Star": return <Star className="h-4 w-4 text-amber-400" />;
-            default: return <Film className="h-4 w-4 text-purple-400" />;
+            default: return <Film className="h-4 w-4 text-sky-400" />;
         }
     };
 

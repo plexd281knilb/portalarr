@@ -75,7 +75,7 @@ export const GUIDE_TOPICS: Record<FeatureGuideId, GuideTopic> = {
         title: "Plex & Server Master AI Support Assistant",
         subtitle: "Automated media playback testing, stream health diagnostics, and smart audio track replacement.",
         category: "AI Support",
-        badgeColor: "bg-purple-500/10 text-purple-400 border-purple-500/30",
+        badgeColor: "bg-sky-500/10 text-sky-400 border-sky-500/30",
         icon: Bot,
         highlights: [
             "Active byte-range physical disk read testing",
@@ -229,7 +229,7 @@ export const GUIDE_TOPICS: Record<FeatureGuideId, GuideTopic> = {
         title: "Audiobooks & Spoken Word Media",
         subtitle: "Stream audiobooks in Plex and digital libraries, with upcoming in-browser background playback.",
         category: "Audiobooks",
-        badgeColor: "bg-indigo-500/10 text-indigo-400 border-indigo-500/30",
+        badgeColor: "bg-teal-500/10 text-teal-400 border-teal-500/30",
         icon: Headphones,
         highlights: [
             "Plex Audiobooks library streaming & permission auto-sync",
@@ -434,7 +434,7 @@ export const GUIDE_TOPICS: Record<FeatureGuideId, GuideTopic> = {
         title: "Server Curation Studio Suite (Admin)",
         subtitle: "Kometa poster overlays, Agregarr smart hubs, Maintainerr storage pruning, and Tagging studio.",
         category: "Admin Suite",
-        badgeColor: "bg-purple-500/10 text-purple-400 border-purple-500/30",
+        badgeColor: "bg-sky-500/10 text-sky-400 border-sky-500/30",
         icon: Sliders,
         highlights: [
             "Kometa Overlays: 4K HDR badges, Dolby Vision, audio ribbons",

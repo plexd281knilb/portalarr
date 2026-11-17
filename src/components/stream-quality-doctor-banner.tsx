@@ -99,7 +99,7 @@ export default function StreamQualityDoctorBanner({ initialAlert }: StreamQualit
         if (cat.includes("browser") || cat.includes("web")) {
             return <Monitor className="h-4 w-4 text-cyan-400 shrink-0" />;
         }
-        return <Smartphone className="h-4 w-4 text-indigo-400 shrink-0" />;
+        return <Smartphone className="h-4 w-4 text-sky-400 shrink-0" />;
     };
 
     return (

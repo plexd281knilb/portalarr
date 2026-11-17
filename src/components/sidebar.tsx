@@ -1,6 +1,7 @@
 "use client";
 
 import { BuildBadge } from "@/components/build-badge";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { getBuildTelemetry } from "@/lib/version";
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
@@ -155,9 +156,9 @@ function SidebarNavContent({ onItemClick }: SidebarNavContentProps) {
           label="Dashboard"
           icon={LayoutDashboard}
           isActive={pathname === "/"}
-          iconColor="text-indigo-400 group-hover:text-indigo-300"
-          activeColorClass="bg-indigo-500/15 text-indigo-300 border-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.2)]"
-          inactiveHoverClass="hover:bg-indigo-950/25 hover:text-indigo-200"
+          iconColor="text-sky-600 dark:text-sky-400 group-hover:text-sky-700 dark:group-hover:text-sky-300"
+          activeColorClass="bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500 shadow-[0_0_10px_rgba(14,165,233,0.2)]"
+          inactiveHoverClass="hover:bg-sky-500/10 hover:text-sky-700 dark:hover:text-sky-200"
           onClick={onItemClick}
         />
 
@@ -166,9 +167,9 @@ function SidebarNavContent({ onItemClick }: SidebarNavContentProps) {
           label="Media Requests"
           icon={Compass}
           isActive={pathname.startsWith("/discover") || pathname.startsWith("/requests")}
-          iconColor="text-rose-400 group-hover:text-rose-300"
-          activeColorClass="bg-rose-500/15 text-rose-300 border-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.2)]"
-          inactiveHoverClass="hover:bg-rose-950/25 hover:text-rose-200"
+          iconColor="text-rose-600 dark:text-rose-400 group-hover:text-rose-700 dark:group-hover:text-rose-300"
+          activeColorClass="bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.2)]"
+          inactiveHoverClass="hover:bg-rose-500/10 hover:text-rose-700 dark:hover:text-rose-200"
           onClick={onItemClick}
         />
 
@@ -178,9 +179,9 @@ function SidebarNavContent({ onItemClick }: SidebarNavContentProps) {
             label="Book Library"
             icon={BookOpen}
             isActive={pathname.startsWith("/library")}
-            iconColor="text-emerald-400 group-hover:text-emerald-300"
-            activeColorClass="bg-emerald-500/15 text-emerald-300 border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.2)]"
-            inactiveHoverClass="hover:bg-emerald-950/25 hover:text-emerald-200"
+            iconColor="text-emerald-600 dark:text-emerald-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-300"
+            activeColorClass="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.2)]"
+            inactiveHoverClass="hover:bg-emerald-500/10 hover:text-emerald-700 dark:hover:text-emerald-200"
             onClick={onItemClick}
           />
         )}
@@ -190,9 +191,9 @@ function SidebarNavContent({ onItemClick }: SidebarNavContentProps) {
           label="Setup Guides"
           icon={HelpCircle}
           isActive={pathname.startsWith("/guides")}
-          iconColor="text-sky-400 group-hover:text-sky-300"
-          activeColorClass="bg-sky-500/15 text-sky-300 border-sky-500 shadow-[0_0_10px_rgba(14,165,233,0.2)]"
-          inactiveHoverClass="hover:bg-sky-950/25 hover:text-sky-200"
+          iconColor="text-sky-600 dark:text-sky-400 group-hover:text-sky-700 dark:group-hover:text-sky-300"
+          activeColorClass="bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500 shadow-[0_0_10px_rgba(14,165,233,0.2)]"
+          inactiveHoverClass="hover:bg-sky-500/10 hover:text-sky-700 dark:hover:text-sky-200"
           onClick={onItemClick}
         />
 
@@ -208,13 +209,13 @@ function SidebarNavContent({ onItemClick }: SidebarNavContentProps) {
             }}
             className="block w-full group select-none"
           >
-            <div className="w-full flex items-center justify-between p-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 hover:border-amber-500/50 hover:bg-amber-500/15 transition-colors text-amber-100 shadow-sm cursor-pointer">
+            <div className="w-full flex items-center justify-between p-2.5 rounded-lg border border-amber-500/35 bg-amber-500/10 hover:border-amber-500/55 hover:bg-amber-500/15 transition-colors text-amber-900 dark:text-amber-100 shadow-sm cursor-pointer">
               <div className="flex items-center gap-2.5 min-w-0">
-                <div className="h-7 w-7 rounded-md bg-amber-500/20 border border-amber-500/35 flex items-center justify-center shrink-0 text-amber-400 group-hover:scale-105 transition-transform">
-                  <Bot className="h-4 w-4 text-amber-400" />
+                <div className="h-7 w-7 rounded-md bg-amber-500/20 border border-amber-500/35 flex items-center justify-center shrink-0 text-amber-600 dark:text-amber-400 group-hover:scale-105 transition-transform">
+                  <Bot className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                 </div>
                 <div className="flex flex-col text-left min-w-0">
-                  <span className="text-xs font-semibold text-foreground tracking-tight leading-none group-hover:text-amber-300 transition-colors">
+                  <span className="text-xs font-semibold text-foreground tracking-tight leading-none group-hover:text-amber-700 dark:group-hover:text-amber-300 transition-colors">
                     AI Assistant
                   </span>
                   <span className="text-[10px] text-muted-foreground font-medium leading-tight mt-1 truncate">
@@ -222,8 +223,8 @@ function SidebarNavContent({ onItemClick }: SidebarNavContentProps) {
                   </span>
                 </div>
               </div>
-              <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 shrink-0">
-                <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30 shrink-0">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-500 dark:bg-amber-400" />
                 Fixes
               </span>
             </div>
@@ -235,9 +236,9 @@ function SidebarNavContent({ onItemClick }: SidebarNavContentProps) {
           label="Support Tickets"
           icon={LifeBuoy}
           isActive={pathname.startsWith("/tickets") || pathname.startsWith("/admin/tickets")}
-          iconColor="text-amber-400 group-hover:text-amber-300"
-          activeColorClass="bg-amber-500/15 text-amber-300 border-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.2)]"
-          inactiveHoverClass="hover:bg-amber-950/25 hover:text-amber-200"
+          iconColor="text-amber-600 dark:text-amber-400 group-hover:text-amber-700 dark:group-hover:text-amber-300"
+          activeColorClass="bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.2)]"
+          inactiveHoverClass="hover:bg-amber-500/10 hover:text-amber-800 dark:hover:text-amber-200"
           onClick={onItemClick}
         />
 
@@ -246,9 +247,9 @@ function SidebarNavContent({ onItemClick }: SidebarNavContentProps) {
           label="Account Settings"
           icon={User}
           isActive={pathname === "/profile" || pathname === "/settings/profile"}
-          iconColor="text-blue-400 group-hover:text-blue-300"
-          activeColorClass="bg-blue-500/15 text-blue-300 border-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.2)]"
-          inactiveHoverClass="hover:bg-blue-950/25 hover:text-blue-200"
+          iconColor="text-blue-600 dark:text-blue-400 group-hover:text-blue-700 dark:group-hover:text-blue-300"
+          activeColorClass="bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.2)]"
+          inactiveHoverClass="hover:bg-blue-500/10 hover:text-blue-700 dark:hover:text-blue-200"
           onClick={onItemClick}
         />
       </div>
@@ -256,7 +257,7 @@ function SidebarNavContent({ onItemClick }: SidebarNavContentProps) {
       {/* Media Apps Section */}
       {(isAdmin || isSuperUser) && (
         <div className="pt-1">
-          <div className="border-t border-border/30 pt-3 pb-1.5 px-2.5 text-[10px] font-bold tracking-wider uppercase text-muted-foreground/70 select-none">
+          <div className="border-t border-border/40 pt-3 pb-1.5 px-2.5 text-[10px] font-bold tracking-wider uppercase text-muted-foreground select-none">
             Media Apps
           </div>
           <div className="space-y-1">
@@ -265,9 +266,9 @@ function SidebarNavContent({ onItemClick }: SidebarNavContentProps) {
               label="Radarr (Movies)"
               icon={Film}
               isActive={pathname.startsWith("/radarr")}
-              iconColor="text-yellow-400 group-hover:text-yellow-300"
-              activeColorClass="bg-yellow-500/15 text-yellow-300 border-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.2)]"
-              inactiveHoverClass="hover:bg-yellow-950/25 hover:text-yellow-200"
+              iconColor="text-amber-600 dark:text-yellow-400 group-hover:text-amber-700 dark:group-hover:text-yellow-300"
+              activeColorClass="bg-yellow-500/15 text-amber-800 dark:text-yellow-300 border-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.2)]"
+              inactiveHoverClass="hover:bg-yellow-500/10 hover:text-amber-800 dark:hover:text-yellow-200"
               onClick={onItemClick}
             />
 
@@ -276,9 +277,9 @@ function SidebarNavContent({ onItemClick }: SidebarNavContentProps) {
               label="Sonarr (TV Shows)"
               icon={Tv}
               isActive={pathname.startsWith("/sonarr")}
-              iconColor="text-sky-400 group-hover:text-sky-300"
-              activeColorClass="bg-sky-500/15 text-sky-300 border-sky-500 shadow-[0_0_10px_rgba(14,165,233,0.2)]"
-              inactiveHoverClass="hover:bg-sky-950/25 hover:text-sky-200"
+              iconColor="text-sky-600 dark:text-sky-400 group-hover:text-sky-700 dark:group-hover:text-sky-300"
+              activeColorClass="bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500 shadow-[0_0_10px_rgba(14,165,233,0.2)]"
+              inactiveHoverClass="hover:bg-sky-500/10 hover:text-sky-700 dark:hover:text-sky-200"
               onClick={onItemClick}
             />
           </div>
@@ -288,8 +289,8 @@ function SidebarNavContent({ onItemClick }: SidebarNavContentProps) {
       {/* Curation Studios Section */}
       {isAdmin && (
         <div className="pt-1">
-          <div className="border-t border-border/30 pt-3 pb-1.5 px-2.5 flex items-center gap-1.5 text-[10px] font-bold tracking-wider uppercase text-muted-foreground/70 select-none">
-            <Sparkles className="h-3 w-3 text-purple-400" />
+          <div className="border-t border-border/40 pt-3 pb-1.5 px-2.5 flex items-center gap-1.5 text-[10px] font-bold tracking-wider uppercase text-muted-foreground select-none">
+            <Sparkles className="h-3 w-3 text-amber-600 dark:text-amber-400" />
             <span>Curation Studios</span>
           </div>
           <div className="space-y-1">
@@ -298,9 +299,9 @@ function SidebarNavContent({ onItemClick }: SidebarNavContentProps) {
               label="Kometa Overlays"
               icon={Sparkles}
               isActive={pathname === "/curation" || pathname.startsWith("/curation/kometa")}
-              iconColor="text-violet-400 group-hover:text-violet-300"
-              activeColorClass="bg-violet-500/15 text-violet-300 border-violet-500 shadow-[0_0_10px_rgba(139,92,246,0.2)]"
-              inactiveHoverClass="hover:bg-violet-950/25 hover:text-violet-200"
+              iconColor="text-amber-600 dark:text-amber-400 group-hover:text-amber-700 dark:group-hover:text-amber-300"
+              activeColorClass="bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.2)]"
+              inactiveHoverClass="hover:bg-amber-500/10 hover:text-amber-800 dark:hover:text-amber-200"
               onClick={onItemClick}
             />
 
@@ -309,9 +310,9 @@ function SidebarNavContent({ onItemClick }: SidebarNavContentProps) {
               label="Agregarr Hubs"
               icon={Film}
               isActive={pathname.startsWith("/curation/agregarr")}
-              iconColor="text-pink-400 group-hover:text-pink-300"
-              activeColorClass="bg-pink-500/15 text-pink-300 border-pink-500 shadow-[0_0_10px_rgba(236,72,153,0.2)]"
-              inactiveHoverClass="hover:bg-pink-950/25 hover:text-pink-200"
+              iconColor="text-sky-600 dark:text-sky-400 group-hover:text-sky-700 dark:group-hover:text-sky-300"
+              activeColorClass="bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500 shadow-[0_0_10px_rgba(14,165,233,0.2)]"
+              inactiveHoverClass="hover:bg-sky-500/10 hover:text-sky-700 dark:hover:text-sky-200"
               onClick={onItemClick}
             />
 
@@ -320,9 +321,9 @@ function SidebarNavContent({ onItemClick }: SidebarNavContentProps) {
               label="Maintainerr Prune"
               icon={Trash2}
               isActive={pathname.startsWith("/curation/prune")}
-              iconColor="text-rose-400 group-hover:text-rose-300"
-              activeColorClass="bg-rose-500/15 text-rose-300 border-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.2)]"
-              inactiveHoverClass="hover:bg-rose-950/25 hover:text-rose-200"
+              iconColor="text-rose-600 dark:text-rose-400 group-hover:text-rose-700 dark:group-hover:text-rose-300"
+              activeColorClass="bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.2)]"
+              inactiveHoverClass="hover:bg-rose-500/10 hover:text-rose-700 dark:hover:text-rose-200"
               onClick={onItemClick}
             />
 
@@ -331,9 +332,9 @@ function SidebarNavContent({ onItemClick }: SidebarNavContentProps) {
               label="Tagging Studio"
               icon={Tag}
               isActive={pathname.startsWith("/curation/tagging")}
-              iconColor="text-amber-400 group-hover:text-amber-300"
-              activeColorClass="bg-amber-500/15 text-amber-300 border-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.2)]"
-              inactiveHoverClass="hover:bg-amber-950/25 hover:text-amber-200"
+              iconColor="text-amber-600 dark:text-amber-400 group-hover:text-amber-700 dark:group-hover:text-amber-300"
+              activeColorClass="bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.2)]"
+              inactiveHoverClass="hover:bg-amber-500/10 hover:text-amber-800 dark:hover:text-amber-200"
               onClick={onItemClick}
             />
           </div>
@@ -343,7 +344,7 @@ function SidebarNavContent({ onItemClick }: SidebarNavContentProps) {
       {/* Administration Section */}
       {isAdmin && (
         <div className="pt-1">
-          <div className="border-t border-border/30 pt-3 pb-1.5 px-2.5 text-[10px] font-bold tracking-wider uppercase text-muted-foreground/70 select-none">
+          <div className="border-t border-border/40 pt-3 pb-1.5 px-2.5 text-[10px] font-bold tracking-wider uppercase text-muted-foreground select-none">
             Administration
           </div>
           <div className="space-y-1">
@@ -357,9 +358,9 @@ function SidebarNavContent({ onItemClick }: SidebarNavContentProps) {
                 pathname.startsWith("/tautulli") || 
                 pathname.startsWith("/streams")
               }
-              iconColor="text-orange-400 group-hover:text-orange-300"
-              activeColorClass="bg-orange-500/15 text-orange-300 border-orange-500 shadow-[0_0_10px_rgba(249,115,22,0.2)]"
-              inactiveHoverClass="hover:bg-orange-950/25 hover:text-orange-200"
+              iconColor="text-orange-600 dark:text-orange-400 group-hover:text-orange-700 dark:group-hover:text-orange-300"
+              activeColorClass="bg-orange-500/15 text-orange-700 dark:text-orange-300 border-orange-500 shadow-[0_0_10px_rgba(249,115,22,0.2)]"
+              inactiveHoverClass="hover:bg-orange-500/10 hover:text-orange-700 dark:hover:text-orange-200"
               onClick={onItemClick}
             />
 
@@ -368,9 +369,9 @@ function SidebarNavContent({ onItemClick }: SidebarNavContentProps) {
               label="Fleet & Monitoring"
               icon={Layers}
               isActive={pathname.startsWith("/admin/monitoring")}
-              iconColor="text-cyan-400 group-hover:text-cyan-300"
-              activeColorClass="bg-cyan-500/15 text-cyan-300 border-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.2)]"
-              inactiveHoverClass="hover:bg-cyan-950/25 hover:text-cyan-200"
+              iconColor="text-cyan-700 dark:text-cyan-400 group-hover:text-cyan-800 dark:group-hover:text-cyan-300"
+              activeColorClass="bg-cyan-500/15 text-cyan-800 dark:text-cyan-300 border-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.2)]"
+              inactiveHoverClass="hover:bg-cyan-500/10 hover:text-cyan-800 dark:hover:text-cyan-200"
               onClick={onItemClick}
             />
 
@@ -379,9 +380,9 @@ function SidebarNavContent({ onItemClick }: SidebarNavContentProps) {
               label="User Scripts"
               icon={Terminal}
               isActive={pathname.startsWith("/admin/scripts")}
-              iconColor="text-emerald-400 group-hover:text-emerald-300"
-              activeColorClass="bg-emerald-500/15 text-emerald-300 border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.2)]"
-              inactiveHoverClass="hover:bg-emerald-950/25 hover:text-emerald-200"
+              iconColor="text-emerald-600 dark:text-emerald-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-300"
+              activeColorClass="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.2)]"
+              inactiveHoverClass="hover:bg-emerald-500/10 hover:text-emerald-700 dark:hover:text-emerald-200"
               onClick={onItemClick}
             />
 
@@ -391,9 +392,9 @@ function SidebarNavContent({ onItemClick }: SidebarNavContentProps) {
               label="System Settings"
               icon={Settings}
               isActive={isSettingsActive}
-              iconColor="text-zinc-400 group-hover:text-zinc-200"
-              activeColorClass="bg-zinc-500/15 text-zinc-200 border-zinc-400 shadow-[0_0_10px_rgba(161,161,170,0.15)]"
-              inactiveHoverClass="hover:bg-zinc-800/30 hover:text-zinc-200"
+              iconColor="text-muted-foreground group-hover:text-foreground"
+              activeColorClass="bg-accent text-foreground border-foreground/40 shadow-sm"
+              inactiveHoverClass="hover:bg-accent hover:text-foreground"
               onClick={onItemClick}
             />
 
@@ -402,9 +403,9 @@ function SidebarNavContent({ onItemClick }: SidebarNavContentProps) {
               label="Live System Logs"
               icon={Terminal}
               isActive={isLogsActive}
-              iconColor="text-emerald-400 group-hover:text-emerald-300"
-              activeColorClass="bg-emerald-500/15 text-emerald-300 border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.15)]"
-              inactiveHoverClass="hover:bg-emerald-950/25 hover:text-emerald-200"
+              iconColor="text-emerald-600 dark:text-emerald-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-300"
+              activeColorClass="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.15)]"
+              inactiveHoverClass="hover:bg-emerald-500/10 hover:text-emerald-700 dark:hover:text-emerald-200"
               onClick={onItemClick}
             />
           </div>
@@ -416,18 +417,19 @@ function SidebarNavContent({ onItemClick }: SidebarNavContentProps) {
 
 export function Sidebar({ className }: React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn("h-full border-r bg-[#101014] text-sidebar-foreground border-border/40 flex flex-col justify-between select-none min-h-0", className)}>
-      <div className="flex-1 overflow-y-auto px-3 py-3 min-h-0">
+    <div className={cn("h-full border-r bg-sidebar text-sidebar-foreground border-border/60 flex flex-col justify-between select-none min-h-0", className)}>
+      <div className="flex-1 overflow-y-auto px-3 py-3 min-h-0 overscroll-y-contain scrollbar-thin">
         <SidebarNavContent />
       </div>
 
-      <div className="px-3 py-3 border-t border-border/30 mt-auto">
+      <div className="px-3 py-3 border-t border-border/50 mt-auto space-y-1">
+        <ThemeToggle variant="sidebar" />
         <Button 
           variant="ghost" 
-          className="w-full justify-start text-xs font-semibold h-9 text-red-400 hover:text-red-200 hover:bg-red-500/15 transition-colors rounded-lg group select-none"
+          className="w-full justify-start text-xs font-semibold h-9 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-200 hover:bg-red-500/10 transition-colors rounded-lg group select-none"
           onClick={() => logout()}
         >
-          <LogOut className="mr-2.5 h-4 w-4 text-red-400 group-hover:text-red-300 transition-colors" />
+          <LogOut className="mr-2.5 h-4 w-4 text-red-600 dark:text-red-400 group-hover:text-red-700 dark:group-hover:text-red-300 transition-colors" />
           <span>Log Out</span>
         </Button>
       </div>
@@ -443,50 +445,62 @@ export function MobileSidebar() {
     setIsOpen(false);
   }, [pathname]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIsOpen(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen]);
+
   return (
     <>
       <Button
         variant="ghost"
         size="icon"
         onClick={() => setIsOpen(true)}
-        className="md:hidden hover:bg-white/[0.05] rounded-lg text-muted-foreground hover:text-foreground"
+        aria-label="Open navigation menu"
+        className="md:hidden hover:bg-accent rounded-lg text-muted-foreground hover:text-foreground touch-manipulation"
       >
         <Menu className="h-6 w-6" />
       </Button>
 
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 flex animate-in fade-in duration-200" role="dialog" aria-modal="true" aria-label="Mobile Navigation">
           <div
-            className="fixed inset-0 bg-black/80 backdrop-blur-sm transition-opacity"
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
             onClick={() => setIsOpen(false)}
           />
-          <div className="relative flex w-72 max-w-xs flex-1 flex-col bg-[#101014] text-sidebar-foreground pb-4 pt-3 shadow-2xl transition-all duration-300 ease-in-out border-r border-border/50">
-            <div className="absolute right-0 top-0 -mr-12 pt-2">
+          <div className="relative flex w-72 max-w-[calc(100vw-2rem)] flex-1 flex-col bg-sidebar text-sidebar-foreground pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-2xl transition-all duration-300 ease-in-out border-r border-border">
+            <div className="flex items-center justify-end px-3 pb-1 shrink-0">
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={() => setIsOpen(false)}
-                className="hover:bg-white/10 rounded-full text-white"
+                aria-label="Close navigation menu"
+                className="h-9 w-9 hover:bg-accent rounded-full text-muted-foreground hover:text-foreground touch-manipulation"
               >
-                <X className="h-6 w-6" />
+                <X className="h-5 w-5" />
               </Button>
             </div>
 
             <div className="flex-1 px-3 pb-2 flex flex-col justify-between min-h-0 overflow-hidden">
-              <div className="flex-1 overflow-y-auto pr-1 min-h-0">
+              <div className="flex-1 overflow-y-auto pr-1 min-h-0 overscroll-y-contain scrollbar-thin">
                 <SidebarNavContent onItemClick={() => setIsOpen(false)} />
               </div>
 
-              <div className="mt-auto border-t border-border/30 pt-3">
+              <div className="mt-auto border-t border-border/50 pt-3 space-y-1">
+                <ThemeToggle variant="sidebar" />
                 <Button
                   variant="ghost"
-                  className="w-full justify-start text-xs font-semibold h-9 text-red-400 hover:text-red-200 hover:bg-red-500/15 transition-colors rounded-lg group select-none"
+                  className="w-full justify-start text-xs font-semibold h-9 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-200 hover:bg-red-500/10 transition-colors rounded-lg group select-none"
                   onClick={() => {
                     setIsOpen(false);
                     logout();
                   }}
                 >
-                  <LogOut className="mr-2.5 h-4 w-4 text-red-400 group-hover:text-red-300 transition-colors" />
+                  <LogOut className="mr-2.5 h-4 w-4 text-red-600 dark:text-red-400 group-hover:text-red-700 dark:group-hover:text-red-300 transition-colors" />
                   <span>Log Out</span>
                 </Button>
               </div>

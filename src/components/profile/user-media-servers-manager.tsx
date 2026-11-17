@@ -277,7 +277,7 @@ export function UserMediaServersManager({
                         </div>
 
                         <div className="p-2.5 rounded-xl bg-white/[0.02] border border-border/40 text-center space-y-1">
-                            <Zap className="h-4 w-4 mx-auto text-purple-400" />
+                            <Zap className="h-4 w-4 mx-auto text-amber-400" />
                             <span className="text-[11px] font-bold block text-foreground truncate">AI Assistant</span>
                             <span className="text-[10px] text-emerald-400 block font-mono">24/7 Active</span>
                         </div>
@@ -368,9 +368,9 @@ export function UserMediaServersManager({
                     )}
 
                     {isTrialUser && (
-                        <div className="p-3.5 rounded-xl bg-purple-950/25 border border-purple-500/40 text-purple-200 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-sm">
+                        <div className="p-3.5 rounded-xl bg-amber-950/25 border border-amber-500/40 text-amber-200 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-sm">
                             <div className="flex items-center gap-2.5 text-xs">
-                                <Lock className="h-4 w-4 text-purple-400 shrink-0" />
+                                <Lock className="h-4 w-4 text-amber-400 shrink-0" />
                                 <span className="leading-relaxed">
                                     <strong>Jellyfin &amp; Emby multi-platform streaming</strong> is exclusively available for Full Members. Upgrade your membership pass to unlock.
                                 </span>
@@ -378,7 +378,7 @@ export function UserMediaServersManager({
                             <Button 
                                 size="sm" 
                                 asChild 
-                                className="h-7 text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white shrink-0 cursor-pointer"
+                                className="h-7 text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground shrink-0 cursor-pointer"
                                 onClick={() => {
                                     document.getElementById("billing")?.scrollIntoView({ behavior: "smooth", block: "start" });
                                 }}
@@ -409,7 +409,7 @@ export function UserMediaServersManager({
                                 const badgeColor = isPlex 
                                     ? "bg-amber-500/15 text-amber-300 border-amber-500/40" 
                                     : isJellyfin 
-                                    ? "bg-purple-500/15 text-purple-300 border-purple-500/40" 
+                                    ? "bg-sky-500/15 text-sky-300 border-sky-500/40" 
                                     : "bg-emerald-500/15 text-emerald-300 border-emerald-500/40";
 
                                 return (
@@ -426,7 +426,7 @@ export function UserMediaServersManager({
                                             <div className="flex items-center gap-3">
                                                 <div className={`h-9 w-9 rounded-xl flex items-center justify-center border shrink-0 ${
                                                     isPlex ? "bg-amber-500/10 border-amber-500/30 text-amber-400" :
-                                                    isJellyfin ? "bg-purple-500/10 border-purple-500/30 text-purple-400" :
+                                                    isJellyfin ? "bg-sky-500/10 border-sky-500/30 text-sky-400" :
                                                     "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
                                                 }`}>
                                                     <Server className="h-4.5 w-4.5" />
@@ -564,7 +564,7 @@ export function UserMediaServersManager({
                                                                         {lib.type.includes("movie") ? (
                                                                             <Film className={`h-3.5 w-3.5 shrink-0 ${isLibSelected ? "text-cyan-400" : "text-muted-foreground"}`} />
                                                                         ) : lib.type.includes("show") || lib.type.includes("tv") ? (
-                                                                            <Tv className={`h-3.5 w-3.5 shrink-0 ${isLibSelected ? "text-purple-400" : "text-muted-foreground"}`} />
+                                                                            <Tv className={`h-3.5 w-3.5 shrink-0 ${isLibSelected ? "text-sky-400" : "text-muted-foreground"}`} />
                                                                         ) : lib.type.includes("music") ? (
                                                                             <Music className={`h-3.5 w-3.5 shrink-0 ${isLibSelected ? "text-emerald-400" : "text-muted-foreground"}`} />
                                                                         ) : (
@@ -592,8 +592,8 @@ export function UserMediaServersManager({
                 </CardContent>
 
                 <CardFooter className="pt-3 pb-4 px-4 bg-white/[0.01] border-t border-border/30 flex flex-col sm:flex-row items-center justify-between gap-3">
-                    <p className="text-[11px] text-muted-foreground italic">
-                        💡 Changes synchronize directly to your Plex shares and Jellyfin/Emby user policies.
+                    <p className="text-[11px] text-muted-foreground">
+                        Changes synchronize directly to your Plex shares and Jellyfin/Emby user policies.
                     </p>
                     <Button
                         type="button"

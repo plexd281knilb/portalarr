@@ -2706,7 +2706,7 @@ export function AgregarrStudio() {
                                         <span>Querying library sections for {currentServer?.serverName || "server"}...</span>
                                     </div>
                                 ) : currentSections.length === 0 ? (
-                                    <span className="text-xs text-slate-500 italic py-1">No library sections found on this server.</span>
+                                    <span className="text-xs text-slate-400 py-1">No library sections found on this server.</span>
                                 ) : (
                                     currentSections.map((sec: any) => {
                                         const isSelected = String(sec.key) === selectedSectionKey;
@@ -2990,7 +2990,7 @@ export function AgregarrStudio() {
                                                         </Badge>
                                                     ))
                                                 ) : (
-                                                    <span className="text-[11px] text-slate-400 italic px-1">No libraries active (Collections paused)</span>
+                                                    <span className="text-[11px] text-slate-400 px-1">No libraries active (Collections paused)</span>
                                                 )}
                                                 {excludedSections.length > 0 && (
                                                     <Badge
@@ -3607,7 +3607,7 @@ export function AgregarrStudio() {
                                                             </Badge>
                                                         )}
                                                         {coll.activeTimeRange && coll.activeTimeRange !== "all_day" && (
-                                                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-indigo-900/60 bg-indigo-950/40 text-indigo-300 gap-1 font-mono shrink-0">
+                                                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-sky-900/60 bg-sky-950/40 text-sky-300 gap-1 font-mono shrink-0">
                                                                 <Clock className="h-2.5 w-2.5" />
                                                                 <span className="capitalize">{coll.activeTimeRange.replace("_", " ")}</span>
                                                             </Badge>
@@ -3694,7 +3694,7 @@ export function AgregarrStudio() {
                                                         title={isSharedActive ? "Visible on Shared Friends & Users' Home Screens (Click to hide)" : "Hidden from Shared Users' Home Screens (Click to show)"}
                                                         className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold border transition-all cursor-pointer ${
                                                             isSharedActive
-                                                                ? "bg-purple-500/20 text-purple-300 border-purple-500/50 shadow-sm"
+                                                                ? "bg-sky-500/20 text-sky-300 border-sky-500/50 shadow-sm"
                                                                 : "bg-slate-950/60 text-slate-500 border-slate-800 opacity-50 hover:opacity-100 hover:text-slate-300"
                                                         }`}
                                                     >
@@ -4011,9 +4011,9 @@ export function AgregarrStudio() {
                                                 <Badge variant="outline" className={`text-[9px] px-1.5 py-0 border-slate-700 font-mono ${
                                                     preset.mediaType === "show" ? "text-sky-300 border-sky-800/60 bg-sky-950/40" :
                                                     preset.mediaType === "movie" ? "text-amber-300 border-amber-800/60 bg-amber-950/40" :
-                                                    "text-purple-300 border-purple-800/60 bg-purple-950/40"
+                                                    "text-teal-300 border-teal-800/60 bg-teal-950/40"
                                                 }`}>
-                                                    {preset.mediaType === "show" ? "📺 TV" : preset.mediaType === "movie" ? "🎬 MOVIES" : "✨ BOTH"}
+                                                    {preset.mediaType === "show" ? "TV" : preset.mediaType === "movie" ? "MOVIES" : "BOTH"}
                                                 </Badge>
                                                 <Badge variant="outline" className="text-[9px] border-slate-700 text-slate-400 capitalize">
                                                     {preset.category}
@@ -5523,10 +5523,10 @@ export function AgregarrStudio() {
                         <div className="space-y-2">
                             <div className="flex items-center justify-between">
                                 <span className="font-bold text-white flex items-center gap-1.5">
-                                    <Eye className="h-4 w-4 text-purple-400" /> Live Library Match Evaluation
+                                    <Eye className="h-4 w-4 text-amber-400" /> Live Library Match Evaluation
                                 </span>
                                 {previewData && (
-                                    <Badge className="bg-purple-950 text-purple-300 border-purple-500/40 text-[10px] font-mono">
+                                    <Badge className="bg-amber-950 text-amber-300 border-amber-500/40 text-[10px] font-mono tabular-nums">
                                         {previewData.matchCount} / {previewData.totalEvaluated} Matches Found
                                     </Badge>
                                 )}
@@ -5534,7 +5534,7 @@ export function AgregarrStudio() {
 
                             {previewLoading ? (
                                 <div className="flex items-center justify-center py-8 text-slate-400 gap-2">
-                                    <Loader2 className="h-5 w-5 animate-spin text-purple-400" />
+                                    <Loader2 className="h-5 w-5 animate-spin text-amber-400" />
                                     <span>Scanning Plex library for matching items...</span>
                                 </div>
                             ) : previewData?.sampleMatches && previewData.sampleMatches.length > 0 ? (
@@ -5565,7 +5565,7 @@ export function AgregarrStudio() {
                                     ))}
                                 </div>
                             ) : (
-                                <p className="text-xs text-slate-500 italic">No media items in this library matched the preset criteria.</p>
+                                <p className="text-xs text-slate-400">No media items in this library matched the preset criteria.</p>
                             )}
                         </div>
 
@@ -5588,7 +5588,7 @@ export function AgregarrStudio() {
                                 </div>
                                 <div className="flex items-center justify-between p-2 rounded bg-slate-900 border border-slate-800">
                                     <div className="flex items-center gap-1.5">
-                                        <Users className="h-3.5 w-3.5 text-purple-400" />
+                                        <Users className="h-3.5 w-3.5 text-sky-400" />
                                         <span className="text-xs text-slate-200">Shared Home</span>
                                     </div>
                                     <Switch checked={inspectShared} onCheckedChange={setInspectShared} />
@@ -5797,7 +5797,7 @@ export function AgregarrStudio() {
                                 {/* Shared Users' Home */}
                                 <div className="flex items-center justify-between p-2 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700">
                                     <div className="flex items-center gap-2.5">
-                                        <div className="p-1.5 rounded-md bg-purple-500/20 text-purple-400 border border-purple-500/30">
+                                        <div className="p-1.5 rounded-md bg-sky-500/20 text-sky-400 border border-sky-500/30">
                                             <Users className="h-4 w-4" />
                                         </div>
                                         <div>
@@ -5961,7 +5961,7 @@ export function AgregarrStudio() {
                         {/* Section 4: Time of Day Scheduling */}
                         <div className="space-y-2 p-3.5 bg-slate-950/90 rounded-xl border border-slate-800">
                             <Label className="text-xs font-bold text-white flex items-center gap-1.5">
-                                <Clock className="h-3.5 w-3.5 text-indigo-400" /> Time of Day Scheduling
+                                <Clock className="h-3.5 w-3.5 text-sky-400" /> Time of Day Scheduling
                             </Label>
                             <p className="text-[10px] text-slate-400">
                                 Automatically rotate collection visibility on Home based on the hour of the day:
@@ -6685,7 +6685,7 @@ export function AgregarrStudio() {
                                 <span>Ignored &amp; Dismissed Hubs ({dismissedHubsList.length})</span>
                             </DialogTitle>
                             <DialogDescription className="text-xs text-slate-400">
-                                Collections and Plex-native auto-generated hubs (like <span className="text-slate-300 italic">&quot;Top Movies by Vicky Jenson&quot;</span>) that you deleted. They are blacklisted so clicking <span className="font-bold text-sky-300">Import from Plex</span> will NOT bring them back.
+                                Collections and Plex-native auto-generated hubs (like <span className="text-slate-300">&quot;Top Movies by Vicky Jenson&quot;</span>) that you deleted. They are blacklisted so clicking <span className="font-bold text-sky-300">Import from Plex</span> will NOT bring them back.
                             </DialogDescription>
                         </div>
                     </DialogHeader>
@@ -6802,7 +6802,7 @@ export function AgregarrStudio() {
                                 value={cookieContent}
                                 onChange={(e) => setCookieContent(e.target.value)}
                                 rows={9}
-                                className="font-mono text-[11px] bg-slate-900 border-slate-800 text-slate-200 placeholder:text-slate-600"
+                                className="font-mono text-[11px] bg-slate-900 border-slate-800 text-slate-200 placeholder:text-slate-400"
                             />
                         </div>
 
@@ -6887,7 +6887,7 @@ export function AgregarrStudio() {
                                             >
                                                 Enable All
                                             </Button>
-                                            <span className="text-slate-600">•</span>
+                                            <span className="text-slate-400">•</span>
                                             <Button
                                                 type="button"
                                                 size="sm"
@@ -6931,7 +6931,7 @@ export function AgregarrStudio() {
                                                             <Badge className={`text-[10px] font-bold ${
                                                                 enabled ? "bg-emerald-600 text-white" : "bg-slate-800 text-slate-400 border border-slate-700"
                                                             }`}>
-                                                                {enabled ? "🟢 ACTIVE" : "⚪ EXCLUDED"}
+                                                                {enabled ? "Active" : "Excluded"}
                                                             </Badge>
                                                             <Switch
                                                                 checked={enabled}
@@ -6943,7 +6943,7 @@ export function AgregarrStudio() {
                                             })}
                                         </div>
                                     ) : (
-                                        <p className="text-xs text-slate-500 italic py-1">No library sections loaded for this server.</p>
+                                        <p className="text-xs text-slate-400 py-1">No library sections loaded for this server.</p>
                                     )}
                                 </div>
                             );

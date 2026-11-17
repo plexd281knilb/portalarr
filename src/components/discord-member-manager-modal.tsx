@@ -320,7 +320,7 @@ export function DiscordMemberManagerModal({
                             size="sm"
                             onClick={handleBatchAutoMatch}
                             disabled={actionLoading !== null || suggestedCount === 0}
-                            className="h-8 px-3 text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white gap-1.5 shadow-xs cursor-pointer active:scale-95"
+                            className="h-8 px-3 text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 shadow-xs cursor-pointer active:scale-95"
                             title="Automatically pairs unlinked Discord members whose names match DomsHomeLab accounts"
                         >
                             {actionLoading === "auto-match" ? (
@@ -419,7 +419,7 @@ export function DiscordMemberManagerModal({
                                 variant={filterTab === "suggested" ? "default" : "outline"}
                                 size="sm"
                                 onClick={() => setFilterTab("suggested")}
-                                className="h-7 text-[11px] px-2.5 font-semibold text-purple-300 border-purple-500/30"
+                                className="h-7 text-[11px] px-2.5 font-semibold text-sky-300 border-sky-500/30"
                             >
                                 Suggested ({suggestedCount})
                             </Button>
@@ -453,7 +453,7 @@ export function DiscordMemberManagerModal({
                                         isLinked
                                             ? "bg-emerald-950/10 border-emerald-500/25 hover:border-emerald-500/40"
                                             : match
-                                                ? "bg-purple-950/15 border-purple-500/30 hover:border-purple-500/50"
+                                                ? "bg-sky-950/15 border-sky-500/30 hover:border-sky-500/50"
                                                 : "bg-black/25 border-border/40 hover:border-border/60"
                                     }`}
                                 >
@@ -530,8 +530,8 @@ export function DiscordMemberManagerModal({
                                         ) : match ? (
                                             <div className="flex items-center gap-2">
                                                 <div className="text-right">
-                                                    <div className="text-[11px] text-purple-300 font-semibold flex items-center gap-1 justify-end">
-                                                        <Sparkles className="h-3 w-3 text-purple-400" />
+                                                    <div className="text-[11px] text-sky-300 font-semibold flex items-center gap-1 justify-end">
+                                                        <Sparkles className="h-3 w-3 text-sky-400" />
                                                         Match: <strong className="text-foreground">@{match.username}</strong> ({match.confidence}%)
                                                     </div>
                                                     <span className="text-[9px] text-muted-foreground">{match.matchReason}</span>
@@ -542,7 +542,7 @@ export function DiscordMemberManagerModal({
                                                     size="sm"
                                                     onClick={() => handleLinkUser(m, match.userId)}
                                                     disabled={isProcessing}
-                                                    className="h-7 px-2.5 text-[11px] font-bold bg-purple-600 hover:bg-purple-500 text-white gap-1 shadow-xs cursor-pointer active:scale-95"
+                                                    className="h-7 px-2.5 text-[11px] font-bold bg-sky-600 hover:bg-sky-500 text-white gap-1 shadow-xs cursor-pointer active:scale-95"
                                                 >
                                                     {isProcessing ? (
                                                         <Loader2 className="h-3 w-3 animate-spin" />

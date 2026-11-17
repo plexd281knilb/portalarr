@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { AlertCircle, ShieldCheck, Loader2, Play, Lock, User, KeyRound, UserPlus, Mail, CheckCircle2, Eye, EyeOff, ExternalLink, Info } from "lucide-react";
 
 function sanitizeReturnTo(url: string | null): string {
@@ -28,7 +29,7 @@ function sanitizeReturnTo(url: string | null): string {
 export default function LoginClient({ initialIsSetupMode }: { initialIsSetupMode?: boolean } = {}) {
   return (
     <Suspense fallback={
-      <div className="flex min-h-screen items-center justify-center bg-background">
+      <div className="flex min-h-dvh items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     }>
@@ -207,15 +208,18 @@ function LoginForm({ initialIsSetupMode }: { initialIsSetupMode?: boolean }) {
 
   if (isSetupMode === null) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
+      <div className="flex min-h-dvh items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4 py-8 animate-in fade-in duration-500">
-      <Card className="w-full max-w-md shadow-2xl bg-[#121218]/90 backdrop-blur-md border-border/50">
+    <div className="relative flex min-h-dvh items-center justify-center bg-background p-4 py-8 animate-in fade-in duration-500">
+      <div className="fixed top-[max(0.75rem,env(safe-area-inset-top))] right-4 z-30">
+        <ThemeToggle variant="compact" className="border border-border bg-card/80 backdrop-blur" />
+      </div>
+      <Card className="w-full max-w-md shadow-2xl bg-card/95 backdrop-blur-md border-border">
         <CardHeader className="space-y-1 text-center">
           <div className="mx-auto bg-primary/10 p-3 rounded-full w-fit mb-2">
             {isSetupMode ? <ShieldCheck className="h-8 w-8 text-primary" /> : <Lock className="h-8 w-8 text-primary" />}

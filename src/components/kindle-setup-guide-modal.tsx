@@ -159,7 +159,7 @@ export function KindleSetupGuideModal({
                     <div className="p-3.5 rounded-xl bg-muted/20 border border-border/30 space-y-2">
                         <div className="flex items-center justify-between gap-2">
                             <span className="font-bold text-foreground text-xs flex items-center gap-1.5">
-                                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-purple-500/20 text-purple-300 text-[11px] font-mono font-bold">1</span>
+                                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-500/20 text-amber-300 text-[11px] font-mono font-bold tabular-nums">1</span>
                                 Find Your Send-to-Kindle Address on Amazon:
                             </span>
                         </div>
@@ -169,22 +169,22 @@ export function KindleSetupGuideModal({
                                 href="https://www.amazon.com/hz/mycd/myx#/home/settings/payment"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-purple-400 hover:text-purple-300 underline font-semibold break-all inline-flex items-center gap-1"
+                                className="text-amber-400 hover:text-amber-300 underline font-semibold break-all inline-flex items-center gap-1"
                             >
                                 <span>https://www.amazon.com/hz/mycd/myx#/home/settings/payment</span>
                                 <ExternalLink className="h-3 w-3 shrink-0" />
                             </a>
                         </p>
                         <p className="text-muted-foreground text-[11px] pl-6.5 leading-relaxed">
-                            Under <strong className="text-foreground">&quot;Send-to-Kindle E-Mail Settings&quot;</strong>, copy your device email (usually ends in <code className="bg-black/40 text-purple-300 px-1.5 py-0.5 rounded font-mono font-semibold">@kindle.com</code>).
+                            Under <strong className="text-foreground">&quot;Send-to-Kindle E-Mail Settings&quot;</strong>, copy your device email (usually ends in <code className="bg-black/40 text-amber-300 px-1.5 py-0.5 rounded font-mono font-semibold">@kindle.com</code>).
                         </p>
                     </div>
 
                     {/* Step 2: Authorize Sender on Amazon */}
-                    <div className="p-3.5 rounded-xl bg-purple-500/[0.08] border border-purple-500/30 space-y-2.5">
+                    <div className="p-3.5 rounded-xl bg-amber-500/[0.08] border border-amber-500/30 space-y-2.5">
                         <div className="flex items-center justify-between gap-2">
-                            <span className="font-bold text-purple-300 text-xs flex items-center gap-1.5">
-                                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-purple-500/30 text-purple-200 text-[11px] font-mono font-bold">2</span>
+                            <span className="font-bold text-amber-300 text-xs flex items-center gap-1.5">
+                                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-500/30 text-amber-200 text-[11px] font-mono font-bold tabular-nums">2</span>
                                 Authorize Server Sender Address on Amazon:
                             </span>
                             <span className="text-[10px] text-muted-foreground">Required by Amazon</span>
@@ -193,16 +193,16 @@ export function KindleSetupGuideModal({
                             In Amazon Personal Document Settings, scroll to the <strong className="text-foreground">Approved Personal Document E-mail List</strong>, click <strong className="text-foreground">&quot;Add a new approved e-mail address&quot;</strong>, and add our outbound sender:
                         </p>
                         <div className="flex items-center gap-2 pl-6.5">
-                            <div className="flex-1 p-2 rounded-lg bg-black/60 border border-purple-500/30 font-mono text-xs sm:text-sm font-bold text-white select-all truncate">
+                            <div className="flex-1 p-2 rounded-lg bg-black/60 border border-amber-500/30 font-mono text-xs sm:text-sm font-bold text-white select-all truncate">
                                 {senderEmail}
                             </div>
                             <Button
                                 type="button"
                                 size="sm"
                                 onClick={handleCopy}
-                                className="h-9 px-3 gap-1.5 bg-purple-600 hover:bg-purple-700 text-white font-semibold shrink-0 shadow-md shadow-purple-900/30 cursor-pointer"
+                                className="h-9 px-3 gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shrink-0 shadow-md cursor-pointer"
                             >
-                                {copied ? <Check className="h-3.5 w-3.5 text-emerald-300" /> : <Copy className="h-3.5 w-3.5" />}
+                                {copied ? <Check className="h-3.5 w-3.5 text-emerald-950" /> : <Copy className="h-3.5 w-3.5" />}
                                 <span>{copied ? "Copied!" : "Copy Email"}</span>
                             </Button>
                         </div>
@@ -212,7 +212,7 @@ export function KindleSetupGuideModal({
                     <form onSubmit={handleSave} className="p-3.5 rounded-xl bg-muted/20 border border-border/30 space-y-2.5">
                         <div className="flex items-center justify-between gap-2">
                             <Label htmlFor="kindleEmailInput" className="font-bold text-foreground text-xs flex items-center gap-1.5 cursor-pointer">
-                                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-purple-500/20 text-purple-300 text-[11px] font-mono font-bold">3</span>
+                                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-500/20 text-amber-300 text-[11px] font-mono font-bold tabular-nums">3</span>
                                 Enter Your Kindle Email Address:
                             </Label>
                         </div>
@@ -227,7 +227,7 @@ export function KindleSetupGuideModal({
                                     setKindleEmail(e.target.value);
                                     if (errorMsg) setErrorMsg("");
                                 }}
-                                className="pl-9 h-9 text-xs bg-black/50 border-purple-500/30 font-mono text-white placeholder:text-muted-foreground/60"
+                                className="pl-9 h-9 text-xs bg-black/50 border-amber-500/30 font-mono text-white placeholder:text-muted-foreground/60"
                                 required
                             />
                         </div>
@@ -242,8 +242,8 @@ export function KindleSetupGuideModal({
                         )}
                     </form>
 
-                    <p className="text-[11px] text-muted-foreground/90 italic">
-                        💡 Once authorized on Amazon, any requested or downloaded ebook will download and fly wirelessly to your Kindle without any delivery rejections or bounces.
+                    <p className="text-[11px] text-muted-foreground">
+                        Once authorized on Amazon, any requested or downloaded ebook will download and deliver wirelessly to your Kindle without bounces.
                     </p>
                 </div>
 
@@ -264,7 +264,7 @@ export function KindleSetupGuideModal({
                             variant="outline"
                             size="sm"
                             asChild
-                            className="text-xs gap-1 border-purple-500/30 text-purple-300 hover:bg-purple-500/10 w-full sm:w-auto shrink-0 whitespace-nowrap"
+                            className="text-xs gap-1 border-amber-500/30 text-amber-300 hover:bg-amber-500/10 w-full sm:w-auto shrink-0 whitespace-nowrap"
                         >
                             <a
                                 href="https://www.amazon.com/hz/mycd/myx#/home/settings/payment"
@@ -280,7 +280,7 @@ export function KindleSetupGuideModal({
                             size="sm"
                             onClick={() => handleSave()}
                             disabled={saving || !kindleEmail.trim()}
-                            className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs gap-1.5 shadow-lg shadow-purple-900/30 w-full sm:w-auto shrink-0 whitespace-nowrap cursor-pointer"
+                            className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs gap-1.5 shadow-lg w-full sm:w-auto shrink-0 whitespace-nowrap cursor-pointer"
                         >
                             {saving ? (
                                 <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />

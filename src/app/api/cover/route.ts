@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
         
         let payload: any;
         try {
-            const decoded = await jwtVerify(session, getJwtSecret());
+            const decoded = await jwtVerify(session, getJwtSecret(), { algorithms: ["HS256"] });
             payload = decoded.payload;
         } catch (e) {
             return new NextResponse("Unauthorized", { status: 401 });
@@ -127,7 +127,8 @@ export async function GET(req: NextRequest) {
                         return new NextResponse(fileBuffer, {
                             headers: {
                                 "Content-Type": contentType,
-                                "Cache-Control": "public, max-age=86400, stale-while-revalidate=43200"
+                                "Cache-Control": "private, max-age=3600",
+                                "X-Content-Type-Options": "nosniff"
                             }
                         });
                     }
@@ -145,7 +146,9 @@ export async function GET(req: NextRequest) {
                         return new NextResponse(Buffer.from(imgBuffer), {
                             headers: {
                                 "Content-Type": cType,
-                                "Cache-Control": "public, max-age=86400, stale-while-revalidate=43200"
+                                "Cache-Control": "private, max-age=3600",
+                                "X-Content-Type-Options": "nosniff",
+                                ...(cType.includes("svg") ? { "Content-Security-Policy": "sandbox; default-src 'none'" } : {})
                             }
                         });
                     }
@@ -171,7 +174,9 @@ export async function GET(req: NextRequest) {
                         return new NextResponse(Buffer.from(imgBuffer), {
                             headers: {
                                 "Content-Type": cType,
-                                "Cache-Control": "public, max-age=86400, stale-while-revalidate=43200"
+                                "Cache-Control": "private, max-age=3600",
+                                "X-Content-Type-Options": "nosniff",
+                                ...(cType.includes("svg") ? { "Content-Security-Policy": "sandbox; default-src 'none'" } : {})
                             }
                         });
                     }
@@ -183,7 +188,9 @@ export async function GET(req: NextRequest) {
             return new NextResponse(svg, {
                 headers: {
                     "Content-Type": "image/svg+xml",
-                    "Cache-Control": "public, max-age=86400"
+                    "Content-Security-Policy": "sandbox; default-src 'none'",
+                    "X-Content-Type-Options": "nosniff",
+                    "Cache-Control": "private, max-age=3600"
                 }
             });
         }
@@ -192,6 +199,13 @@ export async function GET(req: NextRequest) {
         const bookReq = await prisma.bookRequest.findUnique({
             where: { id }
         });
+
+        if (bookReq) {
+            const isRequester = Boolean(bookReq.requestedBy && dbUser.username && bookReq.requestedBy.toLowerCase() === dbUser.username.toLowerCase());
+            if (role !== "ADMIN" && role !== "SUPER_USER" && !isRequester) {
+                return new NextResponse("Access Denied", { status: 403 });
+            }
+        }
 
         if (bookReq && bookReq.coverUrl) {
             const cleanCoverUrl = bookReq.coverUrl.replace(/[\?&]lib=[a-zA-Z0-9_\-]+/, "");
@@ -204,7 +218,9 @@ export async function GET(req: NextRequest) {
                         return new NextResponse(Buffer.from(imgBuffer), {
                             headers: {
                                 "Content-Type": cType,
-                                "Cache-Control": "public, max-age=86400, stale-while-revalidate=43200"
+                                "Cache-Control": "private, max-age=3600",
+                                "X-Content-Type-Options": "nosniff",
+                                ...(cType.includes("svg") ? { "Content-Security-Policy": "sandbox; default-src 'none'" } : {})
                             }
                         });
                     }
@@ -220,7 +236,9 @@ export async function GET(req: NextRequest) {
             return new NextResponse(svg, {
                 headers: {
                     "Content-Type": "image/svg+xml",
-                    "Cache-Control": "public, max-age=86400"
+                    "Content-Security-Policy": "sandbox; default-src 'none'",
+                    "X-Content-Type-Options": "nosniff",
+                    "Cache-Control": "private, max-age=3600"
                 }
             });
         }
@@ -229,7 +247,9 @@ export async function GET(req: NextRequest) {
         return new NextResponse(fallbackSvg, {
             headers: {
                 "Content-Type": "image/svg+xml",
-                "Cache-Control": "public, max-age=86400"
+                "Content-Security-Policy": "sandbox; default-src 'none'",
+                "X-Content-Type-Options": "nosniff",
+                "Cache-Control": "private, max-age=3600"
             }
         });
     } catch (e) {
@@ -238,7 +258,9 @@ export async function GET(req: NextRequest) {
         return new NextResponse(fallbackSvg, {
             headers: {
                 "Content-Type": "image/svg+xml",
-                "Cache-Control": "public, max-age=3600"
+                "Content-Security-Policy": "sandbox; default-src 'none'",
+                "X-Content-Type-Options": "nosniff",
+                "Cache-Control": "private, no-store"
             }
         });
     }

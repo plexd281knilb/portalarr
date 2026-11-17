@@ -243,14 +243,14 @@ export default function WhatsNewModal({
                         }}
                         variant="outline"
                         size="sm"
-                        className={buttonClassName || "h-8 px-3 text-xs font-semibold gap-1.5 rounded-full border-purple-500/40 bg-purple-500/10 text-purple-300 hover:bg-purple-500/20 hover:text-purple-200 hover:ring-2 hover:ring-purple-400/50 active:scale-95 transition-all shadow-sm"}
+                        className={buttonClassName || "h-8 px-3 text-xs font-semibold gap-1.5 rounded-full border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 hover:text-amber-200 hover:ring-2 hover:ring-amber-400/50 active:scale-95 transition-all shadow-sm"}
                     >
-                        <Sparkles className="h-3.5 w-3.5 text-purple-400 animate-pulse" />
+                        <Sparkles className="h-3.5 w-3.5 text-amber-400" />
                         <span>What&apos;s New</span>
                         {hasUnseenUpdate && (
                             <span className="relative flex h-2 w-2 ml-0.5">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-2 w-2 bg-purple-500"></span>
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
                             </span>
                         )}
                     </Button>
@@ -290,7 +290,7 @@ export default function WhatsNewModal({
                                     </>
                                 ) : (
                                     <>
-                                        <Sparkles className="h-5 w-5 text-purple-400" />
+                                        <Sparkles className="h-5 w-5 text-sky-400" />
                                         <span>What&apos;s New in DomsHomeLab</span>
                                     </>
                                 )}
@@ -309,11 +309,11 @@ export default function WhatsNewModal({
                                         onClick={() => setActiveTab("user")}
                                         className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                                             activeTab === "user"
-                                                ? "bg-purple-500/25 text-purple-200 border border-purple-500/40 shadow-xs"
+                                                ? "bg-sky-500/25 text-sky-200 border border-sky-500/40 shadow-xs"
                                                 : "text-muted-foreground hover:text-foreground hover:bg-white/[0.04]"
                                         }`}
                                     >
-                                        <Sparkles className="h-3.5 w-3.5 text-purple-400" />
+                                        <Sparkles className="h-3.5 w-3.5 text-sky-400" />
                                         <span>User Roadmap</span>
                                     </button>
                                     <button
@@ -462,10 +462,7 @@ export default function WhatsNewModal({
                         <Button 
                             onClick={handleDismiss} 
                             size="sm"
-                            className={activeTab === "dev"
-                                ? "bg-amber-600 hover:bg-amber-500 text-white font-semibold px-5 gap-1.5 order-1 sm:order-2 w-full sm:w-auto shadow-md"
-                                : "bg-purple-600 hover:bg-purple-500 text-white font-semibold px-5 gap-1.5 order-1 sm:order-2 w-full sm:w-auto shadow-md"
-                            }
+                            className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-5 gap-1.5 order-1 sm:order-2 w-full sm:w-auto shadow-md"
                         >
                             <CheckCircle2 className="h-4 w-4" />
                             <span>{activeTab === "dev" ? "Close" : "Got It"}</span>

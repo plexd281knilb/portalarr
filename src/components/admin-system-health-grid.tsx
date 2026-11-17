@@ -109,10 +109,10 @@ export default function AdminSystemHealthGrid() {
     const getServiceIcon = (category: string, type: string) => {
         const t = (type || "").toLowerCase();
         if (category === "plex") return <Tv className="h-4 w-4 text-amber-400" />;
-        if (category === "jellyfin") return <Tv className="h-4 w-4 text-purple-400" />;
+        if (category === "jellyfin") return <Tv className="h-4 w-4 text-sky-400" />;
         if (category === "emby") return <Tv className="h-4 w-4 text-emerald-400" />;
         if (category === "glances") return <Cpu className="h-4 w-4 text-emerald-400" />;
-        if (category === "tautulli") return <Activity className="h-4 w-4 text-purple-400" />;
+        if (category === "tautulli") return <Activity className="h-4 w-4 text-amber-400" />;
         if (t.includes("sonarr")) return <Tv className="h-4 w-4 text-sky-400" />;
         if (t.includes("radarr")) return <Film className="h-4 w-4 text-amber-500" />;
         if (t.includes("seerr") || t.includes("ombi")) return <Compass className="h-4 w-4 text-rose-400" />;
@@ -124,10 +124,10 @@ export default function AdminSystemHealthGrid() {
     const getCategoryBadgeClass = (category: string) => {
         switch (category) {
             case "plex": return "bg-amber-500/10 text-amber-400 border-amber-500/30";
-            case "jellyfin": return "bg-purple-500/10 text-purple-400 border-purple-500/30";
+            case "jellyfin": return "bg-sky-500/10 text-sky-400 border-sky-500/30";
             case "emby": return "bg-emerald-500/10 text-emerald-400 border-emerald-500/30";
             case "glances": return "bg-emerald-500/10 text-emerald-400 border-emerald-500/30";
-            case "tautulli": return "bg-purple-500/10 text-purple-400 border-purple-500/30";
+            case "tautulli": return "bg-amber-500/10 text-amber-400 border-amber-500/30";
             case "downloaders": return "bg-blue-500/10 text-blue-400 border-blue-500/30";
             default: return "bg-sky-500/10 text-sky-400 border-sky-500/30";
         }
@@ -229,29 +229,29 @@ export default function AdminSystemHealthGrid() {
                             <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Total Services</span>
                             <span className="text-lg font-black text-foreground">{summary.totalConfigured}</span>
                         </div>
-                        <Server className="h-5 w-5 text-muted-foreground/40" />
+                        <Server className="h-5 w-5 text-muted-foreground/70" />
                     </div>
 
                     <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.06] flex items-center justify-between">
                         <div>
                             <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Operational</span>
-                            <span className="text-lg font-black text-emerald-400 flex items-center gap-1.5">
+                            <span className="text-lg font-black text-emerald-400 flex items-center gap-1.5 tabular-nums">
                                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                                 {summary.onlineCount}
                             </span>
                         </div>
-                        <ShieldCheck className="h-5 w-5 text-emerald-400/40" />
+                        <ShieldCheck className="h-5 w-5 text-emerald-400/70" />
                     </div>
 
                     <div className={`p-2.5 rounded-xl border flex items-center justify-between ${summary.offlineCount > 0 ? "bg-rose-500/10 border-rose-500/30" : "bg-white/[0.02] border-white/[0.06]"}`}>
                         <div>
                             <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Unreachable</span>
-                            <span className={`text-lg font-black flex items-center gap-1.5 ${summary.offlineCount > 0 ? "text-rose-400" : "text-muted-foreground"}`}>
+                            <span className={`text-lg font-black flex items-center gap-1.5 tabular-nums ${summary.offlineCount > 0 ? "text-rose-400" : "text-muted-foreground"}`}>
                                 {summary.offlineCount > 0 && <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />}
                                 {summary.offlineCount}
                             </span>
                         </div>
-                        <AlertTriangle className={`h-5 w-5 ${summary.offlineCount > 0 ? "text-rose-400" : "text-muted-foreground/40"}`} />
+                        <AlertTriangle className={`h-5 w-5 ${summary.offlineCount > 0 ? "text-rose-400" : "text-muted-foreground/70"}`} />
                     </div>
 
                     <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.06] flex items-center justify-between">
@@ -453,7 +453,7 @@ export default function AdminSystemHealthGrid() {
                                             </span>
                                         )}
                                         {isPaused && (
-                                            <span className="text-[10px] text-slate-400 italic">
+                                            <span className="text-[10px] text-slate-400">
                                                 Monitoring Paused
                                             </span>
                                         )}
@@ -474,7 +474,7 @@ export default function AdminSystemHealthGrid() {
                                                 </span>
                                             )}
                                             {srv.metrics.streamCount !== undefined && (
-                                                <span className="flex items-center gap-1 font-mono text-purple-400">
+                                                <span className="flex items-center gap-1 font-mono text-sky-400 tabular-nums">
                                                     <Activity className="h-3 w-3" />
                                                     {srv.metrics.streamCount} {srv.metrics.streamCount === 1 ? "stream" : "streams"}
                                                 </span>

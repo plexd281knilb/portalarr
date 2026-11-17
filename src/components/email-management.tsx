@@ -844,7 +844,7 @@ export default function EmailManagement() {
                                         type="button"
                                         size="sm"
                                         variant={userFilter === "admin" ? "secondary" : "ghost"}
-                                        className="h-6 text-[10px] px-2 text-purple-400"
+                                        className="h-6 text-[10px] px-2 text-sky-400"
                                         onClick={() => setUserFilter("admin")}
                                     >
                                         Admins ({users.filter(u => u.role === "ADMIN").length})
@@ -881,7 +881,7 @@ export default function EmailManagement() {
                         {/* Recipient User List */}
                         <CardContent className="p-0 flex-1 overflow-y-auto max-h-[460px]">
                             {filteredUsers.length === 0 ? (
-                                <div className="p-6 text-center text-xs text-muted-foreground italic">
+                                <div className="p-6 text-center text-xs text-muted-foreground">
                                     No users found matching your search.
                                 </div>
                             ) : (
@@ -911,13 +911,13 @@ export default function EmailManagement() {
                                                         <div className="font-semibold text-foreground truncate flex items-center gap-1.5">
                                                             {user.username}
                                                             {user.role === "ADMIN" && (
-                                                                <Badge variant="outline" className="text-[9px] px-1 py-0 border-purple-500/40 text-purple-400 bg-purple-500/10">
+                                                                <Badge variant="outline" className="text-[9px] px-1 py-0 border-sky-500/40 text-sky-400 bg-sky-500/10">
                                                                     ADMIN
                                                                 </Badge>
                                                             )}
                                                         </div>
                                                         <div className="text-[11px] text-muted-foreground truncate font-mono">
-                                                            {user.email || <span className="text-red-400 italic">No email address configured</span>}
+                                                            {user.email || <span className="text-red-400">No email address configured</span>}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -936,8 +936,8 @@ export default function EmailManagement() {
                                                         {user.status}
                                                     </Badge>
                                                     {user.kindleEmail && (
-                                                        <span className="text-[9px] text-amber-500 font-mono flex items-center gap-0.5" title={`Kindle: ${user.kindleEmail}`}>
-                                                            📖 Kindle
+                                                        <span className="text-[9px] text-amber-500 font-mono flex items-center gap-1" title={`Kindle: ${user.kindleEmail}`}>
+                                                            <BookOpen className="h-2.5 w-2.5 shrink-0" /> Kindle
                                                         </span>
                                                     )}
                                                 </div>
@@ -997,8 +997,8 @@ export default function EmailManagement() {
                                         <div>
                                             <span className="font-bold text-amber-300">
                                                 {approvalSettings.requireApprovalForEmails && approvalSettings.emailApprovalPolicy?.["broadcast"] !== false
-                                                    ? "🛡️ Staged in Admin Approval Queue First (Safe Review Mode)"
-                                                    : "⚡ Direct SMTP Dispatch Mode"}
+                                                    ? "Staged in Admin Approval Queue First (Safe Review Mode)"
+                                                    : "Direct SMTP Dispatch Mode"}
                                             </span>
                                             <p className="text-[11px] text-muted-foreground">
                                                 {approvalSettings.requireApprovalForEmails && approvalSettings.emailApprovalPolicy?.["broadcast"] !== false
@@ -1016,10 +1016,10 @@ export default function EmailManagement() {
                                 </div>
 
                                 {/* 1-CLICK BROADCAST PRESET SELECTOR */}
-                                <div className="space-y-1.5 bg-indigo-950/25 p-3 rounded-xl border border-indigo-500/30">
-                                    <div className="flex items-center justify-between text-[11px] font-semibold text-indigo-300">
+                                <div className="space-y-1.5 bg-sky-950/25 p-3 rounded-xl border border-sky-500/30">
+                                    <div className="flex items-center justify-between text-[11px] font-semibold text-sky-300">
                                         <span className="flex items-center gap-1.5">
-                                            <Sparkles className="h-3.5 w-3.5 text-indigo-400" /> Quick-Load Broadcast Template Preset:
+                                            <Sparkles className="h-3.5 w-3.5 text-sky-400" /> Quick-Load Broadcast Template Preset:
                                         </span>
                                         <span className="text-[10px] text-muted-foreground">Click to load into Subject &amp; Body</span>
                                     </div>
@@ -1028,7 +1028,7 @@ export default function EmailManagement() {
                                             type="button"
                                             size="sm"
                                             variant="secondary"
-                                            className="h-7 text-xs font-bold bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 border border-indigo-500/40 gap-1.5"
+                                            className="h-7 text-xs font-bold bg-sky-600/30 hover:bg-sky-600/50 text-sky-200 border border-sky-500/40 gap-1.5"
                                             onClick={() => {
                                                 const launchTpl = templates.find(t => t.id === "new_site_launch");
                                                 if (launchTpl) {
@@ -1064,7 +1064,7 @@ export default function EmailManagement() {
                                                 setBroadcastIsHtml(false);
                                             }}
                                         >
-                                            🛠️ Scheduled Maintenance Notice
+                                            Scheduled Maintenance Notice
                                         </Button>
                                     </div>
                                 </div>
@@ -1146,7 +1146,7 @@ export default function EmailManagement() {
                                         <span className="flex items-center gap-1">
                                             <Sparkles className="h-3 w-3 text-primary" /> Click to Insert Merge Tag:
                                         </span>
-                                        <span className="text-[10px] italic">Replaced dynamically for each recipient</span>
+                                        <span className="text-[10px]">Replaced dynamically for each recipient</span>
                                     </div>
                                     <div className="flex flex-wrap gap-1.5 pt-1">
                                         {[
@@ -1234,24 +1234,24 @@ export default function EmailManagement() {
                                             <div className="p-6 text-xs leading-relaxed max-h-[380px] overflow-y-auto">
                                                 <div className="max-w-[560px] mx-auto bg-white dark:bg-[#13141f] border border-slate-200 dark:border-white/10 rounded-xl p-6 shadow-xl space-y-4 text-slate-800 dark:text-slate-200">
                                                     <div className="flex items-center gap-2 border-b border-slate-200 dark:border-white/10 pb-3">
-                                                        <div className="h-7 w-7 rounded-lg bg-indigo-600/10 border border-indigo-600/30 dark:bg-indigo-500/20 dark:border-indigo-500/40 flex items-center justify-center font-black text-indigo-600 dark:text-indigo-400 text-xs">
+                                                        <div className="h-7 w-7 rounded-lg bg-sky-600/10 border border-sky-600/30 dark:bg-sky-500/20 dark:border-sky-500/40 flex items-center justify-center font-black text-sky-600 dark:text-sky-400 text-xs">
                                                             D
                                                         </div>
                                                         <span className="font-bold text-sm tracking-wide text-slate-900 dark:text-white">
-                                                            DOMS<span className="text-indigo-600 dark:text-indigo-400">HOMELAB</span>
+                                                            DOMS<span className="text-sky-600 dark:text-sky-400">HOMELAB</span>
                                                         </span>
                                                     </div>
 
                                                     <h4 className="text-base font-bold text-slate-900 dark:text-white">{renderedBroadcastSubjectPreview}</h4>
 
                                                     <div 
-                                                        className="prose dark:prose-invert prose-sm max-w-none text-xs leading-relaxed text-slate-700 dark:text-slate-300 [&_a]:text-indigo-600 dark:[&_a]:text-indigo-400 [&_code]:bg-slate-100 dark:[&_code]:bg-slate-800 [&_code]:text-indigo-600 dark:[&_code]:text-indigo-300 [&_table]:text-xs [&_table]:w-full [&_table]:table-fixed [&_td]:py-1.5 [&_td]:break-words [&_th]:py-1.5 break-words [overflow-wrap:anywhere]"
+                                                        className="prose dark:prose-invert prose-sm max-w-none text-xs leading-relaxed text-slate-700 dark:text-slate-300 [&_a]:text-sky-600 dark:[&_a]:text-sky-400 [&_code]:bg-slate-100 dark:[&_code]:bg-slate-800 [&_code]:text-sky-600 dark:[&_code]:text-sky-300 [&_table]:text-xs [&_table]:w-full [&_table]:table-fixed [&_td]:py-1.5 [&_td]:break-words [&_th]:py-1.5 break-words [overflow-wrap:anywhere]"
                                                         dangerouslySetInnerHTML={{ __html: renderedBroadcastBodyPreview }}
                                                     />
 
-                                                    <div className="p-3 rounded-lg bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 border-l-4 border-l-indigo-600 text-[11px] leading-relaxed text-slate-600 dark:text-slate-400 text-left space-y-1">
+                                                    <div className="p-3 rounded-lg bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 border-l-4 border-l-sky-600 text-[11px] leading-relaxed text-slate-600 dark:text-slate-400 text-left space-y-1">
                                                         <div className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                                                            <span>📬 Note from Dominic:</span>
+                                                            <span>Note from Dominic:</span>
                                                         </div>
                                                         <p className="m-0">
                                                             To ensure you receive media request alerts, library updates, and account notifications, please add this sender to your contacts or mark emails from <strong>domshomelab.com</strong> as trusted.
@@ -1264,7 +1264,7 @@ export default function EmailManagement() {
                                                                 href={typeof window !== "undefined" ? window.location.origin : "/"}
                                                                 target="_blank"
                                                                 rel="noopener noreferrer"
-                                                                className="inline-flex items-center justify-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-bold text-xs px-5 py-2.5 rounded-lg shadow-md transition-all cursor-pointer ring-2 ring-indigo-500/20"
+                                                                className="inline-flex items-center justify-center gap-1.5 bg-sky-600 hover:bg-sky-500 active:bg-sky-700 text-white font-bold text-xs px-5 py-2.5 rounded-lg shadow-md transition-all cursor-pointer"
                                                             >
                                                                 Open Dashboard &rarr;
                                                             </a>
@@ -1336,9 +1336,9 @@ export default function EmailManagement() {
                             <div>
                                 <strong>Approval Gate:</strong>{" "}
                                 {approvalSettings.requireApprovalForEmails && approvalSettings.emailApprovalPolicy?.["broadcast"] !== false ? (
-                                    <span className="text-amber-400 font-semibold">🛡️ Staged in Admin Approval Queue (Check before sending)</span>
+                                    <span className="text-amber-400 font-semibold">Staged in Admin Approval Queue (Check before sending)</span>
                                 ) : (
-                                    <span className="text-emerald-400 font-semibold">⚡ Immediate SMTP Dispatch</span>
+                                    <span className="text-emerald-400 font-semibold">Immediate SMTP Dispatch</span>
                                 )}
                             </div>
                         </div>
@@ -1470,7 +1470,7 @@ export default function EmailManagement() {
                                                     </span>
                                                     <div className="flex items-center gap-1 shrink-0">
                                                         {getTemplateRecipient(tpl.id) === "ADMIN" ? (
-                                                            <Badge variant="outline" className="text-[8px] px-1 py-0 border-purple-500/40 text-purple-300 bg-purple-500/10 font-bold">
+                                                            <Badge variant="outline" className="text-[8px] px-1 py-0 border-sky-500/40 text-sky-300 bg-sky-500/10 font-bold">
                                                                 TO: ADMIN
                                                             </Badge>
                                                         ) : getTemplateRecipient(tpl.id) === "BOTH" ? (
@@ -1503,8 +1503,8 @@ export default function EmailManagement() {
                                                     {currentTemplate.name}
                                                 </CardTitle>
                                                 {getTemplateRecipient(currentTemplate.id) === "ADMIN" ? (
-                                                    <Badge className="bg-purple-500/20 text-purple-300 border border-purple-500/40 text-[10px] font-bold gap-1 shrink-0">
-                                                        <Shield className="h-3 w-3 text-purple-400" /> TO: ADMIN
+                                                    <Badge className="bg-sky-500/20 text-sky-300 border border-sky-500/40 text-[10px] font-bold gap-1 shrink-0">
+                                                        <Shield className="h-3 w-3 text-sky-400" /> TO: ADMIN
                                                     </Badge>
                                                 ) : getTemplateRecipient(currentTemplate.id) === "BOTH" ? (
                                                     <Badge className="bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 text-[10px] font-bold gap-1 shrink-0">
@@ -1669,7 +1669,7 @@ export default function EmailManagement() {
                                             <span className="flex items-center gap-1">
                                                 <Sparkles className="h-3 w-3 text-amber-400" /> Available Template Variables:
                                             </span>
-                                            <span className="text-[10px] italic">Click to append to template</span>
+                                            <span className="text-[10px]">Click to append to template</span>
                                         </div>
                                         <div className="flex flex-wrap gap-1.5 pt-1">
                                             {currentTemplate.variables.map(v => (
@@ -1744,24 +1744,24 @@ export default function EmailManagement() {
                                                 <div className="p-6 text-xs leading-relaxed max-h-[380px] overflow-y-auto">
                                                     <div className="max-w-[560px] mx-auto bg-white dark:bg-[#13141f] border border-slate-200 dark:border-white/10 rounded-xl p-6 shadow-xl space-y-4 text-slate-800 dark:text-slate-200">
                                                         <div className="flex items-center gap-2 border-b border-slate-200 dark:border-white/10 pb-3">
-                                                            <div className="h-7 w-7 rounded-lg bg-indigo-600/10 border border-indigo-600/30 dark:bg-indigo-500/20 dark:border-indigo-500/40 flex items-center justify-center font-black text-indigo-600 dark:text-indigo-400 text-xs">
+                                                            <div className="h-7 w-7 rounded-lg bg-sky-600/10 border border-sky-600/30 dark:bg-sky-500/20 dark:border-sky-500/40 flex items-center justify-center font-black text-sky-600 dark:text-sky-400 text-xs">
                                                                 D
                                                             </div>
                                                             <span className="font-bold text-sm tracking-wide text-slate-900 dark:text-white">
-                                                                DOMS<span className="text-indigo-600 dark:text-indigo-400">HOMELAB</span>
+                                                                DOMS<span className="text-sky-600 dark:text-sky-400">HOMELAB</span>
                                                             </span>
                                                         </div>
 
                                                         <h4 className="text-base font-bold text-slate-900 dark:text-white">{renderedTemplateSubjectPreview}</h4>
 
                                                         <div 
-                                                            className="prose dark:prose-invert prose-sm max-w-none text-xs leading-relaxed text-slate-700 dark:text-slate-300 [&_a]:text-indigo-600 dark:[&_a]:text-indigo-400 [&_code]:bg-slate-100 dark:[&_code]:bg-slate-800 [&_code]:text-indigo-600 dark:[&_code]:text-indigo-300 [&_table]:text-xs [&_table]:w-full [&_table]:table-fixed [&_td]:py-1.5 [&_td]:break-words [&_th]:py-1.5 break-words [overflow-wrap:anywhere]"
+                                                            className="prose dark:prose-invert prose-sm max-w-none text-xs leading-relaxed text-slate-700 dark:text-slate-300 [&_a]:text-sky-600 dark:[&_a]:text-sky-400 [&_code]:bg-slate-100 dark:[&_code]:bg-slate-800 [&_code]:text-sky-600 dark:[&_code]:text-sky-300 [&_table]:text-xs [&_table]:w-full [&_table]:table-fixed [&_td]:py-1.5 [&_td]:break-words [&_th]:py-1.5 break-words [overflow-wrap:anywhere]"
                                                             dangerouslySetInnerHTML={{ __html: renderedTemplateBodyPreview }}
                                                         />
 
-                                                        <div className="p-3 rounded-lg bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 border-l-4 border-l-indigo-600 text-[11px] leading-relaxed text-slate-600 dark:text-slate-400 text-left space-y-1">
+                                                        <div className="p-3 rounded-lg bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 border-l-4 border-l-sky-600 text-[11px] leading-relaxed text-slate-600 dark:text-slate-400 text-left space-y-1">
                                                             <div className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                                                                <span>📬 Note from Dominic:</span>
+                                                                <span>Note from Dominic:</span>
                                                             </div>
                                                             <p className="m-0">
                                                                 To ensure you receive media request alerts, library updates, and account notifications, please add this sender to your contacts or mark emails from <strong>domshomelab.com</strong> as trusted.
@@ -1774,7 +1774,7 @@ export default function EmailManagement() {
                                                                     href={typeof window !== "undefined" ? window.location.origin : "/"}
                                                                     target="_blank"
                                                                     rel="noopener noreferrer"
-                                                                    className="inline-flex items-center justify-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-bold text-xs px-5 py-2.5 rounded-lg shadow-md transition-all cursor-pointer ring-2 ring-indigo-500/20"
+                                                                    className="inline-flex items-center justify-center gap-1.5 bg-sky-600 hover:bg-sky-500 active:bg-sky-700 text-white font-bold text-xs px-5 py-2.5 rounded-lg shadow-md transition-all cursor-pointer"
                                                                 >
                                                                     Open Dashboard &rarr;
                                                                 </a>
@@ -1898,7 +1898,7 @@ export default function EmailManagement() {
                                         <div className="flex items-center gap-2 flex-wrap">
                                             <span className="text-xs font-bold text-foreground">Action Approval Gates & Queue Governance</span>
                                             <Badge variant="outline" className={`text-[10px] font-semibold ${approvalSettings.requireApprovalForEmails ? "bg-amber-500/10 text-amber-400 border-amber-500/30" : "bg-muted/50 text-muted-foreground border-border/40"}`}>
-                                                {approvalSettings.requireApprovalForEmails ? "🔒 Approval Gate Active" : "⚡ Gate Bypassed (All Auto-Send)"}
+                                                {approvalSettings.requireApprovalForEmails ? "Approval Gate Active" : "Gate Bypassed (All Auto-Send)"}
                                             </Badge>
                                             {approvalPolicyMsg && (
                                                 <span className="text-xs text-emerald-400 font-medium flex items-center gap-1 animate-in fade-in">
@@ -1996,7 +1996,7 @@ export default function EmailManagement() {
                                         size="sm"
                                         variant={policyRecipientFilter === "ADMIN" ? "secondary" : "ghost"}
                                         onClick={() => setPolicyRecipientFilter("ADMIN")}
-                                        className="h-6 text-[10px] px-2 font-semibold text-purple-400 hover:text-purple-300"
+                                        className="h-6 text-[10px] px-2 font-semibold text-sky-400 hover:text-sky-300"
                                     >
                                         <Shield className="h-2.5 w-2.5 mr-1" /> To Admin (1)
                                     </Button>
@@ -2043,11 +2043,11 @@ export default function EmailManagement() {
                                         <span className="text-muted-foreground font-medium">Approval Gate:</span>
                                         {isCategoryApprovalRequired(["user_approval"]) ? (
                                             <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">
-                                                🔒 Staged
+                                                Staged
                                             </Badge>
                                         ) : (
                                             <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
-                                                ⚡ Auto-Send
+                                                Auto-Send
                                             </Badge>
                                         )}
                                     </div>
@@ -2072,7 +2072,7 @@ export default function EmailManagement() {
                                     <div className="space-y-1 pr-1">
                                         <div className="font-semibold text-xs text-foreground flex items-center gap-1.5 flex-wrap">
                                             <Shield className="h-4 w-4 text-blue-400" /> New User Requests
-                                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-purple-500/10 text-purple-400 border-purple-500/30 font-bold shrink-0 flex items-center gap-1">
+                                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-sky-500/10 text-sky-400 border-sky-500/30 font-bold shrink-0 flex items-center gap-1">
                                                 <Shield className="h-2.5 w-2.5" /> TO: ADMIN
                                             </Badge>
                                         </div>
@@ -2092,11 +2092,11 @@ export default function EmailManagement() {
                                         <span className="text-muted-foreground font-medium">Approval Gate:</span>
                                         {isCategoryApprovalRequired(["admin_new_user"]) ? (
                                             <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">
-                                                🔒 Staged
+                                                Staged
                                             </Badge>
                                         ) : (
                                             <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
-                                                ⚡ Auto-Send
+                                                Auto-Send
                                             </Badge>
                                         )}
                                     </div>
@@ -2141,11 +2141,11 @@ export default function EmailManagement() {
                                         <span className="text-muted-foreground font-medium">Approval Gate:</span>
                                         {isCategoryApprovalRequired(["password_reset"]) ? (
                                             <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">
-                                                🔒 Staged
+                                                Staged
                                             </Badge>
                                         ) : (
                                             <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
-                                                ⚡ Auto-Send
+                                                Auto-Send
                                             </Badge>
                                         )}
                                     </div>
@@ -2169,7 +2169,7 @@ export default function EmailManagement() {
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="space-y-1 pr-1">
                                         <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
-                                            <BookOpen className="h-4 w-4 text-indigo-400" /> Media & Book Requests
+                                            <BookOpen className="h-4 w-4 text-emerald-400" /> Media &amp; Book Requests
                                         </div>
                                         <p className="text-[11px] text-muted-foreground leading-tight">
                                             Notify users when requested books/audiobooks are ready, failed, or require admin attention.
@@ -2187,11 +2187,11 @@ export default function EmailManagement() {
                                         <span className="text-muted-foreground font-medium">Approval Gate:</span>
                                         {isCategoryApprovalRequired(["media_ready", "media_request_admin", "seerr_request_new_admin", "seerr_request_auto_approved", "seerr_request_approved", "seerr_request_declined", "seerr_request_available", "seerr_request_failed"]) ? (
                                             <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">
-                                                🔒 Staged
+                                                Staged
                                             </Badge>
                                         ) : (
                                             <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
-                                                ⚡ Auto-Send
+                                                Auto-Send
                                             </Badge>
                                         )}
                                     </div>
@@ -2233,11 +2233,11 @@ export default function EmailManagement() {
                                         <span className="text-muted-foreground font-medium">Approval Gate:</span>
                                         {isCategoryApprovalRequired(["ticket_update", "ticket_error_alert"]) ? (
                                             <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">
-                                                🔒 Staged
+                                                Staged
                                             </Badge>
                                         ) : (
                                             <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
-                                                ⚡ Auto-Send
+                                                Auto-Send
                                             </Badge>
                                         )}
                                     </div>
@@ -2279,11 +2279,11 @@ export default function EmailManagement() {
                                         <span className="text-muted-foreground font-medium">Approval Gate:</span>
                                         {isCategoryApprovalRequired(["kindle_delivery", "kindle_success", "kindle_failed"]) ? (
                                             <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">
-                                                🔒 Staged
+                                                Staged
                                             </Badge>
                                         ) : (
                                             <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
-                                                ⚡ Auto-Send
+                                                Auto-Send
                                             </Badge>
                                         )}
                                     </div>
@@ -2325,11 +2325,11 @@ export default function EmailManagement() {
                                         <span className="text-muted-foreground font-medium">Approval Gate:</span>
                                         {isCategoryApprovalRequired(["trial_welcome"]) ? (
                                             <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">
-                                                🔒 Staged
+                                                Staged
                                             </Badge>
                                         ) : (
                                             <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
-                                                ⚡ Auto-Send
+                                                Auto-Send
                                             </Badge>
                                         )}
                                     </div>
@@ -2371,11 +2371,11 @@ export default function EmailManagement() {
                                         <span className="text-muted-foreground font-medium">Approval Gate:</span>
                                         {isCategoryApprovalRequired(["trial_expiring_soon"]) ? (
                                             <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">
-                                                🔒 Staged
+                                                Staged
                                             </Badge>
                                         ) : (
                                             <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
-                                                ⚡ Auto-Send
+                                                Auto-Send
                                             </Badge>
                                         )}
                                     </div>
@@ -2417,11 +2417,11 @@ export default function EmailManagement() {
                                         <span className="text-muted-foreground font-medium">Approval Gate:</span>
                                         {isCategoryApprovalRequired(["trial_expired", "admin_user_access_revoked"]) ? (
                                             <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">
-                                                🔒 Staged
+                                                Staged
                                             </Badge>
                                         ) : (
                                             <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
-                                                ⚡ Auto-Send
+                                                Auto-Send
                                             </Badge>
                                         )}
                                     </div>
@@ -2463,11 +2463,11 @@ export default function EmailManagement() {
                                         <span className="text-muted-foreground font-medium">Approval Gate:</span>
                                         {isCategoryApprovalRequired(["subscription_activated", "payment_received", "payment_underpayment", "admin_payment_received"]) ? (
                                             <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">
-                                                🔒 Staged
+                                                Staged
                                             </Badge>
                                         ) : (
                                             <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
-                                                ⚡ Auto-Send
+                                                Auto-Send
                                             </Badge>
                                         )}
                                     </div>
@@ -2509,11 +2509,11 @@ export default function EmailManagement() {
                                         <span className="text-muted-foreground font-medium">Approval Gate:</span>
                                         {isCategoryApprovalRequired(["referral_reward_credited"]) ? (
                                             <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">
-                                                🔒 Staged
+                                                Staged
                                             </Badge>
                                         ) : (
                                             <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
-                                                ⚡ Auto-Send
+                                                Auto-Send
                                             </Badge>
                                         )}
                                     </div>
@@ -2555,11 +2555,11 @@ export default function EmailManagement() {
                                         <span className="text-muted-foreground font-medium">Approval Gate:</span>
                                         {isCategoryApprovalRequired(["subscription_renewal_reminder_yearly", "subscription_renewal_reminder_monthly", "subscription_renewal_reminder"]) ? (
                                             <Badge variant="outline" className="text-[9px] px-1 py-0 bg-amber-500/10 text-amber-400 border-amber-500/30">
-                                                🔒 Staged
+                                                Staged
                                             </Badge>
                                         ) : (
                                             <Badge variant="outline" className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
-                                                ⚡ Auto-Send
+                                                Auto-Send
                                             </Badge>
                                         )}
                                     </div>

@@ -327,13 +327,13 @@ export default function DiscordSettingsPanel({ onDirtyChange, ref }: DiscordSett
                         className="h-8 text-xs gap-1.5 border-border/60 hover:bg-muted/60"
                         onClick={() => setShowSetupGuide(!showSetupGuide)}
                     >
-                        <BookOpen className="h-3.5 w-3.5 text-indigo-400" />
+                        <BookOpen className="h-3.5 w-3.5 text-sky-400" />
                         {showSetupGuide ? "Hide Setup Guide" : "3-Step Setup Guide"}
                         {showSetupGuide ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                     </Button>
                     <Button
                         size="sm"
-                        className="h-8 text-xs gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold shadow-sm"
+                        className="h-8 text-xs gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-sm"
                         onClick={handleSyncServer}
                         disabled={syncing || !isConfigured}
                     >
@@ -362,9 +362,9 @@ export default function DiscordSettingsPanel({ onDirtyChange, ref }: DiscordSett
 
             {/* COLLAPSIBLE 3-STEP SETUP GUIDE */}
             {showSetupGuide && (
-                <Card className="border-indigo-500/30 bg-background/60 shadow-md">
+                <Card className="border-sky-500/30 bg-background/60 shadow-md">
                     <CardHeader className="pb-3">
-                        <CardTitle className="text-sm font-semibold flex items-center gap-2 text-indigo-300">
+                        <CardTitle className="text-sm font-semibold flex items-center gap-2 text-sky-300">
                             <Bot className="h-4 w-4" /> 3-Step Discord Developer Portal Setup Guide
                         </CardTitle>
                         <CardDescription className="text-xs">
@@ -374,27 +374,27 @@ export default function DiscordSettingsPanel({ onDirtyChange, ref }: DiscordSett
                     <CardContent className="space-y-3 text-xs text-muted-foreground">
                         <div className="p-2.5 rounded-lg bg-muted/40 border border-border/40 space-y-1.5">
                             <div className="font-semibold text-foreground flex items-center gap-2">
-                                <span className="h-5 w-5 rounded-full bg-indigo-500/20 text-indigo-300 flex items-center justify-center text-[11px] font-bold">1</span>
+                                <span className="h-5 w-5 rounded-full bg-sky-500/20 text-sky-300 flex items-center justify-center text-[11px] font-bold tabular-nums">1</span>
                                 Create Application & Bot
                             </div>
                             <p className="pl-7">
-                                Go to the <a href="https://discord.com/developers/applications" target="_blank" rel="noreferrer" className="text-indigo-400 underline font-medium hover:text-indigo-300 inline-flex items-center gap-1">Discord Developer Portal <ExternalLink className="h-3 w-3" /></a> → Click <strong>New Application</strong> → Name it <em>DomsHomeLab</em> (<em>d281knilb</em>).
+                                Go to the <a href="https://discord.com/developers/applications" target="_blank" rel="noreferrer" className="text-sky-400 underline font-medium hover:text-sky-300 inline-flex items-center gap-1">Discord Developer Portal <ExternalLink className="h-3 w-3" /></a> → Click <strong>New Application</strong> → Name it <strong>DomsHomeLab</strong> (<span className="font-mono">d281knilb</span>).
                             </p>
                         </div>
 
                         <div className="p-2.5 rounded-lg bg-muted/40 border border-border/40 space-y-1.5">
                             <div className="font-semibold text-foreground flex items-center gap-2">
-                                <span className="h-5 w-5 rounded-full bg-indigo-500/20 text-indigo-300 flex items-center justify-center text-[11px] font-bold">2</span>
+                                <span className="h-5 w-5 rounded-full bg-sky-500/20 text-sky-300 flex items-center justify-center text-[11px] font-bold tabular-nums">2</span>
                                 Copy Token & Enable Privileged Intents
                             </div>
                             <p className="pl-7">
-                                In the left sidebar, click <strong>Bot</strong> → Click <strong>Reset Token</strong> and copy the token. Scroll down to <em>Privileged Gateway Intents</em> and enable <strong>Server Members Intent</strong>.
+                                In the left sidebar, click <strong>Bot</strong> → Click <strong>Reset Token</strong> and copy the token. Scroll down to <strong>Privileged Gateway Intents</strong> and enable <strong>Server Members Intent</strong>.
                             </p>
                         </div>
 
                         <div className="p-2.5 rounded-lg bg-muted/40 border border-border/40 space-y-1.5">
                             <div className="font-semibold text-foreground flex items-center gap-2">
-                                <span className="h-5 w-5 rounded-full bg-indigo-500/20 text-indigo-300 flex items-center justify-center text-[11px] font-bold">3</span>
+                                <span className="h-5 w-5 rounded-full bg-sky-500/20 text-sky-300 flex items-center justify-center text-[11px] font-bold tabular-nums">3</span>
                                 Invite Bot & Copy Server ID
                             </div>
                             <p className="pl-7">
@@ -465,10 +465,10 @@ export default function DiscordSettingsPanel({ onDirtyChange, ref }: DiscordSett
 
                         {/* 1-CLICK BOT INVITE BANNER */}
                         {clientId && (
-                            <div className="flex items-center justify-between p-2.5 rounded-lg bg-indigo-500/10 border border-indigo-500/25">
+                            <div className="flex items-center justify-between p-2.5 rounded-lg bg-sky-500/10 border border-sky-500/25">
                                 <div className="flex items-center gap-2">
-                                    <Bot className="h-4 w-4 text-indigo-400 shrink-0" />
-                                    <span className="text-[11px] font-medium text-indigo-200">
+                                    <Bot className="h-4 w-4 text-sky-400 shrink-0" />
+                                    <span className="text-[11px] font-medium text-sky-200">
                                         Bot Invite Link Ready with Administrator permissions
                                     </span>
                                 </div>
@@ -476,7 +476,7 @@ export default function DiscordSettingsPanel({ onDirtyChange, ref }: DiscordSett
                                     <Button
                                         size="sm"
                                         variant="outline"
-                                        className="h-7 px-2 text-[11px] border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/20 gap-1"
+                                        className="h-7 px-2 text-[11px] border-sky-500/30 text-sky-300 hover:bg-sky-500/20 gap-1"
                                         onClick={handleCopyInvite}
                                     >
                                         {copiedInvite ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
@@ -486,7 +486,7 @@ export default function DiscordSettingsPanel({ onDirtyChange, ref }: DiscordSett
                                         href={generatedInvite}
                                         target="_blank"
                                         rel="noreferrer"
-                                        className="inline-flex items-center gap-1 h-7 px-2.5 rounded text-[11px] font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition-colors"
+                                        className="inline-flex items-center gap-1 h-7 px-2.5 rounded text-[11px] font-semibold bg-primary hover:bg-primary/90 text-primary-foreground transition-colors"
                                     >
                                         Authorize & Add Bot <ExternalLink className="h-3 w-3" />
                                     </a>
@@ -522,7 +522,7 @@ export default function DiscordSettingsPanel({ onDirtyChange, ref }: DiscordSett
                 <Card className="shadow-sm border-border/60 flex flex-col justify-between">
                     <CardHeader className="pb-3">
                         <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                            <Bot className="h-4 w-4 text-indigo-400" /> Bot Status & Sync Telemetry
+                            <Bot className="h-4 w-4 text-sky-400" /> Bot Status & Sync Telemetry
                         </CardTitle>
                         <CardDescription className="text-xs">
                             Live connection status and last server sync summary.
@@ -532,10 +532,10 @@ export default function DiscordSettingsPanel({ onDirtyChange, ref }: DiscordSett
                         {testResult?.bot ? (
                             <div className="flex items-center gap-3 p-3 rounded-lg bg-background/50 border border-border/50">
                                 {testResult.bot.avatarUrl ? (
-                                    <img src={testResult.bot.avatarUrl} alt="Bot" className="h-10 w-10 rounded-full border border-indigo-500/40" />
+                                    <img src={testResult.bot.avatarUrl} alt="Bot" className="h-10 w-10 rounded-full border border-sky-500/40" />
                                 ) : (
-                                    <div className="h-10 w-10 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold">
-                                        🤖
+                                    <div className="h-10 w-10 rounded-full bg-sky-500/20 text-sky-400 flex items-center justify-center font-bold">
+                                        <Bot className="h-5 w-5" />
                                     </div>
                                 )}
                                 <div className="min-w-0">
@@ -557,9 +557,9 @@ export default function DiscordSettingsPanel({ onDirtyChange, ref }: DiscordSett
                             </div>
                         ) : (
                             <div className="p-3 rounded-lg bg-muted/20 border border-border/30 text-center text-muted-foreground">
-                                <Bot className="h-8 w-8 mx-auto text-muted-foreground/40 mb-1" />
+                                <Bot className="h-8 w-8 mx-auto text-muted-foreground/70 mb-1" />
                                 <p className="font-medium text-xs">Bot Not Verified</p>
-                                <p className="text-[11px] text-muted-foreground/70 mt-0.5">Click "Test Connection" to fetch live bot telemetry.</p>
+                                <p className="text-[11px] text-muted-foreground mt-0.5">Click "Test Connection" to fetch live bot telemetry.</p>
                             </div>
                         )}
 
@@ -578,7 +578,7 @@ export default function DiscordSettingsPanel({ onDirtyChange, ref }: DiscordSett
                                 </span>
                             </div>
                             {lastSyncStatus?.summaryText && (
-                                <p className="text-[11px] text-muted-foreground/80 italic border-t border-border/20 pt-1">
+                                <p className="text-[11px] text-muted-foreground border-t border-border/20 pt-1">
                                     {lastSyncStatus.summaryText}
                                 </p>
                             )}
@@ -589,7 +589,7 @@ export default function DiscordSettingsPanel({ onDirtyChange, ref }: DiscordSett
                             <Button
                                 size="sm"
                                 variant="outline"
-                                className="w-full h-8 text-xs gap-1.5 border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/15"
+                                className="w-full h-8 text-xs gap-1.5 border-sky-500/30 text-sky-300 hover:bg-sky-500/15"
                                 onClick={handleUpdateLiveStatus}
                                 disabled={updatingStatus || !isConfigured}
                             >
@@ -607,7 +607,7 @@ export default function DiscordSettingsPanel({ onDirtyChange, ref }: DiscordSett
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
                             <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                                <Layers className="h-4 w-4 text-purple-400" /> Canonical Server Architecture & Channel Blueprint
+                                <Layers className="h-4 w-4 text-sky-400" /> Canonical Server Architecture & Channel Blueprint
                             </CardTitle>
                             <CardDescription className="text-xs">
                                 DomsHomeLab automatically provisions these categories, channels, permissions, and pinned embeds to ensure consistency.
@@ -615,7 +615,7 @@ export default function DiscordSettingsPanel({ onDirtyChange, ref }: DiscordSett
                         </div>
                         <Button
                             size="sm"
-                            className="h-8 text-xs gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold self-start sm:self-auto"
+                            className="h-8 text-xs gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold self-start sm:self-auto"
                             onClick={handleSyncServer}
                             disabled={syncing || !isConfigured}
                         >
@@ -653,7 +653,7 @@ export default function DiscordSettingsPanel({ onDirtyChange, ref }: DiscordSett
                                                     </span>
                                                 )}
                                                 {ch.pinnedEmbedKey && (
-                                                    <span className="text-[9px] bg-purple-500/10 text-purple-300 border border-purple-500/20 px-1 rounded font-mono" title="Contains pinned guide embed">
+                                                    <span className="text-[9px] bg-sky-500/10 text-sky-300 border border-sky-500/20 px-1 rounded font-mono" title="Contains pinned guide embed">
                                                         EMBED
                                                     </span>
                                                 )}

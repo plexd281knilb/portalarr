@@ -32,15 +32,15 @@ const LOG_CATEGORIES: LogCategoryMeta[] = [
     { id: "PLEX", label: "PLEX", icon: Tv, badgeStyle: "bg-amber-500/20 text-amber-300 border-amber-500/30", activeStyle: "bg-amber-500/25 text-amber-300 border-amber-500/60 font-bold ring-1 ring-amber-500/30" },
     { id: "TAUTULLI", label: "TAUTULLI", icon: BarChart3, badgeStyle: "bg-teal-500/20 text-teal-300 border-teal-500/30", activeStyle: "bg-teal-500/25 text-teal-300 border-teal-500/60 font-bold ring-1 ring-teal-500/30" },
     { id: "SEERR", label: "SEERR", icon: Film, badgeStyle: "bg-orange-600/20 text-orange-300 border-orange-600/30", activeStyle: "bg-orange-600/25 text-orange-300 border-orange-600/60 font-bold ring-1 ring-orange-600/30" },
-    { id: "SCANNER", label: "SCANNER", icon: BookOpen, badgeStyle: "bg-purple-500/20 text-purple-300 border-purple-500/30", activeStyle: "bg-purple-500/25 text-purple-300 border-purple-500/60 font-bold ring-1 ring-purple-500/30" },
+    { id: "SCANNER", label: "SCANNER", icon: BookOpen, badgeStyle: "bg-amber-500/20 text-amber-300 border-amber-500/30", activeStyle: "bg-amber-500/25 text-amber-300 border-amber-500/60 font-bold ring-1 ring-amber-500/30" },
     { id: "DOWNLOAD", label: "DOWNLOAD", icon: Download, badgeStyle: "bg-blue-500/20 text-blue-300 border-blue-500/30", activeStyle: "bg-blue-500/25 text-blue-300 border-blue-500/60 font-bold ring-1 ring-blue-500/30" },
-    { id: "AI_AGENT", label: "AI AGENT", icon: Bot, badgeStyle: "bg-violet-500/20 text-violet-300 border-violet-500/30", activeStyle: "bg-violet-500/25 text-violet-300 border-violet-500/60 font-bold ring-1 ring-violet-500/30" },
-    { id: "COVER", label: "COVER", icon: ImageIcon, badgeStyle: "bg-pink-500/20 text-pink-300 border-pink-500/30", activeStyle: "bg-pink-500/25 text-pink-300 border-pink-500/60 font-bold ring-1 ring-pink-500/30" },
+    { id: "AI_AGENT", label: "AI AGENT", icon: Bot, badgeStyle: "bg-sky-500/20 text-sky-300 border-sky-500/30", activeStyle: "bg-sky-500/25 text-sky-300 border-sky-500/60 font-bold ring-1 ring-sky-500/30" },
+    { id: "COVER", label: "COVER", icon: ImageIcon, badgeStyle: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30", activeStyle: "bg-emerald-500/25 text-emerald-300 border-emerald-500/60 font-bold ring-1 ring-emerald-500/30" },
     { id: "AUTH", label: "AUTH", icon: Key, badgeStyle: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30", activeStyle: "bg-emerald-500/25 text-emerald-300 border-emerald-500/60 font-bold ring-1 ring-emerald-500/30" },
     { id: "SECURITY", label: "SECURITY", icon: Lock, badgeStyle: "bg-rose-500/20 text-rose-300 border-rose-500/30", activeStyle: "bg-rose-500/25 text-rose-300 border-rose-500/60 font-bold ring-1 ring-rose-500/30" },
     { id: "APPROVAL", label: "APPROVAL", icon: ShieldCheck, badgeStyle: "bg-amber-600/20 text-amber-300 border-amber-600/30", activeStyle: "bg-amber-600/25 text-amber-300 border-amber-600/60 font-bold ring-1 ring-amber-600/30" },
     { id: "KINDLE", label: "KINDLE", icon: BookOpen, badgeStyle: "bg-orange-500/20 text-orange-300 border-orange-500/30", activeStyle: "bg-orange-500/25 text-orange-300 border-orange-500/60 font-bold ring-1 ring-orange-500/30" },
-    { id: "EMAIL", label: "EMAIL", icon: Mail, badgeStyle: "bg-indigo-500/20 text-indigo-300 border-indigo-500/30", activeStyle: "bg-indigo-500/25 text-indigo-300 border-indigo-500/60 font-bold ring-1 ring-indigo-500/30" },
+    { id: "EMAIL", label: "EMAIL", icon: Mail, badgeStyle: "bg-cyan-500/20 text-cyan-300 border-cyan-500/30", activeStyle: "bg-cyan-500/25 text-cyan-300 border-cyan-500/60 font-bold ring-1 ring-cyan-500/30" },
     { id: "APPS", label: "APPS", icon: Zap, badgeStyle: "bg-sky-500/20 text-sky-300 border-sky-500/30", activeStyle: "bg-sky-500/25 text-sky-300 border-sky-500/60 font-bold ring-1 ring-sky-500/30" },
     { id: "DATABASE", label: "DATABASE", icon: Database, badgeStyle: "bg-yellow-500/20 text-yellow-300 border-yellow-500/30", activeStyle: "bg-yellow-500/25 text-yellow-300 border-yellow-500/60 font-bold ring-1 ring-yellow-500/30" },
     { id: "API", label: "API", icon: Globe, badgeStyle: "bg-cyan-500/20 text-cyan-300 border-cyan-500/30", activeStyle: "bg-cyan-500/25 text-cyan-300 border-cyan-500/60 font-bold ring-1 ring-cyan-500/30" },
@@ -487,7 +487,7 @@ export default function SystemLogsViewer() {
                 {/* Filter Controls Bar */}
                 <div className="space-y-3 mt-4 pt-3 border-t border-slate-800/60">
                     <div className="flex flex-wrap items-center gap-3">
-                        <div className="relative flex-1 min-w-[240px]">
+                        <div className="relative flex-1 min-w-0 sm:min-w-[240px]">
                             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />
                             <Input
                                 placeholder="Filter logs by keyword, Plex user, book title, error message..."
@@ -572,8 +572,8 @@ export default function SystemLogsViewer() {
                     {filteredLogs.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-16 text-slate-500 text-center">
                             <Terminal className="h-10 w-10 mb-2 opacity-30 text-emerald-400" />
-                            <p className="font-semibold text-slate-400">No diagnostic logs found</p>
-                            <p className="text-xs text-slate-600 mt-1">Logs update automatically when system tasks, Plex calls, or library scans run.</p>
+                            <p className="font-semibold text-slate-300">No diagnostic logs found</p>
+                            <p className="text-xs text-slate-400 mt-1">Logs update automatically when system tasks, Plex calls, or library scans run.</p>
                         </div>
                     ) : (
                         filteredLogs.map(log => (
@@ -588,7 +588,7 @@ export default function SystemLogsViewer() {
                                         {log.message}
                                     </span>
                                 </div>
-                                <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center shrink-0">
+                                <div className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity flex items-center shrink-0">
                                     <button
                                         type="button"
                                         onClick={() => handleCopySingle(log)}

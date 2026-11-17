@@ -611,7 +611,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
     const renderArrSlotConfig = (options: {
         title: string;
         badgeText: string;
-        badgeVariant?: "blue" | "purple" | "cyan" | "orange";
+        badgeVariant?: "blue" | "sky" | "cyan" | "orange";
         icon: React.ReactNode;
         appsList: any[];
         selectedAppId: string;
@@ -648,7 +648,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
 
         const badgeStyles = {
             blue: "bg-blue-500/15 text-blue-400 border-blue-500/30",
-            purple: "bg-purple-500/15 text-purple-300 border-purple-500/30",
+            sky: "bg-sky-500/15 text-sky-300 border-sky-500/30",
             cyan: "bg-cyan-500/15 text-cyan-300 border-cyan-500/30",
             orange: "bg-orange-500/15 text-orange-300 border-orange-500/30"
         }[badgeVariant];
@@ -859,8 +859,8 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                             {renderArrSlotConfig({
                                 title: "4K UHD Movies",
                                 badgeText: "4K UHD",
-                                badgeVariant: "purple",
-                                icon: <Film className="h-4 w-4 text-purple-400" />,
+                                badgeVariant: "sky",
+                                icon: <Film className="h-4 w-4 text-sky-400" />,
                                 appsList: radarrApps,
                                 selectedAppId: defaultMovie4kAppId,
                                 onAppChange: setDefaultMovie4kAppId,
@@ -892,8 +892,8 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                             {renderArrSlotConfig({
                                 title: "4K UHD TV Shows",
                                 badgeText: "4K UHD",
-                                badgeVariant: "purple",
-                                icon: <Tv className="h-4 w-4 text-purple-400" />,
+                                badgeVariant: "sky",
+                                icon: <Tv className="h-4 w-4 text-sky-400" />,
                                 appsList: sonarrApps,
                                 selectedAppId: defaultTv4kAppId,
                                 onAppChange: setDefaultTv4kAppId,
@@ -984,8 +984,8 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                             {renderArrSlotConfig({
                                 title: "Kids 4K UHD Movies",
                                 badgeText: "Kids 4K",
-                                badgeVariant: "purple",
-                                icon: <Film className="h-4 w-4 text-purple-400" />,
+                                badgeVariant: "sky",
+                                icon: <Film className="h-4 w-4 text-sky-400" />,
                                 appsList: radarrApps,
                                 selectedAppId: kidsMovie4kAppId,
                                 onAppChange: setKidsMovie4kAppId,
@@ -1018,8 +1018,8 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                             {renderArrSlotConfig({
                                 title: "Kids 4K UHD TV Shows",
                                 badgeText: "Kids 4K",
-                                badgeVariant: "purple",
-                                icon: <Tv className="h-4 w-4 text-purple-400" />,
+                                badgeVariant: "sky",
+                                icon: <Tv className="h-4 w-4 text-sky-400" />,
                                 appsList: sonarrApps,
                                 selectedAppId: kidsTv4kAppId,
                                 onAppChange: setKidsTv4kAppId,
@@ -1036,14 +1036,14 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                     {/* 3. DUAL 4K + 1080P INGESTION RULE */}
                     <div className="space-y-4">
                         <div className="flex items-center gap-2 pb-2 border-b border-border/40">
-                            <CopyCheck className="h-5 w-5 text-purple-400" />
+                            <CopyCheck className="h-5 w-5 text-sky-400" />
                             <div>
                                 <h3 className="text-sm font-bold text-foreground">Dual 4K + 1080p Ingestion Rule</h3>
                                 <p className="text-xs text-muted-foreground">Ensure backward compatibility for non-4K streaming devices and remote transcoding.</p>
                             </div>
                         </div>
 
-                        <div className="flex items-center justify-between p-3.5 rounded-xl bg-purple-500/10 border border-purple-500/30">
+                        <div className="flex items-center justify-between p-3.5 rounded-xl bg-sky-500/10 border border-sky-500/30">
                             <div className="space-y-0.5 max-w-xl">
                                 <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
                                     Auto-Add 1080p Companion on 4K Request
@@ -1391,7 +1391,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                     <div className="space-y-4">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-border/40">
                             <div className="flex items-center gap-2">
-                                <Mail className="h-5 w-5 text-indigo-400" />
+                                <Mail className="h-5 w-5 text-amber-400" />
                                 <div>
                                     <h3 className="text-sm font-bold text-foreground">Email Notifications</h3>
                                     <p className="text-xs text-muted-foreground">Automated transactional emails dispatched via your server SMTP configuration.</p>
@@ -1435,7 +1435,7 @@ export function SeerrSettingsPanel({ onNavigateTab, onDirtyChange, ref }: SeerrS
                             <div className="flex items-start justify-between p-3 rounded-xl border border-border/40 bg-background/40 hover:bg-background/60 transition-colors">
                                 <div className="space-y-0.5 pr-2">
                                     <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
-                                        <Sparkles className="h-3.5 w-3.5 text-indigo-400" /> User Auto-Approved Notice
+                                        <Sparkles className="h-3.5 w-3.5 text-amber-400" /> User Auto-Approved Notice
                                     </div>
                                     <p className="text-[10px] text-muted-foreground leading-tight">
                                         Email user when their request is automatically approved and queued.

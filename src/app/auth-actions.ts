@@ -14,6 +14,13 @@ import { getAppUrl } from "@/lib/app-url";
 import { renderEmailTemplate } from "@/lib/email-templates";
 import { sendOrQueueEmail } from "@/lib/email-dispatcher";
 import { runAsServerInternal } from "@/lib/internal-context";
+import {
+  canonicalizeIdentifier,
+  checkRateLimit,
+  secureRandomPassword,
+  stripDangerousUnicode,
+  validateUsernameInput,
+} from "@/lib/security";
 
 // --- 1. SETUP CHECK ---
 export async function checkSystemInitialized() {
@@ -23,9 +30,14 @@ export async function checkSystemInitialized() {
 
 // --- 2. SETUP FIRST ADMIN ---
 export async function setupFirstAdmin(formData: FormData) {
-  const username = formData.get("username") as string;
+  const userCheck = validateUsernameInput(formData.get("username"));
   const password = formData.get("password") as string;
-  const email = formData.get("email") as string;
+  const email = stripDangerousUnicode(formData.get("email")).toLowerCase();
+
+  if (!userCheck.valid) {
+    return { error: userCheck.error || "Invalid username" };
+  }
+  const username = userCheck.display;
 
   if (!username || !password || !email) {
     return { error: "All fields are required" };
@@ -53,14 +65,19 @@ export async function setupFirstAdmin(formData: FormData) {
 
 // --- 3. LOGIN ACTION ---
 export async function login(formData: FormData) {
-  const input = (formData.get("username") as string)?.trim();
+  const input = stripDangerousUnicode(formData.get("username"));
   const password = formData.get("password") as string;
 
   if (!input || !password) {
     return { error: "Username/Email and password required" };
   }
 
+  if (process.env.PORTALARR_TEST !== "true" && !checkRateLimit("login", input, 20, 60_000)) {
+    return { error: "Too many login attempts. Please wait a minute and try again." };
+  }
+
   const normalizedInput = input.toLowerCase();
+  const canonicalInput = canonicalizeIdentifier(input);
 
   // Support login by Username, Email, Plex Username, or Plex Email (case-insensitive & trimmed)
   const allUsers = await prisma.user.findMany({
@@ -80,14 +97,17 @@ export async function login(formData: FormData) {
   });
   const user = allUsers.find((u) => {
     const dbUsername = u.username?.trim().toLowerCase();
+    const dbUsernameCanon = canonicalizeIdentifier(u.username);
     const dbEmail = u.email?.trim().toLowerCase();
     const dbPlexUser = u.plexUsername?.trim().toLowerCase();
+    const dbPlexUserCanon = canonicalizeIdentifier(u.plexUsername);
     const dbPlexEmail = u.plexEmail?.trim().toLowerCase();
 
     return (
       dbUsername === normalizedInput ||
+      (canonicalInput && dbUsernameCanon === canonicalInput) ||
       dbEmail === normalizedInput ||
-      (dbPlexUser && dbPlexUser === normalizedInput) ||
+      (dbPlexUser && (dbPlexUser === normalizedInput || (canonicalInput && dbPlexUserCanon === canonicalInput))) ||
       (dbPlexEmail && dbPlexEmail === normalizedInput)
     );
   });
@@ -153,19 +173,30 @@ export async function login(formData: FormData) {
 
 // --- 4. REQUEST PENDING ACCOUNT ACTION ---
 export async function requestAccount(formData: FormData) {
-  const username = (formData.get("username") as string)?.trim();
-  const email = (formData.get("email") as string)?.trim().toLowerCase();
+  const userCheck = validateUsernameInput(formData.get("username"));
+  const email = stripDangerousUnicode(formData.get("email")).toLowerCase();
   const password = formData.get("password") as string;
+
+  if (!userCheck.valid) {
+    return { error: userCheck.error || "Invalid username." };
+  }
+  const username = userCheck.display;
 
   if (!username || !email || !password) {
     return { error: "Username, email, and password are required." };
+  }
+
+  if (process.env.PORTALARR_TEST !== "true" && !checkRateLimit("register", email, 10, 60_000)) {
+    return { error: "Too many registration attempts. Please try again later." };
   }
 
   const allUsers = await prisma.user.findMany({
     select: { id: true, username: true, email: true }
   });
   const existing = allUsers.find(
-    (u) => u.username.toLowerCase() === username.toLowerCase() || u.email.toLowerCase() === email
+    (u) =>
+      canonicalizeIdentifier(u.username) === userCheck.canonical ||
+      u.email.trim().toLowerCase() === email
   );
 
   if (existing) {
@@ -207,20 +238,17 @@ export async function getAuthCookieOptions(customMaxAge?: number) {
   let isSecure = process.env.NODE_ENV === "production";
   try {
     const h = await headers();
-    const proto = h.get("x-forwarded-proto");
-    const referer = h.get("referer");
-    const host = h.get("host") || "";
+    const proto = (h.get("x-forwarded-proto") || "").split(",")[0].trim().toLowerCase();
+    const host = (h.get("host") || "").trim().toLowerCase();
+    const isLocalHost = /^(localhost|127\.0\.0\.1|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)(:|$)/.test(host);
 
-    // If requested over plain unencrypted HTTP, or accessing local LAN IP directly without https, do NOT set secure flag
-    // otherwise Chrome, Edge, Safari, and Firefox silently discard the cookie and prevent view switching!
-    if (proto === "http" || referer?.startsWith("http://")) {
-      isSecure = false;
-    } else if (proto === "https" || referer?.startsWith("https://")) {
+    // Only omit Secure when running on an explicit HTTP proxy or local LAN IP without HTTPS
+    if (proto === "https") {
       isSecure = true;
-    } else if (/^(localhost|127\.0\.0\.1|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/.test(host)) {
-      if (proto !== "https" && !referer?.startsWith("https://")) {
-        isSecure = false;
-      }
+    } else if (isLocalHost && proto !== "https") {
+      isSecure = false;
+    } else if (proto === "http" && process.env.NODE_ENV !== "production") {
+      isSecure = false;
     }
   } catch {
     // In contexts where headers() cannot be read, fallback safely
@@ -242,7 +270,7 @@ export async function getSession() {
     const token = cookieStore.get("session")?.value;
     if (!token) return null;
 
-    const { payload } = await jwtVerify(token, getJwtSecret());
+    const { payload } = await jwtVerify(token, getJwtSecret(), { algorithms: ["HS256"] });
     return payload;
   } catch (e) {
     return null;
@@ -251,11 +279,20 @@ export async function getSession() {
 
 // --- 6. PLEX CALLBACK (AUTO-PROVISION & SYNC) ---
 export async function handlePlexCallback(authToken: string, rawUsername: string, rawEmail: string, isSetupMode: boolean = false) {
-  let plexEmail = (rawEmail || "").trim().toLowerCase();
-  let plexUsername = (rawUsername || "").trim();
-  let plexUserId = "";
+  const isMockTestToken =
+    process.env.PORTALARR_TEST === "true" &&
+    process.env.NODE_ENV === "test" &&
+    typeof authToken === "string" &&
+    authToken.startsWith("mock_");
 
-  console.log(`[AUTH] Processing Plex login for: username="${plexUsername}", email="${plexEmail}"`);
+  let plexEmail = isMockTestToken ? stripDangerousUnicode(rawEmail).toLowerCase() : "";
+  let plexUsername = isMockTestToken ? stripDangerousUnicode(rawUsername) : "";
+  let plexUserId = "";
+  let plexProfileVerified = isMockTestToken;
+
+  if (!authToken || typeof authToken !== "string") {
+    return { error: "Missing Plex authentication token." };
+  }
 
   // 1. Fetch authenticated user profile directly from Plex using the fresh authToken
   try {
@@ -269,17 +306,20 @@ export async function handlePlexCallback(authToken: string, rawUsername: string,
     if (userRes.ok) {
       const userProfile = await userRes.json();
       const uObj = userProfile.user || userProfile;
-      if (uObj.email) plexEmail = uObj.email.trim().toLowerCase();
-      if (uObj.username || uObj.title) plexUsername = (uObj.username || uObj.title).trim();
+      if (uObj.email) plexEmail = stripDangerousUnicode(uObj.email).toLowerCase();
+      if (uObj.username || uObj.title) plexUsername = stripDangerousUnicode(uObj.username || uObj.title);
       if (uObj.id) plexUserId = String(uObj.id);
+      plexProfileVerified = Boolean(plexEmail || plexUsername);
     }
   } catch (err) {
     console.warn("[AUTH] Failed to fetch Plex profile with authToken:", err);
   }
 
-  if (!plexEmail && !plexUsername) {
-    return { error: "Plex account profile is missing email and username details." };
+  if (!plexProfileVerified || (!plexEmail && !plexUsername)) {
+    return { error: "Unable to verify Plex authentication token with Plex.tv." };
   }
+
+  console.log(`[AUTH] Processing Plex login for: username="${plexUsername}", email="${plexEmail}"`);
 
   // 2. Discover user in database and determine admin status
   const allUsers = await prisma.user.findMany({
@@ -296,12 +336,15 @@ export async function handlePlexCallback(authToken: string, rawUsername: string,
       plexEmail: true
     }
   });
+  const canonicalPlexUser = canonicalizeIdentifier(plexUsername);
   let user = allUsers.find(
     (u) =>
-      (plexEmail && u.email.toLowerCase() === plexEmail) ||
-      (plexUsername && u.username.toLowerCase() === plexUsername.toLowerCase()) ||
-      (plexEmail && u.plexEmail && u.plexEmail.toLowerCase() === plexEmail) ||
-      (plexUsername && u.plexUsername && u.plexUsername.toLowerCase() === plexUsername.toLowerCase())
+      (plexEmail && u.email.trim().toLowerCase() === plexEmail) ||
+      (plexEmail && u.plexEmail && u.plexEmail.trim().toLowerCase() === plexEmail) ||
+      (plexUsername && u.plexUsername && canonicalizeIdentifier(u.plexUsername) === canonicalPlexUser) ||
+      (plexUsername &&
+        canonicalizeIdentifier(u.username) === canonicalPlexUser &&
+        (!plexEmail || u.email.endsWith("@plex.local") || u.email.trim().toLowerCase() === plexEmail))
   );
 
   const totalDbAdmins = allUsers.filter(u => u.role === "ADMIN").length;
@@ -480,7 +523,7 @@ export async function handlePlexCallback(authToken: string, rawUsername: string,
     safeEmail = `${safeUsername.toLowerCase()}@plex.local`;
   }
 
-  const randomPassword = Math.random().toString(36).slice(-16) + "Plex!1";
+  const randomPassword = secureRandomPassword();
   const hashedPassword = await hash(randomPassword, 10);
 
   // New users are ALWAYS "USER" unless it's the very first system setup
@@ -812,25 +855,36 @@ export async function getCurrentUser() {
 
 // --- 7. FORGOT PASSWORD ACTION ---
 export async function requestForgotPassword(formData: FormData) {
-  const input = (formData.get("emailOrUsername") as string)?.trim();
+  const input = stripDangerousUnicode(formData.get("emailOrUsername"));
   if (!input) {
     return { error: "Please enter your username or email address." };
   }
 
+  if (process.env.PORTALARR_TEST !== "true" && !checkRateLimit("forgot", input, 5, 60_000)) {
+    return {
+      success: true,
+      message: "If an account with that username/email exists, a temporary password has been sent to your email inbox."
+    };
+  }
+
   const normalizedInput = input.toLowerCase();
+  const canonicalInput = canonicalizeIdentifier(input);
   const allUsers = await prisma.user.findMany({
     select: { id: true, username: true, email: true, plexUsername: true, plexEmail: true }
   });
   const user = allUsers.find((u) => {
     const dbUsername = u.username?.trim().toLowerCase();
+    const dbUsernameCanon = canonicalizeIdentifier(u.username);
     const dbEmail = u.email?.trim().toLowerCase();
     const dbPlexUser = u.plexUsername?.trim().toLowerCase();
+    const dbPlexUserCanon = canonicalizeIdentifier(u.plexUsername);
     const dbPlexEmail = u.plexEmail?.trim().toLowerCase();
 
     return (
       dbUsername === normalizedInput ||
+      (canonicalInput && dbUsernameCanon === canonicalInput) ||
       dbEmail === normalizedInput ||
-      (dbPlexUser && dbPlexUser === normalizedInput) ||
+      (dbPlexUser && (dbPlexUser === normalizedInput || (canonicalInput && dbPlexUserCanon === canonicalInput))) ||
       (dbPlexEmail && dbPlexEmail === normalizedInput)
     );
   });
@@ -863,7 +917,7 @@ export async function requestForgotPassword(formData: FormData) {
     return { error: "Password reset emails are currently disabled by the administrator. Please contact your admin directly for assistance." };
   }
 
-  const tempPassword = "DomsHomeLab-" + Math.random().toString(36).slice(-6) + "!";
+  const tempPassword = secureRandomPassword();
   const hashedPassword = await hash(tempPassword, 10);
 
   // Update password and heal placeholder email with real Plex email if applicable
@@ -955,13 +1009,13 @@ export async function getImpersonationUserListAction() {
   let callerIsAdmin = false;
   if (sessionToken) {
     try {
-      const { payload } = await jwtVerify(sessionToken, getJwtSecret());
-      if (payload.role === "ADMIN" && payload.userId) callerIsAdmin = true;
-    } catch {}
-  }
-  if (!callerIsAdmin && impersonatorToken) {
-    try {
-      const { payload } = await jwtVerify(impersonatorToken, getJwtSecret());
+    const { payload } = await jwtVerify(sessionToken, getJwtSecret(), { algorithms: ["HS256"] });
+    if (payload.role === "ADMIN" && payload.userId) callerIsAdmin = true;
+  } catch {}
+}
+if (!callerIsAdmin && impersonatorToken) {
+  try {
+    const { payload } = await jwtVerify(impersonatorToken, getJwtSecret(), { algorithms: ["HS256"] });
       if (payload.role === "ADMIN" && payload.userId) {
         const dbAdmin = await prisma.user.findUnique({ where: { id: payload.userId as string } });
         if (dbAdmin && dbAdmin.role === "ADMIN") callerIsAdmin = true;
@@ -1001,7 +1055,7 @@ export async function impersonateUserAction(targetUserId: string) {
 
   if (sessionToken) {
     try {
-      const { payload } = await jwtVerify(sessionToken, getJwtSecret());
+      const { payload } = await jwtVerify(sessionToken, getJwtSecret(), { algorithms: ["HS256"] });
       if (payload.role === "ADMIN" && payload.userId) {
         const dbAdmin = await prisma.user.findUnique({ where: { id: payload.userId as string } });
         if (dbAdmin && dbAdmin.role === "ADMIN") {
@@ -1016,7 +1070,7 @@ export async function impersonateUserAction(targetUserId: string) {
 
   if (!callerIsAdmin && impersonatorToken) {
     try {
-      const { payload } = await jwtVerify(impersonatorToken, getJwtSecret());
+      const { payload } = await jwtVerify(impersonatorToken, getJwtSecret(), { algorithms: ["HS256"] });
       if (payload.role === "ADMIN" && payload.userId) {
         const dbAdmin = await prisma.user.findUnique({ where: { id: payload.userId as string } });
         if (dbAdmin && dbAdmin.role === "ADMIN") {
@@ -1105,7 +1159,7 @@ export async function stopImpersonationAction() {
   }
 
   try {
-    const { payload } = await jwtVerify(impersonatorToken, getJwtSecret());
+    const { payload } = await jwtVerify(impersonatorToken, getJwtSecret(), { algorithms: ["HS256"] });
     if (!payload.userId) {
       cookieStore.set(IMPERSONATOR_COOKIE_NAME, "", { path: "/", maxAge: 0 });
       cookieStore.delete(IMPERSONATOR_COOKIE_NAME);
@@ -1161,8 +1215,8 @@ export async function getImpersonationStatusAction() {
   }
 
   try {
-    const { payload: adminPayload } = await jwtVerify(impersonatorToken, getJwtSecret());
-    const { payload: currentPayload } = await jwtVerify(sessionToken, getJwtSecret());
+    const { payload: adminPayload } = await jwtVerify(impersonatorToken, getJwtSecret(), { algorithms: ["HS256"] });
+    const { payload: currentPayload } = await jwtVerify(sessionToken, getJwtSecret(), { algorithms: ["HS256"] });
 
     if (!adminPayload.userId || adminPayload.role !== "ADMIN") {
       return { isImpersonating: false };

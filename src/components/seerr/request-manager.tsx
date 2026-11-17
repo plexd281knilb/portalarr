@@ -427,10 +427,10 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                         <Button
                             size="sm"
                             variant={mediaTypeFilter === "book" ? "default" : "ghost"}
-                            className="h-8 px-3 text-xs font-bold rounded-lg text-purple-300 hover:text-purple-200"
+                            className="h-8 px-3 text-xs font-bold rounded-lg text-emerald-300 hover:text-emerald-200"
                             onClick={() => setMediaTypeFilter("book")}
                         >
-                            <BookOpen className="h-3.5 w-3.5 mr-1 text-purple-400" />
+                            <BookOpen className="h-3.5 w-3.5 mr-1 text-emerald-400" />
                             Ebooks
                         </Button>
                         <Button
@@ -731,7 +731,7 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                                                     {isAudiobook ? (
                                                         <Headphones className="h-6 w-6 text-amber-400 mb-1 shrink-0" />
                                                     ) : isBook ? (
-                                                        <BookOpen className="h-6 w-6 text-purple-400 mb-1 shrink-0" />
+                                                        <BookOpen className="h-6 w-6 text-emerald-400 mb-1 shrink-0" />
                                                     ) : isTv ? (
                                                         <Tv className="h-6 w-6 text-cyan-400 mb-1 shrink-0" />
                                                     ) : (
@@ -765,12 +765,12 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                                             </Badge>
                                         )}
                                         {req.is4k && (
-                                            <Badge variant="outline" className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 border-purple-500/40 shrink-0">
+                                            <Badge variant="outline" className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-300 border-sky-500/40 shrink-0">
                                                 4K
                                             </Badge>
                                         )}
                                         {req.sendToKindle && isBook && (
-                                            <Badge variant="outline" className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-purple-900/30 text-purple-300 border-purple-500/30 gap-1 shrink-0">
+                                            <Badge variant="outline" className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-900/30 text-emerald-300 border-emerald-500/30 gap-1 shrink-0">
                                                 <Send className="h-2.5 w-2.5" />
                                                 <span>Kindle</span>
                                             </Badge>
@@ -884,11 +884,11 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                                             </span>
                                         </div>
                                         {req.kindleEmail && isBook && (
-                                            <span className="text-[10px] text-purple-300/80 truncate max-w-[140px] sm:max-w-[200px]" title={req.kindleEmail}>
+                                            <span className="text-[10px] text-emerald-300/90 truncate max-w-[140px] sm:max-w-[200px]" title={req.kindleEmail}>
                                                 ({req.kindleEmail})
                                             </span>
                                         )}
-                                        <span className="text-muted-foreground/40 shrink-0">•</span>
+                                        <span className="text-muted-foreground/75 shrink-0">•</span>
                                         <span className="shrink-0 text-[10px]">{new Date(req.createdAt).toLocaleDateString()}</span>
                                     </div>
 

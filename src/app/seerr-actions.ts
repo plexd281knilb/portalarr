@@ -1799,14 +1799,19 @@ export async function deleteMediaRequestAction(requestId: string) {
             const mType = req.mediaType === "audiobook" ? "audiobook" : "ebook";
 
             await prisma.bookRequest.deleteMany({
-                where: {
-                    OR: [
-                        { title: cleanTitle, requestedBy: req.requestedByUsername },
-                        { title: cleanTitle, mediaType: mType },
-                        ...(cleanAuthor ? [{ title: cleanTitle, author: cleanAuthor }] : []),
-                        { title: cleanTitle }
-                    ]
-                }
+                where: isAdmin
+                    ? {
+                        OR: [
+                            { title: cleanTitle, requestedBy: req.requestedByUsername },
+                            { title: cleanTitle, mediaType: mType },
+                            ...(cleanAuthor ? [{ title: cleanTitle, author: cleanAuthor }] : []),
+                            { title: cleanTitle }
+                        ]
+                    }
+                    : {
+                        title: cleanTitle,
+                        requestedBy: session.username
+                    }
             }).catch(() => {});
         }
 
@@ -1866,14 +1871,19 @@ export async function bulkDeleteMediaRequestsAction(requestIds: string[]) {
                 const mType = req.mediaType === "audiobook" ? "audiobook" : "ebook";
 
                 await prisma.bookRequest.deleteMany({
-                    where: {
-                        OR: [
-                            { title: cleanTitle, requestedBy: req.requestedByUsername },
-                            { title: cleanTitle, mediaType: mType },
-                            ...(cleanAuthor ? [{ title: cleanTitle, author: cleanAuthor }] : []),
-                            { title: cleanTitle }
-                        ]
-                    }
+                    where: isAdmin
+                        ? {
+                            OR: [
+                                { title: cleanTitle, requestedBy: req.requestedByUsername },
+                                { title: cleanTitle, mediaType: mType },
+                                ...(cleanAuthor ? [{ title: cleanTitle, author: cleanAuthor }] : []),
+                                { title: cleanTitle }
+                            ]
+                        }
+                        : {
+                            title: cleanTitle,
+                            requestedBy: session.username
+                        }
                 }).catch(() => {});
             }
 

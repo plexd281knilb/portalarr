@@ -128,13 +128,13 @@ export default function AdminUserSwitcher({
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto shrink-0 pt-1 sm:pt-0 border-t sm:border-t-0 border-white/[0.06]">
                 <div className="w-full sm:w-72 min-w-0">
                     <Select value={selectedUser} onValueChange={handleSelectUser} disabled={switching}>
-                        <SelectTrigger className={`h-9 text-xs bg-background/80 w-full min-w-0 ${isImpersonating ? "border-amber-500/40 text-amber-200" : "border-purple-500/30"}`}>
+                        <SelectTrigger className={`h-9 text-xs bg-background/80 w-full min-w-0 ${isImpersonating ? "border-amber-500/40 text-amber-200" : "border-sky-500/30"}`}>
                             {switching ? (
-                                <span className="flex items-center gap-1.5 text-purple-300">
+                                <span className="flex items-center gap-1.5 text-sky-300">
                                     <Loader2 className="h-3 w-3 animate-spin" /> Switching view...
                                 </span>
                             ) : (
-                                <SelectValue placeholder={isImpersonating ? `👁️ ${currentUsername || "Switch User..."}` : "👁️ View Dashboard as User..."} />
+                                <SelectValue placeholder={isImpersonating ? currentUsername || "Switch User..." : "View Dashboard as User..."} />
                             )}
                         </SelectTrigger>
                         <SelectContent className="max-h-72">
@@ -142,7 +142,7 @@ export default function AdminUserSwitcher({
                                 <SelectItem value="admin" className="text-xs py-2 font-bold text-amber-400 border-b border-border/40">
                                     <span className="flex items-center gap-1.5">
                                         <Undo2 className="h-3.5 w-3.5 text-amber-400" />
-                                        <span>⬅️ Return to Admin Mission Control</span>
+                                        <span>Return to Admin Mission Control</span>
                                     </span>
                                 </SelectItem>
                             )}
@@ -168,7 +168,7 @@ export default function AdminUserSwitcher({
                                                         Super User
                                                     </Badge>
                                                 ) : isAdmin ? (
-                                                    <Badge variant="outline" className="text-[9px] bg-purple-500/10 text-purple-300 border-purple-500/30">
+                                                    <Badge variant="outline" className="text-[9px] bg-sky-500/10 text-sky-300 border-sky-500/30">
                                                         Admin
                                                     </Badge>
                                                 ) : (
