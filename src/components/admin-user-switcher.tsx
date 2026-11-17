@@ -90,8 +90,8 @@ export default function AdminUserSwitcher({
     }
 
     const containerGradient = isImpersonating
-        ? "bg-gradient-to-r from-amber-950/40 via-[#181410] to-[#12100d] border-amber-500/40 shadow-amber-950/20"
-        : "bg-gradient-to-r from-slate-900/90 via-[#14141c] to-[#101017] border-border/60";
+        ? "bg-gradient-to-r from-amber-500/15 via-card to-muted/60 dark:from-amber-950/40 dark:via-[#181410] dark:to-[#12100d] border-amber-500/40 shadow-sm dark:shadow-amber-950/20"
+        : "bg-gradient-to-r from-muted/80 via-card to-muted/60 dark:from-slate-900/90 dark:via-[#14141c] dark:to-[#101017] border-border/70";
 
     return (
         <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 border rounded-xl shadow-sm transition-all ${containerGradient}`}>
