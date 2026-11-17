@@ -742,7 +742,7 @@ export function AdminMediaServersPanel({ onDirtyChange, ref }: AdminMediaServers
 
             {/* Add / Edit Media Server Modal */}
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-                <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto bg-popover dark:bg-[#121218] border-border/60">
+                <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-xl max-h-[90vh] overflow-y-auto overflow-x-hidden bg-popover dark:bg-[#121218] border-border/60">
                     <DialogHeader>
                         <DialogTitle className="text-base font-bold text-foreground flex items-center gap-2">
                             {editingServer ? (

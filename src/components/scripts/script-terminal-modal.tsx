@@ -199,17 +199,17 @@ export function ScriptTerminalModal({
             );
         }
 
-        let textColor = "text-zinc-300";
+        let textColor = "text-slate-700 dark:text-zinc-300";
         if (line.includes("[OK]") || line.includes("SUCCESS")) {
-            textColor = "text-emerald-400";
+            textColor = "text-emerald-700 dark:text-emerald-400";
         } else if (line.includes("[FAIL]") || line.includes("[ERROR]") || line.includes("[FATAL]")) {
-            textColor = "text-rose-400 font-semibold";
+            textColor = "text-rose-700 dark:text-rose-400 font-semibold";
         } else if (line.includes("[WARN]")) {
-            textColor = "text-amber-400";
+            textColor = "text-amber-700 dark:text-amber-400";
         } else if (line.includes("--- Checking") || line.includes("--- Optimizing") || line.includes("---")) {
-            textColor = "text-sky-300 font-medium";
+            textColor = "text-sky-700 dark:text-sky-300 font-medium";
         } else if (line.includes("[ABORTED]")) {
-            textColor = "text-orange-400 font-semibold";
+            textColor = "text-orange-700 dark:text-orange-400 font-semibold";
         }
 
         // Highlight timestamp [YYYY-MM-DD HH:MM:SS]
@@ -241,7 +241,7 @@ export function ScriptTerminalModal({
                 onClose();
             }
         }}>
-            <DialogContent className="max-w-4xl w-[95vw] max-h-[92vh] flex flex-col bg-popover dark:bg-[#0b0c10] border-border dark:border-zinc-800 p-0 overflow-hidden shadow-2xl">
+            <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-4xl max-h-[92vh] flex flex-col bg-popover dark:bg-[#0b0c10] border-border dark:border-zinc-800 p-0 overflow-hidden overflow-x-hidden shadow-2xl">
                 {/* Header */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 sm:px-5 py-3 sm:py-4 border-b border-border dark:border-zinc-800/80 bg-muted/70 dark:bg-zinc-950/70">
                     <div className="flex items-center gap-3">

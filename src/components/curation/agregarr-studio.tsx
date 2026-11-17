@@ -6856,7 +6856,7 @@ export function AgregarrStudio() {
 
             {/* Manage Target Library Sections Modal */}
             <Dialog open={manageLibrariesModalOpen} onOpenChange={setManageLibrariesModalOpen}>
-                <DialogContent className="w-[96vw] sm:max-w-lg max-h-[85vh] flex flex-col bg-popover dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-slate-100 p-4 sm:p-6 overflow-hidden">
+                <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-xl max-h-[85vh] flex flex-col bg-popover dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-slate-100 p-4 sm:p-6 overflow-hidden overflow-x-hidden">
                     <DialogHeader className="pb-2 border-b border-border dark:border-slate-800 shrink-0">
                         <DialogTitle className="text-base font-bold text-foreground dark:text-white flex items-center gap-2">
                             <Layers className="h-5 w-5 text-amber-700 dark:text-amber-400" />

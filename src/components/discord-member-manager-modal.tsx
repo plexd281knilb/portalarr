@@ -419,7 +419,7 @@ export function DiscordMemberManagerModal({
                                 variant={filterTab === "suggested" ? "default" : "outline"}
                                 size="sm"
                                 onClick={() => setFilterTab("suggested")}
-                                className="h-7 text-[11px] px-2.5 font-semibold text-sky-300 border-sky-500/30"
+                                className={`h-7 text-[11px] px-2.5 font-semibold ${filterTab === "suggested" ? "" : "text-sky-700 dark:text-sky-300 border-sky-500/30"}`}
                             >
                                 Suggested ({suggestedCount})
                             </Button>

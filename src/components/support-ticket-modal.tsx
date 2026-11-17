@@ -62,7 +62,7 @@ export default function SupportTicketModal({ trigger }: SupportTicketModalProps 
             )}
 
             <Dialog open={open} onOpenChange={setOpen}>
-                <DialogContent className="sm:max-w-md bg-popover dark:bg-[#121218] border border-border/60 shadow-2xl max-h-[90vh] overflow-y-auto">
+                <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-xl bg-popover dark:bg-[#121218] border border-border/60 shadow-2xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2 text-base font-bold text-foreground">
                             <LifeBuoy className="h-5 w-5 text-primary" />

@@ -274,7 +274,7 @@ export function ServerGuardRailsModal({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-4xl max-h-[92dvh] bg-popover dark:bg-slate-950 border-border dark:border-slate-800 text-foreground dark:text-white flex flex-col p-4 sm:p-6 overflow-hidden shadow-2xl">
+            <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-4xl max-h-[92dvh] bg-popover dark:bg-slate-950 border-border dark:border-slate-800 text-foreground dark:text-white flex flex-col p-4 sm:p-6 overflow-hidden overflow-x-hidden shadow-2xl">
                 {/* Header */}
                 <DialogHeader className="pb-3 border-b border-border dark:border-slate-800/80 shrink-0">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">

@@ -53,7 +53,7 @@ export function KometaOverlaysGuideModal({ open, onOpenChange }: KometaOverlaysG
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-4xl max-h-[88vh] flex flex-col bg-popover dark:bg-slate-950 border-border dark:border-slate-800 text-foreground dark:text-slate-100 p-0 shadow-2xl overflow-hidden">
+            <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-4xl max-h-[88vh] flex flex-col bg-popover dark:bg-slate-950 border-border dark:border-slate-800 text-foreground dark:text-slate-100 p-0 shadow-2xl overflow-hidden overflow-x-hidden">
                 {/* Header */}
                 <DialogHeader className="p-6 pb-4 bg-card/95 dark:bg-slate-900/90 border-b border-border dark:border-slate-800 shrink-0">
                     <div className="flex items-center justify-between gap-4">

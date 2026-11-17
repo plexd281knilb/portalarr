@@ -599,7 +599,7 @@ export default function TicketsClient({ initialData }: { initialData?: TicketsBo
 
             {/* CREATE TICKET MODAL */}
             <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-                <DialogContent className="sm:max-w-md w-[95vw] max-h-[90vh] overflow-y-auto bg-popover dark:bg-[#121218] border border-border/60 shadow-2xl text-foreground">
+                <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-xl max-h-[90vh] overflow-y-auto overflow-x-hidden bg-popover dark:bg-[#121218] border border-border/60 shadow-2xl text-foreground">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2 text-base font-bold text-foreground">
                             <LifeBuoy className="h-5 w-5 text-amber-700 dark:text-amber-400" />
@@ -688,7 +688,7 @@ export default function TicketsClient({ initialData }: { initialData?: TicketsBo
 
             {/* PERMANENT DELETE CONFIRMATION DIALOG */}
             <Dialog open={!!ticketToDelete} onOpenChange={(open) => !open && setTicketToDelete(null)}>
-                <DialogContent className="sm:max-w-md w-[95vw] max-h-[90vh] overflow-y-auto bg-popover dark:bg-[#121218] border-border/60 text-foreground">
+                <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-xl max-h-[90vh] overflow-y-auto overflow-x-hidden bg-popover dark:bg-[#121218] border-border/60 text-foreground">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2 text-rose-700 dark:text-rose-400">
                             <Trash2 className="h-5 w-5" /> Permanently Delete Ticket?

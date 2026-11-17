@@ -162,7 +162,7 @@ export function SeriesDetailModal({
     return (
         <>
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="w-[95vw] sm:w-[92vw] md:w-[90vw] max-w-4xl lg:max-w-5xl max-h-[90vh] sm:max-h-[92vh] bg-popover dark:bg-[#0c0c12] border border-border/60 shadow-2xl p-0 overflow-y-auto overflow-x-hidden sm:rounded-xl flex flex-col min-w-0 scrollbar-thin text-foreground">
+            <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-4xl lg:max-w-5xl max-h-[90vh] sm:max-h-[92vh] bg-popover dark:bg-[#0c0c12] border border-border/60 shadow-2xl p-0 overflow-y-auto overflow-x-hidden sm:rounded-xl flex flex-col min-w-0 scrollbar-thin text-foreground">
                 {/* Header Banner */}
                 <div className="relative h-28 sm:h-36 w-full bg-gradient-to-r from-muted/60 dark:from-slate-900/90 via-background/95 to-background flex items-end p-4 sm:p-6 overflow-hidden border-b border-border/40 shrink-0">
                     <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-sky-500/15 via-transparent to-transparent" />

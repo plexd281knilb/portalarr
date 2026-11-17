@@ -3785,7 +3785,7 @@ async function runTestSuite() {
             }
         }
 
-        // 8. Light-mode readability regression guard (no dark-only card hexes or un-scoped prose-invert)
+        // 8. Light-mode readability & modal width regression guards
         const globalsCss = fs.readFileSync(path.join(process.cwd(), "src/app/globals.css"), "utf8");
         if (!globalsCss.includes("color-scheme: light;") || !globalsCss.includes("@variant dark")) {
             throw new Error("globals.css must declare light root color-scheme and @variant dark selector");
@@ -3801,10 +3801,23 @@ async function runTestSuite() {
             "src/components/curation/curation-nav-header.tsx",
             "src/components/kindle-sender-update-modal.tsx",
             "src/components/kindle-setup-guide-modal.tsx",
+            "src/components/system-logs-viewer.tsx",
+            "src/components/suggest-fix-modal.tsx",
         ]) {
             const uiSrc = fs.readFileSync(path.join(process.cwd(), relUiFile), "utf8");
             if (unprefixedDarkSurfaceRe.test(uiSrc)) {
                 throw new Error(`${relUiFile} contains un-scoped dark-only surface/prose classes that break Light Mode readability`);
+            }
+        }
+        // Reject DialogContent elements that pass wide unprefixed max-w-(xl|2xl|3xl|4xl|5xl) without an sm:max-w-* override
+        for (const f of tsxFiles) {
+            const rel = path.relative(process.cwd(), f).replace(/\\/g, "/");
+            const content = fs.readFileSync(f, "utf8");
+            const dialogTags = content.match(/<DialogContent[^>]*>/g) || [];
+            for (const tag of dialogTags) {
+                if (/\bmax-w-(?:xl|2xl|3xl|4xl|5xl)\b/.test(tag) && !/\bsm:max-w-/.test(tag)) {
+                    throw new Error(`${rel} has <DialogContent> with unprefixed max-w-(xl..5xl) missing sm:max-w-* override (silently throttled to 512px)`);
+                }
             }
         }
     });

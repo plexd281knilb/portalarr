@@ -35,11 +35,11 @@ export interface SuggestFixModalProps {
 }
 
 const CATEGORIES = [
-    { id: "Bug / Broken Feature", label: "Bug / Broken", icon: Bug, color: "text-red-400 border-red-500/30 hover:border-red-500/60 bg-red-500/10" },
-    { id: "Visual / UI Glitch", label: "Visual Glitch", icon: Palette, color: "text-pink-400 border-pink-500/30 hover:border-pink-500/60 bg-pink-500/10" },
-    { id: "Feature / Page Idea", label: "Feature Idea", icon: Lightbulb, color: "text-amber-400 border-amber-500/30 hover:border-amber-500/60 bg-amber-500/10" },
-    { id: "Slow Performance / Buffering", label: "Slow / Buffering", icon: Zap, color: "text-yellow-400 border-yellow-500/30 hover:border-yellow-500/60 bg-yellow-500/10" },
-    { id: "Other Issue", label: "Other", icon: HelpCircle, color: "text-blue-400 border-blue-500/30 hover:border-blue-500/60 bg-blue-500/10" }
+    { id: "Bug / Broken Feature", label: "Bug / Broken", icon: Bug, color: "text-red-700 dark:text-red-400 border-red-500/30 hover:border-red-500/60 bg-red-500/10" },
+    { id: "Visual / UI Glitch", label: "Visual Glitch", icon: Palette, color: "text-pink-700 dark:text-pink-400 border-pink-500/30 hover:border-pink-500/60 bg-pink-500/10" },
+    { id: "Feature / Page Idea", label: "Feature Idea", icon: Lightbulb, color: "text-amber-700 dark:text-amber-400 border-amber-500/30 hover:border-amber-500/60 bg-amber-500/10" },
+    { id: "Slow Performance / Buffering", label: "Slow / Buffering", icon: Zap, color: "text-yellow-700 dark:text-yellow-400 border-yellow-500/30 hover:border-yellow-500/60 bg-yellow-500/10" },
+    { id: "Other Issue", label: "Other", icon: HelpCircle, color: "text-blue-700 dark:text-blue-400 border-blue-500/30 hover:border-blue-500/60 bg-blue-500/10" }
 ];
 
 export function getFriendlyPageInfo(pathname: string): { title: string; fileHints: string[] } {

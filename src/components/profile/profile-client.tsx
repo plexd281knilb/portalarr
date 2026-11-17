@@ -2974,7 +2974,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
 
             {/* MEMBERSHIP TIER UPGRADE REQUEST MODAL */}
             <Dialog open={upgradeModalOpen} onOpenChange={setUpgradeModalOpen}>
-                <DialogContent className="w-[96vw] sm:max-w-md max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-popover dark:bg-slate-950 border border-border dark:border-slate-800 shadow-2xl">
+                <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-xl max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden overflow-x-hidden bg-popover dark:bg-slate-950 border border-border dark:border-slate-800 shadow-2xl">
                     <DialogHeader className="shrink-0">
                         <DialogTitle className="flex items-center gap-2 text-lg font-bold text-foreground">
                             <Sparkles className="h-5 w-5 text-amber-700 dark:text-amber-400" /> Request Feature or Add-On
@@ -3044,7 +3044,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
 
             {/* SUB-ACCOUNT ADD / EDIT MODAL */}
             <Dialog open={subModalOpen} onOpenChange={setSubModalOpen}>
-                <DialogContent className="w-[96vw] sm:max-w-md max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-popover dark:bg-slate-950 border border-border dark:border-slate-800 shadow-2xl">
+                <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-xl max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden overflow-x-hidden bg-popover dark:bg-slate-950 border border-border dark:border-slate-800 shadow-2xl">
                     <DialogHeader className="shrink-0">
                         <DialogTitle className="flex items-center gap-2 text-lg font-bold text-foreground">
                             <Users className="h-5 w-5 text-sky-700 dark:text-sky-400" />
@@ -3216,7 +3216,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
 
             {/* UPDATE PRIMARY EMAIL MODAL */}
             <Dialog open={showEditEmailModal} onOpenChange={setShowEditEmailModal}>
-                <DialogContent className="sm:max-w-[425px] bg-popover/95 dark:bg-[#121218]/95 border-border/60">
+                <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-xl overflow-y-auto overflow-x-hidden bg-popover/95 dark:bg-[#121218]/95 border-border/60">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2 text-base font-bold">
                             <Mail className="h-5 w-5 text-primary" />

@@ -581,7 +581,7 @@ export default function MyPlexHub() {
             {/* --- KILL STREAM CONFIRMATION MODAL --- */}
             {streamToKill && (
                 <Dialog open={!!streamToKill} onOpenChange={(open) => !open && setStreamToKill(null)}>
-                    <DialogContent className="w-[95vw] sm:max-w-md max-h-[85vh] overflow-y-auto bg-popover/95 dark:bg-[#121218]/95 border-rose-500/30 backdrop-blur-xl shadow-2xl p-4 sm:p-6">
+                    <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-xl max-h-[85vh] overflow-y-auto overflow-x-hidden bg-popover/95 dark:bg-[#121218]/95 border-rose-500/30 backdrop-blur-xl shadow-2xl p-4 sm:p-6">
                         <DialogHeader className="pb-3 border-b border-border/40">
                             <DialogTitle className="flex items-center gap-2 text-base sm:text-lg font-bold text-rose-700 dark:text-rose-400">
                                 <ShieldAlert className="h-5 w-5 text-rose-500 shrink-0" />
@@ -631,7 +631,7 @@ export default function MyPlexHub() {
 
             {/* --- CONNECTED SERVERS MODAL --- */}
             <Dialog open={serversModalOpen} onOpenChange={setServersModalOpen}>
-                <DialogContent className="w-[95vw] sm:max-w-md max-h-[85vh] overflow-y-auto bg-popover/95 dark:bg-[#121218]/95 border-border/60 backdrop-blur-xl shadow-2xl p-4 sm:p-6">
+                <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-xl max-h-[85vh] overflow-y-auto overflow-x-hidden bg-popover/95 dark:bg-[#121218]/95 border-border/60 backdrop-blur-xl shadow-2xl p-4 sm:p-6">
                     <DialogHeader className="pb-3 border-b border-border/40">
                         <DialogTitle className="flex items-center gap-2 text-base sm:text-lg font-bold text-foreground">
                             <Server className="h-5 w-5 text-primary shrink-0" />

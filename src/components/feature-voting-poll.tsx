@@ -245,7 +245,7 @@ export default function FeatureVotingPoll({ isAdmin = false }: { isAdmin?: boole
                                 <span>Suggest Feature</span>
                             </Button>
                         </DialogTrigger>
-                        <DialogContent className="sm:max-w-lg bg-popover dark:bg-[#14141d] border-cyan-500/30 text-foreground max-h-[90vh] overflow-y-auto">
+                        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-xl bg-popover dark:bg-[#14141d] border-cyan-500/30 text-foreground max-h-[90vh] overflow-y-auto overflow-x-hidden">
                             <DialogHeader>
                                 <DialogTitle className="text-xl font-bold flex items-center gap-2 text-cyan-700 dark:text-cyan-400">
                                     💡 Suggest a New Feature
@@ -353,7 +353,7 @@ export default function FeatureVotingPoll({ isAdmin = false }: { isAdmin?: boole
                                     : "border-border/60 hover:bg-accent dark:hover:bg-zinc-800 text-muted-foreground hover:text-foreground"
                             }`}
                         >
-                            <Flame className="h-3.5 w-3.5 text-amber-400" />
+                            <Flame className={`h-3.5 w-3.5 ${sortBy === "votes" ? "text-amber-300" : "text-amber-700 dark:text-amber-400"}`} />
                             Most Voted
                         </Button>
                         <Button
@@ -366,7 +366,7 @@ export default function FeatureVotingPoll({ isAdmin = false }: { isAdmin?: boole
                                     : "border-border/60 hover:bg-accent dark:hover:bg-zinc-800 text-muted-foreground hover:text-foreground"
                             }`}
                         >
-                            <Sparkles className="h-3.5 w-3.5 text-amber-400" />
+                            <Sparkles className={`h-3.5 w-3.5 ${sortBy === "recent" ? "text-amber-300" : "text-amber-700 dark:text-amber-400"}`} />
                             Newest
                         </Button>
 

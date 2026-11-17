@@ -598,7 +598,7 @@ export default function FeatureGuideModal({
                 </DialogTrigger>
             )}
 
-            <DialogContent className="w-[95vw] sm:w-[92vw] md:w-[90vw] max-w-3xl lg:max-w-4xl max-h-[90vh] sm:max-h-[92vh] overflow-y-auto overflow-x-hidden p-0 bg-popover dark:bg-[#0c0c12] border border-border/60 shadow-2xl rounded-2xl sm:rounded-3xl scrollbar-thin text-foreground">
+            <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-3xl lg:max-w-4xl max-h-[90vh] sm:max-h-[92vh] overflow-y-auto overflow-x-hidden p-0 bg-popover dark:bg-[#0c0c12] border border-border/60 shadow-2xl rounded-2xl sm:rounded-3xl scrollbar-thin text-foreground">
                 <div className="flex flex-col min-h-0 min-w-0 w-full overflow-x-hidden">
                     
                     {/* MODAL HEADER */}

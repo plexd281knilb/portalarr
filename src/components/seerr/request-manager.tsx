@@ -409,37 +409,37 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                         <Button
                             size="sm"
                             variant={mediaTypeFilter === "movie" ? "default" : "ghost"}
-                            className="h-8 px-3 text-xs font-bold rounded-lg text-blue-300 hover:text-blue-200"
+                            className={`h-8 px-3 text-xs font-bold rounded-lg ${mediaTypeFilter === "movie" ? "text-primary-foreground" : "text-blue-700 dark:text-blue-300 hover:text-blue-800 dark:hover:text-blue-200"}`}
                             onClick={() => setMediaTypeFilter("movie")}
                         >
-                            <Film className="h-3.5 w-3.5 mr-1 text-blue-400" />
+                            <Film className={`h-3.5 w-3.5 mr-1 ${mediaTypeFilter === "movie" ? "text-primary-foreground" : "text-blue-700 dark:text-blue-400"}`} />
                             Movies
                         </Button>
                         <Button
                             size="sm"
                             variant={mediaTypeFilter === "tv" ? "default" : "ghost"}
-                            className="h-8 px-3 text-xs font-bold rounded-lg text-cyan-300 hover:text-cyan-200"
+                            className={`h-8 px-3 text-xs font-bold rounded-lg ${mediaTypeFilter === "tv" ? "text-primary-foreground" : "text-cyan-700 dark:text-cyan-300 hover:text-cyan-800 dark:hover:text-cyan-200"}`}
                             onClick={() => setMediaTypeFilter("tv")}
                         >
-                            <Tv className="h-3.5 w-3.5 mr-1 text-cyan-400" />
+                            <Tv className={`h-3.5 w-3.5 mr-1 ${mediaTypeFilter === "tv" ? "text-primary-foreground" : "text-cyan-700 dark:text-cyan-400"}`} />
                             TV Shows
                         </Button>
                         <Button
                             size="sm"
                             variant={mediaTypeFilter === "book" ? "default" : "ghost"}
-                            className="h-8 px-3 text-xs font-bold rounded-lg text-emerald-300 hover:text-emerald-200"
+                            className={`h-8 px-3 text-xs font-bold rounded-lg ${mediaTypeFilter === "book" ? "text-primary-foreground" : "text-emerald-700 dark:text-emerald-300 hover:text-emerald-800 dark:hover:text-emerald-200"}`}
                             onClick={() => setMediaTypeFilter("book")}
                         >
-                            <BookOpen className="h-3.5 w-3.5 mr-1 text-emerald-400" />
+                            <BookOpen className={`h-3.5 w-3.5 mr-1 ${mediaTypeFilter === "book" ? "text-primary-foreground" : "text-emerald-700 dark:text-emerald-400"}`} />
                             Ebooks
                         </Button>
                         <Button
                             size="sm"
                             variant={mediaTypeFilter === "audiobook" ? "default" : "ghost"}
-                            className="h-8 px-3 text-xs font-bold rounded-lg text-amber-300 hover:text-amber-200"
+                            className={`h-8 px-3 text-xs font-bold rounded-lg ${mediaTypeFilter === "audiobook" ? "text-primary-foreground" : "text-amber-700 dark:text-amber-300 hover:text-amber-800 dark:hover:text-amber-200"}`}
                             onClick={() => setMediaTypeFilter("audiobook")}
                         >
-                            <Headphones className="h-3.5 w-3.5 mr-1 text-amber-400" />
+                            <Headphones className={`h-3.5 w-3.5 mr-1 ${mediaTypeFilter === "audiobook" ? "text-primary-foreground" : "text-amber-700 dark:text-amber-400"}`} />
                             Audiobooks
                         </Button>
                     </div>

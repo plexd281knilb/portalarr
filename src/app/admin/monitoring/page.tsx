@@ -52,54 +52,54 @@ function getContainerAppBranding(name: any, image: any): AppBranding {
         return { icon: Tv, color: "text-sky-400", bg: "bg-sky-500/10", border: "border-sky-500/30" };
     }
     if (combined.includes("radarr")) {
-        return { icon: Film, color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/30" };
+        return { icon: Film, color: "text-amber-700 dark:text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/30" };
     }
     if (combined.includes("sabnzbd")) {
-        return { icon: ArrowDownCircle, color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/30" };
+        return { icon: ArrowDownCircle, color: "text-emerald-700 dark:text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/30" };
     }
     if (combined.includes("qbit") || combined.includes("torrent")) {
-        return { icon: ArrowDownCircle, color: "text-blue-400", bg: "bg-blue-500/10", border: "border-blue-500/30" };
+        return { icon: ArrowDownCircle, color: "text-blue-700 dark:text-blue-400", bg: "bg-blue-500/10", border: "border-blue-500/30" };
     }
     if (combined.includes("nzbget")) {
-        return { icon: ArrowDownCircle, color: "text-teal-400", bg: "bg-teal-500/10", border: "border-teal-500/30" };
+        return { icon: ArrowDownCircle, color: "text-teal-700 dark:text-teal-400", bg: "bg-teal-500/10", border: "border-teal-500/30" };
     }
     if (combined.includes("bazarr")) {
-        return { icon: FileText, color: "text-teal-400", bg: "bg-teal-500/10", border: "border-teal-500/30" };
+        return { icon: FileText, color: "text-teal-700 dark:text-teal-400", bg: "bg-teal-500/10", border: "border-teal-500/30" };
     }
     if (combined.includes("prowlarr")) {
-        return { icon: Radio, color: "text-rose-400", bg: "bg-rose-500/10", border: "border-rose-500/30" };
+        return { icon: Radio, color: "text-rose-700 dark:text-rose-400", bg: "bg-rose-500/10", border: "border-rose-500/30" };
     }
     if (combined.includes("tautulli")) {
-        return { icon: Activity, color: "text-orange-400", bg: "bg-orange-500/10", border: "border-orange-500/30" };
+        return { icon: Activity, color: "text-orange-700 dark:text-orange-400", bg: "bg-orange-500/10", border: "border-orange-500/30" };
     }
     if (combined.includes("immich") || combined.includes("photo")) {
-        return { icon: Image, color: "text-pink-400", bg: "bg-pink-500/10", border: "border-pink-500/30" };
+        return { icon: Image, color: "text-pink-700 dark:text-pink-400", bg: "bg-pink-500/10", border: "border-pink-500/30" };
     }
     if (combined.includes("grafana")) {
-        return { icon: BarChart2, color: "text-orange-400", bg: "bg-orange-500/10", border: "border-orange-500/30" };
+        return { icon: BarChart2, color: "text-orange-700 dark:text-orange-400", bg: "bg-orange-500/10", border: "border-orange-500/30" };
     }
     if (combined.includes("teslamate")) {
-        return { icon: Zap, color: "text-red-400", bg: "bg-red-500/10", border: "border-red-500/30" };
+        return { icon: Zap, color: "text-red-700 dark:text-red-400", bg: "bg-red-500/10", border: "border-red-500/30" };
     }
     if (combined.includes("glances")) {
-        return { icon: Cpu, color: "text-cyan-400", bg: "bg-cyan-500/10", border: "border-cyan-500/30" };
+        return { icon: Cpu, color: "text-cyan-700 dark:text-cyan-400", bg: "bg-cyan-500/10", border: "border-cyan-500/30" };
     }
     if (combined.includes("diskspeed") || combined.includes("disk")) {
-        return { icon: HardDrive, color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/30" };
+        return { icon: HardDrive, color: "text-emerald-700 dark:text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/30" };
     }
     if (combined.includes("overseerr") || combined.includes("seerr") || combined.includes("jellyseerr")) {
-        return { icon: Layers, color: "text-sky-400", bg: "bg-sky-500/10", border: "border-sky-500/30" };
+        return { icon: Layers, color: "text-sky-700 dark:text-sky-400", bg: "bg-sky-500/10", border: "border-sky-500/30" };
     }
     if (combined.includes("pihole") || combined.includes("adguard") || combined.includes("vaultwarden")) {
-        return { icon: Shield, color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/30" };
+        return { icon: Shield, color: "text-emerald-700 dark:text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/30" };
     }
     if (combined.includes("homeassistant") || combined.includes("hass")) {
-        return { icon: Home, color: "text-sky-400", bg: "bg-sky-500/10", border: "border-sky-500/30" };
+        return { icon: Home, color: "text-sky-700 dark:text-sky-400", bg: "bg-sky-500/10", border: "border-sky-500/30" };
     }
     if (combined.includes("postgres") || combined.includes("redis") || combined.includes("mariadb") || combined.includes("mysql") || combined.includes("mongo")) {
-        return { icon: Database, color: "text-blue-400", bg: "bg-blue-500/10", border: "border-blue-500/30" };
+        return { icon: Database, color: "text-blue-700 dark:text-blue-400", bg: "bg-blue-500/10", border: "border-blue-500/30" };
     }
-    return { icon: Box, color: "text-slate-400", bg: "bg-slate-500/10", border: "border-slate-500/30" };
+    return { icon: Box, color: "text-slate-600 dark:text-slate-400", bg: "bg-slate-500/10", border: "border-slate-500/30" };
 }
 
 export default function AdminFleetMonitoringPage() {

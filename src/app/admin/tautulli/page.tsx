@@ -1835,7 +1835,7 @@ export default function StreamIntelligencePage() {
             {/* --- DEVICE DIAGNOSIS & FIX MODAL --- */}
             {activeDiagnosis && (
                 <Dialog open={!!activeDiagnosis} onOpenChange={(open) => !open && setActiveDiagnosis(null)}>
-                    <DialogContent className="w-[95vw] sm:w-[90vw] max-w-md sm:max-w-md bg-popover dark:bg-[#0c0c14] border-border dark:border-slate-800 text-foreground dark:text-white rounded-2xl p-6">
+                    <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-xl overflow-y-auto overflow-x-hidden bg-popover dark:bg-[#0c0c14] border-border dark:border-slate-800 text-foreground dark:text-white rounded-2xl p-6">
                         <DialogHeader>
                             <DialogTitle className="text-base font-bold text-foreground dark:text-white flex items-center gap-2">
                                 <AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-400" />

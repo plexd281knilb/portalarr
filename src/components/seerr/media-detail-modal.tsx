@@ -560,7 +560,7 @@ export function MediaDetailModal({
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
-            <DialogContent className="w-[95vw] sm:w-[92vw] md:w-[90vw] max-w-4xl lg:max-w-5xl max-h-[90vh] sm:max-h-[92vh] bg-popover dark:bg-[#0c0c12] border-border/60 p-0 overflow-y-auto overflow-x-hidden shadow-2xl rounded-2xl sm:rounded-3xl scrollbar-thin text-foreground">
+            <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-4xl lg:max-w-5xl max-h-[90vh] sm:max-h-[92vh] bg-popover dark:bg-[#0c0c12] border-border/60 p-0 overflow-y-auto overflow-x-hidden shadow-2xl rounded-2xl sm:rounded-3xl scrollbar-thin text-foreground">
                 {!details ? (
                     <div className="flex flex-col items-center justify-center p-20 space-y-4">
                         <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />

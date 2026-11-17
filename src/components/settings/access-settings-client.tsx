@@ -2358,7 +2358,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                     <Button 
                                         variant={filterStatus === "PENDING" ? "secondary" : "ghost"} 
                                         size="sm" 
-                                        className="h-7 text-xs px-2.5 text-amber-400 transition-all duration-200 hover:ring-2 hover:ring-amber-400/40 active:scale-95 font-semibold whitespace-nowrap shrink-0"
+                                        className="h-7 text-xs px-2.5 text-amber-700 dark:text-amber-400 transition-all duration-200 hover:ring-2 hover:ring-amber-400/40 active:scale-95 font-semibold whitespace-nowrap shrink-0"
                                         onClick={() => setFilterStatus("PENDING")}
                                     >
                                         Pending ({users.filter(u => u.status === "PENDING").length})
@@ -2366,7 +2366,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                     <Button 
                                         variant={filterStatus === "TRIAL" ? "secondary" : "ghost"} 
                                         size="sm" 
-                                        className="h-7 text-xs px-2.5 text-blue-400 transition-all duration-200 hover:ring-2 hover:ring-blue-400/40 active:scale-95 font-semibold whitespace-nowrap shrink-0"
+                                        className="h-7 text-xs px-2.5 text-blue-700 dark:text-blue-400 transition-all duration-200 hover:ring-2 hover:ring-blue-400/40 active:scale-95 font-semibold whitespace-nowrap shrink-0"
                                         onClick={() => setFilterStatus("TRIAL")}
                                     >
                                         Trials ({users.filter(u => u.status === "TRIAL").length})
@@ -2374,7 +2374,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                     <Button 
                                         variant={filterStatus === "APPROVED" ? "secondary" : "ghost"} 
                                         size="sm" 
-                                        className="h-7 text-xs px-2.5 text-emerald-400 transition-all duration-200 hover:ring-2 hover:ring-emerald-400/40 active:scale-95 font-semibold whitespace-nowrap shrink-0"
+                                        className="h-7 text-xs px-2.5 text-emerald-700 dark:text-emerald-400 transition-all duration-200 hover:ring-2 hover:ring-emerald-400/40 active:scale-95 font-semibold whitespace-nowrap shrink-0"
                                         onClick={() => setFilterStatus("APPROVED")}
                                     >
                                         Subscribed ({users.filter(u => u.status === "APPROVED" || !u.status).length})
@@ -2384,8 +2384,8 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                         size="sm" 
                                         className={`h-7 text-xs px-2.5 transition-all duration-200 active:scale-95 font-semibold whitespace-nowrap shrink-0 ${
                                             usersWithSecurityLeaks.length > 0 
-                                                ? "text-red-400 font-bold hover:ring-2 hover:ring-red-500/50" 
-                                                : "text-red-400 hover:ring-2 hover:ring-red-400/40"
+                                                ? "text-red-700 dark:text-red-400 font-bold hover:ring-2 hover:ring-red-500/50" 
+                                                : "text-red-700 dark:text-red-400 hover:ring-2 hover:ring-red-400/40"
                                         }`}
                                         onClick={() => setFilterStatus("INACTIVE")}
                                     >
