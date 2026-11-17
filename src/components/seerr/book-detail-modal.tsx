@@ -244,7 +244,7 @@ export function BookDetailModal({
     return (
         <>
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="w-[95vw] sm:w-[92vw] md:w-[90vw] max-w-3xl lg:max-w-4xl max-h-[90vh] sm:max-h-[92vh] bg-popover dark:bg-[#0c0c12] border border-border/60 shadow-2xl p-0 overflow-y-auto overflow-x-hidden sm:rounded-xl scrollbar-thin text-foreground">
+            <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-3xl lg:max-w-4xl max-h-[90vh] sm:max-h-[92vh] bg-popover dark:bg-[#0c0c12] border border-border/60 shadow-2xl p-0 overflow-y-auto overflow-x-hidden sm:rounded-xl scrollbar-thin text-foreground">
                 <div className="flex flex-col min-h-0 min-w-0 w-full overflow-x-hidden">
                     {/* Header Background Banner */}
                     <div className="relative h-28 sm:h-36 w-full bg-gradient-to-r from-muted/60 dark:from-slate-900/90 via-background/95 to-background flex items-end p-4 sm:p-6 overflow-hidden border-b border-border/40 shrink-0">
@@ -495,8 +495,8 @@ export function BookDetailModal({
                                     <span>Request Pending</span>
                                 </Button>
                             ) : isKids && (activeBook?.maturityRating === "MATURE" || activeBook?.ageRating === "18+ Mature") ? (
-                                <Button size="sm" disabled className="bg-rose-500/10 dark:bg-rose-950/40 text-rose-400 border border-rose-500/30 text-xs gap-1.5 font-semibold h-9 px-4 cursor-not-allowed">
-                                    <AlertCircle className="h-3.5 w-3.5 text-rose-400" />
+                                <Button size="sm" disabled className="bg-rose-500/10 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 border border-rose-500/30 text-xs gap-1.5 font-semibold h-9 px-4 cursor-not-allowed">
+                                    <AlertCircle className="h-3.5 w-3.5 text-rose-700 dark:text-rose-400" />
                                     <span>Mature Title (Restricted)</span>
                                 </Button>
                             ) : (

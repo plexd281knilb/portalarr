@@ -153,7 +153,7 @@ export default function ServerSpeedTest({ trigger }: ServerSpeedTestProps = {}) 
                     </Button>
                 )}
             </DialogTrigger>
-            <DialogContent className="w-[95vw] sm:max-w-lg max-h-[85vh] overflow-y-auto bg-popover/95 dark:bg-[#121218]/95 border-border/60 backdrop-blur-xl shadow-2xl p-4 sm:p-6">
+            <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-2xl max-h-[85vh] overflow-y-auto overflow-x-hidden bg-popover/95 dark:bg-[#121218]/95 border-border/60 backdrop-blur-xl shadow-2xl p-4 sm:p-6">
                 <DialogHeader className="pb-3 border-b border-border/40">
                     <DialogTitle className="flex items-center gap-2 text-lg font-bold text-foreground">
                         <Gauge className="h-5 w-5 text-primary" />

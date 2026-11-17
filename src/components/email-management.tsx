@@ -826,7 +826,7 @@ export default function EmailManagement() {
                                         type="button"
                                         size="sm"
                                         variant={userFilter === "approved" ? "secondary" : "ghost"}
-                                        className="h-6 text-[10px] px-2 text-emerald-400"
+                                        className="h-6 text-[10px] px-2 text-emerald-700 dark:text-emerald-400"
                                         onClick={() => setUserFilter("approved")}
                                     >
                                         Approved ({users.filter(u => u.status === "APPROVED").length})
@@ -835,7 +835,7 @@ export default function EmailManagement() {
                                         type="button"
                                         size="sm"
                                         variant={userFilter === "pending" ? "secondary" : "ghost"}
-                                        className="h-6 text-[10px] px-2 text-amber-400"
+                                        className="h-6 text-[10px] px-2 text-amber-700 dark:text-amber-400"
                                         onClick={() => setUserFilter("pending")}
                                     >
                                         Pending ({users.filter(u => u.status === "PENDING").length})
@@ -844,7 +844,7 @@ export default function EmailManagement() {
                                         type="button"
                                         size="sm"
                                         variant={userFilter === "admin" ? "secondary" : "ghost"}
-                                        className="h-6 text-[10px] px-2 text-sky-400"
+                                        className="h-6 text-[10px] px-2 text-sky-700 dark:text-sky-400"
                                         onClick={() => setUserFilter("admin")}
                                     >
                                         Admins ({users.filter(u => u.role === "ADMIN").length})
@@ -1313,7 +1313,7 @@ export default function EmailManagement() {
 
             {/* CONFIRM BROADCAST MODAL */}
             <Dialog open={showConfirmModal} onOpenChange={setShowConfirmModal}>
-                <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto bg-popover dark:bg-[#121218] border-border/60 text-foreground">
+                <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-2xl max-h-[90vh] overflow-y-auto overflow-x-hidden bg-popover dark:bg-[#121218] border-border/60 text-foreground">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2 text-foreground">
                             <Megaphone className="h-5 w-5 text-primary" />
@@ -1987,7 +1987,7 @@ export default function EmailManagement() {
                                         size="sm"
                                         variant={policyRecipientFilter === "USER" ? "secondary" : "ghost"}
                                         onClick={() => setPolicyRecipientFilter("USER")}
-                                        className="h-6 text-[10px] px-2 font-semibold text-blue-400 hover:text-blue-300"
+                                        className="h-6 text-[10px] px-2 font-semibold text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
                                     >
                                         <User className="h-2.5 w-2.5 mr-1" /> To Users (10)
                                     </Button>
@@ -1996,7 +1996,7 @@ export default function EmailManagement() {
                                         size="sm"
                                         variant={policyRecipientFilter === "ADMIN" ? "secondary" : "ghost"}
                                         onClick={() => setPolicyRecipientFilter("ADMIN")}
-                                        className="h-6 text-[10px] px-2 font-semibold text-sky-400 hover:text-sky-300"
+                                        className="h-6 text-[10px] px-2 font-semibold text-sky-700 dark:text-sky-400 hover:text-sky-800 dark:hover:text-sky-300"
                                     >
                                         <Shield className="h-2.5 w-2.5 mr-1" /> To Admin (1)
                                     </Button>
@@ -2005,7 +2005,7 @@ export default function EmailManagement() {
                                         size="sm"
                                         variant={policyRecipientFilter === "BOTH" ? "secondary" : "ghost"}
                                         onClick={() => setPolicyRecipientFilter("BOTH")}
-                                        className="h-6 text-[10px] px-2 font-semibold text-cyan-400 hover:text-cyan-300"
+                                        className="h-6 text-[10px] px-2 font-semibold text-cyan-700 dark:text-cyan-400 hover:text-cyan-800 dark:hover:text-cyan-300"
                                     >
                                         <Users className="h-2.5 w-2.5 mr-1" /> Admin &amp; Users (1)
                                     </Button>

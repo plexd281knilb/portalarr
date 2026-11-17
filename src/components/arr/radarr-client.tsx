@@ -1486,7 +1486,7 @@ export default function RadarrClient({ initialInstances, initialInstancesError }
           setDeleteMovieDialog((prev) => ({ ...prev, open }))
         }
       >
-        <DialogContent className="max-w-md w-[95vw] bg-popover dark:bg-[#121218] border-border/60 text-foreground">
+        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-xl overflow-y-auto overflow-x-hidden bg-popover dark:bg-[#121218] border-border/60 text-foreground">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold text-red-700 dark:text-red-400 flex items-center gap-2">
               <Trash2 className="h-5 w-5" /> Delete Movie from Radarr

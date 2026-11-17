@@ -14086,7 +14086,7 @@ function evaluateReleaseMatch(
     let score = 10;
     let matchQuality: "exact" | "good" | "partial" | "mismatch" = "mismatch";
     let badgeText = "Low Match";
-    let badgeColor = "bg-zinc-500/10 text-zinc-400 border-zinc-500/30";
+    let badgeColor = "bg-zinc-500/10 text-slate-600 dark:text-zinc-400 border-zinc-500/30";
     let warning: string | undefined = undefined;
     let rejected = false;
 
@@ -14094,44 +14094,44 @@ function evaluateReleaseMatch(
         score = 5;
         matchQuality = "mismatch";
         badgeText = `Wrong Author (${parsed.author})`;
-        badgeColor = "bg-red-500/10 text-red-400 border-red-500/30";
+        badgeColor = "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30";
         warning = `Author Mismatch: Release is by ${parsed.author}, not ${requestedAuthor}`;
         rejected = true;
     } else if (authorMatch && titleMatch) {
         score = 100;
         matchQuality = "exact";
         badgeText = "Best Match (100%)";
-        badgeColor = "bg-emerald-500/10 text-emerald-400 border-emerald-500/30";
+        badgeColor = "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30";
     } else if (authorMatch && partialTitle) {
         score = 80;
         matchQuality = "good";
         badgeText = "Author Match";
-        badgeColor = "bg-blue-500/10 text-blue-400 border-blue-500/30";
+        badgeColor = "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30";
     } else if (authorMatch && !titleMatch) {
         score = 65;
         matchQuality = "good";
         badgeText = "Author Match (Partial Title)";
-        badgeColor = "bg-blue-500/10 text-blue-400 border-blue-500/30";
+        badgeColor = "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30";
     } else if (!hasRequestedAuthor && titleMatch) {
         score = 80;
         matchQuality = "good";
         badgeText = "Exact Title";
-        badgeColor = "bg-blue-500/10 text-blue-400 border-blue-500/30";
+        badgeColor = "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30";
     } else if (titleMatch && !authorMatch) {
         score = 60;
         matchQuality = "good";
         badgeText = "Title Match (Author Unverified)";
-        badgeColor = "bg-cyan-500/10 text-cyan-400 border-cyan-500/30";
+        badgeColor = "bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border-cyan-500/30";
     } else if (partialTitle) {
         score = 35;
         matchQuality = "partial";
         badgeText = "Partial Title";
-        badgeColor = "bg-amber-500/10 text-amber-400 border-amber-500/30";
+        badgeColor = "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30";
     } else {
         score = 10;
         matchQuality = "mismatch";
         badgeText = "Low Match";
-        badgeColor = "bg-zinc-500/10 text-zinc-400 border-zinc-500/30";
+        badgeColor = "bg-zinc-500/10 text-slate-600 dark:text-zinc-400 border-zinc-500/30";
         rejected = true;
     }
 

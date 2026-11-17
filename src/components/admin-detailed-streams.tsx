@@ -976,7 +976,7 @@ export default function AdminDetailedStreams({ devRoadmapText = "", roadmapText 
                                         }}
                                         className="h-7 text-xs px-2.5 gap-1"
                                     >
-                                        {tab.id === "sharing" && <ShieldAlert className="h-3.5 w-3.5 text-rose-400 shrink-0" />}
+                                        {tab.id === "sharing" && <ShieldAlert className={`h-3.5 w-3.5 shrink-0 ${historyFilter === tab.id ? "text-primary-foreground" : "text-rose-700 dark:text-rose-400"}`} />}
                                         <span>{tab.label}</span>
                                     </Button>
                                 ))}

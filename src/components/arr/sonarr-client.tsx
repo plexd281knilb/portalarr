@@ -1562,7 +1562,7 @@ export default function SonarrClient({ initialInstances, initialInstancesError }
 
       {/* MANAGE SEASONS MODAL */}
       <Dialog open={seasonsModalOpen} onOpenChange={setSeasonsModalOpen}>
-        <DialogContent className="w-[96vw] sm:max-w-md max-h-[85vh] flex flex-col p-0 bg-popover dark:bg-[#121218] border-border/60">
+        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-xl max-h-[85vh] flex flex-col p-0 overflow-hidden overflow-x-hidden bg-popover dark:bg-[#121218] border-border/60">
           <DialogHeader className="px-6 py-4 border-b border-border/40 shrink-0">
             <DialogTitle className="text-cyan-700 dark:text-cyan-400 font-bold">Manage Seasons</DialogTitle>
             <DialogDescription>
@@ -1736,7 +1736,7 @@ export default function SonarrClient({ initialInstances, initialInstancesError }
           setDeleteSeriesDialog((prev) => ({ ...prev, open }))
         }
       >
-        <DialogContent className="sm:max-w-md w-[95vw] bg-popover dark:bg-[#121218] border-border/60">
+        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-xl overflow-y-auto overflow-x-hidden bg-popover dark:bg-[#121218] border-border/60">
           <DialogHeader>
             <DialogTitle className="text-red-700 dark:text-red-400 font-bold flex items-center gap-2">
               <Trash2 className="h-5 w-5 text-red-700 dark:text-red-400" /> Delete Series

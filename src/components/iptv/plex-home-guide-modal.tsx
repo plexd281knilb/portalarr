@@ -65,7 +65,7 @@ export function PlexHomeGuideModal({ open, onOpenChange, isAdminView }: PlexHome
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-2xl bg-popover dark:bg-slate-950/95 border-amber-500/30 text-foreground backdrop-blur-xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-2xl bg-popover dark:bg-slate-950/95 border-amber-500/30 text-foreground backdrop-blur-xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
                 <DialogHeader className="space-y-2">
                     <div className="flex items-center gap-2 flex-wrap">
                         <Badge className="bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30 text-[10px] uppercase font-bold tracking-wider">

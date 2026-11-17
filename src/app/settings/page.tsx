@@ -5736,7 +5736,7 @@ function SettingsPageContent() {
 
                     {/* ADMIN NOTIFICATION EMAIL UPDATE MODAL */}
                     <Dialog open={showAdminEmailModal} onOpenChange={setShowAdminEmailModal}>
-                        <DialogContent className="sm:max-w-[425px] bg-popover/95 dark:bg-[#121218]/95 border-border/60">
+                        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-xl overflow-y-auto overflow-x-hidden bg-popover/95 dark:bg-[#121218]/95 border-border/60">
                             <DialogHeader>
                                 <DialogTitle className="flex items-center gap-2 text-base font-bold">
                                     <Mail className="h-5 w-5 text-primary" />
@@ -5863,7 +5863,7 @@ function SettingsPageContent() {
 
                         {/* UNSAVED CHANGES MODAL */}
             <Dialog open={leaveModalOpen} onOpenChange={(open) => { if (!open) { setLeaveModalOpen(false); setPendingNavigation(null); } }}>
-                <DialogContent className="w-[96vw] sm:max-w-md max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden bg-popover dark:bg-[#13131a] border-amber-500/40 text-foreground shadow-2xl">
+                <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-xl max-h-[85vh] flex flex-col p-4 sm:p-6 overflow-hidden overflow-x-hidden bg-popover dark:bg-[#13131a] border-amber-500/40 text-foreground shadow-2xl">
                     <DialogHeader className="shrink-0">
                         <div className="flex items-center gap-2 text-amber-500 mb-1">
                             <AlertTriangle className="h-5 w-5" />

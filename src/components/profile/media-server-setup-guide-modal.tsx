@@ -105,16 +105,16 @@ export function MediaServerSetupGuideModal({
 
     const themeColor = isJellyfin 
         ? {
-            badge: "bg-sky-500/15 text-sky-300 border-sky-500/40",
-            iconBg: "bg-sky-500/15 border-sky-500/30 text-sky-400",
+            badge: "bg-sky-500/15 text-sky-800 dark:text-sky-300 border-sky-500/40",
+            iconBg: "bg-sky-500/15 border-sky-500/30 text-sky-700 dark:text-sky-400",
             borderHighlight: "border-sky-500/40",
-            accentText: "text-sky-400"
+            accentText: "text-sky-700 dark:text-sky-400"
         }
         : {
-            badge: "bg-emerald-500/15 text-emerald-300 border-emerald-500/40",
-            iconBg: "bg-emerald-500/15 border-emerald-500/30 text-emerald-400",
+            badge: "bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border-emerald-500/40",
+            iconBg: "bg-emerald-500/15 border-emerald-500/30 text-emerald-700 dark:text-emerald-400",
             borderHighlight: "border-emerald-500/40",
-            accentText: "text-emerald-400"
+            accentText: "text-emerald-700 dark:text-emerald-400"
         };
 
     return (

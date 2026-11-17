@@ -686,7 +686,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                         }`}
                         onClick={() => handleTabChange("movies")}
                     >
-                        <Film className="h-4 w-4 mr-1.5 text-blue-400" />
+                        <Film className={`h-4 w-4 mr-1.5 ${activeTab === "movies" ? "text-white" : "text-blue-700 dark:text-blue-400"}`} />
                         {section === "kids" ? "Family Movies" : "Movies"}
                     </Button>
 
@@ -700,7 +700,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                         }`}
                         onClick={() => handleTabChange("tv")}
                     >
-                        <Tv className="h-4 w-4 mr-1.5 text-cyan-400" />
+                        <Tv className={`h-4 w-4 mr-1.5 ${activeTab === "tv" ? "text-white" : "text-cyan-700 dark:text-cyan-400"}`} />
                         {section === "kids" ? "Kids Shows" : "TV Shows"}
                     </Button>
 
@@ -714,7 +714,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                         }`}
                         onClick={() => handleTabChange("ebooks")}
                     >
-                        <BookOpen className="h-4 w-4 mr-1.5 text-emerald-400" />
+                        <BookOpen className={`h-4 w-4 mr-1.5 ${activeTab === "ebooks" ? "text-white" : "text-emerald-700 dark:text-emerald-400"}`} />
                         Ebooks
                     </Button>
 
@@ -728,7 +728,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                         }`}
                         onClick={() => handleTabChange("audiobooks")}
                     >
-                        <Headphones className="h-4 w-4 mr-1.5 text-amber-400" />
+                        <Headphones className={`h-4 w-4 mr-1.5 ${activeTab === "audiobooks" ? "text-white" : "text-amber-700 dark:text-amber-400"}`} />
                         Audiobooks
                     </Button>
 
@@ -742,7 +742,7 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
                         }`}
                         onClick={() => handleTabChange("requests")}
                     >
-                        <Inbox className="h-4 w-4 mr-1.5 text-sky-400" />
+                        <Inbox className={`h-4 w-4 mr-1.5 ${activeTab === "requests" ? "text-white" : "text-sky-700 dark:text-sky-400"}`} />
                         Requests
                     </Button>
                 </div>

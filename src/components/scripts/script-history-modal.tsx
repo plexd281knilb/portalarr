@@ -101,7 +101,7 @@ export function ScriptHistoryModal({
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="max-w-4xl w-[95vw] max-h-[92vh] flex flex-col bg-popover dark:bg-[#0d0e14] border-border dark:border-zinc-800 p-0 overflow-hidden shadow-2xl">
+            <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-4xl max-h-[92vh] flex flex-col bg-popover dark:bg-[#0d0e14] border-border dark:border-zinc-800 p-0 overflow-hidden overflow-x-hidden shadow-2xl">
                 {/* Header */}
                 <div className="flex items-center justify-between px-4 sm:px-5 py-3 sm:py-4 border-b border-border dark:border-zinc-800 bg-muted/70 dark:bg-zinc-950/70">
                     <div className="flex items-center gap-3">

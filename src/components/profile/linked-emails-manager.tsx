@@ -438,7 +438,7 @@ export function LinkedEmailsManager({ targetUserId, onChanged }: LinkedEmailsMan
 
             {/* ADD / EDIT LINKED INBOX DIALOG MODAL */}
             <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-                <DialogContent className="max-w-lg bg-popover dark:bg-[#14141c] border-border/70 dark:border-white/[0.1] text-foreground">
+                <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-xl overflow-y-auto overflow-x-hidden bg-popover dark:bg-[#14141c] border-border/70 dark:border-white/[0.1] text-foreground">
                     <DialogHeader>
                         <DialogTitle className="text-base font-bold flex items-center gap-2">
                             <Mail className="h-4 w-4 text-cyan-700 dark:text-cyan-400" />

@@ -163,7 +163,7 @@ export default function TrialDashboardView({ user, quota, billing }: TrialDashbo
                                     </div>
                                 </button>
                             </DialogTrigger>
-                            <DialogContent className="sm:max-w-lg bg-popover/95 dark:bg-[#121218]/95 border-border/60 backdrop-blur-xl shadow-2xl p-4 sm:p-6 max-h-[85vh] overflow-y-auto">
+                            <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-xl bg-popover/95 dark:bg-[#121218]/95 border-border/60 backdrop-blur-xl shadow-2xl p-4 sm:p-6 max-h-[85vh] overflow-y-auto overflow-x-hidden">
                                 <DialogHeader className="pb-3 border-b border-border/40">
                                     <DialogTitle className="flex items-center gap-2 text-lg font-bold text-foreground">
                                         <CreditCard className="h-5 w-5 text-emerald-700 dark:text-emerald-400" />
