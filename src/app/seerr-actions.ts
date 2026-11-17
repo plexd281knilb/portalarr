@@ -75,17 +75,7 @@ import {
     prewarmDiscoverCachesInternal,
     pruneExpiredDiskMediaCache
 } from "@/lib/seerr/media-cache";
-
-async function isDirectExternalServerActionCall(): Promise<boolean> {
-    if (process.env.NODE_ENV !== "production" && (process.env.PORTALARR_TEST === "true" || process.env.PORTALARR_TEST_AUTH === "true")) return false;
-    try {
-        const { headers } = await import("next/headers");
-        const h = await headers();
-        return Boolean(h.get("next-action"));
-    } catch {
-        return false;
-    }
-}
+import { isDirectExternalServerActionCall } from "@/lib/internal-context";
 
 interface AuthSession {
     userId: string;

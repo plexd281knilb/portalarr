@@ -83,7 +83,7 @@ import { getUserCache, setUserCache, clearUserCache } from "@/lib/prewarm";
 import { notifyAdminsOnPendingApproval } from "@/lib/admin-approvals";
 import { resolveContainedPath } from "@/lib/book-route-auth";
 import { sendOrQueueEmail, getLinkedEmailCategoryForTemplate, getNotificationCategoryForTemplate } from "@/lib/email-dispatcher";
-import { runAsServerInternal, isServerInternalActive } from "@/lib/internal-context";
+import { runAsServerInternal, isDirectExternalServerActionCall } from "@/lib/internal-context";
 
 if (typeof process !== "undefined" && process.env) {
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
@@ -125,18 +125,6 @@ async function verifyAdmin() {
         throw new Error("Unauthorized");
     }
     return user;
-}
-
-async function isDirectExternalServerActionCall(): Promise<boolean> {
-    if (isServerInternalActive()) return false;
-    if (process.env.NODE_ENV !== "production" && (process.env.PORTALARR_TEST === "true" || process.env.PORTALARR_TEST_AUTH === "true")) return false;
-    try {
-        const { headers } = await import("next/headers");
-        const h = await headers();
-        return Boolean(h.get("next-action"));
-    } catch {
-        return false;
-    }
 }
 
 function cleanUrl(url: string): string {
@@ -3838,7 +3826,7 @@ async function queryAppUsersFromDb() {
     if (process.env.NODE_ENV !== "test" && process.env.PORTALARR_TEST !== "true" && nowMs - lastBgTrialExpirationCheckMs > 60_000) {
         lastBgTrialExpirationCheckMs = nowMs;
         setTimeout(() => {
-            expireDueTrialsAndSubscriptionsInternal().catch(() => {});
+            runAsServerInternal(() => expireDueTrialsAndSubscriptionsInternal()).catch(() => {});
         }, 0);
     }
 
@@ -7822,7 +7810,7 @@ export async function updateUserSelectedPlexLibrariesAction(selectedKeys: string
                     adminToken = process.env.PLEX_TOKEN || process.env.MAIN_PLEX_TOKEN || "";
                 }
                 if (adminToken) {
-                    await syncUserPlexShareInternal(adminToken, dbUser, filteredSelected);
+                    await runAsServerInternal(() => syncUserPlexShareInternal(adminToken, dbUser, filteredSelected));
                 }
             }
         }
@@ -7996,7 +7984,7 @@ export async function createOrUpdateSubAccountAction(payload: {
                             notifyAdminsOnPendingApproval(approval).catch(e => console.warn("[APPROVAL-NOTIFY-ERROR]:", e?.message || e));
                         }
                     } else {
-                        await syncUserPlexShareInternal(adminToken, updated, targetKeys);
+                        await runAsServerInternal(() => syncUserPlexShareInternal(adminToken, updated, targetKeys));
                     }
                 }
             }
@@ -8112,7 +8100,7 @@ export async function createOrUpdateSubAccountAction(payload: {
                             notifyAdminsOnPendingApproval(approval).catch(e => console.warn("[APPROVAL-NOTIFY-ERROR]:", e?.message || e));
                         }
                     } else {
-                        await syncUserPlexShareInternal(adminToken, newSub, targetKeys);
+                        await runAsServerInternal(() => syncUserPlexShareInternal(adminToken, newSub, targetKeys));
                     }
                 }
             }
@@ -8148,7 +8136,7 @@ export async function deleteSubAccountAction(subAccountId: string) {
         if (!subAccount) return { success: false, error: "Sub-account not found or unauthorized" };
 
         // Revoke Plex access
-        await revokePlexAccessForUserInternal(subAccount, "Sub-account deleted.", { bypassApproval: true });
+        await runAsServerInternal(() => revokePlexAccessForUserInternal(subAccount, "Sub-account deleted.", { bypassApproval: true }));
 
         // Delete from DB
         await prisma.user.delete({ where: { id: subAccountId } });
@@ -8415,7 +8403,7 @@ export async function toggleFreeAddonAction(addonId: string, enabled: boolean) {
         // Live Audiobooks Plex Library Sync
         if (addonId === "audiobooks") {
             try {
-                await syncAudiobooksPlexLibraryAccessForUser(user.id, enabled);
+                await runAsServerInternal(() => syncAudiobooksPlexLibraryAccessForUser(user.id, enabled));
             } catch (aErr: any) {
                 console.warn("[AUDIOBOOKS-ADDON-SYNC-WARN]:", aErr?.message || aErr);
             }
@@ -8478,7 +8466,7 @@ export async function toggleUserAddonAdminAction(userId: string, addonId: string
         // Live Audiobooks Plex Library Sync
         if (addonId === "audiobooks") {
             try {
-                await syncAudiobooksPlexLibraryAccessForUser(userId, enabled);
+                await runAsServerInternal(() => syncAudiobooksPlexLibraryAccessForUser(userId, enabled));
             } catch (aErr: any) {
                 console.warn("[AUDIOBOOKS-ADMIN-ADDON-SYNC-WARN]:", aErr?.message || aErr);
             }
@@ -10673,7 +10661,7 @@ export async function syncAudiobooksPlexLibraryAccessForUser(userId: string, ena
             }
         } else {
             try {
-                await syncUserPlexShareInternal(adminToken, updatedUser, currentSelected);
+                await runAsServerInternal(() => syncUserPlexShareInternal(adminToken, updatedUser, currentSelected));
                 logger.addLog("INFO", "PLEX", `Synced live Audiobooks library access on Plex for "${dbUser.username}": ${enable ? "GRANTED" : "REVOKED"}`);
             } catch (pErr: any) {
                 console.warn("[AUDIOBOOKS-PLEX-SYNC-WARN]:", pErr?.message || pErr);
@@ -10850,7 +10838,7 @@ export async function updateUserAudiobooksLibraryAccessAction(enable: boolean) {
             data: { enabledAddons: JSON.stringify(userAddons) }
         });
 
-        await syncAudiobooksPlexLibraryAccessForUser(dbUser.id, enable);
+        await runAsServerInternal(() => syncAudiobooksPlexLibraryAccessForUser(dbUser.id, enable));
 
         revalidatePath("/profile");
         revalidatePath("/settings/profile");
@@ -10938,7 +10926,7 @@ export async function approveBookRequestAction(requestId: string) {
             data: { status: "APPROVED" }
         }).catch(() => {});
 
-        autoDownloadBookRequest(requestId, request.title, request.author || "").catch(err => {
+        runAsServerInternal(() => autoDownloadBookRequest(requestId, request.title, request.author || "")).catch(err => {
             console.error(`[BOOK-REQUEST-APPROVAL] Auto-download error for "${request.title}":`, err);
         });
 
@@ -12990,7 +12978,7 @@ async function runScanLibraryInternal(libraryId: string, options?: { enableAi?: 
                             where: { id: matchedRequest.id },
                             data: { status: "Searching" }
                         });
-                        autoDownloadBookRequest(matchedRequest.id, cleanedTitle, author).catch(err => {
+                        runAsServerInternal(() => autoDownloadBookRequest(matchedRequest.id, cleanedTitle, author)).catch(err => {
                             console.error(`[SCANNER] Failed to trigger auto-download for request ${matchedRequest.id}:`, err.message);
                         });
                     } else {
@@ -13004,7 +12992,7 @@ async function runScanLibraryInternal(libraryId: string, options?: { enableAi?: 
                                 status: "Searching"
                             }
                         });
-                        autoDownloadBookRequest(newRequest.id, cleanedTitle, author).catch(err => {
+                        runAsServerInternal(() => autoDownloadBookRequest(newRequest.id, cleanedTitle, author)).catch(err => {
                             console.error(`[SCANNER] Failed to trigger auto-download for request ${newRequest.id}:`, err.message);
                         });
                     }

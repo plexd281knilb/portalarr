@@ -8,7 +8,7 @@ Portalarr is a centralized, self-hosted dashboard designed to manage a media ser
 
 Portalarr adheres to strict Semantic Versioning (`MAJOR.MINOR.PATCH`):
 - **Production Release (`prod` branch, formerly `stable`)**: `v1.4.15` is the production milestone baseline release on `prod`.
-- **Beta Testing (`beta` branch)**: `v1.4.23` — 9-phase full codebase + test coverage audit hardening across Auth/Billing/Seerr/Books/Curation/Overlay/Maintainerr/Telemetry/AI/Scripts (internal helper extraction & `AsyncLocalStorage` context gating, SSRF/path-containment/upload hardening, Q4 early-renewal & deterministic payment ID fixes, NFT trace exclusions, monthly vs yearly payment tracking fixes + dead-asset cleanup & speed pass) undergoing testing before production deployment.
+- **Beta Testing (`beta` branch)**: `v1.4.24` — 9-phase full codebase + test coverage audit hardening across Auth/Billing/Seerr/Books/Curation/Overlay/Maintainerr/Telemetry/AI/Scripts (internal helper extraction & `AsyncLocalStorage` context gating, SSRF/path-containment/upload hardening, Q4 early-renewal & deterministic payment ID fixes, NFT trace exclusions, monthly vs yearly payment tracking fixes + dead-asset cleanup & speed pass) undergoing testing before production deployment.
 - **Active Feature Development (`dev` branch, formerly `main`)**: `v1.5.35` is the active feature release (future releases in testing on `dev`).
 - **Strict SemVer Policy**:
   - **PATCH increments (`1.3.22` ➔ `1.3.23`)**: Bug fixes, security patches, styling polish, telemetry adjustments, and non-breaking corrections.

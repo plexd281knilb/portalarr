@@ -992,8 +992,11 @@ export async function applySubscriptionForPayment(user: any, payment: ScrapedPay
         if (isCurrentlyActive) {
             try {
                 if (user.status === "EXPIRED" || user.status === "SUSPENDED" || user.status === "PENDING" || user.status === "TRIAL") {
-                    const { setUserTrialOrSubscriptionInternal } = await import("@/app/actions");
-                    await setUserTrialOrSubscriptionInternal(user.id, "CUSTOM", newExpiryDate.toISOString());
+                    const [{ setUserTrialOrSubscriptionInternal }, { runAsServerInternal }] = await Promise.all([
+                        import("@/app/actions"),
+                        import("@/lib/internal-context")
+                    ]);
+                    await runAsServerInternal(() => setUserTrialOrSubscriptionInternal(user.id, "CUSTOM", newExpiryDate.toISOString()));
                 }
             } catch (plexErr) {
                 logger.addLog("WARN", "PLEX", `[PAYMENT-SCRAPER] Failed to sync Plex sharing for "${user.username}": ${plexErr}`);
