@@ -15,7 +15,7 @@ export const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(
             <label
                 htmlFor={id}
                 className={cn(
-                    "relative inline-flex items-center justify-center h-4 w-4 shrink-0 rounded border cursor-pointer transition-all duration-200 select-none",
+                    "relative inline-flex items-center justify-center h-4 w-4 shrink-0 rounded-sm border cursor-pointer transition-all duration-200 select-none",
                     checked
                         ? "bg-primary border-primary text-primary-foreground shadow-xs shadow-primary/30"
                         : "bg-background/80 border-border/60 hover:border-primary/50",

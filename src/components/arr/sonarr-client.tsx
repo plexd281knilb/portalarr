@@ -60,9 +60,11 @@ import {
   Clock,
   Eye,
   EyeOff,
+  Inbox,
 } from "lucide-react";
 
 import ErrorTicketModal from "@/components/error-ticket-modal";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export function formatBytes(bytes: number, decimals = 2) {
   if (!+bytes) return "0 Bytes";
@@ -1252,9 +1254,12 @@ export default function SonarrClient({ initialInstances, initialInstancesError }
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
               ) : filteredQueue.length === 0 ? (
-                <div className="py-8 text-center text-sm text-muted-foreground border border-dashed border-border/40 rounded-xl bg-muted/10">
-                  Queue is empty or no items match your search.
-                </div>
+                <EmptyState
+                  compact
+                  icon={Inbox}
+                  title="Download queue is empty"
+                  description="Queue is empty or no items match your search."
+                />
               ) : (
                 <div className="space-y-2.5">
                   {filteredQueue.map((item: any) => {

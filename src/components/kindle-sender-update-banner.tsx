@@ -116,11 +116,11 @@ export function KindleSenderUpdateBanner({
     if (!hasKindleEmail) {
         return (
             <>
-                <div className={`p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-purple-950/70 via-indigo-950/50 to-purple-950/70 border border-purple-500/40 shadow-xl space-y-3 ${className}`}>
+                <div className={`p-4 sm:p-5 rounded-xl bg-gradient-to-r from-slate-900/95 via-[#141720] to-slate-900/95 border border-amber-500/35 shadow-xl space-y-3 ${className}`}>
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
                         <div className="space-y-1.5 flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                                <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5">
+                                <Badge className="bg-sky-500/15 text-sky-300 border-sky-500/30 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5">
                                     <Send className="h-3 w-3 mr-1 inline" /> Send-to-Kindle Setup
                                 </Badge>
                                 <Badge variant="outline" className="border-amber-500/40 text-amber-400 bg-amber-500/10 text-[10px]">
@@ -129,13 +129,13 @@ export function KindleSenderUpdateBanner({
                             </div>
 
                             <h4 className="text-sm sm:text-base font-extrabold text-white flex items-center gap-1.5">
-                                <Sparkles className="h-4 w-4 text-purple-400 shrink-0" />
-                                <span>⚡ Set Up 1-Click Send-to-Kindle Wireless Delivery</span>
+                                <Sparkles className="h-4 w-4 text-amber-400 shrink-0" />
+                                <span>Set Up 1-Click Send-to-Kindle Wireless Delivery</span>
                             </h4>
 
                             <p className="text-xs text-muted-foreground leading-relaxed max-w-4xl">
                                 Request or download any ebook and have it fly wirelessly straight to your Kindle e-reader or Kindle app automatically. Authorize our server sender (
-                                <span className="font-mono font-bold text-purple-300 bg-purple-500/10 px-1 py-0.5 rounded border border-purple-500/20">
+                                <span className="font-mono font-bold text-amber-300 bg-amber-500/10 px-1 py-0.5 rounded border border-amber-500/20">
                                     {senderEmail}
                                 </span>
                                 ) on Amazon at{" "}
@@ -143,7 +143,7 @@ export function KindleSenderUpdateBanner({
                                     href="https://www.amazon.com/hz/mycd/myx#/home/settings/payment"
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="text-purple-400 hover:text-purple-300 underline font-semibold break-all inline-flex items-center gap-0.5"
+                                    className="text-sky-400 hover:text-sky-300 underline font-semibold break-all inline-flex items-center gap-0.5"
                                 >
                                     <span>https://www.amazon.com/hz/mycd/myx#/home/settings/payment</span>
                                     <ExternalLink className="h-2.5 w-2.5 inline shrink-0" />
@@ -158,7 +158,7 @@ export function KindleSenderUpdateBanner({
                                 size="sm"
                                 variant="outline"
                                 asChild
-                                className="text-xs border-purple-500/40 text-purple-300 hover:bg-purple-500/10 h-8 sm:h-9 shrink-0 whitespace-nowrap"
+                                className="text-xs border-border/60 text-foreground hover:bg-muted/60 h-8 sm:h-9 shrink-0 whitespace-nowrap"
                             >
                                 <a
                                     href="https://www.amazon.com/hz/mycd/myx#/home/settings/payment"
@@ -175,7 +175,7 @@ export function KindleSenderUpdateBanner({
                                 type="button"
                                 size="sm"
                                 onClick={() => setSetupModalOpen(true)}
-                                className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs gap-1.5 shadow-md shadow-purple-900/30 h-8 sm:h-9 shrink-0 whitespace-nowrap cursor-pointer"
+                                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-xs gap-1.5 shadow-md h-8 sm:h-9 shrink-0 whitespace-nowrap cursor-pointer"
                             >
                                 <BookOpen className="h-3.5 w-3.5 shrink-0" />
                                 <span>Set Up Send-to-Kindle</span>
@@ -197,11 +197,11 @@ export function KindleSenderUpdateBanner({
     // CASE 2: User HAS Send-to-Kindle configured, but NEEDS sender update notice
     return (
         <>
-            <div className={`p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-purple-950/70 via-indigo-950/50 to-purple-950/70 border border-purple-500/40 shadow-xl space-y-3 ${className}`}>
+            <div className={`p-4 sm:p-5 rounded-xl bg-gradient-to-r from-slate-900/95 via-[#141720] to-slate-900/95 border border-amber-500/35 shadow-xl space-y-3 ${className}`}>
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
                     <div className="space-y-1.5 flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                            <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5">
+                            <Badge className="bg-sky-500/15 text-sky-300 border-sky-500/30 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5">
                                 <Send className="h-3 w-3 mr-1 inline" /> Send-to-Kindle Notice
                             </Badge>
                             <Badge variant="outline" className="border-amber-500/40 text-amber-400 bg-amber-500/10 text-[10px]">
@@ -216,12 +216,12 @@ export function KindleSenderUpdateBanner({
 
                         <h4 className="text-sm sm:text-base font-extrabold text-white flex items-center gap-1.5">
                             <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" />
-                            <span>⚡ Outbound Sender Updated to {senderEmail}</span>
+                            <span>Outbound Sender Updated to {senderEmail}</span>
                         </h4>
 
                         <p className="text-xs text-muted-foreground leading-relaxed max-w-4xl">
                             If you previously configured your Kindle settings with an older address, please update your Amazon Approved Personal Document E-mail List with{" "}
-                            <span className="font-mono font-bold text-purple-300 bg-purple-500/10 px-1 py-0.5 rounded border border-purple-500/20">
+                            <span className="font-mono font-bold text-amber-300 bg-amber-500/10 px-1 py-0.5 rounded border border-amber-500/20">
                                 {senderEmail}
                             </span>{" "}
                             at{" "}
@@ -229,7 +229,7 @@ export function KindleSenderUpdateBanner({
                                 href="https://www.amazon.com/hz/mycd/myx#/home/settings/payment"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-purple-400 hover:text-purple-300 underline font-semibold break-all inline-flex items-center gap-0.5"
+                                className="text-sky-400 hover:text-sky-300 underline font-semibold break-all inline-flex items-center gap-0.5"
                             >
                                 <span>https://www.amazon.com/hz/mycd/myx#/home/settings/payment</span>
                                 <ExternalLink className="h-2.5 w-2.5 inline shrink-0" />
@@ -244,7 +244,7 @@ export function KindleSenderUpdateBanner({
                             size="sm"
                             variant="outline"
                             asChild
-                            className="text-xs border-purple-500/40 text-purple-300 hover:bg-purple-500/10 h-8 sm:h-9 shrink-0 whitespace-nowrap"
+                            className="text-xs border-border/60 text-foreground hover:bg-muted/60 h-8 sm:h-9 shrink-0 whitespace-nowrap"
                         >
                             <a
                                 href="https://www.amazon.com/hz/mycd/myx#/home/settings/payment"

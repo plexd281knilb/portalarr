@@ -78,11 +78,11 @@ export function KindleSenderUpdateModal({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto bg-[#0e0e15]/95 backdrop-blur-xl border border-purple-500/30 shadow-2xl p-0 text-foreground scrollbar-thin">
-                {/* Glowing Top Banner */}
-                <div className="bg-gradient-to-r from-purple-950/80 via-indigo-950/60 to-purple-950/80 border-b border-purple-500/20 p-5 pb-4">
+            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto bg-[#0e0e15]/95 backdrop-blur-xl border border-amber-500/35 shadow-2xl p-0 text-foreground scrollbar-thin">
+                {/* Header Banner */}
+                <div className="bg-gradient-to-r from-slate-900/95 via-[#141720] to-slate-900/95 border-b border-border/60 p-5 pb-4">
                     <div className="flex items-center gap-2 mb-2">
-                        <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30 text-[10px] uppercase font-bold tracking-wider px-2 py-0.5">
+                        <Badge className="bg-sky-500/15 text-sky-300 border-sky-500/30 text-[10px] uppercase font-bold tracking-wider px-2 py-0.5">
                             <Send className="h-3 w-3 mr-1 inline" /> Send-to-Kindle Notice
                         </Badge>
                         <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-400 bg-amber-500/10">
@@ -90,15 +90,15 @@ export function KindleSenderUpdateModal({
                         </Badge>
                     </div>
                     <DialogTitle className="text-lg sm:text-xl font-extrabold tracking-tight text-white flex items-center gap-2">
-                        <span>⚡ Outbound Sender Updated to {senderEmail}</span>
+                        <span>Outbound Sender Updated to {senderEmail}</span>
                     </DialogTitle>
                     <DialogDescription className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
-                        If you previously configured your Kindle settings with an older address, please update your Amazon Approved Personal Document E-mail List with <span className="font-mono font-bold text-purple-300 bg-purple-500/10 px-1 py-0.5 rounded border border-purple-500/20">{senderEmail}</span> at{" "}
+                        If you previously configured your Kindle settings with an older address, please update your Amazon Approved Personal Document E-mail List with <span className="font-mono font-bold text-amber-300 bg-amber-500/10 px-1 py-0.5 rounded border border-amber-500/20">{senderEmail}</span> at{" "}
                         <a
                             href="https://www.amazon.com/hz/mycd/myx#/home/settings/payment"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-purple-400 hover:text-purple-300 underline font-semibold break-all inline-flex items-center gap-0.5"
+                            className="text-sky-400 hover:text-sky-300 underline font-semibold break-all inline-flex items-center gap-0.5"
                         >
                             <span>https://www.amazon.com/hz/mycd/myx#/home/settings/payment</span>
                             <ExternalLink className="h-2.5 w-2.5 inline shrink-0" />
@@ -112,7 +112,7 @@ export function KindleSenderUpdateModal({
                     {userKindleEmail && (
                         <div className="flex items-center justify-between p-2.5 rounded-lg bg-black/40 border border-border/40 text-[11px]">
                             <span className="text-muted-foreground">Your Configured Kindle Address:</span>
-                            <code className="font-mono font-semibold text-purple-300 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
+                            <code className="font-mono font-semibold text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
                                 {userKindleEmail}
                             </code>
                         </div>

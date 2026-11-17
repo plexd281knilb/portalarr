@@ -2456,7 +2456,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
 
                                         {/* Action Bar when users selected */}
                                         {selectedUserIds.length > 0 && (
-                                            <div className="p-3.5 bg-gradient-to-r from-amber-950/40 via-purple-950/30 to-slate-950/70 rounded-xl border border-amber-500/50 shadow-lg space-y-2.5 animate-in fade-in-50">
+                                            <div className="p-3.5 bg-gradient-to-r from-amber-950/35 via-slate-900/90 to-slate-950/80 rounded-xl border border-amber-500/45 shadow-lg space-y-2.5 animate-in fade-in-50">
                                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                                                     <div className="flex items-center gap-2">
                                                         <Sparkles className="h-4 w-4 text-amber-400 shrink-0" />
@@ -2465,7 +2465,7 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
                                                         </span>
                                                     </div>
                                                     {bulkUpdating && (
-                                                        <span className="text-xs text-amber-300 flex items-center gap-1.5 font-medium animate-pulse">
+                                                        <span className="text-xs text-amber-300 flex items-center gap-1.5 font-medium">
                                                             <Loader2 className="h-3.5 w-3.5 animate-spin" /> Processing bulk update...
                                                         </span>
                                                     )}
@@ -6438,12 +6438,12 @@ export default function AccessSettingsPage({ initialTab, onTabChange }: AccessSe
 
                 return (
                     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-                        <Card className="w-full max-w-lg border-purple-500/40 bg-[#0f0f15] text-foreground shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
-                            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-purple-500 via-pink-500 to-indigo-500" />
+                        <Card className="w-full max-w-lg border-amber-500/35 bg-[#0f0f15] text-foreground shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
+                            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-amber-500 via-amber-400 to-sky-500" />
                             <CardHeader className="pb-3 pt-5">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2.5">
-                                        <div className="p-2.5 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-300">
+                                        <div className="p-2.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-400">
                                             <Gift className="h-5 w-5" />
                                         </div>
                                         <div>

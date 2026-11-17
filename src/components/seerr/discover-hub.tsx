@@ -612,30 +612,30 @@ export function DiscoverHub({ isAdmin, initialTab = "discover", initialSection =
     return (
         <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-300">
             {/* Top Section Switcher: Main Discovery vs Kids & Family */}
-            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 p-2 sm:p-2.5 rounded-2xl bg-[#0e0e14] border border-border/60 shadow-lg min-w-0">
+            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 p-2 sm:p-2.5 rounded-xl bg-[#0e0e14] border border-border/60 shadow-lg min-w-0">
                 <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full xl:w-auto">
                     <button
                         onClick={() => handleSectionChange("main")}
-                        className={`flex items-center justify-center gap-2 px-3 sm:px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all duration-300 w-full sm:w-auto ${
+                        className={`flex items-center justify-center gap-2 px-3 sm:px-5 py-2.5 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 w-full sm:w-auto cursor-pointer ${
                             section === "main"
-                                ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/25 border border-blue-400/30 scale-[1.01]"
+                                ? "bg-sky-600 text-white shadow-md border border-sky-400/30"
                                 : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
                         }`}
                     >
                         <Clapperboard className="h-4 w-4 shrink-0" />
-                        <span className="truncate">🎬 Main Requests</span>
+                        <span className="truncate">Main Requests</span>
                     </button>
 
                     <button
                         onClick={() => handleSectionChange("kids")}
-                        className={`flex items-center justify-center gap-2 px-3 sm:px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all duration-300 w-full sm:w-auto ${
+                        className={`flex items-center justify-center gap-2 px-3 sm:px-5 py-2.5 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 w-full sm:w-auto cursor-pointer ${
                             section === "kids"
-                                ? "bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 text-white shadow-lg shadow-amber-500/25 border border-amber-300/40 scale-[1.01]"
+                                ? "bg-amber-500 text-slate-950 shadow-md border border-amber-300/40"
                                 : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
                         }`}
                     >
                         <Smile className="h-4 w-4 shrink-0" />
-                        <span className="truncate">🧸 Kids & Family</span>
+                        <span className="truncate">Kids & Family</span>
                         <Badge variant="outline" className="text-[10px] font-extrabold px-1.5 py-0 rounded bg-white/20 text-white border-white/40 hidden sm:inline-flex shrink-0">
                             PG Safe
                         </Badge>

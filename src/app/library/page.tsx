@@ -52,6 +52,7 @@ import { BookReaderModal } from "@/components/book-reader-modal";
 import { BookMatchModal } from "@/components/book-match-modal";
 import ErrorTicketModal from "@/components/error-ticket-modal";
 import FeatureGuideModal from "@/components/feature-guide-modal";
+import { EmptyState } from "@/components/ui/empty-state";
 import {
   Card,
   CardHeader,
@@ -909,7 +910,7 @@ function BookLibraryPageContent() {
             </div>
           </div>
         ) : (
-          <div className="relative aspect-[2/3] w-full bg-gradient-to-br from-indigo-950 via-slate-900 to-purple-950 overflow-hidden flex flex-col justify-between p-4 border-b border-muted/40 text-center select-none group-hover:from-indigo-900 group-hover:to-purple-900 transition-all duration-300">
+          <div className="relative aspect-[2/3] w-full bg-gradient-to-br from-slate-900 via-[#121622] to-slate-950 overflow-hidden flex flex-col justify-between p-4 border-b border-muted/40 text-center select-none group-hover:from-slate-800 group-hover:to-slate-900 transition-all duration-300">
             <div className="absolute top-2 right-2 flex flex-col items-end gap-1.5">
               <Badge className="bg-background/80 backdrop-blur text-foreground border border-muted/50 text-[10px] uppercase font-bold tracking-wider">
                 {book.fileType?.toUpperCase()}
@@ -3097,15 +3098,11 @@ function BookLibraryPageContent() {
                       ))}
                     </div>
                   ) : sortedBooks.length === 0 ? (
-                    <div className="text-center p-16 text-muted-foreground border border-dashed rounded-lg bg-muted/5">
-                      <Sparkles className="h-8 w-8 text-primary/30 mx-auto mb-2" />
-                      <p className="text-sm font-medium">
-                        No books in this library shelf.
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Upload some books or request one in the Request tab.
-                      </p>
-                    </div>
+                    <EmptyState
+                      icon={BookOpen}
+                      title="No books in this library shelf."
+                      description="Upload some books or request one in the Request tab."
+                    />
                   ) : groupBySeries ? (
                     <div className="space-y-8">
                       {Object.entries(seriesGroups)
@@ -3152,7 +3149,8 @@ function BookLibraryPageContent() {
                               className="space-y-4 border border-slate-800/80 p-4 rounded-xl bg-slate-900/10 animate-in fade-in duration-300"
                             >
                               <h3 className="text-sm font-extrabold text-primary flex items-center gap-2 border-b border-slate-800 pb-2">
-                                📚 {seriesName}
+                                <BookOpen className="h-4 w-4 shrink-0" />
+                                <span>{seriesName}</span>
                                 <Badge
                                   variant="outline"
                                   className="text-[10px] py-0 border-primary/40 text-primary font-bold bg-primary/5"
@@ -3303,7 +3301,8 @@ function BookLibraryPageContent() {
                       ).length > 0 && (
                         <div className="space-y-4 pt-4 border-t border-slate-800">
                           <h3 className="text-sm font-extrabold text-slate-300 flex items-center gap-2 border-b border-slate-800 pb-2">
-                            📖 Standalone & Uncategorized Books
+                            <BookOpen className="h-4 w-4 shrink-0 text-slate-400" />
+                            <span>Standalone &amp; Uncategorized Books</span>
                             <Badge
                               variant="outline"
                               className="text-[10px] py-0 border-slate-700 text-slate-300 font-bold bg-slate-900/45"
@@ -4279,7 +4278,8 @@ function BookLibraryPageContent() {
               <Card className="border-muted/60">
                 <CardHeader className="py-4 border-b border-muted/50">
                   <CardTitle className="text-base font-bold flex items-center gap-2">
-                    📖 Amazon Approved Senders Guide
+                    <BookOpen className="h-4 w-4 text-primary shrink-0" />
+                    <span>Amazon Approved Senders Guide</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-6 space-y-4 text-sm leading-relaxed">
@@ -4295,7 +4295,7 @@ function BookLibraryPageContent() {
                     <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400 mt-0.5" />
                     <div className="space-y-1">
                       <div className="font-bold text-amber-200">
-                        ⚡ Outbound Sender Updated to {serverSmtpFrom || "kindle@domshomelab.com"}
+                        Outbound Sender Updated to {serverSmtpFrom || "kindle@domshomelab.com"}
                       </div>
                       <p className="text-muted-foreground leading-relaxed">
                         If you previously configured your Kindle settings with an older address, please update your Amazon Approved Personal Document E-mail List with <code className="bg-black/50 px-1 py-0.5 rounded font-mono text-amber-300 font-bold">{serverSmtpFrom || "kindle@domshomelab.com"}</code> so your wireless Kindle deliveries continue uninterrupted.

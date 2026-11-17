@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { EmptyState } from "@/components/ui/empty-state";
 import { 
     Mail, 
     LifeBuoy, 
@@ -256,15 +257,15 @@ export default function TicketsClient({ initialData }: { initialData?: TicketsBo
             </div>
 
             {/* AI ASSISTANT FAST-FIX CALLOUT BANNER */}
-            <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-950/40 via-[#121218] to-cyan-950/30 border border-purple-500/40 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs sm:text-sm">
+            <div className="p-4 rounded-xl bg-gradient-to-r from-slate-900/95 via-[#121218] to-slate-900/90 border border-amber-500/30 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs sm:text-sm">
                 <div className="flex items-center gap-3 min-w-0">
-                    <div className="p-2.5 rounded-xl bg-gradient-to-tr from-purple-600 to-cyan-500 text-white shrink-0 shadow-md">
+                    <div className="p-2.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-400 shrink-0 shadow-sm">
                         <Bot className="h-5 w-5" />
                     </div>
                     <div>
                         <div className="font-bold text-foreground flex items-center gap-2 flex-wrap">
                             <span>Fix Playback or Media Issues in 30 Seconds</span>
-                            <Badge variant="outline" className="text-[10px] bg-purple-500/15 text-purple-300 border-purple-500/40 font-semibold">
+                            <Badge variant="outline" className="text-[10px] bg-amber-500/15 text-amber-300 border-amber-500/35 font-semibold">
                                 24/7 AI Master
                             </Badge>
                         </div>
@@ -278,7 +279,7 @@ export default function TicketsClient({ initialData }: { initialData?: TicketsBo
                     <Button 
                         asChild
                         size="sm"
-                        className="bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 text-white font-bold text-xs h-9 px-4 rounded-xl shadow-md transition-all active:scale-95"
+                        className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-xs h-9 px-4 rounded-md shadow-md transition-all active:scale-95"
                     >
                         <Link 
                             href="/?openAssistant=true"
@@ -288,7 +289,7 @@ export default function TicketsClient({ initialData }: { initialData?: TicketsBo
                                 }
                             }}
                         >
-                            <Sparkles className="h-3.5 w-3.5 mr-1.5" /> Ask AI Assistant First ➔
+                            <Sparkles className="h-3.5 w-3.5 mr-1.5" /> Ask AI Assistant First
                         </Link>
                     </Button>
                 </div>
@@ -529,25 +530,13 @@ export default function TicketsClient({ initialData }: { initialData?: TicketsBo
                 /* ========================================================================= */
                 <div className="space-y-6">
                     {tickets.length === 0 && !loading ? (
-                        <Card className="border-border/50 bg-[#121218]/60 backdrop-blur-md rounded-2xl text-center py-12 px-4 shadow-sm">
-                            <CardContent className="space-y-4 max-w-md mx-auto">
-                                <div className="h-16 w-16 mx-auto rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
-                                    <LifeBuoy className="h-8 w-8 text-amber-400" />
-                                </div>
-                                <div className="space-y-1">
-                                    <h3 className="text-lg font-bold text-foreground">No Support Tickets Found</h3>
-                                    <p className="text-xs text-muted-foreground leading-relaxed">
-                                        Need help with streaming issues, missing episodes, or library access? Open a ticket below and the server admin will assist you.
-                                    </p>
-                                </div>
-                                <Button 
-                                    onClick={() => setIsCreateOpen(true)}
-                                    className="bg-amber-500 hover:bg-amber-600 text-black font-semibold text-xs gap-2 shadow-md active:scale-95"
-                                >
-                                    <PlusCircle className="h-4 w-4" /> Open Your First Ticket
-                                </Button>
-                            </CardContent>
-                        </Card>
+                        <EmptyState
+                            icon={LifeBuoy}
+                            title="No Support Tickets Found"
+                            description="Need help with streaming issues, missing episodes, or library access? Open a ticket below and the server admin will assist you."
+                            actionLabel="Open Your First Ticket"
+                            onAction={() => setIsCreateOpen(true)}
+                        />
                     ) : (
                         <div className="grid gap-4 sm:gap-6">
                             {tickets.map((ticket) => {

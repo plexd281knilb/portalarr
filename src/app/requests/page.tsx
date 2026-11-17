@@ -1,8 +1,14 @@
+import type { Metadata } from "next";
 import { getCurrentUser, getSession } from "@/app/auth-actions";
 import { redirect } from "next/navigation";
 import { DiscoverHub } from "@/components/seerr/discover-hub";
 import { Inbox } from "lucide-react";
 import FeatureGuideModal from "@/components/feature-guide-modal";
+
+export const metadata: Metadata = {
+    title: "Media Requests",
+    description: "Track and manage movie, TV show, ebook, and audiobook requests."
+};
 
 export const dynamic = "force-dynamic";
 

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { BuildBadge } from "@/components/build-badge";
 import { 
     getPublicMediaApps, 
@@ -13,6 +14,11 @@ import { getUserRequestQuotaAction } from "@/app/seerr-actions";
 import { calculateProratedBilling } from "@/lib/prorated-billing";
 import { prisma } from "@/lib/prisma";
 import ReactMarkdown from "react-markdown";
+
+export const metadata: Metadata = {
+  title: "Dashboard",
+  description: "Overview of your homelab media server ecosystem, services, quotas, and announcements."
+};
 import remarkGfm from 'remark-gfm'; 
 import remarkBreaks from 'remark-breaks';
 import rehypeRaw from 'rehype-raw'; 

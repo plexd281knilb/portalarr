@@ -1480,8 +1480,9 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                 {isTrial ? "Trial User" : (user?.role === "ADMIN" ? "Administrator" : (user?.role === "SUPER_USER" ? "Super User" : "Full Member"))}
                             </Badge>
                             {currentAccountType !== "STANDARD" && (
-                                <Badge variant="outline" className="text-xs font-medium bg-muted/40 border-border">
-                                    {currentAccountType === "KID" ? "👶 Kid Account" : "📺 Living Room"}
+                                <Badge variant="outline" className="text-xs font-medium bg-muted/40 border-border inline-flex items-center gap-1">
+                                    {currentAccountType === "KID" ? <Baby className="h-3 w-3 shrink-0" /> : <Tv className="h-3 w-3 shrink-0" />}
+                                    <span>{currentAccountType === "KID" ? "Kid Account" : "Living Room"}</span>
                                 </Badge>
                             )}
                         </div>
@@ -1867,8 +1868,8 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                                     <span className="font-bold text-xs text-foreground truncate">{addon.name}</span>
                                                 </div>
                                                 {isFree ? (
-                                                    <Badge variant="outline" className="text-[10px] bg-emerald-500/15 text-emerald-400 border-emerald-500/30 font-semibold shrink-0">
-                                                        ✨ Free
+                                                    <Badge variant="outline" className="text-[10px] bg-emerald-500/15 text-emerald-400 border-emerald-500/30 font-semibold shrink-0 inline-flex items-center gap-1">
+                                                        <Sparkles className="h-2.5 w-2.5 shrink-0" /> Free
                                                     </Badge>
                                                 ) : (
                                                     <Badge variant="outline" className="text-[10px] bg-amber-500/15 text-amber-400 border-amber-500/30 font-semibold shrink-0">
@@ -1901,9 +1902,9 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                                         setAddonGuideType("JELLYFIN");
                                                         setAddonGuideModalOpen(true);
                                                     }}
-                                                    className="h-6 text-[10px] px-2 font-semibold gap-1 border-purple-500/40 text-purple-300 hover:bg-purple-500/10 cursor-pointer"
+                                                    className="h-6 text-[10px] px-2 font-semibold gap-1 border-sky-500/40 text-sky-300 hover:bg-sky-500/10 cursor-pointer"
                                                 >
-                                                    📖 Setup Guide
+                                                    <BookOpen className="h-3 w-3 shrink-0" /> Setup Guide
                                                 </Button>
                                             )}
                                             </div>
@@ -2298,10 +2299,10 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                     ) : (
                         <div className="space-y-3">
                             {/* STEP 1: JOIN DISCORD INVITE CTA */}
-                            <div className="p-3.5 rounded-xl bg-gradient-to-r from-indigo-500/15 via-purple-500/10 to-indigo-500/5 border border-indigo-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+                            <div className="p-3.5 rounded-xl bg-gradient-to-r from-slate-900/95 via-sky-950/20 to-slate-900/90 border border-sky-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
                                 <div className="space-y-1 min-w-0">
                                     <div className="flex items-center gap-2">
-                                        <Gamepad2 className="h-4 w-4 text-indigo-400 shrink-0" />
+                                        <Gamepad2 className="h-4 w-4 text-sky-400 shrink-0" />
                                         <span className="font-bold text-xs text-foreground">Step 1: Join the Discord Server</span>
                                     </div>
                                     <p className="text-[11px] text-muted-foreground leading-relaxed">
@@ -2312,7 +2313,7 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                                     href={discordInviteUrl || paymentConfig?.discordInviteUrl || "https://discord.gg/KNvUSmPtD3"}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-sm hover:shadow-indigo-500/20 shrink-0 w-full sm:w-auto"
+                                    className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold transition-all shadow-sm shrink-0 w-full sm:w-auto"
                                 >
                                     <Gamepad2 className="h-3.5 w-3.5" />
                                     <span>Join Discord Server</span>
@@ -3115,9 +3116,10 @@ export default function UserProfileClient({ initialBootstrap }: { initialBootstr
                             </p>
                         </div>
 
-                        <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-[11px] text-muted-foreground space-y-1">
-                            <span className="font-bold text-foreground text-xs block">
-                                {subType === "KID" ? "🧸 Kids Protection Policy" : "📺 Living Room Policy"}
+                        <div className="p-3 rounded-lg bg-sky-500/10 border border-sky-500/20 text-[11px] text-muted-foreground space-y-1">
+                            <span className="font-bold text-foreground text-xs flex items-center gap-1.5">
+                                {subType === "KID" ? <Baby className="h-3.5 w-3.5 text-sky-400 shrink-0" /> : <Tv className="h-3.5 w-3.5 text-sky-400 shrink-0" />}
+                                <span>{subType === "KID" ? "Kids Protection Policy" : "Living Room Policy"}</span>
                             </span>
                             <p>
                                 {subType === "KID"

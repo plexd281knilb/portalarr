@@ -91,13 +91,13 @@ export default function AdminUserSwitcher({
 
     const containerGradient = isImpersonating
         ? "bg-gradient-to-r from-amber-950/40 via-[#181410] to-[#12100d] border-amber-500/40 shadow-amber-950/20"
-        : "bg-gradient-to-r from-purple-950/20 via-[#14141c] to-[#101017] border-purple-500/30";
+        : "bg-gradient-to-r from-slate-900/90 via-[#14141c] to-[#101017] border-border/60";
 
     return (
-        <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 border rounded-2xl shadow-sm transition-all ${containerGradient}`}>
+        <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 border rounded-xl shadow-sm transition-all ${containerGradient}`}>
             <div className="flex items-start sm:items-center gap-2.5 min-w-0">
-                <div className={`p-1.5 rounded-lg shrink-0 mt-0.5 sm:mt-0 ${isImpersonating ? "bg-amber-500/20 text-amber-400" : "bg-purple-500/10 text-purple-400"}`}>
-                    <Eye className={`h-4 w-4 ${isImpersonating ? "animate-pulse" : ""}`} />
+                <div className={`p-1.5 rounded-lg shrink-0 mt-0.5 sm:mt-0 ${isImpersonating ? "bg-amber-500/20 text-amber-400" : "bg-sky-500/10 text-sky-400"}`}>
+                    <Eye className="h-4 w-4" />
                 </div>
                 <div className="min-w-0 space-y-0.5">
                     <div className="text-xs font-bold text-foreground flex flex-wrap items-center gap-1.5 sm:gap-2">
@@ -111,7 +111,7 @@ export default function AdminUserSwitcher({
                             className={`text-[9px] shrink-0 ${
                                 isImpersonating 
                                     ? "bg-amber-500/20 text-amber-300 border-amber-500/40 font-bold" 
-                                    : "bg-purple-500/10 text-purple-300 border-purple-500/30"
+                                    : "bg-sky-500/10 text-sky-300 border-sky-500/30"
                             }`}
                         >
                             {isImpersonating ? "Preview Active" : "Admin Tool"}

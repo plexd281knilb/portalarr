@@ -3716,7 +3716,7 @@ function SettingsPageContent() {
                     {hubSubTabs.servers === "telemetry" && (
                         <div className="space-y-6">
                                                 {/* DIRECT PLEX STREAM TELEMETRY BANNER */}
-                    <div className="p-4 rounded-xl bg-gradient-to-r from-amber-500/10 via-purple-500/5 to-sky-500/10 border border-amber-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md backdrop-blur-md">
+                    <div className="p-4 rounded-xl bg-gradient-to-r from-amber-500/10 via-slate-900/70 to-sky-500/10 border border-amber-500/25 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md backdrop-blur-md">
                         <div className="flex items-start gap-3">
                             <div className="p-2 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30 shrink-0 mt-0.5 sm:mt-0">
                                 <Zap className="h-4 w-4" />
@@ -5370,15 +5370,15 @@ function SettingsPageContent() {
                                                     onClick={() => setEmailProviderMode("resend")}
                                                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                                                         emailProviderMode === "resend"
-                                                            ? "bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-900/30 border border-purple-400/40 ring-1 ring-purple-400/50"
+                                                            ? "bg-amber-500/15 text-amber-200 shadow-sm border border-amber-500/40 ring-1 ring-amber-500/30"
                                                             : "text-muted-foreground hover:text-foreground hover:bg-white/[0.04]"
                                                     }`}
                                                 >
-                                                    <Zap className="h-3.5 w-3.5 text-amber-300" />
+                                                    <Zap className="h-3.5 w-3.5 text-amber-400" />
                                                     <span>Resend</span>
                                                     {emailProviderMode === "resend" ? (
                                                         <span className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 rounded-full font-mono ml-0.5">
-                                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> ACTIVE
+                                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> ACTIVE
                                                         </span>
                                                     ) : (
                                                         <span className="text-[10px] text-muted-foreground/60 ml-0.5">Standby</span>

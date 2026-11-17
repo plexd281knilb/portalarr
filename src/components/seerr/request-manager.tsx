@@ -23,6 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { EmptyState } from "@/components/ui/empty-state";
 import { 
     Clock, 
     CheckCircle2, 
@@ -633,13 +634,13 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                     <p className="text-xs text-muted-foreground animate-pulse">Loading media requests...</p>
                 </div>
             ) : filteredRequests.length === 0 ? (
-                <div className="p-12 text-center rounded-2xl bg-[#121218]/60 border border-dashed border-border/50 space-y-2">
-                    <Film className="h-8 w-8 mx-auto text-muted-foreground opacity-40" />
-                    <h3 className="text-sm font-bold text-foreground">No Requests Found</h3>
-                    <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                        There are currently no media requests matching your selected filters. Browse the media catalog to request new titles!
-                    </p>
-                </div>
+                <EmptyState
+                    icon={Film}
+                    title="No Requests Found"
+                    description="There are currently no media requests matching your selected filters. Browse the media catalog to request new titles!"
+                    actionLabel="Browse Discover"
+                    actionHref="/discover"
+                />
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 3xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-5 w-full min-w-0">
                     {filteredRequests.map((req) => {
@@ -653,15 +654,15 @@ export function RequestManager({ isAdmin, onSelectMedia }: RequestManagerProps) 
                         const formatBadgeColor = isAudiobook
                             ? "bg-amber-500/15 text-amber-300 border-amber-500/30"
                             : isBook
-                            ? "bg-purple-500/15 text-purple-300 border-purple-500/30"
+                            ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
                             : isTv
                             ? "bg-cyan-500/15 text-cyan-300 border-cyan-500/30"
-                            : "bg-blue-500/15 text-blue-300 border-blue-500/30";
+                            : "bg-sky-500/15 text-sky-300 border-sky-500/30";
 
                         const formatLabel = isAudiobook
-                            ? "🎧 Audiobook"
+                            ? "Audiobook"
                             : isBook
-                            ? "📖 Ebook"
+                            ? "Ebook"
                             : isTv
                             ? "TV Series"
                             : "Movie";

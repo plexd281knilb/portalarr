@@ -261,16 +261,16 @@ export function SuggestFixModal({ open, onOpenChange, userRole = "USER", usernam
 
     return (
         <Dialog open={open} onOpenChange={handleClose}>
-            <DialogContent className="sm:max-w-xl md:max-w-2xl bg-[#0e0e14] border-border/60 text-foreground p-0 overflow-hidden shadow-2xl rounded-2xl max-h-[92vh] flex flex-col">
-                <DialogHeader className="px-5 pt-5 pb-4 border-b border-border/40 bg-gradient-to-r from-amber-500/10 via-purple-500/10 to-indigo-500/10">
+            <DialogContent className="sm:max-w-xl md:max-w-2xl bg-[#0e0e14] border-border/60 text-foreground p-0 overflow-hidden shadow-2xl rounded-xl max-h-[92vh] flex flex-col">
+                <DialogHeader className="px-5 pt-5 pb-4 border-b border-border/40 bg-gradient-to-r from-amber-500/10 via-slate-900/90 to-slate-900/95">
                     <div className="flex items-center gap-2.5">
-                        <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 shrink-0">
+                        <div className="p-2 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30 shrink-0">
                             <Wrench className="h-5 w-5" />
                         </div>
                         <div className="min-w-0">
                             <DialogTitle className="text-base sm:text-lg font-bold flex items-center gap-2">
                                 <span>Suggest a Fix / Report Issue</span>
-                                <Badge variant="outline" className="text-[10px] bg-purple-500/15 text-purple-300 border-purple-500/30">
+                                <Badge variant="outline" className="text-[10px] bg-amber-500/15 text-amber-300 border-amber-500/30">
                                     <Sparkles className="h-2.5 w-2.5 mr-1" /> Full Member
                                 </Badge>
                             </DialogTitle>
@@ -446,7 +446,7 @@ export function SuggestFixModal({ open, onOpenChange, userRole = "USER", usernam
                             form="suggest-fix-form"
                             size="sm"
                             disabled={submitting}
-                            className="gap-2 bg-gradient-to-r from-amber-600 via-purple-600 to-indigo-600 hover:from-amber-500 hover:via-purple-500 hover:to-indigo-500 text-white font-semibold text-xs h-9 shadow-md shadow-amber-950/40 w-full sm:w-auto shrink-0 whitespace-nowrap"
+                            className="gap-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-xs h-9 shadow-md w-full sm:w-auto shrink-0 whitespace-nowrap"
                         >
                             {submitting ? (
                                 <>

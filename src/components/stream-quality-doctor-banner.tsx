@@ -104,15 +104,15 @@ export default function StreamQualityDoctorBanner({ initialAlert }: StreamQualit
 
     return (
         <>
-            <div className={`relative overflow-hidden rounded-2xl border transition-all duration-300 shadow-lg backdrop-blur-md ${
+            <div className={`relative overflow-hidden rounded-xl border transition-all duration-300 shadow-lg backdrop-blur-md ${
                 isError 
                     ? "bg-gradient-to-r from-red-950/60 via-slate-900/90 to-red-950/40 border-red-500/40" 
-                    : "bg-gradient-to-r from-amber-950/70 via-slate-900/90 to-indigo-950/50 border-amber-500/40"
+                    : "bg-gradient-to-r from-amber-950/50 via-slate-900/95 to-slate-900/95 border-amber-500/40"
             }`}>
                 <div className="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="flex items-start gap-3.5 min-w-0">
-                        <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 shrink-0 mt-0.5 shadow-inner">
-                            <Stethoscope className="h-5 w-5 animate-pulse" />
+                        <div className="p-2.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-400 shrink-0 mt-0.5 shadow-inner">
+                            <Stethoscope className="h-5 w-5" />
                         </div>
 
                         <div className="space-y-1.5 min-w-0">
@@ -127,7 +127,7 @@ export default function StreamQualityDoctorBanner({ initialAlert }: StreamQualit
                                 </Badge>
 
                                 {alert.isActiveNow && (
-                                    <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-[9px] font-semibold animate-pulse">
+                                    <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-[9px] font-semibold">
                                         Streaming Now
                                     </Badge>
                                 )}
@@ -145,7 +145,7 @@ export default function StreamQualityDoctorBanner({ initialAlert }: StreamQualit
                             </p>
 
                             <div className="flex items-center gap-2 text-[11px] text-amber-300 font-medium pt-0.5">
-                                <span className="font-bold uppercase tracking-wide text-amber-400">⚡ Quick Fix:</span>
+                                <span className="font-bold uppercase tracking-wide text-amber-400">Quick Fix:</span>
                                 <span className="truncate">{diag.quickFix}</span>
                             </div>
                         </div>
