@@ -173,9 +173,9 @@ export default function ImpersonationBanner() {
           className="h-7 px-3 bg-black/85 hover:bg-black text-amber-300 hover:text-white border border-amber-400/40 text-xs font-bold gap-1.5 shadow-md active:scale-95 transition-all hover:ring-2 hover:ring-amber-300/40 cursor-pointer"
         >
           {exiting ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-800 dark:text-amber-300" />
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-300" />
           ) : (
-            <Undo2 className="w-3.5 h-3.5 text-amber-800 dark:text-amber-300" />
+            <Undo2 className="w-3.5 h-3.5 text-amber-300" />
           )}
           <span className="hidden sm:inline">Return to Admin ({status.adminUsername || "Admin"})</span>
           <span className="sm:hidden">Exit ({status.adminUsername || "Admin"})</span>

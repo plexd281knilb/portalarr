@@ -3790,11 +3790,12 @@ async function runTestSuite() {
         if (!globalsCss.includes("color-scheme: light;") || !globalsCss.includes("@variant dark")) {
             throw new Error("globals.css must declare light root color-scheme and @variant dark selector");
         }
-        const unprefixedDarkSurfaceRe = /(?<![\w:-])(?:bg-\[#(?:0e0e15|121218)\]|prose-invert)\b/;
+        const unprefixedDarkSurfaceRe = /(?<![\w:-])(?:(?:bg|from|via|to)-\[#(?:0e0e15|121218|14141c|181410|101017|12100d)\]|from-slate-900|from-amber-950|prose-invert)\b/;
         for (const relUiFile of [
             "src/app/page.tsx",
             "src/components/layout-wrapper.tsx",
             "src/components/sidebar.tsx",
+            "src/components/admin-user-switcher.tsx",
             "src/components/admin-detailed-streams.tsx",
             "src/components/error-ticket-modal.tsx",
             "src/components/ai-server-assistant.tsx",
