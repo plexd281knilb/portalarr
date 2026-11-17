@@ -2,8 +2,34 @@ import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 import { getJwtSecret } from "@/lib/auth-secret";
 import prisma from "@/lib/prisma";
+import { checkBookLibraryAccess } from "@/lib/book-route-auth";
 import fs from "fs";
 import path from "path";
+
+function isSafePublicCoverUrl(rawUrl: string): boolean {
+    try {
+        const parsed = new URL(rawUrl);
+        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+        const host = parsed.hostname.toLowerCase();
+        if (
+            host === "localhost" ||
+            host === "127.0.0.1" ||
+            host === "::1" ||
+            host === "0.0.0.0" ||
+            host.endsWith(".local") ||
+            host.endsWith(".internal") ||
+            /^10\./.test(host) ||
+            /^192\.168\./.test(host) ||
+            /^169\.254\./.test(host) ||
+            /^172\.(1[6-9]|2\d|3[0-1])\./.test(host)
+        ) {
+            return false;
+        }
+        return true;
+    } catch {
+        return false;
+    }
+}
 function generateFallbackBookSvg(title: string, author: string, isAudiobook: boolean): string {
     const cleanTitle = (title || "Book").slice(0, 40);
     const cleanAuthor = (author || "Unknown Author").slice(0, 30);
@@ -35,10 +61,25 @@ export async function GET(req: NextRequest) {
         const session = req.cookies.get("session")?.value;
         if (!session) return new NextResponse("Unauthorized", { status: 401 });
         
+        let payload: any;
         try {
-            await jwtVerify(session, getJwtSecret());
+            const decoded = await jwtVerify(session, getJwtSecret());
+            payload = decoded.payload;
         } catch (e) {
             return new NextResponse("Unauthorized", { status: 401 });
+        }
+
+        const userId = String(payload?.userId || payload?.id || "");
+        if (!userId) return new NextResponse("Unauthorized", { status: 401 });
+        const dbUser = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { id: true, username: true, email: true, role: true, status: true }
+        });
+        if (!dbUser) return new NextResponse("Unauthorized", { status: 401 });
+        const role = String(dbUser.role || "").toUpperCase();
+        const status = String(dbUser.status || "").toUpperCase();
+        if (role !== "ADMIN" && (status === "PENDING" || status === "REJECTED" || status === "SUSPENDED" || status === "EXPIRED")) {
+            return new NextResponse("Forbidden", { status: 403 });
         }
 
         const searchParams = req.nextUrl.searchParams;
@@ -48,10 +89,20 @@ export async function GET(req: NextRequest) {
 
         // 1. Check Book table
         const book = await prisma.book.findUnique({
-            where: { id }
+            where: { id },
+            include: { library: true }
         });
 
         if (book) {
+            if (book.library && !checkBookLibraryAccess(
+                book.library.allowedUsers,
+                book.library.restrictedUsers || "",
+                dbUser.username || "",
+                dbUser.email || "",
+                dbUser.role || ""
+            )) {
+                return new NextResponse("Access Denied", { status: 403 });
+            }
             if (book.filePath) {
                 let dirPath = "";
                 try {
@@ -81,7 +132,7 @@ export async function GET(req: NextRequest) {
             }
 
             // Fallback to book.coverUrl if remote URL
-            if (book.coverUrl && book.coverUrl.startsWith("http")) {
+            if (book.coverUrl && isSafePublicCoverUrl(book.coverUrl)) {
                 const cleanRemoteUrl = book.coverUrl.replace(/[\?&]lib=[a-zA-Z0-9_\-]+/, "");
                 try {
                     const imgRes = await fetch(cleanRemoteUrl, { signal: AbortSignal.timeout(8000) });
@@ -96,14 +147,16 @@ export async function GET(req: NextRequest) {
                         });
                     }
                 } catch (e) {
-                    return NextResponse.redirect(cleanRemoteUrl);
+                    if (isSafePublicCoverUrl(cleanRemoteUrl)) {
+                        return NextResponse.redirect(cleanRemoteUrl);
+                    }
                 }
             }
             // Dynamic fetch fallback if coverUrl is missing or invalid
             try {
                 const { fetchBookCover } = await import("@/app/actions");
                 const dynamicCover = await fetchBookCover(book.title, book.author || "Unknown Author", book.mediaType || "ebook");
-                if (dynamicCover && dynamicCover !== "local" && dynamicCover.startsWith("http")) {
+                if (dynamicCover && dynamicCover !== "local" && isSafePublicCoverUrl(dynamicCover)) {
                     const imgRes = await fetch(dynamicCover, { signal: AbortSignal.timeout(8000) });
                     if (imgRes.ok) {
                         const imgBuffer = await imgRes.arrayBuffer();
@@ -139,9 +192,9 @@ export async function GET(req: NextRequest) {
 
         if (bookReq && bookReq.coverUrl) {
             const cleanCoverUrl = bookReq.coverUrl.replace(/[\?&]lib=[a-zA-Z0-9_\-]+/, "");
-            if (cleanCoverUrl.startsWith("http")) {
+            if (isSafePublicCoverUrl(cleanCoverUrl)) {
                 try {
-                    const imgRes = await fetch(cleanCoverUrl);
+                    const imgRes = await fetch(cleanCoverUrl, { signal: AbortSignal.timeout(8000) });
                     if (imgRes.ok) {
                         const imgBuffer = await imgRes.arrayBuffer();
                         const cType = imgRes.headers.get("content-type") || "image/jpeg";

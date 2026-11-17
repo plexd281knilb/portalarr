@@ -2250,8 +2250,8 @@ export async function sendBroadcastEmailAction(payload: {
             continue;
         }
 
-        // Respect member opt-out for announcements during mass broadcasts
-        if (payload.userIds.length > 1 && user.notificationPreference && user.notificationPreference.emailAnnouncements === false) {
+        // Respect member opt-out for announcements during broadcasts
+        if (user.notificationPreference && user.notificationPreference.emailAnnouncements === false) {
             continue;
         }
 
@@ -2294,7 +2294,7 @@ export async function sendBroadcastEmailAction(payload: {
         if (mailRes.success) {
             if (mailRes.queued) {
                 queuedCount++;
-            } else {
+            } else if (mailRes.sent) {
                 sentCount++;
             }
         } else {
@@ -3488,7 +3488,10 @@ export async function revokePlexAccessForUserInternal(
         if (user.id) {
             await prisma.user.update({
                 where: { id: user.id },
-                data: { plexLibrarySectionIds: "", selectedPlexLibrarySectionIds: "" }
+                data: {
+                    plexLibrarySectionIds: "",
+                    selectedPlexLibrarySectionIds: ""
+                }
             }).catch(() => {});
         }
 
@@ -3701,7 +3704,20 @@ export async function expireDueTrialsAndSubscriptionsInternal() {
                     }
                 });
 
+                await prisma.user.updateMany({
+                    where: { parentUserId: u.id },
+                    data: {
+                        status: "EXPIRED",
+                        plexLibrarySectionIds: "",
+                        selectedPlexLibrarySectionIds: ""
+                    }
+                }).catch(() => {});
+
                 await revokePlexAccessForUserInternal(u, "Your trial or subscription period has ended. Please renew your access on DomsHomeLab.");
+                const childSubAccounts = await prisma.user.findMany({ where: { parentUserId: u.id } });
+                for (const child of childSubAccounts) {
+                    await revokePlexAccessForUserInternal(child, "Parent account trial or subscription period ended.").catch(() => {});
+                }
                 logger.addLog("SUCCESS", "PLEX", `[TRIAL-EXPIRATION] Account for "${u.username}" expired; Plex library access revoked and active sessions terminated.`);
 
                 // Dispatch trial_expired notification to the user if enabled
@@ -4868,6 +4884,7 @@ function getNotificationCategoryForTemplate(templateId?: string): {
         templateId === "seerr_request_approved" ||
         templateId === "seerr_request_auto_approved" ||
         templateId === "seerr_request_declined" ||
+        templateId === "seerr_request_failed" ||
         templateId === "media_request_approved" ||
         templateId === "request_approved" ||
         templateId === "book_request_approved"
@@ -4890,6 +4907,9 @@ function getNotificationCategoryForTemplate(templateId?: string): {
         templateId === "trial_expiring_soon" ||
         templateId === "trial_expired" ||
         templateId === "subscription_expired" ||
+        templateId === "subscription_activated" ||
+        templateId === "payment_received" ||
+        templateId === "payment_underpayment" ||
         templateId === "payment_reminder"
     ) {
         return { field: "emailSubscriptionReminders", label: "Subscription & Renewal Reminders" };
@@ -4935,6 +4955,9 @@ export async function getLinkedEmailCategoryForTemplate(templateId?: string): Pr
         t.startsWith("subscription_renewal_reminder") ||
         t.includes("payment_reminder") ||
         t.includes("payment_confirmed") ||
+        t.includes("payment_received") ||
+        t.includes("payment_underpayment") ||
+        t.includes("subscription_activated") ||
         t.includes("trial_expiring") ||
         t.includes("trial_expired") ||
         t.includes("subscription_expired") ||
@@ -4963,10 +4986,12 @@ export async function getLinkedEmailCategoryForTemplate(templateId?: string): Pr
         return "receiveMediaReady";
     }
 
-    // 4. Request Approved
+    // 4. Request Approved / Status Updates
     if (
         t === "seerr_request_approved" || 
         t === "seerr_request_auto_approved" || 
+        t === "seerr_request_declined" ||
+        t === "seerr_request_failed" ||
         t === "request_approved"
     ) {
         return "receiveRequestApproved";
@@ -5080,21 +5105,65 @@ export async function sendOrQueueEmail(options: {
         // SECOND GATE: User-Level Notification Preferences
         // ==========================================
         // Evaluates whether the targeted recipient user has opted out of this specific notification category.
-        // Admin alerts (isToAdminOnly), 1:1 manual admin emails (manual_email), and security notices are never blocked.
-        if (!isToAdminOnly && options.templateId && options.templateId !== "manual_email") {
+        // Note: Primary inbox opt-out skips the primary send, while still allowing opted-in linked inboxes to receive fan-out.
+        let skipPrimaryOptOut = false;
+        if (!options.isLinkedInboxDispatch && !isToAdminOnly && options.templateId && options.templateId !== "manual_email") {
             const notifCategory = getNotificationCategoryForTemplate(options.templateId);
             if (notifCategory && targetUserRecord?.notificationPreference) {
                 const isPrefEnabled = (targetUserRecord.notificationPreference as any)[notifCategory.field];
                 if (isPrefEnabled === false) {
+                    skipPrimaryOptOut = true;
                     logger.addLog(
                         "INFO",
                         "EMAIL",
-                        `[USER-PREFERENCE-GATE] User "${targetUserRecord.username}" opted out of ${notifCategory.label} emails. Skipping "${options.subject}" (template: ${options.templateId}).`
+                        `[USER-PREFERENCE-GATE] User "${targetUserRecord.username}" opted out of ${notifCategory.label} emails for primary inbox. Evaluating linked inboxes before skipping "${options.subject}".`
                     );
-                    console.log(`[USER-PREFERENCE-GATE] User "${targetUserRecord.username}" opted out of ${notifCategory.label}. Skipping email "${options.subject}"`);
-                    return { success: true, sent: false, queued: false };
                 }
             }
+        }
+
+        const dispatchLinkedInboxes = async () => {
+            if (!options.isLinkedInboxDispatch && !isToAdminOnly && options.templateId && targetUserRecord?.id) {
+                const linkedCategory = await getLinkedEmailCategoryForTemplate(options.templateId);
+                if (linkedCategory) {
+                    try {
+                        const linkedInboxes = (targetUserRecord.linkedEmails && targetUserRecord.linkedEmails.length > 0)
+                            ? targetUserRecord.linkedEmails.filter((l: any) => Boolean(l[linkedCategory]) && (!l.verificationToken || l.isVerified))
+                            : await prisma.userLinkedEmail.findMany({
+                                where: {
+                                    userId: targetUserRecord.id,
+                                    [linkedCategory]: true,
+                                    OR: [{ verificationToken: null }, { isVerified: true }]
+                                }
+                            });
+
+                        for (const linked of linkedInboxes) {
+                            const cleanLinkedEmail = (linked.email || "").trim().toLowerCase();
+                            if (cleanLinkedEmail && !recipientList.includes(cleanLinkedEmail)) {
+                                const linkedNote = `<div style="margin-bottom:14px;padding:8px 12px;background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.25);border-radius:8px;font-size:12px;color:#94a3b8;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;">📬 Delivered to linked inbox <strong>${cleanLinkedEmail}</strong>${linked.label ? ` (${linked.label})` : ""} for <strong>${targetUserRecord.name || targetUserRecord.username}</strong></div>`;
+                                const linkedHtml = options.html ? (linkedNote + options.html) : options.html;
+
+                                await sendOrQueueEmail({
+                                    ...options,
+                                    to: cleanLinkedEmail,
+                                    html: linkedHtml,
+                                    isLinkedInboxDispatch: true,
+                                    skipAdminAlert: true
+                                }).catch(err => {
+                                    console.warn(`[LINKED-INBOX-DISPATCH-ERROR] Failed to dispatch to linked inbox ${cleanLinkedEmail}:`, err?.message || err);
+                                });
+                            }
+                        }
+                    } catch (linkedErr: any) {
+                        console.warn("[LINKED-INBOX-FANOUT-ERROR]:", linkedErr?.message || linkedErr);
+                    }
+                }
+            }
+        };
+
+        if (skipPrimaryOptOut) {
+            await dispatchLinkedInboxes();
+            return { success: true, sent: false, queued: false };
         }
 
         // Evaluate whether this email requires approval:
@@ -5230,41 +5299,7 @@ export async function sendOrQueueEmail(options: {
         // ==========================================
         // FAN-OUT TO LINKED / FAMILY INBOXES
         // ==========================================
-        if (!options.isLinkedInboxDispatch && !isToAdminOnly && options.templateId && targetUserRecord?.id) {
-            const linkedCategory = await getLinkedEmailCategoryForTemplate(options.templateId);
-            if (linkedCategory) {
-                try {
-                    const linkedInboxes = (targetUserRecord.linkedEmails && targetUserRecord.linkedEmails.length > 0)
-                        ? targetUserRecord.linkedEmails.filter((l: any) => Boolean(l[linkedCategory]))
-                        : await prisma.userLinkedEmail.findMany({
-                            where: {
-                                userId: targetUserRecord.id,
-                                [linkedCategory]: true
-                            }
-                        });
-
-                    for (const linked of linkedInboxes) {
-                        const cleanLinkedEmail = (linked.email || "").trim().toLowerCase();
-                        if (cleanLinkedEmail && !recipientList.includes(cleanLinkedEmail)) {
-                            const linkedNote = `<div style="margin-bottom:14px;padding:8px 12px;background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.25);border-radius:8px;font-size:12px;color:#94a3b8;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;">📬 Delivered to linked inbox <strong>${cleanLinkedEmail}</strong>${linked.label ? ` (${linked.label})` : ""} for <strong>${targetUserRecord.name || targetUserRecord.username}</strong></div>`;
-                            const linkedHtml = options.html ? (linkedNote + options.html) : options.html;
-
-                            await sendOrQueueEmail({
-                                ...options,
-                                to: cleanLinkedEmail,
-                                html: linkedHtml,
-                                isLinkedInboxDispatch: true,
-                                skipAdminAlert: true
-                            }).catch(err => {
-                                console.warn(`[LINKED-INBOX-DISPATCH-ERROR] Failed to dispatch to linked inbox ${cleanLinkedEmail}:`, err?.message || err);
-                            });
-                        }
-                    }
-                } catch (linkedErr: any) {
-                    console.warn("[LINKED-INBOX-FANOUT-ERROR]:", linkedErr?.message || linkedErr);
-                }
-            }
-        }
+        await dispatchLinkedInboxes();
 
         return { success: true, sent: true, logId: createdLog?.id };
     } catch (e: any) {
@@ -5377,13 +5412,22 @@ export async function approveAdminApprovalAction(approvalId: string) {
         const session: any = await verifyAdmin();
         await ensureSchemaColumns();
 
+        // Atomically claim PENDING -> PROCESSING before executing side effects (prevents double-execution races)
+        const claim = await prisma.adminApproval.updateMany({
+            where: { id: approvalId, status: "PENDING" },
+            data: {
+                status: "PROCESSING",
+                approvedBy: session.username || "Admin"
+            }
+        });
+
         const approval = await prisma.adminApproval.findUnique({
             where: { id: approvalId },
             include: { user: true }
         });
 
         if (!approval) return { success: false, error: "Approval request not found" };
-        if (approval.status !== "PENDING") {
+        if (claim.count !== 1) {
             return { success: false, error: `This item has already been ${approval.status.toLowerCase()}.` };
         }
 
@@ -5391,113 +5435,148 @@ export async function approveAdminApprovalAction(approvalId: string) {
         try {
             payload = JSON.parse(approval.payload);
         } catch {
+            await prisma.adminApproval.update({
+                where: { id: approvalId },
+                data: { status: "PENDING" }
+            }).catch(() => {});
             return { success: false, error: "Invalid approval payload format." };
         }
 
         // Execute action based on type
-        if (approval.type === "EMAIL") {
-            const sendRes = await sendOrQueueEmail({
-                to: payload.to,
-                from: payload.from,
-                subject: payload.subject,
-                html: payload.html,
-                text: payload.text,
-                templateId: payload.templateId,
-                targetUser: payload.targetUser,
-                userId: approval.userId || undefined,
-                attachments: payload.attachments,
-                bypassApproval: true,
-                sendMode: "APPROVED_AND_SENT",
-                approvalId: approval.id,
-                approvedBy: session?.username || "Admin",
-                approvedAt: new Date()
-            });
-            if (!sendRes.success) {
-                return { success: false, error: `Email dispatch failed: ${sendRes.error}` };
-            }
-        } else if (approval.type === "PLEX_ACCESS_GRANT" || approval.type === "PLEX_ACCESS_REVOKE") {
-            if (payload.action === "EXPIRE_SUSPEND") {
-                const targetUser = approval.user || await prisma.user.findUnique({ where: { id: payload.userId } });
-                if (targetUser) {
-                    const targetStatus = (targetUser.status === "SUSPENDED" || targetUser.status === "REJECTED") ? targetUser.status : "EXPIRED";
-                    await prisma.user.update({
-                        where: { id: targetUser.id },
-                        data: { status: targetStatus, plexLibrarySectionIds: "" }
-                    });
-                    await revokePlexAccessForUserInternal(targetUser, payload.reason || "Subscription/trial ended.", { bypassApproval: true });
+        try {
+            if (approval.type === "EMAIL") {
+                const sendRes = await sendOrQueueEmail({
+                    to: payload.to,
+                    from: payload.from,
+                    subject: payload.subject,
+                    html: payload.html,
+                    text: payload.text,
+                    templateId: payload.templateId,
+                    targetUser: payload.targetUser,
+                    userId: approval.userId || payload.userId || undefined,
+                    attachments: payload.attachments,
+                    bypassApproval: true,
+                    sendMode: "APPROVED_AND_SENT",
+                    approvalId: approval.id,
+                    approvedBy: session?.username || "Admin",
+                    approvedAt: new Date()
+                });
+                if (!sendRes.success) {
+                    await prisma.adminApproval.update({
+                        where: { id: approvalId },
+                        data: { status: "PENDING" }
+                    }).catch(() => {});
+                    return { success: false, error: `Email dispatch failed: ${sendRes.error}` };
                 }
-            } else if (payload.action === "INVITE_TRIAL_PLEX") {
-                const targetUser = approval.user || await prisma.user.findUnique({ where: { id: payload.userId } });
-                const settings = await prisma.settings.findUnique({ where: { id: "global" } });
-                if (targetUser && settings?.mainPlexToken) {
-                    const adminToken = decryptData(settings.mainPlexToken);
-                    const rawKeys: string[] = payload.selectedKeys || [];
-                    const cleanPlex = payload.cleanPlex || targetUser.plexEmail || targetUser.plexUsername || targetUser.email || targetUser.username;
-                    const servers = await getPlexServers(adminToken);
-                    const serverSectionsMap = new Map<string, number[]>();
-                    for (const key of rawKeys) {
-                        if (key.includes(":")) {
-                            const [srvId, secStr] = key.split(":");
-                            const secId = parseInt(secStr, 10);
-                            if (!isNaN(secId)) {
-                                const list = serverSectionsMap.get(srvId) || [];
-                                list.push(secId);
-                                serverSectionsMap.set(srvId, list);
-                            }
-                        } else {
-                            const secId = parseInt(key, 10);
-                            if (!isNaN(secId) && servers.length > 0) {
-                                const primaryId = servers[0].clientIdentifier;
-                                const list = serverSectionsMap.get(primaryId) || [];
-                                list.push(secId);
-                                serverSectionsMap.set(primaryId, list);
-                            }
-                        }
-                    }
-                    for (const server of servers) {
-                        const srvId = server.clientIdentifier;
-                        const sections = serverSectionsMap.get(srvId) || [];
-                        if (sections.length > 0) {
-                            await invitePlexFriendAndShare(adminToken, srvId, cleanPlex, sections);
-                        }
-                    }
-                }
-            } else if (payload.action === "SYNC_SHARE") {
-                const targetUser = approval.user || await prisma.user.findUnique({ where: { id: payload.userId } });
-                const settings = await prisma.settings.findUnique({ where: { id: "global" } });
-                if (targetUser && settings?.mainPlexToken) {
-                    const adminToken = decryptData(settings.mainPlexToken);
-                    const rawKeys: string[] = payload.selectedKeys || [];
-                    await syncUserPlexShareInternal(adminToken, targetUser, rawKeys);
-                    if (rawKeys.length > 0) {
+            } else if (approval.type === "PLEX_ACCESS_GRANT" || approval.type === "PLEX_ACCESS_REVOKE") {
+                if (payload.action === "EXPIRE_SUSPEND") {
+                    const targetUser = approval.user || await prisma.user.findUnique({ where: { id: payload.userId } });
+                    if (targetUser) {
+                        const targetStatus = (targetUser.status === "SUSPENDED" || targetUser.status === "REJECTED") ? targetUser.status : "EXPIRED";
                         await prisma.user.update({
                             where: { id: targetUser.id },
-                            data: { plexLibrarySectionIds: rawKeys.join(","), selectedPlexLibrarySectionIds: rawKeys.join(",") }
+                            data: { status: targetStatus, plexLibrarySectionIds: "", selectedPlexLibrarySectionIds: "" }
+                        });
+                        await prisma.user.updateMany({
+                            where: { parentUserId: targetUser.id },
+                            data: { status: targetStatus, plexLibrarySectionIds: "", selectedPlexLibrarySectionIds: "" }
                         }).catch(() => {});
+                        await revokePlexAccessForUserInternal(targetUser, payload.reason || "Subscription/trial ended.", { bypassApproval: true });
+                        const childSubAccounts = await prisma.user.findMany({ where: { parentUserId: targetUser.id } });
+                        for (const child of childSubAccounts) {
+                            await revokePlexAccessForUserInternal(child, payload.reason || "Parent subscription/trial ended.", { bypassApproval: true }).catch(() => {});
+                        }
+                    }
+                } else if (payload.action === "INVITE_TRIAL_PLEX") {
+                    const targetUser = approval.user || await prisma.user.findUnique({ where: { id: payload.userId } });
+                    const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+                    if (targetUser && settings?.mainPlexToken) {
+                        const adminToken = decryptData(settings.mainPlexToken);
+                        const rawKeys: string[] = payload.selectedKeys || [];
+                        const cleanPlex = payload.cleanPlex || targetUser.plexEmail || targetUser.plexUsername || targetUser.email || targetUser.username;
+                        const servers = await getPlexServers(adminToken);
+                        const serverSectionsMap = new Map<string, number[]>();
+                        for (const key of rawKeys) {
+                            if (key.includes(":")) {
+                                const [srvId, secStr] = key.split(":");
+                                const secId = parseInt(secStr, 10);
+                                if (!isNaN(secId)) {
+                                    const list = serverSectionsMap.get(srvId) || [];
+                                    list.push(secId);
+                                    serverSectionsMap.set(srvId, list);
+                                }
+                            } else {
+                                const secId = parseInt(key, 10);
+                                if (!isNaN(secId) && servers.length > 0) {
+                                    const primaryId = servers[0].clientIdentifier;
+                                    const list = serverSectionsMap.get(primaryId) || [];
+                                    list.push(secId);
+                                    serverSectionsMap.set(primaryId, list);
+                                }
+                            }
+                        }
+                        for (const server of servers) {
+                            const srvId = server.clientIdentifier;
+                            const sections = serverSectionsMap.get(srvId) || [];
+                            if (sections.length > 0) {
+                                await invitePlexFriendAndShare(adminToken, srvId, cleanPlex, sections);
+                            }
+                        }
+                    }
+                } else if (payload.action === "SYNC_SHARE") {
+                    const targetUser = approval.user || await prisma.user.findUnique({ where: { id: payload.userId } });
+                    const settings = await prisma.settings.findUnique({ where: { id: "global" } });
+                    if (targetUser && settings?.mainPlexToken) {
+                        const adminToken = decryptData(settings.mainPlexToken);
+                        const rawKeys: string[] = payload.selectedKeys || [];
+                        const syncRes: any = await syncUserPlexShareInternal(adminToken, targetUser, rawKeys);
+                        if (syncRes && syncRes.success === false) {
+                            await prisma.adminApproval.update({
+                                where: { id: approvalId },
+                                data: { status: "PENDING" }
+                            }).catch(() => {});
+                            return { success: false, error: syncRes.error || "Failed to synchronize Plex share." };
+                        }
+                        if (rawKeys.length > 0) {
+                            await prisma.user.update({
+                                where: { id: targetUser.id },
+                                data: { plexLibrarySectionIds: rawKeys.join(","), selectedPlexLibrarySectionIds: rawKeys.join(",") }
+                            }).catch(() => {});
+                        }
+                    }
+                } else {
+                    const keysToApply = payload.selectedKeys || payload.selectedPlexSections || [];
+                    const updateRes = await executePlexLibraryAccessUpdateInternal(
+                        payload.userId,
+                        keysToApply,
+                        payload.activationType,
+                        payload.customDateOrDays
+                    );
+                    if (!updateRes.success) {
+                        await prisma.adminApproval.update({
+                            where: { id: approvalId },
+                            data: { status: "PENDING" }
+                        }).catch(() => {});
+                        return { success: false, error: `Plex update failed: ${updateRes.error}` };
                     }
                 }
-            } else {
-                const keysToApply = payload.selectedKeys || payload.selectedPlexSections || [];
-                const updateRes = await executePlexLibraryAccessUpdateInternal(
-                    payload.userId,
-                    keysToApply,
-                    payload.activationType,
-                    payload.customDateOrDays
-                );
-                if (!updateRes.success) {
-                    return { success: false, error: `Plex update failed: ${updateRes.error}` };
-                }
             }
-        }
 
-        await prisma.adminApproval.update({
-            where: { id: approvalId },
-            data: {
-                status: "APPROVED",
-                approvedBy: session.username || "Admin",
-                approvedAt: new Date()
-            }
-        });
+            await prisma.adminApproval.update({
+                where: { id: approvalId },
+                data: {
+                    status: "APPROVED",
+                    approvedBy: session.username || "Admin",
+                    approvedAt: new Date()
+                }
+            });
+        } catch (execErr) {
+            await prisma.adminApproval.update({
+                where: { id: approvalId },
+                data: { status: "PENDING" }
+            }).catch(() => {});
+            throw execErr;
+        }
 
         logger.addLog("INFO", "APPROVAL", `Administrator ${session.username || 'Admin'} approved "${approval.title}" (ID: ${approval.id}).`);
         revalidatePath("/settings/access");
@@ -5528,20 +5607,20 @@ export async function rejectAdminApprovalAction(approvalId: string, reason?: str
         const session: any = await verifyAdmin();
         await ensureSchemaColumns();
 
-        const approval = await prisma.adminApproval.findUnique({ where: { id: approvalId } });
-        if (!approval) return { success: false, error: "Approval request not found" };
-        if (approval.status !== "PENDING") {
-            return { success: false, error: `This item has already been ${approval.status.toLowerCase()}.` };
-        }
-
-        await prisma.adminApproval.update({
-            where: { id: approvalId },
+        const claim = await prisma.adminApproval.updateMany({
+            where: { id: approvalId, status: "PENDING" },
             data: {
                 status: "REJECTED",
                 approvedBy: session.username || "Admin",
                 rejectionReason: reason || "Rejected by administrator."
             }
         });
+
+        const approval = await prisma.adminApproval.findUnique({ where: { id: approvalId } });
+        if (!approval) return { success: false, error: "Approval request not found" };
+        if (claim.count !== 1) {
+            return { success: false, error: `This item has already been ${approval.status.toLowerCase()}.` };
+        }
 
         logger.addLog("WARN", "APPROVAL", `Administrator ${session.username || 'Admin'} rejected "${approval.title}" (Reason: ${reason || 'None'}).`);
         revalidatePath("/settings/access");
@@ -5826,6 +5905,18 @@ export async function setUserTrialOrSubscription(
 ) {
     try {
         await verifyAdmin();
+        return await setUserTrialOrSubscriptionInternal(userId, type, customDateOrDays);
+    } catch (e: any) {
+        return { success: false, error: e.message || "Failed to update user access" };
+    }
+}
+
+export async function setUserTrialOrSubscriptionInternal(
+    userId: string, 
+    type: "TRIAL" | "CUSTOM_TRIAL" | "7_DAYS_TRIAL" | "14_DAYS_TRIAL" | "REST_OF_YEAR" | "30_DAYS" | "1_YEAR" | "PERMANENT" | "SUSPENDED" | "EXPIRED" | "CUSTOM", 
+    customDateOrDays?: string | number
+) {
+    try {
         const user = await prisma.user.findUnique({ where: { id: userId } });
         if (!user) return { success: false, error: "User not found" };
         if (user.role === "ADMIN") {
@@ -6007,12 +6098,18 @@ export async function setUserTrialOrSubscription(
                 where: { id: child.id },
                 data: {
                     status,
+                    membershipTier: membershipTier === "TRIAL" || membershipTier === "STANDARD" || membershipTier === "TIER_2_VIP" ? membershipTier : child.membershipTier,
+                    subscriptionCadence,
                     trialEndsAt,
                     subscriptionEndsAt,
                     convertedAt
                 }
             });
+            clearUserCache(`user_profile_bootstrap:${child.id}`);
+            clearUserCache(`user_media_servers:${child.id}`);
         }
+        clearUserCache(`user_profile_bootstrap:${userId}`);
+        clearUserCache(`user_media_servers:${userId}`);
 
         // Sync Plex sharing state: if suspended or expired, revoke Plex shares; if active, restore
         const settings = await prisma.settings.findUnique({ where: { id: "global" } });
@@ -6108,11 +6205,12 @@ export async function setUserTrialOrSubscription(
             }
         }
 
-        revalidatePath("/settings/access");
-        revalidatePath("/profile");
-        revalidatePath("/settings/profile");
-        revalidatePath("/profile");
-        revalidatePath("/settings");
+        try {
+            revalidatePath("/settings/access");
+            revalidatePath("/profile");
+            revalidatePath("/settings/profile");
+            revalidatePath("/settings");
+        } catch {}
         return { success: true, message: `Updated access status for ${user.username} to ${status}.` };
     } catch (e: any) {
         console.error("[SET-TRIAL-SUBSCRIPTION-ERROR]:", e.message || e);
@@ -6939,6 +7037,42 @@ export async function sendSubscriptionRenewalReminderAction(userId: string) {
             userId: user.id
         });
 
+        // Update reminder milestone tracking so auto-cron doesn't duplicate the same milestone notice
+        try {
+            if (expiryObj) {
+                const { getDueReminderMilestone } = await import("@/lib/subscription-reminders");
+                const cycleTarget = expiryObj.toISOString().slice(0, 10);
+                let reminderState: { cycleTarget: string; milestones: string[] } = {
+                    cycleTarget,
+                    milestones: []
+                };
+                if (user.renewalRemindersSent) {
+                    try {
+                        const parsed = JSON.parse(user.renewalRemindersSent);
+                        if (parsed && parsed.cycleTarget === cycleTarget && Array.isArray(parsed.milestones)) {
+                            reminderState = parsed;
+                        }
+                    } catch {}
+                }
+                const milestoneDays = isYearly ? yearlyMilestones : monthlyMilestones;
+                const { dueMilestone } = getDueReminderMilestone({
+                    daysRemaining: daysRemainingVal,
+                    milestoneDays,
+                    sentMilestones: reminderState.milestones
+                });
+                if (dueMilestone && !reminderState.milestones.includes(dueMilestone)) {
+                    reminderState.milestones.push(dueMilestone);
+                }
+                await prisma.user.update({
+                    where: { id: user.id },
+                    data: {
+                        lastRenewalReminderSentAt: new Date(),
+                        renewalRemindersSent: JSON.stringify(reminderState)
+                    }
+                });
+            }
+        } catch {}
+
         logger.addLog("INFO", "EMAIL", `Dispatched ${isYearly ? "annual" : "monthly"} subscription renewal reminder to "${user.username}" (${user.email}). Amount due: $${effectiveAmountDue.toFixed(2)}`);
 
         return {
@@ -7146,8 +7280,9 @@ export async function getUserReferralInfo() {
         const conversions = dbUser.referrals.filter(r => r.convertedAt || r.status === "APPROVED").length;
 
         const settings = await prisma.settings.findUnique({ where: { id: "global" } });
-        const yearlyPrice = settings?.yearlyPrice || 180;
-        const monthlyPrice = settings?.monthlyPrice || 17.50;
+        const isTier2 = dbUser.membershipTier === "TIER_2_VIP";
+        const yearlyPrice = isTier2 ? (settings?.tier2YearlyPrice ?? 240) : (settings?.yearlyPrice ?? 180);
+        const monthlyPrice = isTier2 ? (settings?.tier2MonthlyPrice ?? 25) : (settings?.monthlyPrice ?? 17.50);
 
         const renewalSummary = calculateUserRenewalSummary({
             user: dbUser,
@@ -8697,6 +8832,8 @@ export async function toggleFreeAddonAction(addonId: string, enabled: boolean) {
             where: { id: user.id },
             data: { enabledAddons: JSON.stringify(enabledList) }
         });
+        clearUserCache(`user_profile_bootstrap:${user.id}`);
+        clearUserCache(`user_media_servers:${user.id}`);
 
         logger.addLog("INFO", "SETTINGS", `User "${user.username}" ${enabled ? "enabled" : "disabled"} add-on "${targetAddon.name}".`);
 
@@ -8760,6 +8897,8 @@ export async function toggleUserAddonAdminAction(userId: string, addonId: string
             where: { id: userId },
             data: { enabledAddons: JSON.stringify(enabledList) }
         });
+        clearUserCache(`user_profile_bootstrap:${userId}`);
+        clearUserCache(`user_media_servers:${userId}`);
 
         // Live Audiobooks Plex Library Sync
         if (addonId === "audiobooks") {
@@ -10381,7 +10520,7 @@ export async function updateAlertBanner(formData: FormData) {
 // ============================================================================
 
 async function verifyUser() {
-    if (process.env.PORTALARR_TEST_AUTH === "true") {
+    if (process.env.NODE_ENV !== "production" && process.env.PORTALARR_TEST_AUTH === "true") {
         if (process.env.PORTALARR_TEST_USER_ID) {
             const specificUser = await prisma.user.findUnique({ where: { id: process.env.PORTALARR_TEST_USER_ID } });
             if (specificUser) {
@@ -10443,6 +10582,11 @@ async function verifyUser() {
         }
 
         if (dbUser) {
+            const dbRole = String(dbUser.role || "").toUpperCase();
+            const dbStatus = String(dbUser.status || "").toUpperCase();
+            if (dbRole !== "ADMIN" && (dbStatus === "PENDING" || dbStatus === "REJECTED" || dbStatus === "SUSPENDED" || dbStatus === "EXPIRED")) {
+                throw new Error("Unauthorized");
+            }
             return {
                 id: dbUser.id,
                 userId: dbUser.id,
@@ -10453,7 +10597,7 @@ async function verifyUser() {
                 accountType: dbUser.accountType
             };
         }
-        return payload;
+        throw new Error("Unauthorized");
     } catch (err) {
         throw new Error("Unauthorized");
     }
@@ -10516,13 +10660,13 @@ export async function getLibraries() {
     }
     
     for (const lib of libraries) {
-        const isAudioByName = lib.name.toLowerCase().includes("audio");
-        const correctMediaType = isAudioByName ? "audiobook" : "ebook";
-        if (lib.mediaType !== correctMediaType) {
-            lib.mediaType = correctMediaType;
+        if (!lib.mediaType) {
+            const isAudioByName = lib.name.toLowerCase().includes("audio");
+            const inferredMediaType = isAudioByName ? "audiobook" : "ebook";
+            lib.mediaType = inferredMediaType;
             prisma.library.update({
                 where: { id: lib.id },
-                data: { mediaType: correctMediaType }
+                data: { mediaType: inferredMediaType }
             }).catch(() => {});
         }
     }
@@ -11494,8 +11638,9 @@ export async function getBookRequests() {
     try {
         session = await verifyUser();
     } catch (e) {
-        // Fallback gracefully
+        return [];
     }
+    if (!session) return [];
 
     // Auto-sync pending/searching requests against existing library books
     try {
@@ -12626,13 +12771,27 @@ function purgeEmptyDirectories(dir: string, protectedFolderSet?: Set<string>) {
     } catch (e) {}
 }
 
+const activeLibraryScans = new Map<string, Promise<any>>();
+
 export async function scanLibraryInternal(libraryId: string, options?: { enableAi?: boolean }) {
+    const inFlight = activeLibraryScans.get(libraryId);
+    if (inFlight) {
+        return inFlight;
+    }
+    const scanPromise = runScanLibraryInternal(libraryId, options).finally(() => {
+        activeLibraryScans.delete(libraryId);
+    });
+    activeLibraryScans.set(libraryId, scanPromise);
+    return scanPromise;
+}
+
+async function runScanLibraryInternal(libraryId: string, options?: { enableAi?: boolean }) {
     const library = await prisma.library.findUnique({
         where: { id: libraryId }
     });
     if (!library) return { success: false, error: "Library entry not found in database" };
 
-    if (library.name.toLowerCase().includes("audio") && library.mediaType !== "audiobook") {
+    if (!library.mediaType && library.name.toLowerCase().includes("audio")) {
         console.log(`[SCANNER-REPAIR] 🔧 Auto-repairing library "${library.name}" mediaType to "audiobook"...`);
         await prisma.library.update({
             where: { id: libraryId },
@@ -13046,10 +13205,12 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                         console.warn(`[SCANNER] Preflight check warning for ${epubItem.fullPath}:`, vErr.message);
                     }
 
-                    // 2. Delete redundant non-EPUB files (AZW3, MOBI, AZW, AZW4, PDF, etc.) from disk
+                    // 2. Delete only redundant Kindle/reflowable ebook formats (.azw3/.mobi/.azw/.azw4/.fb2/.lit/.rtf/.txt);
+                    // NEVER delete .cbz/.cbr comic archives or .pdf files!
+                    const REDUNDANT_CONVERTIBLE_EXTS = new Set([".azw3", ".mobi", ".azw", ".azw4", ".fb2", ".lit", ".rtf", ".txt"]);
                     for (const other of group) {
                         const otherExt = other.ext.toLowerCase();
-                        if (otherExt !== ".epub") {
+                        if (otherExt !== ".epub" && REDUNDANT_CONVERTIBLE_EXTS.has(otherExt)) {
                             try {
                                 if (fs.existsSync(other.fullPath)) {
                                     fs.unlinkSync(other.fullPath);
@@ -13074,50 +13235,56 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
                         }
                     });
                 } else {
-                    // No EPUB exists! Attempt Calibre conversion from the highest-priority non-EPUB format
+                    // No EPUB exists! Keep native formats (.pdf, .cbz, .cbr) untouched; convert legacy formats if Calibre is available
                     group.sort((a, b) => getEbookExtPriority(b.ext) - getEbookExtPriority(a.ext));
                     const primaryItem = group[0];
+                    const primaryExt = primaryItem.ext.toLowerCase();
+                    const PRESERVED_NATIVE_EXTS = new Set([".pdf", ".cbz", ".cbr"]);
 
-                    console.log(`[SCANNER] 🔄 Non-EPUB book found with no EPUB equivalent: "${primaryItem.file}" (${primaryItem.ext}). Converting to EPUB...`);
-                    const convRes = await convertEbookToEpub(primaryItem.fullPath);
-
-                    if (convRes.success && convRes.epubPath && fs.existsSync(convRes.epubPath)) {
-                        const newEpubPath = convRes.epubPath;
-                        await validateAndFixEpubForKindle(newEpubPath).catch(() => {});
-
-                        // Delete any other non-EPUB files in the group
-                        for (const other of group) {
-                            if (other.fullPath !== primaryItem.fullPath && fs.existsSync(other.fullPath)) {
-                                try {
-                                    fs.unlinkSync(other.fullPath);
-                                    console.log(`[SCANNER] 🧹 Cleaned up non-EPUB file: ${other.fullPath}`);
-                                } catch (e) {}
-                            }
-                        }
-
-                        const newStat = fs.statSync(newEpubPath);
+                    if (PRESERVED_NATIVE_EXTS.has(primaryExt)) {
                         consolidatedEbookMap.set(ebookKey, {
-                            fullPath: newEpubPath,
-                            file: path.basename(newEpubPath),
-                            ext: ".epub",
+                            fullPath: primaryItem.fullPath,
+                            file: primaryItem.file,
+                            ext: primaryExt,
                             stats: {
-                                size: newStat.size,
+                                size: primaryItem.stats.size,
                                 birthtime: primaryItem.stats.birthtime,
-                                mtime: newStat.mtime
+                                mtime: primaryItem.stats.mtime
                             }
                         });
                     } else {
-                        console.warn(`[SCANNER] ❌ Could not convert "${primaryItem.file}" (${primaryItem.ext}) to EPUB: ${convRes.error}. Rejecting unconvertible file.`);
-                        logger.addLog("WARN", "SCANNER", `⚠️ Unconvertible non-EPUB file rejected: "${primaryItem.file}" (${primaryItem.ext}). Only EPUBs are kept.`);
+                        console.log(`[SCANNER] 🔄 Convertible ebook found with no EPUB equivalent: "${primaryItem.file}" (${primaryItem.ext}). Converting to EPUB...`);
+                        const convRes = await convertEbookToEpub(primaryItem.fullPath);
 
-                        // Delete unconvertible non-EPUB files from disk so only valid EPUBs remain
-                        for (const other of group) {
-                            if (fs.existsSync(other.fullPath)) {
-                                try {
-                                    fs.unlinkSync(other.fullPath);
-                                    console.log(`[SCANNER] 🗑️ Deleted unconvertible non-EPUB file from disk: ${other.fullPath}`);
-                                } catch (e) {}
-                            }
+                        if (convRes.success && convRes.epubPath && fs.existsSync(convRes.epubPath)) {
+                            const newEpubPath = convRes.epubPath;
+                            await validateAndFixEpubForKindle(newEpubPath).catch(() => {});
+
+                            const newStat = fs.statSync(newEpubPath);
+                            consolidatedEbookMap.set(ebookKey, {
+                                fullPath: newEpubPath,
+                                file: path.basename(newEpubPath),
+                                ext: ".epub",
+                                stats: {
+                                    size: newStat.size,
+                                    birthtime: primaryItem.stats.birthtime,
+                                    mtime: newStat.mtime
+                                }
+                            });
+                        } else {
+                            // Keep original file safely when Calibre isn't available or conversion fails (NEVER unlink user media!)
+                            console.warn(`[SCANNER] ⚠️ Could not convert "${primaryItem.file}" (${primaryItem.ext}) to EPUB: ${convRes.error}. Keeping original file.`);
+                            logger.addLog("WARN", "SCANNER", `⚠️ Preserved non-EPUB "${primaryItem.file}" (${primaryItem.ext}) after conversion skip/failure: ${convRes.error}`);
+                            consolidatedEbookMap.set(ebookKey, {
+                                fullPath: primaryItem.fullPath,
+                                file: primaryItem.file,
+                                ext: primaryExt,
+                                stats: {
+                                    size: primaryItem.stats.size,
+                                    birthtime: primaryItem.stats.birthtime,
+                                    mtime: primaryItem.stats.mtime
+                                }
+                            });
                         }
                     }
                 }
@@ -13823,14 +13990,19 @@ export async function scanLibraryInternal(libraryId: string, options?: { enableA
         }
 
         for (const dbBook of dbBooks) {
-            if (!matchedDbBookIds.has(dbBook.id) && dbBook.fileType !== 'missing' && dbBook.libraryId === libraryId) {
-                try {
-                    logger.addLog("WARN", "DATABASE", `🗑️ DB-DELETE: Purged missing book "${dbBook.title}" (ID: ${dbBook.id}) from SQLite.`);
-                    await prisma.book.deleteMany({
-                        where: { id: dbBook.id, libraryId }
-                    });
-                } catch (delErr) {
-                    // Ignore record if already deleted
+            if (!matchedDbBookIds.has(dbBook.id) && dbBook.libraryId === libraryId) {
+                const isStaleMissingStub =
+                    dbBook.fileType === "missing" &&
+                    (!dbBook.filePath || (!fs.existsSync(dbBook.filePath) && !fs.existsSync(path.join(dbBook.filePath, ".portalarr-missing"))));
+                if (dbBook.fileType !== "missing" || isStaleMissingStub) {
+                    try {
+                        logger.addLog("WARN", "DATABASE", `🗑️ DB-DELETE: Purged ${isStaleMissingStub ? "stale missing stub" : "missing book"} "${dbBook.title}" (ID: ${dbBook.id}) from SQLite.`);
+                        await prisma.book.deleteMany({
+                            where: { id: dbBook.id, libraryId }
+                        });
+                    } catch (delErr) {
+                        // Ignore record if already deleted
+                    }
                 }
             }
         }
@@ -14379,6 +14551,9 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
                     data: { status: "AVAILABLE", downloadProgress: 100 }
                 }).catch(() => {});
                 sendRequestCompletionNotification(req, existingBook).catch(() => {});
+                if (req?.sendToKindle && reqMediaType === "ebook" && req.requestedBy) {
+                    sendBookToUserKindleInternal(existingBook.id, req.requestedBy).catch(() => {});
+                }
                 return;
             }
 
@@ -14405,9 +14580,9 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
                 logger.addLog("INFO", "AUTO_GRAB", `⚡ Cross-Library Sync: Found existing copy of "${title}" in "${donorBook.library?.name || "another shelf"}". Syncing into "${targetLib.name}"...`);
                 try {
                     const sanitize = (str: string) => str.replace(/[<>:"/\|?*\x00-\x1F]/g, "").trim();
-                    const seriesTag = req?.series ? `[${sanitize(req.series)}${req.volumeNumber ? ' ' + String(req.volumeNumber).padStart(2, '0') : ''}] ` : "";
-                    const cleanAuthorStr = sanitize(author || donorBook.author || "Unknown Author");
-                    const cleanTitleStr = sanitize(title || donorBook.title);
+                    const seriesTag = req?.series ? `[${sanitize(req.series) || "Series"}${req.volumeNumber ? ' ' + String(req.volumeNumber).padStart(2, '0') : ''}] ` : "";
+                    const cleanAuthorStr = sanitize(author || donorBook.author || "Unknown Author") || "Unknown Author";
+                    const cleanTitleStr = sanitize(title || donorBook.title) || "Untitled";
                     const targetFolder = path.join(targetLib.path, cleanAuthorStr, `${seriesTag}${cleanTitleStr}`);
 
                     if (!fs.existsSync(targetFolder)) {
@@ -14482,6 +14657,9 @@ export async function autoDownloadBookRequest(requestId: string, title: string, 
                     }).catch(() => {});
 
                     sendRequestCompletionNotification(req, syncedBook).catch(() => {});
+                    if (req?.sendToKindle && reqMediaType === "ebook" && req.requestedBy) {
+                        sendBookToUserKindleInternal(syncedBook.id, req.requestedBy).catch(() => {});
+                    }
                     return;
                 } catch (cloneErr: any) {
                     logger.addLog("WARN", "AUTO_GRAB", `Cross-library clone attempt encountered error: ${cloneErr.message}. Proceeding to search indexers.`);
@@ -15172,7 +15350,6 @@ async function checkQbitStatus(qbitUrl: string, releaseTitle: string): Promise<{
 
 async function deleteDownload(protocol: string, downloadId: string, title: string): Promise<boolean> {
     try {
-        let downloadId = "";
     if (protocol === "usenet") {
             const sabApp = await prisma.mediaApp.findFirst({ where: { type: "sabnzbd" } });
             if (sabApp) {
@@ -15213,8 +15390,12 @@ async function deleteDownload(protocol: string, downloadId: string, title: strin
                 const qbitUrl = cleanUrl(qbitApp.url);
                 const qbitKey = decryptData(qbitApp.apiKey as string);
                 
-                const { hash } = await checkQbitStatus(qbitUrl, title);
-                if (hash) {
+                let targetHash = downloadId;
+                if (!targetHash && title) {
+                    const checked = await checkQbitStatus(qbitUrl, title);
+                    targetHash = checked.hash || "";
+                }
+                if (targetHash) {
                     let cookieHeader = "";
                     try {
                         const loginRes = await fetch(`${qbitUrl}/api/v2/auth/login`, {
@@ -15228,7 +15409,7 @@ async function deleteDownload(protocol: string, downloadId: string, title: strin
 
                     const res = await fetch(`${qbitUrl}/api/v2/torrents/delete`, {
                         method: "POST",
-                        body: new URLSearchParams({ hashes: hash, deleteFiles: "true" }),
+                        body: new URLSearchParams({ hashes: targetHash, deleteFiles: "true" }),
                         headers: {
                             "Content-Type": "application/x-www-form-urlencoded",
                             ...(cookieHeader ? { "Cookie": cookieHeader } : {})
@@ -16201,6 +16382,15 @@ export async function validateAndSanitizeKindleEbook(filePath: string, title?: s
     let effectivePath = filePath;
     let ext = path.extname(effectivePath).toLowerCase();
 
+    if (ext === ".cbz" || ext === ".cbr") {
+        return {
+            valid: false,
+            error: `Comic archive format '${ext}' cannot be sent to Kindle via EPUB conversion.`,
+            fileSize: stat.size,
+            fileSizeMb: (stat.size / (1024 * 1024)).toFixed(1)
+        };
+    }
+
     // 1. If format is non-EPUB (.azw3, .mobi, .azw, .azw4, .pdf, .cbz, .cbr, etc.), auto-convert to standard EPUB
     if (ext !== ".epub") {
         console.log(`[KINDLE-SANITIZER] Auto-converting non-EPUB file "${path.basename(effectivePath)}" (${ext}) to EPUB for Kindle delivery...`);
@@ -16262,7 +16452,7 @@ export async function sendBookToKindle(bookId: string, targetUsername?: string) 
         });
         
         if (!user) return { success: false, error: "User not found" };
-        if (!user.kindleEmail) {
+        if (!user.kindleEmail || user.kindleEmail.trim().toUpperCase() === "DIRECT_DOWNLOAD" || !user.kindleEmail.includes("@")) {
             return { success: false, error: "Please configure your Send-to-Kindle email address in your library settings first." };
         }
 
@@ -16542,7 +16732,7 @@ export async function sendBookToUserKindleInternal(bookId: string, username: str
         console.error(`[AUTO-KINDLE] User not found: ${username}`);
         return;
     }
-    if (!user.kindleEmail) {
+    if (!user.kindleEmail || user.kindleEmail.trim().toUpperCase() === "DIRECT_DOWNLOAD" || !user.kindleEmail.includes("@")) {
         console.warn(`[AUTO-KINDLE] User ${username} has no Kindle email configured.`);
         return;
     }
@@ -17618,7 +17808,18 @@ export async function getAdminDetailedStreamsAction(skipAuth: boolean = false) {
         }));
 
         // 5. Credential Sharing & Concurrent Connections Analysis
-        const analysesMap = analyzeActiveSessionsForSharing(allSessions, settings?.maxConcurrentStreamsPerUser || 3);
+        const usersForLimits = await prisma.user.findMany({
+            select: { username: true, plexUsername: true, email: true, maxConcurrentStreams: true }
+        }).catch(() => []);
+        const perUserLimitsMap = new Map<string, number>();
+        for (const u of usersForLimits) {
+            if (typeof u.maxConcurrentStreams === "number" && u.maxConcurrentStreams > 0) {
+                if (u.username) perUserLimitsMap.set(u.username.toLowerCase().trim(), u.maxConcurrentStreams);
+                if (u.plexUsername) perUserLimitsMap.set(u.plexUsername.toLowerCase().trim(), u.maxConcurrentStreams);
+                if (u.email) perUserLimitsMap.set(u.email.toLowerCase().trim(), u.maxConcurrentStreams);
+            }
+        }
+        const analysesMap = analyzeActiveSessionsForSharing(allSessions, settings?.maxConcurrentStreamsPerUser || 3, perUserLimitsMap);
         const userAnalysesList = Array.from(analysesMap.values());
 
         // Annotate each session with user connection & sharing telemetry and household anchoring

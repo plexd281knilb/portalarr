@@ -18,7 +18,7 @@ export interface PendingClientProps {
 }
 
 export default function PendingClient({ initialUser, initialPaymentConfig }: PendingClientProps = {}) {
-  const [user, setUser] = useState<{ username: string; email: string; status?: string; subscriptionEndsAt?: Date | null; trialEndsAt?: Date | null } | null>(initialUser || null);
+  const [user, setUser] = useState<{ username: string; email: string; status?: string; membershipTier?: string; subscriptionEndsAt?: Date | null; trialEndsAt?: Date | null } | null>(initialUser || null);
   const [paymentConfig, setPaymentConfig] = useState<any>(initialPaymentConfig || null);
   const [selectedCadence, setSelectedCadence] = useState<"yearly" | "monthly">("yearly");
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -101,8 +101,9 @@ export default function PendingClient({ initialUser, initialPaymentConfig }: Pen
   const isSuspended = user?.status === "SUSPENDED";
   const isRejected = user?.status === "REJECTED";
 
-  const yearlyPrice = paymentConfig?.yearlyPrice ?? 180;
-  const monthlyPrice = paymentConfig?.monthlyPrice ?? paymentConfig?.proratedBilling?.standaloneMonthlyRate ?? 17.50;
+  const isTier2 = user?.membershipTier === "TIER_2_VIP";
+  const yearlyPrice = isTier2 ? (paymentConfig?.tier2YearlyPrice ?? 240) : (paymentConfig?.yearlyPrice ?? 180);
+  const monthlyPrice = isTier2 ? (paymentConfig?.tier2MonthlyPrice ?? 25) : (paymentConfig?.monthlyPrice ?? paymentConfig?.proratedBilling?.standaloneMonthlyRate ?? 17.50);
   // Reactivating accounts calculate proration starting today (trialDays: 0)
   const prorated = calculateProratedBilling({
     startDate: new Date(),
@@ -275,6 +276,7 @@ export default function PendingClient({ initialUser, initialPaymentConfig }: Pen
                 <PaymentMethodsGrid 
                   config={paymentConfig} 
                   username={user?.username} 
+                  membershipTier={user?.membershipTier}
                   amount={effectiveAmount} 
                   cadence={selectedCadence} 
                 />

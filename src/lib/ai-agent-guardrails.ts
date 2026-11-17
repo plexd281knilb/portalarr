@@ -281,24 +281,21 @@ export function validateUserCrossBoundaryQuery(
             }
             if (sub.accountType === "LIVING_ROOM") {
                 allowedTokens.add("living room");
+                allowedTokens.add("living");
+                allowedTokens.add("room");
                 allowedTokens.add("livingroom");
                 allowedTokens.add("tv");
             }
         }
     }
 
-    // Helper: Checks if a target name is allowed
+    // Helper: Checks if a target name is allowed (exact token/phrase match against caller & linked sub-account tokens only)
     const isTargetAllowed = (target: string): boolean => {
-        const cleaned = target.toLowerCase().replace(/['"’]/g, "").trim();
+        const cleaned = target.toLowerCase().replace(/['"’]/g, "").replace(/^(?:the|my|our|a)\s+/i, "").trim();
         if (!cleaned) return true;
         if (allowedTokens.has(cleaned)) return true;
-        // Check if any allowed token contains this target or vice versa
-        for (const token of allowedTokens) {
-            if (token && token.length > 2 && (cleaned.includes(token) || token.includes(cleaned))) {
-                return true;
-            }
-        }
-        return false;
+        const words = cleaned.split(/\s+/).filter(w => !["the", "a", "an", "device", "account", "profile"].includes(w));
+        return words.length > 0 && words.every(w => allowedTokens.has(w));
     };
 
     // 1. UNAUTHORIZED ACCESS MODIFICATION (Shut off / disable / ban / revoke access)

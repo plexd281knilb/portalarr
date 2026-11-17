@@ -112,10 +112,11 @@ export async function notifyAdminsOnPendingApproval(approval: {
             settings.adminApprovalEmailNotify !== false && 
             emailConfig.isConfigured
         ) {
-            // Find all administrators with valid email addresses
+            // Find all active administrators with valid email addresses
             const admins = await prisma.user.findMany({
                 where: {
                     role: { in: ["ADMIN", "SUPER_USER"] },
+                    status: { in: ["APPROVED", "TRIAL"] },
                     email: { not: "" }
                 },
                 select: { id: true, email: true, username: true }

@@ -133,7 +133,18 @@ function isDisallowedSubjectOrBody(subject: string, text: string): boolean {
         "scheduled transfer",
         "pre-approved",
         "special offer",
-        "rate your experience"
+        "rate your experience",
+        "refunded",
+        "issued a refund",
+        "you sent a refund",
+        "refund for",
+        "payment failed",
+        "payment declined",
+        "payment reversed",
+        "payment canceled",
+        "payment cancelled",
+        "chargeback",
+        "dispute"
     ];
 
     for (const kw of disallowedKeywords) {
@@ -158,6 +169,16 @@ export function extractAmount(text: string): number | null {
     for (const splitMatch of splitMatches) {
         if (splitMatch[1] && splitMatch[2]) {
             const val = parseFloat(`${splitMatch[1]}.${splitMatch[2]}`);
+            if (!isNaN(val) && val > 0 && val <= 5000) return val;
+        }
+    }
+
+    // 1.5 Prefer payment-context anchored dollar amounts over generic promo/balance amounts
+    const anchoredMatches = text.matchAll(/(?:paid you|sent you|sent|received|payment(?:\s+of)?|total|amount(?:\s+received)?)[\s:\r\n]*\$\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})?)/gi);
+    for (const match of anchoredMatches) {
+        if (match[1]) {
+            const clean = match[1].replace(/,/g, "");
+            const val = parseFloat(clean);
             if (!isNaN(val) && val > 0 && val <= 5000) return val;
         }
     }
@@ -717,11 +738,22 @@ export function calculateAlignedExpiryDate(params: {
     };
 }
 
+function escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function hasWholeTokenMatch(haystack: string, token: string): boolean {
+    if (!haystack || !token) return false;
+    const regex = new RegExp(`(?:^|[^a-z0-9])${escapeRegExp(token)}(?:$|[^a-z0-9])`, "i");
+    return regex.test(haystack);
+}
+
 /**
  * Match a scraped payment to a User in the database
  */
 export async function matchPaymentToUser(payment: ScrapedPayment): Promise<any | null> {
     const allUsers = await prisma.user.findMany({
+        where: { parentUserId: null },
         select: {
             id: true,
             username: true,
@@ -759,17 +791,30 @@ export async function matchPaymentToUser(payment: ScrapedPayment): Promise<any |
     // 1. Direct match by Username / Plex Username / Referral Code / Real Name in NOTE
     if (note) {
         const cleanNote = note.replace(/^(?:plex|subscription|sub|for|user|username|payment|renewal|annual|monthly)[\s:=-]+/i, "").trim();
-        
+
+        // Pass A: Exact cleanNote match (prevents short prefix/username collisions like "john" matching "john2")
         for (const u of allUsers) {
             const uName = u.username.toLowerCase().trim();
             const realName = (u.name || "").toLowerCase().trim();
             const pName = (u.plexUsername || "").toLowerCase().trim();
             const refCode = (u.referralCode || "").toLowerCase().trim();
 
-            if (uName && (note.includes(uName) || cleanNote === uName)) return u;
-            if (realName && (note.includes(realName) || cleanNote === realName)) return u;
-            if (pName && (note.includes(pName) || cleanNote === pName)) return u;
-            if (refCode && (note.includes(refCode) || cleanNote === refCode)) return u;
+            if ((uName && cleanNote === uName) || (realName && cleanNote === realName) || (pName && cleanNote === pName) || (refCode && cleanNote === refCode)) {
+                return u;
+            }
+        }
+
+        // Pass B: Whole-token match inside free-text notes (minimum length >= 3 to prevent short-token false positives)
+        for (const u of allUsers) {
+            const uName = u.username.toLowerCase().trim();
+            const realName = (u.name || "").toLowerCase().trim();
+            const pName = (u.plexUsername || "").toLowerCase().trim();
+            const refCode = (u.referralCode || "").toLowerCase().trim();
+
+            if (uName.length >= 3 && hasWholeTokenMatch(note, uName)) return u;
+            if (realName.length >= 3 && hasWholeTokenMatch(note, realName)) return u;
+            if (pName.length >= 3 && hasWholeTokenMatch(note, pName)) return u;
+            if (refCode.length >= 3 && hasWholeTokenMatch(note, refCode)) return u;
         }
     }
 
@@ -930,12 +975,25 @@ export async function applySubscriptionForPayment(user: any, payment: ScrapedPay
             }
         });
 
-        // Ensure Plex Sharing access is granted if active
+        // Cascade updated subscription status, tier, cadence, and dates to nested sub-accounts
+        await prisma.user.updateMany({
+            where: { parentUserId: user.id },
+            data: {
+                status: targetStatus,
+                membershipTier: newTier,
+                subscriptionCadence: thresholdResult.cadence,
+                trialEndsAt: targetStatus === "APPROVED" ? null : user.trialEndsAt,
+                subscriptionEndsAt: newExpiryDate,
+                convertedAt: convertedAtDate
+            }
+        }).catch(() => {});
+
+        // Ensure Plex Sharing access is granted/synced if active
         if (isCurrentlyActive) {
             try {
                 if (user.status === "EXPIRED" || user.status === "SUSPENDED" || user.status === "PENDING" || user.status === "TRIAL") {
-                    const { setUserTrialOrSubscription } = await import("@/app/actions");
-                    await setUserTrialOrSubscription(user.id, "CUSTOM", newExpiryDate.toISOString());
+                    const { setUserTrialOrSubscriptionInternal } = await import("@/app/actions");
+                    await setUserTrialOrSubscriptionInternal(user.id, "CUSTOM", newExpiryDate.toISOString());
                 }
             } catch (plexErr) {
                 logger.addLog("WARN", "PLEX", `[PAYMENT-SCRAPER] Failed to sync Plex sharing for "${user.username}": ${plexErr}`);

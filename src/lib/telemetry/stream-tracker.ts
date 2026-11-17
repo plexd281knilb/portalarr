@@ -161,12 +161,20 @@ export function buildWatchHistoryConditions(options?: {
 export function normalizeIp(rawIp?: string | null): string {
     if (!rawIp) return "";
     let ip = rawIp.trim();
+    if (ip.startsWith("[") && ip.includes("]:")) {
+        ip = ip.slice(1, ip.indexOf("]:"));
+    } else if (ip.startsWith("[") && ip.endsWith("]")) {
+        ip = ip.slice(1, -1);
+    }
     if (ip.startsWith("::ffff:")) {
         ip = ip.replace("::ffff:", "");
     }
     // If IPv4 with port e.g. 192.168.1.50:52431
     if (ip.includes(":") && !ip.includes("::") && ip.split(":").length === 2) {
         ip = ip.split(":")[0];
+    }
+    if (ip.includes(":")) {
+        ip = ip.toLowerCase();
     }
     return ip;
 }
@@ -214,11 +222,22 @@ export function isSameSubnetOrIp(ipA?: string | null, ipB?: string | null): bool
         return partsA[0] === partsB[0] && partsA[1] === partsB[1] && partsA[2] === partsB[2];
     }
 
-    // Check IPv6 /64 prefix (e.g. 2601:1c0:... vs 2601:1c0:...)
+    // Check IPv6 /64 prefix with proper :: zero-expansion (e.g. 2601:1c0::1 vs 2601:1c0:0:0::2)
     if (cleanA.includes(":") && cleanB.includes(":")) {
-        const segsA = cleanA.split(":").filter(Boolean);
-        const segsB = cleanB.split(":").filter(Boolean);
-        if (segsA.length >= 4 && segsB.length >= 4) {
+        const expandIpv6 = (addr: string): string[] | null => {
+            const parts = addr.split("::");
+            if (parts.length > 2) return null;
+            const left = parts[0] ? parts[0].split(":").filter(Boolean) : [];
+            const right = parts.length === 2 && parts[1] ? parts[1].split(":").filter(Boolean) : [];
+            const missing = 8 - (left.length + right.length);
+            if (missing < 0) return null;
+            const full = [...left, ...Array(parts.length === 2 ? missing : 0).fill("0"), ...right];
+            if (full.length !== 8) return null;
+            return full.map(seg => seg.padStart(4, "0").toLowerCase());
+        };
+        const segsA = expandIpv6(cleanA);
+        const segsB = expandIpv6(cleanB);
+        if (segsA && segsB) {
             return segsA.slice(0, 4).join(":") === segsB.slice(0, 4).join(":");
         }
     }
@@ -761,7 +780,8 @@ export function extractStreamTelemetry(s: any) {
  */
 export function analyzeActiveSessionsForSharing(
     sessions: any[],
-    defaultMaxStreams: number = 3
+    defaultMaxStreams: number = 3,
+    perUserLimitsMap?: Map<string, number>
 ): Map<string, UserStreamAnalysis> {
     const userMap = new Map<string, any[]>();
 
@@ -821,17 +841,18 @@ export function analyzeActiveSessionsForSharing(
         const distinctPublicIpsList = Array.from(publicIps);
         const streamCount = userSessions.length;
         const isDualTvSharing = tvPublicIps.size >= 2;
+        const effectiveMaxStreams = perUserLimitsMap?.get(userKey) ?? defaultMaxStreams;
 
         // Multi-IP sharing detection: streaming from >= 2 distinct public IP addresses at the exact same time
         const isMultiIp = distinctPublicIpsList.length >= 2;
-        const isExcessiveConnections = streamCount > defaultMaxStreams;
+        const isExcessiveConnections = streamCount > effectiveMaxStreams;
         const isSharingSuspected = isMultiIp || (streamCount >= 4 && distinctIpsList.length >= 2);
 
         let sharingReason: string | undefined = undefined;
         if (isMultiIp) {
             sharingReason = `Simultaneous playback from ${distinctPublicIpsList.length} distinct public IP addresses (${distinctPublicIpsList.join(", ")})`;
         } else if (isExcessiveConnections) {
-            sharingReason = `User exceeds limit with ${streamCount} simultaneous active streams (limit: ${defaultMaxStreams})`;
+            sharingReason = `User exceeds limit with ${streamCount} simultaneous active streams (limit: ${effectiveMaxStreams})`;
         }
 
         analyses.set(userKey, {
@@ -1092,6 +1113,8 @@ export function analyzeUserAccountSharing(userSessions: any[]): {
     };
 }
 
+let activeRecordSessionsLock: Promise<any> | null = null;
+
 /**
  * Records active streaming sessions into WatchHistory and performs security auditing
  */
@@ -1102,12 +1125,30 @@ export async function recordActivePlexSessions(
         return { success: true, recorded: 0, recordedCount: 0, sharingAlerts: 0, analyses: [] };
     }
 
+    if (activeRecordSessionsLock) {
+        await activeRecordSessionsLock.catch(() => {});
+    }
+
+    let runPromise!: Promise<{ success: boolean; recorded: number; recordedCount: number; sharingAlerts: number; analyses: UserStreamAnalysis[] }>;
+    runPromise = (async (): Promise<{ success: boolean; recorded: number; recordedCount: number; sharingAlerts: number; analyses: UserStreamAnalysis[] }> => {
     try {
         const settings = await prisma.settings.findUnique({ where: { id: "global" } }).catch(() => null);
         const defaultMaxStreams = settings?.maxConcurrentStreamsPerUser || 3;
         const detectSharing = settings?.detectPasswordSharing ?? true;
 
-        const analysesMap = analyzeActiveSessionsForSharing(sessions, defaultMaxStreams);
+        const dbUsersWithLimits = await prisma.user.findMany({
+            select: { username: true, plexUsername: true, email: true, maxConcurrentStreams: true }
+        }).catch(() => []);
+        const perUserLimitsMap = new Map<string, number>();
+        for (const u of dbUsersWithLimits) {
+            if (typeof u.maxConcurrentStreams === "number" && u.maxConcurrentStreams > 0) {
+                if (u.username) perUserLimitsMap.set(u.username.toLowerCase().trim(), u.maxConcurrentStreams);
+                if (u.plexUsername) perUserLimitsMap.set(u.plexUsername.toLowerCase().trim(), u.maxConcurrentStreams);
+                if (u.email) perUserLimitsMap.set(u.email.toLowerCase().trim(), u.maxConcurrentStreams);
+            }
+        }
+
+        const analysesMap = analyzeActiveSessionsForSharing(sessions, defaultMaxStreams, perUserLimitsMap);
         const analysesList = Array.from(analysesMap.values());
 
         let recordedCount = 0;
@@ -1272,7 +1313,15 @@ export async function recordActivePlexSessions(
     } catch (err: any) {
         console.error("[STREAM-TRACKER] Error recording active streams:", err.message || err);
         return { success: false, recorded: 0, recordedCount: 0, sharingAlerts: 0, analyses: [] };
+    } finally {
+        if (activeRecordSessionsLock === runPromise) {
+            activeRecordSessionsLock = null;
+        }
     }
+    })();
+
+    activeRecordSessionsLock = runPromise;
+    return runPromise;
 }
 
 /**

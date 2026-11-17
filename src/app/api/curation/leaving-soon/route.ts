@@ -1,16 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { decryptData } from "@/lib/encryption";
 import { logger } from "@/lib/logger";
+import { getCurrentUser } from "@/app/auth-actions";
 import { resolveWorkingPlexServerConnection } from "@/lib/plex";
 import { syncPlexCollection, getPlexLibraryMediaItems } from "@/lib/curation/plex-analyzer";
 import { backupAndApplyOverlay, restoreItemOriginalArtwork } from "@/lib/curation/overlay-engine";
 
 export async function GET(req: NextRequest) {
     try {
+        const user = await getCurrentUser();
+        if (!user || user.role !== "ADMIN") {
+            return NextResponse.json({ success: false, error: "Forbidden: Admin permissions required." }, { status: 403 });
+        }
+
+        const { searchParams } = new URL(req.url);
+        const serverId = searchParams.get("serverId")?.trim() || undefined;
+
         const advisories = await prisma.mediaContentAdvisory.findMany({
             where: {
-                isLeavingSoon: true
+                isLeavingSoon: true,
+                ...(serverId ? { serverId } : {})
             },
             orderBy: {
                 leavingSoonDate: "asc"
@@ -29,6 +38,11 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
     try {
+        const user = await getCurrentUser();
+        if (!user || user.role !== "ADMIN") {
+            return NextResponse.json({ success: false, error: "Forbidden: Admin permissions required." }, { status: 403 });
+        }
+
         const body = await req.json();
         const {
             ratingKey,
@@ -87,14 +101,17 @@ export async function POST(req: NextRequest) {
             resolved = await resolveWorkingPlexServerConnection(serverId).catch(() => null);
         }
 
+        const canonicalServerId = resolved?.serverId || serverId || "default";
+
         if (serverId && ratingKey && sectionKey) {
             if (resolved && resolved.serverUrl && resolved.token) {
                 const token = resolved.token;
                 const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter((u: string) => u !== resolved.serverUrl)];
 
                 // Fetch all active leaving soon items for this server
+                const serverIdCandidates = Array.from(new Set([serverId, canonicalServerId].filter(Boolean)));
                 const allLeavingRecords = await prisma.mediaContentAdvisory.findMany({
-                    where: { isLeavingSoon: true, serverId: serverId || "default" },
+                    where: { isLeavingSoon: true, serverId: { in: serverIdCandidates } },
                     select: { ratingKey: true }
                 });
                 const allLeavingKeys = Array.from(new Set([...allLeavingRecords.map(r => r.ratingKey), ratingKey])).filter(k => !k.startsWith("guid-"));
@@ -123,9 +140,9 @@ export async function POST(req: NextRequest) {
                         const daysLeft = Math.max(1, Math.ceil((effectiveDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
                         matchedItem.isLeavingSoon = true;
                         await backupAndApplyOverlay(
-                            resolved.serverUrl,
+                            urlsToTry,
                             token,
-                            serverId,
+                            canonicalServerId,
                             matchedItem,
                             {
                                 showLeavingSoon: true,
@@ -159,18 +176,26 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
     try {
+        const user = await getCurrentUser();
+        if (!user || user.role !== "ADMIN") {
+            return NextResponse.json({ success: false, error: "Forbidden: Admin permissions required." }, { status: 403 });
+        }
+
         const { searchParams } = new URL(req.url);
         const ratingKey = searchParams.get("ratingKey");
-        const serverId = searchParams.get("serverId") || "default";
+        const serverId = searchParams.get("serverId")?.trim() || "default";
 
         if (!ratingKey) {
             return NextResponse.json({ success: false, error: "Missing ratingKey." }, { status: 400 });
         }
 
+        const resolved = await resolveWorkingPlexServerConnection(serverId).catch(() => null);
+        const serverIdCandidates = Array.from(new Set([serverId, resolved?.serverId].filter((s): s is string => Boolean(s))));
+
         await prisma.mediaContentAdvisory.updateMany({
             where: {
                 ratingKey,
-                serverId
+                serverId: { in: serverIdCandidates }
             },
             data: {
                 isLeavingSoon: false,
@@ -179,13 +204,10 @@ export async function DELETE(req: NextRequest) {
             }
         });
 
-        // Revert poster art if backed up
-        const settings = await prisma.settings.findFirst({ where: { id: "global" } });
-        const token = settings?.mainPlexToken ? decryptData(settings.mainPlexToken) : "";
-        const serverUrl = settings?.mainPlexUrl || "";
-
-        if (token && serverUrl) {
-            await restoreItemOriginalArtwork(serverUrl, token, serverId, ratingKey);
+        // Strictly revert poster art on the target server only (never fall back to Main Plex!)
+        if (resolved && resolved.serverUrl && resolved.token) {
+            const urlsToTry = [resolved.serverUrl, ...resolved.allCandidateUrls.filter((u: string) => u !== resolved.serverUrl)];
+            await restoreItemOriginalArtwork(urlsToTry, resolved.token, resolved.serverId, ratingKey);
         }
 
         return NextResponse.json({

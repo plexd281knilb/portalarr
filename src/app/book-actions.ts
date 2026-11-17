@@ -39,12 +39,28 @@ async function verifyAuth(): Promise<AuthSession> {
     if (!session || !session.username) {
         throw new Error("Unauthorized. Please log in.");
     }
+    const userId = String(session.userId || session.id || "");
+    if (!userId) {
+        throw new Error("Unauthorized. Please log in.");
+    }
+    const dbUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, username: true, role: true, status: true, email: true }
+    });
+    if (!dbUser) {
+        throw new Error("Unauthorized. Please log in.");
+    }
+    const role = String(dbUser.role || "USER").toUpperCase();
+    const status = String(dbUser.status || "APPROVED").toUpperCase();
+    if (role !== "ADMIN" && (status === "PENDING" || status === "REJECTED" || status === "SUSPENDED" || status === "EXPIRED")) {
+        throw new Error("Unauthorized: Account is inactive or pending approval.");
+    }
     return {
-        userId: String(session.userId || session.id || ""),
-        username: String(session.username || ""),
-        role: String(session.role || "USER"),
-        status: String(session.status || "APPROVED"),
-        email: session.email ? String(session.email) : undefined
+        userId: dbUser.id,
+        username: dbUser.username,
+        role: dbUser.role,
+        status: dbUser.status,
+        email: dbUser.email ? String(dbUser.email) : undefined
     };
 }
 

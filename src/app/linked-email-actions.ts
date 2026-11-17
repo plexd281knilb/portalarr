@@ -10,7 +10,7 @@ import { logger } from "@/lib/logger";
 // Helper: Authentication verification matching Portalarr standard
 async function verifySessionUser(): Promise<any> {
     await ensureSchemaColumns();
-    if (process.env.PORTALARR_TEST_AUTH === "true") {
+    if (process.env.NODE_ENV !== "production" && process.env.PORTALARR_TEST_AUTH === "true") {
         if (process.env.PORTALARR_TEST_USER_ID) {
             const specificUser = await prisma.user.findUnique({
                 where: { id: process.env.PORTALARR_TEST_USER_ID }
@@ -41,6 +41,10 @@ async function verifySessionUser(): Promise<any> {
         where: { id: userId }
     });
     if (!dbUser) throw new Error("User not found");
+    const st = String(dbUser.status || "").toUpperCase();
+    if (dbUser.role !== "ADMIN" && (st === "PENDING" || st === "REJECTED" || st === "SUSPENDED" || st === "EXPIRED")) {
+        throw new Error("Unauthorized");
+    }
     return dbUser;
 }
 

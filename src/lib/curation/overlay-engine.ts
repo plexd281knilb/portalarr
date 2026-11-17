@@ -2301,10 +2301,23 @@ export function computeMediaOverlayHash(
         badgeScale: options.badgeScale,
         categoryScales: options.categoryScales,
         badgeBackdrops: options.badgeBackdrops ? (typeof options.badgeBackdrops === "string" ? options.badgeBackdrops : JSON.stringify(options.badgeBackdrops)) : "",
+        ribbonMode: options.ribbonMode || "",
+        ribbonTheme: options.ribbonTheme || "",
+        ribbonText: options.ribbonText || "",
+        ribbonType: options.ribbonType || "",
+        maxRibbonTiers: options.maxRibbonTiers ?? "",
+        tieredRibbons: options.tieredRibbons ? JSON.stringify(options.tieredRibbons) : "",
+        dovetailResolutionHdr: options.dovetailResolutionHdr ?? "",
+        bannerFontSize: options.bannerFontSize ?? options.placeholderFontSize ?? "",
         positions: {
             resolution: options.resolutionPosition,
             hdr: options.hdrPosition,
             audio: options.audioPosition,
+            channels: options.channelsPosition,
+            codec: options.codecPosition,
+            edition: options.editionPosition,
+            studio: options.studioPosition,
+            contentRating: options.contentRatingPosition,
             ratings: options.ratingsPosition,
             ribbon: options.ribbonPosition
         },
@@ -2427,10 +2440,19 @@ export async function backupAndApplyOverlay(
     }
 
     const isUpgrade = Boolean(existingBackup && existingBackup.mediaHash && existingBackup.mediaHash !== currentHash);
-    const backupFilePath = existingBackup?.backupFilePath || path.join(BACKUP_DIR, `${serverId}_${item.ratingKey}.jpg`);
+    const safeServerKey = String(serverId).replace(/[^a-zA-Z0-9._-]/g, "_");
+    const safeRatingKey = String(item.ratingKey).replace(/[^a-zA-Z0-9._-]/g, "_");
+    const backupFilePath = existingBackup?.backupFilePath || path.join(BACKUP_DIR, `${safeServerKey}_${safeRatingKey}.jpg`);
 
     let originalBuffer: Buffer | null = null;
-    if (existingBackup && fs.existsSync(existingBackup.backupFilePath)) {
+    let downloadedFreshBackup = false;
+    if (existingBackup) {
+        if (!existingBackup.backupFilePath || !fs.existsSync(existingBackup.backupFilePath)) {
+            return {
+                success: false,
+                message: `Original artwork backup file missing for "${item.title}" (${item.ratingKey}); skipped to avoid double-stamping already-badged Plex artwork.`
+            };
+        }
         originalBuffer = fs.readFileSync(existingBackup.backupFilePath);
     } else {
         originalBuffer = await fetchPlexPosterBuffer(serverUrlOrCandidates, token, item.thumb);
@@ -2438,28 +2460,22 @@ export async function backupAndApplyOverlay(
             return { success: false, message: "Failed to download poster buffer from Plex." };
         }
         fs.writeFileSync(backupFilePath, originalBuffer);
+        downloadedFreshBackup = true;
     }
 
-    if (!existingBackup) {
-        await prisma.mediaArtBackup.create({
-            data: {
-                ratingKey: String(item.ratingKey),
-                serverId,
-                title: item.title,
-                originalArtUrl: item.thumb,
-                backupFilePath,
-                mediaHash: currentHash,
-                appliedBadges: badgeSummary
-            }
-        });
-        logger.addLog("INFO", "CURATION", `Backed up pristine original poster for "${item.title}" (RatingKey: ${item.ratingKey}) on Plex server "${targetServerName}".`);
+    let overlayBuffer: Buffer;
+    try {
+        overlayBuffer = await applyOverlaysToPoster(
+            originalBuffer,
+            item,
+            options
+        );
+    } catch (renderErr: any) {
+        if (downloadedFreshBackup) {
+            try { if (fs.existsSync(backupFilePath)) fs.unlinkSync(backupFilePath); } catch {}
+        }
+        return { success: false, message: `Overlay render failed for "${item.title}": ${renderErr?.message || renderErr}` };
     }
-
-    const overlayBuffer = await applyOverlaysToPoster(
-        originalBuffer,
-        item,
-        options
-    );
 
     const uploaded = await uploadPlexItemPoster(serverUrlOrCandidates, token, item.ratingKey, overlayBuffer);
 
@@ -2473,6 +2489,19 @@ export async function backupAndApplyOverlay(
                     updatedAt: new Date()
                 }
             });
+        } else {
+            await prisma.mediaArtBackup.create({
+                data: {
+                    ratingKey: String(item.ratingKey),
+                    serverId,
+                    title: item.title,
+                    originalArtUrl: item.thumb,
+                    backupFilePath,
+                    mediaHash: currentHash,
+                    appliedBadges: badgeSummary
+                }
+            });
+            logger.addLog("INFO", "CURATION", `Backed up pristine original poster for "${item.title}" (RatingKey: ${item.ratingKey}) on Plex server "${targetServerName}".`);
         }
 
         const actionType = isUpgrade ? "Upgraded" : "Applied";
@@ -2484,6 +2513,9 @@ export async function backupAndApplyOverlay(
             message: `${actionType} overlay to "${item.title}" on Plex server "${targetServerName}".` 
         };
     } else {
+        if (downloadedFreshBackup) {
+            try { if (fs.existsSync(backupFilePath)) fs.unlinkSync(backupFilePath); } catch {}
+        }
         return { success: false, message: `Failed to upload overlay poster to Plex server "${targetServerName}".` };
     }
 }

@@ -112,7 +112,7 @@ export function evaluatePaymentThreshold(params: {
     const convertedReferralsCount = Array.isArray(user.referrals)
         ? user.referrals.filter(r => r.status === "APPROVED" || Boolean(r.convertedAt)).length
         : 0;
-    const rewardMonths = Math.min(12, Math.max(convertedReferralsCount, Number(user.referralBonusMonths || 0)));
+    const rewardMonths = Math.min(12, convertedReferralsCount + Math.max(0, Number(user.referralBonusMonths || 0)));
     const referralDiscount = Math.min(yearlyPrice, Math.round(rewardMonths * annualMonthlyBase * 100) / 100);
     const effectiveYearlyTarget = Math.max(annualMonthlyBase, Math.round((yearlyPrice - referralDiscount) * 100) / 100);
 

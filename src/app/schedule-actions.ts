@@ -10,7 +10,7 @@ import {
 } from "@/lib/curation/schedule-helper";
 
 async function verifyAdmin() {
-    if (process.env.PORTALARR_TEST_AUTH === "true" || process.env.NODE_ENV === "test" || process.env.PORTALARR_TEST === "true") {
+    if (process.env.NODE_ENV !== "production" && (process.env.PORTALARR_TEST_AUTH === "true" || process.env.NODE_ENV === "test" || process.env.PORTALARR_TEST === "true")) {
         if (process.env.PORTALARR_TEST_USER_ID) {
             const specificUser = await prisma.user.findUnique({
                 where: { id: process.env.PORTALARR_TEST_USER_ID }

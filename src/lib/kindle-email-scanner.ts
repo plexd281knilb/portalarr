@@ -229,10 +229,16 @@ export async function scanKindleBouncesInternal(options?: {
                 const fullText = `${bounce.subject} ${parsed.text || ""}`.toLowerCase();
 
                 for (const delivery of deliveries) {
-                    const titleMatch = delivery.bookTitle && fullText.includes(delivery.bookTitle.toLowerCase());
-                    const emailMatch = delivery.recipientEmail && fullText.includes(delivery.recipientEmail.toLowerCase());
-                    
-                    const isMatch = titleMatch || emailMatch || (deliveries.length === 1 && Math.abs(bounce.date.getTime() - delivery.createdAt.getTime()) < 30 * 60 * 1000);
+                    const titleMatch = Boolean(delivery.bookTitle && fullText.includes(delivery.bookTitle.toLowerCase()));
+                    const emailMatch = Boolean(delivery.recipientEmail && fullText.includes(delivery.recipientEmail.toLowerCase()));
+                    const senderLooksKindle = bounce.from.toLowerCase().includes("amazon") || bounce.from.toLowerCase().includes("kindle");
+                    const singleDeliveryFallback =
+                        deliveries.length === 1 &&
+                        senderLooksKindle &&
+                        Math.abs(bounce.date.getTime() - delivery.createdAt.getTime()) < 30 * 60 * 1000 &&
+                        (!delivery.recipientEmail || !fullText.includes("@"));
+
+                    const isMatch = titleMatch || emailMatch || singleDeliveryFallback;
 
                     if (isMatch && delivery.status !== "FAILED") {
                         bouncesFound++;
